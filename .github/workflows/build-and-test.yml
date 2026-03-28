@@ -1,5 +1,8 @@
 name: Build and Test (Gradle)
 
+env:
+  PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -71,19 +74,26 @@ jobs:
       - name: Build project (without tests)
         id: build_project
         run: |
+          set -o pipefail
+
           echo "🔨 Building project..."
           ./gradlew clean || { echo "❌ Clean failed"; exit 1; }
-          ./gradlew assemble --scan || { echo "❌ Assemble failed"; exit 1; }
-          echo "✅ Project built successfully"
-        shell: bash
 
-      - name: Save build scan URL
-        id: save_build_scan_url
-        if: ${{ failure() && steps.build_project.conclusion == 'failure' }}
-        run: |
-          mkdir -p build-scan-urls
-          echo "${{ steps.build_project.outputs.build-scan-url }}" > build-scan-urls/build-assemble.txt
-          echo "${{ github.event.pull_request.number }}" > build-scan-urls/pr-number.txt
+          log_file="$(mktemp)"
+          if ./gradlew assemble --scan 2>&1 | tee "$log_file"; then
+            status=0
+            echo "✅ Project built successfully"
+          else
+            status=$?
+            echo "❌ Assemble failed"
+          fi
+
+          python3 .github/scripts/maybe_capture_build_scan_artifact.py \
+            "$log_file" \
+            build-assemble.txt \
+            --status "$status"
+
+          exit "$status"
         shell: bash
 
       - name: Verify Dokka output
@@ -159,7 +169,7 @@ jobs:
           path: build/
 
       - name: Upload build scan URLs
-        if: ${{ always() && steps.save_build_scan_url.conclusion == 'success' }}
+        if: ${{ always() && hashFiles('build-scan-urls/*.txt') != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: build-scan-urls-build-${{ matrix.java }}-${{ matrix.os }}
@@ -193,21 +203,25 @@ jobs:
       - name: Run tests
         id: run_tests
         run: |
+          set -o pipefail
+
           echo "🧪 Running tests..."
-          ./gradlew test --scan --continue || {
+          log_file="$(mktemp)"
+          if ./gradlew test --scan --continue 2>&1 | tee "$log_file"; then
+            status=0
+          else
+            status=$?
             echo "⚠️ Some tests failed, but continuing"
             echo "Test failures are not blocking the pipeline"
-          }
-          echo "✅ Test execution completed"
-        shell: bash
+          fi
 
-      - name: Save test build scan URL
-        id: save_test_scan_url
-        if: ${{ failure() && steps.run_tests.conclusion == 'failure' }}
-        run: |
-          mkdir -p build-scan-urls
-          echo "${{ steps.run_tests.outputs.build-scan-url }}" > build-scan-urls/test.txt
-          echo "${{ github.event.pull_request.number }}" > build-scan-urls/pr-number.txt
+          python3 .github/scripts/maybe_capture_build_scan_artifact.py \
+            "$log_file" \
+            test.txt \
+            --status "$status"
+
+          echo "✅ Test execution completed"
+          exit 0
         shell: bash
 
       - name: Generate coverage and test reports
@@ -260,7 +274,7 @@ jobs:
         shell: bash
 
       - name: Upload build scan URLs
-        if: ${{ always() && steps.save_test_scan_url.conclusion == 'success' }}
+        if: ${{ always() && hashFiles('build-scan-urls/*.txt') != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: build-scan-urls-test-${{ matrix.java }}-${{ matrix.os }}
@@ -289,21 +303,25 @@ jobs:
       - name: Run Detekt Static Analysis
         id: run_detekt
         run: |
-          echo "🧹 Running Detekt static analysis..."
-          ./gradlew detekt --no-daemon --max-workers=1 || {
-            echo "❌ Detekt found code style violations"
-            exit 1
-          }
-          echo "✅ Detekt analysis passed"
-        shell: bash
+          set -o pipefail
 
-      - name: Save detekt build scan URL
-        id: save_detekt_scan_url
-        if: ${{ failure() && steps.run_detekt.conclusion == 'failure' }}
-        run: |
-          mkdir -p build-scan-urls
-          echo "${{ steps.run_detekt.outputs.build-scan-url }}" > build-scan-urls/detekt.txt
-          echo "${{ github.event.pull_request.number }}" > build-scan-urls/pr-number.txt
+          echo "🧹 Running Detekt static analysis..."
+
+          log_file="$(mktemp)"
+          if ./gradlew detekt --scan --no-daemon --max-workers=1 2>&1 | tee "$log_file"; then
+            status=0
+            echo "✅ Detekt analysis passed"
+          else
+            status=$?
+            echo "❌ Detekt found code style violations"
+          fi
+
+          python3 .github/scripts/maybe_capture_build_scan_artifact.py \
+            "$log_file" \
+            detekt.txt \
+            --status "$status"
+
+          exit "$status"
         shell: bash
 
       - name: Upload Detekt reports
@@ -314,7 +332,7 @@ jobs:
           path: '**/build/reports/detekt/**/*'
 
       - name: Upload build scan URLs
-        if: ${{ always() && steps.save_detekt_scan_url.conclusion == 'success' }}
+        if: ${{ always() && hashFiles('build-scan-urls/*.txt') != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: build-scan-urls-detekt-${{ matrix.java }}-${{ matrix.os }}
@@ -343,25 +361,29 @@ jobs:
       - name: Run Ktlint Code Formatting Check
         id: run_ktlint
         run: |
-          echo "🧹 Running Ktlint code formatting check..."
-          ./gradlew ktlintCheck --no-daemon --max-workers=1 || {
-            echo "❌ Ktlint found code formatting violations"
-            exit 1
-          }
-          echo "✅ Ktlint formatting check passed"
-        shell: bash
+          set -o pipefail
 
-      - name: Save ktlint build scan URL
-        id: save_ktlint_scan_url
-        if: ${{ failure() && steps.run_ktlint.conclusion == 'failure' }}
-        run: |
-          mkdir -p build-scan-urls
-          echo "${{ steps.run_ktlint.outputs.build-scan-url }}" > build-scan-urls/ktlint.txt
-          echo "${{ github.event.pull_request.number }}" > build-scan-urls/pr-number.txt
+          echo "🧹 Running Ktlint code formatting check..."
+
+          log_file="$(mktemp)"
+          if ./gradlew ktlintCheck --scan --no-daemon --max-workers=1 2>&1 | tee "$log_file"; then
+            status=0
+            echo "✅ Ktlint formatting check passed"
+          else
+            status=$?
+            echo "❌ Ktlint found code formatting violations"
+          fi
+
+          python3 .github/scripts/maybe_capture_build_scan_artifact.py \
+            "$log_file" \
+            ktlint.txt \
+            --status "$status"
+
+          exit "$status"
         shell: bash
 
       - name: Upload build scan URLs
-        if: ${{ always() && steps.save_ktlint_scan_url.conclusion == 'success' }}
+        if: ${{ always() && hashFiles('build-scan-urls/*.txt') != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: build-scan-urls-ktlint-${{ matrix.java }}-${{ matrix.os }}
@@ -391,26 +413,30 @@ jobs:
       - name: Verify coverage thresholds
         id: verify_coverage
         run: |
+          set -o pipefail
+
           echo "🎯 Verifying coverage thresholds..."
-          ./gradlew testCodeCoverageVerification --no-configuration-cache -x testCodeCoverageReport || {
+
+          log_file="$(mktemp)"
+          if ./gradlew testCodeCoverageVerification --scan --no-configuration-cache -x testCodeCoverageReport 2>&1 | tee "$log_file"; then
+            status=0
+            echo "✅ Coverage thresholds met successfully"
+          else
+            status=$?
             echo "❌ Coverage thresholds not met"
             echo "Please check the coverage report and add more tests"
-            exit 1
-          }
-          echo "✅ Coverage thresholds met successfully"
-        shell: bash
+          fi
 
-      - name: Save coverage build scan URL
-        id: save_coverage_scan_url
-        if: ${{ failure() && steps.verify_coverage.conclusion == 'failure' }}
-        run: |
-          mkdir -p build-scan-urls
-          echo "${{ steps.verify_coverage.outputs.build-scan-url }}" > build-scan-urls/coverage-verification.txt
-          echo "${{ github.event.pull_request.number }}" > build-scan-urls/pr-number.txt
+          python3 .github/scripts/maybe_capture_build_scan_artifact.py \
+            "$log_file" \
+            coverage-verification.txt \
+            --status "$status"
+
+          exit "$status"
         shell: bash
 
       - name: Upload build scan URLs
-        if: ${{ always() && steps.save_coverage_scan_url.conclusion == 'success' }}
+        if: ${{ always() && hashFiles('build-scan-urls/*.txt') != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: build-scan-urls-coverage-${{ matrix.java }}-${{ matrix.os }}

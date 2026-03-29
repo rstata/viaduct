@@ -83,6 +83,10 @@ jobs:
           if ./gradlew assemble --scan 2>&1 | tee "$log_file"; then
             status=0
             echo "✅ Project built successfully"
+            if [ "${{ matrix.java }}" = "11" ] && [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+              status=86
+              echo "❌ Canary validation: injected build failure after assemble"
+            fi
           else
             status=$?
             echo "❌ Assemble failed"

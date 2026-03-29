@@ -1,6 +1,12 @@
 name: Post Build Scan Comments
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build and Test workflow run ID to inspect"
+        required: true
+        type: string
   workflow_run:
     workflows: ["Build and Test (Gradle)"]
     types:
@@ -14,8 +20,11 @@ jobs:
   post-comment:
     runs-on: ubuntu-latest
     if: >
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'failure'
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'failure'
+      )
     steps:
       - uses: actions/checkout@v6
 
@@ -23,7 +32,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
           pattern: build-scan-urls-*
           path: build-scan-urls
           merge-multiple: false

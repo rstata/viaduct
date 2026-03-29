@@ -48,6 +48,26 @@ test('collectBuildScanData falls back to legacy text file parsing', () => {
   );
 });
 
+test('collectBuildScanData handles a single flat downloaded artifact', () => {
+  const tempdir = makeTempDir();
+  fs.writeFileSync(path.join(tempdir, 'pr-number.txt'), '7\n');
+  fs.writeFileSync(
+    path.join(tempdir, 'build-assemble.json'),
+    JSON.stringify({
+      label: 'Build assemble (Java 11, ubuntu-latest)',
+      url: 'https://gradle.com/s/flat123',
+    }),
+  );
+
+  const {prNumber, scansByJob} = collectBuildScanData(tempdir);
+
+  assert.equal(prNumber, 7);
+  assert.equal(
+    scansByJob.get('Build assemble (Java 11, ubuntu-latest)'),
+    'https://gradle.com/s/flat123',
+  );
+});
+
 test('buildCommentBody includes marker and sorts rows by label', () => {
   const scansByJob = new Map([
     ['Zed', 'https://gradle.com/s/zed'],

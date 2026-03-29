@@ -31,14 +31,13 @@ function collectBuildScanData(baseDir) {
 
   let prNumber = null;
   const scansByJob = new Map();
-  const artifactDirs = fs.readdirSync(baseDir);
+  const entries = fs.readdirSync(baseDir);
+  const artifactDirs = entries
+    .map((entry) => path.join(baseDir, entry))
+    .filter((entryPath) => fs.statSync(entryPath).isDirectory());
+  const candidateDirs = artifactDirs.length > 0 ? artifactDirs : [baseDir];
 
-  for (const dir of artifactDirs) {
-    const dirPath = path.join(baseDir, dir);
-    if (!fs.statSync(dirPath).isDirectory()) {
-      continue;
-    }
-
+  for (const dirPath of candidateDirs) {
     if (!prNumber) {
       const prFile = path.join(dirPath, 'pr-number.txt');
       if (fs.existsSync(prFile)) {
@@ -63,7 +62,8 @@ function collectBuildScanData(baseDir) {
     }
 
     for (const file of files) {
-      const entry = readLegacyScanEntry(baseDir, dir, file);
+      const relativeDir = path.relative(baseDir, dirPath) || '.';
+      const entry = readLegacyScanEntry(baseDir, relativeDir, file);
       if (entry) {
         scansByJob.set(entry.label, entry.url);
       }

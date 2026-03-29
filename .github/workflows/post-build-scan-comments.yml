@@ -60,7 +60,8 @@ jobs:
               return;
             }
 
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.payload.workflow_run.id}`;
+            const runId = '${{ inputs.run_id || github.event.workflow_run.id }}';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
             const body = buildCommentBody({runUrl, scansByJob});
             const comments = await github.paginate(github.rest.issues.listComments, {
               issue_number: prNumber,

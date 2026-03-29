@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -68,6 +69,29 @@ class TestMaybeCaptureBuildScanArtifact(unittest.TestCase):
                 (tempdir_path / "artifacts" / "pr-number.txt").read_text(),
                 "42\n",
             )
+            self.assertFalse((tempdir_path / "artifacts" / "test.json").exists())
+
+    def test_writes_metadata_when_label_is_provided(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            tempdir_path = Path(tempdir)
+            log_file = tempdir_path / "gradle.log"
+            log_file.write_text("https://scans.gradle.com/s/failure123\n")
+
+            maybe_capture_build_scan_artifact(
+                log_file=log_file,
+                artifact_name="test.txt",
+                status=1,
+                artifact_dir=tempdir_path / "artifacts",
+                label="Test (Java 17, ubuntu-latest)",
+            )
+
+            self.assertEqual(
+                json.loads((tempdir_path / "artifacts" / "test.json").read_text()),
+                {
+                    "label": "Test (Java 17, ubuntu-latest)",
+                    "url": "https://scans.gradle.com/s/failure123",
+                },
+            )
 
     def test_cli_uses_pr_number_environment_variable(self):
         with tempfile.TemporaryDirectory() as tempdir:
@@ -85,6 +109,8 @@ class TestMaybeCaptureBuildScanArtifact(unittest.TestCase):
                     "1",
                     "--artifact-dir",
                     str(tempdir_path / "artifacts"),
+                    "--label",
+                    "Build (Java 21, ubuntu-latest)",
                 ],
                 capture_output=True,
                 text=True,
@@ -100,4 +126,11 @@ class TestMaybeCaptureBuildScanArtifact(unittest.TestCase):
             self.assertEqual(
                 (tempdir_path / "artifacts" / "pr-number.txt").read_text(),
                 "99\n",
+            )
+            self.assertEqual(
+                json.loads((tempdir_path / "artifacts" / "build.json").read_text()),
+                {
+                    "label": "Build (Java 21, ubuntu-latest)",
+                    "url": "https://gradle.com/s/cli123",
+                },
             )

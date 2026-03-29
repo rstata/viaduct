@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ def maybe_capture_build_scan_artifact(
     status: int,
     artifact_dir: Path = Path("build-scan-urls"),
     pr_number: str = "",
+    label: str = "",
 ) -> str | None:
     """Stores the last build scan URL when the Gradle command fails."""
     if status == 0:
@@ -31,6 +33,9 @@ def maybe_capture_build_scan_artifact(
     (artifact_dir / artifact_name).write_text(f"{scan_url}\n")
     if pr_number:
         (artifact_dir / "pr-number.txt").write_text(f"{pr_number}\n")
+    if label:
+        metadata_path = artifact_dir / artifact_name.replace(".txt", ".json")
+        metadata_path.write_text(json.dumps({"label": label, "url": scan_url}, indent=2) + "\n")
 
     return scan_url
 
@@ -42,6 +47,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--status", required=True, type=int)
     parser.add_argument("--artifact-dir", default="build-scan-urls")
     parser.add_argument("--pr-number", default=os.environ.get("PR_NUMBER", ""))
+    parser.add_argument("--label", default="")
     return parser.parse_args(argv[1:])
 
 
@@ -53,6 +59,7 @@ def main(argv: list[str]) -> int:
         status=args.status,
         artifact_dir=Path(args.artifact_dir),
         pr_number=str(args.pr_number),
+        label=str(args.label),
     )
     if scan_url:
         print(f"Captured build scan: {scan_url}")

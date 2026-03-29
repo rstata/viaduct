@@ -91,7 +91,8 @@ jobs:
           python3 .github/scripts/maybe_capture_build_scan_artifact.py \
             "$log_file" \
             build-assemble.txt \
-            --status "$status"
+            --status "$status" \
+            --label "Build assemble (Java ${{ matrix.java }}, ${{ matrix.os }})"
 
           exit "$status"
         shell: bash
@@ -218,7 +219,8 @@ jobs:
           python3 .github/scripts/maybe_capture_build_scan_artifact.py \
             "$log_file" \
             test.txt \
-            --status "$status"
+            --status "$status" \
+            --label "Test (Java ${{ matrix.java }}, ${{ matrix.os }})"
 
           echo "✅ Test execution completed"
           exit 0
@@ -319,7 +321,8 @@ jobs:
           python3 .github/scripts/maybe_capture_build_scan_artifact.py \
             "$log_file" \
             detekt.txt \
-            --status "$status"
+            --status "$status" \
+            --label "Detekt (Java ${{ matrix.java }}, ${{ matrix.os }})"
 
           exit "$status"
         shell: bash
@@ -377,7 +380,8 @@ jobs:
           python3 .github/scripts/maybe_capture_build_scan_artifact.py \
             "$log_file" \
             ktlint.txt \
-            --status "$status"
+            --status "$status" \
+            --label "Ktlint (Java ${{ matrix.java }}, ${{ matrix.os }})"
 
           exit "$status"
         shell: bash
@@ -430,7 +434,8 @@ jobs:
           python3 .github/scripts/maybe_capture_build_scan_artifact.py \
             "$log_file" \
             coverage-verification.txt \
-            --status "$status"
+            --status "$status" \
+            --label "Coverage verification (Java ${{ matrix.java }}, ${{ matrix.os }})"
 
           exit "$status"
         shell: bash

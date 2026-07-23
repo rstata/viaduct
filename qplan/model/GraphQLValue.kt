@@ -145,8 +145,6 @@ interface VariableBindings : Map<String, GraphQLInputValue?> {
     fun getValue(key: String): GraphQLInputValue? = get(key)
 }
 
-private fun initVarBindings(): VariableBindings = TODO()
-
 /**
  * The global map of known variable bindings; not every variable is necessarily bound.
  *
@@ -159,7 +157,7 @@ private fun initVarBindings(): VariableBindings = TODO()
  *
  * See [GraphQLVariableValue] for how bindings help determine equality.
  */
-val variableValues: VariableBindings = initVarBindings()
+val variableValues: VariableBindings = establishAssumptions()
 
 /**
  * The bottom value of the GraphQL value hierarchy.

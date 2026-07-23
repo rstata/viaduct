@@ -98,6 +98,8 @@ The carrier model built during this session lives in [`model/`](./model/). Read 
 
 The decisions most relevant to the next phase are:
 
+- `Schema` now models the canonical query root, named input and output types, fields and arguments, type expressions, defaults, `__typename`, and the declarative relations needed to reason about polymorphic selection sets.
+- The global `schema` is a stipulated input to each reasoning exercise. Schema definitions use canonical identity, while references from other modeling domains use type names and field coordinates.
 - `EngineResult` is a finite value tree containing object, list, and simple results.
 - An OER field contains one `Cell` with a nullable value and a check result.
 - Missing fields are distinct from present fields whose values are null.
@@ -106,7 +108,11 @@ The decisions most relevant to the next phase are:
 - Errors are collapsed to `GraphQLErrorValue`.
 - Correctness, demand, and checked-versus-raw semantics intentionally remain outside the `model` package.
 
-The model still excludes custom scalars, precise error metadata, and lazy values or references returned by executors.
+The schema model is sufficient for the immediate polymorphism work. Other semantic inputs still
+need models, including the supported operation and selection structures, `objectFragments`,
+executor functions, and the execution world that fixes their denotations. The carrier model still
+excludes custom scalars, precise error metadata, and lazy values or references returned by
+executors.
 
 ## Immediate Modeling Scope
 
@@ -126,7 +132,7 @@ These exclusions are temporary. They remove independent sources of conditional d
 
 Add the correctness work in a new package alongside `model`. The first pass should define, in this order:
 
-1. **Semantic inputs.** Define the schema, `objectFragments`, executor functions, and world assumptions against which an OER is judged.
+1. **Remaining semantic inputs.** Use the existing global `schema`, and define the supported operation, `objectFragments`, executor functions, and world assumptions against which an OER is judged.
 2. **Executor denotations.** Define ordinary executors as deterministic functions of their object-fragment values and node resolvers as deterministic functions of node IDs.
 3. **Type applicability.** Given an object occurrence and its concrete type, determine which type-conditioned selections apply and construct their alias-free, fully coerced OER keys.
 4. **Polymorphic required-cell closure.** Seed demand from the external operation, add demand induced by `objectFragments`, and define the least closure while preserving unresolved type conditions as guards.

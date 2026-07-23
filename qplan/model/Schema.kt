@@ -17,17 +17,17 @@ val schema: Schema = establishAssumptions()
  *
  * Definitions are canonical within this schema: each type name, field coordinate, input-field
  * coordinate, and argument coordinate identifies exactly one definition object. For every
- * definition `d` reachable from this schema, `type(d.typeName) === d` when `d` is a [TypeDef];
+ * definition `d` reachable from this schema, `type(d.typeName) === d` when `d` is a [Type];
  * the corresponding owner map contains `d` by its declared name for nested definitions. Every
  * [TypeExpr.baseType] reachable from the schema is likewise the canonical result of [type].
  *
  * References outside the schema use names. Nested definitions instead navigate to their canonical
- * owners through [OutputFieldDef.containingDef], [InputFieldDef.containingDef], and
- * [FieldArgumentDef.containingDef]. Definition objects use identity equality; only acyclic value
+ * owners through [OutputField.containingType], [InputField.containingType], and
+ * [FieldArgument.containingField]. Definition objects use identity equality; only acyclic value
  * objects such as [TypeExpr] and [DefaultValue] use structural equality.
  *
- * [query] is the canonical `Query` [ObjectTypeDef] and is always the query root. The only permitted
- * scalar definitions are the five [ScalarTypeDef] singletons; whenever one belongs to this schema,
+ * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
+ * scalar definitions are the five [ScalarType] singletons; whenever one belongs to this schema,
  * [type] returns that singleton.
  *
  * Type-extension declarations, their boundaries, and their provenance are not represented; their
@@ -43,7 +43,7 @@ interface Schema {
      *
      * Invariants: `query.typeName == "Query"` and `type("Query") === query`.
      */
-    val query: ObjectTypeDef
+    val query: ObjectType
 
     /**
      * Returns the canonical definition named [typeName].
@@ -52,20 +52,20 @@ interface Schema {
      * with that name exists.
      */
     @Throws(MissingSchemaElementException::class)
-    fun type(typeName: String): TypeDef
+    fun type(typeName: String): Type
 
     /**
      * Returns the field at the exact schema coordinate [typeName]/[fieldName].
      *
      * This returns output fields only. It throws if the type is missing, the type is not composite,
      * or the named output field is missing. For every returned field `f`,
-     * `field(f.containingDef.typeName, f.fieldName) === f`.
+     * `field(f.containingType.typeName, f.fieldName) === f`.
      */
     @Throws(MissingSchemaElementException::class)
     fun field(
         typeName: String,
         fieldName: String,
-    ): OutputFieldDef
+    ): OutputField
 
     /**
      * Returns exactly the concrete object types that may occur at runtime for [typeName].
@@ -75,7 +75,7 @@ interface Schema {
      * types. An object result is therefore never empty; an interface or union result may be empty.
      * An empty set means that [typeName] is composite but has no possible object types. Null means
      * that the named type exists but is not composite. Every name in a non-null result resolves
-     * through [type] to an [ObjectTypeDef].
+     * through [type] to an [ObjectType].
      */
     @Throws(MissingSchemaElementException::class)
     fun possibleObjectTypes(typeName: String): Set<String>?
@@ -88,7 +88,7 @@ interface Schema {
      * [possibleObjectTypes] sets have a common member. Thus the parent type itself is always in the
      * returned set, even when it has no possible object types, while distinct nominally related
      * interfaces with no common possible object are not spreadable. Every returned name resolves
-     * through [type] to a [CompositeTypeDef]. Spreadability is symmetric. Null means that the named
+     * through [type] to a [CompositeType]. Spreadability is symmetric. Null means that the named
      * type exists but is not composite.
      */
     @Throws(MissingSchemaElementException::class)
@@ -158,7 +158,7 @@ interface Schema {
      * same [typeName] exactly when they are the same object. The permitted concrete categories are
      * exhaustively scalar, enum, object, interface, union, or input object.
      */
-    sealed interface TypeDef {
+    sealed interface Type {
         val typeName: String
     }
 
@@ -167,17 +167,17 @@ interface Schema {
      *
      * The input types are exactly scalars, enums, and input objects.
      */
-    sealed interface InputTypeDef : TypeDef
+    sealed interface InputType : Type
 
     /**
      * A type permitted as the base type of a GraphQL output value.
      *
      * The output types are exactly scalars, enums, objects, interfaces, and unions.
      */
-    sealed interface OutputTypeDef : TypeDef
+    sealed interface OutputType : Type
 
     /** Exactly the scalar and enum types, which are both input and output types. */
-    sealed interface SimpleTypeDef : InputTypeDef, OutputTypeDef
+    sealed interface SimpleType : InputType, OutputType
 
     /**
      * A type on which GraphQL selection sets and type conditions are meaningful.
@@ -187,39 +187,39 @@ interface Schema {
      * meta-field `f` for which:
      *
      * - `f.fieldName == "__typename"`;
-     * - `f.containingDef === t`;
-     * - `f.type == TypeExpr.Named(ScalarTypeDef.String, isNullable = false)`;
+     * - `f.containingType === t`;
+     * - `f.type == TypeExpr.Named(ScalarType.String, isNullable = false)`;
      * - `f.arguments` is empty; and
      * - `field(t.typeName, "__typename") === f`.
      *
-     * Each map key equals its field's [OutputFieldDef.fieldName], and each field's
-     * [OutputFieldDef.containingDef] is this definition. Conversely, every [OutputFieldDef] in the
+     * Each map key equals its field's [OutputField.fieldName], and each field's
+     * [OutputField.containingType] is this definition. Conversely, every [OutputField] in the
      * schema occurs exactly once in its containing definition's map. Flattened copies at different
      * schema coordinates are distinct canonical definitions even when their signatures match.
      */
-    sealed interface CompositeTypeDef : OutputTypeDef {
-        val fields: Map<String, OutputFieldDef>
+    sealed interface CompositeType : OutputType {
+        val fields: Map<String, OutputField>
     }
 
     /**
      * A scalar in the model's fixed universe of built-in GraphQL scalar types.
      *
      * The instances are exactly [Int], [Float], [String], [Boolean], and [ID], and their
-     * [TypeDef.typeName] values are fixed by those declarations. Any scalar reachable from this
+     * [Type.typeName] values are fixed by those declarations. Any scalar reachable from this
      * schema is the corresponding singleton.
      */
-    sealed class ScalarTypeDef private constructor(
+    sealed class ScalarType private constructor(
         final override val typeName: kotlin.String,
-    ) : SimpleTypeDef {
-        object Int : ScalarTypeDef("Int")
+    ) : SimpleType {
+        object Int : ScalarType("Int")
 
-        object Float : ScalarTypeDef("Float")
+        object Float : ScalarType("Float")
 
-        object String : ScalarTypeDef("String")
+        object String : ScalarType("String")
 
-        object Boolean : ScalarTypeDef("Boolean")
+        object Boolean : ScalarType("Boolean")
 
-        object ID : ScalarTypeDef("ID")
+        object ID : ScalarType("ID")
     }
 
     /**
@@ -227,10 +227,10 @@ interface Schema {
      *
      * The set has no modeled order, and each value is represented only by its name.
      */
-    class EnumTypeDef(
+    class EnumType(
         override val typeName: String,
         val values: Set<String>,
-    ) : SimpleTypeDef
+    ) : SimpleType
 
     /**
      * An object type.
@@ -241,10 +241,10 @@ interface Schema {
      * every interface this object implements, these effective fields satisfy GraphQL's
      * interface-field compatibility rules.
      */
-    class ObjectTypeDef(
+    class ObjectType(
         override val typeName: String,
-        override val fields: Map<String, OutputFieldDef>,
-    ) : CompositeTypeDef
+        override val fields: Map<String, OutputField>,
+    ) : CompositeType
 
     /**
      * An interface type.
@@ -255,10 +255,10 @@ interface Schema {
      * For every parent interface this interface implements, these effective fields satisfy
      * GraphQL's interface-field compatibility rules.
      */
-    class InterfaceTypeDef(
+    class InterfaceType(
         override val typeName: String,
-        override val fields: Map<String, OutputFieldDef>,
-    ) : CompositeTypeDef
+        override val fields: Map<String, OutputField>,
+    ) : CompositeType
 
     /**
      * A union definition.
@@ -266,63 +266,63 @@ interface Schema {
      * Union membership is represented by [Schema.possibleObjectTypes], rather than by members
      * stored on this definition. [fields] contains exactly the `__typename` field.
      */
-    class UnionTypeDef(
+    class UnionType(
         override val typeName: String,
-        override val fields: Map<String, OutputFieldDef>,
-    ) : CompositeTypeDef
+        override val fields: Map<String, OutputField>,
+    ) : CompositeType
 
     /**
      * An input object definition.
      *
-     * Each [fields] key equals its field's [InputFieldDef.fieldName], and each field's
-     * [InputFieldDef.containingDef] is this definition. Conversely, every [InputFieldDef] occurs
+     * Each [fields] key equals its field's [InputField.fieldName], and each field's
+     * [InputField.containingType] is this definition. Conversely, every [InputField] occurs
      * exactly once in its containing definition's map.
      */
-    class InputObjectTypeDef(
+    class InputObjectType(
         override val typeName: String,
-        val fields: Map<String, InputFieldDef>,
-    ) : InputTypeDef
+        val fields: Map<String, InputField>,
+    ) : InputType
 
     /**
-     * The canonical output field at [containingDef]/[fieldName].
+     * The canonical output field at [containingType]/[fieldName].
      *
-     * `containingDef.fields[fieldName] === this`, and [type]'s base type is canonical in the same
-     * schema. Each [arguments] key equals its argument's [FieldArgumentDef.argumentName], and each
-     * argument's [FieldArgumentDef.containingDef] is this field. Conversely, every
-     * [FieldArgumentDef] occurs exactly once in its containing field's map.
+     * `containingType.fields[fieldName] === this`, and [type]'s base type is canonical in the same
+     * schema. Each [arguments] key equals its argument's [FieldArgument.argumentName], and each
+     * argument's [FieldArgument.containingField] is this field. Conversely, every [FieldArgument]
+     * occurs exactly once in its containing field's map.
      */
-    class OutputFieldDef(
+    class OutputField(
         val fieldName: String,
-        val containingDef: CompositeTypeDef,
-        val type: TypeExpr<OutputTypeDef>,
-        val arguments: Map<String, FieldArgumentDef>,
+        val containingType: CompositeType,
+        val type: TypeExpr<OutputType>,
+        val arguments: Map<String, FieldArgument>,
     )
 
     /**
-     * The canonical input field at [containingDef]/[fieldName].
+     * The canonical input field at [containingType]/[fieldName].
      *
-     * `containingDef.fields[fieldName] === this`, and [type]'s base type is canonical in the same
+     * `containingType.fields[fieldName] === this`, and [type]'s base type is canonical in the same
      * schema. [defaultValue], when present, is valid for [type]. The field is required exactly when
      * `!type.isNullable && defaultValue === DefaultValue.Absent`.
      */
-    class InputFieldDef(
+    class InputField(
         val fieldName: String,
-        val containingDef: InputObjectTypeDef,
-        val type: TypeExpr<InputTypeDef>,
+        val containingType: InputObjectType,
+        val type: TypeExpr<InputType>,
         val defaultValue: DefaultValue,
     )
 
     /**
-     * The canonical argument named [argumentName] on [containingDef].
+     * The canonical argument named [argumentName] on [containingField].
      *
-     * `containingDef.arguments[argumentName] === this`, and [type]'s base type is canonical in the
+     * `containingField.arguments[argumentName] === this`, and [type]'s base type is canonical in the
      * same schema. [defaultValue], when present, is valid for [type]. The argument is required
      * exactly when `!type.isNullable && defaultValue === DefaultValue.Absent`.
      */
-    class FieldArgumentDef(
+    class FieldArgument(
         val argumentName: String,
-        val containingDef: OutputFieldDef,
-        val type: TypeExpr<InputTypeDef>,
+        val containingField: OutputField,
+        val type: TypeExpr<InputType>,
         val defaultValue: DefaultValue,
     )
 
@@ -337,12 +337,12 @@ interface Schema {
      * Type expressions use structural equality over their complete wrapper shape, nullability, and
      * canonical base type.
      */
-    sealed interface TypeExpr<out T : TypeDef> {
+    sealed interface TypeExpr<out T : Type> {
         val baseType: T
         val isNullable: Boolean
         val isBaseTypeNullable: Boolean
 
-        data class Named<out T : TypeDef>(
+        data class Named<out T : Type>(
             override val baseType: T,
             override val isNullable: Boolean = true,
         ) : TypeExpr<T> {
@@ -350,7 +350,7 @@ interface Schema {
                 get() = isNullable
         }
 
-        data class List<out T : TypeDef>(
+        data class List<out T : Type>(
             val elementType: TypeExpr<T>,
             override val isNullable: Boolean = true,
         ) : TypeExpr<T> {

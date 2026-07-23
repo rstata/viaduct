@@ -103,7 +103,9 @@ The decisions most relevant to the next phase are:
 - `EngineResult` is a finite value tree containing object, list, and simple results.
 - An OER field contains one `Cell` with a nullable value and a check result.
 - Missing fields are distinct from present fields whose values are null.
-- OER keys contain a schema field name and fully coerced arguments. They do not contain aliases or unresolved variables.
+- Keys present in an OER contain a schema field name and fully coerced arguments. They contain
+  neither aliases nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER
+  may contain unresolved variables.
 - Executor output values and OER values are separate representations.
 - Errors are collapsed to `GraphQLErrorValue`.
 - Correctness, demand, and checked-versus-raw semantics intentionally remain outside the `model` package.

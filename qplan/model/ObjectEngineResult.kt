@@ -22,6 +22,10 @@ sealed interface EngineResult {
  * Although callers cannot enumerate the lookup domain, equality includes both that domain and
  * its results.
  *
+ * Every present [Key] has argument values that are fully coerced to non-variable values: no
+ * argument recursively contains a [GraphQLVariableValue]. Consequently, the identity of keys
+ * present in an OER is canonical and does not depend on conservative symbolic equality.
+ *
  * For every present [Key] whose arguments recursively contain [GraphQLErrorValue], [fetch]
  * returns a [Cell] whose [Cell.value] and [Cell.check] are both [GraphQLErrorValue].
  */
@@ -29,11 +33,11 @@ sealed interface ObjectEngineResult : EngineResult {
     override val typeName: String
 
     /**
-     * A field's identity in an OER. Aliases do not participate in identity.
+     * A field key. Aliases do not participate in identity.
      *
-     * As an invariant, every argument value is fully coerced to a non-variable value:
-     * no value recursively contains a [GraphQLVariableValue] anywhere. Consequently,
-     * key identity is canonical and does not depend on conservative symbolic equality.
+     * A key may contain [GraphQLVariableValue] instances when used outside an OER, such as in a
+     * selection. The non-variable invariant applies only to keys present in an
+     * [ObjectEngineResult].
      */
     data class Key(
         val fieldName: String,
@@ -62,4 +66,3 @@ sealed interface ListEngineResult : EngineResult, List<EngineResult?> {
     override val typeName: String
         get() = "\$LIST"
 }
-

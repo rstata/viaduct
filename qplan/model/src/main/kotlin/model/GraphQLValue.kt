@@ -1,20 +1,6 @@
 package model
 
 /**
- * A field map whose [get] and [getValue] operations throw [MissingFieldException] when a key is
- * absent.
- *
- * A present key may still map to null.
- */
-interface FieldMap<K, out V> : Map<K, V> {
-    @Throws(MissingFieldException::class)
-    override operator fun get(key: K): V
-
-    @Throws(MissingFieldException::class)
-    fun getValue(key: K): V = get(key)
-}
-
-/**
  * Implementations of these interfaces are mathematical values: equality is value equality
  * over the properties exposed by the interface. When an input value contains unbound variable
  * values, equality is conservative; see [GraphQLVariableValue].
@@ -29,7 +15,7 @@ sealed interface GraphQLSimpleValue : GraphQLInputValue, GraphQLOutputValue, Eng
 
 /**
  * A value in the model's closed universe of built-in scalar leaf types: [GraphQLIntValue],
- * [GraphQLFloatValue], [GraphQLStringValue], [GraphQLBooleanValue], or [GraphQLIdValue].
+ * [GraphQLFloatValue], [GraphQLStringValue], [GraphQLBooleanValue], or [GraphQLIDValue].
  *
  * Custom scalar values are not represented in this model. Therefore, this model can reason only
  * about schemas that do not have custom scalars.
@@ -41,6 +27,11 @@ sealed interface GraphQLIntValue : GraphQLScalarValue {
         get() = "Int"
 
     val intValue: Int
+
+    companion object {
+        @JvmStatic
+        fun of(value: Int): GraphQLIntValue = DefaultGraphQLIntValue(value)
+    }
 }
 
 sealed interface GraphQLFloatValue : GraphQLScalarValue {
@@ -49,6 +40,14 @@ sealed interface GraphQLFloatValue : GraphQLScalarValue {
 
     /** Invariant: this value is finite; NaN and positive or negative infinity are excluded. */
     val floatValue: Double
+
+    companion object {
+        @JvmStatic
+        fun of(value: Double): GraphQLFloatValue {
+            require(value.isFinite()) { "GraphQL Float values must be finite" }
+            return DefaultGraphQLFloatValue(value)
+        }
+    }
 }
 
 sealed interface GraphQLStringValue : GraphQLScalarValue {
@@ -56,6 +55,11 @@ sealed interface GraphQLStringValue : GraphQLScalarValue {
         get() = "String"
 
     val stringValue: String
+
+    companion object {
+        @JvmStatic
+        fun of(value: String): GraphQLStringValue = DefaultGraphQLStringValue(value)
+    }
 }
 
 sealed interface GraphQLBooleanValue : GraphQLScalarValue {
@@ -63,13 +67,23 @@ sealed interface GraphQLBooleanValue : GraphQLScalarValue {
         get() = "Boolean"
 
     val booleanValue: Boolean
+
+    companion object {
+        @JvmStatic
+        fun of(value: Boolean): GraphQLBooleanValue = DefaultGraphQLBooleanValue(value)
+    }
 }
 
-sealed interface GraphQLIdValue : GraphQLScalarValue {
+sealed interface GraphQLIDValue : GraphQLScalarValue {
     override val typeName: String
         get() = "ID"
 
     val idValue: String
+
+    companion object {
+        @JvmStatic
+        fun of(value: String): GraphQLIDValue = DefaultGraphQLIDValue(value)
+    }
 }
 
 sealed interface GraphQLEnumValue : GraphQLSimpleValue {
@@ -78,6 +92,14 @@ sealed interface GraphQLEnumValue : GraphQLSimpleValue {
 
     val enumTypeName: String
     val enumValue: String
+
+    companion object {
+        @JvmStatic
+        fun of(
+            enumTypeName: String,
+            enumValue: String,
+        ): GraphQLEnumValue = DefaultGraphQLEnumValue(enumTypeName, enumValue)
+    }
 }
 
 /**
@@ -86,6 +108,12 @@ sealed interface GraphQLEnumValue : GraphQLSimpleValue {
  */
 sealed interface GraphQLInputList : GraphQLInputValue {
     val inputListValues: List<GraphQLInputValue?>
+
+    companion object {
+        @JvmStatic
+        fun of(values: List<GraphQLInputValue?>): GraphQLInputList =
+            DefaultGraphQLInputList(values.toList())
+    }
 }
 
 sealed interface GraphQLOutputList : GraphQLOutputValue {
@@ -99,13 +127,62 @@ sealed interface GraphQLOutputList : GraphQLOutputValue {
  */
 sealed interface GraphQLInputObject : GraphQLInputValue {
     val inputObjectTypeName: String
-    val inputObjectFields: FieldMap<String, GraphQLInputValue?>
+    val inputObjectFields: FieldValues<GraphQLInputValue>
+
+    companion object {
+        @JvmStatic
+        fun of(
+            typeName: String,
+            fields: Map<String, GraphQLInputValue?>,
+        ): GraphQLInputObject =
+            DefaultGraphQLInputObject(
+                inputObjectTypeName = typeName,
+                inputObjectFields = FieldValues(typeName, fields.toMap()),
+            )
+    }
 }
 
 sealed interface GraphQLOutputObject : GraphQLOutputValue {
     val outputObjectTypeName: String
-    val outputObjectFields: FieldMap<String, GraphQLOutputValue?>
+    val outputObjectFields: FieldValues<GraphQLOutputValue>
 }
+
+/**
+ * A map from field names to values.
+ *
+ * Unlike an ordinary [Map], [get] and [getValue] throw [MissingFieldException] when the requested
+ * field does not exist or, for an output object, has not been set. A present field may still map
+ * to null.
+ *
+ * [Map] extension functions such as [Map.getOrElse] may call [get] and therefore throw instead of
+ * applying their fallback. Check [containsKey] before looking up a field whose presence is unknown.
+ */
+class FieldValues<out V : GraphQLValue>(
+    val typeName: String,
+    private val backingMap: Map<String, V?>,
+) : Map<String, V?> by backingMap {
+    /** @throws MissingFieldException when [key] is not present */
+    override operator fun get(key: String): V? = getValue(key)
+
+    /** @throws MissingFieldException when [key] is not present */
+    fun getValue(key: String): V? {
+        if (!backingMap.containsKey(key)) {
+            throw MissingFieldException(typeName, key)
+        }
+        return backingMap[key]
+    }
+
+    override fun equals(other: Any?): Boolean = backingMap == other
+
+    override fun hashCode(): Int = backingMap.hashCode()
+
+    override fun toString(): String = backingMap.toString()
+}
+
+class MissingFieldException(
+    val typeName: String,
+    val fieldName: String,
+) : NoSuchElementException("Missing field: $typeName.$fieldName")
 
 /**
  * A symbolic reference to an execution variable.
@@ -113,9 +190,9 @@ sealed interface GraphQLOutputObject : GraphQLOutputValue {
  * We assume that variables involved in any execution all have unique, non-conflicting names, so
  * when two variable values with the same name appear, it is safe to assume that their actual
  * values will be the same. When comparing a variable value to another value, we attempt to look
- * up its value in [variableValues]. If an entry exists, the variable is "bound," and we compare
- * its bound value with the other value. [equals] returns false for an unbound variable unless it
- * is compared with an unbound variable of the same name.
+ * up its value in [GlobalAssumptions.variableValues]. If an entry exists, the variable is "bound,"
+ * and we compare its bound value with the other value. [equals] returns false for an unbound
+ * variable unless it is compared with an unbound variable of the same name.
  *
  * When [equals] involving variable values returns true, the two values are guaranteed to be equal
  * under all possible variable bindings. When [equals] involving only bound variable values
@@ -125,39 +202,13 @@ sealed interface GraphQLOutputObject : GraphQLOutputValue {
  */
 sealed interface GraphQLVariableValue : GraphQLInputValue {
     val variableName: String
+
+    companion object {
+        @JvmStatic
+        fun of(variableName: String): GraphQLVariableValue =
+            DefaultGraphQLVariableValue(variableName)
+    }
 }
-
-class UnboundVariableException(
-    val variableName: String,
-) : NoSuchElementException("Unbound variable: $variableName")
-
-/**
- * Variable bindings that distinguish an unbound variable from one bound to GraphQL null.
- *
- * Looking up an absent variable throws [UnboundVariableException]. Use [containsKey] to determine
- * whether a variable is bound without throwing.
- */
-interface VariableBindings : Map<String, GraphQLInputValue?> {
-    @Throws(UnboundVariableException::class)
-    override operator fun get(key: String): GraphQLInputValue?
-
-    @Throws(UnboundVariableException::class)
-    fun getValue(key: String): GraphQLInputValue? = get(key)
-}
-
-/**
- * The global map of known variable bindings; not every variable is necessarily bound.
- *
- * A bound value may be null, representing the GraphQL null value, but a non-null bound value
- * cannot contain a [GraphQLVariableValue] anywhere in its nested structure. Variable-to-variable
- * bindings, including nested references and cycles, are therefore excluded. A variable absent
- * from the map is unbound or unknown in this model; there is no separate undefined value.
- * A variable may be bound to [GraphQLErrorValue] because variables can be supplied by providers
- * or fields, either of which may fail.
- *
- * See [GraphQLVariableValue] for how bindings help determine equality.
- */
-val variableValues: VariableBindings = establishAssumptions()
 
 /**
  * The bottom value of the GraphQL value hierarchy.
@@ -174,7 +225,7 @@ object GraphQLErrorValue :
     GraphQLFloatValue,
     GraphQLStringValue,
     GraphQLBooleanValue,
-    GraphQLIdValue,
+    GraphQLIDValue,
     GraphQLEnumValue,
     GraphQLInputList,
     GraphQLOutputList,
@@ -214,13 +265,13 @@ object GraphQLErrorValue :
     override val inputObjectTypeName: String
         get() = unsupported()
 
-    override val inputObjectFields: FieldMap<String, GraphQLInputValue?>
+    override val inputObjectFields: FieldValues<GraphQLInputValue>
         get() = unsupported()
 
     override val outputObjectTypeName: String
         get() = unsupported()
 
-    override val outputObjectFields: FieldMap<String, GraphQLOutputValue?>
+    override val outputObjectFields: FieldValues<GraphQLOutputValue>
         get() = unsupported()
 
     override val variableName: String
@@ -230,7 +281,40 @@ object GraphQLErrorValue :
         throw UnsupportedOperationException("GraphQLErrorValue has no observable properties")
 }
 
-class MissingFieldException(
-    val typeName: String,
-    val fieldName: String,
-) : NoSuchElementException("Missing field: $typeName.$fieldName")
+private data class DefaultGraphQLIntValue(
+    override val intValue: Int,
+) : GraphQLIntValue
+
+private data class DefaultGraphQLFloatValue(
+    override val floatValue: Double,
+) : GraphQLFloatValue
+
+private data class DefaultGraphQLStringValue(
+    override val stringValue: String,
+) : GraphQLStringValue
+
+private data class DefaultGraphQLBooleanValue(
+    override val booleanValue: Boolean,
+) : GraphQLBooleanValue
+
+private data class DefaultGraphQLIDValue(
+    override val idValue: String,
+) : GraphQLIDValue
+
+private data class DefaultGraphQLEnumValue(
+    override val enumTypeName: String,
+    override val enumValue: String,
+) : GraphQLEnumValue
+
+private data class DefaultGraphQLInputList(
+    override val inputListValues: List<GraphQLInputValue?>,
+) : GraphQLInputList
+
+private data class DefaultGraphQLInputObject(
+    override val inputObjectTypeName: String,
+    override val inputObjectFields: FieldValues<GraphQLInputValue>,
+) : GraphQLInputObject
+
+private data class DefaultGraphQLVariableValue(
+    override val variableName: String,
+) : GraphQLVariableValue

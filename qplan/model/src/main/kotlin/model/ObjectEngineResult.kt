@@ -57,8 +57,9 @@ sealed interface ObjectEngineResult : EngineResult {
      *
      * In this mathematical model, lookup always terminates. Its only possible outcomes are
      * returning exactly one [Cell] or throwing [MissingFieldException].
+     *
+     * @throws MissingFieldException when [key] is not present
      */
-    @Throws(MissingFieldException::class)
     suspend fun fetch(key: Key): Cell
 }
 

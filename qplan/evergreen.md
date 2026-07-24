@@ -529,7 +529,7 @@ The links below preserve the research trail. Proposal and implementation documen
 
 ### Evolving proposals and research summaries
 
--   
+- [Query-Planning Model Architecture and Selection-Flattening Handoff](https://slate.airbnb.tools/RJDGeEFw2Q/DRAFT+Query-Planning+Model+Architecture+and+Selection-Flattening+Handoff)
 - [Query Execution Revisited session index](https://docs.google.com/document/d/1L8oGjvvcSMZNkY6ooL78l0K_92f84SLUuGFdf3S3cA8/edit?tab=t.0)  
 - [RFC-254: ctx-selections and alternative tabs](https://docs.google.com/document/d/1aXmtEPIQx0xD35kBYyePb2sqnzOjI5GQSB-5STkxHVk/edit)  
 - [RFC-246: Selective vs Non-Selective Resolvers](https://docs.google.com/document/d/1rr1KSMe4okF3C_mci17GO4vnP5kCbZ049TbJ5IDC_jI/edit)  
@@ -600,4 +600,3 @@ The links below preserve the research trail. Proposal and implementation documen
 - [GraphQL CollectFields](https://spec.graphql.org/draft/#CollectFields)  
 - [GraphQL fragment applicability](https://spec.graphql.org/draft/#sec-Fragment-Spread-Is-Possible)  
 - [GraphQL variables](https://spec.graphql.org/draft/#sec-Language.Variables)
-

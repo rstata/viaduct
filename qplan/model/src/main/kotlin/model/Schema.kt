@@ -1,19 +1,9 @@
 package model
 
 /**
- * The global schema against which operations, values, and results are interpreted.
- *
- * Whenever reasoning uses this model, its assumptions must state the expected contents of
- * [schema]. Those assumptions, rather than its nonexistent startup value, determine the canonical
- * type and field definitions and the type relations returned by its operations.
- *
- * As with [variableValues], every occurrence of this global refers to the same value throughout
- * one reasoning exercise.
- */
-val schema: Schema = establishAssumptions()
-
-/**
  * A finite GraphQL schema view used as an input to the correctness model.
+ *
+ * One instance is supplied by [GlobalAssumptions.schema] for each reasoning world.
  *
  * Definitions are canonical within this schema: each type name, field coordinate, input-field
  * coordinate, and argument coordinate identifies exactly one definition object. For every
@@ -50,8 +40,9 @@ interface Schema {
      *
      * If `d` is any type definition in this schema, `type(d.typeName) === d`. Throws when no type
      * with that name exists.
+     *
+     * @throws MissingSchemaElementException when [typeName] does not identify a schema type
      */
-    @Throws(MissingSchemaElementException::class)
     fun type(typeName: String): Type
 
     /**
@@ -60,8 +51,9 @@ interface Schema {
      * This returns output fields only. It throws if the type is missing, the type is not composite,
      * or the named output field is missing. For every returned field `f`,
      * `field(f.containingType.typeName, f.fieldName) === f`.
+     *
+     * @throws MissingSchemaElementException when the coordinate does not identify an output field
      */
-    @Throws(MissingSchemaElementException::class)
     fun field(
         typeName: String,
         fieldName: String,
@@ -76,8 +68,9 @@ interface Schema {
      * An empty set means that [typeName] is composite but has no possible object types. Null means
      * that the named type exists but is not composite. Every name in a non-null result resolves
      * through [type] to an [ObjectType].
+     *
+     * @throws MissingSchemaElementException when [typeName] does not identify a schema type
      */
-    @Throws(MissingSchemaElementException::class)
     fun possibleObjectTypes(typeName: String): Set<String>?
 
     /**
@@ -90,8 +83,9 @@ interface Schema {
      * interfaces with no common possible object are not spreadable. Every returned name resolves
      * through [type] to a [CompositeType]. Spreadability is symmetric. Null means that the named
      * type exists but is not composite.
+     *
+     * @throws MissingSchemaElementException when [parentTypeName] does not identify a schema type
      */
-    @Throws(MissingSchemaElementException::class)
     fun spreadableTypes(parentTypeName: String): Set<String>?
 
     /**
@@ -103,8 +97,9 @@ interface Schema {
      *
      * Null means that at least one named type exists but is not composite. If either name does not
      * exist, this throws [MissingSchemaElementException].
+     *
+     * @throws MissingSchemaElementException when either name does not identify a schema type
      */
-    @Throws(MissingSchemaElementException::class)
     fun isSpreadable(
         parentTypeName: String,
         fragmentTypeName: String,
@@ -122,8 +117,9 @@ interface Schema {
      * possible-object set is a subset of the wider type's set, but set inclusion does not imply a
      * nominal relation. The result is a stipulated schema relation, not an algorithm derived solely
      * by comparing [possibleObjectTypes] results.
+     *
+     * @throws MissingSchemaElementException when either name does not identify a schema type
      */
-    @Throws(MissingSchemaElementException::class)
     fun relation(
         aTypeName: String,
         bTypeName: String,
@@ -199,6 +195,17 @@ interface Schema {
      */
     sealed interface CompositeType : OutputType {
         val fields: Map<String, OutputField>
+
+        /**
+         * Exactly the concrete object types that may occur at runtime for this type.
+         *
+         * An object type contains only itself. An interface contains all of its direct and indirect
+         * implementing object types. A union contains its member object types. The set is therefore
+         * non-empty for an object but may be empty for an interface or union. Every member is a
+         * canonical definition in the containing schema, and its set of type names equals the
+         * result of [Schema.possibleObjectTypes] for this type.
+         */
+        val possibleTypes: Set<ObjectType>
     }
 
     /**
@@ -244,6 +251,7 @@ interface Schema {
     class ObjectType(
         override val typeName: String,
         override val fields: Map<String, OutputField>,
+        override val possibleTypes: Set<ObjectType>,
     ) : CompositeType
 
     /**
@@ -258,17 +266,19 @@ interface Schema {
     class InterfaceType(
         override val typeName: String,
         override val fields: Map<String, OutputField>,
+        override val possibleTypes: Set<ObjectType>,
     ) : CompositeType
 
     /**
      * A union definition.
      *
-     * Union membership is represented by [Schema.possibleObjectTypes], rather than by members
-     * stored on this definition. [fields] contains exactly the `__typename` field.
+     * Union membership is represented by [CompositeType.possibleTypes] and
+     * [Schema.possibleObjectTypes]. [fields] contains exactly the `__typename` field.
      */
     class UnionType(
         override val typeName: String,
         override val fields: Map<String, OutputField>,
+        override val possibleTypes: Set<ObjectType>,
     ) : CompositeType
 
     /**

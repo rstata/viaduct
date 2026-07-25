@@ -26,7 +26,7 @@ Any design that promises one-shot selective resolution must establish, before di
 Several other conclusions are durable:
 
 - Demand and ownership are different. Query selections and RSSes describe what data is needed; a resolver's OSS describes which paths that resolver owns.  
-- One-shot execution correctness is producer-specific. Eventual union coverage of an OER does not prove that the invocation that produced it received complete demand. This is an execution/materialization proof obligation, distinct from the extensional definition of a perfect OER.  
+- One-shot execution correctness is producer-specific. Eventual union coverage of an OER does not prove that the invocation that produced it received complete demand. This is an execution/materialization proof obligation, distinct from extensional predicates over acceptable OERs.
 - Plan occurrence is not producer identity. Static paths are templates; runtime identity also depends on target OER, field identity and arguments, concrete type, ancestry, and execution epoch.  
 - Runtime type, request variables, and object identity prevent execution from being wholly static. A useful plan may still eagerly bound all possible dependencies while binding concrete instances at runtime.  
 - Query plan ownership, dependency target, concrete applicability, and OSS root shape must be explicit. Reconstructing them from incidental type equality or a single plan index has produced real bugs.  
@@ -71,6 +71,7 @@ The research does not settle:
 - whether `KeyTree` should be reused as a planning representation;  
 - how paths should be canonicalized across interfaces and concrete implementations;  
 - how parent traversal and cross-scope dependencies should be represented;  
+- whether coherence across resolver selections is sufficient to make minimal resolution unique;
 - the production migration or rollout sequence.
 
 ## Architecture-neutral vocabulary
@@ -210,9 +211,11 @@ Future designs should state whether they are producing:
 
 Those artifacts may be related, but they are not automatically interchangeable.
 
+For a selective resolver, the resolver-visible selection is a semantic input: different requested selections may produce different projections or coverage. The resolver function must nevertheless be coherent across that input. Holding all other resolver inputs fixed, each requested selection determines one result, and the results for any two requested selections agree at every OER coordinate selected by both. A selection may therefore change which values are returned, but not the value, null or error status, list structure, or concrete object type at an overlapping coordinate.
+
 ## Correctness criteria
 
-These criteria are execution-algorithm proof obligations that are intentionally independent of a particular query-plan representation. They are distinct from the extensional predicate that defines the perfect OER itself.
+These criteria are execution-algorithm proof obligations that are intentionally independent of a particular query-plan representation. They are distinct from extensional predicates that judge an OER directly.
 
 ### Producer completeness
 
@@ -246,7 +249,7 @@ Demand supplied to a selective resolver must stay within its OSS, except for exp
 
 When an exact branch cannot be chosen before dispatch, a safe superset is preferable to an under-approximation if the resolver contract permits it. For an execution algorithm, completeness takes priority over avoiding extra work.
 
-Minimality is nevertheless part of the exact perfect-OER predicate. Conservative over-materialization would need to satisfy a separate, more permissive coverage predicate. The amount of over-selection should still be observable and bounded.
+Minimality is nevertheless part of an exact minimal-result predicate. Conservative over-materialization would need to satisfy a separate, more permissive coverage predicate. The amount of over-selection should still be observable and bounded.
 
 ### Termination
 

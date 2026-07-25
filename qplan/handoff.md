@@ -2,11 +2,7 @@
 
 ## Purpose
 
-This is a historical handoff for the shift toward defining predicates and invariants for a correct
-`ObjectEngineResult` (OER). The current architecture and continuation point are recorded in
-[Query-Planning Model Architecture and Selection-Flattening Handoff](https://slate.airbnb.tools/RJDGeEFw2Q/DRAFT+Query-Planning+Model+Architecture+and+Selection-Flattening+Handoff).
-The current repository state is summarized below so that the historical instructions are not
-mistaken for next steps.
+This is a historical handoff for the shift toward defining predicates and invariants for a correct `ObjectEngineResult` (OER). The current architecture and continuation point are recorded in [Query-Planning Model Architecture and Selection-Flattening Handoff](https://slate.airbnb.tools/RJDGeEFw2Q/DRAFT+Query-Planning+Model+Architecture+and+Selection-Flattening+Handoff). The current repository state is summarized below so that the historical instructions are not mistaken for next steps.
 
 Use this document for prior context:
 
@@ -14,31 +10,16 @@ Use this document for prior context:
 
 ## Current Repository State
 
-This repository currently contains two Gradle projects, `model` and `semantics`, with conventional
-source layouts:
+This repository currently contains two Gradle projects, `model` and `semantics`, with conventional source layouts:
 
-- model declarations and GraphQL Java-backed construction live under
-  [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/);
-- model examples and checks live under
-  [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/);
-- semantic operations live under
-  [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/); and
-- semantic examples and checks live under
-  [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/).
+- model declarations and GraphQL Java-backed construction live under [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/);
+- model examples and checks live under [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/);
+- semantic operations live under [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/); and
+- semantic examples and checks live under [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/).
 
-There are no executable JVM-global `schema` or `variableValues` declarations and no
-`establishAssumptions` initializer. `GlobalAssumptions` supplies the `schema` and `variableValues`
-for one reasoning world and parses validated named fragments into `SpecSelection` values.
-`GJAssumptions` is the GraphQL Java-backed implementation. Main sources use `jakarta.inject`
-annotations so constructors are injection-ready without selecting a DI framework. Guice is a
-test-only dependency of `semantics`.
+There are no executable JVM-global `schema` or `variableValues` declarations and no `establishAssumptions` initializer. `GlobalAssumptions` supplies the `schema` and `variableValues` for one reasoning world and parses validated named fragments into `SpecSelection` values. `GJAssumptions` is the GraphQL Java-backed implementation. Main sources use `jakarta.inject` annotations so constructors are injection-ready without selecting a DI framework. Guice is a test-only dependency of `semantics`.
 
-The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened
-field-resolution `Selection` values. Semantic equality for `Selection` remains undefined.
-`SpecSelectionFlattener` is implemented in
-[`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt).
-Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the
-modeled behavior, not proofs.
+The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened field-resolution `Selection` values. Semantic equality for `Selection` remains undefined. `SpecSelectionFlattener` is implemented in [`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt). Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the modeled behavior, not proofs.
 
 ## Historical Change in Direction
 
@@ -126,39 +107,25 @@ Each complete runtime type assignment produces an ordinary monomorphic requireme
 
 ## Historical Model Snapshot
 
-At the time of this handoff, the carrier model lived directly in [`model/`](./model/). It has since
-moved to the `model` Gradle project's conventional source tree. Read
-[`model/AGENTS.md`](./model/AGENTS.md) before extending it; that file records the current modeling
-discipline and scope boundaries.
+At the time of this handoff, the carrier model lived directly in [`model/`](./model/). It has since moved to the `model` Gradle project's conventional source tree. Read [`model/AGENTS.md`](./model/AGENTS.md) before extending it; that file records the current modeling discipline and scope boundaries.
 
 The decisions recorded for the proposed next phase were:
 
 - `Schema` now models the canonical query root, named input and output types, fields and arguments, type expressions, defaults, `__typename`, and the declarative relations needed to reason about polymorphic selection sets.
-- The schema was treated as a stipulated input to each reasoning exercise. It is now supplied by
-  `GlobalAssumptions.schema`, not an executable JVM-global declaration. Schema definitions use
-  canonical identity, while references from other modeling domains use type names and field
-  coordinates.
+- The schema was treated as a stipulated input to each reasoning exercise. It is now supplied by `GlobalAssumptions.schema`, not an executable JVM-global declaration. Schema definitions use canonical identity, while references from other modeling domains use type names and field coordinates.
 - `EngineResult` is a finite value tree containing object, list, and simple results.
 - An OER field contains one `Cell` with a nullable value and a check result.
 - Missing fields are distinct from present fields whose values are null.
-- Keys present in an OER contain a schema field name and fully coerced arguments. They contain
-  neither aliases nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER
-  may contain unresolved variables.
+- Keys present in an OER contain a schema field name and fully coerced arguments. They contain neither aliases nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER may contain unresolved variables.
 - Executor output values and OER values are separate representations.
 - Errors are collapsed to `GraphQLErrorValue`.
 - Correctness, demand, and checked-versus-raw semantics intentionally remain outside the `model` package.
 
-The schema model was judged sufficient for the immediate polymorphism work. Other semantic inputs
-were not yet modeled, including the supported operation and selection structures, `objectFragments`,
-executor functions, and the execution world that fixes their denotations. The carrier model also
-excluded custom scalars, precise error metadata, and lazy values or references returned by
-executors.
+The schema model was judged sufficient for the immediate polymorphism work. Other semantic inputs were not yet modeled, including the supported operation and selection structures, `objectFragments`, executor functions, and the execution world that fixes their denotations. The carrier model also excluded custom scalars, precise error metadata, and lazy values or references returned by executors.
 
 ## Historical Modeling Scope
 
-The proposed next round was to isolate the polymorphism problem and model how type-conditioned
-demand aggregates bottom-up while concrete object types resolve top-down. This scope is retained as
-historical context, not as current instructions.
+The proposed next round was to isolate the polymorphism problem and model how type-conditioned demand aggregates bottom-up while concrete object types resolve top-down. This scope is retained as historical context, not as current instructions.
 
 That round proposed:
 
@@ -168,26 +135,20 @@ That round proposed:
 - excluding `@skip` and `@include`; and
 - deferring other directive-controlled applicability.
 
-These exclusions were intended to be temporary. They removed independent sources of conditional
-demand to isolate what polymorphism alone required from the result predicate and demand closure.
+These exclusions were intended to be temporary. They removed independent sources of conditional demand to isolate what polymorphism alone required from the result predicate and demand closure.
 
 ## Historical Next Definitions
 
-The proposed sequence below predates the current `model` and `semantics` Gradle projects and the
-implemented selection flattener. It is not the current work queue:
+The proposed sequence below predates the current `model` and `semantics` Gradle projects and the implemented selection flattener. It is not the current work queue:
 
-1. **Remaining semantic inputs.** Define the supported operation, `objectFragments`, executor
-   functions, and world assumptions against which an OER is judged. Schema and variable bindings
-   belong to `GlobalAssumptions`.
+1. **Remaining semantic inputs.** Define the supported operation, `objectFragments`, executor functions, and world assumptions against which an OER is judged. Schema and variable bindings belong to `GlobalAssumptions`.
 2. **Executor denotations.** Define ordinary executors as deterministic functions of their object-fragment values and node resolvers as deterministic functions of node IDs.
 3. **Type applicability.** Given an object occurrence and its concrete type, determine which type-conditioned selections apply and construct their alias-free, fully coerced OER keys.
 4. **Polymorphic required-cell closure.** Seed demand from the external operation, add demand induced by `objectFragments`, and define the least closure while preserving unresolved type conditions as guards.
 5. **Nested result correctness.** Define how the guarded requirements specialize over concrete object and list results.
 6. **Perfect OER.** Require exactly the cells in the specialized least closure, with the correct values and checks.
 
-The sequence also left open whether to define a second predicate permitting additional semantically
-correct cells. Such a predicate would separate perfect minimality from the correctness of a
-production executor that conservatively over-materializes.
+The sequence also left open whether to define a second predicate permitting additional semantically correct cells. Such a predicate would separate perfect minimality from the correctness of a production executor that conservatively over-materializes.
 
 The desired result was an existence-and-uniqueness statement:
 
@@ -207,15 +168,10 @@ The proposed examples were:
 - two concrete implementations that induce the same continuation and may share its representation; and
 - a list containing more than one concrete object type.
 
-The intent was for these examples to become assertions over later semantic definitions, not
-simulations of an executor. Such assertions would be finite evidence rather than formal proofs.
+The intent was for these examples to become assertions over later semantic definitions, not simulations of an executor. Such assertions would be finite evidence rather than formal proofs.
 
 ## Historical Deferred Questions
 
-The deferred questions were `queryFragments`, variables and variable providers, `@skip`/`@include`,
-other directives, `@parent`, lazy executor values, legal RSS cycles, and whether conservative extra
-cells should be accepted by a separate coverage predicate.
+The deferred questions were `queryFragments`, variables and variable providers, `@skip`/`@include`, other directives, `@parent`, lazy executor values, legal RSS cycles, and whether conservative extra cells should be accepted by a separate coverage predicate.
 
-The historical recommendation was to defer production scheduler design until the output semantics
-were stable, then ask what static structures and runtime transitions were sufficient to establish
-them.
+The historical recommendation was to defer production scheduler design until the output semantics were stable, then ask what static structures and runtime transitions were sufficient to establish them.

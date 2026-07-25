@@ -86,13 +86,13 @@ class AssumptionsTest {
 
         val filter = assertIs<Schema.InputObjectValue>(node.arguments.getValue("filter"))
         assertSame(assumptions.schema.type("Filter"), filter.type)
-        val role = assertIs<Schema.EnumValue>(filter.inputObjectFields["role"])
+        val role = assertIs<Schema.EnumValue>(filter.fieldValues["role"])
         assertSame(assumptions.schema.type("Role"), role.type)
         assertEquals("ADMIN", role.enumValue)
-        val limit = assertIs<Schema.IntValue>(filter.inputObjectFields["limit"])
+        val limit = assertIs<Schema.IntValue>(filter.fieldValues["limit"])
         assertSame(assumptions.schema.type("Int"), limit.type)
         assertEquals(10, limit.intValue)
-        val tags = assertIs<Schema.InputListValue>(filter.inputObjectFields["tags"])
+        val tags = assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
         assertEquals(
             "one",
             assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
@@ -166,6 +166,12 @@ class AssumptionsTest {
         ).forEach { field ->
             assertSame(Schema.NoArguments, field.arguments)
         }
+        val emptyArguments = schema.argumentsValue(actors, emptyMap())
+        val otherEmptyArguments = schema.argumentsValue(typeName, emptyMap())
+        assertEquals(emptyArguments, otherEmptyArguments)
+        assertFalse(emptyArguments === otherEmptyArguments)
+        assertSame(Schema.NoArguments, emptyArguments.type)
+        assertSame(emptyArguments.type, emptyArguments.fieldValues.containingType)
         assertEquals(
             Schema.TypeExpr.List(
                 elementType = Schema.TypeExpr.Named(actor, isNullable = false),
@@ -184,19 +190,27 @@ class AssumptionsTest {
         val filterDefault =
             assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
         val filterValue = assertIs<Schema.InputObjectValue>(filterDefault.value)
+        val nodeArguments =
+            schema.argumentsValue(
+                field = nodeField,
+                fields = mapOf("filter" to filterValue),
+            )
+        assertSame(nodeField.arguments, nodeArguments.type)
+        assertSame(nodeArguments.type, nodeArguments.fieldValues.containingType)
+        assertSame(filterValue, nodeArguments.fieldValues["filter"])
         assertSame(schema.type("Filter"), filterValue.type)
-        val defaultRole = assertIs<Schema.EnumValue>(filterValue.inputObjectFields["role"])
+        val defaultRole = assertIs<Schema.EnumValue>(filterValue.fieldValues["role"])
         assertSame(schema.type("Role"), defaultRole.type)
         assertEquals("MEMBER", defaultRole.enumValue)
         val defaultLimit =
             assertIs<Schema.IntValue>(
-                filterValue.inputObjectFields["limit"],
+                filterValue.fieldValues["limit"],
             )
         assertSame(schema.type("Int"), defaultLimit.type)
         assertEquals(10, defaultLimit.intValue)
         val tags =
             assertIs<Schema.InputListValue>(
-                filterValue.inputObjectFields["tags"],
+                filterValue.fieldValues["tags"],
             )
         assertEquals(
             "a",
@@ -239,6 +253,12 @@ class AssumptionsTest {
             schemaB.inputObjectValue(
                 type = schemaB.type("Filter") as Schema.InputObjectType,
                 fields = mapOf("role" to foreignRole),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            schemaB.argumentsValue(
+                field = schemaA.field("Query", "node"),
+                fields = emptyMap(),
             )
         }
     }

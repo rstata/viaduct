@@ -123,7 +123,7 @@ class VariableBindings private constructor(
                 schema.inputObjectValue(
                     type = value.type,
                     fields =
-                        value.inputObjectFields.mapValues { (_, fieldValue) ->
+                        value.fieldValues.mapValues { (_, fieldValue) ->
                             instantiateVariables(
                                 fieldValue,
                                 unboundVariables,

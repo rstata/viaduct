@@ -7,6 +7,7 @@ import model.GJSchema
 import model.Schema
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -31,10 +32,42 @@ class SpecSelectionFlattenerTest {
 
         val version = result.single()
         assertEquals("version", version.key.fieldName)
-        assertEquals(emptyMap(), version.key.arguments)
+        assertSame(Schema.NoArguments, version.key.arguments.type)
+        assertEquals(emptyMap(), version.key.arguments.fieldValues)
         assertSame(fixture.query, version.nominalType)
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertNull(version.subselections)
+    }
+
+    @Test
+    fun `field arguments become values of the canonical argument definition`() {
+        val fixture = SchemaFixture()
+        val (typeInScope, selectionSet) =
+            fixture.assumptions.selectionsFrom(
+                """
+                fragment ignored on Query {
+                  release(channel: "beta")
+                }
+                """.trimIndent(),
+            )
+
+        val release =
+            flattener(fixture.assumptions)
+                .flatten(typeInScope, selectionSet)
+                .single()
+        val field = fixture.assumptions.schema.field("Query", "release")
+
+        assertSame(field.arguments, release.key.arguments.type)
+        assertSame(
+            field.arguments,
+            release.key.arguments.fieldValues.containingType,
+        )
+        assertEquals(
+            "beta",
+            assertIs<Schema.StringValue>(
+                release.key.arguments.fieldValues["channel"],
+            ).stringValue,
+        )
     }
 
     @Test
@@ -204,6 +237,7 @@ class SpecSelectionFlattenerTest {
 
             type Query {
               version: String
+              release(channel: String): String
               pet: Pet
               pairwise: I1
             }

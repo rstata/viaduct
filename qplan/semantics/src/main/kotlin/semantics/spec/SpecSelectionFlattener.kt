@@ -85,7 +85,11 @@ class SpecSelectionFlattener
                 key =
                     ObjectEngineResult.Key(
                         fieldName = fieldName,
-                        arguments = arguments,
+                        arguments =
+                            assumptions.schema.argumentsValue(
+                                field = field,
+                                fields = arguments,
+                            ),
                     ),
                 nominalType = context.nominalType,
                 possibleTypes = context.possibleTypes,

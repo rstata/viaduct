@@ -14,25 +14,31 @@ Use this document for prior context:
 
 ## Current Repository State
 
-This repository currently contains one Gradle project, `model`, with a conventional source layout:
+This repository currently contains two Gradle projects, `model` and `semantics`, with conventional
+source layouts:
 
 - model declarations and GraphQL Java-backed construction live under
-  [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/); and
-- executable examples of model construction and variable behavior live under
-  [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/).
+  [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/);
+- model examples and checks live under
+  [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/);
+- semantic operations live under
+  [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/); and
+- semantic examples and checks live under
+  [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/).
 
 There are no executable JVM-global `schema` or `variableValues` declarations and no
 `establishAssumptions` initializer. `GlobalAssumptions` supplies the `schema` and `variableValues`
 for one reasoning world and parses validated named fragments into `SpecSelection` values.
 `GJAssumptions` is the GraphQL Java-backed implementation. Main sources use `jakarta.inject`
-annotations so constructors are injection-ready, but the project does not select or depend on a DI
-framework.
+annotations so constructors are injection-ready without selecting a DI framework. Guice is a
+test-only dependency of `semantics`.
 
 The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened
-field-resolution `Selection` values. Semantic equality for `Selection` remains undefined. A
-separate semantics project and the operation that flattens `SpecSelection` values into `Selection`
-values are intentionally absent from this model-only snapshot; they can be reconstructed in later
-history.
+field-resolution `Selection` values. Semantic equality for `Selection` remains undefined.
+`SpecSelectionFlattener` is implemented in
+[`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt).
+Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the
+modeled behavior, not proofs.
 
 ## Historical Change in Direction
 
@@ -167,8 +173,8 @@ demand to isolate what polymorphism alone required from the result predicate and
 
 ## Historical Next Definitions
 
-The proposed sequence below predates the current `model` Gradle project and its selection models.
-It is not the current work queue:
+The proposed sequence below predates the current `model` and `semantics` Gradle projects and the
+implemented selection flattener. It is not the current work queue:
 
 1. **Remaining semantic inputs.** Define the supported operation, `objectFragments`, executor
    functions, and world assumptions against which an OER is judged. Schema and variable bindings

@@ -4,6 +4,8 @@
 
 Treat the files in this directory as a baseline data model for reasoning about the results of Viaduct query executions. They define the carrier values that may appear in an OER tree, but they do **not** define which OER is correct for an operation.
 
+Follow the repository-wide purpose and modeling discipline in [`../AGENTS.md`](../AGENTS.md).
+
 Keep definitions of correctness in other packages. In particular, do not use this package to define:
 
 - the perfect or correct OER for an operation;
@@ -16,9 +18,8 @@ Those concepts belong to separate reasoning domains. Do not project them back in
 
 ## Modeling Discipline
 
-The Kotlin code in this directory must compile, but it is not intended to become running production code. Use Kotlin as a stand-in for a formal modeling language such as TLA+: it provides a more rigorous vocabulary than prose while remaining familiar. Read declarations as mathematical sets, values, functions, and relations unless their KDoc gives them operational semantics. Some Java and Kotlin runtime conventions are deliberately replaced by mathematical assumptions:
+Some Java and Kotlin runtime conventions are deliberately replaced by mathematical assumptions:
 
-- `GlobalAssumptions` contains the schema and variable bindings stipulated for one reasoning world. These are mathematical globals, not JVM-global values. Code that interprets model values does so under an explicit assumptions value. Do not assume that the assumptions are singleton-scoped; an operation may derive a new immutable assumption snapshot.
 - For value objects, Java and Kotlin normally interpret `Object.equals` as strict equality: `true` means definitely equal and `false` means definitely unequal. As documented in `GraphQLValue.kt`, equality is conservative when assumptions permit unbound variables: `true` still means definitely equal, while `false` means the values might be unequal rather than definitely unequal.
 - In our models, we use value equality to mean _semantic_ equality, not syntactic equality.  In the case of `Selection` for example, data-class-style equality would capture syntactic equality of `Selection`s but not true runtime equivalence.  We do not use value equality unless there's a clear semantic meaning for it.  At the same time, this is supposed to be a "mathematical model," which begs the question: what does NON-value equality mean. As of now we don't have a great answer, hopefully we'll tighten this up over time.
 - Treat `EngineResult` values as finite, inductively defined algebraic values. Kotlin reference identity, object sharing, self-reference, and cyclic runtime object graphs are outside the model and must not be inferred from the use of Kotlin interfaces.
@@ -31,8 +32,6 @@ The Kotlin code in this directory must compile, but it is not intended to become
 - Methods and derived properties may specify partial mathematical functions or declarative relations. A nullable result and a thrown exception have the distinct meanings documented by the declaration. Do not infer an implementation, search procedure, cache, index, or complexity from their Kotlin signatures.
 - `suspend` permits an executable implementation to suspend but introduces no scheduling, concurrency, blocking, or nondeterminism into the model. Modeled lookups terminate with one of their documented outcomes.
 - `FieldValues` and `VariableBindings` deliberately throw from `get` when a field or variable is missing. Map extension helpers such as `getOrElse` may call that throwing operation rather than applying their fallback. Check `containsKey` explicitly when absence is possible.
-
-Successful compilation checks only Kotlin syntax and host-language types; it does not establish any of the assumptions (e.g., about the actual schema being assumed) that any reasoning effort might be making.
 
 Keep package-wide assumptions and scope boundaries in this file. Keep KDoc focused on invariants and semantics specific to the type it documents.
 

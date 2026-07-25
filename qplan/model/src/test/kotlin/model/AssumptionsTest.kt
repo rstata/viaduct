@@ -140,6 +140,11 @@ class AssumptionsTest {
         val actor = assertIs<Schema.UnionType>(schema.type("Actor"))
 
         assertSame(query, schema.type("Query"))
+        assertSame(Schema.IntType, schema.type("Int"))
+        assertSame(Schema.FloatType, schema.type("Float"))
+        assertSame(Schema.StringType, schema.type("String"))
+        assertSame(Schema.BooleanType, schema.type("Boolean"))
+        assertSame(Schema.IDType, schema.type("ID"))
         assertEquals(setOf(user, admin), node.possibleTypes)
         assertEquals(setOf(user, admin), actor.possibleTypes)
         assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation("Node", "User"))
@@ -153,7 +158,7 @@ class AssumptionsTest {
         assertSame(Schema.NoArguments, typeName.arguments)
         assertEquals(emptyMap(), Schema.NoArguments.fields)
         assertEquals(
-            Schema.TypeExpr.Named(Schema.ScalarType.String, isNullable = false),
+            Schema.TypeExpr.Named(Schema.StringType, isNullable = false),
             typeName.type,
         )
 

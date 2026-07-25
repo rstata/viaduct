@@ -21,8 +21,8 @@ package model
  * [DefaultValue] use structural equality.
  *
  * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
- * scalar definitions are the five [ScalarType] singletons; whenever one belongs to this schema,
- * [type] returns that singleton.
+ * scalar definitions are the five [ScalarType] singletons [IntType], [FloatType], [StringType],
+ * [BooleanType], and [IDType]; whenever one belongs to this schema, [type] returns that singleton.
  *
  * Type-extension declarations, their boundaries, and their provenance are not represented; their
  * merged effects are already present in the effective field maps. Directives, descriptions, source
@@ -161,35 +161,22 @@ interface Schema {
         NONE,
     }
 
-    fun intValue(value: kotlin.Int): IntValue {
-        requireCanonicalType(ScalarType.Int)
-        return DefaultIntValue(value)
-    }
+    fun intValue(value: Int): IntValue = DefaultIntValue(value)
 
     fun floatValue(value: Double): FloatValue {
-        requireCanonicalType(ScalarType.Float)
         require(value.isFinite()) { "GraphQL Float values must be finite" }
         return DefaultFloatValue(value)
     }
 
-    fun stringValue(value: kotlin.String): StringValue {
-        requireCanonicalType(ScalarType.String)
-        return DefaultStringValue(value)
-    }
+    fun stringValue(value: String): StringValue = DefaultStringValue(value)
 
-    fun booleanValue(value: Boolean): BooleanValue {
-        requireCanonicalType(ScalarType.Boolean)
-        return DefaultBooleanValue(value)
-    }
+    fun booleanValue(value: Boolean): BooleanValue = DefaultBooleanValue(value)
 
-    fun idValue(value: kotlin.String): IDValue {
-        requireCanonicalType(ScalarType.ID)
-        return DefaultIDValue(value)
-    }
+    fun idValue(value: String): IDValue = DefaultIDValue(value)
 
     fun enumValue(
         type: EnumType,
-        value: kotlin.String,
+        value: String,
     ): EnumValue {
         requireCanonicalType(type)
         require(value in type.values) {
@@ -205,7 +192,7 @@ interface Schema {
 
     fun inputObjectValue(
         type: InputObjectType,
-        fields: Map<kotlin.String, InputValue?>,
+        fields: Map<String, InputValue?>,
     ): InputObjectValue {
         requireCanonicalType(type)
         fields.values.forEach(::requireCanonicalValue)
@@ -217,7 +204,7 @@ interface Schema {
 
     fun argumentsValue(
         field: OutputField,
-        fields: Map<kotlin.String, InputValue?>,
+        fields: Map<String, InputValue?>,
     ): ArgumentsValue {
         requireCanonicalField(field)
         fields.values.forEach(::requireCanonicalValue)
@@ -227,7 +214,7 @@ interface Schema {
         )
     }
 
-    fun variableValue(variableName: kotlin.String): VariableValue =
+    fun variableValue(variableName: String): VariableValue =
         DefaultVariableValue(variableName)
 
     private fun requireCanonicalType(type: Type) {
@@ -251,7 +238,7 @@ interface Schema {
         if (value == null || value === ErrorValue) return
 
         when (value) {
-            is ScalarValue -> requireCanonicalType(value.type)
+            is ScalarValue -> Unit
             is EnumValue -> requireCanonicalType(value.type)
             is InputListValue -> value.inputListValues.forEach(::requireCanonicalValue)
             is InputObjectValue -> {
@@ -285,7 +272,7 @@ interface Schema {
     sealed interface SimpleValue : InputValue, OutputValue, TypedValue, EngineResult {
         override val type: SimpleType
 
-        override val typeName: kotlin.String
+        override val typeName: String
             get() = type.typeName
     }
 
@@ -301,45 +288,45 @@ interface Schema {
     }
 
     sealed interface IntValue : ScalarValue {
-        override val type: ScalarType
-            get() = ScalarType.Int
+        override val type: IntType
+            get() = IntType
 
-        val intValue: kotlin.Int
+        val intValue: Int
     }
 
     sealed interface FloatValue : ScalarValue {
-        override val type: ScalarType
-            get() = ScalarType.Float
+        override val type: FloatType
+            get() = FloatType
 
         /** Invariant: this value is finite; NaN and positive or negative infinity are excluded. */
         val floatValue: Double
     }
 
     sealed interface StringValue : ScalarValue {
-        override val type: ScalarType
-            get() = ScalarType.String
+        override val type: StringType
+            get() = StringType
 
-        val stringValue: kotlin.String
+        val stringValue: String
     }
 
     sealed interface BooleanValue : ScalarValue {
-        override val type: ScalarType
-            get() = ScalarType.Boolean
+        override val type: BooleanType
+            get() = BooleanType
 
         val booleanValue: Boolean
     }
 
     sealed interface IDValue : ScalarValue {
-        override val type: ScalarType
-            get() = ScalarType.ID
+        override val type: IDType
+            get() = IDType
 
-        val idValue: kotlin.String
+        val idValue: String
     }
 
     sealed interface EnumValue : SimpleValue {
         override val type: EnumType
 
-        val enumValue: kotlin.String
+        val enumValue: String
     }
 
     /**
@@ -407,13 +394,13 @@ interface Schema {
      */
     class FieldValues<out T : Any, out V : Value>(
         val containingType: T,
-        private val backingMap: Map<kotlin.String, V?>,
-    ) : Map<kotlin.String, V?> by backingMap {
+        private val backingMap: Map<String, V?>,
+    ) : Map<String, V?> by backingMap {
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: kotlin.String): V? = getValue(key)
+        override operator fun get(key: String): V? = getValue(key)
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: kotlin.String): V? {
+        fun getValue(key: String): V? {
             if (!backingMap.containsKey(key)) {
                 val typeName =
                     when (containingType) {
@@ -431,10 +418,10 @@ interface Schema {
                 containingType === other.containingType &&
                 backingMap == other.backingMap
 
-        override fun hashCode(): kotlin.Int =
+        override fun hashCode(): Int =
             31 * System.identityHashCode(containingType) + backingMap.hashCode()
 
-        override fun toString(): kotlin.String = backingMap.toString()
+        override fun toString(): String = backingMap.toString()
     }
 
     /**
@@ -454,7 +441,7 @@ interface Schema {
      * equal depending on the eventual bindings.
      */
     sealed interface VariableValue : InputValue {
-        val variableName: kotlin.String
+        val variableName: String
     }
 
     /**
@@ -481,25 +468,25 @@ interface Schema {
         override val type: Nothing
             get() = unsupported()
 
-        override val typeName: kotlin.String
+        override val typeName: String
             get() = unsupported()
 
-        override val intValue: kotlin.Int
+        override val intValue: Int
             get() = unsupported()
 
         override val floatValue: Double
             get() = unsupported()
 
-        override val stringValue: kotlin.String
+        override val stringValue: String
             get() = unsupported()
 
         override val booleanValue: Boolean
             get() = unsupported()
 
-        override val idValue: kotlin.String
+        override val idValue: String
             get() = unsupported()
 
-        override val enumValue: kotlin.String
+        override val enumValue: String
             get() = unsupported()
 
         override val inputListValues: List<InputValue?>
@@ -514,7 +501,7 @@ interface Schema {
         override val outputObjectFields: FieldValues<ObjectType, OutputValue>
             get() = unsupported()
 
-        override val variableName: kotlin.String
+        override val variableName: String
             get() = unsupported()
 
         private fun unsupported(): Nothing =
@@ -559,7 +546,7 @@ interface Schema {
      *
      * - `f.fieldName == "__typename"`;
      * - `f.containingType === t`;
-     * - `f.type == TypeExpr.Named(ScalarType.String, isNullable = false)`;
+     * - `f.type == TypeExpr.Named(StringType, isNullable = false)`;
      * - `f.arguments == NoArguments`; and
      * - `field(t.typeName, "__typename") === f`.
      *
@@ -586,23 +573,23 @@ interface Schema {
     /**
      * A scalar in the model's fixed universe of built-in GraphQL scalar types.
      *
-     * The instances are exactly [Int], [Float], [String], [Boolean], and [ID], and their
-     * [Type.typeName] values are fixed by those declarations. Any scalar reachable from this
-     * schema is the corresponding singleton.
+     * The instances are exactly [IntType], [FloatType], [StringType], [BooleanType], and [IDType],
+     * and their [Type.typeName] values are fixed by those declarations. Any scalar reachable from
+     * this schema is the corresponding singleton.
      */
-    sealed class ScalarType private constructor(
-        final override val typeName: kotlin.String,
-    ) : SimpleType {
-        object Int : ScalarType("Int")
+    sealed class ScalarType protected constructor(
+        final override val typeName: String,
+    ) : SimpleType
 
-        object Float : ScalarType("Float")
+    object IntType : ScalarType("Int")
 
-        object String : ScalarType("String")
+    object FloatType : ScalarType("Float")
 
-        object Boolean : ScalarType("Boolean")
+    object StringType : ScalarType("String")
 
-        object ID : ScalarType("ID")
-    }
+    object BooleanType : ScalarType("Boolean")
+
+    object IDType : ScalarType("ID")
 
     /**
      * An enum whose [values] are exactly its finite set of legal GraphQL enum value names.

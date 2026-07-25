@@ -70,11 +70,11 @@ internal class GJSchemaDecoder(
 
     private fun registerBuiltInScalars() {
         listOf(
-            Schema.ScalarType.Int,
-            Schema.ScalarType.Float,
-            Schema.ScalarType.String,
-            Schema.ScalarType.Boolean,
-            Schema.ScalarType.ID,
+            Schema.IntType,
+            Schema.FloatType,
+            Schema.StringType,
+            Schema.BooleanType,
+            Schema.IDType,
         ).forEach { scalar ->
             types[scalar.typeName] = scalar
         }
@@ -222,7 +222,7 @@ internal class GJSchemaDecoder(
             Schema.OutputField(
                 fieldName = "__typename",
                 containingType = type,
-                type = Schema.TypeExpr.Named(Schema.ScalarType.String, isNullable = false),
+                type = Schema.TypeExpr.Named(Schema.StringType, isNullable = false),
                 arguments = Schema.NoArguments,
             )
         compositeFields.getValue(type)[field.fieldName] = field
@@ -391,9 +391,9 @@ private fun decodeScalarLiteral(
     value: Value<*>,
 ): Schema.InputValue =
     when (scalarType) {
-        Schema.ScalarType.Int ->
+        Schema.IntType ->
             schema.intValue((value as IntValue).value.intValueExact())
-        Schema.ScalarType.Float ->
+        Schema.FloatType ->
             schema.floatValue(
                 when (value) {
                     is FloatValue -> value.value.toDouble()
@@ -402,9 +402,9 @@ private fun decodeScalarLiteral(
                 },
             )
 
-        Schema.ScalarType.String -> schema.stringValue((value as StringValue).value!!)
-        Schema.ScalarType.Boolean -> schema.booleanValue((value as BooleanValue).isValue)
-        Schema.ScalarType.ID ->
+        Schema.StringType -> schema.stringValue((value as StringValue).value!!)
+        Schema.BooleanType -> schema.booleanValue((value as BooleanValue).isValue)
+        Schema.IDType ->
             schema.idValue(
                 when (value) {
                     is StringValue -> value.value!!
@@ -512,11 +512,11 @@ private fun decodeScalarExternal(
     value: Any,
 ): Schema.InputValue =
     when (scalarType) {
-        Schema.ScalarType.Int -> schema.intValue((value as Number).toInt())
-        Schema.ScalarType.Float -> schema.floatValue((value as Number).toDouble())
-        Schema.ScalarType.String -> schema.stringValue(value as String)
-        Schema.ScalarType.Boolean -> schema.booleanValue(value as Boolean)
-        Schema.ScalarType.ID -> schema.idValue(value.toString())
+        Schema.IntType -> schema.intValue((value as Number).toInt())
+        Schema.FloatType -> schema.floatValue((value as Number).toDouble())
+        Schema.StringType -> schema.stringValue(value as String)
+        Schema.BooleanType -> schema.booleanValue(value as Boolean)
+        Schema.IDType -> schema.idValue(value.toString())
     }
 
 private fun decodeObjectExternal(

@@ -26,3 +26,24 @@ a new immutable assumption snapshot.
 
 Compilation and tests provide finite evidence that the model is internally consistent and behaves
 as illustrated. They do not prove its mathematical assumptions or semantic claims.
+
+## Claims And Arguments
+
+Record important propositions in [`claims.md`](./claims.md). Give each claim a stable, unique,
+kebab-case label and a one-sentence statement in this form:
+
+```markdown
+**[claim-label]** One-sentence statement of the claim.
+```
+
+An optional paragraph of two to five sentences may follow when the claim needs clarification, but
+keep supporting reasoning out of the registry.
+
+When a claim has a supporting proof, derivation, or body of evidence, put it in
+`arguments/<claim-label>.md`. State the argument's scope and assumptions there, distinguish finite
+test evidence from proof, and identify any observations or cases the argument intentionally
+excludes. An argument file is optional: the absence of one means the claim is currently being
+assumed or recorded without support, not that support should be inferred.
+
+Update a claim and its argument together whenever code or later reasoning strengthens, weakens, or
+invalidates either one.

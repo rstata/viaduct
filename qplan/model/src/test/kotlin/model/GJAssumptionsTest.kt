@@ -85,7 +85,7 @@ class GJAssumptionsTest {
             10,
             assertIs<GraphQLIntValue>(filter.inputObjectFields["limit"]).intValue,
         )
-        val tags = assertIs<GraphQLInputList>(filter.inputObjectFields["tags"])
+        val tags = assertIs<GraphQLInputListValue>(filter.inputObjectFields["tags"])
         assertEquals(
             "one",
             assertIs<GraphQLStringValue>(tags.inputListValues.single()).stringValue,
@@ -170,7 +170,7 @@ class GJAssumptionsTest {
             ).intValue,
         )
         val tags =
-            assertIs<GraphQLInputList>(
+            assertIs<GraphQLInputListValue>(
                 filterValue.inputObjectFields["tags"],
             )
         assertEquals(

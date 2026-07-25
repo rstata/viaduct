@@ -27,7 +27,7 @@ class VariableValuesTest {
                         "count" to GraphQLVariableValue.of("count"),
                         "nothing" to GraphQLVariableValue.of("nothing"),
                         "nested" to
-                            GraphQLInputList.of(
+                            GraphQLInputListValue.of(
                                 listOf(
                                     unresolved,
                                     other,
@@ -48,13 +48,13 @@ class VariableValuesTest {
         assertNull(instantiated.inputObjectFields["nothing"])
         assertEquals(
             listOf(unresolved, other, unresolved),
-            assertIs<GraphQLInputList>(
+            assertIs<GraphQLInputListValue>(
                 instantiated.inputObjectFields["nested"],
             ).inputListValues,
         )
 
         val exception =
-            assertFailsWith<MissingVariableException> {
+            assertFailsWith<MissingVariablesException> {
                 variableValues.instantiateAllVariables(value)
             }
         assertEquals(listOf(unresolved, other), exception.variableValues)
@@ -77,11 +77,11 @@ class VariableValuesTest {
         val third = GraphQLVariableValue.of("third")
 
         val exception =
-            assertFailsWith<MissingVariableException> {
+            assertFailsWith<MissingVariablesException> {
                 VariableBindings.from(
                     mapOf(
                         "list" to
-                            GraphQLInputList.of(
+                            GraphQLInputListValue.of(
                                 listOf(first, second, GraphQLVariableValue.of("first")),
                             ),
                         "object" to

@@ -7,7 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertSame
 
 class AssumptionsTest {
     @Test
@@ -59,9 +58,9 @@ class AssumptionsTest {
             )
 
         val node = assertIs<SpecSelection.Field>(selections.single())
-        assertSame(filter, node.arguments.getValue("filter"))
-        assertSame(filterType, filter.type)
-        assertSame(assumptions.schema.type("Filter"), filter.type)
+        assertEquals(filter, node.arguments.getValue("filter"))
+        assertEquals(filterType, filter.type)
+        assertEquals(assumptions.schema.type("Filter"), filter.type)
     }
 
     @Test
@@ -79,18 +78,18 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        assertSame(assumptions.schema.query, typeCondition)
+        assertEquals(assumptions.schema.query, typeCondition)
         val node = assertIs<SpecSelection.Field>(selections.single())
         assertEquals("result", node.alias)
         assertEquals("node", node.fieldName)
 
         val filter = assertIs<Schema.InputObjectValue>(node.arguments.getValue("filter"))
-        assertSame(assumptions.schema.type("Filter"), filter.type)
+        assertEquals(assumptions.schema.type("Filter"), filter.type)
         val role = assertIs<Schema.EnumValue>(filter.fieldValues["role"])
-        assertSame(assumptions.schema.type("Role"), role.type)
+        assertEquals(assumptions.schema.type("Role"), role.type)
         assertEquals("ADMIN", role.enumValue)
         val limit = assertIs<Schema.IntValue>(filter.fieldValues["limit"])
-        assertSame(assumptions.schema.type("Int"), limit.type)
+        assertEquals(assumptions.schema.type("Int"), limit.type)
         assertEquals(10, limit.intValue)
         val tags = assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
         assertEquals(
@@ -129,8 +128,8 @@ class AssumptionsTest {
                 bindings = mapOf("failed" to Schema.ErrorValue),
             )
 
-        assertSame(suppliedSchema, assumptions.schema)
-        assertSame(Schema.ErrorValue, assumptions.variableValues["failed"])
+        assertEquals(suppliedSchema, assumptions.schema)
+        assertEquals(Schema.ErrorValue, assumptions.variableValues["failed"])
 
         val schema = assumptions.schema
         val query = schema.query
@@ -139,12 +138,12 @@ class AssumptionsTest {
         val admin = assertIs<Schema.ObjectType>(schema.type("Admin"))
         val actor = assertIs<Schema.UnionType>(schema.type("Actor"))
 
-        assertSame(query, schema.type("Query"))
-        assertSame(Schema.IntType, schema.type("Int"))
-        assertSame(Schema.FloatType, schema.type("Float"))
-        assertSame(Schema.StringType, schema.type("String"))
-        assertSame(Schema.BooleanType, schema.type("Boolean"))
-        assertSame(Schema.IDType, schema.type("ID"))
+        assertEquals(query, schema.type("Query"))
+        assertEquals(Schema.IntType, schema.type("Int"))
+        assertEquals(Schema.FloatType, schema.type("Float"))
+        assertEquals(Schema.StringType, schema.type("String"))
+        assertEquals(Schema.BooleanType, schema.type("Boolean"))
+        assertEquals(Schema.IDType, schema.type("ID"))
         assertEquals(setOf(user, admin), node.possibleTypes)
         assertEquals(setOf(user, admin), actor.possibleTypes)
         assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation("Node", "User"))
@@ -154,8 +153,8 @@ class AssumptionsTest {
         assertEquals(true, schema.isSpreadable("Node", "Actor"))
 
         val typeName = schema.field("Node", "__typename")
-        assertSame(node, typeName.containingType)
-        assertSame(Schema.NoArguments, typeName.arguments)
+        assertEquals(node, typeName.containingType)
+        assertEquals(Schema.NoArguments, typeName.arguments)
         assertEquals(emptyMap(), Schema.NoArguments.fields)
         assertEquals(
             Schema.TypeExpr.Named(Schema.StringType, isNullable = false),
@@ -169,14 +168,13 @@ class AssumptionsTest {
             schema.field("Admin", "level"),
             actors,
         ).forEach { field ->
-            assertSame(Schema.NoArguments, field.arguments)
+            assertEquals(Schema.NoArguments, field.arguments)
         }
         val emptyArguments = schema.argumentsValue(actors, emptyMap())
         val otherEmptyArguments = schema.argumentsValue(typeName, emptyMap())
         assertEquals(emptyArguments, otherEmptyArguments)
-        assertFalse(emptyArguments === otherEmptyArguments)
-        assertSame(Schema.NoArguments, emptyArguments.type)
-        assertSame(emptyArguments.type, emptyArguments.fieldValues.containingType)
+        assertEquals(Schema.NoArguments, emptyArguments.type)
+        assertEquals(emptyArguments.type, emptyArguments.fieldValues.containingType)
         assertEquals(
             Schema.TypeExpr.List(
                 elementType = Schema.TypeExpr.Named(actor, isNullable = false),
@@ -186,10 +184,10 @@ class AssumptionsTest {
         )
 
         val nodeField = schema.field("Query", "node")
-        assertSame(query, nodeField.containingType)
+        assertEquals(query, nodeField.containingType)
         assertFalse(nodeField.arguments == Schema.NoArguments)
         val filterArgument = nodeField.arguments.fields.getValue("filter")
-        assertSame(nodeField.arguments, filterArgument.containingType)
+        assertEquals(nodeField.arguments, filterArgument.containingType)
         assertEquals("filter", filterArgument.name)
         assertFalse(filterArgument.isRequired)
         val filterDefault =
@@ -200,18 +198,18 @@ class AssumptionsTest {
                 field = nodeField,
                 fields = mapOf("filter" to filterValue),
             )
-        assertSame(nodeField.arguments, nodeArguments.type)
-        assertSame(nodeArguments.type, nodeArguments.fieldValues.containingType)
-        assertSame(filterValue, nodeArguments.fieldValues["filter"])
-        assertSame(schema.type("Filter"), filterValue.type)
+        assertEquals(nodeField.arguments, nodeArguments.type)
+        assertEquals(nodeArguments.type, nodeArguments.fieldValues.containingType)
+        assertEquals(filterValue, nodeArguments.fieldValues["filter"])
+        assertEquals(schema.type("Filter"), filterValue.type)
         val defaultRole = assertIs<Schema.EnumValue>(filterValue.fieldValues["role"])
-        assertSame(schema.type("Role"), defaultRole.type)
+        assertEquals(schema.type("Role"), defaultRole.type)
         assertEquals("MEMBER", defaultRole.enumValue)
         val defaultLimit =
             assertIs<Schema.IntValue>(
                 filterValue.fieldValues["limit"],
             )
-        assertSame(schema.type("Int"), defaultLimit.type)
+        assertEquals(schema.type("Int"), defaultLimit.type)
         assertEquals(10, defaultLimit.intValue)
         val tags =
             assertIs<Schema.InputListValue>(
@@ -221,49 +219,136 @@ class AssumptionsTest {
             "a",
             assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
         )
+        val nodeKey =
+            schema.objectEngineResultKey(
+                field = nodeField,
+                arguments = mapOf("filter" to filterValue),
+            )
+        assertEquals(nodeField, nodeKey.field)
+        assertEquals(nodeField.arguments, nodeKey.arguments.type)
+        assertEquals(filterValue, nodeKey.arguments.fieldValues["filter"])
+        assertEquals(
+            nodeKey,
+            schema.objectEngineResultKey(
+                field = nodeField,
+                arguments = mapOf("filter" to filterValue),
+            ),
+        )
+        val interfaceIdKey =
+            schema.objectEngineResultKey(
+                field = schema.field("Node", "id"),
+                arguments = emptyMap(),
+            )
+        val objectIdKey =
+            schema.objectEngineResultKey(
+                field = schema.field("User", "id"),
+                arguments = emptyMap(),
+            )
+        assertFalse(interfaceIdKey == objectIdKey)
 
         val friendField = schema.field("User", "friend")
         assertFalse(friendField.arguments == Schema.NoArguments)
         val limitArgument: Schema.InputLikeField =
             friendField.arguments.fields.getValue("limit")
-        assertSame(friendField.arguments, limitArgument.containingType)
+        assertEquals(friendField.arguments, limitArgument.containingType)
         assertEquals("limit", limitArgument.name)
         assertFalse(limitArgument.isRequired)
 
         val filter = assertIs<Schema.InputObjectType>(schema.type("Filter"))
         val limitInputField: Schema.InputLikeField = filter.fields.getValue("limit")
-        assertSame(filter, limitInputField.containingType)
+        assertEquals(filter, limitInputField.containingType)
         assertEquals("limit", limitInputField.name)
         assertFalse(limitInputField.isRequired)
         assertFalse(filter.fields.getValue("tags").type.isBaseTypeNullable)
     }
 
     @Test
-    fun `value factories reject definitions from another schema instance`() {
-        val schemaA = GJSchema.fromSDL(SCHEMA_SDL)
-        val schemaB = GJSchema.fromSDL(SCHEMA_SDL)
-        val foreignRole =
-            schemaA.enumValue(
-                schemaA.type("Role") as Schema.EnumType,
+    fun `input-like factories convert host values according to the schema`() {
+        val schema = GJSchema.fromSDL(SCHEMA_SDL)
+        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val filter =
+            schema.inputObjectValue(
+                type = filterType,
+                fields =
+                    mapOf(
+                        "limit" to 20,
+                        "tags" to listOf("one", "two"),
+                        "role" to "ADMIN",
+                    ),
+            )
+
+        assertEquals(20, assertIs<Schema.IntValue>(filter.fieldValues["limit"]).intValue)
+        assertEquals(
+            listOf("one", "two"),
+            assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
+                .inputListValues
+                .map { assertIs<Schema.StringValue>(it).stringValue },
+        )
+        assertEquals(
+            "ADMIN",
+            assertIs<Schema.EnumValue>(filter.fieldValues["role"]).enumValue,
+        )
+
+        val nodeField = schema.field("Query", "node")
+        val arguments =
+            schema.argumentsValue(
+                field = nodeField,
+                fields =
+                    mapOf(
+                        "filter" to
+                            mapOf(
+                                "limit" to 30,
+                                "tags" to listOf("nested"),
+                            ),
+                    ),
+            )
+        val nestedFilter =
+            assertIs<Schema.InputObjectValue>(arguments.fieldValues["filter"])
+        assertEquals(filterType, nestedFilter.type)
+        assertEquals(
+            30,
+            assertIs<Schema.IntValue>(nestedFilter.fieldValues["limit"]).intValue,
+        )
+    }
+
+    @Test
+    fun `input-like factories reject values that do not match the schema`() {
+        val schema = GJSchema.fromSDL(SCHEMA_SDL)
+        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val otherRole =
+            schema.enumValue(
+                schema.type("OtherRole") as Schema.EnumType,
                 "MEMBER",
             )
 
-        assertFailsWith<IllegalArgumentException> {
-            schemaB.inputObjectValue(
-                type = schemaA.type("Filter") as Schema.InputObjectType,
-                fields = emptyMap(),
+        assertFailsWith<ClassCastException> {
+            schema.inputObjectValue(
+                type = filterType,
+                fields = mapOf("limit" to "twenty"),
             )
         }
-        assertFailsWith<IllegalArgumentException> {
-            schemaB.inputObjectValue(
-                type = schemaB.type("Filter") as Schema.InputObjectType,
-                fields = mapOf("role" to foreignRole),
+        assertFailsWith<ClassCastException> {
+            schema.inputObjectValue(
+                type = filterType,
+                fields = mapOf("tags" to listOf(null)),
             )
         }
-        assertFailsWith<IllegalArgumentException> {
-            schemaB.argumentsValue(
-                field = schemaA.field("Query", "node"),
-                fields = emptyMap(),
+        assertFailsWith<ClassCastException> {
+            schema.inputObjectValue(
+                type = filterType,
+                fields = mapOf("missing" to 1),
+            )
+        }
+        assertFailsWith<ClassCastException> {
+            schema.argumentsValue(
+                field = schema.field("Query", "node"),
+                fields = mapOf("filter" to 1),
+            )
+        }
+        assertFailsWith<ClassCastException> {
+            schema.inputObjectValue(
+                type = filterType,
+                fields = mapOf("role" to otherRole),
             )
         }
     }
@@ -330,6 +415,10 @@ class AssumptionsTest {
             enum Role {
               MEMBER
               ADMIN
+            }
+
+            enum OtherRole {
+              MEMBER
             }
 
             input Filter {

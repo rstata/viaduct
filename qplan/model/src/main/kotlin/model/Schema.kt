@@ -7,18 +7,20 @@ package model
  * implementations use `@Singleton` to record this modeling assumption for dependency injection.
  *
  * Definitions are canonical within this schema: each type name, field coordinate, input-field
- * coordinate, and argument coordinate identifies exactly one definition object. For every
- * definition `d` reachable from this schema, `type(d.typeName) === d` when `d` is a [Type];
- * the corresponding owner map contains `d` by its declared name for nested definitions. Every
- * [TypeExpr.baseType] reachable from the schema is likewise the canonical result of [type].
+ * coordinate, and argument coordinate identifies exactly one definition object. Definition
+ * classes do not override `Any.equals` or `Any.hashCode`, so `==` is reference equality and two
+ * definitions are equal exactly when they represent the same schema element. For every definition
+ * `d` reachable from this schema, `type(d.typeName) == d` when `d` is a [Type]; the corresponding
+ * owner map contains `d` by its declared name for nested definitions. Every [TypeExpr.baseType]
+ * reachable from the schema is likewise the canonical result of [type].
  *
- * Construct [Value] and [ArgumentsValue] instances through this schema's value factory methods.
- * Those methods require every carried definition to be canonical in this schema, so reasoning
- * within the one-schema world may assume same-schema ownership without repeating validation. Other
- * modeling domains may instead use names and coordinates. Nested definitions navigate to their
- * canonical owners through [OutputField.containingType] and [InputLikeField.containingType].
- * Definition objects use identity equality; only acyclic value objects such as [TypeExpr] and
- * [DefaultValue] use structural equality.
+ * Construct [Value], [ArgumentsValue], and [ObjectEngineResult.Key] instances through this schema's
+ * factory methods. The one-schema world stipulates that every definition supplied to those methods
+ * is canonical in this schema; the factories do not revalidate that ownership. Other modeling
+ * domains may instead use names and coordinates. Nested definitions navigate to their canonical
+ * owners through [OutputField.containingType] and [InputLikeField.containingType]. Compare
+ * definitions with ordinary `==`, `!=`, and collection equality operations. Only acyclic value
+ * objects such as [TypeExpr] and [DefaultValue] add structural equality over their properties.
  *
  * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
  * scalar definitions are the five [ScalarType] singletons [IntType], [FloatType], [StringType],
@@ -46,14 +48,14 @@ interface Schema {
     /**
      * The canonical query root.
      *
-     * Invariants: `query.typeName == "Query"` and `type("Query") === query`.
+     * Invariants: `query.typeName == "Query"` and `type("Query") == query`.
      */
     val query: ObjectType
 
     /**
      * Returns the canonical definition named [typeName].
      *
-     * If `d` is any type definition in this schema, `type(d.typeName) === d`. Throws when no type
+     * If `d` is any type definition in this schema, `type(d.typeName) == d`. Throws when no type
      * with that name exists.
      *
      * @throws MissingSchemaElementException when [typeName] does not identify a schema type
@@ -65,7 +67,7 @@ interface Schema {
      *
      * This returns output fields only. It throws if the type is missing, the type is not composite,
      * or the named output field is missing. For every returned field `f`,
-     * `field(f.containingType.typeName, f.fieldName) === f`.
+     * `field(f.containingType.typeName, f.fieldName) == f`.
      *
      * @throws MissingSchemaElementException when the coordinate does not identify an output field
      */
@@ -178,76 +180,241 @@ interface Schema {
         type: EnumType,
         value: String,
     ): EnumValue {
-        requireCanonicalType(type)
         require(value in type.values) {
             "$value is not a value of ${type.typeName}"
         }
         return DefaultEnumValue(type, value)
     }
 
-    fun inputListValue(values: List<InputValue?>): InputListValue {
-        values.forEach(::requireCanonicalValue)
-        return DefaultInputListValue(values.toList())
-    }
+    fun inputListValue(values: List<InputValue?>): InputListValue =
+        DefaultInputListValue(values.toList())
 
+    /**
+     * Constructs an input-object value by converting each supplied host value according to its
+     * schema field's [InputField.type].
+     *
+     * @throws ClassCastException when a field is unknown or a supplied value does not have the
+     * required shape
+     */
     fun inputObjectValue(
         type: InputObjectType,
-        fields: Map<String, InputValue?>,
+        fields: Map<String, Any?>,
     ): InputObjectValue {
-        requireCanonicalType(type)
-        fields.values.forEach(::requireCanonicalValue)
+        val convertedFields =
+            convertInputLikeFields(
+                type = type,
+                fields = fields,
+                context = type.typeName,
+            )
         return DefaultInputObjectValue(
             type = type,
-            fieldValues = FieldValues(type, fields.toMap()),
+            fieldValues = FieldValues(type, convertedFields),
         )
     }
 
+    /**
+     * Constructs an argument value by converting each supplied host value according to its
+     * argument's [FieldArgument.type].
+     *
+     * @throws ClassCastException when an argument is unknown or a supplied value does not have the
+     * required shape
+     */
     fun argumentsValue(
         field: OutputField,
-        fields: Map<String, InputValue?>,
+        fields: Map<String, Any?>,
     ): ArgumentsValue {
-        requireCanonicalField(field)
-        fields.values.forEach(::requireCanonicalValue)
+        val convertedFields =
+            convertInputLikeFields(
+                type = field.arguments,
+                fields = fields,
+                context = "${field.containingType.typeName}/${field.fieldName}",
+            )
         return DefaultArgumentsValue(
             type = field.arguments,
-            fieldValues = FieldValues(field.arguments, fields.toMap()),
+            fieldValues = FieldValues(field.arguments, convertedFields),
         )
     }
+
+    /**
+     * Constructs a key for [field], which is canonical under the one-schema invariant, converting
+     * each supplied host argument according to the field's argument definition.
+     *
+     * The returned key carries [field] itself, so its complete schema coordinate is closed over the
+     * canonical definitions of this schema. Its argument value is typed by [OutputField.arguments].
+     *
+     * @throws ClassCastException when an argument is unknown or a supplied value does not have the
+     * required shape
+     */
+    fun objectEngineResultKey(
+        field: OutputField,
+        arguments: Map<String, Any?>,
+    ): ObjectEngineResult.Key =
+        ObjectEngineResult.Key(
+            field = field,
+            arguments = argumentsValue(field, arguments),
+        )
 
     fun variableValue(variableName: String): VariableValue =
         DefaultVariableValue(variableName)
 
-    private fun requireCanonicalType(type: Type) {
-        require(this.type(type.typeName) === type) {
-            "${type.typeName} is not canonical in this schema"
+    private fun convertInputLikeFields(
+        type: InputObjectLike,
+        fields: Map<String, Any?>,
+        context: String,
+    ): Map<String, InputValue?> =
+        fields.mapValues { (fieldName, value) ->
+            val field =
+                type.fields[fieldName]
+                    ?: throw ClassCastException(
+                        "$context has no input field named $fieldName",
+                    )
+            convertInputValue(
+                type = field.type,
+                value = value,
+                path = "$context.$fieldName",
+            )
         }
-    }
 
-    private fun requireCanonicalField(field: OutputField) {
-        require(
-            this.field(
-                field.containingType.typeName,
-                field.fieldName,
-            ) === field,
-        ) {
-            "${field.containingType.typeName}/${field.fieldName} is not canonical in this schema"
-        }
-    }
-
-    private fun requireCanonicalValue(value: InputValue?) {
-        if (value == null || value === ErrorValue) return
-
-        when (value) {
-            is ScalarValue -> Unit
-            is EnumValue -> requireCanonicalType(value.type)
-            is InputListValue -> value.inputListValues.forEach(::requireCanonicalValue)
-            is InputObjectValue -> {
-                requireCanonicalType(value.type)
-                value.fieldValues.values.forEach(::requireCanonicalValue)
+    private fun convertInputValue(
+        type: TypeExpr<InputType>,
+        value: Any?,
+        path: String,
+    ): InputValue? {
+        if (value == null) {
+            if (!type.isNullable) {
+                throw inputValueClassCast(path, type, value)
             }
-            is VariableValue -> Unit
+            return null
+        }
+        if (value == ErrorValue) return ErrorValue
+        if (value is VariableValue) return value
+
+        return when (type) {
+            is TypeExpr.Named ->
+                convertNamedInputValue(
+                    type = type.baseType,
+                    value = value,
+                    path = path,
+                )
+
+            is TypeExpr.List -> {
+                val elements =
+                    when (value) {
+                        is InputListValue -> value.inputListValues
+                        is List<*> -> value
+                        else -> throw inputValueClassCast(path, type, value)
+                    }
+                inputListValue(
+                    elements.mapIndexed { index, element ->
+                        convertInputValue(
+                            type = type.elementType,
+                            value = element,
+                            path = "$path[$index]",
+                        )
+                    },
+                )
+            }
         }
     }
+
+    private fun convertNamedInputValue(
+        type: InputType,
+        value: Any,
+        path: String,
+    ): InputValue =
+        when (type) {
+            IntType ->
+                when (value) {
+                    is IntValue -> value
+                    is Int -> intValue(value)
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+
+            FloatType ->
+                when (value) {
+                    is FloatValue -> value
+                    is Double -> floatValue(value)
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+
+            StringType ->
+                when (value) {
+                    is StringValue -> value
+                    is String -> stringValue(value)
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+
+            BooleanType ->
+                when (value) {
+                    is BooleanValue -> value
+                    is Boolean -> booleanValue(value)
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+
+            IDType ->
+                when (value) {
+                    is IDValue -> value
+                    is String -> idValue(value)
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+
+            is EnumType ->
+                when (value) {
+                    is EnumValue -> {
+                        if (value.type != type) {
+                            throw inputValueClassCast(path, type, value)
+                        }
+                        value
+                    }
+
+                    is String -> enumValue(type, value)
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+
+            is InputObjectType ->
+                when (value) {
+                    is InputObjectValue -> {
+                        if (value.type != type) {
+                            throw inputValueClassCast(path, type, value)
+                        }
+                        value
+                    }
+
+                    is Map<*, *> ->
+                        inputObjectValue(
+                            type = type,
+                            fields = value.toStringKeyedMap(path),
+                        )
+
+                    else -> throw inputValueClassCast(path, type, value)
+                }
+        }
+
+    private fun Map<*, *>.toStringKeyedMap(path: String): Map<String, Any?> =
+        entries.associate { (key, value) ->
+            if (key !is String) {
+                throw ClassCastException(
+                    "$path requires String field names, got ${key?.let { it::class.simpleName }}",
+                )
+            }
+            key to value
+        }
+
+    private fun inputValueClassCast(
+        path: String,
+        type: TypeExpr<InputType>,
+        value: Any?,
+    ): ClassCastException =
+        inputValueClassCast(path, type.baseType, value)
+
+    private fun inputValueClassCast(
+        path: String,
+        type: InputType,
+        value: Any?,
+    ): ClassCastException =
+        ClassCastException(
+            "$path requires ${type.typeName}, got ${value?.let { it::class.simpleName } ?: "null"}",
+        )
 
     /**
      * A GraphQL semantic value.
@@ -415,11 +582,11 @@ interface Schema {
 
         override fun equals(other: Any?): Boolean =
             other is FieldValues<*, *> &&
-                containingType === other.containingType &&
+                containingType == other.containingType &&
                 backingMap == other.backingMap
 
         override fun hashCode(): Int =
-            31 * System.identityHashCode(containingType) + backingMap.hashCode()
+            31 * containingType.hashCode() + backingMap.hashCode()
 
         override fun toString(): String = backingMap.toString()
     }
@@ -511,10 +678,10 @@ interface Schema {
     /**
      * A named type definition.
      *
-     * Definitions have identity equality. Because definitions are canonical within [Schema],
-     * definition identity coincides with schema-coordinate identity: two type definitions have the
-     * same [typeName] exactly when they are the same object. The permitted concrete categories are
-     * exhaustively scalar, enum, object, interface, union, or input object.
+     * Definitions use the canonical equality documented by [Schema]: `a == b` exactly when `a` and
+     * `b` represent the same schema type. Equivalently, two type definitions have the same
+     * [typeName] exactly when they are equal. The permitted concrete categories are exhaustively
+     * scalar, enum, object, interface, union, or input object.
      */
     sealed interface Type {
         val typeName: String
@@ -545,10 +712,10 @@ interface Schema {
      * meta-field `f` for which:
      *
      * - `f.fieldName == "__typename"`;
-     * - `f.containingType === t`;
+     * - `f.containingType == t`;
      * - `f.type == TypeExpr.Named(StringType, isNullable = false)`;
      * - `f.arguments == NoArguments`; and
-     * - `field(t.typeName, "__typename") === f`.
+     * - `field(t.typeName, "__typename") == f`.
      *
      * Each map key equals its field's [OutputField.fieldName], and each field's
      * [OutputField.containingType] is this definition. Conversely, every [OutputField] in the
@@ -698,7 +865,7 @@ interface Schema {
                     require(field.argumentName == argumentName) {
                         "Field argument name does not match its map key"
                     }
-                    require(field.containingType === result) {
+                    require(field.containingType == result) {
                         "Field argument does not reference its containing argument definition"
                     }
                     fields[argumentName] = field
@@ -711,7 +878,7 @@ interface Schema {
     /**
      * The canonical output field at [containingType]/[fieldName].
      *
-     * `containingType.fields[fieldName] === this`, and [type]'s base type is canonical in the same
+     * `containingType.fields[fieldName] == this`, and [type]'s base type is canonical in the same
      * schema. [arguments] is the input-object-like definition of the complete argument tuple.
      * It is [NoArguments] exactly when this field takes no arguments.
      */
@@ -725,7 +892,7 @@ interface Schema {
     /**
      * A field of an input-object-like definition.
      *
-     * `containingType.fields[name] === this`, and [type]'s base type is canonical in the same
+     * `containingType.fields[name] == this`, and [type]'s base type is canonical in the same
      * schema. [defaultValue], when present, is valid for [type].
      */
     sealed interface InputLikeField {
@@ -735,7 +902,7 @@ interface Schema {
         val defaultValue: DefaultValue
 
         val isRequired: Boolean
-            get() = !type.isNullable && defaultValue === DefaultValue.Absent
+            get() = !type.isNullable && defaultValue == DefaultValue.Absent
     }
 
     /** The canonical input-object field at [containingType]/[fieldName]. */
@@ -752,7 +919,7 @@ interface Schema {
     /**
      * The canonical argument named [argumentName] in [containingType].
      *
-     * `containingType.fields[argumentName] === this`.
+     * `containingType.fields[argumentName] == this`.
      */
     class FieldArgument(
         val argumentName: String,

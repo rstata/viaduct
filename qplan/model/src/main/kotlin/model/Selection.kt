@@ -13,12 +13,13 @@ package model
  */
 interface Selection {
     /**
-     * OER key being selected by this selection. (The field name of this key must be a field
-     * of [nominalType].)
+     * OER key being selected by this selection.
      *
-     * Non-variable arguments values are in their coerced semantic form. An argument may
-     * contain a [Schema.VariableValue] when the variable is unbound. Such keys use the
-     * model's conservative equality: they merge only when they are definitely equal.
+     * [ObjectEngineResult.Key.field] is the canonical schema field intended by this selection, and
+     * its containing type is [nominalType]. Non-variable argument values are in their coerced
+     * semantic form. An argument may contain a [Schema.VariableValue] when the variable is unbound.
+     * Such keys use the model's conservative equality: they merge only when they are definitely
+     * equal.
      *
      * Compared to GraphQL selections, field-resolver selections use the OER key rather than
      * response keys.
@@ -26,10 +27,11 @@ interface Selection {
     val key: ObjectEngineResult.Key
 
     /**
-     * Provides context for [key]: this type together with the field-name in [key] give the
-     * schema coordinate of the field intended by this selection.  However, it's [possibleTypes],
-     * not the nominal type, that controls what types this selection actually applies to. This
-     * object must be contained in [Assumptions.schema].
+     * The immediate type context of [key].
+     *
+     * The invariant `key.field.containingType == nominalType` holds. It is [possibleTypes], not
+     * the nominal type, that controls which concrete types this selection actually applies to.
+     * This object must be contained in [Assumptions.schema].
      *
      * Compared to GraphQL selections, this is the type-condition of the immediately-enclosing
      * spread, or the nominal type inherited from an enclosing selection or document if there
@@ -58,9 +60,8 @@ interface Selection {
      * empty (unlike standard GraphQL).
      *
      * Because of GraphQL's validation rules for type conditions, the relationship
-     * between the [nominalType] of a subselection and the the base type of the field
-     * implied by the [nominalType] and [key.fieldName] coordinate is complicated.  Nested
-     * type conditions nested spreads need only overlap pairwise:
+     * between the [nominalType] of a subselection and [key]'s field result type is complicated.
+     * Nested type conditions nested spreads need only overlap pairwise:
      * ```
      *    I1 = {A, B}
      *    I2 = {B, C}

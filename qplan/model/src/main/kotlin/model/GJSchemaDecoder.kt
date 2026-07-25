@@ -587,7 +587,7 @@ private class DecodedSchema(
         return types.values
             .filterIsInstance<Schema.CompositeType>()
             .filter { candidate ->
-                candidate === parentType ||
+                candidate == parentType ||
                     candidate.possibleTypes.any(parentType.possibleTypes::contains)
             }.mapTo(linkedSetOf()) { it.typeName }
     }
@@ -598,7 +598,7 @@ private class DecodedSchema(
     ): Boolean? {
         val parentType = type(parentTypeName) as? Schema.CompositeType ?: return null
         val fragmentType = type(fragmentTypeName) as? Schema.CompositeType ?: return null
-        return fragmentType === parentType ||
+        return fragmentType == parentType ||
             fragmentType.possibleTypes.any(parentType.possibleTypes::contains)
     }
 
@@ -609,7 +609,7 @@ private class DecodedSchema(
         val a = type(aTypeName) as? Schema.CompositeType ?: return null
         val b = type(bTypeName) as? Schema.CompositeType ?: return null
         return when {
-            a === b -> Schema.TypeRelation.SAME
+            a == b -> Schema.TypeRelation.SAME
             isNominallyWider(a, b) -> Schema.TypeRelation.WIDER_THAN
             isNominallyWider(b, a) -> Schema.TypeRelation.NARROWER_THAN
             a.possibleTypes.any(b.possibleTypes::contains) -> Schema.TypeRelation.COPARENT

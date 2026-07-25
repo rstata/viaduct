@@ -83,13 +83,9 @@ class SpecSelectionFlattener
 
             return FlattenedSelection(
                 key =
-                    ObjectEngineResult.Key(
-                        fieldName = fieldName,
-                        arguments =
-                            assumptions.schema.argumentsValue(
-                                field = field,
-                                fields = arguments,
-                            ),
+                    assumptions.schema.objectEngineResultKey(
+                        field = field,
+                        arguments = arguments,
                     ),
                 nominalType = context.nominalType,
                 possibleTypes = context.possibleTypes,

@@ -9,7 +9,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class SpecSelectionFlattenerTest {
@@ -31,10 +30,10 @@ class SpecSelectionFlattenerTest {
             )
 
         val version = result.single()
-        assertEquals("version", version.key.fieldName)
-        assertSame(Schema.NoArguments, version.key.arguments.type)
+        assertEquals(fixture.schema.field("Query", "version"), version.key.field)
+        assertEquals(Schema.NoArguments, version.key.arguments.type)
         assertEquals(emptyMap(), version.key.arguments.fieldValues)
-        assertSame(fixture.query, version.nominalType)
+        assertEquals(fixture.query, version.nominalType)
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertNull(version.subselections)
     }
@@ -57,8 +56,9 @@ class SpecSelectionFlattenerTest {
                 .single()
         val field = fixture.assumptions.schema.field("Query", "release")
 
-        assertSame(field.arguments, release.key.arguments.type)
-        assertSame(
+        assertEquals(field, release.key.field)
+        assertEquals(field.arguments, release.key.arguments.type)
+        assertEquals(
             field.arguments,
             release.key.arguments.fieldValues.containingType,
         )
@@ -97,13 +97,15 @@ class SpecSelectionFlattenerTest {
             )
 
         val pet = result.single()
-        val name = pet.subselections.orEmpty().single { it.key.fieldName == "name" }
+        val name = pet.subselections.orEmpty().single { it.key.field.fieldName == "name" }
         val barkVolume =
-            pet.subselections.orEmpty().single { it.key.fieldName == "barkVolume" }
+            pet.subselections.orEmpty().single { it.key.field.fieldName == "barkVolume" }
 
-        assertSame(fixture.pet, name.nominalType)
+        assertEquals(fixture.pet, name.key.field.containingType)
+        assertEquals(fixture.pet, name.nominalType)
         assertEquals(setOf(fixture.dog), name.possibleTypes)
-        assertSame(fixture.dog, barkVolume.nominalType)
+        assertEquals(fixture.dog, barkVolume.key.field.containingType)
+        assertEquals(fixture.dog, barkVolume.nominalType)
         assertEquals(setOf(fixture.dog), barkVolume.possibleTypes)
     }
 
@@ -131,9 +133,9 @@ class SpecSelectionFlattenerTest {
         val friend = result.single()
         val name = friend.subselections.orEmpty().single()
 
-        assertSame(fixture.dog, friend.nominalType)
+        assertEquals(fixture.dog, friend.nominalType)
         assertEquals(setOf(fixture.dog), friend.possibleTypes)
-        assertSame(fixture.pet, name.nominalType)
+        assertEquals(fixture.pet, name.nominalType)
         assertEquals(setOf(fixture.dog, fixture.cat), name.possibleTypes)
     }
 
@@ -159,7 +161,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val x = result.single()
-        assertSame(fixture.i3, x.nominalType)
+        assertEquals(fixture.i3, x.nominalType)
         assertTrue(x.possibleTypes.isEmpty())
     }
 
@@ -178,7 +180,7 @@ class SpecSelectionFlattenerTest {
 
     private class SchemaFixture {
         val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
-        private val schema = assumptions.schema
+        val schema = assumptions.schema
 
         val query = schema.query
         val dog = schema.type("Dog") as Schema.ObjectType

@@ -6,7 +6,9 @@ package model
  * This is an inductively defined algebraic value: every [EngineResult] is finite and
  * well-founded, and every child of a [ListEngineResult] or [ObjectEngineResult] is a strictly
  * smaller value. Kotlin object identity, reference sharing, self-reference, and cycles are not
- * part of this model. Implementations use structural value equality, never reference equality.
+ * part of this model. Implementations compare result values structurally over their documented
+ * properties; schema definitions within those properties use the canonical `==` equality
+ * documented by [Schema].
  */
 sealed interface EngineResult {
     val typeName: String
@@ -22,7 +24,8 @@ sealed interface EngineResult {
  * Although callers cannot enumerate the lookup domain, equality includes both that domain and
  * its results.
  *
- * Every present [Key] has an [Schema.ArgumentsValue] whose fields are fully coerced to non-variable
+ * Every present [Key] has a canonical [Key.field] and a [Schema.ArgumentsValue] typed by that
+ * field's [Schema.OutputField.arguments]. Its argument fields are fully coerced to non-variable
  * values: no argument recursively contains a [Schema.VariableValue]. Consequently, the identity of
  * keys present in an OER is canonical and does not depend on conservative symbolic equality.
  *
@@ -33,16 +36,26 @@ sealed interface ObjectEngineResult : EngineResult {
     override val typeName: String
 
     /**
-     * A field key. Aliases do not participate in identity.
+     * A key for one canonical schema output field and its arguments.
      *
      * [arguments] may contain [Schema.VariableValue] instances when a key is used outside an OER,
      * such as in a selection. The non-variable invariant applies only to keys present in an
-     * [ObjectEngineResult].
+     * [ObjectEngineResult]. Aliases do not participate in identity.
+     *
+     * Construct keys through [Schema.objectEngineResultKey]. Equality is structural over [field]
+     * and [arguments], using the canonical schema equality documented by [Schema].
      */
-    data class Key(
-        val fieldName: String,
+    @ConsistentCopyVisibility
+    data class Key internal constructor(
+        val field: Schema.OutputField,
         val arguments: Schema.ArgumentsValue,
-    )
+    ) {
+        init {
+            require(arguments.type == field.arguments) {
+                "Key arguments do not belong to its output field"
+            }
+        }
+    }
 
     data class Cell(
         val value: EngineResult?,

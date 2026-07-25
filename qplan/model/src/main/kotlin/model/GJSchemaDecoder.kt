@@ -328,7 +328,7 @@ internal fun decodeLiteral(
 
         is GraphQLList -> {
             val values = if (value is ArrayValue) value.values else listOf(value)
-            GraphQLInputList.of(
+            GraphQLInputListValue.of(
                 values.map {
                     decodeLiteral(
                         type.wrappedType as GraphQLInputType,
@@ -433,7 +433,7 @@ private fun decodeExternal(
             )
         is GraphQLList -> {
             val values = if (value is Iterable<*>) value.toList() else listOf(value)
-            GraphQLInputList.of(
+            GraphQLInputListValue.of(
                 values.map {
                     decodeExternal(
                         type.wrappedType as GraphQLInputType,

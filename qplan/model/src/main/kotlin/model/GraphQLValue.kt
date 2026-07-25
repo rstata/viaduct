@@ -106,17 +106,17 @@ sealed interface GraphQLEnumValue : GraphQLSimpleValue {
  * When an input list contains potentially nested unbound variable values, equality is
  * conservative; see [GraphQLVariableValue].
  */
-sealed interface GraphQLInputList : GraphQLInputValue {
+sealed interface GraphQLInputListValue : GraphQLInputValue {
     val inputListValues: List<GraphQLInputValue?>
 
     companion object {
         @JvmStatic
-        fun of(values: List<GraphQLInputValue?>): GraphQLInputList =
-            DefaultGraphQLInputList(values.toList())
+        fun of(values: List<GraphQLInputValue?>): GraphQLInputListValue =
+            DefaultGraphQLInputListValue(values.toList())
     }
 }
 
-sealed interface GraphQLOutputList : GraphQLOutputValue {
+sealed interface GraphQLListValue : GraphQLOutputValue {
     val outputListValues: List<GraphQLOutputValue?>
 }
 
@@ -227,8 +227,8 @@ object GraphQLErrorValue :
     GraphQLBooleanValue,
     GraphQLIDValue,
     GraphQLEnumValue,
-    GraphQLInputList,
-    GraphQLOutputList,
+    GraphQLInputListValue,
+    GraphQLListValue,
     GraphQLInputObjectValue,
     GraphQLObjectValue,
     GraphQLVariableValue {
@@ -306,9 +306,9 @@ private data class DefaultGraphQLEnumValue(
     override val enumValue: String,
 ) : GraphQLEnumValue
 
-private data class DefaultGraphQLInputList(
+private data class DefaultGraphQLInputListValue(
     override val inputListValues: List<GraphQLInputValue?>,
-) : GraphQLInputList
+) : GraphQLInputListValue
 
 private data class DefaultGraphQLInputObjectValue(
     override val inputObjectTypeName: String,

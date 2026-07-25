@@ -3,7 +3,7 @@ package model
 /**
  * Variable bindings that distinguish an unbound variable from one bound to GraphQL null.
  *
- * Unlike an ordinary [Map], [get] and [getValue] throw [MissingVariableException] when used on an
+ * Unlike an ordinary [Map], [get] and [getValue] throw [MissingVariablesException] when used on an
  * unbound variable. Use [containsKey] to determine whether a variable is bound.
  *
  * Construct bindings with [from]. It takes a snapshot of the top-level map and recursively
@@ -16,13 +16,13 @@ package model
 class VariableBindings private constructor(
     private val backingMap: Map<String, GraphQLInputValue?>,
 ) : Map<String, GraphQLInputValue?> by backingMap {
-    /** @throws MissingVariableException when [key] is unbound */
+    /** @throws MissingVariablesException when [key] is unbound */
     override operator fun get(key: String): GraphQLInputValue? = getValue(key)
 
-    /** @throws MissingVariableException when [key] is unbound */
+    /** @throws MissingVariablesException when [key] is unbound */
     fun getValue(key: String): GraphQLInputValue? {
         if (!backingMap.containsKey(key)) {
-            throw MissingVariableException(
+            throw MissingVariablesException(
                 listOf(GraphQLVariableValue.of(key)),
             )
         }
@@ -45,13 +45,13 @@ class VariableBindings private constructor(
      * contains each unbound variable once. The result is null when [value] is a variable bound to
      * GraphQL null.
      *
-     * @throws MissingVariableException when one or more variables in [value] are unbound
+     * @throws MissingVariablesException when one or more variables in [value] are unbound
      */
     fun instantiateAllVariables(value: GraphQLValue): GraphQLValue? {
         val unboundVariables = linkedMapOf<String, GraphQLVariableValue>()
         val result = instantiateVariables(value, unboundVariables)
         if (unboundVariables.isNotEmpty()) {
-            throw MissingVariableException(unboundVariables.values.toList())
+            throw MissingVariablesException(unboundVariables.values.toList())
         }
         return result
     }
@@ -67,7 +67,7 @@ class VariableBindings private constructor(
          * Constructs bindings after validating every supplied value.
          *
          * @throws IllegalArgumentException when a non-null binding is not a [GraphQLInputValue]
-         * @throws MissingVariableException when any binding recursively contains variable values
+         * @throws MissingVariablesException when any binding recursively contains variable values
          */
         @JvmStatic
         fun from(bindings: Map<String, GraphQLValue?>): VariableBindings {
@@ -87,7 +87,7 @@ class VariableBindings private constructor(
                 noBindings.instantiateVariables(value, unboundVariables)
             }
             if (unboundVariables.isNotEmpty()) {
-                throw MissingVariableException(unboundVariables.values.toList())
+                throw MissingVariablesException(unboundVariables.values.toList())
             }
 
             return VariableBindings(validatedBindings)
@@ -109,8 +109,8 @@ class VariableBindings private constructor(
                     value
                 }
 
-            is GraphQLInputList ->
-                GraphQLInputList.of(
+            is GraphQLInputListValue ->
+                GraphQLInputListValue.of(
                     value.inputListValues.map { element ->
                         instantiateVariables(element, unboundVariables) as GraphQLInputValue?
                     },
@@ -138,7 +138,7 @@ class VariableBindings private constructor(
  *
  * [variableValues] is non-empty and contains at most one value for each variable name.
  */
-class MissingVariableException(
+class MissingVariablesException(
     variableValues: List<GraphQLVariableValue>,
 ) : NoSuchElementException(
         "Unbound variables: " +
@@ -148,7 +148,7 @@ class MissingVariableException(
 
     init {
         require(this.variableValues.isNotEmpty()) {
-            "MissingVariableException requires at least one variable"
+            "MissingVariablesException requires at least one variable"
         }
         require(
             this.variableValues
@@ -156,7 +156,7 @@ class MissingVariableException(
                 .distinct()
                 .size == this.variableValues.size,
         ) {
-            "MissingVariableException requires distinct variable names"
+            "MissingVariablesException requires distinct variable names"
         }
     }
 }

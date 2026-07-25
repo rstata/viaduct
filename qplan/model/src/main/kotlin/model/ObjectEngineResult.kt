@@ -22,9 +22,9 @@ sealed interface EngineResult {
  * Although callers cannot enumerate the lookup domain, equality includes both that domain and
  * its results.
  *
- * Every present [Key] has argument values that are fully coerced to non-variable values: no
- * argument recursively contains a [Schema.VariableValue]. Consequently, the identity of keys
- * present in an OER is canonical and does not depend on conservative symbolic equality.
+ * Every present [Key] has an [Schema.ArgumentsValue] whose fields are fully coerced to non-variable
+ * values: no argument recursively contains a [Schema.VariableValue]. Consequently, the identity of
+ * keys present in an OER is canonical and does not depend on conservative symbolic equality.
  *
  * For every present [Key] whose arguments recursively contain [Schema.ErrorValue], [fetch]
  * returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
@@ -35,13 +35,13 @@ sealed interface ObjectEngineResult : EngineResult {
     /**
      * A field key. Aliases do not participate in identity.
      *
-     * A key may contain [Schema.VariableValue] instances when used outside an OER, such as in a
-     * selection. The non-variable invariant applies only to keys present in an
+     * [arguments] may contain [Schema.VariableValue] instances when a key is used outside an OER,
+     * such as in a selection. The non-variable invariant applies only to keys present in an
      * [ObjectEngineResult].
      */
     data class Key(
         val fieldName: String,
-        val arguments: Map<String, Schema.InputValue?>,
+        val arguments: Schema.ArgumentsValue,
     )
 
     data class Cell(

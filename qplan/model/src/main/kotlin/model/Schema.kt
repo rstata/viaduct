@@ -12,13 +12,13 @@ package model
  * the corresponding owner map contains `d` by its declared name for nested definitions. Every
  * [TypeExpr.baseType] reachable from the schema is likewise the canonical result of [type].
  *
- * Construct [Value] instances through this schema's value factory methods. Those methods require
- * every carried definition to be canonical in this schema, so reasoning within the one-schema
- * world may assume same-schema ownership without repeating validation. Other modeling domains may
- * instead use names and coordinates. Nested definitions navigate to their canonical owners through
- * [OutputField.containingType] and [InputLikeField.containingType]. Definition objects use identity
- * equality; only acyclic value objects such as [TypeExpr] and [DefaultValue] use structural
- * equality.
+ * Construct [Value] and [ArgumentsValue] instances through this schema's value factory methods.
+ * Those methods require every carried definition to be canonical in this schema, so reasoning
+ * within the one-schema world may assume same-schema ownership without repeating validation. Other
+ * modeling domains may instead use names and coordinates. Nested definitions navigate to their
+ * canonical owners through [OutputField.containingType] and [InputLikeField.containingType].
+ * Definition objects use identity equality; only acyclic value objects such as [TypeExpr] and
+ * [DefaultValue] use structural equality.
  *
  * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
  * scalar definitions are the five [ScalarType] singletons; whenever one belongs to this schema,
@@ -211,7 +211,19 @@ interface Schema {
         fields.values.forEach(::requireCanonicalValue)
         return DefaultInputObjectValue(
             type = type,
-            inputObjectFields = FieldValues(type, fields.toMap()),
+            fieldValues = FieldValues(type, fields.toMap()),
+        )
+    }
+
+    fun argumentsValue(
+        field: OutputField,
+        fields: Map<kotlin.String, InputValue?>,
+    ): ArgumentsValue {
+        requireCanonicalField(field)
+        fields.values.forEach(::requireCanonicalValue)
+        return DefaultArgumentsValue(
+            type = field.arguments,
+            fieldValues = FieldValues(field.arguments, fields.toMap()),
         )
     }
 
@@ -224,6 +236,17 @@ interface Schema {
         }
     }
 
+    private fun requireCanonicalField(field: OutputField) {
+        require(
+            this.field(
+                field.containingType.typeName,
+                field.fieldName,
+            ) === field,
+        ) {
+            "${field.containingType.typeName}/${field.fieldName} is not canonical in this schema"
+        }
+    }
+
     private fun requireCanonicalValue(value: InputValue?) {
         if (value == null || value === ErrorValue) return
 
@@ -233,7 +256,7 @@ interface Schema {
             is InputListValue -> value.inputListValues.forEach(::requireCanonicalValue)
             is InputObjectValue -> {
                 requireCanonicalType(value.type)
-                value.inputObjectFields.values.forEach(::requireCanonicalValue)
+                value.fieldValues.values.forEach(::requireCanonicalValue)
             }
             is VariableValue -> Unit
         }
@@ -332,34 +355,58 @@ interface Schema {
     }
 
     /**
+     * A value shaped like a GraphQL input object.
+     *
+     * [type] is the canonical input-object-like definition whose fields [fieldValues] inhabit.
+     * Implementations narrow [type] to match their corresponding definition category. This common
+     * interface is not itself a GraphQL [Value], because an [ArgumentsValue] is a schema-synthetic
+     * tuple rather than a GraphQL input value.
+     */
+    sealed interface InputLikeValue {
+        val type: InputObjectLike
+        val fieldValues: FieldValues<InputObjectLike, InputValue>
+    }
+
+    /**
      * An input object whose fields may contain nested unbound [VariableValue] instances.
      *
      * Equality is conservative when such variables are present as described by [VariableValue].
      */
-    sealed interface InputObjectValue : InputValue, TypedValue {
+    sealed interface InputObjectValue : InputValue, TypedValue, InputLikeValue {
         override val type: InputObjectType
-        val inputObjectFields: FieldValues<InputValue>
+        override val fieldValues: FieldValues<InputObjectType, InputValue>
+    }
+
+    /**
+     * The values supplied for one output field's complete argument definition.
+     *
+     * A value may contain nested unbound [VariableValue] instances when used outside an OER.
+     * Equality is structural over [type] and [fieldValues]; no distinguished empty value is needed.
+     */
+    sealed interface ArgumentsValue : InputLikeValue {
+        override val type: FieldArguments
+        override val fieldValues: FieldValues<FieldArguments, InputValue>
     }
 
     sealed interface ObjectValue : OutputValue, TypedValue {
         override val type: ObjectType
-        val outputObjectFields: FieldValues<OutputValue>
+        val outputObjectFields: FieldValues<ObjectType, OutputValue>
     }
 
     /**
      * A map from field names to values.
      *
-     * [containingType] is the canonical schema definition whose fields these values inhabit. Unlike
-     * an ordinary [Map], [get] and [getValue] throw [MissingFieldException] when the requested field
-     * does not exist or, for an output object, has not been set. A present field may still map to
-     * null.
+     * [containingType] is the canonical [Type] or [FieldArguments] definition whose fields these
+     * values inhabit. Unlike an ordinary [Map], [get] and [getValue] throw
+     * [MissingFieldException] when the requested field does not exist or, for an output object, has
+     * not been set. A present field may still map to null.
      *
      * [Map] extension functions such as [Map.getOrElse] may call [get] and therefore throw instead of
      * applying their fallback. Check [containsKey] before looking up a field whose presence is
      * unknown.
      */
-    class FieldValues<out V : Value>(
-        val containingType: Type,
+    class FieldValues<out T : Any, out V : Value>(
+        val containingType: T,
         private val backingMap: Map<kotlin.String, V?>,
     ) : Map<kotlin.String, V?> by backingMap {
         /** @throws MissingFieldException when [key] is not present */
@@ -368,13 +415,19 @@ interface Schema {
         /** @throws MissingFieldException when [key] is not present */
         fun getValue(key: kotlin.String): V? {
             if (!backingMap.containsKey(key)) {
-                throw MissingFieldException(containingType.typeName, key)
+                val typeName =
+                    when (containingType) {
+                        is Type -> containingType.typeName
+                        is FieldArguments -> "\$ARGUMENTS"
+                        else -> error("Unexpected field-value definition: $containingType")
+                    }
+                throw MissingFieldException(typeName, key)
             }
             return backingMap[key]
         }
 
         override fun equals(other: Any?): Boolean =
-            other is FieldValues<*> &&
+            other is FieldValues<*, *> &&
                 containingType === other.containingType &&
                 backingMap == other.backingMap
 
@@ -455,10 +508,10 @@ interface Schema {
         override val outputListValues: List<OutputValue?>
             get() = unsupported()
 
-        override val inputObjectFields: FieldValues<InputValue>
+        override val fieldValues: FieldValues<InputObjectType, InputValue>
             get() = unsupported()
 
-        override val outputObjectFields: FieldValues<OutputValue>
+        override val outputObjectFields: FieldValues<ObjectType, OutputValue>
             get() = unsupported()
 
         override val variableName: kotlin.String
@@ -834,8 +887,15 @@ private data class DefaultInputListValue(
 
 private data class DefaultInputObjectValue(
     override val type: Schema.InputObjectType,
-    override val inputObjectFields: Schema.FieldValues<Schema.InputValue>,
+    override val fieldValues:
+        Schema.FieldValues<Schema.InputObjectType, Schema.InputValue>,
 ) : Schema.InputObjectValue
+
+private data class DefaultArgumentsValue(
+    override val type: Schema.FieldArguments,
+    override val fieldValues:
+        Schema.FieldValues<Schema.FieldArguments, Schema.InputValue>,
+) : Schema.ArgumentsValue
 
 private data class DefaultVariableValue(
     override val variableName: String,

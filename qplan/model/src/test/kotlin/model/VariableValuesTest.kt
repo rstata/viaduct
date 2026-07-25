@@ -65,14 +65,14 @@ class VariableValuesTest {
         assertEquals(
             7,
             assertIs<Schema.IntValue>(
-                instantiated.inputObjectFields["count"],
+                instantiated.fieldValues["count"],
             ).intValue,
         )
-        assertNull(instantiated.inputObjectFields["nothing"])
+        assertNull(instantiated.fieldValues["nothing"])
         assertEquals(
             listOf(unresolved, other, unresolved),
             assertIs<Schema.InputListValue>(
-                instantiated.inputObjectFields["nested"],
+                instantiated.fieldValues["nested"],
             ).inputListValues,
         )
 

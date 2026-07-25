@@ -334,7 +334,7 @@ One static field path can produce many runtime objects, including nested lists. 
 
 ### Aliases, arguments, directives, and fragments
 
-Resolvers should not see aliases as semantic demand. Aliases remain important to external response paths, but they do not participate in OER keys in the current model. OER field identity is the canonical schema output field plus fully coerced arguments; equal field names at distinct schema coordinates remain distinct. Directives and variables control applicability. Named and inline fragments carry both syntax and type conditions.
+Resolvers should not see aliases as semantic demand. Aliases remain important to external response paths, but they do not participate in OER keys in the current model. OER field identity is the canonical schema output field plus fully coerced arguments; equal field names at distinct schema coordinates remain distinct. A selection or demand key outside an OER may carry an abstract interface or union field, but every key actually present in an OER carries the corresponding field owned by a concrete object type. Concrete runtime type specialization must therefore occur before an abstract-coordinate key is materialized in an OER. Directives and variables control applicability. Named and inline fragments carry both syntax and type conditions.
 
 Selection normalization must preserve every distinction execution uses while avoiding invalid merged ASTs.
 
@@ -374,7 +374,7 @@ At minimum, retain these tests:
 6. **Abstract concrete cycle:** a concrete covariant `@cycle` must find its concrete ancestor mask.  
 7. **List independence:** separate items must activate and fail independently without a global path barrier.  
 8. **Raw checker dependency:** checker RSSes must observe raw values without waiting on the selected field's checker.  
-9. **Alias and argument identity:** aliases never distinguish OER cells; selections with the same canonical schema output field and equal fully coerced arguments merge, while distinct output-field definitions or unequal arguments remain separate.
+9. **Alias, argument, and concrete-field identity:** aliases never distinguish OER cells; selections with the same canonical schema output field and equal fully coerced arguments merge, while distinct output-field definitions or unequal arguments remain separate. Every materialized OER key uses a field owned by a concrete object type, never an interface or union field definition.
 10. **Failure liveness:** every failed producer/checker path must release dependents with an error rather than hang.
 
 ### Differential execution

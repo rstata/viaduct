@@ -71,7 +71,7 @@ class SpecSelectionFlattenerTest {
     }
 
     @Test
-    fun `nested fragments retain the immediate nominal type and cumulative possible types`() {
+    fun `selection keys may retain abstract nominal fields and cumulative possible types`() {
         val fixture = SchemaFixture()
         val (typeInScope, selectionSet) =
             fixture.assumptions.selectionsFrom(

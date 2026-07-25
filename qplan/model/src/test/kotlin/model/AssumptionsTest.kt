@@ -150,12 +150,22 @@ class AssumptionsTest {
 
         val typeName = schema.field("Node", "__typename")
         assertSame(node, typeName.containingType)
+        assertSame(Schema.NoArguments, typeName.arguments)
+        assertEquals(emptyMap(), Schema.NoArguments.fields)
         assertEquals(
             Schema.TypeExpr.Named(Schema.ScalarType.String, isNullable = false),
             typeName.type,
         )
 
         val actors = schema.field("Query", "actors")
+        listOf(
+            schema.field("Node", "id"),
+            schema.field("User", "name"),
+            schema.field("Admin", "level"),
+            actors,
+        ).forEach { field ->
+            assertSame(Schema.NoArguments, field.arguments)
+        }
         assertEquals(
             Schema.TypeExpr.List(
                 elementType = Schema.TypeExpr.Named(actor, isNullable = false),
@@ -166,8 +176,11 @@ class AssumptionsTest {
 
         val nodeField = schema.field("Query", "node")
         assertSame(query, nodeField.containingType)
-        val filterArgument = nodeField.arguments.getValue("filter")
-        assertSame(nodeField, filterArgument.containingField)
+        assertFalse(nodeField.arguments == Schema.NoArguments)
+        val filterArgument = nodeField.arguments.fields.getValue("filter")
+        assertSame(nodeField.arguments, filterArgument.containingType)
+        assertEquals("filter", filterArgument.name)
+        assertFalse(filterArgument.isRequired)
         val filterDefault =
             assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
         val filterValue = assertIs<Schema.InputObjectValue>(filterDefault.value)
@@ -190,8 +203,19 @@ class AssumptionsTest {
             assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
         )
 
+        val friendField = schema.field("User", "friend")
+        assertFalse(friendField.arguments == Schema.NoArguments)
+        val limitArgument: Schema.InputLikeField =
+            friendField.arguments.fields.getValue("limit")
+        assertSame(friendField.arguments, limitArgument.containingType)
+        assertEquals("limit", limitArgument.name)
+        assertFalse(limitArgument.isRequired)
+
         val filter = assertIs<Schema.InputObjectType>(schema.type("Filter"))
-        assertSame(filter, filter.fields.getValue("limit").containingType)
+        val limitInputField: Schema.InputLikeField = filter.fields.getValue("limit")
+        assertSame(filter, limitInputField.containingType)
+        assertEquals("limit", limitInputField.name)
+        assertFalse(limitInputField.isRequired)
         assertFalse(filter.fields.getValue("tags").type.isBaseTypeNullable)
     }
 

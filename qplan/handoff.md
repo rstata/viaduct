@@ -19,6 +19,8 @@ This repository currently contains two Gradle projects, `model` and `semantics`,
 
 There are no executable JVM-global `schema` or `variableValues` declarations and no `establishAssumptions` initializer. Each reasoning exercise fixes one `Schema` and `Assumptions`; their concrete implementations are annotated `@Singleton`. `Assumptions` supplies the schema and variable bindings for that world and parses validated named fragments into `SpecSelection` values; `Assumptions.of` constructs the GraphQL Java-backed implementation. Every `Schema.Value` is constructed through instance factories on that schema, which validate canonical schema references at the construction boundary. Main sources use `jakarta.inject` annotations so constructors are injection-ready without selecting a DI framework. Guice is a test-only dependency of `semantics`.
 
+Input-object types and output-field argument definitions implement `Schema.InputObjectLike`; their fields implement `Schema.InputLikeField`. An output field carries one `Schema.FieldArguments` definition for its complete argument tuple, and every field with no arguments shares the identity singleton `Schema.NoArguments`.
+
 The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened field-resolution `Selection` values. Semantic equality for `Selection` remains undefined. `SpecSelectionFlattener` is implemented in [`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt). Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the modeled behavior, not proofs.
 
 ## Current Continuation

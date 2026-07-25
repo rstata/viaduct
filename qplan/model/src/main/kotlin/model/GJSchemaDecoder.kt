@@ -189,19 +189,14 @@ internal class GJSchemaDecoder(
                 val modelType = types.getValue(graphQLType.name) as Schema.CompositeType
                 val modelFields = compositeFields.getValue(modelType)
                 graphQLType.fieldDefinitions.forEach { graphQLField ->
-                    val arguments = linkedMapOf<String, Schema.FieldArgument>()
-                    val modelField =
-                        Schema.OutputField(
-                            fieldName = graphQLField.name,
-                            containingType = modelType,
-                            type = decodeOutputType(graphQLField.type),
-                            arguments = arguments,
-                        )
-                    graphQLField.arguments.forEach { graphQLArgument ->
-                        arguments[graphQLArgument.name] =
+                    val arguments =
+                        Schema.FieldArguments.of(
+                            definitions = graphQLField.arguments,
+                            name = { it.name },
+                        ) { graphQLArgument, containingType ->
                             Schema.FieldArgument(
                                 argumentName = graphQLArgument.name,
-                                containingField = modelField,
+                                containingType = containingType,
                                 type = decodeInputType(graphQLArgument.type),
                                 defaultValue =
                                     decodeDefault(
@@ -209,7 +204,14 @@ internal class GJSchemaDecoder(
                                         graphQLArgument.argumentDefaultValue,
                                     ),
                             )
-                    }
+                        }
+                    val modelField =
+                        Schema.OutputField(
+                            fieldName = graphQLField.name,
+                            containingType = modelType,
+                            type = decodeOutputType(graphQLField.type),
+                            arguments = arguments,
+                        )
                     modelFields[modelField.fieldName] = modelField
                 }
             }
@@ -221,7 +223,7 @@ internal class GJSchemaDecoder(
                 fieldName = "__typename",
                 containingType = type,
                 type = Schema.TypeExpr.Named(Schema.ScalarType.String, isNullable = false),
-                arguments = emptyMap(),
+                arguments = Schema.NoArguments,
             )
         compositeFields.getValue(type)[field.fieldName] = field
     }

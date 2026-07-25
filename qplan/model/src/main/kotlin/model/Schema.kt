@@ -16,9 +16,9 @@ package model
  * every carried definition to be canonical in this schema, so reasoning within the one-schema
  * world may assume same-schema ownership without repeating validation. Other modeling domains may
  * instead use names and coordinates. Nested definitions navigate to their canonical owners through
- * [OutputField.containingType], [InputField.containingType], and
- * [FieldArgument.containingField]. Definition objects use identity equality; only acyclic value
- * objects such as [TypeExpr] and [DefaultValue] use structural equality.
+ * [OutputField.containingType] and [InputLikeField.containingType]. Definition objects use identity
+ * equality; only acyclic value objects such as [TypeExpr] and [DefaultValue] use structural
+ * equality.
  *
  * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
  * scalar definitions are the five [ScalarType] singletons; whenever one belongs to this schema,
@@ -32,6 +32,17 @@ package model
  * concrete implementation, and mutability are not modeled.
  */
 interface Schema {
+    companion object {
+        /**
+         * The unique argument definition for every output field that takes no arguments.
+         *
+         * For every [OutputField] `f`, `f.arguments == NoArguments` exactly when `f` takes no
+         * arguments.
+         */
+        @JvmField
+        val NoArguments: FieldArguments = FieldArguments.empty()
+    }
+
     /**
      * The canonical query root.
      *
@@ -496,7 +507,7 @@ interface Schema {
      * - `f.fieldName == "__typename"`;
      * - `f.containingType === t`;
      * - `f.type == TypeExpr.Named(ScalarType.String, isNullable = false)`;
-     * - `f.arguments` is empty; and
+     * - `f.arguments == NoArguments`; and
      * - `field(t.typeName, "__typename") === f`.
      *
      * Each map key equals its field's [OutputField.fieldName], and each field's
@@ -593,59 +604,125 @@ interface Schema {
     ) : CompositeType
 
     /**
+     * A schema definition shaped like a GraphQL input object.
+     *
+     * The instances are named [InputObjectType] definitions and schema-synthetic [FieldArguments]
+     * definitions. Each [fields] key equals its field's [InputLikeField.name], and each field's
+     * [InputLikeField.containingType] is this definition.
+     */
+    sealed interface InputObjectLike {
+        val fields: Map<String, InputLikeField>
+    }
+
+    /**
      * An input object definition.
      *
-     * Each [fields] key equals its field's [InputField.fieldName], and each field's
-     * [InputField.containingType] is this definition. Conversely, every [InputField] occurs
-     * exactly once in its containing definition's map.
+     * Every [InputField] occurs exactly once in its containing definition's map.
      */
     class InputObjectType(
         override val typeName: String,
-        val fields: Map<String, InputField>,
-    ) : InputType
+        override val fields: Map<String, InputField>,
+    ) : InputType, InputObjectLike
+
+    /**
+     * The complete argument definition of an output field.
+     *
+     * This is schema-synthetic rather than a named [Type], and it cannot occur in a [TypeExpr].
+     * Each non-empty instance belongs to exactly one [OutputField]. The empty argument definition
+     * is always represented by the singleton [NoArguments] and is shared by every field that takes
+     * no arguments.
+     */
+    class FieldArguments private constructor(
+        override val fields: Map<String, FieldArgument>,
+    ) : InputObjectLike {
+        internal companion object {
+            private val EMPTY = FieldArguments(emptyMap())
+
+            internal fun empty(): FieldArguments = EMPTY
+
+            internal fun <T> of(
+                definitions: Collection<T>,
+                name: (T) -> String,
+                createField: (T, FieldArguments) -> FieldArgument,
+            ): FieldArguments {
+                if (definitions.isEmpty()) return EMPTY
+
+                val fields = linkedMapOf<String, FieldArgument>()
+                val result = FieldArguments(fields)
+                definitions.forEach { definition ->
+                    val argumentName = name(definition)
+                    require(argumentName !in fields) {
+                        "Duplicate field argument: $argumentName"
+                    }
+                    val field = createField(definition, result)
+                    require(field.argumentName == argumentName) {
+                        "Field argument name does not match its map key"
+                    }
+                    require(field.containingType === result) {
+                        "Field argument does not reference its containing argument definition"
+                    }
+                    fields[argumentName] = field
+                }
+                return result
+            }
+        }
+    }
 
     /**
      * The canonical output field at [containingType]/[fieldName].
      *
      * `containingType.fields[fieldName] === this`, and [type]'s base type is canonical in the same
-     * schema. Each [arguments] key equals its argument's [FieldArgument.argumentName], and each
-     * argument's [FieldArgument.containingField] is this field. Conversely, every [FieldArgument]
-     * occurs exactly once in its containing field's map.
+     * schema. [arguments] is the input-object-like definition of the complete argument tuple.
+     * It is [NoArguments] exactly when this field takes no arguments.
      */
     class OutputField(
         val fieldName: String,
         val containingType: CompositeType,
         val type: TypeExpr<OutputType>,
-        val arguments: Map<String, FieldArgument>,
+        val arguments: FieldArguments,
     )
 
     /**
-     * The canonical input field at [containingType]/[fieldName].
+     * A field of an input-object-like definition.
      *
-     * `containingType.fields[fieldName] === this`, and [type]'s base type is canonical in the same
-     * schema. [defaultValue], when present, is valid for [type]. The field is required exactly when
-     * `!type.isNullable && defaultValue === DefaultValue.Absent`.
+     * `containingType.fields[name] === this`, and [type]'s base type is canonical in the same
+     * schema. [defaultValue], when present, is valid for [type].
      */
+    sealed interface InputLikeField {
+        val name: String
+        val containingType: InputObjectLike
+        val type: TypeExpr<InputType>
+        val defaultValue: DefaultValue
+
+        val isRequired: Boolean
+            get() = !type.isNullable && defaultValue === DefaultValue.Absent
+    }
+
+    /** The canonical input-object field at [containingType]/[fieldName]. */
     class InputField(
         val fieldName: String,
-        val containingType: InputObjectType,
-        val type: TypeExpr<InputType>,
-        val defaultValue: DefaultValue,
-    )
+        override val containingType: InputObjectType,
+        override val type: TypeExpr<InputType>,
+        override val defaultValue: DefaultValue,
+    ) : InputLikeField {
+        override val name: String
+            get() = fieldName
+    }
 
     /**
-     * The canonical argument named [argumentName] on [containingField].
+     * The canonical argument named [argumentName] in [containingType].
      *
-     * `containingField.arguments[argumentName] === this`, and [type]'s base type is canonical in the
-     * same schema. [defaultValue], when present, is valid for [type]. The argument is required
-     * exactly when `!type.isNullable && defaultValue === DefaultValue.Absent`.
+     * `containingType.fields[argumentName] === this`.
      */
     class FieldArgument(
         val argumentName: String,
-        val containingField: OutputField,
-        val type: TypeExpr<InputType>,
-        val defaultValue: DefaultValue,
-    )
+        override val containingType: FieldArguments,
+        override val type: TypeExpr<InputType>,
+        override val defaultValue: DefaultValue,
+    ) : InputLikeField {
+        override val name: String
+            get() = argumentName
+    }
 
     /**
      * A finite, well-founded GraphQL value-type expression.

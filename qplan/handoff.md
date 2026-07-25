@@ -21,6 +21,24 @@ There are no executable JVM-global `schema` or `variableValues` declarations and
 
 The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened field-resolution `Selection` values. Semantic equality for `Selection` remains undefined. `SpecSelectionFlattener` is implemented in [`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt). Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the modeled behavior, not proofs.
 
+## Current Continuation
+
+The immediate next step is to expand the fixed reasoning world beyond its schema and request variable bindings by adding a resolver table. Each table entry associates a resolvable field coordinate with its required `objectFragment` and resolver function, fixing ordinary field-resolver lookup and interpretation without introducing query-plan structure or scheduling policy.
+
+Each resolver function takes fully coerced arguments, resolved object-fragment values, and the requested flattened selections, and returns `GraphQLOutputValue?`. The selection input is semantically relevant: a selective resolver may return different projections or coverage for different requested selections. Holding every other resolver input fixed, each requested selection determines one result, and results for any two requested selections must agree at every OER coordinate selected by both.
+
+Resolver return values must carry the information needed for result reasoning, including null, list, error, and concrete object-type information. Checkers, node resolution, and variable providers are explicitly out of scope for this phase.
+
+Once that world is modeled, the next semantic layer should judge resolution results directly:
+
+```text
+world |- minimalResolution(oer, nominalType, selections)
+world |- correctResolution(oer, nominalType, selections)
+world |- maximalResolution(oer, nominalType, selections)
+```
+
+These predicates concern field resolution, not response completion, and should not mention planner nodes, readiness, or execution order. Their exact relationship remains to be defined. In particular, `maximalResolution` requires an explicit finite universe of eligible cells; an unbounded schema and argument domain need not admit a finite maximal OER. Whether resolver coherence across requested selections is sufficient to make minimal resolution unique remains to be established. Query plans and their execution should be introduced only after these predicates provide a plan-independent correctness target.
+
 ## Historical Change in Direction
 
 We initially tried to move directly from the research findings to an executable dependency graph. During this session, type conditions exposed a more fundamental problem that would organize the proposed next phase:
@@ -64,7 +82,7 @@ The session chose to answer the first question before returning to the second.
 
 We briefly considered defining a deterministic, deliberately naive reference executor and proving the production executor equivalent to it. That would still require relating two operational state machines, especially their intermediate treatment of type conditions and demand.
 
-The proposed direction was instead to define correctness directly over the result. Under the assumption that executors return the same semantic values and concrete types for the same inputs, independent of the selection set supplied to them, a fixed execution world should determine one minimal **perfect OER**.
+The proposed direction was instead to define correctness directly over the result. That result-oriented direction remains current, while the earlier focus on one minimal **perfect OER** has been generalized to the `minimalResolution`, `correctResolution`, and `maximalResolution` predicates above.
 
 The intended shape of the definition is:
 
@@ -72,9 +90,9 @@ The intended shape of the definition is:
 PerfectOer(inputs, operation, oer)
 ```
 
-The exact partitioning of `inputs` is not important yet. It includes a schema, the actual `objectFragments`, the available executors, and a world that fixes any ambient facts needed to interpret them. Executors may instead be considered part of that world.
+The exact partitioning of `inputs` was not important to the sketch. It included a schema, the actual `objectFragments`, the available resolvers, and a world fixing any ambient facts needed to interpret them.
 
-What matters is the executor contract. For this model, an ordinary executor that takes an `objectFragment` is a deterministic function of only the values supplied for that `objectFragment`. A node resolver is a deterministic function of only its node ID. Any other ambient state is held fixed by the world. The supplied output selection set is not a semantic input: changing it may change projection or cost, but not the values or concrete types denoted for the same executor inputs.
+The current resolver contract is specified once in Current Continuation. In particular, requested flattened selections are resolver inputs and may affect returned projection or coverage, while node resolution is outside the present scope.
 
 `PerfectOer` says which cells exist and what values and checks they contain. It does not mention planner nodes, dependency counts, readiness, or execution order.
 
@@ -139,23 +157,23 @@ These exclusions were intended to be temporary. They removed independent sources
 
 ## Historical Next Definitions
 
-The proposed sequence below predates the current `model` and `semantics` Gradle projects and the implemented selection flattener. It is not the current work queue:
+The proposed sequence below predates the current `model` and `semantics` Gradle projects and the implemented selection flattener. Its first two steps, which called for remaining semantic inputs and executor denotations, have been superseded by Current Continuation and are not repeated here. The still-useful historical progression after defining the resolver world was:
 
-1. **Remaining semantic inputs.** Define the supported operation, `objectFragments`, executor functions, and world assumptions against which an OER is judged. Schema and variable bindings belong to `GlobalAssumptions`.
-2. **Executor denotations.** Define ordinary executors as deterministic functions of their object-fragment values and node resolvers as deterministic functions of node IDs.
-3. **Type applicability.** Given an object occurrence and its concrete type, determine which type-conditioned selections apply and construct their alias-free, fully coerced OER keys.
-4. **Polymorphic required-cell closure.** Seed demand from the external operation, add demand induced by `objectFragments`, and define the least closure while preserving unresolved type conditions as guards.
-5. **Nested result correctness.** Define how the guarded requirements specialize over concrete object and list results.
-6. **Perfect OER.** Require exactly the cells in the specialized least closure, with the correct values and checks.
+1. **Type applicability.** Given an object occurrence and its concrete type, determine which type-conditioned selections apply and construct their alias-free, fully coerced OER keys.
+2. **Polymorphic required-cell closure.** Seed demand from the external operation, add demand induced by `objectFragments`, and define the least closure while preserving unresolved type conditions as guards.
+3. **Nested result correctness.** Define how the guarded requirements specialize over concrete object and list results.
+4. **Exact result.** Require exactly the cells in the specialized least closure, with the values produced by the applicable resolver calls.
 
 The sequence also left open whether to define a second predicate permitting additional semantically correct cells. Such a predicate would separate perfect minimality from the correctness of a production executor that conservatively over-materializes.
 
-The desired result was an existence-and-uniqueness statement:
+The historical desired result was an existence-and-uniqueness statement:
 
 ```text
 For a fixed supported execution world and operation,
 there exists exactly one perfect OER.
 ```
+
+This is not a current claim. Its status depends in part on whether the resolver coherence requirement above is sufficient to make minimal resolution unique.
 
 ## Historical First Examples
 

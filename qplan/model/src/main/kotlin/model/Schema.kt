@@ -241,6 +241,9 @@ interface Schema {
      *
      * The returned key carries [field] itself, so its complete schema coordinate is closed over the
      * canonical definitions of this schema. Its argument value is typed by [OutputField.arguments].
+     * This factory also constructs keys for abstract-type fields used outside an OER; the invariant
+     * that a key present in an [ObjectEngineResult] belongs to an [ObjectType] is enforced by the
+     * modeled OER domain rather than by this factory.
      *
      * @throws ClassCastException when an argument is unknown or a supplied value does not have the
      * required shape

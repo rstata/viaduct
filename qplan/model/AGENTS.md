@@ -52,3 +52,5 @@ The `Schema.Value` model is not yet complete. In particular, it does not represe
 ## Intentional Differences From Existing Viaduct
 
 Unlike the existing Viaduct implementation, `ObjectEngineResult.Key` does **not** include a response alias. OER field identity is determined by the canonical `Schema.OutputField` and its fully coerced arguments. Selections of that canonical field with different aliases therefore address the same OER cell; fields with the same name at distinct schema coordinates remain distinct. Aliases remain relevant when constructing the external GraphQL response, not when identifying data within an OER.
+
+Every key present in an `ObjectEngineResult` carries a field whose `containingType` is a concrete `Schema.ObjectType`; an OER never contains a key for an interface or union field coordinate. Keys used outside an OER, including `Selection.key`, may carry abstract-type fields. Such a key must use the applicable concrete object field before it is present in an OER.

@@ -19,7 +19,9 @@ interface Selection {
      * its containing type is [nominalType]. Non-variable argument values are in their coerced
      * semantic form. An argument may contain a [Schema.VariableValue] when the variable is unbound.
      * Such keys use the model's conservative equality: they merge only when they are definitely
-     * equal.
+     * equal. Because a selection key is outside an OER, its field may belong to an abstract
+     * [Schema.InterfaceType] or [Schema.UnionType]. Before a key is present in an OER, its field must
+     * belong to the applicable concrete [Schema.ObjectType].
      *
      * Compared to GraphQL selections, field-resolver selections use the OER key rather than
      * response keys.

@@ -21,7 +21,7 @@ There are no executable JVM-global `schema` or `variableValues` declarations and
 
 Input-object types and output-field argument definitions implement `Schema.InputObjectLike`; their fields implement `Schema.InputLikeField`. An output field carries one `Schema.FieldArguments` definition for its complete argument tuple, and every field with no arguments shares the one canonical `Schema.NoArguments` definition.
 
-Input-object values and argument-tuple values implement `Schema.InputLikeValue`, covariantly narrowing their `type` properties to `InputObjectType` and `FieldArguments`, respectively. `ObjectEngineResult.Key` carries a canonical `Schema.OutputField` and a matching `ArgumentsValue`; its constructor is internal, and `Schema.objectEngineResultKey` is the public construction boundary. Empty argument values are ordinary structurally equal values rather than a distinguished singleton.
+Input-object values and argument-tuple values implement `Schema.InputLikeValue`, covariantly narrowing their `type` properties to `InputObjectType` and `FieldArguments`, respectively. `ObjectEngineResult.Key` carries a canonical `Schema.OutputField` and a matching `ArgumentsValue`; its constructor is internal, and `Schema.objectEngineResultKey` is the public construction boundary. Every key present in an OER has a field belonging to a concrete `Schema.ObjectType`, while keys used outside an OER may belong to abstract types. Empty argument values are ordinary structurally equal values rather than a distinguished singleton.
 
 The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened field-resolution `Selection` values. Semantic equality for `Selection` remains undefined. `SpecSelectionFlattener` is implemented in [`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt). Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the modeled behavior, not proofs.
 
@@ -138,7 +138,7 @@ The decisions recorded for the proposed next phase were:
 - `EngineResult` is a finite value tree containing object, list, and simple results.
 - An OER field contains one `Cell` with a nullable value and a check result.
 - Missing fields are distinct from present fields whose values are null.
-- Keys present in an OER contain a canonical schema output field and fully coerced arguments typed by that field's argument definition. They contain neither aliases nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER may contain unresolved variables.
+- Keys present in an OER contain a canonical schema output field owned by a concrete object type and fully coerced arguments typed by that field's argument definition. They contain neither aliases, abstract interface or union field coordinates, nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER may contain abstract-type fields and unresolved variables.
 - Executor output values and OER values are separate representations.
 - Errors are collapsed to `Schema.ErrorValue`.
 - Correctness, demand, and checked-versus-raw semantics intentionally remain outside the `model` package.

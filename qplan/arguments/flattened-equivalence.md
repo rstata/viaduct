@@ -6,6 +6,8 @@ Consider an interpreter for spec selections. A field emits one resolution obliga
 
 The flattened interpreter emits a selection exactly when the concrete runtime type belongs to its `possibleTypes`. It obtains the field coordinate directly from `key.field`, whose containing type is `nominalType`, then interprets `subselections` against returned object occurrences.
 
+These flattened keys are selection keys outside an OER, so their fields may belong to abstract nominal types. Any later materialization of one of these obligations in an OER must use the corresponding field of the applicable concrete object type; keys actually present in an OER never carry interface or union field coordinates.
+
 Flattening preserves the following invariant for every field occurrence:
 
 - `key` preserves the canonical schema output field and arguments while discarding the unobservable alias;

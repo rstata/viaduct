@@ -24,10 +24,12 @@ sealed interface EngineResult {
  * Although callers cannot enumerate the lookup domain, equality includes both that domain and
  * its results.
  *
- * Every present [Key] has a canonical [Key.field] and a [Schema.ArgumentsValue] typed by that
- * field's [Schema.OutputField.arguments]. Its argument fields are fully coerced to non-variable
- * values: no argument recursively contains a [Schema.VariableValue]. Consequently, the identity of
- * keys present in an OER is canonical and does not depend on conservative symbolic equality.
+ * Every present [Key] has a canonical [Key.field] whose
+ * [Schema.OutputField.containingType] is a concrete [Schema.ObjectType], never an abstract
+ * [Schema.InterfaceType] or [Schema.UnionType]. Its [Schema.ArgumentsValue] is typed by that field's
+ * [Schema.OutputField.arguments], and its argument fields are fully coerced to non-variable values:
+ * no argument recursively contains a [Schema.VariableValue]. Consequently, the identity of keys
+ * present in an OER is canonical and does not depend on conservative symbolic equality.
  *
  * For every present [Key] whose arguments recursively contain [Schema.ErrorValue], [fetch]
  * returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
@@ -38,9 +40,10 @@ sealed interface ObjectEngineResult : EngineResult {
     /**
      * A key for one canonical schema output field and its arguments.
      *
-     * [arguments] may contain [Schema.VariableValue] instances when a key is used outside an OER,
-     * such as in a selection. The non-variable invariant applies only to keys present in an
-     * [ObjectEngineResult]. Aliases do not participate in identity.
+     * When a key is used outside an OER, such as in a selection, [field]'s containing type may be
+     * abstract and [arguments] may contain [Schema.VariableValue] instances. Keys present in an
+     * [ObjectEngineResult] instead have fields belonging to concrete [Schema.ObjectType]
+     * definitions and contain no variables. Aliases do not participate in identity.
      *
      * Construct keys through [Schema.objectEngineResultKey]. Equality is structural over [field]
      * and [arguments], using the canonical schema equality documented by [Schema].

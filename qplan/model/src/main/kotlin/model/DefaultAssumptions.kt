@@ -158,14 +158,11 @@ internal class DefaultAssumptions(
         require(fragment.directives.isEmpty()) {
             "Applied directives are outside the spec-selection model"
         }
+        val typeConditionName = fragment.typeCondition?.name
         val graphQLTypeCondition =
-            fragment.typeCondition?.let { typeCondition ->
-                graphQLSchema.getType(typeCondition.name!!) as GraphQLCompositeType
-            }
+            typeConditionName?.let { graphQLSchema.getType(it) as GraphQLCompositeType }
         val modelTypeCondition =
-            fragment.typeCondition?.let { typeCondition ->
-                schema.type(typeCondition.name!!) as Schema.CompositeType
-            }
+            typeConditionName?.let { schema.type(it) as Schema.CompositeType }
 
         return SpecSelection.InlineFragment.of(
             typeCondition = modelTypeCondition,

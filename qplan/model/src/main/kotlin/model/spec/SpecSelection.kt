@@ -53,15 +53,13 @@ sealed interface SpecSelection {
                 arguments: Map<String, Schema.InputValue?>,
                 subselections: List<SpecSelection>?,
             ): Field {
-                val capturedAlias = alias
-                val capturedFieldName = fieldName
-                val capturedArguments = arguments.toMap()
-                val capturedSubselections = subselections?.toList()
+                val defensiveArguments = arguments.toMap()
+                val defensiveSubselections = subselections?.toList()
                 return object : Field {
-                    override val alias = capturedAlias
-                    override val fieldName = capturedFieldName
-                    override val arguments = capturedArguments
-                    override val subselections = capturedSubselections
+                    override val alias = alias
+                    override val fieldName = fieldName
+                    override val arguments = defensiveArguments
+                    override val subselections = defensiveSubselections
                 }
             }
         }
@@ -91,11 +89,10 @@ sealed interface SpecSelection {
                 typeCondition: Schema.CompositeType?,
                 selections: List<SpecSelection>,
             ): InlineFragment {
-                val capturedTypeCondition = typeCondition
-                val capturedSelections = selections.toList()
+                val defensiveSelections = selections.toList()
                 return object : InlineFragment {
-                    override val typeCondition = capturedTypeCondition
-                    override val selections = capturedSelections
+                    override val typeCondition = typeCondition
+                    override val selections = defensiveSelections
                 }
             }
         }

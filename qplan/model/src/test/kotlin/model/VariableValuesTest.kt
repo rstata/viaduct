@@ -8,47 +8,70 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class VariableValuesTest {
+    private val schema =
+        GJSchema.fromSDL(
+            """
+            input Variables {
+              count: Int
+              nothing: Int
+              nested: [Int]
+            }
+
+            input Input {
+              value: Int
+            }
+
+            type Query {
+              value: Int
+            }
+            """.trimIndent(),
+        )
+    private val variablesType = schema.type("Variables") as Schema.InputObjectType
+    private val inputType = schema.type("Input") as Schema.InputObjectType
+
     @Test
     fun `instantiates bound variables recursively and preserves unbound variables`() {
-        val unresolved = GraphQLVariableValue.of("unresolved")
-        val other = GraphQLVariableValue.of("other")
+        val unresolved = schema.variableValue("unresolved")
+        val other = schema.variableValue("other")
         val variableValues =
-            VariableBindings.from(
-                mapOf(
-                    "count" to GraphQLIntValue.of(7),
-                    "nothing" to null,
-                ),
-            )
+            Assumptions
+                .of(
+                    schema,
+                    mapOf(
+                        "count" to schema.intValue(7),
+                        "nothing" to null,
+                    ),
+                ).variableValues
         val value =
-            GraphQLInputObjectValue.of(
-                typeName = "Variables",
+            schema.inputObjectValue(
+                type = variablesType,
                 fields =
                     mapOf(
-                        "count" to GraphQLVariableValue.of("count"),
-                        "nothing" to GraphQLVariableValue.of("nothing"),
+                        "count" to schema.variableValue("count"),
+                        "nothing" to schema.variableValue("nothing"),
                         "nested" to
-                            GraphQLInputListValue.of(
+                            schema.inputListValue(
                                 listOf(
                                     unresolved,
                                     other,
-                                    GraphQLVariableValue.of("unresolved"),
+                                    schema.variableValue("unresolved"),
                                 ),
                             ),
                     ),
             )
 
         val instantiated =
-            assertIs<GraphQLInputObjectValue>(variableValues.instantiateVariables(value))
+            assertIs<Schema.InputObjectValue>(variableValues.instantiateVariables(value))
         assertEquals(
             7,
-            assertIs<GraphQLIntValue>(
+            assertIs<Schema.IntValue>(
                 instantiated.inputObjectFields["count"],
             ).intValue,
         )
         assertNull(instantiated.inputObjectFields["nothing"])
         assertEquals(
             listOf(unresolved, other, unresolved),
-            assertIs<GraphQLInputListValue>(
+            assertIs<Schema.InputListValue>(
                 instantiated.inputObjectFields["nested"],
             ).inputListValues,
         )
@@ -61,32 +84,33 @@ class VariableValuesTest {
 
         assertNull(
             variableValues.instantiateAllVariables(
-                GraphQLVariableValue.of("nothing"),
+                schema.variableValue("nothing"),
             ),
         )
         assertSame(
-            GraphQLErrorValue,
-            variableValues.instantiateAllVariables(GraphQLErrorValue),
+            Schema.ErrorValue,
+            variableValues.instantiateAllVariables(Schema.ErrorValue),
         )
     }
 
     @Test
     fun `binding validation reports every nested variable once`() {
-        val first = GraphQLVariableValue.of("first")
-        val second = GraphQLVariableValue.of("second")
-        val third = GraphQLVariableValue.of("third")
+        val first = schema.variableValue("first")
+        val second = schema.variableValue("second")
+        val third = schema.variableValue("third")
 
         val exception =
             assertFailsWith<MissingVariablesException> {
-                VariableBindings.from(
+                Assumptions.of(
+                    schema,
                     mapOf(
                         "list" to
-                            GraphQLInputListValue.of(
-                                listOf(first, second, GraphQLVariableValue.of("first")),
+                            schema.inputListValue(
+                                listOf(first, second, schema.variableValue("first")),
                             ),
                         "object" to
-                            GraphQLInputObjectValue.of(
-                                typeName = "Input",
+                            schema.inputObjectValue(
+                                type = inputType,
                                 fields = mapOf("value" to third),
                             ),
                     ),

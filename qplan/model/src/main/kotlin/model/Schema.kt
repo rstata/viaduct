@@ -3,7 +3,8 @@ package model
 /**
  * A finite GraphQL schema view used as an input to the correctness model.
  *
- * One instance is supplied by [GlobalAssumptions.schema] for each reasoning world.
+ * Exactly one instance is supplied by [Assumptions.schema] for a reasoning world. Concrete
+ * implementations use `@Singleton` to record this modeling assumption for dependency injection.
  *
  * Definitions are canonical within this schema: each type name, field coordinate, input-field
  * coordinate, and argument coordinate identifies exactly one definition object. For every
@@ -11,8 +12,11 @@ package model
  * the corresponding owner map contains `d` by its declared name for nested definitions. Every
  * [TypeExpr.baseType] reachable from the schema is likewise the canonical result of [type].
  *
- * References outside the schema use names. Nested definitions instead navigate to their canonical
- * owners through [OutputField.containingType], [InputField.containingType], and
+ * Construct [Value] instances through this schema's value factory methods. Those methods require
+ * every carried definition to be canonical in this schema, so reasoning within the one-schema
+ * world may assume same-schema ownership without repeating validation. Other modeling domains may
+ * instead use names and coordinates. Nested definitions navigate to their canonical owners through
+ * [OutputField.containingType], [InputField.containingType], and
  * [FieldArgument.containingField]. Definition objects use identity equality; only acyclic value
  * objects such as [TypeExpr] and [DefaultValue] use structural equality.
  *
@@ -144,6 +148,313 @@ interface Schema {
         NARROWER_THAN,
         COPARENT,
         NONE,
+    }
+
+    fun intValue(value: kotlin.Int): IntValue {
+        requireCanonicalType(ScalarType.Int)
+        return DefaultIntValue(value)
+    }
+
+    fun floatValue(value: Double): FloatValue {
+        requireCanonicalType(ScalarType.Float)
+        require(value.isFinite()) { "GraphQL Float values must be finite" }
+        return DefaultFloatValue(value)
+    }
+
+    fun stringValue(value: kotlin.String): StringValue {
+        requireCanonicalType(ScalarType.String)
+        return DefaultStringValue(value)
+    }
+
+    fun booleanValue(value: Boolean): BooleanValue {
+        requireCanonicalType(ScalarType.Boolean)
+        return DefaultBooleanValue(value)
+    }
+
+    fun idValue(value: kotlin.String): IDValue {
+        requireCanonicalType(ScalarType.ID)
+        return DefaultIDValue(value)
+    }
+
+    fun enumValue(
+        type: EnumType,
+        value: kotlin.String,
+    ): EnumValue {
+        requireCanonicalType(type)
+        require(value in type.values) {
+            "$value is not a value of ${type.typeName}"
+        }
+        return DefaultEnumValue(type, value)
+    }
+
+    fun inputListValue(values: List<InputValue?>): InputListValue {
+        values.forEach(::requireCanonicalValue)
+        return DefaultInputListValue(values.toList())
+    }
+
+    fun inputObjectValue(
+        type: InputObjectType,
+        fields: Map<kotlin.String, InputValue?>,
+    ): InputObjectValue {
+        requireCanonicalType(type)
+        fields.values.forEach(::requireCanonicalValue)
+        return DefaultInputObjectValue(
+            type = type,
+            inputObjectFields = FieldValues(type, fields.toMap()),
+        )
+    }
+
+    fun variableValue(variableName: kotlin.String): VariableValue =
+        DefaultVariableValue(variableName)
+
+    private fun requireCanonicalType(type: Type) {
+        require(this.type(type.typeName) === type) {
+            "${type.typeName} is not canonical in this schema"
+        }
+    }
+
+    private fun requireCanonicalValue(value: InputValue?) {
+        if (value == null || value === ErrorValue) return
+
+        when (value) {
+            is ScalarValue -> requireCanonicalType(value.type)
+            is EnumValue -> requireCanonicalType(value.type)
+            is InputListValue -> value.inputListValues.forEach(::requireCanonicalValue)
+            is InputObjectValue -> {
+                requireCanonicalType(value.type)
+                value.inputObjectFields.values.forEach(::requireCanonicalValue)
+            }
+            is VariableValue -> Unit
+        }
+    }
+
+    /**
+     * A GraphQL semantic value.
+     *
+     * Implementations are mathematical values: equality is value equality over the properties
+     * exposed by the interface. When an input value contains unbound [VariableValue] instances,
+     * equality is conservative as described by [VariableValue].
+     *
+     * Every schema definition carried by a value is the canonical definition from the
+     * [Assumptions.schema] under which that value is interpreted.
+     */
+    sealed interface Value
+
+    sealed interface InputValue : Value
+
+    sealed interface OutputValue : Value
+
+    sealed interface TypedValue : Value {
+        val type: Type
+    }
+
+    sealed interface SimpleValue : InputValue, OutputValue, TypedValue, EngineResult {
+        override val type: SimpleType
+
+        override val typeName: kotlin.String
+            get() = type.typeName
+    }
+
+    /**
+     * A value in the model's closed universe of built-in scalar leaf types: [IntValue],
+     * [FloatValue], [StringValue], [BooleanValue], or [IDValue].
+     *
+     * Custom scalar values are not represented in this model. Therefore, this model can reason only
+     * about schemas that do not have custom scalars.
+     */
+    sealed interface ScalarValue : SimpleValue {
+        override val type: ScalarType
+    }
+
+    sealed interface IntValue : ScalarValue {
+        override val type: ScalarType
+            get() = ScalarType.Int
+
+        val intValue: kotlin.Int
+    }
+
+    sealed interface FloatValue : ScalarValue {
+        override val type: ScalarType
+            get() = ScalarType.Float
+
+        /** Invariant: this value is finite; NaN and positive or negative infinity are excluded. */
+        val floatValue: Double
+    }
+
+    sealed interface StringValue : ScalarValue {
+        override val type: ScalarType
+            get() = ScalarType.String
+
+        val stringValue: kotlin.String
+    }
+
+    sealed interface BooleanValue : ScalarValue {
+        override val type: ScalarType
+            get() = ScalarType.Boolean
+
+        val booleanValue: Boolean
+    }
+
+    sealed interface IDValue : ScalarValue {
+        override val type: ScalarType
+            get() = ScalarType.ID
+
+        val idValue: kotlin.String
+    }
+
+    sealed interface EnumValue : SimpleValue {
+        override val type: EnumType
+
+        val enumValue: kotlin.String
+    }
+
+    /**
+     * When an input list contains potentially nested unbound [VariableValue] instances, equality is
+     * conservative as described by [VariableValue].
+     */
+    sealed interface InputListValue : InputValue {
+        val inputListValues: List<InputValue?>
+    }
+
+    sealed interface ListValue : OutputValue {
+        val outputListValues: List<OutputValue?>
+    }
+
+    /**
+     * An input object whose fields may contain nested unbound [VariableValue] instances.
+     *
+     * Equality is conservative when such variables are present as described by [VariableValue].
+     */
+    sealed interface InputObjectValue : InputValue, TypedValue {
+        override val type: InputObjectType
+        val inputObjectFields: FieldValues<InputValue>
+    }
+
+    sealed interface ObjectValue : OutputValue, TypedValue {
+        override val type: ObjectType
+        val outputObjectFields: FieldValues<OutputValue>
+    }
+
+    /**
+     * A map from field names to values.
+     *
+     * [containingType] is the canonical schema definition whose fields these values inhabit. Unlike
+     * an ordinary [Map], [get] and [getValue] throw [MissingFieldException] when the requested field
+     * does not exist or, for an output object, has not been set. A present field may still map to
+     * null.
+     *
+     * [Map] extension functions such as [Map.getOrElse] may call [get] and therefore throw instead of
+     * applying their fallback. Check [containsKey] before looking up a field whose presence is
+     * unknown.
+     */
+    class FieldValues<out V : Value>(
+        val containingType: Type,
+        private val backingMap: Map<kotlin.String, V?>,
+    ) : Map<kotlin.String, V?> by backingMap {
+        /** @throws MissingFieldException when [key] is not present */
+        override operator fun get(key: kotlin.String): V? = getValue(key)
+
+        /** @throws MissingFieldException when [key] is not present */
+        fun getValue(key: kotlin.String): V? {
+            if (!backingMap.containsKey(key)) {
+                throw MissingFieldException(containingType.typeName, key)
+            }
+            return backingMap[key]
+        }
+
+        override fun equals(other: Any?): Boolean =
+            other is FieldValues<*> &&
+                containingType === other.containingType &&
+                backingMap == other.backingMap
+
+        override fun hashCode(): kotlin.Int =
+            31 * System.identityHashCode(containingType) + backingMap.hashCode()
+
+        override fun toString(): kotlin.String = backingMap.toString()
+    }
+
+    /**
+     * A symbolic reference to an execution variable.
+     *
+     * We assume that variables involved in any execution all have unique, non-conflicting names, so
+     * when two variable values with the same name appear, it is safe to assume that their actual
+     * values will be the same. When comparing a variable value to another value, we attempt to look
+     * up its value in [Assumptions.variableValues]. If an entry exists, the variable is bound
+     * and we compare its bound value with the other value. [equals] returns false for an unbound
+     * variable unless it is compared with an unbound variable of the same name.
+     *
+     * When [equals] involving variable values returns true, the two values are guaranteed to be equal
+     * under all possible variable bindings. When [equals] involving only bound variable values
+     * returns false, the two values are guaranteed not to be equal. However, when [equals] involving
+     * an unbound variable returns false, the two values are not necessarily unequal and may become
+     * equal depending on the eventual bindings.
+     */
+    sealed interface VariableValue : InputValue {
+        val variableName: kotlin.String
+    }
+
+    /**
+     * The bottom value of the GraphQL value hierarchy.
+     *
+     * Kotlin has no user-definable bottom value, so this object explicitly implements every leaf
+     * value interface. Its properties have no value and therefore cannot be observed.
+     *
+     * This model intentionally collapses all GraphQL error metadata, including messages, paths,
+     * extensions, and error multiplicity, into this single value.
+     */
+    object ErrorValue :
+        IntValue,
+        FloatValue,
+        StringValue,
+        BooleanValue,
+        IDValue,
+        EnumValue,
+        InputListValue,
+        ListValue,
+        InputObjectValue,
+        ObjectValue,
+        VariableValue {
+        override val type: Nothing
+            get() = unsupported()
+
+        override val typeName: kotlin.String
+            get() = unsupported()
+
+        override val intValue: kotlin.Int
+            get() = unsupported()
+
+        override val floatValue: Double
+            get() = unsupported()
+
+        override val stringValue: kotlin.String
+            get() = unsupported()
+
+        override val booleanValue: Boolean
+            get() = unsupported()
+
+        override val idValue: kotlin.String
+            get() = unsupported()
+
+        override val enumValue: kotlin.String
+            get() = unsupported()
+
+        override val inputListValues: List<InputValue?>
+            get() = unsupported()
+
+        override val outputListValues: List<OutputValue?>
+            get() = unsupported()
+
+        override val inputObjectFields: FieldValues<InputValue>
+            get() = unsupported()
+
+        override val outputObjectFields: FieldValues<OutputValue>
+            get() = unsupported()
+
+        override val variableName: kotlin.String
+            get() = unsupported()
+
+        private fun unsupported(): Nothing =
+            throw UnsupportedOperationException("Schema.ErrorValue has no observable properties")
     }
 
     /**
@@ -380,14 +691,14 @@ interface Schema {
      * [Present] is valid for its declaring [TypeExpr]: null is permitted only when the expression's
      * outer layer is nullable, and a non-null value conforms recursively to every list and named
      * layer, including enum membership and input-object fields. It does not recursively contain
-     * [GraphQLVariableValue] or [GraphQLErrorValue]. Defaults are semantic values after input
+     * [VariableValue] or [ErrorValue]. Defaults are semantic values after input
      * coercion, not source literals. Default values use structural equality.
      */
     sealed interface DefaultValue {
         data object Absent : DefaultValue
 
         data class Present(
-            val value: GraphQLInputValue?,
+            val value: InputValue?,
         ) : DefaultValue
     }
 
@@ -409,3 +720,46 @@ interface Schema {
             },
         )
 }
+
+class MissingFieldException(
+    val typeName: String,
+    val fieldName: String,
+) : NoSuchElementException("Missing field: $typeName.$fieldName")
+
+private data class DefaultIntValue(
+    override val intValue: Int,
+) : Schema.IntValue
+
+private data class DefaultFloatValue(
+    override val floatValue: Double,
+) : Schema.FloatValue
+
+private data class DefaultStringValue(
+    override val stringValue: String,
+) : Schema.StringValue
+
+private data class DefaultBooleanValue(
+    override val booleanValue: Boolean,
+) : Schema.BooleanValue
+
+private data class DefaultIDValue(
+    override val idValue: String,
+) : Schema.IDValue
+
+private data class DefaultEnumValue(
+    override val type: Schema.EnumType,
+    override val enumValue: String,
+) : Schema.EnumValue
+
+private data class DefaultInputListValue(
+    override val inputListValues: List<Schema.InputValue?>,
+) : Schema.InputListValue
+
+private data class DefaultInputObjectValue(
+    override val type: Schema.InputObjectType,
+    override val inputObjectFields: Schema.FieldValues<Schema.InputValue>,
+) : Schema.InputObjectValue
+
+private data class DefaultVariableValue(
+    override val variableName: String,
+) : Schema.VariableValue

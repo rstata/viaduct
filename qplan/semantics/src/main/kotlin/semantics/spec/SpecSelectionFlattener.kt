@@ -1,7 +1,7 @@
 package semantics.spec
 
 import jakarta.inject.Inject
-import model.GlobalAssumptions
+import model.Assumptions
 import model.ObjectEngineResult
 import model.Schema
 import model.Selection
@@ -16,7 +16,7 @@ import model.spec.SpecSelection
 class SpecSelectionFlattener
     @Inject
     constructor(
-        private val globalAssumptions: GlobalAssumptions,
+        private val assumptions: Assumptions,
     ) {
         fun flatten(
             typeInScope: Schema.CompositeType,
@@ -53,7 +53,7 @@ class SpecSelectionFlattener
 
         private fun SpecSelection.Field.flattenField(context: SelectionContext): Selection {
             val field =
-                globalAssumptions.schema.field(
+                assumptions.schema.field(
                     context.nominalType.typeName,
                     fieldName,
                 )

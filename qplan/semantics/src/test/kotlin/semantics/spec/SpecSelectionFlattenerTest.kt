@@ -2,8 +2,8 @@ package semantics.spec
 
 import com.google.inject.AbstractModule
 import com.google.inject.Guice
-import model.GJAssumptions
-import model.GlobalAssumptions
+import model.Assumptions
+import model.GJSchema
 import model.Schema
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -130,12 +130,12 @@ class SpecSelectionFlattenerTest {
         assertTrue(x.possibleTypes.isEmpty())
     }
 
-    private fun flattener(assumptions: GlobalAssumptions): SpecSelectionFlattener {
+    private fun flattener(assumptions: Assumptions): SpecSelectionFlattener {
         val injector =
             Guice.createInjector(
                 object : AbstractModule() {
                     override fun configure() {
-                        bind(GlobalAssumptions::class.java).toInstance(assumptions)
+                        bind(Assumptions::class.java).toInstance(assumptions)
                     }
                 },
             )
@@ -144,7 +144,7 @@ class SpecSelectionFlattenerTest {
     }
 
     private class SchemaFixture {
-        val assumptions = GJAssumptions(SCHEMA_SDL, emptyMap())
+        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
         private val schema = assumptions.schema
 
         val query = schema.query

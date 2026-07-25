@@ -17,7 +17,7 @@ This repository currently contains two Gradle projects, `model` and `semantics`,
 - semantic operations live under [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/); and
 - semantic examples and checks live under [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/).
 
-There are no executable JVM-global `schema` or `variableValues` declarations and no `establishAssumptions` initializer. `GlobalAssumptions` supplies the `schema` and `variableValues` for one reasoning world and parses validated named fragments into `SpecSelection` values. `GJAssumptions` is the GraphQL Java-backed implementation. Main sources use `jakarta.inject` annotations so constructors are injection-ready without selecting a DI framework. Guice is a test-only dependency of `semantics`.
+There are no executable JVM-global `schema` or `variableValues` declarations and no `establishAssumptions` initializer. Each reasoning exercise fixes one `Schema` and `Assumptions`; their concrete implementations are annotated `@Singleton`. `Assumptions` supplies the schema and variable bindings for that world and parses validated named fragments into `SpecSelection` values; `Assumptions.of` constructs the GraphQL Java-backed implementation. Every `Schema.Value` is constructed through instance factories on that schema, which validate canonical schema references at the construction boundary. Main sources use `jakarta.inject` annotations so constructors are injection-ready without selecting a DI framework. Guice is a test-only dependency of `semantics`.
 
 The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened field-resolution `Selection` values. Semantic equality for `Selection` remains undefined. `SpecSelectionFlattener` is implemented in [`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt). Its public operation is `flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the modeled behavior, not proofs.
 
@@ -25,7 +25,7 @@ The `model` project defines both GraphQL-shaped `SpecSelection` values and flatt
 
 The immediate next step is to expand the fixed reasoning world beyond its schema and request variable bindings by adding a resolver table. Each table entry associates a resolvable field coordinate with its required `objectFragment` and resolver function, fixing ordinary field-resolver lookup and interpretation without introducing query-plan structure or scheduling policy.
 
-Each resolver function takes fully coerced arguments, resolved object-fragment values, and the requested flattened selections, and returns `GraphQLOutputValue?`. The selection input is semantically relevant: a selective resolver may return different projections or coverage for different requested selections. Holding every other resolver input fixed, each requested selection determines one result, and results for any two requested selections must agree at every OER coordinate selected by both.
+Each resolver function takes fully coerced arguments, resolved object-fragment values, and the requested flattened selections, and returns `Schema.OutputValue?`. The selection input is semantically relevant: a selective resolver may return different projections or coverage for different requested selections. Holding every other resolver input fixed, each requested selection determines one result, and results for any two requested selections must agree at every OER coordinate selected by both.
 
 Resolver return values must carry the information needed for result reasoning, including null, list, error, and concrete object-type information. Checkers, node resolution, and variable providers are explicitly out of scope for this phase.
 
@@ -130,13 +130,13 @@ At the time of this handoff, the carrier model lived directly in [`model/`](./mo
 The decisions recorded for the proposed next phase were:
 
 - `Schema` now models the canonical query root, named input and output types, fields and arguments, type expressions, defaults, `__typename`, and the declarative relations needed to reason about polymorphic selection sets.
-- The schema was treated as a stipulated input to each reasoning exercise. It is now supplied by `GlobalAssumptions.schema`, not an executable JVM-global declaration. Schema definitions use canonical identity, while references from other modeling domains use type names and field coordinates.
+- The schema was treated as a stipulated input to each reasoning exercise. It is now the singleton `Assumptions.schema`, not an executable JVM-global declaration. Schema definitions use canonical identity; `Schema.Value` instances are constructed through that schema and carry its canonical definitions, while coordinate-oriented modeling domains may use type names and field coordinates.
 - `EngineResult` is a finite value tree containing object, list, and simple results.
 - An OER field contains one `Cell` with a nullable value and a check result.
 - Missing fields are distinct from present fields whose values are null.
 - Keys present in an OER contain a schema field name and fully coerced arguments. They contain neither aliases nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER may contain unresolved variables.
 - Executor output values and OER values are separate representations.
-- Errors are collapsed to `GraphQLErrorValue`.
+- Errors are collapsed to `Schema.ErrorValue`.
 - Correctness, demand, and checked-versus-raw semantics intentionally remain outside the `model` package.
 
 The schema model was judged sufficient for the immediate polymorphism work. Other semantic inputs were not yet modeled, including the supported operation and selection structures, `objectFragments`, executor functions, and the execution world that fixes their denotations. The carrier model also excluded custom scalars, precise error metadata, and lazy values or references returned by executors.

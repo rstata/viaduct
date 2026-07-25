@@ -235,11 +235,8 @@ internal class GJSchemaDecoder(
 
     private fun decodeInputType(type: GraphQLInputType): Schema.TypeExpr<Schema.InputType> =
         decodeType(type) { typeName ->
-            resolveInputType(typeName)
+            types.getValue(typeName) as Schema.InputType
         }
-
-    private fun resolveInputType(typeName: String): Schema.InputType =
-        types.getValue(typeName) as Schema.InputType
 
     private fun <T : Schema.Type> decodeType(
         type: GraphQLType,
@@ -414,28 +411,19 @@ private fun decodeScalarLiteral(
             )
     }
 
-private fun decodeObjectLiteral(
+private inline fun decodeInputObjectFields(
     type: GraphQLInputObjectType,
-    value: ObjectValue,
+    isFieldSupplied: (String) -> Boolean,
+    decodeSupplied: (GraphQLInputType, String) -> Schema.InputValue?,
     variableValues: VariableBindings,
     schema: Schema,
 ): Schema.InputValue {
-    val suppliedFields = value.objectFields.associateBy { it.name }
     val fields =
         buildMap<String, Schema.InputValue?> {
             type.fieldDefinitions.forEach { field ->
-                val suppliedValue = suppliedFields[field.name]
                 when {
-                    suppliedValue != null ->
-                        put(
-                            field.name,
-                            decodeLiteral(
-                                field.type,
-                                suppliedValue.value,
-                                variableValues,
-                                schema,
-                            ),
-                        )
+                    isFieldSupplied(field.name) ->
+                        put(field.name, decodeSupplied(field.type, field.name))
 
                     field.hasSetDefaultValue() ->
                         put(
@@ -453,6 +441,24 @@ private fun decodeObjectLiteral(
     return schema.inputObjectValue(
         type = schema.type(type.name) as Schema.InputObjectType,
         fields = fields,
+    )
+}
+
+private fun decodeObjectLiteral(
+    type: GraphQLInputObjectType,
+    value: ObjectValue,
+    variableValues: VariableBindings,
+    schema: Schema,
+): Schema.InputValue {
+    val suppliedFields = value.objectFields.associateBy { it.name }
+    return decodeInputObjectFields(
+        type = type,
+        isFieldSupplied = { suppliedFields.containsKey(it) },
+        decodeSupplied = { fieldType, fieldName ->
+            decodeLiteral(fieldType, suppliedFields.getValue(fieldName).value, variableValues, schema)
+        },
+        variableValues = variableValues,
+        schema = schema,
     )
 }
 
@@ -526,37 +532,14 @@ private fun decodeObjectExternal(
     schema: Schema,
 ): Schema.InputValue {
     val valueMap = value as Map<*, *>
-    val fields =
-        buildMap<String, Schema.InputValue?> {
-            type.fieldDefinitions.forEach { field ->
-                when {
-                    valueMap.containsKey(field.name) ->
-                        put(
-                            field.name,
-                            decodeExternal(
-                                field.type,
-                                valueMap[field.name],
-                                variableValues,
-                                schema,
-                            ),
-                        )
-
-                    field.hasSetDefaultValue() ->
-                        put(
-                            field.name,
-                            decodeInputValue(
-                                field.type,
-                                field.inputFieldDefaultValue,
-                                variableValues,
-                                schema,
-                            ),
-                        )
-                }
-            }
-        }
-    return schema.inputObjectValue(
-        type = schema.type(type.name) as Schema.InputObjectType,
-        fields = fields,
+    return decodeInputObjectFields(
+        type = type,
+        isFieldSupplied = { valueMap.containsKey(it) },
+        decodeSupplied = { fieldType, fieldName ->
+            decodeExternal(fieldType, valueMap[fieldName], variableValues, schema)
+        },
+        variableValues = variableValues,
+        schema = schema,
     )
 }
 

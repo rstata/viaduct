@@ -125,7 +125,7 @@ sealed interface GraphQLOutputList : GraphQLOutputValue {
  *
  * Equality is conservative when such variables are present; see [GraphQLVariableValue].
  */
-sealed interface GraphQLInputObject : GraphQLInputValue {
+sealed interface GraphQLInputObjectValue : GraphQLInputValue {
     val inputObjectTypeName: String
     val inputObjectFields: FieldValues<GraphQLInputValue>
 
@@ -134,15 +134,15 @@ sealed interface GraphQLInputObject : GraphQLInputValue {
         fun of(
             typeName: String,
             fields: Map<String, GraphQLInputValue?>,
-        ): GraphQLInputObject =
-            DefaultGraphQLInputObject(
+        ): GraphQLInputObjectValue =
+            DefaultGraphQLInputObjectValue(
                 inputObjectTypeName = typeName,
                 inputObjectFields = FieldValues(typeName, fields.toMap()),
             )
     }
 }
 
-sealed interface GraphQLOutputObject : GraphQLOutputValue {
+sealed interface GraphQLObjectValue : GraphQLOutputValue {
     val outputObjectTypeName: String
     val outputObjectFields: FieldValues<GraphQLOutputValue>
 }
@@ -229,8 +229,8 @@ object GraphQLErrorValue :
     GraphQLEnumValue,
     GraphQLInputList,
     GraphQLOutputList,
-    GraphQLInputObject,
-    GraphQLOutputObject,
+    GraphQLInputObjectValue,
+    GraphQLObjectValue,
     GraphQLVariableValue {
     override val typeName: String
         get() = unsupported()
@@ -310,10 +310,10 @@ private data class DefaultGraphQLInputList(
     override val inputListValues: List<GraphQLInputValue?>,
 ) : GraphQLInputList
 
-private data class DefaultGraphQLInputObject(
+private data class DefaultGraphQLInputObjectValue(
     override val inputObjectTypeName: String,
     override val inputObjectFields: FieldValues<GraphQLInputValue>,
-) : GraphQLInputObject
+) : GraphQLInputObjectValue
 
 private data class DefaultGraphQLVariableValue(
     override val variableName: String,

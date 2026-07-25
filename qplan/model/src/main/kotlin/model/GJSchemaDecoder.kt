@@ -412,7 +412,7 @@ private fun decodeObjectLiteral(
                 }
             }
         }
-    return GraphQLInputObject.of(type.name, fields)
+    return GraphQLInputObjectValue.of(type.name, fields)
 }
 
 private fun decodeExternal(
@@ -498,7 +498,7 @@ private fun decodeObjectExternal(
                 }
             }
         }
-    return GraphQLInputObject.of(type.name, fields)
+    return GraphQLInputObjectValue.of(type.name, fields)
 }
 
 private class DecodedSchema(

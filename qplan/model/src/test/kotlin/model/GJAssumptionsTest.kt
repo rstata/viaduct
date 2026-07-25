@@ -35,7 +35,7 @@ class GJAssumptionsTest {
     @Test
     fun `instantiates a bound fragment variable with its binding`() {
         val filter =
-            GraphQLInputObject.of(
+            GraphQLInputObjectValue.of(
                 typeName = "Filter",
                 fields = mapOf("limit" to GraphQLIntValue.of(5)),
             )
@@ -80,7 +80,7 @@ class GJAssumptionsTest {
         assertEquals("result", node.alias)
         assertEquals("node", node.fieldName)
 
-        val filter = assertIs<GraphQLInputObject>(node.arguments.getValue("filter"))
+        val filter = assertIs<GraphQLInputObjectValue>(node.arguments.getValue("filter"))
         assertEquals(
             10,
             assertIs<GraphQLIntValue>(filter.inputObjectFields["limit"]).intValue,
@@ -161,7 +161,7 @@ class GJAssumptionsTest {
         assertSame(nodeField, filterArgument.containingField)
         val filterDefault =
             assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
-        val filterValue = assertIs<GraphQLInputObject>(filterDefault.value)
+        val filterValue = assertIs<GraphQLInputObjectValue>(filterDefault.value)
         assertEquals("Filter", filterValue.inputObjectTypeName)
         assertEquals(
             10,

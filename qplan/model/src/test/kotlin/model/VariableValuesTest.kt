@@ -20,7 +20,7 @@ class VariableValuesTest {
                 ),
             )
         val value =
-            GraphQLInputObject.of(
+            GraphQLInputObjectValue.of(
                 typeName = "Variables",
                 fields =
                     mapOf(
@@ -38,7 +38,7 @@ class VariableValuesTest {
             )
 
         val instantiated =
-            assertIs<GraphQLInputObject>(variableValues.instantiateVariables(value))
+            assertIs<GraphQLInputObjectValue>(variableValues.instantiateVariables(value))
         assertEquals(
             7,
             assertIs<GraphQLIntValue>(
@@ -54,7 +54,7 @@ class VariableValuesTest {
         )
 
         val exception =
-            assertFailsWith<UnboundVariablesException> {
+            assertFailsWith<MissingVariableException> {
                 variableValues.instantiateAllVariables(value)
             }
         assertEquals(listOf(unresolved, other), exception.variableValues)
@@ -77,7 +77,7 @@ class VariableValuesTest {
         val third = GraphQLVariableValue.of("third")
 
         val exception =
-            assertFailsWith<UnboundVariablesException> {
+            assertFailsWith<MissingVariableException> {
                 VariableBindings.from(
                     mapOf(
                         "list" to
@@ -85,7 +85,7 @@ class VariableValuesTest {
                                 listOf(first, second, GraphQLVariableValue.of("first")),
                             ),
                         "object" to
-                            GraphQLInputObject.of(
+                            GraphQLInputObjectValue.of(
                                 typeName = "Input",
                                 fields = mapOf("value" to third),
                             ),

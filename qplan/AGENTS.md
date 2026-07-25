@@ -16,6 +16,8 @@ The Kotlin code must compile, but it is not intended to become running productio
 
 `Assumptions` contains the schema and variable bindings stipulated for one reasoning world. Each reasoning exercise has exactly one `Assumptions` and one `Schema`, as emphasized by `@Singleton` on their concrete implementations. These are mathematical globals rather than JVM-global values: code receives them explicitly, constructs every `Schema.Value` through that schema's factories, and does not combine values or definitions from different reasoning exercises.
 
+Every element of a reasoning world's schema has exactly one canonical definition object. Schema definition classes retain the default reference-based `Any.equals` and `Any.hashCode`, so `a == b` exactly when `a` and `b` represent the same schema element. Compare schema definitions with `==`, `!=`, and ordinary collection operations such as `contains`; do not use identity-specific operators, hashes, or collection scans.
+
 Compilation and tests provide finite evidence that the model is internally consistent and behaves as illustrated. They do not prove its mathematical assumptions or semantic claims.
 
 ## Claims And Arguments

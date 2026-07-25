@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 
 class VariableValuesTest {
     private val schema =
@@ -87,7 +86,7 @@ class VariableValuesTest {
                 schema.variableValue("nothing"),
             ),
         )
-        assertSame(
+        assertEquals(
             Schema.ErrorValue,
             variableValues.instantiateAllVariables(Schema.ErrorValue),
         )

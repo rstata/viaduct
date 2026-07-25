@@ -101,7 +101,7 @@ class VariableBindings private constructor(
         value: Schema.Value?,
         unboundVariables: MutableMap<String, Schema.VariableValue>? = null,
     ): Schema.Value? {
-        if (value == null || value === Schema.ErrorValue) return value
+        if (value == null || value == Schema.ErrorValue) return value
 
         return when (value) {
             is Schema.VariableValue ->

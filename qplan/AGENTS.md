@@ -14,7 +14,7 @@ The [`model` project](./model/AGENTS.md) defines the carrier algebra and its inv
 
 The Kotlin code must compile, but it is not intended to become running production code. Read declarations as mathematical sets, values, functions, and relations unless their documentation gives them operational semantics.
 
-`GlobalAssumptions` contains the schema and variable bindings stipulated for one reasoning world. These are mathematical globals, not JVM-global values. Code interpreting model values does so under an explicit assumptions value; do not assume singleton scope, because an operation may derive a new immutable assumption snapshot.
+`Assumptions` contains the schema and variable bindings stipulated for one reasoning world. Each reasoning exercise has exactly one `Assumptions` and one `Schema`, as emphasized by `@Singleton` on their concrete implementations. These are mathematical globals rather than JVM-global values: code receives them explicitly, constructs every `Schema.Value` through that schema's factories, and does not combine values or definitions from different reasoning exercises.
 
 Compilation and tests provide finite evidence that the model is internally consistent and behaves as illustrated. They do not prove its mathematical assumptions or semantic claims.
 

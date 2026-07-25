@@ -17,7 +17,7 @@ interface Selection {
      * of [nominalType].)
      *
      * Non-variable arguments values are in their coerced semantic form. An argument may
-     * contain a [GraphQLVariableValue] when the variable is unbound. Such keys use the
+     * contain a [Schema.VariableValue] when the variable is unbound. Such keys use the
      * model's conservative equality: they merge only when they are definitely equal.
      *
      * Compared to GraphQL selections, field-resolver selections use the OER key rather than
@@ -29,7 +29,7 @@ interface Selection {
      * Provides context for [key]: this type together with the field-name in [key] give the
      * schema coordinate of the field intended by this selection.  However, it's [possibleTypes],
      * not the nominal type, that controls what types this selection actually applies to. This
-     * object must be contained in [GlobalAssumptions.schema].
+     * object must be contained in [Assumptions.schema].
      *
      * Compared to GraphQL selections, this is the type-condition of the immediately-enclosing
      * spread, or the nominal type inherited from an enclosing selection or document if there
@@ -43,7 +43,7 @@ interface Selection {
      * In prose this property is often called the "type condition" of the selection.
      * We maintain the invariant that this set is always a subset of the
      * object types contained by [nominalType]. All of these objects must be contained in
-     * [GlobalAssumptions.schema].
+     * [Assumptions.schema].
      *
      * Compared to GraphQL selections, this is the intersection of all the possible types of all the
      * containing spreads and the type-level type of the containing document.  Unlike GraphQL

@@ -1,8 +1,6 @@
 package model.spec
 
-import model.GraphQLInputValue
-import model.GraphQLVariableValue
-import model.GlobalAssumptions
+import model.Assumptions
 import model.Schema
 
 /**
@@ -34,10 +32,10 @@ sealed interface SpecSelection {
         /**
          * The field arguments as an unordered map from schema argument name to semantic value.
          *
-         * Non-variable values are in coerced form. A value may contain a [GraphQLVariableValue]
+         * Non-variable values are in coerced form. A value may contain a [Schema.VariableValue]
          * when that variable is unbound.
          */
-        val arguments: Map<String, GraphQLInputValue?>
+        val arguments: Map<String, Schema.InputValue?>
 
         /**
          * The selection set on this field's result.
@@ -52,7 +50,7 @@ sealed interface SpecSelection {
             fun of(
                 alias: String?,
                 fieldName: String,
-                arguments: Map<String, GraphQLInputValue?>,
+                arguments: Map<String, Schema.InputValue?>,
                 subselections: List<SpecSelection>?,
             ): Field {
                 val capturedAlias = alias
@@ -80,7 +78,7 @@ sealed interface SpecSelection {
          * The fragment's canonical composite type condition, or null when it has no type condition.
          *
          * A null condition leaves the surrounding type condition unchanged. A non-null condition is
-         * a definition in [GlobalAssumptions.schema].
+         * a definition in [Assumptions.schema].
          */
         val typeCondition: Schema.CompositeType?
 

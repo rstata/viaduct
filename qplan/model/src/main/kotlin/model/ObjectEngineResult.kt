@@ -23,11 +23,11 @@ sealed interface EngineResult {
  * its results.
  *
  * Every present [Key] has argument values that are fully coerced to non-variable values: no
- * argument recursively contains a [GraphQLVariableValue]. Consequently, the identity of keys
+ * argument recursively contains a [Schema.VariableValue]. Consequently, the identity of keys
  * present in an OER is canonical and does not depend on conservative symbolic equality.
  *
- * For every present [Key] whose arguments recursively contain [GraphQLErrorValue], [fetch]
- * returns a [Cell] whose [Cell.value] and [Cell.check] are both [GraphQLErrorValue].
+ * For every present [Key] whose arguments recursively contain [Schema.ErrorValue], [fetch]
+ * returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
  */
 sealed interface ObjectEngineResult : EngineResult {
     override val typeName: String
@@ -35,18 +35,18 @@ sealed interface ObjectEngineResult : EngineResult {
     /**
      * A field key. Aliases do not participate in identity.
      *
-     * A key may contain [GraphQLVariableValue] instances when used outside an OER, such as in a
+     * A key may contain [Schema.VariableValue] instances when used outside an OER, such as in a
      * selection. The non-variable invariant applies only to keys present in an
      * [ObjectEngineResult].
      */
     data class Key(
         val fieldName: String,
-        val arguments: Map<String, GraphQLInputValue?>,
+        val arguments: Map<String, Schema.InputValue?>,
     )
 
     data class Cell(
         val value: EngineResult?,
-        val check: GraphQLBooleanValue,
+        val check: Schema.BooleanValue,
     )
 
     /**

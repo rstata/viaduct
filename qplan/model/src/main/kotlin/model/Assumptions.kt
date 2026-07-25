@@ -5,11 +5,11 @@ import model.spec.SpecSelection
 /**
  * The fixed inputs under which model values and operations over them are interpreted.
  *
- * These assumptions are global only within one reasoning world. They are not JVM globals, and
- * callers must not assume that this interface has a singleton implementation. An operation may
- * instead use a different immutable snapshot when it derives a new world.
+ * Exactly one instance is fixed for a reasoning world. Concrete implementations use `@Singleton`
+ * to record that modeling assumption for dependency injection; it does not make this a JVM-global
+ * value.
  */
-interface GlobalAssumptions {
+interface Assumptions {
     /**
      * The canonical schema for this reasoning world.
      *
@@ -22,11 +22,11 @@ interface GlobalAssumptions {
      * The known variable bindings for this reasoning world.
      *
      * A bound value may be null, representing GraphQL null, but a non-null bound value cannot
-     * recursively contain a [GraphQLVariableValue]. Variable-to-variable bindings, including nested
+     * recursively contain a [Schema.VariableValue]. Variable-to-variable bindings, including nested
      * references and cycles, are therefore excluded. A missing entry denotes an unbound or unknown
-     * variable. A variable may be bound to [GraphQLErrorValue] because providers or fields may fail.
+     * variable. A variable may be bound to [Schema.ErrorValue] because providers or fields may fail.
      *
-     * See [GraphQLVariableValue] for how bindings affect conservative equality.
+     * See [Schema.VariableValue] for how bindings affect conservative equality.
      */
     val variableValues: VariableBindings
 
@@ -37,4 +37,17 @@ interface GlobalAssumptions {
      * followed by the post-validation selections in its selection set.
      */
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, List<SpecSelection>>
+
+    companion object {
+        /**
+         * Constructs one reasoning world over an already constructed [schema].
+         *
+         * Every value in [bindings] must have been constructed by [schema].
+         */
+        @JvmStatic
+        fun of(
+            schema: GJSchema,
+            bindings: Map<String, Schema.Value?>,
+        ): Assumptions = DefaultAssumptions(schema, bindings)
+    }
 }

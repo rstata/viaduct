@@ -8,7 +8,7 @@ Follow the repository-wide purpose and modeling discipline in [`../AGENTS.md`](.
 
 ## Assumption Context
 
-Public semantic operations should be classes that receive one `GlobalAssumptions`. Obtain the operation's schema and variable bindings through that value. DI constructs objects but does not define semantic composition across assumption snapshots.
+Public semantic operations should be classes that receive the reasoning world's singleton `Assumptions`. Obtain the operation's schema and variable bindings through that value. Do not combine assumptions, schemas, definitions, or values from different reasoning exercises.
 
 Private pure helpers may be top-level when they require no assumptions. Public operations should make their modeled world explicit through the injected assumptions.
 

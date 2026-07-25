@@ -9,10 +9,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 
-class GJAssumptionsTest {
+class AssumptionsTest {
     @Test
     fun `preserves an unbound fragment variable as a variable value`() {
-        val assumptions = GJAssumptions(SCHEMA_SDL, emptyMap())
+        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
 
         val (_, selections) =
             assumptions.selectionsFrom(
@@ -27,21 +27,23 @@ class GJAssumptionsTest {
 
         val node = assertIs<SpecSelection.Field>(selections.single())
         assertEquals(
-            GraphQLVariableValue.of("filter"),
+            assumptions.schema.variableValue("filter"),
             node.arguments.getValue("filter"),
         )
     }
 
     @Test
     fun `instantiates a bound fragment variable with its binding`() {
+        val schema = GJSchema.fromSDL(SCHEMA_SDL)
+        val filterType = schema.type("Filter") as Schema.InputObjectType
         val filter =
-            GraphQLInputObjectValue.of(
-                typeName = "Filter",
-                fields = mapOf("limit" to GraphQLIntValue.of(5)),
+            schema.inputObjectValue(
+                type = filterType,
+                fields = mapOf("limit" to schema.intValue(5)),
             )
         val assumptions =
-            GJAssumptions(
-                schemaSDL = SCHEMA_SDL,
+            Assumptions.of(
+                schema = schema,
                 bindings = mapOf("filter" to filter),
             )
 
@@ -58,17 +60,19 @@ class GJAssumptionsTest {
 
         val node = assertIs<SpecSelection.Field>(selections.single())
         assertSame(filter, node.arguments.getValue("filter"))
+        assertSame(filterType, filter.type)
+        assertSame(assumptions.schema.type("Filter"), filter.type)
     }
 
     @Test
     fun `parses and validates a named fragment against the retained schema`() {
-        val assumptions = GJAssumptions(SCHEMA_SDL, emptyMap())
+        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
 
         val (typeCondition, selections) =
             assumptions.selectionsFrom(
                 """
                 fragment ignored on Query {
-                  result: node(filter: {tags: "one"}) {
+                  result: node(filter: {tags: "one", role: ADMIN}) {
                     id
                   }
                 }
@@ -80,15 +84,18 @@ class GJAssumptionsTest {
         assertEquals("result", node.alias)
         assertEquals("node", node.fieldName)
 
-        val filter = assertIs<GraphQLInputObjectValue>(node.arguments.getValue("filter"))
-        assertEquals(
-            10,
-            assertIs<GraphQLIntValue>(filter.inputObjectFields["limit"]).intValue,
-        )
-        val tags = assertIs<GraphQLInputListValue>(filter.inputObjectFields["tags"])
+        val filter = assertIs<Schema.InputObjectValue>(node.arguments.getValue("filter"))
+        assertSame(assumptions.schema.type("Filter"), filter.type)
+        val role = assertIs<Schema.EnumValue>(filter.inputObjectFields["role"])
+        assertSame(assumptions.schema.type("Role"), role.type)
+        assertEquals("ADMIN", role.enumValue)
+        val limit = assertIs<Schema.IntValue>(filter.inputObjectFields["limit"])
+        assertSame(assumptions.schema.type("Int"), limit.type)
+        assertEquals(10, limit.intValue)
+        val tags = assertIs<Schema.InputListValue>(filter.inputObjectFields["tags"])
         assertEquals(
             "one",
-            assertIs<GraphQLStringValue>(tags.inputListValues.single()).stringValue,
+            assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
         )
 
         val id = assertIs<SpecSelection.Field>(node.subselections.orEmpty().single())
@@ -97,7 +104,7 @@ class GJAssumptionsTest {
 
     @Test
     fun `rejects a named fragment that is invalid for the retained schema`() {
-        val assumptions = GJAssumptions(SCHEMA_SDL, emptyMap())
+        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
 
         val exception =
             assertFailsWith<IllegalArgumentException> {
@@ -114,14 +121,16 @@ class GJAssumptionsTest {
     }
 
     @Test
-    fun `constructs global assumptions from SDL and qualified variable values`() {
+    fun `constructs assumptions from a schema and qualified variable values`() {
+        val suppliedSchema = GJSchema.fromSDL(SCHEMA_SDL)
         val assumptions =
-            GJAssumptions(
-                schemaSDL = SCHEMA_SDL,
-                bindings = mapOf("failed" to GraphQLErrorValue),
+            Assumptions.of(
+                schema = suppliedSchema,
+                bindings = mapOf("failed" to Schema.ErrorValue),
             )
 
-        assertSame(GraphQLErrorValue, assumptions.variableValues["failed"])
+        assertSame(suppliedSchema, assumptions.schema)
+        assertSame(Schema.ErrorValue, assumptions.variableValues["failed"])
 
         val schema = assumptions.schema
         val query = schema.query
@@ -161,21 +170,24 @@ class GJAssumptionsTest {
         assertSame(nodeField, filterArgument.containingField)
         val filterDefault =
             assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
-        val filterValue = assertIs<GraphQLInputObjectValue>(filterDefault.value)
-        assertEquals("Filter", filterValue.inputObjectTypeName)
-        assertEquals(
-            10,
-            assertIs<GraphQLIntValue>(
+        val filterValue = assertIs<Schema.InputObjectValue>(filterDefault.value)
+        assertSame(schema.type("Filter"), filterValue.type)
+        val defaultRole = assertIs<Schema.EnumValue>(filterValue.inputObjectFields["role"])
+        assertSame(schema.type("Role"), defaultRole.type)
+        assertEquals("MEMBER", defaultRole.enumValue)
+        val defaultLimit =
+            assertIs<Schema.IntValue>(
                 filterValue.inputObjectFields["limit"],
-            ).intValue,
-        )
+            )
+        assertSame(schema.type("Int"), defaultLimit.type)
+        assertEquals(10, defaultLimit.intValue)
         val tags =
-            assertIs<GraphQLInputListValue>(
+            assertIs<Schema.InputListValue>(
                 filterValue.inputObjectFields["tags"],
             )
         assertEquals(
             "a",
-            assertIs<GraphQLStringValue>(tags.inputListValues.single()).stringValue,
+            assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
         )
 
         val filter = assertIs<Schema.InputObjectType>(schema.type("Filter"))
@@ -184,10 +196,34 @@ class GJAssumptionsTest {
     }
 
     @Test
+    fun `value factories reject definitions from another schema instance`() {
+        val schemaA = GJSchema.fromSDL(SCHEMA_SDL)
+        val schemaB = GJSchema.fromSDL(SCHEMA_SDL)
+        val foreignRole =
+            schemaA.enumValue(
+                schemaA.type("Role") as Schema.EnumType,
+                "MEMBER",
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            schemaB.inputObjectValue(
+                type = schemaA.type("Filter") as Schema.InputObjectType,
+                fields = emptyMap(),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            schemaB.inputObjectValue(
+                type = schemaB.type("Filter") as Schema.InputObjectType,
+                fields = mapOf("role" to foreignRole),
+            )
+        }
+    }
+
+    @Test
     fun `rejects non-standard scalar declarations`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {
-                GJAssumptions(
+                GJSchema.fromSDL(
                     schemaSDL =
                         """
                         scalar Date
@@ -196,7 +232,6 @@ class GJAssumptionsTest {
                           today: Date
                         }
                         """.trimIndent(),
-                    bindings = emptyMap(),
                 )
             }
 
@@ -207,7 +242,7 @@ class GJAssumptionsTest {
     fun `rejects non-standard directive definitions`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {
-                GJAssumptions(
+                GJSchema.fromSDL(
                     schemaSDL =
                         """
                         directive @authenticated on FIELD_DEFINITION
@@ -216,7 +251,6 @@ class GJAssumptionsTest {
                           secret: String @authenticated
                         }
                         """.trimIndent(),
-                    bindings = emptyMap(),
                 )
             }
 
@@ -252,6 +286,7 @@ class GJAssumptionsTest {
             input Filter {
               limit: Int = 10
               tags: [String!]
+              role: Role = MEMBER
             }
 
             type Query {

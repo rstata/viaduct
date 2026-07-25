@@ -27,7 +27,6 @@ import graphql.schema.InputValueWithState
 
 internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
-    private val variableValues: VariableBindings,
 ) {
     private val types = linkedMapOf<String, Schema.Type>()
     private val compositeFields =
@@ -36,6 +35,8 @@ internal class GJSchemaDecoder(
         linkedMapOf<Schema.InputObjectType, MutableMap<String, Schema.InputField>>()
     private val possibleTypeSets =
         linkedMapOf<Schema.CompositeType, MutableSet<Schema.ObjectType>>()
+    private lateinit var schema: Schema
+    private lateinit var noVariableValues: VariableBindings
 
     fun decode(): Schema {
         require(graphQLSchema.mutationType == null) {
@@ -50,16 +51,21 @@ internal class GJSchemaDecoder(
 
         registerBuiltInScalars()
         createTypeShells()
+
+        val query = types["Query"] as Schema.ObjectType
+        schema =
+            DecodedSchema(
+                query = query,
+                types = types.toMap(),
+                graphQLSchema = graphQLSchema,
+            )
+        noVariableValues = VariableBindings.from(schema, emptyMap())
+
         populatePossibleTypes()
         populateInputFields()
         populateCompositeFields()
 
-        val query = types["Query"] as Schema.ObjectType
-        return DecodedSchema(
-            query = query,
-            types = types.toMap(),
-            graphQLSchema = graphQLSchema,
-        )
+        return schema
     }
 
     private fun registerBuiltInScalars() {
@@ -227,8 +233,11 @@ internal class GJSchemaDecoder(
 
     private fun decodeInputType(type: GraphQLInputType): Schema.TypeExpr<Schema.InputType> =
         decodeType(type) { typeName ->
-            types.getValue(typeName) as Schema.InputType
+            resolveInputType(typeName)
         }
+
+    private fun resolveInputType(typeName: String): Schema.InputType =
+        types.getValue(typeName) as Schema.InputType
 
     private fun <T : Schema.Type> decodeType(
         type: GraphQLType,
@@ -280,7 +289,14 @@ internal class GJSchemaDecoder(
         if (value.isNotSet) {
             Schema.DefaultValue.Absent
         } else {
-            Schema.DefaultValue.Present(decodeInputValue(type, value, variableValues))
+            Schema.DefaultValue.Present(
+                decodeInputValue(
+                    type,
+                    value,
+                    noVariableValues,
+                    schema,
+                ),
+            )
         }
 
     private fun implementsInterface(
@@ -295,23 +311,25 @@ internal fun decodeInputValue(
     type: GraphQLInputType,
     value: InputValueWithState,
     variableValues: VariableBindings,
-): GraphQLInputValue? =
+    schema: Schema,
+): Schema.InputValue? =
     if (value.isLiteral) {
-        decodeLiteral(type, value.value as Value<*>, variableValues)
+        decodeLiteral(type, value.value as Value<*>, variableValues, schema)
     } else {
-        decodeExternal(type, value.value, variableValues)
+        decodeExternal(type, value.value, variableValues, schema)
     }
 
 internal fun decodeLiteral(
     type: GraphQLInputType,
     value: Value<*>,
     variableValues: VariableBindings,
-): GraphQLInputValue? {
+    schema: Schema,
+): Schema.InputValue? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
             variableValues.getValue(value.name)
         } else {
-            GraphQLVariableValue.of(value.name)
+            schema.variableValue(value.name)
         }
     }
     if (value is NullValue) {
@@ -324,40 +342,57 @@ internal fun decodeLiteral(
                 type.wrappedType as GraphQLInputType,
                 value,
                 variableValues,
+                schema,
             )
 
         is GraphQLList -> {
             val values = if (value is ArrayValue) value.values else listOf(value)
-            GraphQLInputListValue.of(
+            schema.inputListValue(
                 values.map {
                     decodeLiteral(
                         type.wrappedType as GraphQLInputType,
                         it,
                         variableValues,
+                        schema,
                     )
                 },
             )
         }
 
-        is GraphQLScalarType -> decodeScalarLiteral(type.name, value)
+        is GraphQLScalarType ->
+            decodeScalarLiteral(
+                schema,
+                schema.type(type.name) as Schema.ScalarType,
+                value,
+            )
         is graphql.schema.GraphQLEnumType ->
-            GraphQLEnumValue.of(type.name, (value as EnumValue).name)
+            schema.enumValue(
+                schema.type(type.name) as Schema.EnumType,
+                (value as EnumValue).name,
+            )
 
         is GraphQLInputObjectType ->
-            decodeObjectLiteral(type, value as ObjectValue, variableValues)
+            decodeObjectLiteral(
+                type,
+                value as ObjectValue,
+                variableValues,
+                schema,
+            )
 
         else -> error("Unexpected input type: $type")
     }
 }
 
 private fun decodeScalarLiteral(
-    typeName: String,
+    schema: Schema,
+    scalarType: Schema.ScalarType,
     value: Value<*>,
-): GraphQLInputValue =
-    when (typeName) {
-        "Int" -> GraphQLIntValue.of((value as IntValue).value.intValueExact())
-        "Float" ->
-            GraphQLFloatValue.of(
+): Schema.InputValue =
+    when (scalarType) {
+        Schema.ScalarType.Int ->
+            schema.intValue((value as IntValue).value.intValueExact())
+        Schema.ScalarType.Float ->
+            schema.floatValue(
                 when (value) {
                     is FloatValue -> value.value.toDouble()
                     is IntValue -> value.value.toDouble()
@@ -365,28 +400,27 @@ private fun decodeScalarLiteral(
                 },
             )
 
-        "String" -> GraphQLStringValue.of((value as StringValue).value!!)
-        "Boolean" -> GraphQLBooleanValue.of((value as BooleanValue).isValue)
-        "ID" ->
-            GraphQLIDValue.of(
+        Schema.ScalarType.String -> schema.stringValue((value as StringValue).value!!)
+        Schema.ScalarType.Boolean -> schema.booleanValue((value as BooleanValue).isValue)
+        Schema.ScalarType.ID ->
+            schema.idValue(
                 when (value) {
                     is StringValue -> value.value!!
                     is IntValue -> value.value.toString()
                     else -> error("Invalid ID literal: $value")
                 },
             )
-
-        else -> error("Unsupported scalar $typeName")
     }
 
 private fun decodeObjectLiteral(
     type: GraphQLInputObjectType,
     value: ObjectValue,
     variableValues: VariableBindings,
-): GraphQLInputValue {
+    schema: Schema,
+): Schema.InputValue {
     val suppliedFields = value.objectFields.associateBy { it.name }
     val fields =
-        buildMap<String, GraphQLInputValue?> {
+        buildMap<String, Schema.InputValue?> {
             type.fieldDefinitions.forEach { field ->
                 val suppliedValue = suppliedFields[field.name]
                 when {
@@ -397,6 +431,7 @@ private fun decodeObjectLiteral(
                                 field.type,
                                 suppliedValue.value,
                                 variableValues,
+                                schema,
                             ),
                         )
 
@@ -407,19 +442,24 @@ private fun decodeObjectLiteral(
                                 field.type,
                                 field.inputFieldDefaultValue,
                                 variableValues,
+                                schema,
                             ),
                         )
                 }
             }
         }
-    return GraphQLInputObjectValue.of(type.name, fields)
+    return schema.inputObjectValue(
+        type = schema.type(type.name) as Schema.InputObjectType,
+        fields = fields,
+    )
 }
 
 private fun decodeExternal(
     type: GraphQLInputType,
     value: Any?,
     variableValues: VariableBindings,
-): GraphQLInputValue? {
+    schema: Schema,
+): Schema.InputValue? {
     if (value == null) {
         return null
     }
@@ -430,50 +470,62 @@ private fun decodeExternal(
                 type.wrappedType as GraphQLInputType,
                 value,
                 variableValues,
+                schema,
             )
         is GraphQLList -> {
             val values = if (value is Iterable<*>) value.toList() else listOf(value)
-            GraphQLInputListValue.of(
+            schema.inputListValue(
                 values.map {
                     decodeExternal(
                         type.wrappedType as GraphQLInputType,
                         it,
                         variableValues,
+                        schema,
                     )
                 },
             )
         }
 
-        is GraphQLScalarType -> decodeScalarExternal(type.name, value)
+        is GraphQLScalarType ->
+            decodeScalarExternal(
+                schema,
+                schema.type(type.name) as Schema.ScalarType,
+                value,
+            )
         is graphql.schema.GraphQLEnumType ->
-            GraphQLEnumValue.of(type.name, value.toString())
+            schema.enumValue(
+                schema.type(type.name) as Schema.EnumType,
+                value.toString(),
+            )
 
-        is GraphQLInputObjectType -> decodeObjectExternal(type, value, variableValues)
+        is GraphQLInputObjectType ->
+            decodeObjectExternal(type, value, variableValues, schema)
         else -> error("Unexpected input type: $type")
     }
 }
 
 private fun decodeScalarExternal(
-    typeName: String,
+    schema: Schema,
+    scalarType: Schema.ScalarType,
     value: Any,
-): GraphQLInputValue =
-    when (typeName) {
-        "Int" -> GraphQLIntValue.of((value as Number).toInt())
-        "Float" -> GraphQLFloatValue.of((value as Number).toDouble())
-        "String" -> GraphQLStringValue.of(value as String)
-        "Boolean" -> GraphQLBooleanValue.of(value as Boolean)
-        "ID" -> GraphQLIDValue.of(value.toString())
-        else -> error("Unsupported scalar $typeName")
+): Schema.InputValue =
+    when (scalarType) {
+        Schema.ScalarType.Int -> schema.intValue((value as Number).toInt())
+        Schema.ScalarType.Float -> schema.floatValue((value as Number).toDouble())
+        Schema.ScalarType.String -> schema.stringValue(value as String)
+        Schema.ScalarType.Boolean -> schema.booleanValue(value as Boolean)
+        Schema.ScalarType.ID -> schema.idValue(value.toString())
     }
 
 private fun decodeObjectExternal(
     type: GraphQLInputObjectType,
     value: Any,
     variableValues: VariableBindings,
-): GraphQLInputValue {
+    schema: Schema,
+): Schema.InputValue {
     val valueMap = value as Map<*, *>
     val fields =
-        buildMap<String, GraphQLInputValue?> {
+        buildMap<String, Schema.InputValue?> {
             type.fieldDefinitions.forEach { field ->
                 when {
                     valueMap.containsKey(field.name) ->
@@ -483,6 +535,7 @@ private fun decodeObjectExternal(
                                 field.type,
                                 valueMap[field.name],
                                 variableValues,
+                                schema,
                             ),
                         )
 
@@ -493,12 +546,16 @@ private fun decodeObjectExternal(
                                 field.type,
                                 field.inputFieldDefaultValue,
                                 variableValues,
+                                schema,
                             ),
                         )
                 }
             }
         }
-    return GraphQLInputObjectValue.of(type.name, fields)
+    return schema.inputObjectValue(
+        type = schema.type(type.name) as Schema.InputObjectType,
+        fields = fields,
+    )
 }
 
 private class DecodedSchema(

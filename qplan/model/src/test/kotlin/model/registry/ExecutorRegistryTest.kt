@@ -1,11 +1,15 @@
 package model.registry
 
+import model.Fragment
 import model.Schema
+import model.Selection
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class ExecutorRegistryTest {
     @Test
@@ -28,10 +32,15 @@ class ExecutorRegistryTest {
                 },
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
+                    val queryFragment =
+                        object : Fragment {
+                            override val nominalType = schema.query
+                            override val subselections = emptyList<model.Selection>()
+                        }
                     mapOf<FieldCoordinate, FieldResolver>(
                         FieldCoordinate("Query", "user") to
                             FieldResolver(
-                                objectFragment = emptyList(),
+                                objectFragment = queryFragment,
                                 function = { parent, arguments ->
                                     assertEquals(
                                         schema.objectValue(schema.query, emptyMap()),
@@ -66,7 +75,8 @@ class ExecutorRegistryTest {
         )
         val (objectFragment, fieldResolverFunction) =
             registry.fieldResolver(userField)
-        assertEquals(emptyList(), objectFragment)
+        assertEquals(schema.query, objectFragment.nominalType)
+        assertEquals(emptyList(), objectFragment.subselections)
         assertEquals(
             user,
             fieldResolverFunction(
@@ -198,6 +208,27 @@ class ExecutorRegistryTest {
         }
     }
 
+    @Test
+    fun `selection factory distinguishes empty composites and rejects subselections on leaves`() {
+        val fixture = Fixture()
+
+        val leaf = fixture.selection("Node", "id")
+        val emptyComposite = fixture.selection("User", "friend")
+
+        assertTrue(leaf.isLeaf)
+        assertTrue(leaf.subselections.isEmpty())
+        assertFalse(emptyComposite.isLeaf)
+        assertTrue(emptyComposite.subselections.isEmpty())
+        assertFailsWith<IllegalArgumentException> {
+            Selection.of(
+                key = leaf.key,
+                nominalType = leaf.nominalType,
+                possibleTypes = leaf.possibleTypes,
+                subselections = listOf(emptyComposite),
+            )
+        }
+    }
+
     private class Fixture {
         private val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
@@ -209,10 +240,10 @@ class ExecutorRegistryTest {
             fieldName: String,
             possibleTypes: Set<Schema.ObjectType> =
                 (schema.type(typeName) as Schema.CompositeType).possibleTypes,
-            subselections: List<model.Selection>? = null,
+            subselections: List<model.Selection> = emptyList(),
         ): model.Selection {
             val nominalType = schema.type(typeName) as Schema.CompositeType
-            return TestSelection(
+            return Selection.of(
                 key =
                     schema.objectEngineResultKey(
                         field = schema.field(typeName, fieldName),
@@ -224,13 +255,6 @@ class ExecutorRegistryTest {
             )
         }
     }
-
-    private class TestSelection(
-        override val key: model.ObjectEngineResult.Key,
-        override val nominalType: Schema.CompositeType,
-        override val possibleTypes: Set<Schema.ObjectType>,
-        override val subselections: List<model.Selection>?,
-    ) : model.Selection
 
     private companion object {
         val SCHEMA_SDL =

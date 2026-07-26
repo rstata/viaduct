@@ -1,6 +1,7 @@
 package semantics
 
 import model.Assumptions
+import model.Fragment
 import model.GJSchema
 import model.Schema
 import model.registry.ExecutorRegistry
@@ -39,10 +40,15 @@ class WorldInjectionTest {
                 },
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
+                    val queryFragment =
+                        object : Fragment {
+                            override val nominalType = schema.query
+                            override val subselections = emptyList<model.Selection>()
+                        }
                     mapOf<FieldCoordinate, FieldResolver>(
                         FieldCoordinate("Query", "user") to
                             FieldResolver(
-                                objectFragment = emptyList(),
+                                objectFragment = queryFragment,
                                 function = { _, _ ->
                                     schema.objectValue(
                                         type = user,
@@ -107,7 +113,7 @@ class WorldInjectionTest {
         assertEquals(userField, selections.single().key.field)
         assertEquals(
             schema.field("User", "id"),
-            selections.single().subselections.orEmpty().single().key.field,
+            selections.single().subselections.single().key.field,
         )
     }
 

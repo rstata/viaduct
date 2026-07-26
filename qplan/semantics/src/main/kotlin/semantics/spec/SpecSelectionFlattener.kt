@@ -2,7 +2,6 @@ package semantics.spec
 
 import jakarta.inject.Inject
 import model.Assumptions
-import model.ObjectEngineResult
 import model.Schema
 import model.Selection
 import model.spec.SpecSelection
@@ -63,7 +62,7 @@ class SpecSelectionFlattener
                         check(subselections == null) {
                             "Simple field ${context.nominalType.typeName}.$fieldName has subselections"
                         }
-                        null
+                        emptyList()
                     }
 
                     is Schema.CompositeType -> {
@@ -81,7 +80,7 @@ class SpecSelectionFlattener
                     }
                 }
 
-            return FlattenedSelection(
+            return Selection.of(
                 key =
                     assumptions.schema.objectEngineResultKey(
                         field = field,
@@ -97,11 +96,4 @@ class SpecSelectionFlattener
             val nominalType: Schema.CompositeType,
             val possibleTypes: Set<Schema.ObjectType>,
         )
-
-        private class FlattenedSelection(
-            override val key: ObjectEngineResult.Key,
-            override val nominalType: Schema.CompositeType,
-            override val possibleTypes: Set<Schema.ObjectType>,
-            override val subselections: List<Selection>?,
-        ) : Selection
     }

@@ -1,7 +1,7 @@
 package model.registry
 
+import model.Fragment
 import model.Schema
-import model.Selection
 
 sealed interface Executor
 
@@ -20,15 +20,13 @@ class NodeResolver(
  * A field-resolver function and the parent-object fragment it requires.
  *
  * Destructuring yields [objectFragment] followed by [function]. This class intentionally does not
- * define value equality because neither selection nor function equality is defined by the model.
+ * define value equality because neither fragment nor function equality is defined by the model.
  */
 class FieldResolver(
-    objectFragment: List<Selection>,
+    val objectFragment: Fragment,
     val function: FieldResolverFunction,
 ) : Resolver {
-    val objectFragment: List<Selection> = objectFragment.toList()
-
-    operator fun component1(): List<Selection> = objectFragment
+    operator fun component1(): Fragment = objectFragment
 
     operator fun component2(): FieldResolverFunction = function
 }

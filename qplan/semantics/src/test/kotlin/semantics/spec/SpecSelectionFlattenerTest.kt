@@ -5,7 +5,6 @@ import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SpecSelectionFlattenerTest {
@@ -32,7 +31,8 @@ class SpecSelectionFlattenerTest {
         assertEquals(emptyMap(), version.key.arguments.fieldValues)
         assertEquals(fixture.query, version.nominalType)
         assertEquals(setOf(fixture.query), version.possibleTypes)
-        assertNull(version.subselections)
+        assertTrue(version.isLeaf)
+        assertEquals(emptyList(), version.subselections)
     }
 
     @Test
@@ -94,9 +94,9 @@ class SpecSelectionFlattenerTest {
             )
 
         val pet = result.single()
-        val name = pet.subselections.orEmpty().single { it.key.field.fieldName == "name" }
+        val name = pet.subselections.single { it.key.field.fieldName == "name" }
         val barkVolume =
-            pet.subselections.orEmpty().single { it.key.field.fieldName == "barkVolume" }
+            pet.subselections.single { it.key.field.fieldName == "barkVolume" }
 
         assertEquals(fixture.pet, name.key.field.containingType)
         assertEquals(fixture.pet, name.nominalType)
@@ -128,7 +128,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val friend = result.single()
-        val name = friend.subselections.orEmpty().single()
+        val name = friend.subselections.single()
 
         assertEquals(fixture.dog, friend.nominalType)
         assertEquals(setOf(fixture.dog), friend.possibleTypes)

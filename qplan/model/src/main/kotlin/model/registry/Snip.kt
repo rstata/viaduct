@@ -36,16 +36,11 @@ fun Schema.ObjectValue.snip(selections: List<Selection>): Schema.ObjectValue {
             .groupBy { it.key.field.fieldName }
             .mapValues { (fieldName, fieldSelections) ->
                 val value = outputObjectFields.getValue(fieldName)
-                val firstSubselections = fieldSelections.first().subselections
-                if (firstSubselections == null) {
+                val firstSelection = fieldSelections.first()
+                if (firstSelection.isLeaf) {
                     value
                 } else {
-                    val subselections =
-                        fieldSelections.flatMap {
-                            checkNotNull(it.subselections) {
-                                "Selections of $fieldName disagree about its output shape"
-                            }
-                        }
+                    val subselections = fieldSelections.flatMap { it.subselections }
                     value.snipOutput(subselections)
                 }
             }
@@ -59,7 +54,7 @@ private fun requireArgumentless(selections: List<Selection>) {
             "Cannot snip argument-taking field " +
                 "${selection.nominalType.typeName}.${selection.key.field.fieldName}"
         }
-        selection.subselections?.let(::requireArgumentless)
+        requireArgumentless(selection.subselections)
     }
 }
 

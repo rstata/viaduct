@@ -7,6 +7,12 @@ package model
  * keys, source order, named fragments, inline-fragment nodes, and directives are absent. Inline
  * fragments have already been flattened into [nominalType] and [possibleTypes].
  *
+ * Selections constructed by this model use [of], which enforces these local invariants:
+ * - [key]'s field belongs to [nominalType].
+ * - [possibleTypes] is a subset of the object types contained by [nominalType].
+ * - When [isLeaf] is true, [subselections] is empty. The converse does not hold: a composite
+ *   selection may also have no subselections.
+ *
  * A selection and its [subselections] form a finite, well-founded value. Kotlin `equals` is
  * currently undefined for [Selection]. The model does not yet assume that selections can or need
  * to be compared; proofs must not rely on selection equality until that requirement is established.
@@ -57,9 +63,10 @@ interface Selection {
     val possibleTypes: Set<Schema.ObjectType>
 
     /**
-     * For composite types, the subselections on the object this selection selects.
-     * Null when this selection selects a simple type, non-null otherwise, but may be
-     * empty (unlike standard GraphQL).
+     * The subselections on the value this selection selects.
+     *
+     * This is empty when [isLeaf] is true. It may also be empty when this selection selects a
+     * composite type but no fields within that value.
      *
      * Because of GraphQL's validation rules for type conditions, the relationship
      * between the [nominalType] of a subselection and [key]'s field result type is complicated.
@@ -82,5 +89,51 @@ interface Selection {
      * into the GraphQL object-value tree.  (In GraphQL selections, subselections can be spreads,
      * which do **not** descend into the object-value tree.)
      */
-    val subselections: List<Selection>?
+    val subselections: List<Selection>
+
+    /**
+     * Whether this selection's field has a simple base output type.
+     *
+     * The field's type expression may wrap that base type in lists or non-null constraints.
+     */
+    val isLeaf: Boolean
+        get() = key.field.type.baseType is Schema.SimpleType
+
+    companion object {
+        /**
+         * Constructs a selection that satisfies the local invariants documented on [Selection].
+         */
+        fun of(
+            key: ObjectEngineResult.Key,
+            nominalType: Schema.CompositeType,
+            possibleTypes: Set<Schema.ObjectType>,
+            subselections: List<Selection>,
+        ): Selection {
+            require(key.field.containingType == nominalType) {
+                "Selection field ${key.field.fieldName} does not belong to ${nominalType.typeName}"
+            }
+            require(possibleTypes.all { it in nominalType.possibleTypes }) {
+                "Selection possible types must be contained by ${nominalType.typeName}"
+            }
+            require(
+                key.field.type.baseType is Schema.CompositeType || subselections.isEmpty(),
+            ) {
+                "Leaf selection ${nominalType.typeName}.${key.field.fieldName} has subselections"
+            }
+
+            return DefaultSelection(
+                key = key,
+                nominalType = nominalType,
+                possibleTypes = possibleTypes.toSet(),
+                subselections = subselections.toList(),
+            )
+        }
+    }
 }
+
+private class DefaultSelection(
+    override val key: ObjectEngineResult.Key,
+    override val nominalType: Schema.CompositeType,
+    override val possibleTypes: Set<Schema.ObjectType>,
+    override val subselections: List<Selection>,
+) : Selection

@@ -20,8 +20,8 @@ import model.toSelectionForest
  * resolvers. A type-conditioned selection that does not apply to a concrete object is omitted
  * before its nominal type is checked.
  *
- * The reasoning world assumes that every argument-bearing output field has an explicit field
- * resolver. Such a field is therefore a behavioral boundary, and every retained field is
+ * This operation's reasoning scope assumes that every argument-bearing output field has an explicit
+ * field resolver. Such a field is therefore a behavioral boundary, and every retained field is
  * argumentless.
  *
  * This must be a canonical behavioral field. Every applicable selection must be declared on the

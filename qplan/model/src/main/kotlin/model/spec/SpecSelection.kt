@@ -12,9 +12,14 @@ import model.Schema
  * including `@skip` and `@include`, are in the project's eventual scope but deferred from this
  * current selection model.
  *
- * A selection and its nested selections form a finite, well-founded value. Kotlin `equals` is
- * currently undefined for [SpecSelection]. The model does not yet assume that spec selections can
- * or need to be compared.
+ * ### Invariant: spec-selection-well-foundedness
+ *
+ * A selection and its nested selections form a finite, well-founded value.
+ *
+ * ### Equality
+ *
+ * Kotlin `equals` is currently undefined for [SpecSelection]. The model does not yet assume that
+ * spec selections can or need to be compared.
  */
 sealed interface SpecSelection {
     /**
@@ -34,6 +39,15 @@ sealed interface SpecSelection {
         /**
          * The field arguments as an unordered map from schema argument name to semantic value.
          *
+         * ### Invariant: spec-field-arguments
+         *
+         * Every key names an argument of [fieldName] in the surrounding validated type context.
+         * Declared defaults have been applied, every required argument is present, omitted optional
+         * arguments without defaults are absent, and every present non-variable value conforms
+         * recursively to its argument type.
+         *
+         * ### Representation
+         *
          * Non-variable values are in coerced form. A value may contain a [Schema.VariableValue]
          * when that variable is unbound.
          */
@@ -41,6 +55,8 @@ sealed interface SpecSelection {
 
         /**
          * The selection set on this field's result.
+         *
+         * ### Invariant: spec-field-shape
          *
          * This is null exactly when the field's base type is a [Schema.SimpleType]. When the base
          * type is a [Schema.CompositeType], this is non-null and non-empty as required by GraphQL.
@@ -96,12 +112,23 @@ sealed interface SpecSelection {
         /**
          * The fragment's canonical composite type condition, or null when it has no type condition.
          *
+         * ### Invariant: spec-inline-fragment-applicability
+         *
+         * A non-null condition belongs to [Assumptions.schema] and is valid in the surrounding
+         * post-validation type context.
+         *
+         * ### Interpretation
+         *
          * A null condition leaves the surrounding type condition unchanged. A non-null condition is
          * a definition in [Assumptions.schema].
          */
         val typeCondition: Schema.CompositeType?
 
-        /** The non-empty, ordered selection set contained by this inline fragment. */
+        /**
+         * ### Invariant: spec-inline-fragment-shape
+         *
+         * The non-empty, ordered selection set contained by this inline fragment.
+         */
         val selections: List<SpecSelection>
 
         companion object {

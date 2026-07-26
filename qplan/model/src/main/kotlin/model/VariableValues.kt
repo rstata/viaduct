@@ -3,12 +3,15 @@ package model
 /**
  * Variable bindings that distinguish an unbound variable from one bound to GraphQL null.
  *
+ * ### Invariant: variable-bindings-closed
+ *
+ * The bindings are a snapshot whose non-null values are [Schema.InputValue] instances containing no
+ * [Schema.VariableValue]. [Schema.ErrorValue] is permitted.
+ *
+ * ### Lookup
+ *
  * Unlike an ordinary [Map], [get] and [getValue] throw [MissingVariablesException] when used on an
  * unbound variable. Use [containsKey] to determine whether a variable is bound.
- *
- * Assumptions construction takes a snapshot of the top-level map and recursively requires every
- * non-null value to be a [Schema.InputValue] containing no [Schema.VariableValue].
- * [Schema.ErrorValue] is permitted.
  *
  * [Map] extension functions such as [Map.getOrElse] may call [get] and therefore throw instead of
  * applying their fallback. They should not be used when the variable may be unbound.
@@ -138,6 +141,8 @@ class VariableBindings private constructor(
 
 /**
  * One or more distinct variable values that are unbound under the current assumptions.
+ *
+ * ### Invariant: missing-variables-payload
  *
  * [variableValues] is non-empty and contains at most one value for each variable name.
  */

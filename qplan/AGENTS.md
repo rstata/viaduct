@@ -40,6 +40,10 @@ When a claim has a supporting proof, derivation, or body of evidence, put it in 
 
 Update a claim and its argument together whenever code or later reasoning strengthens, weakens, or invalidates either one.
 
+## Invariants
+
+Document carrier and world invariants at the closest applicable type or property using a KDoc heading `### Invariant: kebab-case-label`. Labels are globally unique across both invariants and the claims in [`claims.md`](./claims.md); `checkDocumentationLabels` enforces the shared namespace and generates `build/reports/documentation-labels.txt`. State related cross-property constraints conjunctively in one block, do not restate invariants already established by referenced types, and keep preconditions, operation semantics, and derived claims outside invariant blocks.
+
 ## Context Parameters for World Assumptions
 
 Use a Kotlin context parameter named `world` for functions interpreted under one reasoning world's `Assumptions`:

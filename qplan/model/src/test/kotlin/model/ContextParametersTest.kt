@@ -1,6 +1,7 @@
 package model
 
 import model.registry.snip
+import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -59,10 +60,7 @@ class ContextParametersTest {
         copyInWorld().copyInWorld()
 
     private fun assumptions(): Assumptions =
-        Assumptions.of(
-            schema = GJSchema.fromSDL(SCHEMA_SDL),
-            bindings = emptyMap(),
-        )
+        TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
     private fun Assumptions.sourceObject(): Schema.ObjectValue =
         schema.objectValue(

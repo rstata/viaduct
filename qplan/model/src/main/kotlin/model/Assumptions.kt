@@ -12,7 +12,6 @@ import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLTypeUtil
 import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
-import jakarta.inject.Singleton
 import java.util.Locale
 import model.registry.ExecutorRegistry
 import model.spec.SpecSelection
@@ -20,9 +19,8 @@ import model.spec.SpecSelection
 /**
  * The fixed schema, bindings, and executors under which model values and operations are interpreted.
  *
- * Exactly one instance is fixed for a reasoning world. Concrete implementations use `@Singleton`
- * to record that modeling assumption for dependency injection; it does not make this a JVM-global
- * value.
+ * Exactly one instance is fixed for a reasoning world. Dependency-injection composition scopes the
+ * public [Assumptions] binding as a singleton; this does not make it a JVM-global value.
  */
 interface Assumptions {
     /**
@@ -80,7 +78,6 @@ interface Assumptions {
  * [schema]. The executor registry is stipulated to belong to that same schema. The supplied schema,
  * valid binding values, and registry are retained rather than decoded or rebased.
  */
-@Singleton
 private class DefaultAssumptions(
     override val schema: GJSchema,
     bindings: Map<String, Schema.Value?>,

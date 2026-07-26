@@ -32,6 +32,16 @@ Several other conclusions are durable:
 - Query plan ownership, dependency target, concrete applicability, and OSS root shape must be explicit. Reconstructing them from incidental type equality or a single plan index has produced real bugs.  
 - Validation must be capable of distinguishing the producer from cache hits and must exercise actual execution, not only a second interpreter of planning semantics.
 
+## Semantic boundary
+
+Viaduct decomposes GraphQL field execution into field resolution followed by field completion. This project models field resolution: which resolver-produced values and OER cells exist for requested fields. At this boundary, field identity is an alias-free OER key consisting of a canonical schema field and fully coerced arguments. Response aliases, response keys, response ordering, and assembly of the external GraphQL response are observations of field completion, not field resolution.
+
+This model emphatically assumes that every argument-bearing output field has an explicit field resolver. Consequently, a field without a resolver is argumentless, and projection can stop at resolver boundaries without grouping passive values by argument-sensitive keys. Production namespace exceptions to the resolver requirement are outside the current model.
+
+For a canonical field on a concrete object type, `behavioral(field)` means that the field is the engine-supplied `__typename`, has an explicit field resolver, or belongs to a type with a node resolver and is not `id`. The predicate is deliberately undefined for abstract-type fields. A node's `id` is an engine bridge materialized by the resolver that produced the node reference.
+
+The modeled input is a post-validation selection set. Named fragment spreads are assumed to have been inlined before this boundary; inline fragments remain because their type conditions affect field applicability. Directive-controlled applicability, including `@skip` and `@include`, belongs to field resolution and is therefore in the project's eventual scope even when a modeling phase explicitly defers it.
+
 ## Epistemic status
 
 ### Established by counterexample or code investigation
@@ -319,6 +329,8 @@ Broad interfaces and unions may make conservative expansion expensive even when 
 ### Field and node OSS root shapes
 
 A field-resolver OSS is rooted on the parent type and includes the resolver field wrapper. A node-resolver OSS is already rooted on the node type. Recursive same-type fields make type equality useless as a discriminator.
+
+Projecting a field-resolver result to its OSS retains selected non-behavioral fields and stops before every behavioral field. This lets a containing resolver materialize the `id` of a nested node reference without taking responsibility for the node resolver's remaining fields or engine-supplied `__typename`. Projecting a node-resolver result uses a distinct root rule: it omits the root `id` bridge, engine-supplied `__typename`, and explicit field-resolver fields; retains fields supplied by that node resolver; and then uses ordinary behavioral boundaries below the root.
 
 ### Abstract and covariant recursion
 

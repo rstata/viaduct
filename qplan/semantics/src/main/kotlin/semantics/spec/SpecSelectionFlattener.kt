@@ -1,99 +1,93 @@
 package semantics.spec
 
-import jakarta.inject.Inject
 import model.Assumptions
 import model.Schema
 import model.Selection
+import model.SelectionForest
+import model.selectionForestOf
 import model.spec.SpecSelection
+import model.toSelectionForest
 
 /**
  * Flattens a spec selection set interpreted with [typeInScope].
  *
  * Fields become [Selection] values, while inline fragments are removed after contributing their
- * type conditions to the fields they contain. The returned list is unordered.
+ * type conditions to the fields they contain. Each source field occurrence contributes one member
+ * to the returned [SelectionForest], which erases source order while preserving occurrences.
+ * Host-language equality used while producing the multiset does not define semantic equality for
+ * [Selection].
  */
-class SpecSelectionFlattener
-    @Inject
-    constructor(
-        private val assumptions: Assumptions,
-    ) {
-        fun flatten(
-            typeInScope: Schema.CompositeType,
-            selectionSet: List<SpecSelection>,
-        ): List<Selection> {
-            val initialContext =
-                SelectionContext(
-                    nominalType = typeInScope,
-                    possibleTypes = typeInScope.possibleTypes,
-                )
-            return flattenSelectionSet(selectionSet, initialContext)
-        }
+context(world: Assumptions)
+fun flatten(
+    typeInScope: Schema.CompositeType,
+    selectionSet: List<SpecSelection>,
+): SelectionForest {
+    val initialContext =
+        SelectionContext(
+            nominalType = typeInScope,
+            possibleTypes = typeInScope.possibleTypes,
+        )
+    return flattenSelectionSet(selectionSet, initialContext)
+}
 
-        private fun flattenSelectionSet(
-            selections: List<SpecSelection>,
-            context: SelectionContext,
-        ): List<Selection> =
-            selections.flatMap { selection ->
-                when (selection) {
-                    is SpecSelection.Field -> listOf(selection.flattenField(context))
-                    is SpecSelection.InlineFragment -> {
-                        val fragmentContext =
-                            selection.typeCondition?.let { typeCondition ->
-                                SelectionContext(
-                                    nominalType = typeCondition,
-                                    possibleTypes =
-                                        context.possibleTypes intersect typeCondition.possibleTypes,
-                                )
-                            } ?: context
-                        flattenSelectionSet(selection.selections, fragmentContext)
-                    }
+context(world: Assumptions)
+private fun flattenSelectionSet(
+    selections: List<SpecSelection>,
+    context: SelectionContext,
+): SelectionForest =
+    selections
+        .flatMap { selection ->
+            when (selection) {
+                is SpecSelection.Field -> listOf(selection.flattenField(context))
+                is SpecSelection.InlineFragment -> {
+                    val fragmentContext =
+                        selection.typeCondition?.let { typeCondition ->
+                            SelectionContext(
+                                nominalType = typeCondition,
+                                possibleTypes =
+                                    context.possibleTypes intersect typeCondition.possibleTypes,
+                            )
+                        } ?: context
+                    flattenSelectionSet(selection.selections, fragmentContext)
                 }
             }
+        }
+        .toSelectionForest()
 
-        private fun SpecSelection.Field.flattenField(context: SelectionContext): Selection {
-            val field =
-                assumptions.schema.field(
-                    context.nominalType.typeName,
-                    fieldName,
-                )
-            val flattenedSubselections =
-                when (val resultType = field.type.baseType) {
-                    is Schema.SimpleType -> {
-                        check(subselections == null) {
-                            "Simple field ${context.nominalType.typeName}.$fieldName has subselections"
-                        }
-                        emptyList()
-                    }
+context(world: Assumptions)
+private fun SpecSelection.Field.flattenField(context: SelectionContext): Selection {
+    val field =
+        world.schema.field(
+            context.nominalType.typeName,
+            fieldName,
+        )
+    val flattenedSubselections =
+        when (val resultType = field.type.baseType) {
+            is Schema.SimpleType -> selectionForestOf()
 
-                    is Schema.CompositeType -> {
-                        val sourceSubselections =
-                            checkNotNull(subselections) {
-                                "Composite field ${context.nominalType.typeName}.$fieldName lacks subselections"
-                            }
-                        flattenSelectionSet(
-                            sourceSubselections,
-                            SelectionContext(
-                                nominalType = resultType,
-                                possibleTypes = resultType.possibleTypes,
-                            ),
-                        )
-                    }
-                }
-
-            return Selection.of(
-                key =
-                    assumptions.schema.objectEngineResultKey(
-                        field = field,
-                        arguments = arguments,
+            is Schema.CompositeType ->
+                flattenSelectionSet(
+                    subselections.orEmpty(),
+                    SelectionContext(
+                        nominalType = resultType,
+                        possibleTypes = resultType.possibleTypes,
                     ),
-                nominalType = context.nominalType,
-                possibleTypes = context.possibleTypes,
-                subselections = flattenedSubselections,
-            )
+                )
         }
 
-        private class SelectionContext(
-            val nominalType: Schema.CompositeType,
-            val possibleTypes: Set<Schema.ObjectType>,
-        )
-    }
+    return Selection.of(
+        key =
+            world.schema.objectEngineResultKey(
+                field = field,
+                arguments = arguments,
+            ),
+        nominalType = context.nominalType,
+        possibleTypes = context.possibleTypes,
+        subselections = flattenedSubselections,
+    )
+}
+
+private class SelectionContext(
+    val nominalType: Schema.CompositeType,
+    val possibleTypes: Set<Schema.ObjectType>,
+)

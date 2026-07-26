@@ -3,64 +3,135 @@ package model.registry
 import model.Assumptions
 import model.Schema
 import model.Selection
+import model.SelectionForest
+import model.toSelectionForest
 
 /**
- * Projects this object to the fields selected by [selections].
+ * Supplies the selection input of this behavioral field's interpretation by projecting [result] to
+ * its output selection set.
  *
- * Every selection must be declared on this object's type or one of its nominal supertypes. All
- * selections at every depth must select fields that take no arguments. A type-conditioned
- * selection that does not apply to this concrete object type is omitted.
+ * For fixed non-selection inputs, the field's behavior produces [result] before [selections] are
+ * considered. Projecting that same object for different requested selections makes the results
+ * agree at every coordinate selected by both.
  *
- * @throws IllegalArgumentException when either precondition is not met
+ * Projection retains selected non-behavioral fields and stops before every field for which
+ * [Assumptions.behavioral] is true. This leaves a nested node's `id` field in the containing
+ * resolver's output while omitting fields supplied by that node's resolver or by explicit field
+ * resolvers. A type-conditioned selection that does not apply to a concrete object is omitted
+ * before its nominal type is checked.
+ *
+ * The reasoning world assumes that every argument-bearing output field has an explicit field
+ * resolver. Such a field is therefore a behavioral boundary, and every retained field is
+ * argumentless.
+ *
+ * This must be a canonical behavioral field. Every applicable selection must be declared on the
+ * concrete object type or one of its nominal supertypes.
+ *
+ * @throws IllegalArgumentException when a precondition is not met
  */
 context(world: Assumptions)
-fun Schema.ObjectValue.snip(selections: List<Selection>): Schema.ObjectValue {
-    requireArgumentless(selections)
-    selections.forEach { selection ->
-        val relation =
-            world.schema.relation(
-                selection.nominalType.typeName,
-                type.typeName,
-            )
-        require(
-            relation == Schema.TypeRelation.SAME ||
-                relation == Schema.TypeRelation.WIDER_THAN,
-        ) {
-            "${selection.nominalType.typeName} is not a supertype of ${type.typeName}"
-        }
+fun Schema.OutputField.snip(
+    result: Schema.ObjectValue,
+    selections: SelectionForest,
+): Schema.ObjectValue {
+    require(world.behavioral(this)) {
+        "Field ${containingType.typeName}/$fieldName is not behavioral"
     }
+    return result.snip(selections)
+}
+
+/**
+ * Supplies the selection input of this node resolver by projecting [result] to the node resolver's
+ * output selection set.
+ *
+ * At the root, projection retains fields supplied by this node resolver but omits the node's `id`
+ * bridge field and fields with explicit field resolvers. Below the root it stops at every
+ * [Assumptions.behavioral] field, just like field-resolver projection. Thus a node resolver may
+ * supply its own behavioral fields without crossing into another resolver's behavior.
+ *
+ * This must be [result]'s canonical type and must have a registered node resolver. Every applicable
+ * selection must be declared on the concrete object type or one of its nominal supertypes.
+ *
+ * @throws IllegalArgumentException when a precondition is not met
+ */
+context(world: Assumptions)
+fun Schema.ObjectType.snip(
+    result: Schema.ObjectValue,
+    selections: SelectionForest,
+): Schema.ObjectValue {
+    require(result.type == this) {
+        "Node resolver $typeName cannot project an object of type ${result.type.typeName}"
+    }
+    require(world.executorRegistry.hasNodeResolver(this)) {
+        "No node resolver is registered for $typeName"
+    }
+    val applicableSelections = selections.filter { result.type in it.possibleTypes }
 
     val selectedFields =
-        selections
-            .filter { type in it.possibleTypes }
+        applicableSelections
             .groupBy { it.key.field.fieldName }
-            .mapValues { (fieldName, fieldSelections) ->
+            .mapNotNull { (fieldName, fieldSelections) ->
+                val concreteField = world.schema.field(result.type.typeName, fieldName)
+                val crossesBoundary =
+                    fieldName == "id" ||
+                        fieldName == "__typename" ||
+                        world.executorRegistry.hasFieldResolver(concreteField)
+                if (crossesBoundary) return@mapNotNull null
+
+                val value = result.outputObjectFields.getValue(fieldName)
+                val firstSelection = fieldSelections.first()
+                val selectedValue =
+                    if (firstSelection.isLeaf) {
+                        value
+                    } else {
+                        val subselections =
+                            fieldSelections
+                                .flatMap { it.subselections }
+                                .toSelectionForest()
+                        value.snipOutput(subselections)
+                    }
+                fieldName to selectedValue
+            }
+            .toMap()
+
+    return world.schema.objectValue(result.type, selectedFields)
+}
+
+context(world: Assumptions)
+private fun Schema.ObjectValue.snip(
+    selections: SelectionForest,
+): Schema.ObjectValue {
+    val applicableSelections = selections.filter { type in it.possibleTypes }
+
+    val selectedFields =
+        applicableSelections
+            .groupBy { it.key.field.fieldName }
+            .mapNotNull { (fieldName, fieldSelections) ->
+                val concreteField = world.schema.field(type.typeName, fieldName)
+                if (world.behavioral(concreteField)) return@mapNotNull null
+
                 val value = outputObjectFields.getValue(fieldName)
                 val firstSelection = fieldSelections.first()
-                if (firstSelection.isLeaf) {
-                    value
-                } else {
-                    val subselections = fieldSelections.flatMap { it.subselections }
-                    value.snipOutput(subselections)
-                }
+                val selectedValue =
+                    if (firstSelection.isLeaf) {
+                        value
+                    } else {
+                        val subselections =
+                            fieldSelections
+                                .flatMap { it.subselections }
+                                .toSelectionForest()
+                        value.snipOutput(subselections)
+                    }
+                fieldName to selectedValue
             }
+            .toMap()
 
     return world.schema.objectValue(type, selectedFields)
 }
 
-private fun requireArgumentless(selections: List<Selection>) {
-    selections.forEach { selection ->
-        require(selection.key.field.arguments == Schema.NoArguments) {
-            "Cannot snip argument-taking field " +
-                "${selection.nominalType.typeName}.${selection.key.field.fieldName}"
-        }
-        requireArgumentless(selection.subselections)
-    }
-}
-
 context(world: Assumptions)
 private fun Schema.OutputValue?.snipOutput(
-    selections: List<Selection>,
+    selections: SelectionForest,
 ): Schema.OutputValue? =
     when (this) {
         null,

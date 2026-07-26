@@ -3,6 +3,8 @@ package model.registry
 import model.Fragment
 import model.Schema
 import model.Selection
+import model.SelectionForest
+import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,8 +21,8 @@ class ExecutorRegistryTest {
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<String, NodeResolver>(
-                        "User" to
+                    mapOf<Schema.ObjectType, NodeResolver>(
+                        user to
                             NodeResolver { id ->
                                 assertEquals("42", id.idValue)
                                 schema.objectValue(
@@ -32,13 +34,14 @@ class ExecutorRegistryTest {
                 },
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
+                    val userField = schema.field("Query", "user")
                     val queryFragment =
                         object : Fragment {
                             override val nominalType = schema.query
-                            override val subselections = emptyList<model.Selection>()
+                            override val subselections = selectionForestOf()
                         }
-                    mapOf<FieldCoordinate, FieldResolver>(
-                        FieldCoordinate("Query", "user") to
+                    mapOf<Schema.OutputField, FieldResolver>(
+                        userField to
                             FieldResolver(
                                 objectFragment = queryFragment,
                                 function = { parent, arguments ->
@@ -76,7 +79,7 @@ class ExecutorRegistryTest {
         val (objectFragment, fieldResolverFunction) =
             registry.fieldResolver(userField)
         assertEquals(schema.query, objectFragment.nominalType)
-        assertEquals(emptyList(), objectFragment.subselections)
+        assertTrue(objectFragment.subselections.isEmpty())
         assertEquals(
             user,
             fieldResolverFunction(
@@ -120,6 +123,145 @@ class ExecutorRegistryTest {
     }
 
     @Test
+    fun `rejects a field resolver whose object fragment is not its canonical parent type`() {
+        assertFailsWith<IllegalArgumentException> {
+            worldWithFragmentType { schema ->
+                schema.type("User") as Schema.ObjectType
+            }
+        }
+
+        val foreignQuery = TestWorld.fromSDL(SCHEMA_SDL).schema.query
+        assertFailsWith<IllegalArgumentException> {
+            worldWithFragmentType { foreignQuery }
+        }
+    }
+
+    @Test
+    fun `rejects foreign resolver coordinate definitions`() {
+        val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val foreignUser = foreignSchema.type("User") as Schema.ObjectType
+        val foreignUserField = foreignSchema.field("Query", "user")
+
+        assertFailsWith<IllegalArgumentException> {
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                nodeResolvers = {
+                    mapOf(foreignUser to NodeResolver { error("Not invoked") })
+                },
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                fieldResolvers = { schema ->
+                    val queryFragment =
+                        object : Fragment {
+                            override val nominalType = schema.query
+                            override val subselections = selectionForestOf()
+                        }
+                    mapOf(
+                        foreignUserField to
+                            FieldResolver(
+                                objectFragment = queryFragment,
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                    )
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `node resolver registration establishes the node id contract`() {
+        listOf(
+            """
+            type User {
+              name: String
+            }
+
+            type Query {
+              user: User
+            }
+            """,
+            """
+            type User {
+              id: String!
+            }
+
+            type Query {
+              user: User
+            }
+            """,
+            """
+            type User {
+              id(format: String): ID!
+            }
+
+            type Query {
+              user: User
+            }
+            """,
+        ).forEach { schemaSDL ->
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL = schemaSDL.trimIndent(),
+                    nodeResolvers = { schema ->
+                        val user = schema.type("User") as Schema.ObjectType
+                        mapOf(user to NodeResolver { error("Not invoked") })
+                    },
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `rejects field resolvers for node id and typename engine fields`() {
+        listOf("id", "__typename").forEach { fieldName ->
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL = SCHEMA_SDL,
+                    nodeResolvers = { schema ->
+                        val user = schema.type("User") as Schema.ObjectType
+                        mapOf(user to NodeResolver { error("Not invoked") })
+                    },
+                    fieldResolvers = { schema ->
+                        val user = schema.type("User") as Schema.ObjectType
+                        val fragment =
+                            object : Fragment {
+                                override val nominalType = user
+                                override val subselections = selectionForestOf()
+                            }
+                        mapOf(
+                            schema.field("User", fieldName) to
+                                FieldResolver(
+                                    objectFragment = fragment,
+                                    function = { _, _ -> error("Not invoked") },
+                                ),
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `public snip functions require a behavioral field or node resolver coordinate`() {
+        val world = TestWorld.fromSDL(SCHEMA_SDL)
+        val schema = world.schema
+        val user = schema.type("User") as Schema.ObjectType
+        val result = schema.objectValue(user, emptyMap())
+
+        with(world.assumptions) {
+            assertFailsWith<IllegalArgumentException> {
+                schema.field("Query", "user").snip(result, selectionForestOf())
+            }
+            assertFailsWith<IllegalArgumentException> {
+                user.snip(result, selectionForestOf())
+            }
+        }
+    }
+
+    @Test
     fun `snips selected fields recursively through objects and lists`() {
         val fixture = Fixture()
         val friend =
@@ -149,17 +291,17 @@ class ExecutorRegistryTest {
                 ),
             )
         val selections =
-            listOf(
+            selectionForestOf(
                 fixture.selection("Node", "id"),
                 fixture.selection(
                     typeName = "User",
                     fieldName = "friend",
-                    subselections = listOf(fixture.selection("Node", "id")),
+                    subselections = selectionForestOf(fixture.selection("Node", "id")),
                 ),
                 fixture.selection(
                     typeName = "User",
                     fieldName = "peers",
-                    subselections = listOf(fixture.selection("Node", "name")),
+                    subselections = selectionForestOf(fixture.selection("Node", "name")),
                 ),
                 fixture.selection(
                     typeName = "Node",
@@ -170,7 +312,7 @@ class ExecutorRegistryTest {
 
         val result =
             with(fixture.assumptions) {
-                source.snip(selections)
+                fixture.userField.snip(source, selections)
             }
 
         assertEquals(setOf("id", "friend", "peers"), result.outputObjectFields.keys)
@@ -187,25 +329,154 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `snip rejects selections on unrelated types and argument-taking fields`() {
+    fun `snip omits selections conditioned on another concrete type`() {
+        val fixture = Fixture()
+        val source =
+            fixture.schema.objectValue(
+                fixture.user,
+                mapOf("id" to fixture.schema.idValue("target")),
+            )
+
+        val result =
+            with(fixture.assumptions) {
+                fixture.userField.snip(
+                    source,
+                    selectionForestOf(fixture.selection("Admin", "level")),
+                )
+            }
+
+        assertEquals(emptySet(), result.outputObjectFields.keys)
+    }
+
+    @Test
+    fun `field-resolver snip stops before an argument-bearing field resolver`() {
         val fixture = Fixture()
         val source =
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
                     "id" to fixture.schema.idValue("target"),
-                    "search" to null,
                 ),
             )
 
-        with(fixture.assumptions) {
-            assertFailsWith<IllegalArgumentException> {
-                source.snip(listOf(fixture.selection("Query", "user")))
+        val result =
+            with(fixture.assumptions) {
+                fixture.userField.snip(
+                    source,
+                    selectionForestOf(fixture.selection("User", "search")),
+                )
             }
-            assertFailsWith<IllegalArgumentException> {
-                source.snip(listOf(fixture.selection("User", "search")))
-            }
+
+        assertEquals(emptySet(), result.outputObjectFields.keys)
+    }
+
+    @Test
+    fun `behavioral is defined by concrete field and node resolvers`() {
+        val fieldFixture = Fixture()
+        val nodeFixture = Fixture(withNodeResolver = true)
+
+        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.field("User", "id")))
+        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.field("User", "name")))
+        assertTrue(fieldFixture.assumptions.behavioral(fieldFixture.schema.field("User", "search")))
+        assertTrue(
+            fieldFixture.assumptions.behavioral(
+                fieldFixture.schema.field("User", "__typename"),
+            ),
+        )
+        assertFalse(
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "id")),
+        )
+        assertTrue(
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "__typename")),
+        )
+        assertTrue(
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "name")),
+        )
+        assertTrue(
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "search")),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("Node", "name"))
         }
+        assertFailsWith<IllegalArgumentException> {
+            nodeFixture.assumptions.behavioral(
+                fieldFixture.schema.field("User", "name"),
+            )
+        }
+    }
+
+    @Test
+    fun `field-resolver snip retains only a nested node reference`() {
+        val fixture = Fixture(withNodeResolver = true)
+        val source =
+            fixture.schema.objectValue(
+                fixture.user,
+                mapOf(
+                    "id" to fixture.schema.idValue("target"),
+                    "name" to fixture.schema.stringValue("Target"),
+                ),
+            )
+
+        val result =
+            with(fixture.assumptions) {
+                fixture.userField.snip(
+                    source,
+                    selectionForestOf(
+                        fixture.selection("Node", "id"),
+                        fixture.selection("Node", "name"),
+                    ),
+                )
+            }
+
+        assertEquals(setOf("id"), result.outputObjectFields.keys)
+    }
+
+    @Test
+    fun `node-resolver snip retains its fields and stops at nested boundaries`() {
+        val fixture = Fixture(withNodeResolver = true)
+        val friend =
+            fixture.schema.objectValue(
+                fixture.user,
+                mapOf(
+                    "id" to fixture.schema.idValue("friend"),
+                    "name" to fixture.schema.stringValue("Friend"),
+                ),
+            )
+        val source =
+            fixture.schema.objectValue(
+                fixture.user,
+                mapOf(
+                    "id" to fixture.schema.idValue("target"),
+                    "name" to fixture.schema.stringValue("Target"),
+                    "friend" to friend,
+                ),
+            )
+        val selections =
+            selectionForestOf(
+                fixture.selection("Node", "id"),
+                fixture.selection("Node", "name"),
+                fixture.selection("User", "__typename"),
+                fixture.selection("User", "search"),
+                fixture.selection(
+                    typeName = "User",
+                    fieldName = "friend",
+                    subselections =
+                        selectionForestOf(
+                            fixture.selection("Node", "id"),
+                            fixture.selection("Node", "name"),
+                        ),
+                ),
+            )
+
+        val result =
+            with(fixture.assumptions) {
+                fixture.user.snip(source, selections)
+            }
+
+        assertEquals(setOf("name", "friend"), result.outputObjectFields.keys)
+        val snippedFriend = assertIs<Schema.ObjectValue>(result.outputObjectFields["friend"])
+        assertEquals(setOf("id"), snippedFriend.outputObjectFields.keys)
     }
 
     @Test
@@ -224,23 +495,86 @@ class ExecutorRegistryTest {
                 key = leaf.key,
                 nominalType = leaf.nominalType,
                 possibleTypes = leaf.possibleTypes,
-                subselections = listOf(emptyComposite),
+                subselections = selectionForestOf(emptyComposite),
             )
         }
     }
 
-    private class Fixture {
-        private val world = TestWorld.fromSDL(SCHEMA_SDL)
+    private fun worldWithFragmentType(
+        fragmentType: (Schema) -> Schema.CompositeType,
+    ): TestWorld =
+        TestWorld.fromSDL(
+            schemaSDL = SCHEMA_SDL,
+            fieldResolvers = { schema ->
+                val fragment =
+                    object : Fragment {
+                        override val nominalType = fragmentType(schema)
+                        override val subselections = selectionForestOf()
+                    }
+                val user = schema.type("User") as Schema.ObjectType
+                val userField = schema.field("Query", "user")
+                mapOf(
+                    userField to
+                        FieldResolver(
+                            objectFragment = fragment,
+                            function = { _, _ -> schema.objectValue(user, emptyMap()) },
+                        ),
+                )
+            },
+        )
+
+    private class Fixture(
+        withNodeResolver: Boolean = false,
+    ) {
+        private val world =
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                nodeResolvers = { schema ->
+                    if (withNodeResolver) {
+                        val user = schema.type("User") as Schema.ObjectType
+                        mapOf(user to NodeResolver { error("Not invoked") })
+                    } else {
+                        emptyMap()
+                    }
+                },
+                fieldResolvers = { schema ->
+                    val query = schema.query
+                    val user = schema.type("User") as Schema.ObjectType
+                    val queryFragment =
+                        object : Fragment {
+                            override val nominalType = query
+                            override val subselections = selectionForestOf()
+                        }
+                    val userFragment =
+                        object : Fragment {
+                            override val nominalType = user
+                            override val subselections = selectionForestOf()
+                        }
+                    mapOf(
+                        schema.field("Query", "user") to
+                            FieldResolver(
+                                objectFragment = queryFragment,
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                        schema.field("User", "search") to
+                            FieldResolver(
+                                objectFragment = userFragment,
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                    )
+                },
+            )
         val schema = world.schema
         val assumptions = world.assumptions
         val user = schema.type("User") as Schema.ObjectType
+        val userField = schema.field("Query", "user")
 
         fun selection(
             typeName: String,
             fieldName: String,
             possibleTypes: Set<Schema.ObjectType> =
                 (schema.type(typeName) as Schema.CompositeType).possibleTypes,
-            subselections: List<model.Selection> = emptyList(),
+            subselections: SelectionForest = selectionForestOf(),
         ): model.Selection {
             val nominalType = schema.type(typeName) as Schema.CompositeType
             return Selection.of(
@@ -270,6 +604,12 @@ class ExecutorRegistryTest {
               friend: User
               peers: [User]
               search(limit: Int): User
+            }
+
+            type Admin implements Node {
+              id: ID!
+              name: String!
+              level: Int!
             }
 
             type Query {

@@ -1,6 +1,8 @@
 package semantics.spec
 
 import model.Schema
+import model.SelectionForest
+import model.spec.SpecSelection
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +22,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            fixture.flattener.flatten(
+            fixture.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -32,7 +34,27 @@ class SpecSelectionFlattenerTest {
         assertEquals(fixture.query, version.nominalType)
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertTrue(version.isLeaf)
-        assertEquals(emptyList(), version.subselections)
+        assertTrue(version.subselections.isEmpty())
+    }
+
+    @Test
+    fun `flattening preserves duplicate field occurrences without source order`() {
+        val fixture = SchemaFixture()
+        val (typeInScope, selectionSet) =
+            fixture.assumptions.selectionsFrom(
+                """
+                fragment ignored on Query {
+                  version
+                  version
+                }
+                """.trimIndent(),
+            )
+
+        val result = fixture.flatten(typeInScope, selectionSet)
+        val versionField = fixture.schema.field("Query", "version")
+
+        assertEquals(2, result.size)
+        assertTrue(result.all { it.key.field == versionField })
     }
 
     @Test
@@ -48,7 +70,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val release =
-            fixture.flattener
+            fixture
                 .flatten(typeInScope, selectionSet)
                 .single()
         val field = fixture.assumptions.schema.field("Query", "release")
@@ -88,7 +110,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            fixture.flattener.flatten(
+            fixture.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -122,7 +144,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            fixture.flattener.flatten(
+            fixture.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -152,7 +174,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            fixture.flattener.flatten(
+            fixture.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -166,7 +188,6 @@ class SpecSelectionFlattenerTest {
         private val world = TestWorld.fromSDL(SCHEMA_SDL)
         val assumptions = world.assumptions
         val schema = world.schema
-        val flattener = world.instance(SpecSelectionFlattener::class.java)
 
         val query = schema.query
         val dog = schema.type("Dog") as Schema.ObjectType
@@ -174,6 +195,14 @@ class SpecSelectionFlattenerTest {
         val pet = schema.type("Pet") as Schema.InterfaceType
         val i1 = schema.type("I1") as Schema.InterfaceType
         val i3 = schema.type("I3") as Schema.InterfaceType
+
+        fun flatten(
+            typeInScope: Schema.CompositeType,
+            selectionSet: List<SpecSelection>,
+        ): SelectionForest =
+            context(assumptions) {
+                semantics.spec.flatten(typeInScope, selectionSet)
+            }
     }
 
     private companion object {

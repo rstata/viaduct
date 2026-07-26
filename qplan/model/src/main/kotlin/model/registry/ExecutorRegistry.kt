@@ -7,8 +7,37 @@ sealed interface Executor
 
 sealed interface Resolver : Executor
 
+/**
+ * The selection-independent part of a node resolver.
+ *
+ * Applying requested selections is a separate projection of the returned object with [snip].
+ */
 typealias NodeResolverFunction = (Schema.IDValue) -> Schema.ObjectValue
 
+/**
+ * The selection-independent part of a field resolver.
+ *
+ * The [Schema.ObjectValue] input is the resolved value of the resolver's required object fragment,
+ * and [Schema.ArgumentsValue] contains its field arguments. When invoking the function registered
+ * for a field `f`, those arguments satisfy all of the following preconditions:
+ *
+ * - `arguments.type == f.arguments`;
+ * - every supplied variable has been instantiated;
+ * - declared argument defaults have been applied;
+ * - every required argument is present;
+ * - an optional argument without a default is absent when omitted;
+ * - every present value conforms recursively to its argument type; and
+ * - no value recursively contains [Schema.VariableValue].
+ *
+ * Argument coercion failure is handled before resolver invocation, so this function is undefined
+ * for arguments containing [Schema.ErrorValue]. These are invocation preconditions;
+ * [Schema.argumentsValue] remains a general construction operation and does not establish them by
+ * itself.
+ *
+ * The returned object is independent of requested selections. A full selective interpretation
+ * supplies that conceptual additional input by applying [snip] to this result, so projections for
+ * different selections are coherent by construction.
+ */
 typealias FieldResolverFunction =
     (Schema.ObjectValue, Schema.ArgumentsValue) -> Schema.ObjectValue
 
@@ -17,7 +46,7 @@ class NodeResolver(
 ) : Resolver
 
 /**
- * A field-resolver function and the parent-object fragment it requires.
+ * A selection-independent field-resolver function and the parent-object fragment it requires.
  *
  * Destructuring yields [objectFragment] followed by [function]. This class intentionally does not
  * define value equality because neither fragment nor function equality is defined by the model.
@@ -32,30 +61,46 @@ class FieldResolver(
 }
 
 /**
- * The schema coordinate of a field resolver.
- */
-data class FieldCoordinate(
-    val typeName: String,
-    val fieldName: String,
-)
-
-/**
- * The resolvers fixed for one reasoning world.
+ * The selection-independent node and field resolvers fixed for one reasoning world.
  *
  * Lookup is defined only for canonical definitions from the registry's schema. A missing resolver
  * at a valid coordinate throws [MissingExecutorException]. An invalid or foreign schema definition
- * does not denote a missing executor.
+ * does not denote a missing executor. Requested selections are interpreted separately through
+ * [snip].
  */
 interface ExecutorRegistry {
+    /**
+     * Whether [type] has a node resolver.
+     *
+     * [type] must be the canonical definition from this registry's schema.
+     */
+    fun hasNodeResolver(type: Schema.ObjectType): Boolean
+
+    /**
+     * Whether [field] has a field resolver.
+     *
+     * [field] must be the canonical definition from this registry's schema.
+     */
+    fun hasFieldResolver(field: Schema.OutputField): Boolean
+
     fun nodeResolver(type: Schema.ObjectType): NodeResolver
 
     fun fieldResolver(field: Schema.OutputField): FieldResolver
 
     companion object {
+        /**
+         * Constructs a registry keyed by canonical schema definitions.
+         *
+         * @throws IllegalArgumentException when a resolver key is foreign to [schema], or when a
+         * field resolver's object-fragment type is foreign to [schema] or differs from the
+         * registered field's containing type; when a node-resolver type lacks a canonical,
+         * argumentless, ID-typed `id` field; or when a field resolver is registered for that `id`
+         * field or for `__typename`
+         */
         fun of(
             schema: Schema,
-            nodeResolvers: Map<String, NodeResolver> = emptyMap(),
-            fieldResolvers: Map<FieldCoordinate, FieldResolver> = emptyMap(),
+            nodeResolvers: Map<Schema.ObjectType, NodeResolver> = emptyMap(),
+            fieldResolvers: Map<Schema.OutputField, FieldResolver> = emptyMap(),
         ): ExecutorRegistry =
             DefaultExecutorRegistry(
                 schema = schema,
@@ -83,34 +128,87 @@ class MissingExecutorException(
 
 private class DefaultExecutorRegistry(
     private val schema: Schema,
-    private val nodeResolvers: Map<String, NodeResolver>,
-    private val fieldResolvers: Map<FieldCoordinate, FieldResolver>,
+    private val nodeResolvers: Map<Schema.ObjectType, NodeResolver>,
+    private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
 ) : ExecutorRegistry {
     init {
-        nodeResolvers.keys.forEach { typeName ->
-            require(schema.type(typeName) is Schema.ObjectType) {
-                "Node resolver coordinate is not an object type: $typeName"
+        val nodeIdFields =
+            nodeResolvers.keys.mapTo(mutableSetOf()) { type ->
+                validateCanonicalType(type)
+                val idField =
+                    type.fields["id"]
+                        ?: throw IllegalArgumentException(
+                            "Node-resolver type ${type.typeName} has no id field",
+                        )
+                require(schema.field(type.typeName, "id") == idField) {
+                    "${type.typeName}/id is not the canonical node id field in this registry's schema"
+                }
+                require(idField.arguments == Schema.NoArguments) {
+                    "Node id field ${type.typeName}/id must take no arguments"
+                }
+                require(idField.type.baseType == Schema.IDType) {
+                    "Node id field ${type.typeName}/id must be ID-typed"
+                }
+                idField
             }
-        }
-        fieldResolvers.keys.forEach { coordinate ->
-            schema.field(coordinate.typeName, coordinate.fieldName)
+        fieldResolvers.forEach { (field, resolver) ->
+            validateCanonicalField(field, "field-resolver field")
+            val typeName = field.containingType.typeName
+            require(field !in nodeIdFields) {
+                "Node id field $typeName/${field.fieldName} cannot have a field resolver"
+            }
+            require(field.fieldName != "__typename") {
+                "Engine field $typeName/__typename cannot have a field resolver"
+            }
+            val fragmentType = resolver.objectFragment.nominalType
+            require(schema.type(fragmentType.typeName) == fragmentType) {
+                "${fragmentType.typeName} is not the canonical object-fragment type in this " +
+                    "registry's schema"
+            }
+            require(fragmentType == field.containingType) {
+                "Object fragment type ${fragmentType.typeName} does not match field resolver " +
+                    "parent type ${field.containingType.typeName} at " +
+                    "$typeName/${field.fieldName}"
+            }
         }
     }
 
+    override fun hasNodeResolver(type: Schema.ObjectType): Boolean {
+        validateCanonicalType(type)
+        return type in nodeResolvers
+    }
+
+    override fun hasFieldResolver(field: Schema.OutputField): Boolean {
+        validateCanonicalField(field)
+        return field in fieldResolvers
+    }
+
     override fun nodeResolver(type: Schema.ObjectType): NodeResolver {
-        require(schema.type(type.typeName) == type) {
-            "${type.typeName} is not the canonical type in this registry's schema"
-        }
-        return nodeResolvers[type.typeName]
+        validateCanonicalType(type)
+        return nodeResolvers[type]
             ?: throw MissingExecutorException(type.typeName)
     }
 
     override fun fieldResolver(field: Schema.OutputField): FieldResolver {
+        validateCanonicalField(field)
+        val typeName = field.containingType.typeName
+        return fieldResolvers[field]
+            ?: throw MissingExecutorException(typeName, field.fieldName)
+    }
+
+    private fun validateCanonicalType(type: Schema.ObjectType) {
+        require(schema.type(type.typeName) == type) {
+            "${type.typeName} is not the canonical type in this registry's schema"
+        }
+    }
+
+    private fun validateCanonicalField(
+        field: Schema.OutputField,
+        role: String = "field",
+    ) {
         val typeName = field.containingType.typeName
         require(schema.field(typeName, field.fieldName) == field) {
-            "$typeName/${field.fieldName} is not the canonical field in this registry's schema"
+            "$typeName/${field.fieldName} is not the canonical $role in this registry's schema"
         }
-        return fieldResolvers[FieldCoordinate(typeName, field.fieldName)]
-            ?: throw MissingExecutorException(typeName, field.fieldName)
     }
 }

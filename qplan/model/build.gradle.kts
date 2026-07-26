@@ -1,9 +1,12 @@
 plugins {
     kotlin("jvm")
+    `java-library`
     `java-test-fixtures`
 }
 
 dependencies {
+    api("com.google.guava:guava:33.3.1-jre")
+
     implementation("com.graphql-java:graphql-java:26.0")
     implementation("jakarta.inject:jakarta.inject-api:2.0.1")
 

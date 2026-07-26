@@ -45,14 +45,32 @@ interface Assumptions {
 
     /**
      * The node and field resolvers fixed for this reasoning world.
+     *
+     * Registered functions contain the selection-independent inputs of resolver interpretation.
+     * Requested selections are applied separately by projecting their object results with `snip`.
      */
     val executorRegistry: ExecutorRegistry
 
     /**
+     * Whether resolution of [field] crosses a resolver behavior boundary.
+     *
+     * This predicate is defined only for a canonical field whose containing type is a concrete
+     * [Schema.ObjectType]. It is true for the engine-supplied `__typename` field, when the field has
+     * an explicit field resolver, or when its containing type has a node resolver and the field is
+     * not `id`. The node `id` field is materialized by the resolver that produced the node
+     * reference.
+     *
+     * @throws IllegalArgumentException when [field] is abstract or foreign to [schema]
+     */
+    fun behavioral(field: Schema.OutputField): Boolean
+
+    /**
      * Parses and validates one GraphQL named fragment against [schema].
      *
-     * The fragment name is ignored. The result contains its canonical composite type condition
-     * followed by the post-validation selections in its selection set.
+     * The named fragment is a parsing envelope: its name is ignored, and named fragment spreads
+     * within its selection set must already have been inlined. Applied directives are temporarily
+     * unsupported. The result contains its canonical composite type condition followed by the
+     * post-validation selections in its selection set.
      */
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, List<SpecSelection>>
 
@@ -60,7 +78,8 @@ interface Assumptions {
         /**
          * Constructs one reasoning world over an already constructed [schema].
          *
-         * Every value in [bindings] must have been constructed by [schema].
+         * Every non-error value in [bindings] must have been constructed by [schema].
+         * [Schema.ErrorValue] is schema-independent.
          */
         @JvmStatic
         fun of(
@@ -88,6 +107,22 @@ private class DefaultAssumptions(
     override val variableValues =
         VariableBindings.from(schema, bindings)
 
+    override fun behavioral(field: Schema.OutputField): Boolean {
+        val containingType = field.containingType
+        require(containingType is Schema.ObjectType) {
+            "Behavioral is defined only for fields on concrete object types"
+        }
+        require(schema.field(containingType.typeName, field.fieldName) == field) {
+            "${containingType.typeName}/${field.fieldName} is not canonical in this world"
+        }
+        return field.fieldName == "__typename" ||
+            executorRegistry.hasFieldResolver(field) ||
+            (
+                executorRegistry.hasNodeResolver(containingType) &&
+                    field.fieldName != "id"
+            )
+    }
+
     override fun selectionsFrom(
         fragment: String,
     ): Pair<Schema.CompositeType, List<SpecSelection>> {
@@ -98,7 +133,7 @@ private class DefaultAssumptions(
                     "Expected exactly one named fragment definition",
                 )
         require(definition.directives.isEmpty()) {
-            "Applied directives are outside the spec-selection model"
+            "Applied directives are deferred from the current spec-selection model"
         }
         validateFragment(document)
 
@@ -137,7 +172,7 @@ private class DefaultAssumptions(
                 is InlineFragment -> decodeInlineFragment(selection, typeInScope)
                 is FragmentSpread ->
                     throw IllegalArgumentException(
-                        "Named fragment spreads are outside the spec-selection model",
+                        "Named fragment spreads must be inlined before constructing spec selections",
                     )
 
                 else ->
@@ -152,7 +187,7 @@ private class DefaultAssumptions(
         typeInScope: GraphQLCompositeType,
     ): SpecSelection.Field {
         require(field.directives.isEmpty()) {
-            "Applied directives are outside the spec-selection model"
+            "Applied directives are deferred from the current spec-selection model"
         }
         val fieldDefinition =
             graphql.introspection.Introspection.getFieldDef(
@@ -200,7 +235,7 @@ private class DefaultAssumptions(
 
         return SpecSelection.Field.of(
             alias = field.alias,
-            fieldName = field.name,
+            field = schema.field(typeInScope.name, field.name),
             arguments = arguments,
             subselections = subselections,
         )
@@ -211,7 +246,7 @@ private class DefaultAssumptions(
         typeInScope: GraphQLCompositeType,
     ): SpecSelection.InlineFragment {
         require(fragment.directives.isEmpty()) {
-            "Applied directives are outside the spec-selection model"
+            "Applied directives are deferred from the current spec-selection model"
         }
         val typeConditionName = fragment.typeCondition?.name
         val graphQLTypeCondition =

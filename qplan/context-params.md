@@ -24,10 +24,11 @@ For example, the following is mathematical pseudocode rather than a declaration 
 ```text
 world |- forall(
     obj: Schema.ObjectValue,
-    selections: List<Selection>,
+    behavioralField: Schema.OutputField,
+    selections: SelectionForest,
 ) {
-    snippable(obj, selections) implies
-        obj.snip(selections).type == obj.type
+    snippable(obj, behavioralField, selections) implies
+        behavioralField.snip(obj, selections).type == obj.type
 }
 ```
 
@@ -59,7 +60,7 @@ fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue =
     world.schema.objectValue(type, outputObjectFields)
 ```
 
-The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, and `world.selectionsFrom(...)`. Value factories such as `objectValue` belong to `Schema`, so call them through `world.schema`; they are not members of `Assumptions`.
+The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories such as `objectValue` belong to `Schema`, so call them through `world.schema`; they are not members of `Assumptions`.
 
 Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Schema.ObjectValue.snip`.
 
@@ -88,7 +89,7 @@ Context parameters are not global variables. Establish an `Assumptions` value at
 ```kotlin
 val result =
     context(world) {
-        objectValue.snip(emptyList())
+        behavioralField.snip(objectValue, selectionForestOf())
     }
 ```
 

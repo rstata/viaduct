@@ -14,13 +14,14 @@ package model
  * owner map contains `d` by its declared name for nested definitions. Every [TypeExpr.baseType]
  * reachable from the schema is likewise the canonical result of [type].
  *
- * Construct [Value], [ArgumentsValue], and [ObjectEngineResult.Key] instances through this schema's
- * factory methods. The one-schema world stipulates that every definition supplied to those methods
- * is canonical in this schema; the factories do not revalidate that ownership. Other modeling
- * domains may instead use names and coordinates. Nested definitions navigate to their canonical
- * owners through [OutputField.containingType] and [InputLikeField.containingType]. Compare
- * definitions with ordinary `==`, `!=`, and collection equality operations. Only acyclic value
- * objects such as [TypeExpr] and [DefaultValue] add structural equality over their properties.
+ * Construct every [Value] other than the schema-independent [ErrorValue], every [ArgumentsValue],
+ * and every [ObjectEngineResult.Key] through this schema's factory methods. The one-schema world
+ * stipulates that every definition supplied to those methods is canonical in this schema; the
+ * factories do not revalidate that ownership. Other modeling domains may instead use names and
+ * coordinates. Nested definitions navigate to their canonical owners through
+ * [OutputField.containingType] and [InputLikeField.containingType]. Compare definitions with ordinary
+ * `==`, `!=`, and collection equality operations. Only acyclic value objects such as [TypeExpr] and
+ * [DefaultValue] add structural equality over their properties.
  *
  * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
  * scalar definitions are the five [ScalarType] singletons [IntType], [FloatType], [StringType],

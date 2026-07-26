@@ -1,9 +1,34 @@
 package model
 
+import com.google.common.collect.ImmutableMultiset
+import com.google.common.collect.Multiset
+
 /**
- * An unordered, post-validation field selection used for Viaduct field resolution.
+ * A free commutative collection of opaque [Selection] occurrences.
  *
- * This is not a GraphQL AST selection or a description of response completion. Aliases, response
+ * Each flattened GraphQL field occurrence contributes one member. Iteration is available for
+ * permutation-invariant consumption, and [Collection.size] observes the total number of occurrences.
+ * The equality and hashing used by the host [Multiset] implementation are production bookkeeping
+ * only: they do not define semantic equality for [Selection]. In particular, consumers must not use
+ * equality-based multiset operations as semantic operations unless a separate argument first defines
+ * the required selection equivalence.
+ *
+ * Model producers return immutable snapshots even though the [Multiset] interface exposes mutation.
+ */
+typealias SelectionForest = Multiset<Selection>
+
+/** Constructs an immutable [SelectionForest] containing the supplied occurrences. */
+fun selectionForestOf(vararg selections: Selection): SelectionForest =
+    ImmutableMultiset.copyOf(selections.asList())
+
+/** Copies these occurrences into an immutable [SelectionForest]. */
+fun Iterable<Selection>.toSelectionForest(): SelectionForest =
+    ImmutableMultiset.copyOf(this)
+
+/**
+ * A post-validation field-selection occurrence used for Viaduct field resolution.
+ *
+ * This is not a GraphQL AST selection or a description of field completion. Aliases, response
  * keys, source order, named fragments, inline-fragment nodes, and directives are absent. Inline
  * fragments have already been flattened into [nominalType] and [possibleTypes].
  *
@@ -89,7 +114,7 @@ interface Selection {
      * into the GraphQL object-value tree.  (In GraphQL selections, subselections can be spreads,
      * which do **not** descend into the object-value tree.)
      */
-    val subselections: List<Selection>
+    val subselections: SelectionForest
 
     /**
      * Whether this selection's field has a simple base output type.
@@ -107,7 +132,7 @@ interface Selection {
             key: ObjectEngineResult.Key,
             nominalType: Schema.CompositeType,
             possibleTypes: Set<Schema.ObjectType>,
-            subselections: List<Selection>,
+            subselections: SelectionForest,
         ): Selection {
             require(key.field.containingType == nominalType) {
                 "Selection field ${key.field.fieldName} does not belong to ${nominalType.typeName}"
@@ -125,7 +150,7 @@ interface Selection {
                 key = key,
                 nominalType = nominalType,
                 possibleTypes = possibleTypes.toSet(),
-                subselections = subselections.toList(),
+                subselections = subselections.toSelectionForest(),
             )
         }
     }
@@ -135,5 +160,5 @@ private class DefaultSelection(
     override val key: ObjectEngineResult.Key,
     override val nominalType: Schema.CompositeType,
     override val possibleTypes: Set<Schema.ObjectType>,
-    override val subselections: List<Selection>,
+    override val subselections: SelectionForest,
 ) : Selection

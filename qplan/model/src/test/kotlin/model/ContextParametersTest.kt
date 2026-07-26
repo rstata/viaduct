@@ -1,5 +1,6 @@
 package model
 
+import model.registry.FieldResolver
 import model.registry.snip
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -42,7 +43,10 @@ class ContextParametersTest {
 
         val result =
             context(world) {
-                source.snip(emptyList())
+                world.schema.field("Query", "self").snip(
+                    source,
+                    selectionForestOf(),
+                )
             }
 
         assertEquals(world.schema.query, result.type)
@@ -60,7 +64,23 @@ class ContextParametersTest {
         copyInWorld().copyInWorld()
 
     private fun assumptions(): Assumptions =
-        TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        TestWorld.fromSDL(
+            schemaSDL = SCHEMA_SDL,
+            fieldResolvers = { schema ->
+                val fragment =
+                    object : Fragment {
+                        override val nominalType = schema.query
+                        override val subselections = selectionForestOf()
+                    }
+                mapOf(
+                    schema.field("Query", "self") to
+                        FieldResolver(
+                            objectFragment = fragment,
+                            function = { _, _ -> error("Not invoked") },
+                        ),
+                )
+            },
+        ).assumptions
 
     private fun Assumptions.sourceObject(): Schema.ObjectValue =
         schema.objectValue(
@@ -78,6 +98,7 @@ class ContextParametersTest {
             type Query {
               id: ID!
               name: String!
+              self: Query
             }
             """.trimIndent()
     }

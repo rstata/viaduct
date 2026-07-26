@@ -1,0 +1,83 @@
+package model
+
+import model.spec.SpecSelection
+import model.testing.TestWorld
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+class SpecSelectionTest {
+    @Test
+    fun `field factory enforces subselection shape from the canonical field`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val nameField = schema.field("User", "name")
+        val userField = schema.field("Query", "user")
+        val nameSelection =
+            SpecSelection.Field.of(
+                alias = null,
+                field = nameField,
+                arguments = emptyMap(),
+                subselections = null,
+            )
+
+        val userSelection =
+            SpecSelection.Field.of(
+                alias = null,
+                field = userField,
+                arguments = emptyMap(),
+                subselections = listOf(nameSelection),
+            )
+        assertEquals("user", userSelection.fieldName)
+        assertEquals(listOf(nameSelection), userSelection.subselections)
+
+        assertFailsWith<IllegalArgumentException> {
+            SpecSelection.Field.of(
+                alias = null,
+                field = nameField,
+                arguments = emptyMap(),
+                subselections = listOf(nameSelection),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SpecSelection.Field.of(
+                alias = null,
+                field = userField,
+                arguments = emptyMap(),
+                subselections = null,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SpecSelection.Field.of(
+                alias = null,
+                field = userField,
+                arguments = emptyMap(),
+                subselections = emptyList(),
+            )
+        }
+    }
+
+    @Test
+    fun `inline fragment factory requires a non-empty selection set`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+
+        assertFailsWith<IllegalArgumentException> {
+            SpecSelection.InlineFragment.of(
+                typeCondition = schema.type("User") as Schema.ObjectType,
+                selections = emptyList(),
+            )
+        }
+    }
+
+    private companion object {
+        val SCHEMA_SDL =
+            """
+            type User {
+              name: String!
+            }
+
+            type Query {
+              user: User
+            }
+            """.trimIndent()
+    }
+}

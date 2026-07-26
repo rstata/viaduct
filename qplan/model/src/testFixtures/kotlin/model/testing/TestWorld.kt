@@ -14,7 +14,6 @@ import model.Schema
 import model.SchemaSDL
 import model.VariableValues
 import model.registry.ExecutorRegistry
-import model.registry.FieldCoordinate
 import model.registry.FieldResolver
 import model.registry.NodeResolver
 
@@ -36,9 +35,10 @@ class TestWorld private constructor(
         fun fromSDL(
             schemaSDL: String,
             variableValues: (GJSchema) -> Map<String, Schema.Value?> = { emptyMap() },
-            nodeResolvers: (GJSchema) -> Map<String, NodeResolver> = { emptyMap() },
+            nodeResolvers:
+                (GJSchema) -> Map<Schema.ObjectType, NodeResolver> = { emptyMap() },
             fieldResolvers:
-                (GJSchema) -> Map<FieldCoordinate, FieldResolver> = { emptyMap() },
+                (GJSchema) -> Map<Schema.OutputField, FieldResolver> = { emptyMap() },
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -64,8 +64,8 @@ class TestWorld private constructor(
 private class TestWorldModule(
     private val schemaSDL: String,
     private val variableValues: (GJSchema) -> Map<String, Schema.Value?>,
-    private val nodeResolvers: (GJSchema) -> Map<String, NodeResolver>,
-    private val fieldResolvers: (GJSchema) -> Map<FieldCoordinate, FieldResolver>,
+    private val nodeResolvers: (GJSchema) -> Map<Schema.ObjectType, NodeResolver>,
+    private val fieldResolvers: (GJSchema) -> Map<Schema.OutputField, FieldResolver>,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -86,20 +86,20 @@ private class TestWorldModule(
 
     @Provides
     @NodeResolvers
-    fun nodeResolvers(schema: GJSchema): Map<String, NodeResolver> =
+    fun nodeResolvers(schema: GJSchema): Map<Schema.ObjectType, NodeResolver> =
         nodeResolvers.invoke(schema)
 
     @Provides
     @FieldResolvers
-    fun fieldResolvers(schema: GJSchema): Map<FieldCoordinate, FieldResolver> =
+    fun fieldResolvers(schema: GJSchema): Map<Schema.OutputField, FieldResolver> =
         fieldResolvers.invoke(schema)
 
     @Provides
     @Singleton
     fun executorRegistry(
         schema: GJSchema,
-        @NodeResolvers nodeResolvers: Map<String, NodeResolver>,
-        @FieldResolvers fieldResolvers: Map<FieldCoordinate, FieldResolver>,
+        @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolver>,
+        @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolver>,
     ): ExecutorRegistry =
         ExecutorRegistry.of(
             schema = schema,

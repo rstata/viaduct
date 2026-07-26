@@ -7,8 +7,10 @@ import model.Schema
  * A post-validation selection in a GraphQL-spec selection set.
  *
  * This model retains the recursive shape of GraphQL selections: fields descend into their result
- * values, while inline fragments add nested type conditions without descending. Applied directives
- * and named fragment spreads are outside the model.
+ * values, while inline fragments add nested type conditions without descending. Named fragment
+ * spreads are absent because modeled inputs have already inlined them. Applied directives,
+ * including `@skip` and `@include`, are in the project's eventual scope but deferred from this
+ * current selection model.
  *
  * A selection and its nested selections form a finite, well-founded value. Kotlin `equals` is
  * currently undefined for [SpecSelection]. The model does not yet assume that spec selections can
@@ -46,18 +48,37 @@ sealed interface SpecSelection {
         val subselections: List<SpecSelection>?
 
         companion object {
+            /**
+             * Constructs a field selection whose subselection shape matches [field]'s base type.
+             *
+             * @throws IllegalArgumentException when a simple field has subselections or a composite
+             * field lacks a non-empty selection set
+             */
             @JvmStatic
             fun of(
                 alias: String?,
-                fieldName: String,
+                field: Schema.OutputField,
                 arguments: Map<String, Schema.InputValue?>,
                 subselections: List<SpecSelection>?,
             ): Field {
                 val defensiveArguments = arguments.toMap()
                 val defensiveSubselections = subselections?.toList()
+                when (field.type.baseType) {
+                    is Schema.SimpleType ->
+                        require(defensiveSubselections == null) {
+                            "Simple field ${field.containingType.typeName}.${field.fieldName} " +
+                                "must not have subselections"
+                        }
+
+                    is Schema.CompositeType ->
+                        require(!defensiveSubselections.isNullOrEmpty()) {
+                            "Composite field ${field.containingType.typeName}.${field.fieldName} " +
+                                "requires a non-empty selection set"
+                        }
+                }
                 return object : Field {
                     override val alias = alias
-                    override val fieldName = fieldName
+                    override val fieldName = field.fieldName
                     override val arguments = defensiveArguments
                     override val subselections = defensiveSubselections
                 }
@@ -84,12 +105,20 @@ sealed interface SpecSelection {
         val selections: List<SpecSelection>
 
         companion object {
+            /**
+             * Constructs an inline fragment with a non-empty selection set.
+             *
+             * @throws IllegalArgumentException when [selections] is empty
+             */
             @JvmStatic
             fun of(
                 typeCondition: Schema.CompositeType?,
                 selections: List<SpecSelection>,
             ): InlineFragment {
                 val defensiveSelections = selections.toList()
+                require(defensiveSelections.isNotEmpty()) {
+                    "Inline fragment requires a non-empty selection set"
+                }
                 return object : InlineFragment {
                     override val typeCondition = typeCondition
                     override val selections = defensiveSelections

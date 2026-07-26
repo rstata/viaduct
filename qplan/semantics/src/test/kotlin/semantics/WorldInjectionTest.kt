@@ -5,12 +5,12 @@ import model.Fragment
 import model.GJSchema
 import model.Schema
 import model.registry.ExecutorRegistry
-import model.registry.FieldCoordinate
 import model.registry.FieldResolver
 import model.registry.MissingExecutorException
 import model.registry.NodeResolver
+import model.selectionForestOf
 import model.testing.TestWorld
-import semantics.spec.SpecSelectionFlattener
+import semantics.spec.flatten
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -28,8 +28,8 @@ class WorldInjectionTest {
                 },
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<String, NodeResolver>(
-                        "User" to
+                    mapOf<Schema.ObjectType, NodeResolver>(
+                        user to
                             NodeResolver { id ->
                                 schema.objectValue(
                                     type = user,
@@ -40,13 +40,14 @@ class WorldInjectionTest {
                 },
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
+                    val userField = schema.field("Query", "user")
                     val queryFragment =
                         object : Fragment {
                             override val nominalType = schema.query
-                            override val subselections = emptyList<model.Selection>()
+                            override val subselections = selectionForestOf()
                         }
-                    mapOf<FieldCoordinate, FieldResolver>(
-                        FieldCoordinate("Query", "user") to
+                    mapOf<Schema.OutputField, FieldResolver>(
+                        userField to
                             FieldResolver(
                                 objectFragment = queryFragment,
                                 function = { _, _ ->
@@ -63,7 +64,6 @@ class WorldInjectionTest {
         val schema = testWorld.schema
         val registry = testWorld.executorRegistry
         val world = testWorld.assumptions
-        val flattener = testWorld.instance(SpecSelectionFlattener::class.java)
 
         assertEquals(schema, world.schema)
         assertEquals(registry, world.executorRegistry)
@@ -109,7 +109,10 @@ class WorldInjectionTest {
                 }
                 """.trimIndent(),
             )
-        val selections = flattener.flatten(typeInScope, specSelections)
+        val selections =
+            context(world) {
+                flatten(typeInScope, specSelections)
+            }
         assertEquals(userField, selections.single().key.field)
         assertEquals(
             schema.field("User", "id"),

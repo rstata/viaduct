@@ -11,6 +11,9 @@ dependencies {
 }
 
 kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xcontext-parameters")
+    }
     jvmToolchain(21)
 }
 

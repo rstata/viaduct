@@ -14,19 +14,21 @@ import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import jakarta.inject.Singleton
 import java.util.Locale
+import model.registry.ExecutorRegistry
 import model.spec.SpecSelection
 
 /**
- * Assumptions over an already constructed [GJSchema] and model variable values.
+ * Assumptions over an already constructed [GJSchema], model variable values, and executor registry.
  *
  * Every schema definition carried by the supplied bindings must be the canonical definition from
- * [schema]. The supplied schema and valid binding values are retained rather than decoded or
- * rebased.
+ * [schema]. The executor registry is stipulated to belong to that same schema. The supplied schema,
+ * valid binding values, and registry are retained rather than decoded or rebased.
  */
 @Singleton
 internal class DefaultAssumptions(
     override val schema: GJSchema,
     bindings: Map<String, Schema.Value?>,
+    override val executorRegistry: ExecutorRegistry,
 ) : Assumptions {
     private val graphQLSchema: GraphQLSchema = schema.graphQLSchema
 

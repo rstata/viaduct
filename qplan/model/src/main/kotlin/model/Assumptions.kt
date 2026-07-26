@@ -1,9 +1,10 @@
 package model
 
+import model.registry.ExecutorRegistry
 import model.spec.SpecSelection
 
 /**
- * The fixed inputs under which model values and operations over them are interpreted.
+ * The fixed schema, bindings, and executors under which model values and operations are interpreted.
  *
  * Exactly one instance is fixed for a reasoning world. Concrete implementations use `@Singleton`
  * to record that modeling assumption for dependency injection; it does not make this a JVM-global
@@ -31,6 +32,11 @@ interface Assumptions {
     val variableValues: VariableBindings
 
     /**
+     * The node and field resolvers fixed for this reasoning world.
+     */
+    val executorRegistry: ExecutorRegistry
+
+    /**
      * Parses and validates one GraphQL named fragment against [schema].
      *
      * The fragment name is ignored. The result contains its canonical composite type condition
@@ -48,6 +54,7 @@ interface Assumptions {
         fun of(
             schema: GJSchema,
             bindings: Map<String, Schema.Value?>,
-        ): Assumptions = DefaultAssumptions(schema, bindings)
+            executorRegistry: ExecutorRegistry = ExecutorRegistry.empty(schema),
+        ): Assumptions = DefaultAssumptions(schema, bindings, executorRegistry)
     }
 }

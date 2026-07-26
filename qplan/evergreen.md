@@ -2,15 +2,16 @@
 
 ## Purpose
 
-This document records durable context about Viaduct query planning and selective resolver demand. It is intended to be useful as input to future design sessions without silently importing any current design as settled architecture.
+This document records durable context for designing Viaduct query planning and execution to support one-shot resolver execution. Within the supported execution scope, every runtime producer identity should receive complete in-scope demand before dispatch and execute at most once.
 
 The emphasis is therefore on:
 
 - findings supported by concrete counterexamples or code investigation;  
+- the proof obligations imposed by the one-shot goal;
 - correctness properties that any solution should satisfy;  
 - difficult cases that a design must address or explicitly exclude;  
 - validation techniques that can falsify an incorrect design;  
-- James Bellenger's MAT and `KeyTree` work as relevant prior art;  
+- multiple-materialization and `KeyTree` work as contrasting prior art;
 - open questions whose answers may change as the design evolves.
 
 Current proposals, class shapes, implementation milestones, and migration sequences are intentionally not summarized as conclusions. They are linked in References as evolving artifacts.
@@ -19,9 +20,9 @@ Current proposals, class shapes, implementation milestones, and migration sequen
 
 Viaduct currently discovers much of its resolver demand during execution. Fields and child plans begin running as traversal encounters them, while promises, OER cells, and memoization impose ordering through later reads. This makes complete demand aggregation difficult for selective resolvers: multiple plan occurrences can converge on the same producer after its invocation has already started.
 
-The strongest finding is not that selective resolvers must always run multiple times. It is that local, lazy demand discovery cannot guarantee one-shot completeness merely by waiting on promises or recursively walking the plan occurrence that reached the resolver first.
+The project goal is a query-plan and execution design that supports one-shot resolver execution. For every demanded runtime producer identity in the supported scope, planning must aggregate complete in-scope demand before dispatch so that later consumers do not require another invocation or materialization of that producer. One-shot is defined per runtime producer identity, not per schema coordinate: distinct objects, list items, arguments, concrete types, or execution epochs may still require distinct invocations.
 
-Any design that promises one-shot selective resolution must establish, before dispatch, that the demand supplied to a producer covers every in-scope use that will share that producer identity. If the system permits demand that cannot be known at that point, it needs an explicit alternative such as isolated execution, delayed execution, conservative over-selection, or additional materialization. Which mechanism to use is a design choice, not a settled finding.
+Local, lazy demand discovery cannot provide that guarantee merely by waiting on promises or recursively walking the plan occurrence that reached the resolver first. The design must bound possible contributors before dispatch, preserve unresolved applicability as guards, conservatively over-select when exact activation is unavailable, isolate work into a distinct producer identity or execution scope, or explicitly exclude the shape. Repeatedly materializing the same producer as new demand arrives is useful contrasting prior art, not the target design.
 
 Several other conclusions are durable:
 
@@ -76,8 +77,9 @@ The research does not settle:
 
 - the final query plan representation;  
 - whether the solution should be a new plan, an overlay on `QueryPlan`, or an evolution of existing structures;  
-- whether every supported selective resolver should run once;  
-- the boundary between conservative over-selection and repeated materialization;  
+- the exact execution scope that can receive the one-shot guarantee;
+- how much conservative over-selection is acceptable within that scope;
+- how work outside that scope should be rejected or isolated without silently weakening the guarantee;
 - whether `KeyTree` should be reused as a planning representation;  
 - how paths should be canonicalized across interfaces and concrete implementations;  
 - how parent traversal and cross-scope dependencies should be represented;  
@@ -125,15 +127,14 @@ The durable lesson is:
 
 A runtime barrier can wait for contributors that are already known, but it cannot generally prove that no future contributor will appear. Consider a recursive shape where executing `foo` is needed before a descendant can reveal additional demand for `foo`. Waiting for that demand can deadlock; dispatching before it is known can under-supply the resolver.
 
-This creates a fundamental design fork:
+The one-shot goal permits several responses:
 
 - bound possible contributors before dispatch;  
 - conservatively include demand whose activation is not yet known;  
 - separate the late work into another execution scope;  
-- allow additional materialization;  
 - reject or validate away the shape.
 
-A design should state which choice it makes for each supported feature.
+Allowing additional materialization of the same producer is the contrasting multi-shot approach. A one-shot design should state which permitted response it uses for each supported feature and make exclusions explicit.
 
 ### Demand must be attributed to the actual producer
 
@@ -229,21 +230,21 @@ These criteria are execution-algorithm proof obligations that are intentionally 
 
 ### Producer completeness
 
-For every producer invocation `P`, every in-scope, producer-owned field that execution consumes from `P` must be covered by the demand supplied to `P` or by an explicitly modeled later materialization.
-
-For a one-shot producer:
+For every demanded producer identity `P` in the supported scope, every in-scope, producer-owned field that execution consumes from `P` must be covered by the demand supplied to its sole invocation:
 
 ```
 ConsumedOwnedFields(P) subset-of SuppliedDemand(P) subset-of OSS(P)
 ```
 
+Later materialization of `P` does not satisfy the one-shot contract. Work that cannot meet this relation must be assigned a distinct producer identity or execution scope, conservatively covered before dispatch, or declared unsupported.
+
 Permitted engine bridges such as `Node.id` should be modeled explicitly rather than hidden as exceptions.
 
 ### Sound dependency discovery
 
-Every producer, checker, variable provider, runtime type step, or other prerequisite that execution may require in the supported scope must be represented by the planning or fallback mechanism.
+Every producer, checker, variable provider, runtime type step, or other prerequisite that execution may require in the supported scope must be represented before dispatch by the planning mechanism.
 
-Runtime may bind or activate pre-bounded alternatives. If runtime can introduce an unbounded new dependency, the one-shot completeness claim no longer applies unless a fallback handles it.
+Runtime may bind or activate pre-bounded alternatives. If runtime can introduce an unbounded new dependency for an existing producer identity, that feature is outside the one-shot scope until the design can bound, isolate, or reject it.
 
 ### Identity agreement
 
@@ -259,7 +260,7 @@ Demand supplied to a selective resolver must stay within its OSS, except for exp
 
 When an exact branch cannot be chosen before dispatch, a safe superset is preferable to an under-approximation if the resolver contract permits it. For an execution algorithm, completeness takes priority over avoiding extra work.
 
-Minimality is nevertheless part of an exact minimal-result predicate. Conservative over-materialization would need to satisfy a separate, more permissive coverage predicate. The amount of over-selection should still be observable and bounded.
+Minimality is nevertheless part of an exact minimal-result predicate. Conservative over-selection would need to satisfy a separate, more permissive coverage predicate. The amount of over-selection should still be observable and bounded.
 
 ### Termination
 
@@ -318,7 +319,7 @@ These cases should not be assumed equivalent to ordinary current-object RSSes. A
 
 A selective field's argument or condition can depend on a variable provider, whose own RSS may require object or query data. The variable-resolution target may differ from the child plan's selection type.
 
-If the value needed to decide producer identity or demand depends on the same producer's output, exact pre-dispatch merging may be cyclic. Conservative demand, isolated execution, or later materialization may be required.
+If the value needed to decide producer identity or demand depends on the same producer's output, exact pre-dispatch merging may be cyclic. The shape cannot remain in the one-shot scope unless conservative demand or isolated execution breaks that cycle; otherwise it must be rejected or excluded.
 
 ### Lazy concrete-type plans
 
@@ -379,7 +380,7 @@ For nodes or ledgers with multiple real materializations, preserve each material
 At minimum, retain these tests:
 
 1. **Split prediction oracle:** claimed `{a, b}` with predictions `{a}` and `{b}` must fail one-shot producer validation.  
-2. **Two-RSS convergence:** the `Query.a` / `Query.foo` counterexample must either supply the union before one invocation or exercise the design's explicit fallback.  
+2. **Two-RSS convergence:** the `Query.a` / `Query.foo` counterexample must supply the union before one invocation or be explicitly outside the supported scope.
 3. **Same-type OSS root:** a field such as `Profile.profile: Profile` must descend through the field wrapper, while a `Profile` node resolver must not.  
 4. **Lazy type-plan dependency:** a type-checker plan with a variable-provider or nested RSS must remain discoverable.  
 5. **Cycle backedge:** a legal checker cycle must terminate and resolve the correct plan owner.  
@@ -438,11 +439,11 @@ Random volume does not compensate for a weak oracle. The earlier ten 1,000-case 
 In addition to end-to-end parity, inspect the planned result directly:
 
 - every dependency has an owner, target, and provenance;  
-- every producer's demand is stable before dispatch if one-shot execution is claimed;  
+- every producer's demand is stable before dispatch within the supported scope;
 - concrete alternatives are bounded;  
 - cycles have useful diagnostics;  
 - identity keys explain why occurrences merge or remain separate;  
-- excluded or fallback features are visible rather than silently approximated.
+- excluded or isolated features are visible rather than silently approximated.
 
 ### Observability for validation and production
 
@@ -452,18 +453,18 @@ Useful measurements include:
 - number of possible versus activated alternatives;  
 - demand before and after ownership projection;  
 - over-selection ratio;  
-- producer invocation and materialization count;  
-- missing-demand or fallback frequency;  
+- invocation count per producer identity;
+- missing-demand or scope-exclusion frequency;
 - batching quality;  
 - number and duration of blocked dependencies;  
 - hangs prevented by explicit missing-writer detection;  
 - discrepancies between predicted demand, actual coverage, and consumed fields.
 
-## James Bellenger's MAT and KeyTree work
+## Multiple-Materialization And KeyTree Prior Art
 
 ### Motivation and current model
 
-James's [Selective Resolvers discussion](https://github.com/airbnb/viaduct/discussions/399) describes a pivot away from selection-shaped OER keys. The earlier keying approach could re-run an expensive resolver for the entire new selection, had difficulty re-running parent producers after traversal reached a dead end, did not generalize cleanly to nodes, and created missing-writer hangs.
+The [Selective Resolvers discussion](https://github.com/airbnb/viaduct/discussions/399) describes a pivot away from selection-shaped OER keys. The earlier keying approach could re-run an expensive resolver for the entire new selection, had difficulty re-running parent producers after traversal reached a dead end, did not generalize cleanly to nodes, and created missing-writer hangs.
 
 The MAT direction models selective output as materialization coverage:
 
@@ -487,9 +488,9 @@ The MAT direction models selective output as materialization coverage:
 
 This is useful prior art regardless of the final query-plan design. It demonstrates that demand and coverage benefit from a typed path algebra rather than flat field coordinates or arbitrary GraphQL strings.
 
-### Relationship to query planning
+### Relationship to one-shot query planning
 
-MAT and query planning answer different questions.
+MAT and one-shot query planning answer different questions.
 
 `KeyTree` represents what is requested or covered at runtime. It does not by itself encode:
 
@@ -503,9 +504,7 @@ MAT and query planning answer different questions.
 
 It is therefore a demand/coverage representation, not a complete dependency graph or scheduler.
 
-MAT's ability to fetch only the missing difference is valuable when demand is genuinely late or when conservative planning would be too broad. An eager aggregation design may reduce repeated materialization in its supported scope, while MAT can remain a fallback, defensive repair layer, or independent solution for dynamic cases.
-
-The final relationship is unresolved. Future designs should evaluate reuse based on semantics rather than vocabulary similarity.
+MAT's ability to fetch only the missing difference supports repeated materialization when demand arrives late. That makes it useful contrasting prior art and potentially useful infrastructure outside the declared one-shot scope, but repeated materialization of one producer identity is not the project endpoint. A one-shot design may reuse typed demand, coverage, and difference operations when their semantics fit without adopting repeated execution as its correctness strategy.
 
 ### Durable lessons from MAT
 
@@ -519,8 +518,8 @@ The final relationship is unresolved. Future designs should evaluate reuse based
 
 ## Questions every future design should answer
 
-1. What exact scope receives a one-shot completeness guarantee?  
-2. What mechanisms handle demand outside that scope?  
+1. What exact scope receives the one-shot completeness guarantee?
+2. How does the design reject or isolate demand outside that scope without silently becoming multi-shot?
 3. What identity determines whether two occurrences share one producer?  
 4. Does that identity exactly match OER memoization, node caching, and batching behavior?  
 5. Which dependencies are bounded statically, and which values are bound at runtime?  
@@ -571,7 +570,7 @@ The links below preserve the research trail. Proposal and implementation documen
 - [\#1088747: Project resolver-owned output selections at runtime](https://git.musta.ch/airbnb/treehouse/pull/1088747)  
 - [\#1090492: Compute OSS-bounded resolver demand](https://git.musta.ch/airbnb/treehouse/pull/1090492)
 
-### James Bellenger's MAT work
+### MAT and KeyTree work
 
 - [\#1067105: WIP selective resolvers dev](https://git.musta.ch/airbnb/treehouse/pull/1067105)  
 - [\#1079953: ExecutionSelectionSet](https://git.musta.ch/airbnb/treehouse/pull/1079953)  

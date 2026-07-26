@@ -2,78 +2,99 @@
 
 ## Purpose
 
-This is a historical handoff for the shift toward defining predicates and invariants for a correct `ObjectEngineResult` (OER). The current architecture and continuation point are recorded in [Query-Planning Model Architecture and Selection-Flattening Handoff](https://slate.airbnb.tools/RJDGeEFw2Q/DRAFT+Query-Planning+Model+Architecture+and+Selection-Flattening+Handoff). The current repository state is summarized below so that the historical instructions are not mistaken for next steps.
+This is the working handoff for continuing the query-planning model. It should let a new agent understand the current semantic boundary, what the repository already establishes, and the next reasoning task without reconstructing the chronology that produced those decisions.
 
-Use this document for prior context:
+Read [Query Plan Research](./evergreen.md) for the durable production evidence, vocabulary, hard cases, correctness obligations, and validation strategy. Read [AGENTS.md](./AGENTS.md), [`model/AGENTS.md`](./model/AGENTS.md), and [`semantics/AGENTS.md`](./semantics/AGENTS.md) before changing their respective domains.
 
-- [Query Plan Research](./evergreen.md) is the evergreen source for the problem statement, vocabulary, established findings, hard cases, correctness constraints, and validation strategy. This handoff assumes that material rather than restating it.
+## Long Term Goal
 
-## Current Repository State
+The long-term goal is a query-plan and query-execution design that supports one-shot resolver execution. For every demanded runtime producer identity in the supported scope, the design should aggregate complete in-scope demand before dispatch and invoke that producer at most once. One-shot is per runtime producer identity, not per schema coordinate: distinct objects, list items, argument tuples, concrete types, or execution epochs may still require distinct invocations. Repeatedly invoking or materializing the same producer identity as later demand appears is a contrasting approach, not the target.
 
-This repository currently contains two Gradle projects, `model` and `semantics`, with conventional source layouts:
+The current model is building a plan-independent correctness judgment over `ObjectEngineResult`. That judgment should characterize valid field-resolution results without mentioning planner nodes, readiness, dependency counts, or execution order, so the eventual one-shot plan and executor can be judged against it. OER coordinates use canonical schema output fields and fully coerced arguments; response aliases, response keys, response ordering, and external response assembly belong to field completion and remain outside the model. [Query Plan Research](./evergreen.md) records the production motivation, one-shot proof obligations, and hard cases.
 
-- model declarations and GraphQL Java-backed construction live under [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/);
-- model examples and checks live under [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/);
-- semantic operations live under [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/); and
-- semantic examples and checks live under [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/).
+## Next Step Goal
 
-There are no executable JVM-global `schema` or `variableValues` declarations and no `establishAssumptions` initializer. Each reasoning exercise fixes one `Schema` and `Assumptions`; dependency-injection composition scopes their public bindings as singletons. `Assumptions` supplies the schema, variable bindings, executor registry, and concrete-field `behavioral` predicate for that world and parses validated named fragments into `SpecSelection` values; `Assumptions.of` constructs the GraphQL Java-backed implementation. The registry contains the world's node and field resolvers. Every `Schema.Value` other than the schema-independent `Schema.ErrorValue` is constructed through instance factories on that schema, which convert host values according to schema input types. The one-schema world stipulates canonical ownership, so factories do not revalidate it. Main sources use standard `jakarta.inject` annotations without selecting a DI framework, while Guice remains test-only.
+The concrete next step is to define:
 
-Input-object types and output-field argument definitions implement `Schema.InputObjectLike`; their fields implement `Schema.InputLikeField`. An output field carries one `Schema.FieldArguments` definition for its complete argument tuple, and every field with no arguments shares the one canonical `Schema.NoArguments` definition.
+```text
+world |- correctResolution(oer, fragment)
+```
 
-Input-object values and argument-tuple values implement `Schema.InputLikeValue`, covariantly narrowing their `type` properties to `InputObjectType` and `FieldArguments`, respectively. `ObjectEngineResult.Key` carries a canonical `Schema.OutputField` and a matching `ArgumentsValue`; its constructor is internal, and `Schema.objectEngineResultKey` is the public construction boundary. Every key present in an OER has a field belonging to a concrete `Schema.ObjectType`, while keys used outside an OER may belong to abstract types. Empty argument values are ordinary structurally equal values rather than a distinguished singleton.
+Here `fragment` is a post-validation, flattened `Fragment` whose nominal type is `world.schema.query`. It represents the external query demand. The judgment should determine whether `oer` is a correct field-resolution result under `world`, including demand induced transitively through registered resolvers' object fragments.
 
-The `model` project defines both GraphQL-shaped `SpecSelection` values and flattened field-resolution `Selection` values. Flattened occurrences are carried in a Guava `Multiset` named `SelectionForest`, which erases source order while preserving multiplicity. Semantic equality for `Selection` remains undefined; equality used internally to produce a multiset is host-language bookkeeping and does not license equality-based reasoning by consumers. Spec-selection flattening is implemented in [`semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt). Its public operation is `context(world: Assumptions) fun flatten(typeInScope, selectionSet)`. Its tests are finite evidence for the modeled behavior, not proofs.
+This step should define correctness directly, supported by focused examples of polymorphic and converging demand. It does not need separate minimal or maximal predicates. It should preserve unresolved type conditions as guards and remain entirely plan-independent; planner state, readiness, and scheduling belong only after `correctResolution` provides a stable target.
+
+## Repository
+
+The repository has two Gradle projects:
+
+- [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/) defines carrier values, one-world assumptions, resolver registrations, and their invariants.
+- [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/) contains model examples and finite checks.
+- [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/) defines transformations, predicates, and reasoning over the model.
+- [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/) contains semantic examples and finite checks.
+
+Run `./gradlew check` for the complete repository verification.
+
+## Current Model
+
+### World And Schema
+
+Each reasoning exercise fixes exactly one `Assumptions` and one canonical `Schema`. `Assumptions` supplies the schema, variable bindings, executor registry, concrete-field `behavioral` predicate, and parsing of validated named fragments into `SpecSelection` values. Dependency-injection composition scopes the public world bindings as singletons; there are no JVM-global schema or variable declarations.
+
+Every schema definition has one canonical object, so ordinary `==` means that two definitions denote the same schema element. Every non-error `Schema.Value`, argument tuple, and OER key is constructed through that schema. `Schema.ErrorValue` is schema-independent.
+
+`ObjectEngineResult` is a finite value tree. A present object field has one `Cell` containing a nullable value and a check result; absence differs from a present null. Every key present in an OER carries a field owned by a concrete `Schema.ObjectType`. Keys outside an OER may carry abstract-type fields or unresolved variables.
+
+### Selections And Fragments
+
+`SpecSelection` represents GraphQL-shaped, post-validation selections. [`SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt) flattens them into field-resolution `Selection` occurrences.
+
+A `Selection` carries a canonical OER key, nominal composite type, possible concrete parent types, and nested selections. Inline fragment structure has been flattened into the nominal and possible-type information. A `SelectionForest` is a Guava `Multiset`: source order is erased while occurrence multiplicity is preserved.
+
+Semantic equality for `Selection` is intentionally undefined. Host-language equality used to construct a multiset is bookkeeping and must not be used for semantic deduplication, intersection, or membership reasoning.
+
+A `Fragment` contains a nominal composite type and a flattened `SelectionForest`. A field resolver's `objectFragment` describes the object-valued input that must be resolved before invoking its selection-independent function.
+
+### Resolver Interpretation
+
+The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a selection-independent `Schema.ObjectValue`. A node resolver stores a selection-independent lookup from `Schema.IDValue` to `Schema.ObjectValue`.
+
+`snip` supplies the conceptual additional selection input by projecting a resolver's fixed object result. Holding the ordinary function inputs fixed therefore produces coherent projections for different requested selections.
+
+For a concrete field, `behavioral(field)` is true for engine-supplied `__typename`, an explicit field resolver, and every non-`id` field on a type with a node resolver. Field-resolver projection retains selected passive fields and stops at behavioral boundaries, leaving only the `id` bridge of a nested node reference. Node-resolver projection has a distinct root rule: it omits root `id`, `__typename`, and explicit field-resolver fields while retaining fields supplied by that node resolver.
+
+### Resolver Demand
+
+The executor registry derives an acyclic resolver-demand graph. Its nodes are registered `Resolver` objects, and every resolver object occurs at exactly one resolver coordinate.
+
+For a field resolver `R`, `R.mayDemandFrom` contains exactly the resolvers directly implicated by selections reachable from `R.objectFragment`. A selection directly implicates:
+
+- the node resolver, when present, for every object type in `selection.possibleTypes`; and
+- the field resolver, when present, at each concrete possible type combined with `selection.key.field.fieldName`.
+
+`R.mayBeDemandedBy` is the exact transpose of `mayDemandFrom`. The factory rejects a self-cycle or longer demand cycle with `IllegalArgumentException`.
+
+The intended demand interpretation starts with the resolvers directly implicated by an external selection forest and takes the least superset closed under `mayDemandFrom`. The relation is a conservative possibility relation because the selections that induce an edge retain type conditions that may not apply to the runtime concrete object.
+
+This is a resolver-demand graph, not a graph of every invocation input, value provenance fact, or scheduling prerequisite. In particular, the `id` passed to a node resolver is an engine-supplied addressing input and does not create a demand edge. Node resolvers have no `objectFragment`, so their `mayDemandFrom` sets are empty even though other resolvers may demand from them.
+
+The graph and its checks are implemented in [`ExecutorRegistry.kt`](./model/src/main/kotlin/model/registry/ExecutorRegistry.kt). [`ResolverDemandTest.kt`](./model/src/test/kotlin/model/registry/ResolverDemandTest.kt) exercises nested reachability, polymorphic node and field implication, transposition, empty node demand, and cycle rejection.
 
 ## Current Scope
 
-The current model inherits the evergreen field-resolution boundary. It reasons about OER-keyed field resolution rather than field completion, so response aliases, response keys, response ordering, and response assembly are outside its observations.
+Inputs are post-validation and all named fragment spreads are assumed to have been inlined. `Assumptions.selectionsFrom` accepts one named fragment definition as a parsing envelope, ignores its name, and rejects nested named spreads.
 
-Selection inputs are post-validation and are assumed to have all named fragment spreads inlined. `Assumptions.selectionsFrom` accepts one named fragment definition only as a convenient parsing envelope; the fragment's name is ignored, and a spread within its selection set is rejected.
+`@skip` and `@include` belong to the eventual field-resolution model but are deferred. Applied directives are currently rejected. Query fragments, variable providers, `@parent`, lazy executor values, checkers, and raw-versus-checked dependency distinctions are also not yet modeled.
 
-`@skip` and `@include` affect field applicability and remain in the project's intended scope, but they are deliberately deferred from the current `SpecSelection` model and flattener. The current parser therefore rejects applied directives. This is a temporary phase boundary, not a claim that directives are irrelevant to field resolution.
+Every argument-bearing output field is currently assumed to have an explicit field resolver. Production namespace exceptions are outside the model.
 
-## Current Continuation
+The registry currently rejects resolver-demand cycles. `evergreen.md` records legal production RSS cycles as an eventual hard case, so cycle rejection is a present scope constraint rather than a general claim about Viaduct.
 
-The resolver model deliberately decomposes a resolver's conceptual `N + 1` inputs. The executor registry stores the selection-independent `N`-input function. For a field resolver, those inputs are the resolved value of its required `objectFragment` and fully coerced arguments; the function returns a selection-independent `Schema.ObjectValue`. A node resolver similarly stores its selection-independent lookup by ID. Node and field resolution are both part of the current fixed reasoning world.
+## Design Constraints
 
-`snip` supplies the conceptual `+ 1` selection input by projecting requested flattened selections from the fixed object returned by the registered function to that resolver's output selection set. Thus the registered function itself does not accept selections. Holding its `N` inputs fixed gives one object value, and applying `snip` to any two requested selection forests produces projections that agree at every OER coordinate selected by both. This decomposition builds resolver coherence into interpretation rather than requiring it as an independent property of arbitrary selection-sensitive functions.
+Demand aggregates from consumers toward producers, while concrete type information becomes available from producers toward consumers. Do not make demand depend on first completing a scheduler decision about which concrete branch will execute. Preserve unresolved type conditions as guards until the concrete result can specialize them.
 
-The world defines `behavioral(field)` only for canonical fields on concrete object types. It is true for engine-supplied `__typename`, a field with an explicit field resolver, and every non-`id` field on a type with a node resolver. Every argument-bearing output field is assumed to have an explicit field resolver; production namespace exceptions are outside the current model. Field-resolver `snip` retains selected non-behavioral fields and stops at behavioral boundaries, thereby retaining only the `id` bridge of a nested node reference. Node-resolver `snip` has a distinct root rule that omits `id`, `__typename`, and explicit field-resolver fields while retaining fields supplied by that node resolver; recursive projection then stops at ordinary behavioral boundaries.
-
-The immediate next step is to add a declarative dependency relation over the executor registry. At a high level, required-selection sets should determine which registered resolvers a resolver depends on. The representation and detailed closure rules remain to be designed; this step should establish dependency meaning without introducing query-plan scheduling policy.
-
-Once that dependency relation is modeled, a later semantic layer should judge resolution results directly:
-
-```text
-world |- minimalResolution(oer, nominalType, selections)
-world |- correctResolution(oer, nominalType, selections)
-world |- maximalResolution(oer, nominalType, selections)
-```
-
-These predicates concern field resolution, not field completion, and should not mention planner nodes, readiness, or execution order. Their exact relationship remains to be defined. In particular, `maximalResolution` requires an explicit finite universe of eligible cells; an unbounded schema and argument domain need not admit a finite maximal OER. Whether resolver coherence across requested selections is sufficient to make minimal resolution unique remains to be established. Query plans and their execution should be introduced only after these predicates provide a plan-independent correctness target.
-
-## Historical Change in Direction
-
-We initially tried to move directly from the research findings to an executable dependency graph. During this session, type conditions exposed a more fundamental problem that would organize the proposed next phase:
-
-> **Demand aggregates bottom-up, while concrete type information resolves top-down.**
-
-An RSS on a descendant executor can add demand to an ancestor producer, so discovering the complete demand starts with consumers and moves toward their producers. Whether that demand applies can depend on the concrete type produced by an ancestor, which is learned in the opposite direction. Neither flow can simply run to completion before the other.
-
-We explored scheduler states such as may-run, will-not-run, and eligible, along with a second count for unresolved demand contributors. That made the demand supplied to a producer depend on future scheduler decisions about which consumers would run. The useful result of that exploration was not the state machine. It was the realization that bottom-up demand can retain top-down type conditions as guards.
-
-Consider:
-
-```graphql
-p {
-  ... on B {
-    expensive
-  }
-}
-```
-
-If the resolver for `expensive` requires the passive field `helper` from `p`, then `p` can receive:
+For example, if `expensive` applies only when `p` is a `B` and its object fragment requires passive field `helper`, the demand on `p` should retain the same guard:
 
 ```graphql
 p {
@@ -83,127 +104,42 @@ p {
 }
 ```
 
-We do not need to know whether `p` will produce an `A` or a `B` before starting it. The demand itself says what is needed in the `B` case. Runtime type resolution later determines whether the guarded requirement applies and whether the `expensive` resolver runs.
+This separates the semantic question, "What values must a correct result contain for each concrete type?", from the operational question, "How should an implementation schedule the work?" The current continuation addresses the semantic question first.
 
-This separates two questions:
-
-1. What values must a correct execution contain under each concrete type?
-2. How does an implementation schedule the work that produces those values?
-
-The session chose to answer the first question before returning to the second.
-
-## Historical Correctness Direction
-
-We briefly considered defining a deterministic, deliberately naive reference executor and proving the production executor equivalent to it. That would still require relating two operational state machines, especially their intermediate treatment of type conditions and demand.
-
-The proposed direction was instead to define correctness directly over the result. That result-oriented direction remains current, while the earlier focus on one minimal **perfect OER** has been generalized to the `minimalResolution`, `correctResolution`, and `maximalResolution` predicates above.
-
-The intended shape of the definition is:
-
-```text
-PerfectOer(inputs, operation, oer)
-```
-
-The exact partitioning of `inputs` was not important to the sketch. It included a schema, the actual `objectFragments`, the available resolvers, and a world fixing any ambient facts needed to interpret them.
-
-The current resolver interpretation is specified once in Current Continuation. In particular, the registry stores each resolver's selection-independent inputs and object result, while `snip` supplies requested flattened selections as a separate projection step. Node and field resolution are both in the current world.
-
-`PerfectOer` says which cells exist and what values and checks they contain. It does not mention planner nodes, dependency counts, readiness, or execution order.
-
-This also gives us a cleaner target for a production proof. An execution algorithm is correct when its output satisfies the result predicate, regardless of how it reached that output.
-
-## Historical Result-Shaped Requirements
-
-We also considered identifying result positions with root-to-leaf syntactic locators. Those locators no longer look like the right foundation. Requirements should instead resemble the OER tree they constrain. A preliminary shape is:
-
-```kotlin
-data class RequirementNode(
-    val fields: Map<
-        GraphQLObjectType,
-        Map<ObjectEngineResult.Key, RequirementNode>,
-    >,
-)
-```
-
-For an object result of concrete type `T`, the `T` branch states which field keys are required. The real type would need to account for lists, scalar leaves, checks, ownership boundaries, and RSS targets, so this was an intuition rather than an API proposal.
-
-Semantically, requirements should unfold as a tree. An implementation may share identical continuation nodes as a DAG, but only when the shared subtree has no remaining dependence on ancestry, target scope, ownership, or an ancestor type condition. Sharing is a representation choice, not part of correctness.
-
-Another useful interpretation is:
+Requirements should be result-shaped rather than identified only by root-to-leaf syntax. Conceptually, guarded requirements describe a family:
 
 ```text
 Demand : RuntimeTypeAssignment -> RequirementTree
 ```
 
-Each complete runtime type assignment produces an ordinary monomorphic requirement tree. A guarded representation compactly describes that family. The correctness definition can evaluate the guards against the actual concrete types supplied by `world`, even though an executor learns those types incrementally.
+Each complete runtime type assignment yields an ordinary monomorphic requirement tree. A compact implementation may share equivalent continuations, but sharing is a representation choice and is valid only when the continuation no longer depends on ancestry, target scope, ownership, or an ancestor type condition.
 
-## Historical Model Snapshot
+## Continuation
 
-At the time of this handoff, the carrier model lived directly in [`model/`](./model/). It has since moved to the `model` Gradle project's conventional source tree. Read [`model/AGENTS.md`](./model/AGENTS.md) before extending it; that file records the current modeling discipline and scope boundaries.
+Implement the Query-rooted `correctResolution(oer, fragment)` judgment in the semantic layer:
 
-The decisions recorded for the proposed next phase were:
+1. Establish the judgment's domain: `fragment.nominalType == world.schema.query`, and `oer` is the Query-rooted result being judged.
+2. Define concrete type applicability for flattened selections and conversion of an applicable abstract selection key to its concrete OER field coordinate.
+3. Define the least guarded required-cell closure seeded by `fragment.subselections` and extended transitively through demanded resolvers' `objectFragment`s.
+4. Define correctness recursively over object, list, and simple results, specializing guarded requirements with each concrete `Schema.ObjectType` and relating resolver-owned values to the registered resolver interpretations.
+5. Decide and document directly which additional OER cells, if any, `correctResolution` permits; do not introduce a separate minimality judgment first.
 
-- `Schema` now models the canonical query root, named input and output types, fields and arguments, type expressions, defaults, `__typename`, and the declarative relations needed to reason about polymorphic selection sets.
-- The schema was treated as a stipulated input to each reasoning exercise. It is now the singleton `Assumptions.schema`, not an executable JVM-global declaration. Exactly one canonical definition object represents each schema element, and ordinary `==` equality means that two definitions represent the same element. Non-error `Schema.Value` instances are constructed through that schema and carry its canonical definitions; the schema-independent `Schema.ErrorValue` carries no observable definitions. Coordinate-oriented modeling domains may instead use type names and field coordinates.
-- `EngineResult` is a finite value tree containing object, list, and simple results.
-- An OER field contains one `Cell` with a nullable value and a check result.
-- Missing fields are distinct from present fields whose values are null.
-- Keys present in an OER contain a canonical schema output field owned by a concrete object type and fully coerced arguments typed by that field's argument definition. They contain neither aliases, abstract interface or union field coordinates, nor unresolved variables; `ObjectEngineResult.Key` values used outside an OER may contain abstract-type fields and unresolved variables.
-- Executor output values and OER values are separate representations.
-- Errors are collapsed to `Schema.ErrorValue`.
-- Correctness, demand, and checked-versus-raw semantics intentionally remain outside the `model` package.
+Keep these definitions in the semantic layer. They should consume the established model and trust its construction invariants rather than revalidating schema ownership or registry coherence.
 
-The schema model was judged sufficient for the immediate polymorphism work. Other semantic inputs were not yet modeled, including the supported operation and selection structures, `objectFragments`, executor functions, and the execution world that fixes their denotations. The carrier model also excluded custom scalars, precise error metadata, and lazy values or references returned by executors.
-
-## Historical Modeling Scope
-
-The proposed next round was to isolate the polymorphism problem and model how type-conditioned demand aggregates bottom-up while concrete object types resolve top-down. This scope is retained as historical context, not as current instructions.
-
-That round proposed:
-
-- including `objectFragments`, including `objectFragments` on `Query` fields;
-- excluding `queryFragments`;
-- excluding variables and variable providers, so arguments would be literal and fully coerced;
-- excluding `@skip` and `@include`; and
-- deferring other directive-controlled applicability.
-
-These exclusions were intended to be temporary. They removed independent sources of conditional demand to isolate what polymorphism alone required from the result predicate and demand closure.
-
-## Historical Next Definitions
-
-The proposed sequence below predates the current `model` and `semantics` Gradle projects and the implemented selection flattener. Its first two steps, which called for remaining semantic inputs and executor denotations, have been superseded by Current Continuation and are not repeated here. The still-useful historical progression after defining the resolver world was:
-
-1. **Type applicability.** Given an object occurrence and its concrete type, determine which type-conditioned selections apply and construct their alias-free, fully coerced OER keys.
-2. **Polymorphic required-cell closure.** Seed demand from the external operation, add demand induced by `objectFragments`, and define the least closure while preserving unresolved type conditions as guards.
-3. **Nested result correctness.** Define how the guarded requirements specialize over concrete object and list results.
-4. **Exact result.** Require exactly the cells in the specialized least closure, with the values produced by the applicable resolver calls.
-
-The sequence also left open whether to define a second predicate permitting additional semantically correct cells. Such a predicate would separate perfect minimality from the correctness of a production executor that conservatively over-materializes.
-
-The historical desired result was an existence-and-uniqueness statement:
-
-```text
-For a fixed supported execution world and operation,
-there exists exactly one perfect OER.
-```
-
-This is not a current claim. Its status depends in part on whether the resolver coherence requirement above is sufficient to make minimal resolution unique.
-
-## Historical First Examples
-
-The proposed examples were:
+Use examples as finite evidence, not proofs. The first examples should cover:
 
 - a type-conditioned passive field;
-- the guarded `B/helper` RSS case above;
-- sibling `objectFragment` consumers whose guarded demand converges on one producer;
-- two concrete implementations that induce different demand at the same result position;
-- two concrete implementations that induce the same continuation and may share its representation; and
-- a list containing more than one concrete object type.
+- the guarded `B/helper` object-fragment case above;
+- sibling object-fragment consumers whose demand converges on one producer;
+- concrete implementations that induce different guarded demand at the same result position;
+- a list containing more than one concrete object type; and
+- required cells versus additional cells accepted or rejected by correctness.
 
-The intent was for these examples to become assertions over later semantic definitions, not simulations of an executor. Such assertions would be finite evidence rather than formal proofs.
+## Open Questions
 
-## Historical Deferred Questions
+- What additional semantically valid cells, if any, should `correctResolution` permit?
+- How should recursive correctness relate a field resolver's resolved `objectFragment` input to the object returned by its registered function?
+- How should the later model admit legal demand cycles without confusing coordinate-level recursion with runtime occurrence identity?
+- Which deferred conditions, especially directives and variable providers, must become guards in the same requirement representation?
 
-The deferred questions were `queryFragments`, variables and variable providers, `@skip`/`@include`, other directives, `@parent`, lazy executor values, legal RSS cycles, and whether conservative extra cells should be accepted by a separate coverage predicate.
-
-The historical recommendation was to defer production scheduler design until the output semantics were stable, then ask what static structures and runtime transitions were sufficient to establish them.
+Do not introduce planner state or scheduler transitions to answer these questions. The immediate objective is a plan-independent specification of correct field-resolution results.

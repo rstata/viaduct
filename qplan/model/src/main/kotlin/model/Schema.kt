@@ -6,6 +6,8 @@ package model
  * Exactly one instance is supplied by [Assumptions.schema] for a reasoning world.
  * Dependency-injection composition scopes that schema binding as a singleton.
  *
+ * ### Invariant: schema-canonical-definition-graph
+ *
  * Definitions are canonical within this schema: each type name, field coordinate, input-field
  * coordinate, and argument coordinate identifies exactly one definition object. Definition
  * classes do not override `Any.equals` or `Any.hashCode`, so `==` is reference equality and two
@@ -23,6 +25,8 @@ package model
  * `==`, `!=`, and collection equality operations. Only acyclic value objects such as [TypeExpr] and
  * [DefaultValue] add structural equality over their properties.
  *
+ * ### Invariant: schema-supported-domain
+ *
  * [query] is the canonical `Query` [ObjectType] and is always the query root. The only permitted
  * scalar definitions are the five [ScalarType] singletons [IntType], [FloatType], [StringType],
  * [BooleanType], and [IDType]; whenever one belongs to this schema, [type] returns that singleton.
@@ -39,6 +43,8 @@ interface Schema {
         /**
          * The unique argument definition for every output field that takes no arguments.
          *
+         * ### Invariant: schema-no-arguments
+         *
          * For every [OutputField] `f`, `f.arguments == NoArguments` exactly when `f` takes no
          * arguments.
          */
@@ -49,7 +55,9 @@ interface Schema {
     /**
      * The canonical query root.
      *
-     * Invariants: `query.typeName == "Query"` and `type("Query") == query`.
+     * ### Invariant: schema-query-root
+     *
+     * `query.typeName == "Query"` and `type("Query") == query`.
      */
     val query: ObjectType
 
@@ -451,6 +459,8 @@ interface Schema {
      * exposed by the interface. When an input value contains unbound [VariableValue] instances,
      * equality is conservative as described by [VariableValue].
      *
+     * ### Invariant: schema-value-canonicality
+     *
      * Every schema definition carried by a value is the canonical definition from the
      * [Assumptions.schema] under which that value is interpreted.
      */
@@ -493,7 +503,11 @@ interface Schema {
         override val type: FloatType
             get() = FloatType
 
-        /** Invariant: this value is finite; NaN and positive or negative infinity are excluded. */
+        /**
+         * ### Invariant: schema-finite-float
+         *
+         * This value is finite; NaN and positive or negative infinity are excluded.
+         */
         val floatValue: Double
     }
 
@@ -521,6 +535,11 @@ interface Schema {
     sealed interface EnumValue : SimpleValue {
         override val type: EnumType
 
+        /**
+         * ### Invariant: schema-enum-membership
+         *
+         * This value is a member of [type].[EnumType.values].
+         */
         val enumValue: String
     }
 
@@ -539,7 +558,13 @@ interface Schema {
     /**
      * A value shaped like a GraphQL input object.
      *
+     * ### Invariant: input-like-value-coherence
+     *
      * [type] is the canonical input-object-like definition whose fields [fieldValues] inhabit.
+     * `fieldValues.containingType == type`.
+     *
+     * ### Representation
+     *
      * Implementations narrow [type] to match their corresponding definition category. This common
      * interface is not itself a GraphQL [Value], because an [ArgumentsValue] is a schema-synthetic
      * tuple rather than a GraphQL input value.
@@ -570,6 +595,13 @@ interface Schema {
         override val fieldValues: FieldValues<FieldArguments, InputValue>
     }
 
+    /**
+     * A possibly partial object output.
+     *
+     * ### Invariant: object-value-owner
+     *
+     * `outputObjectFields.containingType == type`.
+     */
     sealed interface ObjectValue : OutputValue, TypedValue {
         override val type: ObjectType
         val outputObjectFields: FieldValues<ObjectType, OutputValue>
@@ -578,8 +610,14 @@ interface Schema {
     /**
      * A map from field names to values.
      *
+     * ### Invariant: field-values-owner
+     *
      * [containingType] is the canonical [Type] or [FieldArguments] definition whose fields these
-     * values inhabit. Unlike an ordinary [Map], [get] and [getValue] throw
+     * values inhabit, and every present key names one of its fields.
+     *
+     * ### Lookup
+     *
+     * Unlike an ordinary [Map], [get] and [getValue] throw
      * [MissingFieldException] when the requested field does not exist or, for an output object, has
      * not been set. A present field may still map to null.
      *
@@ -706,6 +744,8 @@ interface Schema {
     /**
      * A named type definition.
      *
+     * ### Invariant: schema-type-name-uniqueness
+     *
      * Definitions use the canonical equality documented by [Schema]: `a == b` exactly when `a` and
      * `b` represent the same schema type. Equivalently, two type definitions have the same
      * [typeName] exactly when they are equal. The permitted concrete categories are exhaustively
@@ -735,6 +775,8 @@ interface Schema {
     /**
      * A type on which GraphQL selection sets and type conditions are meaningful.
      *
+     * ### Invariant: schema-composite-field-graph
+     *
      * [fields] contains all fields selectable at this type, rather than only fields declared in
      * SDL. Every composite type `t` has exactly one owner-specific, schema-synthetic GraphQL
      * meta-field `f` for which:
@@ -749,12 +791,16 @@ interface Schema {
      * [OutputField.containingType] is this definition. Conversely, every [OutputField] in the
      * schema occurs exactly once in its containing definition's map. Flattened copies at different
      * schema coordinates are distinct canonical definitions even when their signatures match.
+     * Effective object and interface fields satisfy GraphQL interface-field compatibility for every
+     * interface they implement.
      */
     sealed interface CompositeType : OutputType {
         val fields: Map<String, OutputField>
 
         /**
          * Exactly the concrete object types that may occur at runtime for this type.
+         *
+         * ### Invariant: schema-composite-possible-types
          *
          * An object type contains only itself. An interface contains all of its direct and indirect
          * implementing object types. A union contains its member object types. The set is therefore
@@ -767,6 +813,8 @@ interface Schema {
 
     /**
      * A scalar in the model's fixed universe of built-in GraphQL scalar types.
+     *
+     * ### Invariant: schema-scalar-universe
      *
      * The instances are exactly [IntType], [FloatType], [StringType], [BooleanType], and [IDType],
      * and their [Type.typeName] values are fixed by those declarations. Any scalar reachable from
@@ -789,6 +837,8 @@ interface Schema {
     /**
      * An enum whose [values] are exactly its finite set of legal GraphQL enum value names.
      *
+     * ### Invariant: schema-enum-values
+     *
      * The set has no modeled order, and each value is represented only by its name.
      */
     class EnumType(
@@ -801,9 +851,7 @@ interface Schema {
      *
      * [fields] contains `__typename` and the object's effective fields after flattening type
      * extensions and inherited interface fields. Interface implementation relationships are
-     * represented by the schema's relation operations rather than stored on this definition. For
-     * every interface this object implements, these effective fields satisfy GraphQL's
-     * interface-field compatibility rules.
+     * represented by the schema's relation operations rather than stored on this definition.
      */
     class ObjectType(
         override val typeName: String,
@@ -817,8 +865,6 @@ interface Schema {
      * [fields] contains `__typename` and the interface's effective fields after flattening type
      * extensions and inherited interface fields. Parent-interface and implementation
      * relationships are represented by the schema's relation operations rather than stored here.
-     * For every parent interface this interface implements, these effective fields satisfy
-     * GraphQL's interface-field compatibility rules.
      */
     class InterfaceType(
         override val typeName: String,
@@ -828,6 +874,8 @@ interface Schema {
 
     /**
      * A union definition.
+     *
+     * ### Invariant: schema-union-fields
      *
      * Union membership is represented by [CompositeType.possibleTypes] and
      * [Schema.possibleObjectTypes]. [fields] contains exactly the `__typename` field.
@@ -840,6 +888,8 @@ interface Schema {
 
     /**
      * A schema definition shaped like a GraphQL input object.
+     *
+     * ### Invariant: schema-input-field-graph
      *
      * The instances are named [InputObjectType] definitions and schema-synthetic [FieldArguments]
      * definitions. Each [fields] key equals its field's [InputLikeField.name], and each field's
@@ -861,6 +911,8 @@ interface Schema {
 
     /**
      * The complete argument definition of an output field.
+     *
+     * ### Invariant: schema-field-argument-graph
      *
      * This is schema-synthetic rather than a named [Type], and it cannot occur in a [TypeExpr].
      * Each non-empty instance belongs to exactly one [OutputField]. The empty argument definition
@@ -906,9 +958,10 @@ interface Schema {
     /**
      * The canonical output field at [containingType]/[fieldName].
      *
+     * ### Invariant: schema-output-field-coordinate
+     *
      * `containingType.fields[fieldName] == this`, and [type]'s base type is canonical in the same
      * schema. [arguments] is the input-object-like definition of the complete argument tuple.
-     * It is [NoArguments] exactly when this field takes no arguments.
      */
     class OutputField(
         val fieldName: String,
@@ -919,6 +972,8 @@ interface Schema {
 
     /**
      * A field of an input-object-like definition.
+     *
+     * ### Invariant: schema-input-like-field-coordinate
      *
      * `containingType.fields[name] == this`, and [type]'s base type is canonical in the same
      * schema. [defaultValue], when present, is valid for [type].
@@ -962,10 +1017,14 @@ interface Schema {
     /**
      * A finite, well-founded GraphQL value-type expression.
      *
+     * ### Invariant: schema-type-expression-well-foundedness
+     *
      * Nullability belongs independently to every named or list layer. [isNullable] describes the
      * outermost layer of this expression. [baseType] is the named type beneath every list wrapper,
      * and [isBaseTypeNullable] is that named layer's nullability. Wherever a type expression is
      * embedded in a schema definition, [baseType] is that schema's canonical type definition.
+     *
+     * ### Equality
      *
      * Type expressions use structural equality over their complete wrapper shape, nullability, and
      * canonical base type.
@@ -998,13 +1057,19 @@ interface Schema {
     /**
      * An optional, fully coerced semantic default.
      *
+     * ### Invariant: schema-default-value-conformance
+     *
      * [Absent] means that no default is declared. [Present.value] may be null, denoting an explicit
      * GraphQL null; absence and explicit null are distinct. When attached to a field or argument,
      * [Present] is valid for its declaring [TypeExpr]: null is permitted only when the expression's
      * outer layer is nullable, and a non-null value conforms recursively to every list and named
      * layer, including enum membership and input-object fields. It does not recursively contain
      * [VariableValue] or [ErrorValue]. Defaults are semantic values after input
-     * coercion, not source literals. Default values use structural equality.
+     * coercion, not source literals.
+     *
+     * ### Equality
+     *
+     * Default values use structural equality.
      */
     sealed interface DefaultValue {
         data object Absent : DefaultValue

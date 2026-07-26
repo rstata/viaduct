@@ -19,12 +19,16 @@ import model.spec.SpecSelection
 /**
  * The fixed schema, bindings, and executors under which model values and operations are interpreted.
  *
+ * ### Invariant: world-single-schema
+ *
  * Exactly one instance is fixed for a reasoning world. Dependency-injection composition scopes the
  * public [Assumptions] binding as a singleton; this does not make it a JVM-global value.
  */
 interface Assumptions {
     /**
      * The canonical schema for this reasoning world.
+     *
+     * ### Invariant: world-canonical-ownership
      *
      * Every schema definition referenced by a model value interpreted in this world belongs to this
      * schema and satisfies the canonicality invariants documented by [Schema].
@@ -34,10 +38,16 @@ interface Assumptions {
     /**
      * The known variable bindings for this reasoning world.
      *
-     * A bound value may be null, representing GraphQL null, but a non-null bound value cannot
-     * recursively contain a [Schema.VariableValue]. Variable-to-variable bindings, including nested
-     * references and cycles, are therefore excluded. A missing entry denotes an unbound or unknown
-     * variable. A variable may be bound to [Schema.ErrorValue] because providers or fields may fail.
+     * ### Invariant: world-variable-name-consistency
+     *
+     * Variable names are unique and non-conflicting throughout the world, so equal names denote the
+     * same eventual value.
+     *
+     * ### Binding Semantics
+     *
+     * A bound value may be null, representing GraphQL null, and a missing entry denotes an unbound
+     * or unknown variable. A variable may be bound to [Schema.ErrorValue] because providers or
+     * fields may fail. [VariableBindings] documents the constraints on bound values.
      *
      * See [Schema.VariableValue] for how bindings affect conservative equality.
      */
@@ -45,6 +55,12 @@ interface Assumptions {
 
     /**
      * The node and field resolvers fixed for this reasoning world.
+     *
+     * ### Invariant: world-executor-schema
+     *
+     * Every definition and model value referenced by the registry belongs to [schema].
+     *
+     * ### Resolver Interpretation
      *
      * Registered functions contain the selection-independent inputs of resolver interpretation.
      * Requested selections are applied separately by projecting their object results with `snip`.

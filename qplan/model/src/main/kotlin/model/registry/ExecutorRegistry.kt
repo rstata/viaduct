@@ -63,6 +63,22 @@ class FieldResolver(
 /**
  * The selection-independent node and field resolvers fixed for one reasoning world.
  *
+ * ### Invariant: registry-coordinate-validity
+ *
+ * Every resolver key is a canonical definition in the registry's schema.
+ *
+ * ### Invariant: registry-node-id-contract
+ *
+ * Every registered node-resolver type has a canonical, argumentless, ID-typed `id` field. That
+ * field has no field resolver.
+ *
+ * ### Invariant: registry-field-resolver-contract
+ *
+ * Every field resolver's object-fragment type is canonical and equals the registered field's
+ * containing type. No field resolver is registered for `__typename`.
+ *
+ * ### Lookup
+ *
  * Lookup is defined only for canonical definitions from the registry's schema. A missing resolver
  * at a valid coordinate throws [MissingExecutorException]. An invalid or foreign schema definition
  * does not denote a missing executor. Requested selections are interpreted separately through

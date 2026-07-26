@@ -86,75 +86,47 @@ interface Schema {
     ): OutputField
 
     /**
-     * Returns exactly the concrete object types that may occur at runtime for [typeName].
-     *
-     * An object type maps to the singleton set containing its own name. An interface maps to all
-     * of its direct and indirect implementing object types. A union maps to its member object
-     * types. An object result is therefore never empty; an interface or union result may be empty.
-     * An empty set means that [typeName] is composite but has no possible object types. Null means
-     * that the named type exists but is not composite. Every name in a non-null result resolves
-     * through [type] to an [ObjectType].
-     *
-     * @throws MissingSchemaElementException when [typeName] does not identify a schema type
-     */
-    fun possibleObjectTypes(typeName: String): Set<String>?
-
-    /**
      * Returns exactly the composite types that may be used as type conditions in the selection
-     * set of [parentTypeName], according to GraphQL fragment-spread validity.
+     * set of [parentType], according to GraphQL fragment-spread validity.
      *
      * For composite types `a` and `b`, `b` is in `spreadableTypes(a)` exactly when `a == b` or their
-     * [possibleObjectTypes] sets have a common member. Thus the parent type itself is always in the
-     * returned set, even when it has no possible object types, while distinct nominally related
-     * interfaces with no common possible object are not spreadable. Every returned name resolves
-     * through [type] to a [CompositeType]. Spreadability is symmetric. Null means that the named
-     * type exists but is not composite.
-     *
-     * @throws MissingSchemaElementException when [parentTypeName] does not identify a schema type
+     * [CompositeType.possibleTypes] sets have a common member. Thus the parent type itself is always
+     * in the returned set, even when it has no possible object types, while distinct nominally
+     * related interfaces with no common possible object are not spreadable. Spreadability is
+     * symmetric.
      */
-    fun spreadableTypes(parentTypeName: String): Set<String>?
+    fun spreadableTypes(parentType: CompositeType): Set<CompositeType>
 
     /**
-     * Whether [fragmentTypeName] may be used as a type condition in the selection set of
-     * [parentTypeName], according to GraphQL fragment-spread validity.
+     * Whether [fragmentType] may be used as a type condition in the selection set of [parentType],
+     * according to GraphQL fragment-spread validity.
      *
-     * For two composite types, this is true exactly when [fragmentTypeName] is in
-     * `spreadableTypes(parentTypeName)`.
-     *
-     * Null means that at least one named type exists but is not composite. If either name does not
-     * exist, this throws [MissingSchemaElementException].
-     *
-     * @throws MissingSchemaElementException when either name does not identify a schema type
+     * This is true exactly when [fragmentType] is in `spreadableTypes(parentType)`.
      */
     fun isSpreadable(
-        parentTypeName: String,
-        fragmentTypeName: String,
-    ): Boolean?
+        parentType: CompositeType,
+        fragmentType: CompositeType,
+    ): Boolean
 
     /**
-     * The selection-set relation of the composite types [aTypeName] and [bTypeName].
-     *
-     * Null means that at least one named type exists but is not composite. If either name does not
-     * exist, this throws [MissingSchemaElementException].
+     * The selection-set relation of the composite types [a] and [b].
      *
      * Nominal narrowing and fragment spreadability remain distinct. In particular, one interface
      * may be nominally narrower than another even when neither has a possible concrete object;
      * that fact alone does not make a fragment spread possible. A nominally narrower type's
      * possible-object set is a subset of the wider type's set, but set inclusion does not imply a
      * nominal relation. The result is a stipulated schema relation, not an algorithm derived solely
-     * by comparing [possibleObjectTypes] results.
-     *
-     * @throws MissingSchemaElementException when either name does not identify a schema type
+     * by comparing [CompositeType.possibleTypes].
      */
     fun relation(
-        aTypeName: String,
-        bTypeName: String,
-    ): TypeRelation?
+        a: CompositeType,
+        b: CompositeType,
+    ): TypeRelation
 
     /**
      * The relation of the first composite type to the second.
      *
-     * [SAME] holds exactly when both names denote the same canonical type. [WIDER_THAN] holds
+     * [SAME] holds exactly when both values denote the same canonical type. [WIDER_THAN] holds
      * exactly when the first type is an interface transitively implemented by the second object or
      * interface, or when the first is a union having the second object as a direct member.
      * [NARROWER_THAN] is exactly the converse. [COPARENT] holds exactly when neither type nominally
@@ -192,7 +164,10 @@ interface Schema {
         require(value in type.values) {
             "$value is not a value of ${type.typeName}"
         }
-        return DefaultEnumValue(type, value)
+        return DefaultEnumValue(
+            type = TypeExpr.Named(type, isNullable = false),
+            enumValue = value,
+        )
     }
 
     fun inputListValue(values: List<InputValue?>): InputListValue =
@@ -200,6 +175,17 @@ interface Schema {
 
     fun outputListValue(values: List<OutputValue?>): ListValue =
         DefaultListValue(values.toList())
+
+    /**
+     * Constructs a list engine result with the complete output [type].
+     *
+     * @throws IllegalArgumentException when [values] contains null and [type]'s element type is
+     * non-null
+     */
+    fun listEngineResult(
+        type: TypeExpr.List<OutputType>,
+        values: List<EngineResult?>,
+    ): ListEngineResult = ListEngineResult.create(type, values)
 
     /**
      * Constructs a possibly partial object value whose fields belong to [type].
@@ -397,7 +383,7 @@ interface Schema {
             is EnumType ->
                 when (value) {
                     is EnumValue -> {
-                        if (value.type != type) {
+                        if (value.baseType != type) {
                             throw inputValueClassCast(path, type, value)
                         }
                         value
@@ -474,11 +460,10 @@ interface Schema {
         val type: Type
     }
 
-    sealed interface SimpleValue : InputValue, OutputValue, TypedValue, EngineResult {
-        override val type: SimpleType
-
-        override val typeName: String
-            get() = type.typeName
+    sealed interface SimpleValue : InputValue, OutputValue, EngineResult {
+        override val type: TypeExpr.Named<SimpleType>
+        override val baseType: SimpleType
+            get() = type.baseType
     }
 
     /**
@@ -489,19 +474,19 @@ interface Schema {
      * about schemas that do not have custom scalars.
      */
     sealed interface ScalarValue : SimpleValue {
-        override val type: ScalarType
+        override val type: TypeExpr.Named<ScalarType>
     }
 
     sealed interface IntValue : ScalarValue {
-        override val type: IntType
-            get() = IntType
+        override val type: TypeExpr.Named<IntType>
+            get() = TypeExpr.Named(IntType, isNullable = false)
 
         val intValue: Int
     }
 
     sealed interface FloatValue : ScalarValue {
-        override val type: FloatType
-            get() = FloatType
+        override val type: TypeExpr.Named<FloatType>
+            get() = TypeExpr.Named(FloatType, isNullable = false)
 
         /**
          * ### Invariant: schema-finite-float
@@ -512,33 +497,33 @@ interface Schema {
     }
 
     sealed interface StringValue : ScalarValue {
-        override val type: StringType
-            get() = StringType
+        override val type: TypeExpr.Named<StringType>
+            get() = TypeExpr.Named(StringType, isNullable = false)
 
         val stringValue: String
     }
 
     sealed interface BooleanValue : ScalarValue {
-        override val type: BooleanType
-            get() = BooleanType
+        override val type: TypeExpr.Named<BooleanType>
+            get() = TypeExpr.Named(BooleanType, isNullable = false)
 
         val booleanValue: Boolean
     }
 
     sealed interface IDValue : ScalarValue {
-        override val type: IDType
-            get() = IDType
+        override val type: TypeExpr.Named<IDType>
+            get() = TypeExpr.Named(IDType, isNullable = false)
 
         val idValue: String
     }
 
     sealed interface EnumValue : SimpleValue {
-        override val type: EnumType
+        override val type: TypeExpr.Named<EnumType>
 
         /**
          * ### Invariant: schema-enum-membership
          *
-         * This value is a member of [type].[EnumType.values].
+         * This value is a member of [baseType].[EnumType.values].
          */
         val enumValue: String
     }
@@ -701,9 +686,6 @@ interface Schema {
         override val type: Nothing
             get() = unsupported()
 
-        override val typeName: String
-            get() = unsupported()
-
         override val intValue: Int
             get() = unsupported()
 
@@ -805,8 +787,7 @@ interface Schema {
          * An object type contains only itself. An interface contains all of its direct and indirect
          * implementing object types. A union contains its member object types. The set is therefore
          * non-empty for an object but may be empty for an interface or union. Every member is a
-         * canonical definition in the containing schema, and its set of type names equals the
-         * result of [Schema.possibleObjectTypes] for this type.
+         * canonical definition in the containing schema.
          */
         val possibleTypes: Set<ObjectType>
     }
@@ -877,8 +858,8 @@ interface Schema {
      *
      * ### Invariant: schema-union-fields
      *
-     * Union membership is represented by [CompositeType.possibleTypes] and
-     * [Schema.possibleObjectTypes]. [fields] contains exactly the `__typename` field.
+     * Union membership is represented by [CompositeType.possibleTypes]. [fields] contains exactly
+     * the `__typename` field.
      */
     class UnionType(
         override val typeName: String,
@@ -1124,7 +1105,7 @@ private data class DefaultIDValue(
 ) : Schema.IDValue
 
 private data class DefaultEnumValue(
-    override val type: Schema.EnumType,
+    override val type: Schema.TypeExpr.Named<Schema.EnumType>,
     override val enumValue: String,
 ) : Schema.EnumValue
 

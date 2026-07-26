@@ -95,10 +95,18 @@ class AssumptionsTest {
         val filter = assertIs<Schema.InputObjectValue>(node.arguments.getValue("filter"))
         assertEquals(assumptions.schema.type("Filter"), filter.type)
         val role = assertIs<Schema.EnumValue>(filter.fieldValues["role"])
-        assertEquals(assumptions.schema.type("Role"), role.type)
+        assertEquals(assumptions.schema.type("Role"), role.baseType)
+        assertEquals(
+            Schema.TypeExpr.Named(role.baseType, isNullable = false),
+            role.type,
+        )
         assertEquals("ADMIN", role.enumValue)
         val limit = assertIs<Schema.IntValue>(filter.fieldValues["limit"])
-        assertEquals(assumptions.schema.type("Int"), limit.type)
+        assertEquals(assumptions.schema.type("Int"), limit.baseType)
+        assertEquals(
+            Schema.TypeExpr.Named(Schema.IntType, isNullable = false),
+            limit.type,
+        )
         assertEquals(10, limit.intValue)
         val tags = assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
         assertEquals(
@@ -157,11 +165,12 @@ class AssumptionsTest {
         assertEquals(Schema.IDType, schema.type("ID"))
         assertEquals(setOf(user, admin), node.possibleTypes)
         assertEquals(setOf(user, admin), actor.possibleTypes)
-        assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation("Node", "User"))
-        assertEquals(Schema.TypeRelation.NARROWER_THAN, schema.relation("User", "Node"))
-        assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation("Actor", "Admin"))
-        assertEquals(Schema.TypeRelation.COPARENT, schema.relation("Node", "Actor"))
-        assertEquals(true, schema.isSpreadable("Node", "Actor"))
+        assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation(node, user))
+        assertEquals(Schema.TypeRelation.NARROWER_THAN, schema.relation(user, node))
+        assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation(actor, admin))
+        assertEquals(Schema.TypeRelation.COPARENT, schema.relation(node, actor))
+        assertEquals(setOf(node, user, admin, actor), schema.spreadableTypes(node))
+        assertEquals(true, schema.isSpreadable(node, actor))
 
         val typeName = schema.field("Node", "__typename")
         assertEquals(node, typeName.containingType)
@@ -214,13 +223,13 @@ class AssumptionsTest {
         assertEquals(filterValue, nodeArguments.fieldValues["filter"])
         assertEquals(schema.type("Filter"), filterValue.type)
         val defaultRole = assertIs<Schema.EnumValue>(filterValue.fieldValues["role"])
-        assertEquals(schema.type("Role"), defaultRole.type)
+        assertEquals(schema.type("Role"), defaultRole.baseType)
         assertEquals("MEMBER", defaultRole.enumValue)
         val defaultLimit =
             assertIs<Schema.IntValue>(
                 filterValue.fieldValues["limit"],
             )
-        assertEquals(schema.type("Int"), defaultLimit.type)
+        assertEquals(schema.type("Int"), defaultLimit.baseType)
         assertEquals(10, defaultLimit.intValue)
         val tags =
             assertIs<Schema.InputListValue>(

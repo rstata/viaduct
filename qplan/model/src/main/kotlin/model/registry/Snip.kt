@@ -146,6 +146,6 @@ private fun Schema.OutputValue?.snipOutput(
 
         is Schema.SimpleValue ->
             throw IllegalArgumentException(
-                "Cannot apply subselections to simple value of type $typeName",
+                "Cannot apply subselections to simple value of type ${baseType.typeName}",
             )
     }

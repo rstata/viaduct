@@ -16,29 +16,34 @@ class ExecutorRegistryTest {
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf<String, NodeResolver>(
-                        "User" to { id ->
-                            assertEquals("42", id.idValue)
-                            schema.objectValue(
-                                user,
-                                mapOf("id" to id),
-                            )
-                        },
+                        "User" to
+                            NodeResolver { id ->
+                                assertEquals("42", id.idValue)
+                                schema.objectValue(
+                                    user,
+                                    mapOf("id" to id),
+                                )
+                            },
                     )
                 },
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf<FieldCoordinate, FieldResolver>(
-                        FieldCoordinate("Query", "user") to { parent, arguments ->
-                            assertEquals(
-                                schema.objectValue(schema.query, emptyMap()),
-                                parent,
-                            )
-                            assertEquals(Schema.NoArguments, arguments.type)
-                            schema.objectValue(
-                                user,
-                                mapOf("id" to schema.idValue("42")),
-                            )
-                        },
+                        FieldCoordinate("Query", "user") to
+                            FieldResolver(
+                                objectFragment = emptyList(),
+                                function = { parent, arguments ->
+                                    assertEquals(
+                                        schema.objectValue(schema.query, emptyMap()),
+                                        parent,
+                                    )
+                                    assertEquals(Schema.NoArguments, arguments.type)
+                                    schema.objectValue(
+                                        user,
+                                        mapOf("id" to schema.idValue("42")),
+                                    )
+                                },
+                            ),
                     )
                 },
             )
@@ -57,11 +62,14 @@ class ExecutorRegistryTest {
         assertEquals(registry, assumptions.executorRegistry)
         assertEquals(
             user,
-            registry.nodeResolver(userType)(schema.idValue("42")),
+            registry.nodeResolver(userType).function(schema.idValue("42")),
         )
+        val (objectFragment, fieldResolverFunction) =
+            registry.fieldResolver(userField)
+        assertEquals(emptyList(), objectFragment)
         assertEquals(
             user,
-            registry.fieldResolver(userField)(
+            fieldResolverFunction(
                 query,
                 schema.argumentsValue(userField, emptyMap()),
             ),

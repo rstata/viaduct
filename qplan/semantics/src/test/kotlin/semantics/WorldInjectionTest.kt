@@ -28,23 +28,28 @@ class WorldInjectionTest {
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf<String, NodeResolver>(
-                        "User" to { id ->
-                            schema.objectValue(
-                                type = user,
-                                fields = mapOf("id" to id),
-                            )
-                        },
+                        "User" to
+                            NodeResolver { id ->
+                                schema.objectValue(
+                                    type = user,
+                                    fields = mapOf("id" to id),
+                                )
+                            },
                     )
                 },
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf<FieldCoordinate, FieldResolver>(
-                        FieldCoordinate("Query", "user") to { _, _ ->
-                            schema.objectValue(
-                                type = user,
-                                fields = mapOf("id" to schema.idValue("field")),
-                            )
-                        },
+                        FieldCoordinate("Query", "user") to
+                            FieldResolver(
+                                objectFragment = emptyList(),
+                                function = { _, _ ->
+                                    schema.objectValue(
+                                        type = user,
+                                        fields = mapOf("id" to schema.idValue("field")),
+                                    )
+                                },
+                            ),
                     )
                 },
             )
@@ -68,7 +73,7 @@ class WorldInjectionTest {
 
         val user = schema.type("User") as Schema.ObjectType
         val node =
-            registry.nodeResolver(user)(
+            registry.nodeResolver(user).function(
                 schema.idValue("node"),
             )
         assertEquals(
@@ -77,8 +82,9 @@ class WorldInjectionTest {
         )
 
         val userField = schema.field("Query", "user")
+        val (_, fieldResolverFunction) = registry.fieldResolver(userField)
         val field =
-            registry.fieldResolver(userField)(
+            fieldResolverFunction(
                 schema.objectValue(schema.query, emptyMap()),
                 schema.argumentsValue(userField, emptyMap()),
             )

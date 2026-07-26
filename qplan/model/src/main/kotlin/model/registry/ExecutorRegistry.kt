@@ -1,10 +1,37 @@
 package model.registry
 
 import model.Schema
+import model.Selection
 
-typealias NodeResolver = (Schema.IDValue) -> Schema.ObjectValue
+sealed interface Executor
 
-typealias FieldResolver = (Schema.ObjectValue, Schema.ArgumentsValue) -> Schema.ObjectValue
+sealed interface Resolver : Executor
+
+typealias NodeResolverFunction = (Schema.IDValue) -> Schema.ObjectValue
+
+typealias FieldResolverFunction =
+    (Schema.ObjectValue, Schema.ArgumentsValue) -> Schema.ObjectValue
+
+class NodeResolver(
+    val function: NodeResolverFunction,
+) : Resolver
+
+/**
+ * A field-resolver function and the parent-object fragment it requires.
+ *
+ * Destructuring yields [objectFragment] followed by [function]. This class intentionally does not
+ * define value equality because neither selection nor function equality is defined by the model.
+ */
+class FieldResolver(
+    objectFragment: List<Selection>,
+    val function: FieldResolverFunction,
+) : Resolver {
+    val objectFragment: List<Selection> = objectFragment.toList()
+
+    operator fun component1(): List<Selection> = objectFragment
+
+    operator fun component2(): FieldResolverFunction = function
+}
 
 /**
  * The schema coordinate of a field resolver.
@@ -15,7 +42,7 @@ data class FieldCoordinate(
 )
 
 /**
- * The resolver functions fixed for one reasoning world.
+ * The resolvers fixed for one reasoning world.
  *
  * Lookup is defined only for canonical definitions from the registry's schema. A missing resolver
  * at a valid coordinate throws [MissingExecutorException]. An invalid or foreign schema definition

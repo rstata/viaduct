@@ -2,15 +2,63 @@ package model.registry
 
 import model.Fragment
 import model.Schema
+import model.Selection
 
 sealed interface Executor
 
-sealed interface Resolver : Executor
+/**
+ * A node in the registry's resolver-demand graph.
+ *
+ * [mayDemandFrom] contains the resolvers whose coordinates are implicated by selections reachable
+ * from this resolver's object fragment. [mayBeDemandedBy] is the transpose adjacency list. The
+ * relation models possible propagation of resolver demand, not every input or prerequisite of
+ * resolver invocation. Both properties are established when the resolver is supplied to
+ * [ExecutorRegistry.of] and are undefined before then.
+ */
+sealed class Resolver : Executor {
+    private var demandGraph: DemandGraph? = null
+
+    val mayDemandFrom: Set<Resolver>
+        get() = demandGraph().mayDemandFrom
+
+    val mayBeDemandedBy: Set<Resolver>
+        get() = demandGraph().mayBeDemandedBy
+
+    internal fun requireUnregistered() {
+        require(demandGraph == null) {
+            "A resolver can belong to only one executor registry"
+        }
+    }
+
+    internal fun establishDemandEdges(
+        mayDemandFrom: Set<Resolver>,
+        mayBeDemandedBy: Set<Resolver>,
+    ) {
+        requireUnregistered()
+        demandGraph =
+            DemandGraph(
+                mayDemandFrom = mayDemandFrom.toSet(),
+                mayBeDemandedBy = mayBeDemandedBy.toSet(),
+            )
+    }
+
+    private fun demandGraph(): DemandGraph =
+        checkNotNull(demandGraph) {
+            "Resolver demand edges are established by ExecutorRegistry.of"
+        }
+
+    private class DemandGraph(
+        val mayDemandFrom: Set<Resolver>,
+        val mayBeDemandedBy: Set<Resolver>,
+    )
+}
 
 /**
  * The selection-independent part of a node resolver.
  *
  * Applying requested selections is a separate projection of the returned object with [snip].
+ * The [Schema.IDValue] is an engine-supplied addressing input and does not create a resolver-demand
+ * edge. Because a node resolver has no object fragment, its [Resolver.mayDemandFrom] set is empty.
  */
 typealias NodeResolverFunction = (Schema.IDValue) -> Schema.ObjectValue
 
@@ -43,10 +91,13 @@ typealias FieldResolverFunction =
 
 class NodeResolver(
     val function: NodeResolverFunction,
-) : Resolver
+) : Resolver()
 
 /**
  * A selection-independent field-resolver function and the parent-object fragment it requires.
+ *
+ * Selections reachable from [objectFragment] determine this resolver's
+ * [Resolver.mayDemandFrom] edges.
  *
  * Destructuring yields [objectFragment] followed by [function]. This class intentionally does not
  * define value equality because neither fragment nor function equality is defined by the model.
@@ -54,7 +105,7 @@ class NodeResolver(
 class FieldResolver(
     val objectFragment: Fragment,
     val function: FieldResolverFunction,
-) : Resolver {
+) : Resolver() {
     operator fun component1(): Fragment = objectFragment
 
     operator fun component2(): FieldResolverFunction = function
@@ -76,6 +127,30 @@ class FieldResolver(
  *
  * Every field resolver's object-fragment type is canonical and equals the registered field's
  * containing type. No field resolver is registered for `__typename`.
+ *
+ * ### Invariant: registry-resolver-demand-dag
+ *
+ * Each registered [Resolver] occurs at exactly one resolver coordinate. A field resolver's
+ * [Resolver.mayDemandFrom] set contains exactly the registered node and field resolvers directly
+ * implicated by any [Selection] reachable from its object fragment; a node resolver's set is empty.
+ * [Resolver.mayBeDemandedBy] is exactly the transpose of [Resolver.mayDemandFrom], and this demand
+ * relation is acyclic.
+ *
+ * ### Direct Implication
+ *
+ * A [Selection] directly implicates the node resolver, when present, of every object type in its
+ * possible types. For each of those possible types, it also directly implicates the field resolver,
+ * when present, at the coordinate formed from that concrete type and the selection key's field
+ * name. A selection or fragment implicates every resolver directly implicated by any reachable
+ * selection.
+ *
+ * ### Demand Closure
+ *
+ * For a set of resolvers directly implicated by an external selection forest, the resolver demand
+ * implied by that forest is the least superset closed under [Resolver.mayDemandFrom]. An edge is
+ * possible rather than unconditional because the selections that induce it carry type conditions.
+ * This graph does not model every invocation input, value provenance, or scheduling prerequisite.
+ * In particular, the `id` supplied to a node resolver is an engine bridge and creates no edge.
  *
  * ### Lookup
  *
@@ -111,7 +186,8 @@ interface ExecutorRegistry {
          * field resolver's object-fragment type is foreign to [schema] or differs from the
          * registered field's containing type; when a node-resolver type lacks a canonical,
          * argumentless, ID-typed `id` field; or when a field resolver is registered for that `id`
-         * field or for `__typename`
+         * field or for `__typename`; when one resolver object occurs at multiple coordinates or
+         * already belongs to a registry; or when the resolver demand relation contains a cycle
          */
         fun of(
             schema: Schema,
@@ -148,6 +224,12 @@ private class DefaultExecutorRegistry(
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
 ) : ExecutorRegistry {
     init {
+        val resolvers = nodeResolvers.values + fieldResolvers.values
+        require(resolvers.toSet().size == resolvers.size) {
+            "Each resolver object must occur at exactly one resolver coordinate"
+        }
+        resolvers.forEach(Resolver::requireUnregistered)
+
         val nodeIdFields =
             nodeResolvers.keys.mapTo(mutableSetOf()) { type ->
                 validateCanonicalType(type)
@@ -186,6 +268,32 @@ private class DefaultExecutorRegistry(
                     "parent type ${field.containingType.typeName} at " +
                     "$typeName/${field.fieldName}"
             }
+        }
+
+        val mayDemandFrom =
+            buildMap<Resolver, Set<Resolver>> {
+                nodeResolvers.values.forEach { resolver ->
+                    put(resolver, emptySet())
+                }
+                fieldResolvers.values.forEach { resolver ->
+                    put(resolver, implicatedResolvers(resolver.objectFragment))
+                }
+            }
+        requireAcyclic(mayDemandFrom)
+        val mayBeDemandedBy =
+            resolvers.associateWith { mutableSetOf<Resolver>() }
+                .also { transpose ->
+                    mayDemandFrom.forEach { (demander, demandedResolvers) ->
+                        demandedResolvers.forEach { demandedResolver ->
+                            transpose.getValue(demandedResolver).add(demander)
+                        }
+                    }
+                }
+        resolvers.forEach { resolver ->
+            resolver.establishDemandEdges(
+                mayDemandFrom = mayDemandFrom.getValue(resolver),
+                mayBeDemandedBy = mayBeDemandedBy.getValue(resolver),
+            )
         }
     }
 
@@ -226,5 +334,51 @@ private class DefaultExecutorRegistry(
         require(schema.field(typeName, field.fieldName) == field) {
             "$typeName/${field.fieldName} is not the canonical $role in this registry's schema"
         }
+    }
+
+    private fun implicatedResolvers(fragment: Fragment): Set<Resolver> =
+        buildSet {
+            fragment.subselections.forEach { selection ->
+                addImplicatedBy(selection)
+            }
+        }
+
+    private fun MutableSet<Resolver>.addImplicatedBy(selection: Selection) {
+        selection.possibleTypes.forEach { possibleType ->
+            nodeResolvers[possibleType]?.let(::add)
+            possibleType.fields[selection.key.field.fieldName]
+                ?.let(fieldResolvers::get)
+                ?.let(::add)
+        }
+        selection.subselections.forEach { subselection ->
+            addImplicatedBy(subselection)
+        }
+    }
+
+    private fun requireAcyclic(mayDemandFrom: Map<Resolver, Set<Resolver>>) {
+        val state = mutableMapOf<Resolver, VisitState>()
+
+        fun visit(resolver: Resolver) {
+            when (state[resolver]) {
+                VisitState.VISITING ->
+                    throw IllegalArgumentException(
+                        "Resolver object fragments contain a demand cycle",
+                    )
+
+                VisitState.VISITED -> return
+                null -> Unit
+            }
+
+            state[resolver] = VisitState.VISITING
+            mayDemandFrom.getValue(resolver).forEach(::visit)
+            state[resolver] = VisitState.VISITED
+        }
+
+        mayDemandFrom.keys.forEach(::visit)
+    }
+
+    private enum class VisitState {
+        VISITING,
+        VISITED,
     }
 }

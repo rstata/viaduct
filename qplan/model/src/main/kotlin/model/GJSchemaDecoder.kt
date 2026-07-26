@@ -560,45 +560,34 @@ private class DecodedSchema(
             ?: throw Schema.MissingSchemaElementException(typeName, fieldName)
     }
 
-    override fun possibleObjectTypes(typeName: String): Set<String>? =
-        (type(typeName) as? Schema.CompositeType)
-            ?.possibleTypes
-            ?.mapTo(linkedSetOf()) { it.typeName }
-
-    override fun spreadableTypes(parentTypeName: String): Set<String>? {
-        val parentType = type(parentTypeName) as? Schema.CompositeType ?: return null
-        return types.values
+    override fun spreadableTypes(
+        parentType: Schema.CompositeType,
+    ): Set<Schema.CompositeType> =
+        types.values
             .filterIsInstance<Schema.CompositeType>()
             .filter { candidate ->
                 candidate == parentType ||
                     candidate.possibleTypes.any(parentType.possibleTypes::contains)
-            }.mapTo(linkedSetOf()) { it.typeName }
-    }
+            }.toCollection(linkedSetOf())
 
     override fun isSpreadable(
-        parentTypeName: String,
-        fragmentTypeName: String,
-    ): Boolean? {
-        val parentType = type(parentTypeName) as? Schema.CompositeType ?: return null
-        val fragmentType = type(fragmentTypeName) as? Schema.CompositeType ?: return null
-        return fragmentType == parentType ||
+        parentType: Schema.CompositeType,
+        fragmentType: Schema.CompositeType,
+    ): Boolean =
+        fragmentType == parentType ||
             fragmentType.possibleTypes.any(parentType.possibleTypes::contains)
-    }
 
     override fun relation(
-        aTypeName: String,
-        bTypeName: String,
-    ): Schema.TypeRelation? {
-        val a = type(aTypeName) as? Schema.CompositeType ?: return null
-        val b = type(bTypeName) as? Schema.CompositeType ?: return null
-        return when {
+        a: Schema.CompositeType,
+        b: Schema.CompositeType,
+    ): Schema.TypeRelation =
+        when {
             a == b -> Schema.TypeRelation.SAME
             isNominallyWider(a, b) -> Schema.TypeRelation.WIDER_THAN
             isNominallyWider(b, a) -> Schema.TypeRelation.NARROWER_THAN
             a.possibleTypes.any(b.possibleTypes::contains) -> Schema.TypeRelation.COPARENT
             else -> Schema.TypeRelation.NONE
         }
-    }
 
     private fun isNominallyWider(
         wider: Schema.CompositeType,

@@ -189,6 +189,30 @@ interface Schema {
     fun inputListValue(values: List<InputValue?>): InputListValue =
         DefaultInputListValue(values.toList())
 
+    fun outputListValue(values: List<OutputValue?>): ListValue =
+        DefaultListValue(values.toList())
+
+    /**
+     * Constructs a possibly partial object value whose fields belong to [type].
+     *
+     * A resolver may omit fields that it did not resolve. A present field may map to null.
+     *
+     * @throws IllegalArgumentException when a supplied field name does not belong to [type]
+     */
+    fun objectValue(
+        type: ObjectType,
+        fields: Map<String, OutputValue?>,
+    ): ObjectValue {
+        require(fields.keys.all(type.fields::containsKey)) {
+            val unknownFields = fields.keys - type.fields.keys
+            "${type.typeName} has no output fields named ${unknownFields.sorted().joinToString()}"
+        }
+        return DefaultObjectValue(
+            type = type,
+            outputObjectFields = FieldValues(type, fields.toMap()),
+        )
+    }
+
     /**
      * Constructs an input-object value by converting each supplied host value according to its
      * schema field's [InputField.type].
@@ -1041,6 +1065,16 @@ private data class DefaultEnumValue(
 private data class DefaultInputListValue(
     override val inputListValues: List<Schema.InputValue?>,
 ) : Schema.InputListValue
+
+private data class DefaultListValue(
+    override val outputListValues: List<Schema.OutputValue?>,
+) : Schema.ListValue
+
+private data class DefaultObjectValue(
+    override val type: Schema.ObjectType,
+    override val outputObjectFields:
+        Schema.FieldValues<Schema.ObjectType, Schema.OutputValue>,
+) : Schema.ObjectValue
 
 private data class DefaultInputObjectValue(
     override val type: Schema.InputObjectType,

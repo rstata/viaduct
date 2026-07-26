@@ -3,7 +3,6 @@ package model
 import graphql.schema.GraphQLSchema
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
-import jakarta.inject.Singleton
 
 /**
  * A [Schema] decoded from GraphQL SDL.
@@ -12,7 +11,6 @@ import jakarta.inject.Singleton
  * created through this exact canonical graph. The retained GraphQL Java schema is used by
  * [Assumptions] to parse and validate selections without decoding a second model schema.
  */
-@Singleton
 class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,
     private val decodedSchema: Schema,

@@ -1,6 +1,7 @@
 package model
 
 import model.spec.SpecSelection
+import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -11,7 +12,7 @@ import kotlin.test.assertIs
 class AssumptionsTest {
     @Test
     fun `preserves an unbound fragment variable as a variable value`() {
-        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
         val (_, selections) =
             assumptions.selectionsFrom(
@@ -33,18 +34,26 @@ class AssumptionsTest {
 
     @Test
     fun `instantiates a bound fragment variable with its binding`() {
-        val schema = GJSchema.fromSDL(SCHEMA_SDL)
-        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                variableValues = { schema ->
+                    val filterType = schema.type("Filter") as Schema.InputObjectType
+                    mapOf(
+                        "filter" to
+                            schema.inputObjectValue(
+                                type = filterType,
+                                fields = mapOf("limit" to schema.intValue(5)),
+                            ),
+                    )
+                },
+            )
+        val assumptions = world.assumptions
         val filter =
-            schema.inputObjectValue(
-                type = filterType,
-                fields = mapOf("limit" to schema.intValue(5)),
+            assertIs<Schema.InputObjectValue>(
+                assumptions.variableValues["filter"],
             )
-        val assumptions =
-            Assumptions.of(
-                schema = schema,
-                bindings = mapOf("filter" to filter),
-            )
+        val filterType = world.schema.type("Filter")
 
         val (_, selections) =
             assumptions.selectionsFrom(
@@ -65,7 +74,7 @@ class AssumptionsTest {
 
     @Test
     fun `parses and validates a named fragment against the retained schema`() {
-        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
         val (typeCondition, selections) =
             assumptions.selectionsFrom(
@@ -103,7 +112,7 @@ class AssumptionsTest {
 
     @Test
     fun `rejects a named fragment that is invalid for the retained schema`() {
-        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
         val exception =
             assertFailsWith<IllegalArgumentException> {
@@ -121,14 +130,16 @@ class AssumptionsTest {
 
     @Test
     fun `constructs assumptions from a schema and qualified variable values`() {
-        val suppliedSchema = GJSchema.fromSDL(SCHEMA_SDL)
-        val assumptions =
-            Assumptions.of(
-                schema = suppliedSchema,
-                bindings = mapOf("failed" to Schema.ErrorValue),
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                variableValues = {
+                    mapOf("failed" to Schema.ErrorValue)
+                },
             )
+        val assumptions = world.assumptions
 
-        assertEquals(suppliedSchema, assumptions.schema)
+        assertEquals(world.schema, assumptions.schema)
         assertEquals(Schema.ErrorValue, assumptions.variableValues["failed"])
 
         val schema = assumptions.schema
@@ -264,7 +275,7 @@ class AssumptionsTest {
 
     @Test
     fun `input-like factories convert host values according to the schema`() {
-        val schema = GJSchema.fromSDL(SCHEMA_SDL)
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val filter =
             schema.inputObjectValue(
@@ -313,7 +324,7 @@ class AssumptionsTest {
 
     @Test
     fun `input-like factories reject values that do not match the schema`() {
-        val schema = GJSchema.fromSDL(SCHEMA_SDL)
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val otherRole =
             schema.enumValue(
@@ -357,7 +368,7 @@ class AssumptionsTest {
     fun `rejects non-standard scalar declarations`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {
-                GJSchema.fromSDL(
+                TestWorld.fromSDL(
                     schemaSDL =
                         """
                         scalar Date
@@ -376,7 +387,7 @@ class AssumptionsTest {
     fun `rejects non-standard directive definitions`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {
-                GJSchema.fromSDL(
+                TestWorld.fromSDL(
                     schemaSDL =
                         """
                         directive @authenticated on FIELD_DEFINITION

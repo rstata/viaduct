@@ -1,5 +1,6 @@
 package model
 
+import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -7,40 +8,23 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class VariableValuesTest {
-    private val schema =
-        GJSchema.fromSDL(
-            """
-            input Variables {
-              count: Int
-              nothing: Int
-              nested: [Int]
-            }
-
-            input Input {
-              value: Int
-            }
-
-            type Query {
-              value: Int
-            }
-            """.trimIndent(),
-        )
-    private val variablesType = schema.type("Variables") as Schema.InputObjectType
-    private val inputType = schema.type("Input") as Schema.InputObjectType
-
     @Test
     fun `instantiates bound variables recursively and preserves unbound variables`() {
-        val unresolved = schema.variableValue("unresolved")
-        val other = schema.variableValue("other")
-        val variableValues =
-            Assumptions
-                .of(
-                    schema,
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                variableValues = { schema ->
                     mapOf(
                         "count" to schema.intValue(7),
                         "nothing" to null,
-                    ),
-                ).variableValues
+                    )
+                },
+            )
+        val schema = world.schema
+        val variablesType = schema.type("Variables") as Schema.InputObjectType
+        val unresolved = schema.variableValue("unresolved")
+        val other = schema.variableValue("other")
+        val variableValues = world.assumptions.variableValues
         val value =
             schema.inputObjectValue(
                 type = variablesType,
@@ -94,25 +78,31 @@ class VariableValuesTest {
 
     @Test
     fun `binding validation reports every nested variable once`() {
-        val first = schema.variableValue("first")
-        val second = schema.variableValue("second")
-        val third = schema.variableValue("third")
+        lateinit var first: Schema.VariableValue
+        lateinit var second: Schema.VariableValue
+        lateinit var third: Schema.VariableValue
 
         val exception =
             assertFailsWith<MissingVariablesException> {
-                Assumptions.of(
-                    schema,
-                    mapOf(
-                        "list" to
-                            schema.inputListValue(
-                                listOf(first, second, schema.variableValue("first")),
-                            ),
-                        "object" to
-                            schema.inputObjectValue(
-                                type = inputType,
-                                fields = mapOf("value" to third),
-                            ),
-                    ),
+                TestWorld.fromSDL(
+                    schemaSDL = SCHEMA_SDL,
+                    variableValues = { schema ->
+                        val inputType = schema.type("Input") as Schema.InputObjectType
+                        first = schema.variableValue("first")
+                        second = schema.variableValue("second")
+                        third = schema.variableValue("third")
+                        mapOf(
+                            "list" to
+                                schema.inputListValue(
+                                    listOf(first, second, schema.variableValue("first")),
+                                ),
+                            "object" to
+                                schema.inputObjectValue(
+                                    type = inputType,
+                                    fields = mapOf("value" to third),
+                                ),
+                        )
+                    },
                 )
             }
 
@@ -121,5 +111,24 @@ class VariableValuesTest {
             exception.variableValues.toSet(),
         )
         assertEquals(3, exception.variableValues.size)
+    }
+
+    private companion object {
+        val SCHEMA_SDL =
+            """
+            input Variables {
+              count: Int
+              nothing: Int
+              nested: [Int]
+            }
+
+            input Input {
+              value: Int
+            }
+
+            type Query {
+              value: Int
+            }
+            """.trimIndent()
     }
 }

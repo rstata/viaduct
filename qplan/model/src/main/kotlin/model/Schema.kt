@@ -3,8 +3,8 @@ package model
 /**
  * A finite GraphQL schema view used as an input to the correctness model.
  *
- * Exactly one instance is supplied by [Assumptions.schema] for a reasoning world. Concrete
- * implementations use `@Singleton` to record this modeling assumption for dependency injection.
+ * Exactly one instance is supplied by [Assumptions.schema] for a reasoning world.
+ * Dependency-injection composition scopes that schema binding as a singleton.
  *
  * Definitions are canonical within this schema: each type name, field coordinate, input-field
  * coordinate, and argument coordinate identifies exactly one definition object. Definition

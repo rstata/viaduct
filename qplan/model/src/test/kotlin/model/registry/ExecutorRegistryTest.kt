@@ -1,8 +1,7 @@
 package model.registry
 
-import model.Assumptions
-import model.GJSchema
 import model.Schema
+import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -11,7 +10,39 @@ import kotlin.test.assertIs
 class ExecutorRegistryTest {
     @Test
     fun `looks up and invokes node and field resolvers by schema coordinate`() {
-        val schema = GJSchema.fromSDL(SCHEMA_SDL)
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                nodeResolvers = { schema ->
+                    val user = schema.type("User") as Schema.ObjectType
+                    mapOf<String, NodeResolver>(
+                        "User" to { id ->
+                            assertEquals("42", id.idValue)
+                            schema.objectValue(
+                                user,
+                                mapOf("id" to id),
+                            )
+                        },
+                    )
+                },
+                fieldResolvers = { schema ->
+                    val user = schema.type("User") as Schema.ObjectType
+                    mapOf<FieldCoordinate, FieldResolver>(
+                        FieldCoordinate("Query", "user") to { parent, arguments ->
+                            assertEquals(
+                                schema.objectValue(schema.query, emptyMap()),
+                                parent,
+                            )
+                            assertEquals(Schema.NoArguments, arguments.type)
+                            schema.objectValue(
+                                user,
+                                mapOf("id" to schema.idValue("42")),
+                            )
+                        },
+                    )
+                },
+            )
+        val schema = world.schema
         val query = schema.objectValue(schema.query, emptyMap())
         val userType = schema.type("User") as Schema.ObjectType
         val user =
@@ -20,31 +51,8 @@ class ExecutorRegistryTest {
                 mapOf("id" to schema.idValue("42")),
             )
         val userField = schema.field("Query", "user")
-        val registry =
-            ExecutorRegistry.of(
-                schema = schema,
-                nodeResolvers =
-                    mapOf(
-                        "User" to { id ->
-                            assertEquals("42", id.idValue)
-                            user
-                        },
-                    ),
-                fieldResolvers =
-                    mapOf(
-                        FieldCoordinate("Query", "user") to { parent, arguments ->
-                            assertEquals(query, parent)
-                            assertEquals(Schema.NoArguments, arguments.type)
-                            user
-                        },
-                    ),
-            )
-        val assumptions =
-            Assumptions.of(
-                schema = schema,
-                bindings = emptyMap(),
-                executorRegistry = registry,
-            )
+        val registry = world.executorRegistry
+        val assumptions = world.assumptions
 
         assertEquals(registry, assumptions.executorRegistry)
         assertEquals(
@@ -62,8 +70,9 @@ class ExecutorRegistryTest {
 
     @Test
     fun `distinguishes missing executors from foreign schema definitions`() {
-        val schema = GJSchema.fromSDL(SCHEMA_SDL)
-        val registry = ExecutorRegistry.empty(schema)
+        val world = TestWorld.fromSDL(SCHEMA_SDL)
+        val schema = world.schema
+        val registry = world.executorRegistry
         val userType = schema.type("User") as Schema.ObjectType
         val userField = schema.field("Query", "user")
 
@@ -81,7 +90,7 @@ class ExecutorRegistryTest {
         assertEquals("Query", missingField.typeName)
         assertEquals("user", missingField.fieldName)
 
-        val foreignSchema = GJSchema.fromSDL(SCHEMA_SDL)
+        val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
         assertFailsWith<IllegalArgumentException> {
             registry.nodeResolver(
                 foreignSchema.type("User") as Schema.ObjectType,
@@ -182,8 +191,9 @@ class ExecutorRegistryTest {
     }
 
     private class Fixture {
-        val schema = GJSchema.fromSDL(SCHEMA_SDL)
-        val assumptions = Assumptions.of(schema, emptyMap())
+        private val world = TestWorld.fromSDL(SCHEMA_SDL)
+        val schema = world.schema
+        val assumptions = world.assumptions
         val user = schema.type("User") as Schema.ObjectType
 
         fun selection(

@@ -14,7 +14,11 @@ The [`model` project](./model/AGENTS.md) defines the carrier algebra and its inv
 
 The Kotlin code must compile, but it is not intended to become running production code. Read declarations as mathematical sets, values, functions, and relations unless their documentation gives them operational semantics.
 
-`Assumptions` contains the schema, variable bindings, and executors stipulated for one reasoning world. Each reasoning exercise has exactly one `Assumptions` and one `Schema`, as emphasized by `@Singleton` on their concrete implementations. These are mathematical globals rather than JVM-global values: code receives them explicitly, constructs every `Schema.Value` through that schema's factories, and does not combine values or definitions from different reasoning exercises.
+`Assumptions` contains the schema, variable bindings, and executors stipulated for one reasoning world. Each reasoning exercise has exactly one `Assumptions` and one `Schema`; dependency-injection composition scopes their public bindings as singletons. These are mathematical globals rather than JVM-global values: code receives them explicitly, constructs every `Schema.Value` through that schema's factories, and does not combine values or definitions from different reasoning exercises.
+
+Treat one dependency injector as one reasoning world. Qualify raw world inputs with `@SchemaSDL`, `@VariableValues`, `@NodeResolvers`, or `@FieldResolvers`; construct variable values and resolver functions from that injector's one `GJSchema`; and scope the public `GJSchema`, `ExecutorRegistry`, and `Assumptions` bindings as singletons. DI-framework modules belong in test or application composition code, never a main source set in this repository.
+
+Tests that need a reasoning world must construct it through `model.testing.TestWorld`; do not call `GJSchema.fromSDL`, `Assumptions.of`, or `ExecutorRegistry.of` directly from an ordinary test source set.
 
 Every element of a reasoning world's schema has exactly one canonical definition object. Schema definition classes retain the default reference-based `Any.equals` and `Any.hashCode`, so `a == b` exactly when `a` and `b` represent the same schema element. Compare schema definitions with `==`, `!=`, and ordinary collection operations such as `contains`; do not use identity-specific operators, hashes, or collection scans.
 

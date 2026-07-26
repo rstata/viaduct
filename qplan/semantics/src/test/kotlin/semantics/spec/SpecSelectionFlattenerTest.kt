@@ -1,10 +1,7 @@
 package semantics.spec
 
-import com.google.inject.AbstractModule
-import com.google.inject.Guice
-import model.Assumptions
-import model.GJSchema
 import model.Schema
+import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -24,7 +21,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            flattener(fixture.assumptions).flatten(
+            fixture.flattener.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -51,7 +48,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val release =
-            flattener(fixture.assumptions)
+            fixture.flattener
                 .flatten(typeInScope, selectionSet)
                 .single()
         val field = fixture.assumptions.schema.field("Query", "release")
@@ -91,7 +88,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            flattener(fixture.assumptions).flatten(
+            fixture.flattener.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -125,7 +122,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            flattener(fixture.assumptions).flatten(
+            fixture.flattener.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -155,7 +152,7 @@ class SpecSelectionFlattenerTest {
                 """.trimIndent(),
             )
         val result =
-            flattener(fixture.assumptions).flatten(
+            fixture.flattener.flatten(
                 typeInScope = typeInScope,
                 selectionSet = selectionSet,
             )
@@ -165,22 +162,11 @@ class SpecSelectionFlattenerTest {
         assertTrue(x.possibleTypes.isEmpty())
     }
 
-    private fun flattener(assumptions: Assumptions): SpecSelectionFlattener {
-        val injector =
-            Guice.createInjector(
-                object : AbstractModule() {
-                    override fun configure() {
-                        bind(Assumptions::class.java).toInstance(assumptions)
-                    }
-                },
-            )
-
-        return injector.getInstance(SpecSelectionFlattener::class.java)
-    }
-
     private class SchemaFixture {
-        val assumptions = Assumptions.of(GJSchema.fromSDL(SCHEMA_SDL), emptyMap())
-        val schema = assumptions.schema
+        private val world = TestWorld.fromSDL(SCHEMA_SDL)
+        val assumptions = world.assumptions
+        val schema = world.schema
+        val flattener = world.instance(SpecSelectionFlattener::class.java)
 
         val query = schema.query
         val dog = schema.type("Dog") as Schema.ObjectType

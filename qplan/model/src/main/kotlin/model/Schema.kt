@@ -165,7 +165,7 @@ interface Schema {
             "$value is not a value of ${type.typeName}"
         }
         return DefaultEnumValue(
-            type = TypeExpr.Named(type, isNullable = false),
+            type = type,
             enumValue = value,
         )
     }
@@ -176,16 +176,9 @@ interface Schema {
     fun outputListValue(values: List<OutputValue?>): ListValue =
         DefaultListValue(values.toList())
 
-    /**
-     * Constructs a list engine result with the complete output [type].
-     *
-     * @throws IllegalArgumentException when [values] contains null and [type]'s element type is
-     * non-null
-     */
-    fun listEngineResult(
-        type: TypeExpr.List<OutputType>,
-        values: List<EngineResult?>,
-    ): ListEngineResult = ListEngineResult.create(type, values)
+    /** Constructs a list engine result whose elements are typed by their surrounding schema context. */
+    fun listEngineResult(values: List<EngineResult?>): ListEngineResult =
+        ListEngineResult.create(values)
 
     /**
      * Constructs a possibly partial object value whose keys belong to [type].
@@ -381,7 +374,7 @@ interface Schema {
             is EnumType ->
                 when (value) {
                     is EnumValue -> {
-                        if (value.baseType != type) {
+                        if (value.type != type) {
                             throw inputValueClassCast(path, type, value)
                         }
                         value
@@ -459,9 +452,7 @@ interface Schema {
     }
 
     sealed interface SimpleValue : InputValue, OutputValue, EngineResult {
-        override val type: TypeExpr.Named<SimpleType>
-        override val baseType: SimpleType
-            get() = type.baseType
+        val type: SimpleType
     }
 
     /**
@@ -472,19 +463,19 @@ interface Schema {
      * about schemas that do not have custom scalars.
      */
     sealed interface ScalarValue : SimpleValue {
-        override val type: TypeExpr.Named<ScalarType>
+        override val type: ScalarType
     }
 
     sealed interface IntValue : ScalarValue {
-        override val type: TypeExpr.Named<IntType>
-            get() = TypeExpr.Named(IntType, isNullable = false)
+        override val type: IntType
+            get() = IntType
 
         val intValue: Int
     }
 
     sealed interface FloatValue : ScalarValue {
-        override val type: TypeExpr.Named<FloatType>
-            get() = TypeExpr.Named(FloatType, isNullable = false)
+        override val type: FloatType
+            get() = FloatType
 
         /**
          * ### Invariant: schema-finite-float
@@ -495,34 +486,34 @@ interface Schema {
     }
 
     sealed interface StringValue : ScalarValue {
-        override val type: TypeExpr.Named<StringType>
-            get() = TypeExpr.Named(StringType, isNullable = false)
+        override val type: StringType
+            get() = StringType
 
         val stringValue: String
     }
 
     sealed interface BooleanValue : ScalarValue {
-        override val type: TypeExpr.Named<BooleanType>
-            get() = TypeExpr.Named(BooleanType, isNullable = false)
+        override val type: BooleanType
+            get() = BooleanType
 
         val booleanValue: Boolean
     }
 
     sealed interface IDValue : ScalarValue {
-        override val type: TypeExpr.Named<IDType>
-            get() = TypeExpr.Named(IDType, isNullable = false)
+        override val type: IDType
+            get() = IDType
 
         val idValue: String
     }
 
     sealed interface EnumValue : SimpleValue {
-        override val type: TypeExpr.Named<EnumType>
-
         /**
          * ### Invariant: schema-enum-membership
          *
-         * This value is a member of [baseType].[EnumType.values].
+         * [type] is the canonical enum definition through which this value was constructed, and
+         * [enumValue] is a member of [type].[EnumType.values].
          */
+        override val type: EnumType
         val enumValue: String
     }
 
@@ -1185,7 +1176,7 @@ private data class DefaultIDValue(
 ) : Schema.IDValue
 
 private data class DefaultEnumValue(
-    override val type: Schema.TypeExpr.Named<Schema.EnumType>,
+    override val type: Schema.EnumType,
     override val enumValue: String,
 ) : Schema.EnumValue
 

@@ -10,37 +10,31 @@ package model
  * smaller value. Kotlin object identity, reference sharing, self-reference, and cycles are not
  * part of this model.
  *
- * ### Invariant: engine-result-nullability
+ * ### Invariant: oer-result-nullability
  *
- * A null child occurs only at a nullable type expression. For an [ObjectEngineResult] cell, the
- * child's expression is [Schema.ObjectKey.field]'s [Schema.OutputField.type]. For a
- * [ListEngineResult] element, it is [Schema.TypeExpr.List.elementType]. Object lookup and list
- * construction enforce this invariant.
+ * A null [ObjectEngineResult] cell occurs only when its [Schema.ObjectKey.field] has a nullable
+ * [Schema.OutputField.type]. Object lookup enforces this invariant. List elements are typed by
+ * their surrounding schema context rather than by the [ListEngineResult] carrier.
  *
  * ### Equality
  *
  * Implementations compare result values structurally over their documented properties; schema
  * definitions within those properties use the canonical `==` equality documented by [Schema].
  */
-sealed interface EngineResult {
-    val type: Schema.TypeExpr<Schema.OutputType>
-
-    val baseType: Schema.OutputType
-        get() = type.baseType
-}
+sealed interface EngineResult
 
 /**
  * An object result similar to the result of the GraphQL ExecuteSelectionSet algorithm.
  *
  * [keys] exposes the finite domain of present [Schema.ObjectKey] instances. Two object results are
- * equal exactly when their [type] expressions and key sets match and [fetch] returns equal [Cell]
- * values for every present key.
+ * equal exactly when their concrete [type] and key sets match and [fetch] returns equal [Cell] values
+ * for every present key.
  *
  * ### Invariant: oer-present-key-validity
  *
  * Every present [Schema.ObjectKey] has a canonical [Schema.ObjectKey.field] whose
  * [Schema.OutputField.containingType] is a concrete [Schema.ObjectType], never an abstract
- * [Schema.InterfaceType] or [Schema.UnionType], and that concrete type equals [baseType]. Its
+ * [Schema.InterfaceType] or [Schema.UnionType], and that concrete type equals [type]. Its
  * argument fields are fully coerced to non-variable values: no argument recursively contains a
  * [Schema.VariableValue]. Consequently, the identity of keys present in an OER is canonical and
  * does not depend on conservative symbolic equality.
@@ -51,9 +45,7 @@ sealed interface EngineResult {
  * [fetch] returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
  */
 sealed class ObjectEngineResult : EngineResult {
-    abstract override val type: Schema.TypeExpr.Named<Schema.ObjectType>
-    final override val baseType: Schema.ObjectType
-        get() = type.baseType
+    abstract val type: Schema.ObjectType
 
     /**
      * The finite set of keys present in this result.
@@ -104,35 +96,19 @@ sealed class ObjectEngineResult : EngineResult {
 }
 
 class ListEngineResult private constructor(
-    override val type: Schema.TypeExpr.List<Schema.OutputType>,
     private val elements: List<EngineResult?>,
 ) : EngineResult,
     List<EngineResult?> by elements {
-    init {
-        if (!type.elementType.isNullable) {
-            require(elements.none { it == null }) {
-                "Non-null list element type cannot contain a null engine result"
-            }
-        }
-    }
-
     override fun equals(other: Any?): Boolean =
         other is ListEngineResult &&
-            type == other.type &&
             elements == other.elements
 
-    override fun hashCode(): Int = 31 * type.hashCode() + elements.hashCode()
+    override fun hashCode(): Int = elements.hashCode()
 
     override fun toString(): String = elements.toString()
 
     internal companion object {
-        fun create(
-            type: Schema.TypeExpr.List<Schema.OutputType>,
-            elements: List<EngineResult?>,
-        ): ListEngineResult =
-            ListEngineResult(
-                type = type,
-                elements = elements.toList(),
-            )
+        fun create(elements: List<EngineResult?>): ListEngineResult =
+            ListEngineResult(elements.toList())
     }
 }

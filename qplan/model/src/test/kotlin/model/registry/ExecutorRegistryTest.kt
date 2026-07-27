@@ -27,7 +27,7 @@ class ExecutorRegistryTest {
                                 assertEquals("42", id.idValue)
                                 schema.objectValue(
                                     user,
-                                    mapOf("id" to id),
+                                    mapOf(schema.key(user, "id") to id),
                                 )
                             },
                     )
@@ -52,7 +52,9 @@ class ExecutorRegistryTest {
                                     assertEquals(Schema.NoArguments, arguments.type)
                                     schema.objectValue(
                                         user,
-                                        mapOf("id" to schema.idValue("42")),
+                                        mapOf(
+                                            schema.key(user, "id") to schema.idValue("42"),
+                                        ),
                                     )
                                 },
                             ),
@@ -65,7 +67,7 @@ class ExecutorRegistryTest {
         val user =
             schema.objectValue(
                 userType,
-                mapOf("id" to schema.idValue("42")),
+                mapOf(schema.key(userType, "id") to schema.idValue("42")),
             )
         val userField = schema.field("Query", "user")
         val registry = world.executorRegistry
@@ -387,26 +389,26 @@ class ExecutorRegistryTest {
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("friend"),
-                    "name" to fixture.schema.stringValue("Friend"),
+                    fixture.key("id") to fixture.schema.idValue("friend"),
+                    fixture.key("name") to fixture.schema.stringValue("Friend"),
                 ),
             )
         val peer =
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("peer"),
-                    "name" to fixture.schema.stringValue("Peer"),
+                    fixture.key("id") to fixture.schema.idValue("peer"),
+                    fixture.key("name") to fixture.schema.stringValue("Peer"),
                 ),
             )
         val source =
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("target"),
-                    "name" to fixture.schema.stringValue("Target"),
-                    "friend" to friend,
-                    "peers" to fixture.schema.outputListValue(listOf(peer, null)),
+                    fixture.key("id") to fixture.schema.idValue("target"),
+                    fixture.key("name") to fixture.schema.stringValue("Target"),
+                    fixture.key("friend") to friend,
+                    fixture.key("peers") to fixture.schema.outputListValue(listOf(peer, null)),
                 ),
             )
         val selections =
@@ -436,16 +438,20 @@ class ExecutorRegistryTest {
                 },
             )
 
-        assertEquals(setOf("id", "friend", "peers"), result.outputObjectFields.keys)
+        assertEquals(
+            setOf(fixture.key("id"), fixture.key("friend"), fixture.key("peers")),
+            result.fieldValues.keys,
+        )
         assertEquals(
             "target",
-            assertIs<Schema.IDValue>(result.outputObjectFields["id"]).idValue,
+            assertIs<Schema.IDValue>(result.fieldValues[fixture.key("id")]).idValue,
         )
-        val snippedFriend = assertIs<Schema.ObjectValue>(result.outputObjectFields["friend"])
-        assertEquals(setOf("id"), snippedFriend.outputObjectFields.keys)
-        val peers = assertIs<Schema.ListValue>(result.outputObjectFields["peers"])
+        val snippedFriend =
+            assertIs<Schema.ObjectValue>(result.fieldValues[fixture.key("friend")])
+        assertEquals(setOf(fixture.key("id")), snippedFriend.fieldValues.keys)
+        val peers = assertIs<Schema.ListValue>(result.fieldValues[fixture.key("peers")])
         val snippedPeer = assertIs<Schema.ObjectValue>(peers.outputListValues.first())
-        assertEquals(setOf("name"), snippedPeer.outputObjectFields.keys)
+        assertEquals(setOf(fixture.key("name")), snippedPeer.fieldValues.keys)
         assertEquals(null, peers.outputListValues.last())
     }
 
@@ -455,7 +461,7 @@ class ExecutorRegistryTest {
         val source =
             fixture.schema.objectValue(
                 fixture.user,
-                mapOf("id" to fixture.schema.idValue("target")),
+                mapOf(fixture.key("id") to fixture.schema.idValue("target")),
             )
 
         val result =
@@ -468,7 +474,7 @@ class ExecutorRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.outputObjectFields.keys)
+        assertEquals(emptySet(), result.fieldValues.keys)
     }
 
     @Test
@@ -478,7 +484,7 @@ class ExecutorRegistryTest {
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("target"),
+                    fixture.key("id") to fixture.schema.idValue("target"),
                 ),
             )
 
@@ -492,7 +498,7 @@ class ExecutorRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.outputObjectFields.keys)
+        assertEquals(emptySet(), result.fieldValues.keys)
     }
 
     @Test
@@ -538,8 +544,8 @@ class ExecutorRegistryTest {
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("target"),
-                    "name" to fixture.schema.stringValue("Target"),
+                    fixture.key("id") to fixture.schema.idValue("target"),
+                    fixture.key("name") to fixture.schema.stringValue("Target"),
                 ),
             )
 
@@ -556,7 +562,7 @@ class ExecutorRegistryTest {
                 },
             )
 
-        assertEquals(setOf("id"), result.outputObjectFields.keys)
+        assertEquals(setOf(fixture.key("id")), result.fieldValues.keys)
     }
 
     @Test
@@ -566,17 +572,17 @@ class ExecutorRegistryTest {
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("friend"),
-                    "name" to fixture.schema.stringValue("Friend"),
+                    fixture.key("id") to fixture.schema.idValue("friend"),
+                    fixture.key("name") to fixture.schema.stringValue("Friend"),
                 ),
             )
         val source =
             fixture.schema.objectValue(
                 fixture.user,
                 mapOf(
-                    "id" to fixture.schema.idValue("target"),
-                    "name" to fixture.schema.stringValue("Target"),
-                    "friend" to friend,
+                    fixture.key("id") to fixture.schema.idValue("target"),
+                    fixture.key("name") to fixture.schema.stringValue("Target"),
+                    fixture.key("friend") to friend,
                 ),
             )
         val selections =
@@ -601,9 +607,13 @@ class ExecutorRegistryTest {
                 fixture.user.snip(source, selections)
             }
 
-        assertEquals(setOf("name", "friend"), result.outputObjectFields.keys)
-        val snippedFriend = assertIs<Schema.ObjectValue>(result.outputObjectFields["friend"])
-        assertEquals(setOf("id"), snippedFriend.outputObjectFields.keys)
+        assertEquals(
+            setOf(fixture.key("name"), fixture.key("friend")),
+            result.fieldValues.keys,
+        )
+        val snippedFriend =
+            assertIs<Schema.ObjectValue>(result.fieldValues[fixture.key("friend")])
+        assertEquals(setOf(fixture.key("id")), snippedFriend.fieldValues.keys)
     }
 
     @Test
@@ -696,6 +706,12 @@ class ExecutorRegistryTest {
         val user = schema.type("User") as Schema.ObjectType
         val userField = schema.field("Query", "user")
 
+        fun key(fieldName: String): Schema.ObjectKey =
+            schema.objectKey(
+                field = schema.field(user.typeName, fieldName),
+                arguments = emptyMap(),
+            )
+
         fun selection(
             typeName: String,
             fieldName: String,
@@ -706,7 +722,7 @@ class ExecutorRegistryTest {
             val nominalType = schema.type(typeName) as Schema.CompositeType
             return Selection.of(
                 key =
-                    schema.objectEngineResultKey(
+                    schema.objectKey(
                         field = schema.field(typeName, fieldName),
                         arguments = emptyMap(),
                     ),
@@ -716,6 +732,15 @@ class ExecutorRegistryTest {
             )
         }
     }
+
+    private fun Schema.key(
+        type: Schema.ObjectType,
+        fieldName: String,
+    ): Schema.ObjectKey =
+        objectKey(
+            field = field(type.typeName, fieldName),
+            arguments = emptyMap(),
+        )
 
     private companion object {
         val SCHEMA_SDL =

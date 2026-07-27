@@ -13,7 +13,7 @@ package model
  * ### Invariant: engine-result-nullability
  *
  * A null child occurs only at a nullable type expression. For an [ObjectEngineResult] cell, the
- * child's expression is [ObjectEngineResult.Key.field]'s [Schema.OutputField.type]. For a
+ * child's expression is [Schema.ObjectKey.field]'s [Schema.OutputField.type]. For a
  * [ListEngineResult] element, it is [Schema.TypeExpr.List.elementType]. Object lookup and list
  * construction enforce this invariant.
  *
@@ -32,13 +32,13 @@ sealed interface EngineResult {
 /**
  * An object result similar to the result of the GraphQL ExecuteSelectionSet algorithm.
  *
- * [keys] exposes the finite domain of present [Key] instances. Two object results are equal exactly
- * when their [type] expressions and key sets match and [fetch] returns equal [Cell] values for
- * every present key.
+ * [keys] exposes the finite domain of present [Schema.ObjectKey] instances. Two object results are
+ * equal exactly when their [type] expressions and key sets match and [fetch] returns equal [Cell]
+ * values for every present key.
  *
  * ### Invariant: oer-present-key-validity
  *
- * Every present [Key] has a canonical [Key.field] whose
+ * Every present [Schema.ObjectKey] has a canonical [Schema.ObjectKey.field] whose
  * [Schema.OutputField.containingType] is a concrete [Schema.ObjectType], never an abstract
  * [Schema.InterfaceType] or [Schema.UnionType], and that concrete type equals [baseType]. Its
  * argument fields are fully coerced to non-variable values: no argument recursively contains a
@@ -47,8 +47,8 @@ sealed interface EngineResult {
  *
  * ### Invariant: oer-error-argument-cell
  *
- * For every present [Key] whose arguments recursively contain [Schema.ErrorValue], [fetch]
- * returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
+ * For every present [Schema.ObjectKey] whose arguments recursively contain [Schema.ErrorValue],
+ * [fetch] returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
  */
 sealed class ObjectEngineResult : EngineResult {
     abstract override val type: Schema.TypeExpr.Named<Schema.ObjectType>
@@ -60,39 +60,10 @@ sealed class ObjectEngineResult : EngineResult {
      *
      * ### Invariant: oer-key-domain
      *
-     * For every [Key] `key`, `key in keys` exactly when [fetch] returns one [Cell]; when
+     * For every [Schema.ObjectKey] `key`, `key in keys` exactly when [fetch] returns one [Cell]; when
      * `key !in keys`, [fetch] throws [MissingFieldException]. The set has no modeled order.
      */
-    abstract val keys: Set<Key>
-
-    /**
-     * A key for one canonical schema output field and its arguments.
-     *
-     * ### Invariant: oer-key-argument-definition
-     *
-     * `arguments.type == field.arguments`.
-     *
-     * ### Usage
-     *
-     * When a key is used outside an OER, such as in a selection, [field]'s containing type may be
-     * abstract and [arguments] may contain [Schema.VariableValue] instances. [ObjectEngineResult]
-     * documents the additional constraints on keys present in an OER. Aliases do not participate in
-     * identity.
-     *
-     * Construct keys through [Schema.objectEngineResultKey]. Equality is structural over [field]
-     * and [arguments], using the canonical schema equality documented by [Schema].
-     */
-    @ConsistentCopyVisibility
-    data class Key internal constructor(
-        val field: Schema.OutputField,
-        val arguments: Schema.ArgumentsValue,
-    ) {
-        init {
-            require(arguments.type == field.arguments) {
-                "Key arguments do not belong to its output field"
-            }
-        }
-    }
+    abstract val keys: Set<Schema.ObjectKey>
 
     /**
      * One present field's resolved value and retained check component.
@@ -120,7 +91,7 @@ sealed class ObjectEngineResult : EngineResult {
      * @throws MissingFieldException when [key] is not present
      * @throws IllegalStateException when a non-null field contains a null value
      */
-    suspend fun fetch(key: Key): Cell {
+    suspend fun fetch(key: Schema.ObjectKey): Cell {
         val cell = fetchCell(key)
         check(key.field.type.isNullable || cell.value != null) {
             "Non-null field ${key.field.containingType.typeName}/${key.field.fieldName} " +
@@ -129,7 +100,7 @@ sealed class ObjectEngineResult : EngineResult {
         return cell
     }
 
-    protected abstract suspend fun fetchCell(key: Key): Cell
+    protected abstract suspend fun fetchCell(key: Schema.ObjectKey): Cell
 }
 
 class ListEngineResult private constructor(

@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class SpecSelectionFlattenerTest {
     @Test
-    fun `fields use OER keys instead of response aliases`() {
+    fun `fields use object keys instead of response aliases`() {
         val fixture = SchemaFixture()
         val (typeInScope, selectionSet) =
             fixture.assumptions.selectionsFrom(

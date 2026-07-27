@@ -41,7 +41,7 @@ A function that already has an `Assumptions` context may directly call another f
 ```kotlin
 context(world: Assumptions)
 fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue =
-    world.schema.objectValue(type, outputObjectFields)
+    world.schema.objectValue(type, fieldValues)
 
 context(world: Assumptions)
 fun Schema.ObjectValue.copyTwiceInWorld(): Schema.ObjectValue =
@@ -57,7 +57,7 @@ A context parameter is not an implicit receiver. Access members of `Assumptions`
 ```kotlin
 context(world: Assumptions)
 fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue =
-    world.schema.objectValue(type, outputObjectFields)
+    world.schema.objectValue(type, fieldValues)
 ```
 
 The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories such as `objectValue` belong to `Schema`, so call them through `world.schema`; they are not members of `Assumptions`.
@@ -71,12 +71,12 @@ When an assumption-heavy body reads more clearly with `world` as an implicit rec
 ```kotlin
 context(world: Assumptions)
 fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue = world.run {
-    val copiedFields = outputObjectFields.toMap()
+    val copiedFields = fieldValues.toMap()
     schema.objectValue(type, copiedFields)
 }
 ```
 
-Inside the `run` body, `schema` resolves against the `Assumptions` receiver while `type` and `outputObjectFields` remain available from the `Schema.ObjectValue` extension receiver. Functions requiring the same `Assumptions` context also remain callable.
+Inside the `run` body, `schema` resolves against the `Assumptions` receiver while `type` and `fieldValues` remain available from the `Schema.ObjectValue` extension receiver. Functions requiring the same `Assumptions` context also remain callable.
 
 Use `run`, not `apply`, when the function returns a modeled result. `run` returns the lambda result; `apply` returns its receiver, which would be `world`.
 

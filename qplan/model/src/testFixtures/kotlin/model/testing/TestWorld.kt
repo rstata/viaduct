@@ -8,6 +8,7 @@ import com.google.inject.ProvisionException
 import jakarta.inject.Singleton
 import model.Assumptions
 import model.FieldResolvers
+import model.Fragment
 import model.GJSchema
 import model.NodeResolvers
 import model.Schema
@@ -16,6 +17,7 @@ import model.VariableValues
 import model.registry.ExecutorRegistry
 import model.registry.FieldResolver
 import model.registry.NodeResolver
+import model.selectionForestOf
 
 /**
  * One Guice-assembled reasoning world for model and semantics tests.
@@ -38,7 +40,7 @@ class TestWorld private constructor(
             nodeResolvers:
                 (GJSchema) -> Map<Schema.ObjectType, NodeResolver> = { emptyMap() },
             fieldResolvers:
-                (GJSchema) -> Map<Schema.OutputField, FieldResolver> = { emptyMap() },
+                ((GJSchema) -> Map<Schema.OutputField, FieldResolver>)? = null,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -65,7 +67,7 @@ private class TestWorldModule(
     private val schemaSDL: String,
     private val variableValues: (GJSchema) -> Map<String, Schema.Value?>,
     private val nodeResolvers: (GJSchema) -> Map<Schema.ObjectType, NodeResolver>,
-    private val fieldResolvers: (GJSchema) -> Map<Schema.OutputField, FieldResolver>,
+    private val fieldResolvers: ((GJSchema) -> Map<Schema.OutputField, FieldResolver>)?,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -92,7 +94,7 @@ private class TestWorldModule(
     @Provides
     @FieldResolvers
     fun fieldResolvers(schema: GJSchema): Map<Schema.OutputField, FieldResolver> =
-        fieldResolvers.invoke(schema)
+        fieldResolvers?.invoke(schema) ?: defaultQueryResolvers(schema)
 
     @Provides
     @Singleton
@@ -119,4 +121,22 @@ private class TestWorldModule(
             bindings = variableValues,
             executorRegistry = executorRegistry,
         )
+
+    private fun defaultQueryResolvers(
+        schema: GJSchema,
+    ): Map<Schema.OutputField, FieldResolver> {
+        val queryFragment =
+            object : Fragment {
+                override val nominalType = schema.query
+                override val subselections = selectionForestOf()
+            }
+        return schema.query.fields.values
+            .filter { it.fieldName != "__typename" }
+            .associateWith {
+                FieldResolver(
+                    objectFragment = queryFragment,
+                    function = { _, _ -> Schema.ErrorValue },
+                )
+            }
+    }
 }

@@ -22,7 +22,11 @@ world |- correctResolution(oer, fragment)
 
 Here `fragment` is a post-validation, flattened `Fragment` whose nominal type is `world.schema.query`. It represents the external query demand. The judgment should determine whether `oer` is a correct field-resolution result under `world`, including demand induced transitively through registered resolvers' object fragments.
 
-This step should define correctness directly, supported by focused examples of polymorphic and converging demand. It does not need separate minimal or maximal predicates. It should preserve unresolved type conditions as guards and remain entirely plan-independent; planner state, readiness, and scheduling belong only after `correctResolution` provides a stable target.
+The `oer` argument is a stipulated element of the `ObjectEngineResult` carrier: for this exercise it may be understood as having been constructed magically. The task is to define a predicate on such OERs, not an algorithm or API that produces them. Do not add an OER factory, map-backed OER implementation, builder, or test fixture in order to make candidate OERs constructible.
+
+This step should define correctness directly, supported by focused examples of polymorphic and converging demand. It does not need separate minimal or maximal predicates. It should preserve unresolved type conditions as guards and remain entirely plan-independent; planner state, readiness, and scheduling belong only after `correctResolution` provides a stable target. In the current checker-free scope, `correctResolution` must not observe `ObjectEngineResult.Cell.check`: replacing only check components while preserving the OER's types, present keys, and cell values cannot change the judgment.
+
+For now, the objective is the definition itself. Do not add executable tests for `correctResolution`; careful human inspection of the definition and its worked examples is the validation strategy at this stage. The repository's existing test volume and its general use of finite checks do not imply that this judgment needs constructible OER witnesses.
 
 ## Repository
 
@@ -43,7 +47,7 @@ Each reasoning exercise fixes exactly one `Assumptions` and one canonical `Schem
 
 Every schema definition has one canonical object, so ordinary `==` means that two definitions denote the same schema element. Every non-error `Schema.Value`, argument tuple, and OER key is constructed through that schema. `Schema.ErrorValue` is schema-independent.
 
-`ObjectEngineResult` is a finite value tree. A present object field has one `Cell` containing a nullable value and a check result; absence differs from a present null. Every key present in an OER carries a field owned by a concrete `Schema.ObjectType`. Keys outside an OER may carry abstract-type fields or unresolved variables.
+`ObjectEngineResult` is a finite value tree. A present object field has one `Cell` containing a nullable value and a check result; absence differs from a present null. Every key present in an OER carries a field owned by a concrete `Schema.ObjectType`. Keys outside an OER may carry abstract-type fields or unresolved variables. The carrier need not expose a public construction mechanism for the semantic layer to define a relation over its stipulated values; the absence of constructible OER witnesses is intentional for this step, not a gap to fill.
 
 ### Selections And Fragments
 
@@ -57,9 +61,9 @@ A `Fragment` contains a nominal composite type and a flattened `SelectionForest`
 
 ### Resolver Interpretation
 
-The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a selection-independent `Schema.ObjectValue`. A node resolver stores a selection-independent lookup from `Schema.IDValue` to `Schema.ObjectValue`.
+The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a nullable, selection-independent `Schema.OutputValue`. A node resolver stores a selection-independent lookup from `Schema.IDValue` to `Schema.ObjectValue`.
 
-`snip` supplies the conceptual additional selection input by projecting a resolver's fixed object result. Holding the ordinary function inputs fixed therefore produces coherent projections for different requested selections.
+`snip` supplies the conceptual additional selection input by projecting a resolver's fixed output result. Holding the ordinary function inputs fixed therefore produces coherent projections for different requested selections.
 
 For a concrete field, `behavioral(field)` is true for engine-supplied `__typename`, an explicit field resolver, and every non-`id` field on a type with a node resolver. Field-resolver projection retains selected passive fields and stops at behavioral boundaries, leaving only the `id` bridge of a nested node reference. Node-resolver projection has a distinct root rule: it omits root `id`, `__typename`, and explicit field-resolver fields while retaining fields supplied by that node resolver.
 
@@ -84,11 +88,15 @@ The graph and its checks are implemented in [`ExecutorRegistry.kt`](./model/src/
 
 Inputs are post-validation and all named fragment spreads are assumed to have been inlined. `Assumptions.selectionsFrom` accepts one named fragment definition as a parsing envelope, ignores its name, and rejects nested named spreads.
 
-`@skip` and `@include` belong to the eventual field-resolution model but are deferred. Applied directives are currently rejected. Query fragments, variable providers, `@parent`, lazy executor values, checkers, and raw-versus-checked dependency distinctions are also not yet modeled.
+`@skip` and `@include` belong to the eventual field-resolution model but are deferred. Applied directives are currently rejected. Query fragments, variable providers, `@parent`, lazy executor values, checkers, and raw-versus-checked dependency distinctions are also not yet modeled. `ObjectEngineResult.Cell.check` remains in the carrier algebra for that future work, but the initial `correctResolution` judgment is explicitly check-insensitive.
+
+`correctResolution` is defined only when every variable needed by an applicable required-cell key can be instantiated from `world.variableValues`. Variables occurring only in guards or branches inapplicable to the judged runtime object do not restrict the judgment's domain. After instantiation, an argument tuple containing `Schema.ErrorValue` requires the error cell mandated by the OER carrier invariant and does not invoke the registered field resolver.
 
 Every argument-bearing output field is currently assumed to have an explicit field resolver. Production namespace exceptions are outside the model.
 
 The registry currently rejects resolver-demand cycles. `evergreen.md` records legal production RSS cycles as an eventual hard case, so cycle rejection is a present scope constraint rather than a general claim about Viaduct.
+
+Every non-`__typename` field on `Query` has an explicit field resolver. Field resolvers are registered only at concrete object-field coordinates, and node resolvers are registered only for object types that nominally implement the canonical `Node` interface.
 
 ## Design Constraints
 
@@ -118,27 +126,47 @@ Each complete runtime type assignment yields an ordinary monomorphic requirement
 
 Implement the Query-rooted `correctResolution(oer, fragment)` judgment in the semantic layer:
 
+```text
+world |- correctResolution(oer, fragment) :=
+    rootedAndWellTyped(oer, fragment)
+    && oer.conformsToSchema()
+    && oer.conformsToFragment(fragment)
+    && oer.isClosedUnderResolverDemand()
+    && oer.conformsToResolvers()
+    && oer.conformsToTypename()
+```
+
+- `rootedAndWellTyped(oer, fragment)` establishes the judgment's domain: `fragment.nominalType == world.schema.query`, and `oer` is an object result whose canonical concrete type is `world.schema.query`.
+- `oer.conformsToSchema()` establishes recursive schema conformance independently of demand: every present result conforms to its declared output type, including nullability, list structure, and concrete object type.
+- `oer.conformsToFragment(fragment)` establishes correct shape: after specializing type conditions to each runtime concrete object and instantiating applicable keys, the OER contains every cell required by the external fragment. Null and error results stop recursive requirements, and an applicable key whose arguments contain `Schema.ErrorValue` requires its error cell without invoking its field resolver. This predicate is schema-blind: the input fragment is post-validation, so its compatibility with the schema is assumed rather than revalidated here.
+- `oer.isClosedUnderResolverDemand()` establishes sufficient content: every activated resolver occurrence has the resolved input it requires. For a field resolver, its parent OER conforms to the resolver's `objectFragment`; these requirements apply transitively under the same type guards. An activated node resolver has its required `id` addressing bridge even though that bridge is not a resolver-demand edge.
+- `oer.conformsToResolvers()` establishes resolver consistency: each activated field or node resolver agrees with the values attributed to it in the OER. Field-resolver inputs are the `Schema.ObjectValue` materialized from the parent according to its `objectFragment`; comparison with resolver output is recursive and ownership-aware, preserving exact scalar, null, error, list, and concrete-type structure while stopping where ownership passes to another resolver. This conjunct never observes `ObjectEngineResult.Cell.check`.
+- `oer.conformsToTypename()` establishes engine-supplied type-name consistency: every present `__typename` cell contains the name of its OER object's canonical concrete type.
+
 1. Establish the judgment's domain: `fragment.nominalType == world.schema.query`, and `oer` is the Query-rooted result being judged.
-2. Define concrete type applicability for flattened selections and conversion of an applicable abstract selection key to its concrete OER field coordinate.
+2. Define concrete type applicability for flattened selections and conversion of an applicable abstract selection key to its concrete OER field coordinate, including variable instantiation and the non-invoking error-cell rule for arguments containing `Schema.ErrorValue`.
 3. Define the least guarded required-cell closure seeded by `fragment.subselections` and extended transitively through demanded resolvers' `objectFragment`s.
-4. Define correctness recursively over object, list, and simple results, specializing guarded requirements with each concrete `Schema.ObjectType` and relating resolver-owned values to the registered resolver interpretations.
+4. Define correctness recursively over object, list, and simple results, specializing guarded requirements with each concrete `Schema.ObjectType` and relating resolver-owned values to the registered resolver interpretations while never inspecting `ObjectEngineResult.Cell.check`.
 5. Decide and document directly which additional OER cells, if any, `correctResolution` permits; do not introduce a separate minimality judgment first.
 
 Keep these definitions in the semantic layer. They should consume the established model and trust its construction invariants rather than revalidating schema ownership or registry coherence.
 
-Use examples as finite evidence, not proofs. The first examples should cover:
+Do not extend the model with OER construction support or add executable correctness tests as part of this continuation. If the predicate itself requires an OER observation that the carrier does not currently expose, identify and justify that requirement independently; test convenience is not sufficient justification for a model change.
+
+Use focused worked examples as aids to human inspection, not as executable tests or proofs. The first examples should cover:
 
 - a type-conditioned passive field;
 - the guarded `B/helper` object-fragment case above;
 - sibling object-fragment consumers whose demand converges on one producer;
 - concrete implementations that induce different guarded demand at the same result position;
 - a list containing more than one concrete object type; and
-- required cells versus additional cells accepted or rejected by correctness.
+- required cells versus additional cells accepted or rejected by correctness; and
+- otherwise identical OERs whose check components differ but receive the same correctness verdict.
 
 ## Open Questions
 
 - What additional semantically valid cells, if any, should `correctResolution` permit?
-- How should recursive correctness relate a field resolver's resolved `objectFragment` input to the object returned by its registered function?
+- How should recursive correctness relate a field resolver's resolved `objectFragment` input to the output returned by its registered function?
 - How should the later model admit legal demand cycles without confusing coordinate-level recursion with runtime occurrence identity?
 - Which deferred conditions, especially directives and variable providers, must become guards in the same requirement representation?
 

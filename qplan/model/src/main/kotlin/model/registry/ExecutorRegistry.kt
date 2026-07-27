@@ -82,12 +82,12 @@ typealias NodeResolverFunction = (Schema.IDValue) -> Schema.ObjectValue
  * [Schema.argumentsValue] remains a general construction operation and does not establish them by
  * itself.
  *
- * The returned object is independent of requested selections. A full selective interpretation
+ * The returned value is independent of requested selections. A full selective interpretation
  * supplies that conceptual additional input by applying [snip] to this result, so projections for
- * different selections are coherent by construction.
+ * different selections are coherent by construction. A null result represents GraphQL null.
  */
 typealias FieldResolverFunction =
-    (Schema.ObjectValue, Schema.ArgumentsValue) -> Schema.ObjectValue
+    (Schema.ObjectValue, Schema.ArgumentsValue) -> Schema.OutputValue?
 
 class NodeResolver(
     val function: NodeResolverFunction,
@@ -120,13 +120,19 @@ class FieldResolver(
  *
  * ### Invariant: registry-node-id-contract
  *
- * Every registered node-resolver type has a canonical, argumentless, ID-typed `id` field. That
- * field has no field resolver.
+ * Every registered node-resolver type nominally implements the canonical `Node` interface and has
+ * a canonical, argumentless, ID-typed `id` field. That field has no field resolver.
  *
  * ### Invariant: registry-field-resolver-contract
  *
- * Every field resolver's object-fragment type is canonical and equals the registered field's
- * containing type. No field resolver is registered for `__typename`.
+ * Every field resolver is registered at a field belonging to a concrete object type. Its
+ * object-fragment type is canonical and equals that concrete containing type. No field resolver is
+ * registered for `__typename`.
+ *
+ * ### Invariant: registry-query-field-coverage
+ *
+ * Every field on [Schema.query] other than the engine-supplied `__typename` field has exactly one
+ * registered field resolver.
  *
  * ### Invariant: registry-resolver-demand-dag
  *
@@ -183,11 +189,12 @@ interface ExecutorRegistry {
          * Constructs a registry keyed by canonical schema definitions.
          *
          * @throws IllegalArgumentException when a resolver key is foreign to [schema], or when a
-         * field resolver's object-fragment type is foreign to [schema] or differs from the
-         * registered field's containing type; when a node-resolver type lacks a canonical,
-         * argumentless, ID-typed `id` field; or when a field resolver is registered for that `id`
-         * field or for `__typename`; when one resolver object occurs at multiple coordinates or
-         * already belongs to a registry; or when the resolver demand relation contains a cycle
+         * field resolver's field is abstract, its object-fragment type is foreign to [schema], or
+         * differs from the registered field's containing type; when a node-resolver type does not
+         * implement `Node` or lacks a canonical, argumentless, ID-typed `id` field; when a field
+         * resolver is registered for that `id` field or for `__typename`; when a Query field lacks
+         * a field resolver; when one resolver object occurs at multiple coordinates or already
+         * belongs to a registry; or when the resolver demand relation contains a cycle
          */
         fun of(
             schema: Schema,
@@ -199,8 +206,6 @@ interface ExecutorRegistry {
                 nodeResolvers = nodeResolvers.toMap(),
                 fieldResolvers = fieldResolvers.toMap(),
             )
-
-        fun empty(schema: Schema): ExecutorRegistry = of(schema)
     }
 }
 
@@ -224,6 +229,21 @@ private class DefaultExecutorRegistry(
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
 ) : ExecutorRegistry {
     init {
+        val nodeType =
+            if (nodeResolvers.isEmpty()) {
+                null
+            } else {
+                val candidate =
+                    try {
+                        schema.type("Node")
+                    } catch (_: Schema.MissingSchemaElementException) {
+                        null
+                    }
+                candidate as? Schema.InterfaceType
+                    ?: throw IllegalArgumentException(
+                        "Node resolvers require a canonical Node interface",
+                    )
+            }
         val resolvers = nodeResolvers.values + fieldResolvers.values
         require(resolvers.toSet().size == resolvers.size) {
             "Each resolver object must occur at exactly one resolver coordinate"
@@ -233,6 +253,9 @@ private class DefaultExecutorRegistry(
         val nodeIdFields =
             nodeResolvers.keys.mapTo(mutableSetOf()) { type ->
                 validateCanonicalType(type)
+                require(schema.relation(nodeType!!, type) == Schema.TypeRelation.WIDER_THAN) {
+                    "Node-resolver type ${type.typeName} does not implement Node"
+                }
                 val idField =
                     type.fields["id"]
                         ?: throw IllegalArgumentException(
@@ -252,6 +275,9 @@ private class DefaultExecutorRegistry(
         fieldResolvers.forEach { (field, resolver) ->
             validateCanonicalField(field, "field-resolver field")
             val typeName = field.containingType.typeName
+            require(field.containingType is Schema.ObjectType) {
+                "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
+            }
             require(field !in nodeIdFields) {
                 "Node id field $typeName/${field.fieldName} cannot have a field resolver"
             }
@@ -268,6 +294,16 @@ private class DefaultExecutorRegistry(
                     "parent type ${field.containingType.typeName} at " +
                     "$typeName/${field.fieldName}"
             }
+        }
+        val missingQueryFields =
+            schema.query.fields.values
+                .filter { it.fieldName != "__typename" && it !in fieldResolvers }
+        require(missingQueryFields.isEmpty()) {
+            "Query fields without field resolvers: " +
+                missingQueryFields
+                    .map { it.fieldName }
+                    .sorted()
+                    .joinToString()
         }
 
         val mayDemandFrom =

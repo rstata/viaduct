@@ -101,7 +101,7 @@ interface Assumptions {
         fun of(
             schema: GJSchema,
             bindings: Map<String, Schema.Value?>,
-            executorRegistry: ExecutorRegistry = ExecutorRegistry.empty(schema),
+            executorRegistry: ExecutorRegistry,
         ): Assumptions = DefaultAssumptions(schema, bindings, executorRegistry)
     }
 }

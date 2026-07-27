@@ -90,12 +90,77 @@ class ExecutorRegistryTest {
     }
 
     @Test
+    fun `field resolvers return the complete nullable output-value algebra`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      scalar: String!
+                      list: [String]
+                      nullable: String
+                      failed: String
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val fragment =
+                        object : Fragment {
+                            override val nominalType = schema.query
+                            override val subselections = selectionForestOf()
+                        }
+                    mapOf<Schema.OutputField, FieldResolver>(
+                        schema.field("Query", "scalar") to
+                            FieldResolver(fragment) { _, _ -> schema.stringValue("value") },
+                        schema.field("Query", "list") to
+                            FieldResolver(fragment) { _, _ ->
+                                schema.outputListValue(
+                                    listOf(schema.stringValue("value"), null),
+                                )
+                            },
+                        schema.field("Query", "nullable") to
+                            FieldResolver(fragment) { _, _ -> null },
+                        schema.field("Query", "failed") to
+                            FieldResolver(fragment) { _, _ -> Schema.ErrorValue },
+                    )
+                },
+            )
+        val schema = world.schema
+        val parent = schema.objectValue(schema.query, emptyMap())
+        val outputs =
+            listOf("scalar", "list", "nullable", "failed").associateWith { fieldName ->
+                val field = schema.field("Query", fieldName)
+                world.executorRegistry
+                    .fieldResolver(field)
+                    .function(parent, schema.argumentsValue(field, emptyMap()))
+            }
+
+        assertEquals(schema.stringValue("value"), outputs.getValue("scalar"))
+        assertEquals(
+            schema.outputListValue(listOf(schema.stringValue("value"), null)),
+            outputs.getValue("list"),
+        )
+        assertEquals(null, outputs.getValue("nullable"))
+        assertEquals(Schema.ErrorValue, outputs.getValue("failed"))
+
+        outputs.forEach { (fieldName, output) ->
+            val projection =
+                with(world.assumptions) {
+                    schema.field("Query", fieldName).snip(output, selectionForestOf())
+                }
+            assertEquals(output, projection)
+        }
+    }
+
+    @Test
     fun `distinguishes missing executors from foreign schema definitions`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
         val registry = world.executorRegistry
         val userType = schema.type("User") as Schema.ObjectType
-        val userField = schema.field("Query", "user")
+        val userField = schema.field("User", "name")
+
+        assertFalse(registry.hasNodeResolver(schema.query))
+        assertFalse(registry.hasFieldResolver(schema.field("Node", "name")))
 
         val missingNode =
             assertFailsWith<MissingExecutorException> {
@@ -108,8 +173,8 @@ class ExecutorRegistryTest {
             assertFailsWith<MissingExecutorException> {
                 registry.fieldResolver(userField)
             }
-        assertEquals("Query", missingField.typeName)
-        assertEquals("user", missingField.fieldName)
+        assertEquals("User", missingField.typeName)
+        assertEquals("name", missingField.fieldName)
 
         val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
         assertFailsWith<IllegalArgumentException> {
@@ -118,7 +183,7 @@ class ExecutorRegistryTest {
             )
         }
         assertFailsWith<IllegalArgumentException> {
-            registry.fieldResolver(foreignSchema.field("Query", "user"))
+            registry.fieldResolver(foreignSchema.field("User", "name"))
         }
     }
 
@@ -172,45 +237,99 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `node resolver registration establishes the node id contract`() {
-        listOf(
-            """
-            type User {
-              name: String
-            }
+    fun `node resolver registration requires a canonical Node interface`() {
+        assertFailsWith<IllegalArgumentException> {
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      id: ID!
+                    }
 
-            type Query {
-              user: User
-            }
-            """,
-            """
-            type User {
-              id: String!
-            }
+                    type Query {
+                      user: User
+                    }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val user = schema.type("User") as Schema.ObjectType
+                    mapOf(user to NodeResolver { error("Not invoked") })
+                },
+            )
+        }
+    }
 
-            type Query {
-              user: User
-            }
-            """,
-            """
-            type User {
-              id(format: String): ID!
-            }
+    @Test
+    fun `rejects node resolvers for object types that do not implement Node`() {
+        assertFailsWith<IllegalArgumentException> {
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
 
-            type Query {
-              user: User
-            }
-            """,
-        ).forEach { schemaSDL ->
-            assertFailsWith<IllegalArgumentException> {
-                TestWorld.fromSDL(
-                    schemaSDL = schemaSDL.trimIndent(),
-                    nodeResolvers = { schema ->
-                        val user = schema.type("User") as Schema.ObjectType
-                        mapOf(user to NodeResolver { error("Not invoked") })
-                    },
-                )
-            }
+                    type User implements Node {
+                      id: ID!
+                    }
+
+                    type Other {
+                      id: ID!
+                    }
+
+                    type Query {
+                      user: User
+                      other: Other
+                    }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val other = schema.type("Other") as Schema.ObjectType
+                    mapOf(other to NodeResolver { error("Not invoked") })
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `rejects field resolvers registered at abstract coordinates`() {
+        assertFailsWith<IllegalArgumentException> {
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                fieldResolvers = { schema ->
+                    val queryFragment =
+                        object : Fragment {
+                            override val nominalType = schema.query
+                            override val subselections = selectionForestOf()
+                        }
+                    val node = schema.type("Node") as Schema.InterfaceType
+                    val nodeFragment =
+                        object : Fragment {
+                            override val nominalType = node
+                            override val subselections = selectionForestOf()
+                        }
+                    mapOf(
+                        schema.field("Query", "user") to
+                            FieldResolver(
+                                objectFragment = queryFragment,
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                        schema.field("Node", "name") to
+                            FieldResolver(
+                                objectFragment = nodeFragment,
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                    )
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `requires a field resolver for every Query field`() {
+        assertFailsWith<IllegalArgumentException> {
+            TestWorld.fromSDL(
+                schemaSDL = SCHEMA_SDL,
+                fieldResolvers = { emptyMap() },
+            )
         }
     }
 
@@ -253,7 +372,7 @@ class ExecutorRegistryTest {
 
         with(world.assumptions) {
             assertFailsWith<IllegalArgumentException> {
-                schema.field("Query", "user").snip(result, selectionForestOf())
+                schema.field("User", "name").snip(result, selectionForestOf())
             }
             assertFailsWith<IllegalArgumentException> {
                 user.snip(result, selectionForestOf())
@@ -311,9 +430,11 @@ class ExecutorRegistryTest {
             )
 
         val result =
-            with(fixture.assumptions) {
-                fixture.userField.snip(source, selections)
-            }
+            assertIs<Schema.ObjectValue>(
+                with(fixture.assumptions) {
+                    fixture.userField.snip(source, selections)
+                },
+            )
 
         assertEquals(setOf("id", "friend", "peers"), result.outputObjectFields.keys)
         assertEquals(
@@ -338,12 +459,14 @@ class ExecutorRegistryTest {
             )
 
         val result =
-            with(fixture.assumptions) {
-                fixture.userField.snip(
-                    source,
-                    selectionForestOf(fixture.selection("Admin", "level")),
-                )
-            }
+            assertIs<Schema.ObjectValue>(
+                with(fixture.assumptions) {
+                    fixture.userField.snip(
+                        source,
+                        selectionForestOf(fixture.selection("Admin", "level")),
+                    )
+                },
+            )
 
         assertEquals(emptySet(), result.outputObjectFields.keys)
     }
@@ -360,12 +483,14 @@ class ExecutorRegistryTest {
             )
 
         val result =
-            with(fixture.assumptions) {
-                fixture.userField.snip(
-                    source,
-                    selectionForestOf(fixture.selection("User", "search")),
-                )
-            }
+            assertIs<Schema.ObjectValue>(
+                with(fixture.assumptions) {
+                    fixture.userField.snip(
+                        source,
+                        selectionForestOf(fixture.selection("User", "search")),
+                    )
+                },
+            )
 
         assertEquals(emptySet(), result.outputObjectFields.keys)
     }
@@ -419,15 +544,17 @@ class ExecutorRegistryTest {
             )
 
         val result =
-            with(fixture.assumptions) {
-                fixture.userField.snip(
-                    source,
-                    selectionForestOf(
-                        fixture.selection("Node", "id"),
-                        fixture.selection("Node", "name"),
-                    ),
-                )
-            }
+            assertIs<Schema.ObjectValue>(
+                with(fixture.assumptions) {
+                    fixture.userField.snip(
+                        source,
+                        selectionForestOf(
+                            fixture.selection("Node", "id"),
+                            fixture.selection("Node", "name"),
+                        ),
+                    )
+                },
+            )
 
         assertEquals(setOf("id"), result.outputObjectFields.keys)
     }

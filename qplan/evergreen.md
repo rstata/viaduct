@@ -28,6 +28,7 @@ Several other conclusions are durable:
 
 - Demand and ownership are different. Query selections and RSSes describe what data is needed; a resolver's OSS describes which paths that resolver owns.  
 - One-shot execution correctness is producer-specific. Eventual union coverage of an OER does not prove that the invocation that produced it received complete demand. This is an execution/materialization proof obligation, distinct from extensional predicates over acceptable OERs.
+- An extensional correctness predicate may be defined over stipulated OER carrier values without defining how to construct those values. Such a specification does not by itself require an OER factory, concrete implementation, builder, test fixture, or execution algorithm.
 - Plan occurrence is not producer identity. Static paths are templates; runtime identity also depends on target OER, field identity and arguments, concrete type, ancestry, and execution epoch.  
 - Runtime type, request variables, and object identity prevent execution from being wholly static. A useful plan may still eagerly bound all possible dependencies while binding concrete instances at runtime.  
 - Query plan ownership, dependency target, concrete applicability, and OSS root shape must be explicit. Reconstructing them from incidental type equality or a single plan index has produced real bugs.  
@@ -38,6 +39,8 @@ Several other conclusions are durable:
 Viaduct decomposes GraphQL field execution into field resolution followed by field completion. This project models field resolution: which resolver-produced values and OER cells exist for requested fields. At this boundary, field identity is an alias-free OER key consisting of a canonical schema field and fully coerced arguments. Response aliases, response keys, response ordering, and assembly of the external GraphQL response are observations of field completion, not field resolution.
 
 This model emphatically assumes that every argument-bearing output field has an explicit field resolver. Consequently, a field without a resolver is argumentless, and projection can stop at resolver boundaries without grouping passive values by argument-sensitive keys. Production namespace exceptions to the resolver requirement are outside the current model.
+
+Every non-`__typename` Query field has an explicit field resolver. Field resolvers are registered only at concrete object-field coordinates and return nullable output values; node resolvers are registered only for concrete object types that nominally implement the canonical `Node` interface.
 
 For a canonical field on a concrete object type, `behavioral(field)` means that the field is the engine-supplied `__typename`, has an explicit field resolver, or belongs to a type with a node resolver and is not `id`. The predicate is deliberately undefined for abstract-type fields. A node's `id` is an engine bridge materialized by the resolver that produced the node reference.
 

@@ -147,7 +147,7 @@ private fun Schema.OutputValue?.snipOutput(
 
         is Schema.SimpleValue -> {
             require(selections.isEmpty()) {
-                "Cannot apply subselections to simple value of type ${baseType.typeName}"
+                "Cannot apply subselections to a simple value $this"
             }
             this
         }

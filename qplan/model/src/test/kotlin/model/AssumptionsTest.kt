@@ -95,18 +95,10 @@ class AssumptionsTest {
         val filter = assertIs<Schema.InputObjectValue>(node.arguments.getValue("filter"))
         assertEquals(assumptions.schema.type("Filter"), filter.type)
         val role = assertIs<Schema.EnumValue>(filter.fieldValues["role"])
-        assertEquals(assumptions.schema.type("Role"), role.baseType)
-        assertEquals(
-            Schema.TypeExpr.Named(role.baseType, isNullable = false),
-            role.type,
-        )
+        assertEquals(assumptions.schema.type("Role"), role.type)
         assertEquals("ADMIN", role.enumValue)
         val limit = assertIs<Schema.IntValue>(filter.fieldValues["limit"])
-        assertEquals(assumptions.schema.type("Int"), limit.baseType)
-        assertEquals(
-            Schema.TypeExpr.Named(Schema.IntType, isNullable = false),
-            limit.type,
-        )
+        assertEquals(Schema.IntType, limit.type)
         assertEquals(10, limit.intValue)
         val tags = assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
         assertEquals(
@@ -223,13 +215,13 @@ class AssumptionsTest {
         assertEquals(filterValue, nodeArguments.fieldValues["filter"])
         assertEquals(schema.type("Filter"), filterValue.type)
         val defaultRole = assertIs<Schema.EnumValue>(filterValue.fieldValues["role"])
-        assertEquals(schema.type("Role"), defaultRole.baseType)
+        assertEquals(schema.type("Role"), defaultRole.type)
         assertEquals("MEMBER", defaultRole.enumValue)
         val defaultLimit =
             assertIs<Schema.IntValue>(
                 filterValue.fieldValues["limit"],
             )
-        assertEquals(schema.type("Int"), defaultLimit.baseType)
+        assertEquals(Schema.IntType, defaultLimit.type)
         assertEquals(10, defaultLimit.intValue)
         val tags =
             assertIs<Schema.InputListValue>(

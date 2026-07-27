@@ -59,6 +59,9 @@ sealed class Resolver : Executor {
  * Applying requested selections is a separate projection of the returned object with [snip].
  * The [Schema.IDValue] is an engine-supplied addressing input and does not create a resolver-demand
  * edge. Because a node resolver has no object fragment, its [Resolver.mayDemandFrom] set is empty.
+ *
+ * This is math, not programming: [NodeResolverFunction]s should be thought of as mathmatical
+ * functions, not programming language routines.
  */
 typealias NodeResolverFunction = (Schema.IDValue) -> Schema.ObjectValue
 
@@ -85,6 +88,9 @@ typealias NodeResolverFunction = (Schema.IDValue) -> Schema.ObjectValue
  * The returned value is independent of requested selections. A full selective interpretation
  * supplies that conceptual additional input by applying [snip] to this result, so projections for
  * different selections are coherent by construction. A null result represents GraphQL null.
+ *
+ * This is math, not programming: [FieldResolverFunction]s should be thought of as mathmatical
+ * functions, not programming language routines.
  */
 typealias FieldResolverFunction =
     (Schema.ObjectValue, Schema.ArgumentsValue) -> Schema.OutputValue?

@@ -16,9 +16,11 @@ Keep definitions of correctness in other packages. In particular, do not use thi
 
 Those concepts belong to separate reasoning domains. Do not project them back into the carrier types in this package.
 
-## Modeling Discipline
+## This is math, not programming!
 
-Some Java and Kotlin runtime conventions are deliberately replaced by mathematical assumptions:
+Semantic Kotlin expressions denote mathematical functions, relations, and values. `resolver.function(input, arguments)` denotes application of a stipulated function.  It is not an event and implies no execution, invocation, effects, timing, ordering, allocation, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
+
+Some Kotlin (and Java) conventions are deliberately replaced by mathematical assumptions:
 
 - For value objects, Java and Kotlin normally interpret `Object.equals` as strict equality: `true` means definitely equal and `false` means definitely unequal. As documented in `Schema.kt`, equality is conservative when assumptions permit unbound variables: `true` still means definitely equal, while `false` means the values might be unequal rather than definitely unequal.
 - In our models, we use value equality to mean _semantic_ equality, not syntactic equality.  In the case of `Selection` for example, data-class-style equality would capture syntactic equality of `Selection`s but not true runtime equivalence.  We do not use value equality unless there's a clear semantic meaning for it.  At the same time, this is supposed to be a "mathematical model," which begs the question: what does NON-value equality mean. As of now we don't have a great answer, hopefully we'll tighten this up over time.

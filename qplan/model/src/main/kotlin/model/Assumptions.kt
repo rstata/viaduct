@@ -107,6 +107,19 @@ interface Assumptions {
 }
 
 /**
+ * Returns [type]'s canonical argumentless `id` key when it has a node resolver, or null otherwise.
+ */
+fun Assumptions.idKeyOf(type: Schema.ObjectType): Schema.ObjectKey? =
+    if (executorRegistry.hasNodeResolver(type)) {
+        schema.objectKey(
+            field = schema.field(type.typeName, "id"),
+            arguments = emptyMap(),
+        )
+    } else {
+        null
+    }
+
+/**
  * Assumptions over an already constructed [GJSchema], model variable values, and executor registry.
  *
  * Every schema definition carried by the supplied bindings must be the canonical definition from

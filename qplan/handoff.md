@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This is the working handoff for continuing the query-planning model. It should let a new agent understand the current semantic boundary, what the repository already establishes, and the next reasoning task without reconstructing the chronology that produced those decisions.
+This is the handoff for continuing work on the query-planning model. It should let a new agent understand the current semantic boundary, what the repository already establishes, and the next reasoning task without reconstructing the chronology that produced those decisions.
 
-Read [Query Plan Research](./evergreen.md) for the durable production evidence, vocabulary, hard cases, correctness obligations, and validation strategy. Read [AGENTS.md](./AGENTS.md), [`model/AGENTS.md`](./model/AGENTS.md), and [`semantics/AGENTS.md`](./semantics/AGENTS.md) before changing their respective domains.
+Read [Query Plan Research](./evergreen.md) for the durable production evidence, vocabulary, hard cases, correctness obligations, and validation strategy. [AGENTS.md](./AGENTS.md), [`model/AGENTS.md`](./model/AGENTS.md), and [`semantics/AGENTS.md`](./semantics/AGENTS.md) describe the current state of our modeling effort plus guidelines and procedures for updating that state; read these files before making any modifications.
 
 ## Long Term Goal
 
@@ -14,30 +14,7 @@ The current model is building a plan-independent correctness judgment over `Obje
 
 ## Next Step Goal
 
-The concrete next step is to define:
-
-```text
-world |- correctResolution(oer, fragment)
-```
-
-Here `fragment` is a post-validation, flattened `Fragment` whose nominal type is `world.schema.query`. It represents the external query demand. The judgment should determine whether `oer` is a correct field-resolution result under `world`, including demand induced transitively through registered resolvers' object fragments.
-
-The `oer` argument is a stipulated element of the `ObjectEngineResult` carrier: for this exercise it may be understood as having been constructed magically. The task is to define a predicate on such OERs, not an algorithm or API that produces them. Do not add an OER factory, map-backed OER implementation, builder, or test fixture in order to make candidate OERs constructible.
-
-This step should define correctness directly, supported by focused examples of polymorphic and converging demand. It does not need separate minimal or maximal predicates. It should preserve unresolved type conditions as guards and remain entirely plan-independent; planner state, readiness, and scheduling belong only after `correctResolution` provides a stable target. In the current checker-free scope, `correctResolution` must not observe `ObjectEngineResult.Cell.check`: replacing only check components while preserving the OER's types, present keys, and cell values cannot change the judgment.
-
-For now, the objective is the definition itself. Do not add executable tests for `correctResolution`; careful human inspection of the definition and its worked examples is the validation strategy at this stage. The repository's existing test volume and its general use of finite checks do not imply that this judgment needs constructible OER witnesses.
-
-## Repository
-
-The repository has two Gradle projects:
-
-- [`model/src/main/kotlin/model/`](./model/src/main/kotlin/model/) defines carrier values, one-world assumptions, resolver registrations, and their invariants.
-- [`model/src/test/kotlin/model/`](./model/src/test/kotlin/model/) contains model examples and finite checks.
-- [`semantics/src/main/kotlin/semantics/`](./semantics/src/main/kotlin/semantics/) defines transformations, predicates, and reasoning over the model.
-- [`semantics/src/test/kotlin/semantics/`](./semantics/src/test/kotlin/semantics/) contains semantic examples and finite checks.
-
-Run `./gradlew check` for the complete repository verification.
+We have a fairly complete algebra at this point and a definition of correct resolution.  At this point we're a little stuck as to large next steps, so in each session we've just been experimenting with various ideas.  What we have identified is that the predicate `isClosedUnderResolverDemand` (`isClosed` for short) -- a subpredicate of `correctResolution` -- is what makes our problem a difficult one.  In particular, we are trying to understand how demand "flows" into the resolvers that are implied by an correctly-resolved `ObjectEngineResult`.
 
 ## Current Model
 
@@ -123,53 +100,3 @@ Demand : RuntimeTypeAssignment -> RequirementTree
 ```
 
 Each complete runtime type assignment yields an ordinary monomorphic requirement tree. A compact implementation may share equivalent continuations, but sharing is a representation choice and is valid only when the continuation no longer depends on ancestry, target scope, ownership, or an ancestor type condition.
-
-## Continuation
-
-Implement the Query-rooted `correctResolution(oer, fragment)` judgment in the semantic layer:
-
-```text
-world |- correctResolution(oer, fragment) :=
-    rootedAndWellTyped(oer, fragment)
-    && oer.conformsToSchema()
-    && oer.conformsToFragment(fragment)
-    && oer.isClosedUnderResolverDemand()
-    && oer.conformsToResolvers()
-    && oer.conformsToTypename()
-```
-
-- `rootedAndWellTyped(oer, fragment)` establishes the judgment's domain: `fragment.nominalType == world.schema.query`, and `oer` is an object result whose canonical concrete type is `world.schema.query`.
-- `oer.conformsToSchema()` establishes recursive schema conformance independently of demand: every present result conforms to its declared output type, including nullability, list structure, and concrete object type.
-- `oer.conformsToFragment(fragment)` establishes correct shape: after specializing type conditions to each runtime concrete object and instantiating applicable `Schema.ObjectKey` values, the OER contains every cell required by the external fragment. Null and error results stop recursive requirements, and an applicable key whose arguments contain `Schema.ErrorValue` requires its error cell without invoking its field resolver. This predicate is schema-blind: the input fragment is post-validation, so its compatibility with the schema is assumed rather than revalidated here.
-- `oer.isClosedUnderResolverDemand()` establishes sufficient content: every activated resolver occurrence has the resolved input it requires. For a field resolver, its parent OER conforms to the resolver's `objectFragment`; these requirements apply transitively under the same type guards. An activated node resolver has its required `id` addressing bridge even though that bridge is not a resolver-demand edge.
-- `oer.conformsToResolvers()` establishes resolver consistency: each activated field or node resolver agrees with the values attributed to it in the OER. Field-resolver inputs are the `Schema.ObjectValue` materialized from the parent according to its `objectFragment`; its `fieldValues` retain the same concrete `Schema.ObjectKey` coordinates as the corresponding OER cells. Comparison with resolver output is recursive and ownership-aware, preserving exact scalar, null, error, list, and concrete-type structure while stopping where ownership passes to another resolver. This conjunct never observes `ObjectEngineResult.Cell.check`.
-- `oer.conformsToTypename()` establishes engine-supplied type-name consistency: every present `__typename` cell contains the name of its OER object's canonical concrete type.
-
-1. Establish the judgment's domain: `fragment.nominalType == world.schema.query`, and `oer` is the Query-rooted result being judged.
-2. Define concrete type applicability for flattened selections and specialization of an applicable selection's possibly abstract `Schema.ObjectKey` into its concrete OER coordinate, including variable instantiation and the non-invoking error-cell rule for arguments containing `Schema.ErrorValue`.
-3. Define the least guarded required-cell closure seeded by `fragment.subselections` and extended transitively through demanded resolvers' `objectFragment`s.
-4. Define correctness recursively over object, list, and simple results, specializing guarded requirements with each concrete `Schema.ObjectType` and relating resolver-owned values to the registered resolver interpretations while never inspecting `ObjectEngineResult.Cell.check`.
-5. Decide and document directly which additional OER cells, if any, `correctResolution` permits; do not introduce a separate minimality judgment first.
-
-Keep these definitions in the semantic layer. They should consume the established model and trust its construction invariants rather than revalidating schema ownership or registry coherence.
-
-Do not extend the model with OER construction support or add executable correctness tests as part of this continuation. If the predicate itself requires an OER observation that the carrier does not currently expose, identify and justify that requirement independently; test convenience is not sufficient justification for a model change.
-
-Use focused worked examples as aids to human inspection, not as executable tests or proofs. The first examples should cover:
-
-- a type-conditioned passive field;
-- the guarded `B/helper` object-fragment case above;
-- sibling object-fragment consumers whose demand converges on one producer;
-- concrete implementations that induce different guarded demand at the same result position;
-- a list containing more than one concrete object type; and
-- required cells versus additional cells accepted or rejected by correctness; and
-- otherwise identical OERs whose check components differ but receive the same correctness verdict.
-
-## Open Questions
-
-- What additional semantically valid cells, if any, should `correctResolution` permit?
-- How should recursive correctness relate a field resolver's resolved `objectFragment` input to the output returned by its registered function?
-- How should the later model admit legal demand cycles without confusing coordinate-level recursion with runtime occurrence identity?
-- Which deferred conditions, especially directives and variable providers, must become guards in the same requirement representation?
-
-Do not introduce planner state or scheduler transitions to answer these questions. The immediate objective is a plan-independent specification of correct field-resolution results.

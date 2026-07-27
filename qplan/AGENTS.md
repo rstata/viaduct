@@ -4,11 +4,23 @@ In Markdown files, keep each prose paragraph and each individual list item on a 
 
 ## Purpose
 
-This repository uses compiling Kotlin as a precise modeling language for reasoning about Viaduct query execution and resolver demand. Read [Query Plan Research](./evergreen.md) for the durable problem statement, established findings, correctness constraints, and open questions that motivate the code.
+This repository uses compiling Kotlin as a precise modeling language for reasoning about Viaduct query execution and resolver demand. Viaduct decomposes query execution into two phases, field resolution and field completion, and the work in this directory specifically targets field resolution.  Read [Query Plan Research](./evergreen.md) for the durable problem statement, established findings, correctness constraints, and open questions that motivate the code.
 
-## Projects
+## This is math, not programming!
 
-The [`model` project](./model/AGENTS.md) defines the carrier algebra and its invariants. The [`semantics` project](./semantics/AGENTS.md) defines transformations, predicates, and other reasoning over that algebra; consult each project's local guidance before changing it.
+Semantic Kotlin expressions denote mathematical functions, relations, and values. `resolver.function(input, arguments)` denotes application of a stipulated function.  It is not an event and implies no execution, invocation, effects, timing, ordering, allocation, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
+
+## State
+
+* The [`model` project](./model/AGENTS.md) defines the carrier algebra and its invariants. Our model encompases GraphQL schemas, GraphQL selection sets, GraphQL values, and a representation of the result of field resolution.
+
+* The [`semantics` project](./semantics/AGENTS.md) defines transformations, predicates, and other reasoning over that algebra.
+
+Consult each project's local guidance before changing it.
+
+## Validation
+
+This directory is a multi-project Gradle build consisting of two projects, `model` and `semantics`, each of which has a validation suite: from this directory run `./gradlew check` for the complete repository validation.
 
 ## Shared Modeling Discipline
 

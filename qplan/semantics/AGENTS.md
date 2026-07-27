@@ -6,6 +6,19 @@ This project defines transformations, predicates, and other reasoning over the a
 
 Follow the repository-wide purpose and modeling discipline in [`../AGENTS.md`](../AGENTS.md).
 
+The main result so far is the predicate:
+```kotlin
+package semantics.correctresolution
+
+context(world: Assumptions)
+suspend fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
+```
+which defines whether or not its target parameter is a correct resolution for the provided `fragment`.
+
+## This is math, not programming!
+
+Semantic Kotlin expressions denote mathematical functions, relations, and values. `resolver.function(input, arguments)` denotes application of a stipulated function.  It is not an event and implies no execution, invocation, effects, timing, ordering, allocation, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
+
 ## Assumption Context
 
 Public semantic operations interpreted under one reasoning world are functions with a context parameter named `world`:

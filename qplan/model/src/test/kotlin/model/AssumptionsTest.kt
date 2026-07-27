@@ -240,7 +240,7 @@ class AssumptionsTest {
             assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
         )
         val nodeKey =
-            schema.objectEngineResultKey(
+            schema.objectKey(
                 field = nodeField,
                 arguments = mapOf("filter" to filterValue),
             )
@@ -249,18 +249,18 @@ class AssumptionsTest {
         assertEquals(filterValue, nodeKey.arguments.fieldValues["filter"])
         assertEquals(
             nodeKey,
-            schema.objectEngineResultKey(
+            schema.objectKey(
                 field = nodeField,
                 arguments = mapOf("filter" to filterValue),
             ),
         )
         val interfaceIdKey =
-            schema.objectEngineResultKey(
+            schema.objectKey(
                 field = schema.field("Node", "id"),
                 arguments = emptyMap(),
             )
         val objectIdKey =
-            schema.objectEngineResultKey(
+            schema.objectKey(
                 field = schema.field("User", "id"),
                 arguments = emptyMap(),
             )
@@ -280,6 +280,53 @@ class AssumptionsTest {
         assertEquals("limit", limitInputField.name)
         assertFalse(limitInputField.isRequired)
         assertFalse(filter.fields.getValue("tags").type.isBaseTypeNullable)
+    }
+
+    @Test
+    fun `object values use concrete argument-sensitive keys`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val user = schema.type("User") as Schema.ObjectType
+        val friend = schema.field("User", "friend")
+        val firstKey = schema.objectKey(friend, mapOf("limit" to 1))
+        val secondKey = schema.objectKey(friend, mapOf("limit" to 2))
+        val friendValue = schema.objectValue(user, emptyMap())
+
+        val value =
+            schema.objectValue(
+                type = user,
+                fields =
+                    mapOf(
+                        firstKey to friendValue,
+                        secondKey to null,
+                    ),
+            )
+
+        assertEquals(setOf(firstKey, secondKey), value.fieldValues.keys)
+        assertEquals(friendValue, value.fieldValues[firstKey])
+        assertEquals(null, value.fieldValues[secondKey])
+
+        assertFailsWith<IllegalArgumentException> {
+            schema.objectValue(
+                type = user,
+                fields =
+                    mapOf(
+                        schema.objectKey(schema.field("Node", "id"), emptyMap()) to
+                            schema.idValue("abstract"),
+                    ),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            schema.objectValue(
+                type = user,
+                fields =
+                    mapOf(
+                        schema.objectKey(
+                            friend,
+                            mapOf("limit" to schema.variableValue("limit")),
+                        ) to friendValue,
+                    ),
+            )
+        }
     }
 
     @Test

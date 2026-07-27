@@ -70,16 +70,16 @@ fun Schema.ObjectType.snip(
 
     val selectedFields =
         applicableSelections
-            .groupBy { it.key.field.fieldName }
-            .mapNotNull { (fieldName, fieldSelections) ->
-                val concreteField = world.schema.field(result.type.typeName, fieldName)
+            .groupBy { it.concreteObjectKey(result.type) }
+            .mapNotNull { (key, fieldSelections) ->
+                val concreteField = key.field
                 val crossesBoundary =
-                    fieldName == "id" ||
-                        fieldName == "__typename" ||
+                    concreteField.fieldName == "id" ||
+                        concreteField.fieldName == "__typename" ||
                         world.executorRegistry.hasFieldResolver(concreteField)
                 if (crossesBoundary) return@mapNotNull null
 
-                val value = result.outputObjectFields.getValue(fieldName)
+                val value = result.fieldValues.getValue(key)
                 val firstSelection = fieldSelections.first()
                 val selectedValue =
                     if (firstSelection.isLeaf) {
@@ -91,7 +91,7 @@ fun Schema.ObjectType.snip(
                                 .toSelectionForest()
                         value.snipOutput(subselections)
                     }
-                fieldName to selectedValue
+                key to selectedValue
             }
             .toMap()
 
@@ -106,12 +106,12 @@ private fun Schema.ObjectValue.snip(
 
     val selectedFields =
         applicableSelections
-            .groupBy { it.key.field.fieldName }
-            .mapNotNull { (fieldName, fieldSelections) ->
-                val concreteField = world.schema.field(type.typeName, fieldName)
+            .groupBy { it.concreteObjectKey(type) }
+            .mapNotNull { (key, fieldSelections) ->
+                val concreteField = key.field
                 if (world.behavioral(concreteField)) return@mapNotNull null
 
-                val value = outputObjectFields.getValue(fieldName)
+                val value = fieldValues.getValue(key)
                 val firstSelection = fieldSelections.first()
                 val selectedValue =
                     if (firstSelection.isLeaf) {
@@ -123,7 +123,7 @@ private fun Schema.ObjectValue.snip(
                                 .toSelectionForest()
                         value.snipOutput(subselections)
                     }
-                fieldName to selectedValue
+                key to selectedValue
             }
             .toMap()
 
@@ -152,3 +152,10 @@ private fun Schema.OutputValue?.snipOutput(
             this
         }
     }
+
+context(world: Assumptions)
+private fun Selection.concreteObjectKey(type: Schema.ObjectType): Schema.ObjectKey =
+    world.schema.objectKey(
+        field = world.schema.field(type.typeName, key.field.fieldName),
+        arguments = key.arguments.fieldValues,
+    )

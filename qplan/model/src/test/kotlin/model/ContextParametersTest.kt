@@ -52,12 +52,12 @@ class ContextParametersTest {
             )
 
         assertEquals(world.schema.query, result.type)
-        assertEquals(emptyMap(), result.outputObjectFields)
+        assertEquals(emptyMap(), result.fieldValues)
     }
 
     context(world: Assumptions)
     private fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue = world.run {
-        val copiedFields = outputObjectFields.toMap()
+        val copiedFields = fieldValues.toMap()
         schema.objectValue(type, copiedFields)
     }
 
@@ -90,9 +90,15 @@ class ContextParametersTest {
             type = schema.query,
             fields =
                 mapOf(
-                    "id" to schema.idValue("query"),
-                    "name" to schema.stringValue("Query"),
+                    schema.key("id") to schema.idValue("query"),
+                    schema.key("name") to schema.stringValue("Query"),
                 ),
+        )
+
+    private fun Schema.key(fieldName: String): Schema.ObjectKey =
+        objectKey(
+            field = field("Query", fieldName),
+            arguments = emptyMap(),
         )
 
     private companion object {

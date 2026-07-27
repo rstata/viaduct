@@ -17,7 +17,7 @@ package model
  * reachable from the schema is likewise the canonical result of [type].
  *
  * Construct every [Value] other than the schema-independent [ErrorValue], every [ArgumentsValue],
- * and every [ObjectEngineResult.Key] through this schema's factory methods. The one-schema world
+ * and every [ObjectKey] through this schema's factory methods. The one-schema world
  * stipulates that every definition supplied to those methods is canonical in this schema; the
  * factories do not revalidate that ownership. Other modeling domains may instead use names and
  * coordinates. Nested definitions navigate to their canonical owners through
@@ -188,25 +188,22 @@ interface Schema {
     ): ListEngineResult = ListEngineResult.create(type, values)
 
     /**
-     * Constructs a possibly partial object value whose fields belong to [type].
+     * Constructs a possibly partial object value whose keys belong to [type].
      *
-     * A resolver may omit fields that it did not resolve. A present field may map to null.
+     * A resolver may omit fields that it did not resolve. Distinct argument tuples for the same
+     * field are distinct keys, and a present key may map to null.
      *
-     * @throws IllegalArgumentException when a supplied field name does not belong to [type]
+     * @throws IllegalArgumentException when a supplied key's field does not belong to [type] or its
+     * arguments recursively contain an unresolved [VariableValue]
      */
     fun objectValue(
         type: ObjectType,
-        fields: Map<String, OutputValue?>,
-    ): ObjectValue {
-        require(fields.keys.all(type.fields::containsKey)) {
-            val unknownFields = fields.keys - type.fields.keys
-            "${type.typeName} has no output fields named ${unknownFields.sorted().joinToString()}"
-        }
-        return DefaultObjectValue(
+        fields: Map<ObjectKey, OutputValue?>,
+    ): ObjectValue =
+        DefaultObjectValue(
             type = type,
-            outputObjectFields = FieldValues(type, fields.toMap()),
+            fieldValues = ObjectFieldValues(type, fields.toMap()),
         )
-    }
 
     /**
      * Constructs an input-object value by converting each supplied host value according to its
@@ -260,18 +257,19 @@ interface Schema {
      *
      * The returned key carries [field] itself, so its complete schema coordinate is closed over the
      * canonical definitions of this schema. Its argument value is typed by [OutputField.arguments].
-     * This factory also constructs keys for abstract-type fields used outside an OER; the invariant
-     * that a key present in an [ObjectEngineResult] belongs to an [ObjectType] is enforced by the
-     * modeled OER domain rather than by this factory.
+     * This factory also constructs keys for abstract-type fields or unresolved arguments used
+     * outside an [ObjectValue] or [ObjectEngineResult]. The concrete-field and instantiated-argument
+     * constraints on keys present in those values are enforced by their respective carrier domains
+     * rather than by this factory.
      *
      * @throws ClassCastException when an argument is unknown or a supplied value does not have the
      * required shape
      */
-    fun objectEngineResultKey(
+    fun objectKey(
         field: OutputField,
         arguments: Map<String, Any?>,
-    ): ObjectEngineResult.Key =
-        ObjectEngineResult.Key(
+    ): ObjectKey =
+        ObjectKey(
             field = field,
             arguments = argumentsValue(field, arguments),
         )
@@ -572,8 +570,9 @@ interface Schema {
     /**
      * The values supplied for one output field's complete argument definition.
      *
-     * A value may contain nested unbound [VariableValue] instances when used outside an OER.
-     * Equality is structural over [type] and [fieldValues]; no distinguished empty value is needed.
+     * A value may contain nested unbound [VariableValue] instances when it belongs to an
+     * [ObjectKey] used outside an [ObjectValue] or [ObjectEngineResult]. Equality is structural
+     * over [type] and [fieldValues]; no distinguished empty value is needed.
      */
     sealed interface ArgumentsValue : InputLikeValue {
         override val type: FieldArguments
@@ -581,15 +580,100 @@ interface Schema {
     }
 
     /**
+     * One alias-free output-field coordinate consisting of a canonical field and its arguments.
+     *
+     * ### Invariant: object-key-argument-definition
+     *
+     * `arguments.type == field.arguments`.
+     *
+     * ### Usage
+     *
+     * A key used in a selection may carry an abstract-type field or unresolved variables. A key in
+     * an [ObjectValue] or [ObjectEngineResult] carries a field owned by that concrete object type
+     * and contains no unresolved variables. Aliases do not participate in identity.
+     *
+     * Construct keys through [Schema.objectKey]. Equality is structural over [field] and
+     * [arguments], using the canonical schema equality documented by [Schema].
+     */
+    @ConsistentCopyVisibility
+    data class ObjectKey internal constructor(
+        val field: OutputField,
+        val arguments: ArgumentsValue,
+    ) {
+        init {
+            require(arguments.type == field.arguments) {
+                "Key arguments do not belong to its output field"
+            }
+        }
+    }
+
+    /**
      * A possibly partial object output.
      *
      * ### Invariant: object-value-owner
      *
-     * `outputObjectFields.containingType == type`.
+     * `fieldValues.containingType == type`. Every present [ObjectKey] carries a field whose
+     * containing type equals [type] and arguments containing no unresolved [VariableValue].
      */
     sealed interface ObjectValue : OutputValue, TypedValue {
         override val type: ObjectType
-        val outputObjectFields: FieldValues<ObjectType, OutputValue>
+        val fieldValues: ObjectFieldValues
+    }
+
+    /**
+     * A finite map from exact output-field coordinates to values.
+     *
+     * [containingType] is the concrete object type whose keys this map contains. Unlike
+     * [FieldValues], this map is keyed by [ObjectKey] rather than field name, so it can represent
+     * multiple argument tuples for one output field.
+     *
+     * Construct instances through [Schema.objectValue].
+     */
+    class ObjectFieldValues internal constructor(
+        val containingType: ObjectType,
+        private val backingMap: Map<ObjectKey, OutputValue?>,
+    ) : Map<ObjectKey, OutputValue?> by backingMap {
+        init {
+            require(backingMap.keys.all { it.field.containingType == containingType }) {
+                val foreignFields =
+                    backingMap.keys
+                        .filter { it.field.containingType != containingType }
+                        .map { "${it.field.containingType.typeName}/${it.field.fieldName}" }
+                "${containingType.typeName} cannot contain output fields " +
+                    foreignFields.sorted().joinToString()
+            }
+            require(
+                backingMap.keys.none { key ->
+                    key.arguments.fieldValues.values.any { it.containsVariableValue() }
+                },
+            ) {
+                "${containingType.typeName} object-value keys cannot contain unresolved variables"
+            }
+        }
+
+        /** @throws MissingFieldException when [key] is not present */
+        override operator fun get(key: ObjectKey): OutputValue? = getValue(key)
+
+        /** @throws MissingFieldException when [key] is not present */
+        fun getValue(key: ObjectKey): OutputValue? {
+            if (!backingMap.containsKey(key)) {
+                throw MissingFieldException(
+                    containingType.typeName,
+                    key.field.fieldName,
+                )
+            }
+            return backingMap[key]
+        }
+
+        override fun equals(other: Any?): Boolean =
+            other is ObjectFieldValues &&
+                containingType == other.containingType &&
+                backingMap == other.backingMap
+
+        override fun hashCode(): Int =
+            31 * containingType.hashCode() + backingMap.hashCode()
+
+        override fun toString(): String = backingMap.toString()
     }
 
     /**
@@ -602,9 +686,8 @@ interface Schema {
      *
      * ### Lookup
      *
-     * Unlike an ordinary [Map], [get] and [getValue] throw
-     * [MissingFieldException] when the requested field does not exist or, for an output object, has
-     * not been set. A present field may still map to null.
+     * Unlike an ordinary [Map], [get] and [getValue] throw [MissingFieldException] when the
+     * requested field does not exist or has not been set. A present field may still map to null.
      *
      * [Map] extension functions such as [Map.getOrElse] may call [get] and therefore throw instead of
      * applying their fallback. Check [containsKey] before looking up a field whose presence is
@@ -710,10 +793,7 @@ interface Schema {
         override val outputListValues: List<OutputValue?>
             get() = unsupported()
 
-        override val fieldValues: FieldValues<InputObjectType, InputValue>
-            get() = unsupported()
-
-        override val outputObjectFields: FieldValues<ObjectType, OutputValue>
+        override val fieldValues: Nothing
             get() = unsupported()
 
         override val variableName: String
@@ -1119,8 +1199,7 @@ private data class DefaultListValue(
 
 private data class DefaultObjectValue(
     override val type: Schema.ObjectType,
-    override val outputObjectFields:
-        Schema.FieldValues<Schema.ObjectType, Schema.OutputValue>,
+    override val fieldValues: Schema.ObjectFieldValues,
 ) : Schema.ObjectValue
 
 private data class DefaultInputObjectValue(
@@ -1138,3 +1217,16 @@ private data class DefaultArgumentsValue(
 private data class DefaultVariableValue(
     override val variableName: String,
 ) : Schema.VariableValue
+
+private fun Schema.InputValue?.containsVariableValue(): Boolean =
+    when {
+        this == null || this == Schema.ErrorValue -> false
+        this is Schema.VariableValue -> true
+        this is Schema.InputListValue ->
+            inputListValues.any { it.containsVariableValue() }
+
+        this is Schema.InputObjectValue ->
+            fieldValues.values.any { it.containsVariableValue() }
+
+        else -> false
+    }

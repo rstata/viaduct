@@ -33,7 +33,7 @@ class WorldInjectionTest {
                             NodeResolver { id ->
                                 schema.objectValue(
                                     type = user,
-                                    fields = mapOf("id" to id),
+                                    fields = mapOf(schema.key(user, "id") to id),
                                 )
                             },
                     )
@@ -53,7 +53,11 @@ class WorldInjectionTest {
                                 function = { _, _ ->
                                     schema.objectValue(
                                         type = user,
-                                        fields = mapOf("id" to schema.idValue("field")),
+                                        fields =
+                                            mapOf(
+                                                schema.key(user, "id") to
+                                                    schema.idValue("field"),
+                                            ),
                                     )
                                 },
                             ),
@@ -84,7 +88,9 @@ class WorldInjectionTest {
             )
         assertEquals(
             "node",
-            assertIs<Schema.IDValue>(node.outputObjectFields["id"]).idValue,
+            assertIs<Schema.IDValue>(
+                node.fieldValues[schema.key(user, "id")],
+            ).idValue,
         )
 
         val userField = schema.field("Query", "user")
@@ -98,7 +104,9 @@ class WorldInjectionTest {
             )
         assertEquals(
             "field",
-            assertIs<Schema.IDValue>(field.outputObjectFields["id"]).idValue,
+            assertIs<Schema.IDValue>(
+                field.fieldValues[schema.key(user, "id")],
+            ).idValue,
         )
 
         val (typeInScope, specSelections) =
@@ -153,3 +161,12 @@ class WorldInjectionTest {
             """.trimIndent()
     }
 }
+
+private fun Schema.key(
+    type: Schema.ObjectType,
+    fieldName: String,
+): Schema.ObjectKey =
+    objectKey(
+        field = field(type.typeName, fieldName),
+        arguments = emptyMap(),
+    )

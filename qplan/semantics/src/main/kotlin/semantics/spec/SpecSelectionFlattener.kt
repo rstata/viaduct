@@ -77,7 +77,7 @@ private fun SpecSelection.Field.flattenField(context: SelectionContext): Selecti
 
     return Selection.of(
         key =
-            world.schema.objectEngineResultKey(
+            world.schema.objectKey(
                 field = field,
                 arguments = arguments,
             ),

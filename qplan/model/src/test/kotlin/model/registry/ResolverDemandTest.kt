@@ -225,7 +225,7 @@ class ResolverDemandTest {
         ): Selection =
             Selection.of(
                 key =
-                    schema.objectEngineResultKey(
+                    schema.objectKey(
                         field = schema.field(nominalType.typeName, fieldName),
                         arguments = emptyMap(),
                     ),

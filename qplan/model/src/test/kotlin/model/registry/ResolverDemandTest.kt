@@ -72,6 +72,7 @@ class ResolverDemandTest {
                                 ),
                         )
                     mapOf(
+                        schema.field("Query", "node") to resolver(fragment(query)),
                         schema.field("Query", "consumer") to
                             resolver(consumerFragment),
                         schema.field("Query", "outer") to resolver(outerFragment),
@@ -86,6 +87,7 @@ class ResolverDemandTest {
         val registry = world.executorRegistry
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
+        val queryNode = registry.fieldResolver(schema.field("Query", "node"))
         val consumer = registry.fieldResolver(schema.field("Query", "consumer"))
         val outer = registry.fieldResolver(schema.field("Query", "outer"))
         val userResolved = registry.fieldResolver(schema.field("User", "resolved"))
@@ -94,16 +96,18 @@ class ResolverDemandTest {
         val adminNode = registry.nodeResolver(admin)
 
         assertEquals(
-            setOf(userNode, adminNode, userResolved, adminResolved),
+            setOf(queryNode, userNode, adminNode, userResolved, adminResolved),
             consumer.mayDemandFrom,
         )
         assertEquals(setOf(consumer), outer.mayDemandFrom)
+        assertTrue(queryNode.mayDemandFrom.isEmpty())
         assertTrue(userNode.mayDemandFrom.isEmpty())
         assertTrue(adminNode.mayDemandFrom.isEmpty())
         assertTrue(userResolved.mayDemandFrom.isEmpty())
         assertTrue(adminResolved.mayDemandFrom.isEmpty())
 
         assertEquals(setOf(outer), consumer.mayBeDemandedBy)
+        assertEquals(setOf(consumer), queryNode.mayBeDemandedBy)
         assertEquals(setOf(consumer), userNode.mayBeDemandedBy)
         assertEquals(setOf(consumer), adminNode.mayBeDemandedBy)
         assertEquals(setOf(consumer), userResolved.mayBeDemandedBy)

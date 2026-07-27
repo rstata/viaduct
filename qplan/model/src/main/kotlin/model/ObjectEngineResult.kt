@@ -32,12 +32,9 @@ sealed interface EngineResult {
 /**
  * An object result similar to the result of the GraphQL ExecuteSelectionSet algorithm.
  *
- * Extensional value equality is intentionally encapsulated by [equals] rather than exposing the
- * set of present [Key] instances for now. Two object results are equal exactly when their
- * [type] expressions match and, for every possible key, their [fetch] lookups return equal [Cell]
- * values or are both missing. Missingness means that the lookup throws [MissingFieldException].
- * Although callers cannot enumerate the lookup domain, equality includes both that domain and
- * its results.
+ * [keys] exposes the finite domain of present [Key] instances. Two object results are equal exactly
+ * when their [type] expressions and key sets match and [fetch] returns equal [Cell] values for
+ * every present key.
  *
  * ### Invariant: oer-present-key-validity
  *
@@ -57,6 +54,16 @@ sealed class ObjectEngineResult : EngineResult {
     abstract override val type: Schema.TypeExpr.Named<Schema.ObjectType>
     final override val baseType: Schema.ObjectType
         get() = type.baseType
+
+    /**
+     * The finite set of keys present in this result.
+     *
+     * ### Invariant: oer-key-domain
+     *
+     * For every [Key] `key`, `key in keys` exactly when [fetch] returns one [Cell]; when
+     * `key !in keys`, [fetch] throws [MissingFieldException]. The set has no modeled order.
+     */
+    abstract val keys: Set<Key>
 
     /**
      * A key for one canonical schema output field and its arguments.
@@ -87,6 +94,15 @@ sealed class ObjectEngineResult : EngineResult {
         }
     }
 
+    /**
+     * One present field's resolved value and retained check component.
+     *
+     * [check] is an uninterpreted carrier value in the current model. This package does not define
+     * how it is produced or what its Boolean value means; those rules belong to future checker
+     * semantics. A semantic judgment may explicitly declare itself check-insensitive and observe
+     * only field presence and [value]. Future checker-aware correctness judgments will interpret
+     * and account for [check] alongside [value].
+     */
     data class Cell(
         val value: EngineResult?,
         val check: Schema.BooleanValue,

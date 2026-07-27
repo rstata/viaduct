@@ -42,12 +42,14 @@ class ContextParametersTest {
         val source = world.sourceObject()
 
         val result =
-            context(world) {
-                world.schema.field("Query", "self").snip(
-                    source,
-                    selectionForestOf(),
-                )
-            }
+            assertIs<Schema.ObjectValue>(
+                context(world) {
+                    world.schema.field("Query", "self").snip(
+                        source,
+                        selectionForestOf(),
+                    )
+                },
+            )
 
         assertEquals(world.schema.query, result.type)
         assertEquals(emptyMap(), result.outputObjectFields)
@@ -72,13 +74,14 @@ class ContextParametersTest {
                         override val nominalType = schema.query
                         override val subselections = selectionForestOf()
                     }
-                mapOf(
-                    schema.field("Query", "self") to
+                schema.query.fields.values
+                    .filter { it.fieldName != "__typename" }
+                    .associateWith {
                         FieldResolver(
                             objectFragment = fragment,
                             function = { _, _ -> error("Not invoked") },
-                        ),
-                )
+                        )
+                    }
             },
         ).assumptions
 

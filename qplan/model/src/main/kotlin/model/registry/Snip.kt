@@ -11,10 +11,11 @@ import model.toSelectionForest
  * its output selection set.
  *
  * For fixed non-selection inputs, the field's behavior produces [result] before [selections] are
- * considered. Projecting that same object for different requested selections makes the results
+ * considered. Projecting that same output for different requested selections makes the results
  * agree at every coordinate selected by both.
  *
- * Projection retains selected non-behavioral fields and stops before every field for which
+ * Simple, null, and error results are unchanged. List results are projected element-wise. Object
+ * projection retains selected non-behavioral fields and stops before every field for which
  * [Assumptions.behavioral] is true. This leaves a nested node's `id` field in the containing
  * resolver's output while omitting fields supplied by that node's resolver or by explicit field
  * resolvers. A type-conditioned selection that does not apply to a concrete object is omitted
@@ -31,13 +32,13 @@ import model.toSelectionForest
  */
 context(world: Assumptions)
 fun Schema.OutputField.snip(
-    result: Schema.ObjectValue,
+    result: Schema.OutputValue?,
     selections: SelectionForest,
-): Schema.ObjectValue {
+): Schema.OutputValue? {
     require(world.behavioral(this)) {
         "Field ${containingType.typeName}/$fieldName is not behavioral"
     }
-    return result.snip(selections)
+    return result.snipOutput(selections)
 }
 
 /**
@@ -144,8 +145,10 @@ private fun Schema.OutputValue?.snipOutput(
                 outputListValues.map { it.snipOutput(selections) },
             )
 
-        is Schema.SimpleValue ->
-            throw IllegalArgumentException(
-                "Cannot apply subselections to simple value of type ${baseType.typeName}",
-            )
+        is Schema.SimpleValue -> {
+            require(selections.isEmpty()) {
+                "Cannot apply subselections to simple value of type ${baseType.typeName}"
+            }
+            this
+        }
     }

@@ -90,9 +90,11 @@ class WorldInjectionTest {
         val userField = schema.field("Query", "user")
         val (_, fieldResolverFunction) = registry.fieldResolver(userField)
         val field =
-            fieldResolverFunction(
-                schema.objectValue(schema.query, emptyMap()),
-                schema.argumentsValue(userField, emptyMap()),
+            assertIs<Schema.ObjectValue>(
+                fieldResolverFunction(
+                    schema.objectValue(schema.query, emptyMap()),
+                    schema.argumentsValue(userField, emptyMap()),
+                ),
             )
         assertEquals(
             "field",
@@ -121,7 +123,7 @@ class WorldInjectionTest {
     }
 
     @Test
-    fun `guice explicitly binds empty world input tables`() {
+    fun `guice supplies required query resolvers when resolver inputs are omitted`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val user = world.schema.type("User") as Schema.ObjectType
 
@@ -129,17 +131,19 @@ class WorldInjectionTest {
         assertFailsWith<MissingExecutorException> {
             world.executorRegistry.nodeResolver(user)
         }
-        assertFailsWith<MissingExecutorException> {
-            world.executorRegistry.fieldResolver(
-                world.schema.field("Query", "user"),
-            )
-        }
+        world.executorRegistry.fieldResolver(
+            world.schema.field("Query", "user"),
+        )
     }
 
     private companion object {
         val SCHEMA_SDL =
             """
-            type User {
+            interface Node {
+              id: ID!
+            }
+
+            type User implements Node {
               id: ID!
             }
 

@@ -14,7 +14,7 @@ The current model is building a plan-independent correctness judgment over `Engi
 
 ## Next Step Goal
 
-We have a fairly complete algebra at this point and a definition of correct resolution.  At this point we're a little stuck as to large next steps, so in each session we've just been experimenting with various ideas.  What we have identified is that the predicate `isClosedUnderResolverDemand` (`isClosed` for short) -- a subpredicate of `correctResolution` -- is what makes our problem a difficult one.  In particular, we are trying to understand how demand "flows" into the resolvers that are implied by an correctly-resolved `EngineResult.Object`.
+We have a fairly complete algebra at this point and a definition of correct resolution. At this point we're a little stuck as to large next steps, so in each session we've just been experimenting with various ideas. What we have identified is that the predicate `isClosedUnderResolverDemand` (`isClosed` for short) -- a subpredicate of `correctResolution` -- is what makes our problem a difficult one. In particular, we are trying to understand how demand "flows" into the resolvers that are implied by a correctly resolved `EngineResult.Object`. The latest experiment adds a partial structural union over engine results as a possible tool for combining compatible pieces of resolver output; whether and how that operation helps characterize demand flow remains open.
 
 ## Current Model
 
@@ -26,7 +26,9 @@ Every schema definition has one canonical object, so ordinary `==` means that tw
 
 `Value.Key` is the shared alias-free coordinate for selections, resolved object values, and OER cells. It contains a canonical output field and its coerced arguments. `Value.Object.fieldValues` is a `Value.ObjectFields` map keyed by `Value.Key`, while `EngineResult.Object.keys` is the set of `Value.Key` coordinates whose cells are present. Every key present in either value carries a field owned by that value's concrete `Schema.ObjectType` and contains no unresolved variables; keys outside those values may carry abstract-type fields or unresolved variables. A `Value.Object` can therefore contain multiple values for one output field under distinct argument tuples.
 
-`EngineResult.Object` is a finite, structurally comparable value tree constructed by `EngineResult.Object.of`. A present object field and each list element has one `EngineResult.Cell` containing a nullable value and a check result; absence differs from a present null. Object and list factories eagerly establish recursive schema conformance, and list results carry their element `typeExpr` even when empty.
+`EngineResult.Object`, `EngineResult.List`, and `EngineResult.Cell` are logic-constructible model types backed by private data-class implementations and constructed by their respective `of` factories; they are not externally supplied implementation points. An `EngineResult.Object` is a finite, structurally comparable value tree. A present object field and each list element has one `EngineResult.Cell` containing a nullable value and a check result; absence differs from a present null. Object and list factories eagerly establish recursive schema conformance, and list results carry their element `typeExpr` even when empty.
+
+`EngineResult?.union` is a partial structural operation. Object union requires equal object types, retains cells found in only one operand, and recursively unions cells found in both. List union is positional and requires equal element `typeExpr` values and lengths. Shared cells require equal check values; simple values union only when equal, and null unions only with null. An undefined union is represented by `IllegalArgumentException`.
 
 ### Selections And Fragments
 

@@ -17,10 +17,9 @@ package model
  * reachable from the schema is likewise the canonical result of [type].
  *
  * Construct every [Value] other than the schema-independent [ErrorValue], every [ArgumentsValue],
- * and every [ObjectKey] through this schema's factory methods. The one-schema world
- * stipulates that every definition supplied to those methods is canonical in this schema; the
- * factories do not revalidate that ownership. Other modeling domains may instead use names and
- * coordinates. Nested definitions navigate to their canonical owners through
+ * and every [ObjectKey] through a factory on its precise semantic category. The one-schema world
+ * stipulates that every definition supplied to those factories is canonical in this schema; the
+ * factories do not revalidate that ownership. Nested definitions navigate to their canonical owners through
  * [OutputField.containingType] and [InputLikeField.containingType]. Compare definitions with ordinary
  * `==`, `!=`, and collection equality operations. Only acyclic value objects such as [TypeExpr] and
  * [DefaultValue] add structural equality over their properties.
@@ -39,18 +38,6 @@ package model
  * concrete implementation, and mutability are not modeled.
  */
 interface Schema {
-    companion object {
-        /**
-         * The unique argument definition for every output field that takes no arguments.
-         *
-         * ### Invariant: schema-no-arguments
-         *
-         * For every [OutputField] `f`, `f.arguments == NoArguments` exactly when `f` takes no
-         * arguments.
-         */
-        @JvmField
-        val NoArguments: FieldArguments = FieldArguments.empty()
-    }
 
     /**
      * The canonical query root.
@@ -144,291 +131,6 @@ interface Schema {
         NONE,
     }
 
-    fun intValue(value: Int): IntValue = DefaultIntValue(value)
-
-    fun floatValue(value: Double): FloatValue {
-        require(value.isFinite()) { "GraphQL Float values must be finite" }
-        return DefaultFloatValue(value)
-    }
-
-    fun stringValue(value: String): StringValue = DefaultStringValue(value)
-
-    fun booleanValue(value: Boolean): BooleanValue = DefaultBooleanValue(value)
-
-    fun idValue(value: String): IDValue = DefaultIDValue(value)
-
-    fun enumValue(
-        type: EnumType,
-        value: String,
-    ): EnumValue {
-        require(value in type.values) {
-            "$value is not a value of ${type.typeName}"
-        }
-        return DefaultEnumValue(
-            type = type,
-            enumValue = value,
-        )
-    }
-
-    fun inputListValue(values: List<InputValue?>): InputListValue =
-        DefaultInputListValue(values.toList())
-
-    fun outputListValue(values: List<OutputValue?>): ListValue =
-        DefaultListValue(values.toList())
-
-    /** Constructs a list engine result whose elements are typed by their surrounding schema context. */
-    fun listEngineResult(values: List<EngineResult?>): ListEngineResult =
-        ListEngineResult.create(values)
-
-    /**
-     * Constructs a possibly partial object value whose keys belong to [type].
-     *
-     * A resolver may omit fields that it did not resolve. Distinct argument tuples for the same
-     * field are distinct keys, and a present key may map to null.
-     *
-     * @throws IllegalArgumentException when a supplied key's field does not belong to [type] or its
-     * arguments recursively contain an unresolved [VariableValue]
-     */
-    fun objectValue(
-        type: ObjectType,
-        fields: Map<ObjectKey, OutputValue?>,
-    ): ObjectValue =
-        DefaultObjectValue(
-            type = type,
-            fieldValues = ObjectFieldValues(type, fields.toMap()),
-        )
-
-    /**
-     * Constructs an input-object value by converting each supplied host value according to its
-     * schema field's [InputField.type].
-     *
-     * @throws ClassCastException when a field is unknown or a supplied value does not have the
-     * required shape
-     */
-    fun inputObjectValue(
-        type: InputObjectType,
-        fields: Map<String, Any?>,
-    ): InputObjectValue {
-        val convertedFields =
-            convertInputLikeFields(
-                type = type,
-                fields = fields,
-                context = type.typeName,
-            )
-        return DefaultInputObjectValue(
-            type = type,
-            fieldValues = FieldValues(type, convertedFields),
-        )
-    }
-
-    /**
-     * Constructs an argument value by converting each supplied host value according to its
-     * argument's [FieldArgument.type].
-     *
-     * @throws ClassCastException when an argument is unknown or a supplied value does not have the
-     * required shape
-     */
-    fun argumentsValue(
-        field: OutputField,
-        fields: Map<String, Any?>,
-    ): ArgumentsValue {
-        val convertedFields =
-            convertInputLikeFields(
-                type = field.arguments,
-                fields = fields,
-                context = "${field.containingType.typeName}/${field.fieldName}",
-            )
-        return DefaultArgumentsValue(
-            type = field.arguments,
-            fieldValues = FieldValues(field.arguments, convertedFields),
-        )
-    }
-
-    /**
-     * Constructs a key for [field], which is canonical under the one-schema invariant, converting
-     * each supplied host argument according to the field's argument definition.
-     *
-     * The returned key carries [field] itself, so its complete schema coordinate is closed over the
-     * canonical definitions of this schema. Its argument value is typed by [OutputField.arguments].
-     * This factory also constructs keys for abstract-type fields or unresolved arguments used
-     * outside an [ObjectValue] or [ObjectEngineResult]. The concrete-field and instantiated-argument
-     * constraints on keys present in those values are enforced by their respective carrier domains
-     * rather than by this factory.
-     *
-     * @throws ClassCastException when an argument is unknown or a supplied value does not have the
-     * required shape
-     */
-    fun objectKey(
-        field: OutputField,
-        arguments: Map<String, Any?>,
-    ): ObjectKey =
-        ObjectKey(
-            field = field,
-            arguments = argumentsValue(field, arguments),
-        )
-
-    fun variableValue(variableName: String): VariableValue =
-        DefaultVariableValue(variableName)
-
-    private fun convertInputLikeFields(
-        type: InputObjectLike,
-        fields: Map<String, Any?>,
-        context: String,
-    ): Map<String, InputValue?> =
-        fields.mapValues { (fieldName, value) ->
-            val field =
-                type.fields[fieldName]
-                    ?: throw ClassCastException(
-                        "$context has no input field named $fieldName",
-                    )
-            convertInputValue(
-                type = field.type,
-                value = value,
-                path = "$context.$fieldName",
-            )
-        }
-
-    private fun convertInputValue(
-        type: TypeExpr<InputType>,
-        value: Any?,
-        path: String,
-    ): InputValue? {
-        if (value == null) {
-            if (!type.isNullable) {
-                throw inputValueClassCast(path, type, value)
-            }
-            return null
-        }
-        if (value == ErrorValue) return ErrorValue
-        if (value is VariableValue) return value
-
-        return when (type) {
-            is TypeExpr.Named ->
-                convertNamedInputValue(
-                    type = type.baseType,
-                    value = value,
-                    path = path,
-                )
-
-            is TypeExpr.List -> {
-                val elements =
-                    when (value) {
-                        is InputListValue -> value.inputListValues
-                        is List<*> -> value
-                        else -> throw inputValueClassCast(path, type, value)
-                    }
-                inputListValue(
-                    elements.mapIndexed { index, element ->
-                        convertInputValue(
-                            type = type.elementType,
-                            value = element,
-                            path = "$path[$index]",
-                        )
-                    },
-                )
-            }
-        }
-    }
-
-    private fun convertNamedInputValue(
-        type: InputType,
-        value: Any,
-        path: String,
-    ): InputValue =
-        when (type) {
-            IntType ->
-                when (value) {
-                    is IntValue -> value
-                    is Int -> intValue(value)
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-
-            FloatType ->
-                when (value) {
-                    is FloatValue -> value
-                    is Double -> floatValue(value)
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-
-            StringType ->
-                when (value) {
-                    is StringValue -> value
-                    is String -> stringValue(value)
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-
-            BooleanType ->
-                when (value) {
-                    is BooleanValue -> value
-                    is Boolean -> booleanValue(value)
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-
-            IDType ->
-                when (value) {
-                    is IDValue -> value
-                    is String -> idValue(value)
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-
-            is EnumType ->
-                when (value) {
-                    is EnumValue -> {
-                        if (value.type != type) {
-                            throw inputValueClassCast(path, type, value)
-                        }
-                        value
-                    }
-
-                    is String -> enumValue(type, value)
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-
-            is InputObjectType ->
-                when (value) {
-                    is InputObjectValue -> {
-                        if (value.type != type) {
-                            throw inputValueClassCast(path, type, value)
-                        }
-                        value
-                    }
-
-                    is Map<*, *> ->
-                        inputObjectValue(
-                            type = type,
-                            fields = value.toStringKeyedMap(path),
-                        )
-
-                    else -> throw inputValueClassCast(path, type, value)
-                }
-        }
-
-    private fun Map<*, *>.toStringKeyedMap(path: String): Map<String, Any?> =
-        entries.associate { (key, value) ->
-            if (key !is String) {
-                throw ClassCastException(
-                    "$path requires String field names, got ${key?.let { it::class.simpleName }}",
-                )
-            }
-            key to value
-        }
-
-    private fun inputValueClassCast(
-        path: String,
-        type: TypeExpr<InputType>,
-        value: Any?,
-    ): ClassCastException =
-        inputValueClassCast(path, type.baseType, value)
-
-    private fun inputValueClassCast(
-        path: String,
-        type: InputType,
-        value: Any?,
-    ): ClassCastException =
-        ClassCastException(
-            "$path requires ${type.typeName}, got ${value?.let { it::class.simpleName } ?: "null"}",
-        )
-
     /**
      * A GraphQL semantic value.
      *
@@ -471,6 +173,10 @@ interface Schema {
             get() = IntType
 
         val intValue: Int
+
+        companion object {
+            fun of(value: Int): IntValue = IntValueImpl(value)
+        }
     }
 
     sealed interface FloatValue : ScalarValue {
@@ -483,6 +189,13 @@ interface Schema {
          * This value is finite; NaN and positive or negative infinity are excluded.
          */
         val floatValue: Double
+
+        companion object {
+            fun of(value: Double): FloatValue {
+                require(value.isFinite()) { "GraphQL Float values must be finite" }
+                return FloatValueImpl(value)
+            }
+        }
     }
 
     sealed interface StringValue : ScalarValue {
@@ -490,6 +203,10 @@ interface Schema {
             get() = StringType
 
         val stringValue: String
+
+        companion object {
+            fun of(value: String): StringValue = StringValueImpl(value)
+        }
     }
 
     sealed interface BooleanValue : ScalarValue {
@@ -497,6 +214,10 @@ interface Schema {
             get() = BooleanType
 
         val booleanValue: Boolean
+
+        companion object {
+            fun of(value: Boolean): BooleanValue = BooleanValueImpl(value)
+        }
     }
 
     sealed interface IDValue : ScalarValue {
@@ -504,6 +225,10 @@ interface Schema {
             get() = IDType
 
         val idValue: String
+
+        companion object {
+            fun of(value: String): IDValue = IDValueImpl(value)
+        }
     }
 
     sealed interface EnumValue : SimpleValue {
@@ -515,18 +240,57 @@ interface Schema {
          */
         override val type: EnumType
         val enumValue: String
+
+        companion object {
+            fun of(
+                type: EnumType,
+                value: String,
+            ): EnumValue {
+                require(value in type.values) { "$value is not a value of ${type.typeName}" }
+                return EnumValueImpl(type, value)
+            }
+        }
+    }
+
+    sealed interface ListValue<out T : Type> : Value {
+        val typeExpr: TypeExpr<T>
+        val values: kotlin.collections.List<Value?>
     }
 
     /**
      * When an input list contains potentially nested unbound [VariableValue] instances, equality is
      * conservative as described by [VariableValue].
      */
-    sealed interface InputListValue : InputValue {
-        val inputListValues: List<InputValue?>
+    sealed interface InputListValue : InputValue, ListValue<InputType> {
+        override val values: kotlin.collections.List<InputValue?>
+
+        companion object {
+            fun of(
+                typeExpr: TypeExpr<InputType>,
+                values: kotlin.collections.List<InputValue?>,
+            ): InputListValue {
+                require(values.all { it.conformsTo(typeExpr) }) {
+                    "Input list element does not conform to $typeExpr"
+                }
+                return InputListValueImpl(typeExpr, values)
+            }
+        }
     }
 
-    sealed interface ListValue : OutputValue {
-        val outputListValues: List<OutputValue?>
+    sealed interface OutputListValue : OutputValue, ListValue<OutputType> {
+        override val values: kotlin.collections.List<OutputValue?>
+
+        companion object {
+            fun of(
+                typeExpr: TypeExpr<OutputType>,
+                values: kotlin.collections.List<OutputValue?>,
+            ): OutputListValue {
+                require(values.all { it.conformsTo(typeExpr) }) {
+                    "Output list element does not conform to $typeExpr"
+                }
+                return OutputListValueImpl(typeExpr, values)
+            }
+        }
     }
 
     /**
@@ -556,6 +320,21 @@ interface Schema {
     sealed interface InputObjectValue : InputValue, TypedValue, InputLikeValue {
         override val type: InputObjectType
         override val fieldValues: FieldValues<InputObjectType, InputValue>
+
+        companion object {
+            fun of(
+                type: InputObjectType,
+                fields: Map<String, Any?>,
+            ): InputObjectValue =
+                InputObjectValueImpl(
+                    type = type,
+                    fieldValues =
+                        FieldValuesImpl(
+                            type,
+                            coerceInputLikeFields(type, fields, type.typeName),
+                        ),
+                )
+        }
     }
 
     /**
@@ -568,6 +347,25 @@ interface Schema {
     sealed interface ArgumentsValue : InputLikeValue {
         override val type: FieldArguments
         override val fieldValues: FieldValues<FieldArguments, InputValue>
+
+        companion object {
+            fun of(
+                field: OutputField,
+                fields: Map<String, Any?>,
+            ): ArgumentsValue =
+                ArgumentsValueImpl(
+                    type = field.arguments,
+                    fieldValues =
+                        FieldValuesImpl(
+                            field.arguments,
+                            coerceInputLikeFields(
+                                field.arguments,
+                                fields,
+                                "${field.containingType.typeName}/${field.fieldName}",
+                            ),
+                        ),
+                )
+        }
     }
 
     /**
@@ -583,17 +381,27 @@ interface Schema {
      * an [ObjectValue] or [ObjectEngineResult] carries a field owned by that concrete object type
      * and contains no unresolved variables. Aliases do not participate in identity.
      *
-     * Construct keys through [Schema.objectKey]. Equality is structural over [field] and
-     * [arguments], using the canonical schema equality documented by [Schema].
+     * Construct keys through [ObjectKey.of]. Equality is structural over [field] and [arguments],
+     * using the canonical schema equality documented by [Schema].
      */
-    @ConsistentCopyVisibility
-    data class ObjectKey internal constructor(
-        val field: OutputField,
-        val arguments: ArgumentsValue,
-    ) {
-        init {
-            require(arguments.type == field.arguments) {
-                "Key arguments do not belong to its output field"
+    sealed interface ObjectKey {
+        val field: OutputField
+        val arguments: ArgumentsValue
+
+        companion object {
+            fun of(
+                field: OutputField,
+                arguments: Map<String, Any?>,
+            ): ObjectKey = of(field, ArgumentsValue.of(field, arguments))
+
+            fun of(
+                field: OutputField,
+                arguments: ArgumentsValue,
+            ): ObjectKey {
+                require(arguments.type == field.arguments) {
+                    "Key arguments do not belong to its output field"
+                }
+                return ObjectKeyImpl(field, arguments)
             }
         }
     }
@@ -609,6 +417,17 @@ interface Schema {
     sealed interface ObjectValue : OutputValue, TypedValue {
         override val type: ObjectType
         val fieldValues: ObjectFieldValues
+
+        companion object {
+            fun of(
+                type: ObjectType,
+                fields: Map<ObjectKey, OutputValue?>,
+            ): ObjectValue =
+                ObjectValueImpl(
+                    type = type,
+                    fieldValues = ObjectFieldValuesImpl(type, fields),
+                )
+        }
     }
 
     /**
@@ -618,53 +437,16 @@ interface Schema {
      * [FieldValues], this map is keyed by [ObjectKey] rather than field name, so it can represent
      * multiple argument tuples for one output field.
      *
-     * Construct instances through [Schema.objectValue].
+     * Construct instances through [ObjectValue.of].
      */
-    class ObjectFieldValues internal constructor(
-        val containingType: ObjectType,
-        private val backingMap: Map<ObjectKey, OutputValue?>,
-    ) : Map<ObjectKey, OutputValue?> by backingMap {
-        init {
-            require(backingMap.keys.all { it.field.containingType == containingType }) {
-                val foreignFields =
-                    backingMap.keys
-                        .filter { it.field.containingType != containingType }
-                        .map { "${it.field.containingType.typeName}/${it.field.fieldName}" }
-                "${containingType.typeName} cannot contain output fields " +
-                    foreignFields.sorted().joinToString()
-            }
-            require(
-                backingMap.keys.none { key ->
-                    key.arguments.fieldValues.values.any { it.containsVariableValue() }
-                },
-            ) {
-                "${containingType.typeName} object-value keys cannot contain unresolved variables"
-            }
-        }
+    sealed interface ObjectFieldValues : Map<ObjectKey, OutputValue?> {
+        val containingType: ObjectType
 
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: ObjectKey): OutputValue? = getValue(key)
+        override operator fun get(key: ObjectKey): OutputValue?
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: ObjectKey): OutputValue? {
-            if (!backingMap.containsKey(key)) {
-                throw MissingFieldException(
-                    containingType.typeName,
-                    key.field.fieldName,
-                )
-            }
-            return backingMap[key]
-        }
-
-        override fun equals(other: Any?): Boolean =
-            other is ObjectFieldValues &&
-                containingType == other.containingType &&
-                backingMap == other.backingMap
-
-        override fun hashCode(): Int =
-            31 * containingType.hashCode() + backingMap.hashCode()
-
-        override fun toString(): String = backingMap.toString()
+        fun getValue(key: ObjectKey): OutputValue?
     }
 
     /**
@@ -684,36 +466,14 @@ interface Schema {
      * applying their fallback. Check [containsKey] before looking up a field whose presence is
      * unknown.
      */
-    class FieldValues<out T : Any, out V : Value>(
-        val containingType: T,
-        private val backingMap: Map<String, V?>,
-    ) : Map<String, V?> by backingMap {
-        /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: String): V? = getValue(key)
+    sealed interface FieldValues<out T : Any, out V : Value> : Map<String, V?> {
+        val containingType: T
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: String): V? {
-            if (!backingMap.containsKey(key)) {
-                val typeName =
-                    when (containingType) {
-                        is Type -> containingType.typeName
-                        is FieldArguments -> "\$ARGUMENTS"
-                        else -> error("Unexpected field-value definition: $containingType")
-                    }
-                throw MissingFieldException(typeName, key)
-            }
-            return backingMap[key]
-        }
+        override operator fun get(key: String): V?
 
-        override fun equals(other: Any?): Boolean =
-            other is FieldValues<*, *> &&
-                containingType == other.containingType &&
-                backingMap == other.backingMap
-
-        override fun hashCode(): Int =
-            31 * containingType.hashCode() + backingMap.hashCode()
-
-        override fun toString(): String = backingMap.toString()
+        /** @throws MissingFieldException when [key] is not present */
+        fun getValue(key: String): V?
     }
 
     /**
@@ -734,26 +494,30 @@ interface Schema {
      */
     sealed interface VariableValue : InputValue {
         val variableName: String
+
+        companion object {
+            fun of(variableName: String): VariableValue = VariableValueImpl(variableName)
+        }
     }
 
     /**
      * The bottom value of the GraphQL value hierarchy.
      *
-     * Kotlin has no user-definable bottom value, so this object explicitly implements every leaf
-     * value interface. Its properties have no value and therefore cannot be observed.
+     * Kotlin has no user-definable bottom value, so this object implements enough leaf interfaces
+     * to inhabit both [InputValue] and [OutputValue]. Generic input/output list specializations
+     * cannot share one implementation type, so semantic functions handle this value before
+     * category-specific dispatch. Its properties have no value and cannot be observed.
      *
      * This model intentionally collapses all GraphQL error metadata, including messages, paths,
      * extensions, and error multiplicity, into this single value.
      */
-    object ErrorValue :
+    data object ErrorValue :
         IntValue,
         FloatValue,
         StringValue,
         BooleanValue,
         IDValue,
         EnumValue,
-        InputListValue,
-        ListValue,
         InputObjectValue,
         ObjectValue,
         VariableValue {
@@ -776,12 +540,6 @@ interface Schema {
             get() = unsupported()
 
         override val enumValue: String
-            get() = unsupported()
-
-        override val inputListValues: List<InputValue?>
-            get() = unsupported()
-
-        override val outputListValues: List<OutputValue?>
             get() = unsupported()
 
         override val fieldValues: Nothing
@@ -836,7 +594,7 @@ interface Schema {
      *
      * - `f.fieldName == "__typename"`;
      * - `f.containingType == t`;
-     * - `f.type == TypeExpr.Named(StringType, isNullable = false)`;
+     * - `f.typeExpr == TypeExpr.Named.of(StringType, isNullable = false)`;
      * - `f.arguments == NoArguments`; and
      * - `field(t.typeName, "__typename") == f`.
      *
@@ -872,19 +630,27 @@ interface Schema {
      * and their [Type.typeName] values are fixed by those declarations. Any scalar reachable from
      * this schema is the corresponding singleton.
      */
-    sealed class ScalarType protected constructor(
-        final override val typeName: String,
-    ) : SimpleType
+    sealed interface ScalarType : SimpleType
 
-    object IntType : ScalarType("Int")
+    data object IntType : ScalarType {
+        override val typeName: String = "Int"
+    }
 
-    object FloatType : ScalarType("Float")
+    data object FloatType : ScalarType {
+        override val typeName: String = "Float"
+    }
 
-    object StringType : ScalarType("String")
+    data object StringType : ScalarType {
+        override val typeName: String = "String"
+    }
 
-    object BooleanType : ScalarType("Boolean")
+    data object BooleanType : ScalarType {
+        override val typeName: String = "Boolean"
+    }
 
-    object IDType : ScalarType("ID")
+    data object IDType : ScalarType {
+        override val typeName: String = "ID"
+    }
 
     /**
      * An enum whose [values] are exactly its finite set of legal GraphQL enum value names.
@@ -893,10 +659,9 @@ interface Schema {
      *
      * The set has no modeled order, and each value is represented only by its name.
      */
-    class EnumType(
-        override val typeName: String,
-        val values: Set<String>,
-    ) : SimpleType
+    interface EnumType : SimpleType {
+        val values: Set<String>
+    }
 
     /**
      * An object type.
@@ -905,11 +670,7 @@ interface Schema {
      * extensions and inherited interface fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
      */
-    class ObjectType(
-        override val typeName: String,
-        override val fields: Map<String, OutputField>,
-        override val possibleTypes: Set<ObjectType>,
-    ) : CompositeType
+    interface ObjectType : CompositeType, ResolverSite
 
     /**
      * An interface type.
@@ -918,11 +679,7 @@ interface Schema {
      * extensions and inherited interface fields. Parent-interface and implementation
      * relationships are represented by the schema's relation operations rather than stored here.
      */
-    class InterfaceType(
-        override val typeName: String,
-        override val fields: Map<String, OutputField>,
-        override val possibleTypes: Set<ObjectType>,
-    ) : CompositeType
+    interface InterfaceType : CompositeType
 
     /**
      * A union definition.
@@ -932,11 +689,7 @@ interface Schema {
      * Union membership is represented by [CompositeType.possibleTypes]. [fields] contains exactly
      * the `__typename` field.
      */
-    class UnionType(
-        override val typeName: String,
-        override val fields: Map<String, OutputField>,
-        override val possibleTypes: Set<ObjectType>,
-    ) : CompositeType
+    interface UnionType : CompositeType
 
     /**
      * A schema definition shaped like a GraphQL input object.
@@ -956,10 +709,9 @@ interface Schema {
      *
      * Every [InputField] occurs exactly once in its containing definition's map.
      */
-    class InputObjectType(
-        override val typeName: String,
-        override val fields: Map<String, InputField>,
-    ) : InputType, InputObjectLike
+    interface InputObjectType : InputType, InputObjectLike {
+        override val fields: Map<String, InputField>
+    }
 
     /**
      * The complete argument definition of an output field.
@@ -971,40 +723,20 @@ interface Schema {
      * is always represented by the singleton [NoArguments] and is shared by every field that takes
      * no arguments.
      */
-    class FieldArguments private constructor(
-        override val fields: Map<String, FieldArgument>,
-    ) : InputObjectLike {
-        internal companion object {
-            private val EMPTY = FieldArguments(emptyMap())
+    sealed interface FieldArguments : InputObjectLike {
+        interface NonEmpty : FieldArguments
+    }
 
-            internal fun empty(): FieldArguments = EMPTY
-
-            internal fun <T> of(
-                definitions: Collection<T>,
-                name: (T) -> String,
-                createField: (T, FieldArguments) -> FieldArgument,
-            ): FieldArguments {
-                if (definitions.isEmpty()) return EMPTY
-
-                val fields = linkedMapOf<String, FieldArgument>()
-                val result = FieldArguments(fields)
-                definitions.forEach { definition ->
-                    val argumentName = name(definition)
-                    require(argumentName !in fields) {
-                        "Duplicate field argument: $argumentName"
-                    }
-                    val field = createField(definition, result)
-                    require(field.argumentName == argumentName) {
-                        "Field argument name does not match its map key"
-                    }
-                    require(field.containingType == result) {
-                        "Field argument does not reference its containing argument definition"
-                    }
-                    fields[argumentName] = field
-                }
-                return result
-            }
-        }
+    /**
+     * The unique argument definition for every output field that takes no arguments.
+     *
+     * ### Invariant: schema-no-arguments
+     *
+     * For every [OutputField] `f`, `f.arguments == NoArguments` exactly when `f` takes no
+     * arguments.
+     */
+    data object NoArguments : FieldArguments {
+        override val fields: Map<String, FieldArgument> = emptyMap()
     }
 
     /**
@@ -1012,41 +744,38 @@ interface Schema {
      *
      * ### Invariant: schema-output-field-coordinate
      *
-     * `containingType.fields[fieldName] == this`, and [type]'s base type is canonical in the same
+     * `containingType.fields[fieldName] == this`, and [typeExpr]'s base type is canonical in the same
      * schema. [arguments] is the input-object-like definition of the complete argument tuple.
      */
-    class OutputField(
-        val fieldName: String,
-        val containingType: CompositeType,
-        val type: TypeExpr<OutputType>,
-        val arguments: FieldArguments,
-    )
+    interface OutputField : ResolverSite {
+        val fieldName: String
+        val containingType: CompositeType
+        val typeExpr: TypeExpr<OutputType>
+        val arguments: FieldArguments
+    }
 
     /**
      * A field of an input-object-like definition.
      *
      * ### Invariant: schema-input-like-field-coordinate
      *
-     * `containingType.fields[name] == this`, and [type]'s base type is canonical in the same
-     * schema. [defaultValue], when present, is valid for [type].
+     * `containingType.fields[name] == this`, and [typeExpr]'s base type is canonical in the same
+     * schema. [defaultValue], when present, is valid for [typeExpr].
      */
     sealed interface InputLikeField {
         val name: String
         val containingType: InputObjectLike
-        val type: TypeExpr<InputType>
+        val typeExpr: TypeExpr<InputType>
         val defaultValue: DefaultValue
 
         val isRequired: Boolean
-            get() = !type.isNullable && defaultValue == DefaultValue.Absent
+            get() = !typeExpr.isNullable && defaultValue == DefaultValue.Absent
     }
 
     /** The canonical input-object field at [containingType]/[fieldName]. */
-    class InputField(
-        val fieldName: String,
-        override val containingType: InputObjectType,
-        override val type: TypeExpr<InputType>,
-        override val defaultValue: DefaultValue,
-    ) : InputLikeField {
+    interface InputField : InputLikeField {
+        val fieldName: String
+        override val containingType: InputObjectType
         override val name: String
             get() = fieldName
     }
@@ -1056,12 +785,9 @@ interface Schema {
      *
      * `containingType.fields[argumentName] == this`.
      */
-    class FieldArgument(
-        val argumentName: String,
-        override val containingType: FieldArguments,
-        override val type: TypeExpr<InputType>,
-        override val defaultValue: DefaultValue,
-    ) : InputLikeField {
+    interface FieldArgument : InputLikeField {
+        val argumentName: String
+        override val containingType: FieldArguments
         override val name: String
             get() = argumentName
     }
@@ -1086,23 +812,33 @@ interface Schema {
         val isNullable: Boolean
         val isBaseTypeNullable: Boolean
 
-        data class Named<out T : Type>(
-            override val baseType: T,
-            override val isNullable: Boolean = true,
-        ) : TypeExpr<T> {
+        sealed interface Named<out T : Type> : TypeExpr<T> {
             override val isBaseTypeNullable: Boolean
                 get() = isNullable
+
+            companion object {
+                fun <T : Type> of(
+                    baseType: T,
+                    isNullable: Boolean = true,
+                ): Named<T> = NamedTypeExprImpl(baseType, isNullable)
+            }
         }
 
-        data class List<out T : Type>(
-            val elementType: TypeExpr<T>,
-            override val isNullable: Boolean = true,
-        ) : TypeExpr<T> {
+        sealed interface List<out T : Type> : TypeExpr<T> {
+            val elementType: TypeExpr<T>
+
             override val baseType: T
                 get() = elementType.baseType
 
             override val isBaseTypeNullable: Boolean
                 get() = elementType.isBaseTypeNullable
+
+            companion object {
+                fun <T : Type> of(
+                    elementType: TypeExpr<T>,
+                    isNullable: Boolean = true,
+                ): List<T> = ListTypeExprImpl(elementType, isNullable)
+            }
         }
     }
 
@@ -1126,9 +862,13 @@ interface Schema {
     sealed interface DefaultValue {
         data object Absent : DefaultValue
 
-        data class Present(
-            val value: InputValue?,
-        ) : DefaultValue
+        sealed interface Present : DefaultValue {
+            val value: InputValue?
+        }
+
+        companion object {
+            fun of(value: InputValue?): Present = PresentDefaultValueImpl(value)
+        }
     }
 
     /**
@@ -1155,66 +895,336 @@ class MissingFieldException(
     val fieldName: String,
 ) : NoSuchElementException("Missing field: $typeName.$fieldName")
 
-private data class DefaultIntValue(
+private data class IntValueImpl(
     override val intValue: Int,
 ) : Schema.IntValue
 
-private data class DefaultFloatValue(
+private data class FloatValueImpl(
     override val floatValue: Double,
 ) : Schema.FloatValue
 
-private data class DefaultStringValue(
+private data class StringValueImpl(
     override val stringValue: String,
 ) : Schema.StringValue
 
-private data class DefaultBooleanValue(
+private data class BooleanValueImpl(
     override val booleanValue: Boolean,
 ) : Schema.BooleanValue
 
-private data class DefaultIDValue(
+private data class IDValueImpl(
     override val idValue: String,
 ) : Schema.IDValue
 
-private data class DefaultEnumValue(
+private data class EnumValueImpl(
     override val type: Schema.EnumType,
     override val enumValue: String,
 ) : Schema.EnumValue
 
-private data class DefaultInputListValue(
-    override val inputListValues: List<Schema.InputValue?>,
+private data class InputListValueImpl(
+    override val typeExpr: Schema.TypeExpr<Schema.InputType>,
+    override val values: List<Schema.InputValue?>,
 ) : Schema.InputListValue
 
-private data class DefaultListValue(
-    override val outputListValues: List<Schema.OutputValue?>,
-) : Schema.ListValue
+private data class OutputListValueImpl(
+    override val typeExpr: Schema.TypeExpr<Schema.OutputType>,
+    override val values: List<Schema.OutputValue?>,
+) : Schema.OutputListValue
 
-private data class DefaultObjectValue(
+private data class ObjectValueImpl(
     override val type: Schema.ObjectType,
     override val fieldValues: Schema.ObjectFieldValues,
 ) : Schema.ObjectValue
 
-private data class DefaultInputObjectValue(
+private data class InputObjectValueImpl(
     override val type: Schema.InputObjectType,
     override val fieldValues:
         Schema.FieldValues<Schema.InputObjectType, Schema.InputValue>,
 ) : Schema.InputObjectValue
 
-private data class DefaultArgumentsValue(
+private data class ArgumentsValueImpl(
     override val type: Schema.FieldArguments,
     override val fieldValues:
         Schema.FieldValues<Schema.FieldArguments, Schema.InputValue>,
 ) : Schema.ArgumentsValue
 
-private data class DefaultVariableValue(
+private data class VariableValueImpl(
     override val variableName: String,
 ) : Schema.VariableValue
+
+private data class ObjectKeyImpl(
+    override val field: Schema.OutputField,
+    override val arguments: Schema.ArgumentsValue,
+) : Schema.ObjectKey
+
+private data class NamedTypeExprImpl<out T : Schema.Type>(
+    override val baseType: T,
+    override val isNullable: Boolean,
+) : Schema.TypeExpr.Named<T>
+
+private data class ListTypeExprImpl<out T : Schema.Type>(
+    override val elementType: Schema.TypeExpr<T>,
+    override val isNullable: Boolean,
+) : Schema.TypeExpr.List<T>
+
+private data class PresentDefaultValueImpl(
+    override val value: Schema.InputValue?,
+) : Schema.DefaultValue.Present
+
+private class ObjectFieldValuesImpl(
+    override val containingType: Schema.ObjectType,
+    private val backingMap: Map<Schema.ObjectKey, Schema.OutputValue?>,
+) : Schema.ObjectFieldValues,
+    Map<Schema.ObjectKey, Schema.OutputValue?> by backingMap {
+    init {
+        require(backingMap.keys.all { it.field.containingType == containingType }) {
+            val foreignFields =
+                backingMap.keys
+                    .filter { it.field.containingType != containingType }
+                    .map { "${it.field.containingType.typeName}/${it.field.fieldName}" }
+            "${containingType.typeName} cannot contain output fields " +
+                foreignFields.sorted().joinToString()
+        }
+        require(
+            backingMap.keys.none { key ->
+                key.arguments.fieldValues.values.any { it.containsVariableValue() }
+            },
+        ) {
+            "${containingType.typeName} object-value keys cannot contain unresolved variables"
+        }
+    }
+
+    override operator fun get(key: Schema.ObjectKey): Schema.OutputValue? = getValue(key)
+
+    override fun getValue(key: Schema.ObjectKey): Schema.OutputValue? {
+        if (!backingMap.containsKey(key)) {
+            throw MissingFieldException(containingType.typeName, key.field.fieldName)
+        }
+        return backingMap[key]
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is Schema.ObjectFieldValues &&
+            containingType == other.containingType &&
+            entries == other.entries
+
+    override fun hashCode(): Int = 31 * containingType.hashCode() + backingMap.hashCode()
+
+    override fun toString(): String = backingMap.toString()
+}
+
+private class FieldValuesImpl<out T : Any, out V : Schema.Value>(
+    override val containingType: T,
+    private val backingMap: Map<String, V?>,
+) : Schema.FieldValues<T, V>,
+    Map<String, V?> by backingMap {
+    override operator fun get(key: String): V? = getValue(key)
+
+    override fun getValue(key: String): V? {
+        if (!backingMap.containsKey(key)) {
+            val typeName =
+                when (containingType) {
+                    is Schema.Type -> containingType.typeName
+                    is Schema.FieldArguments -> "\$ARGUMENTS"
+                    else -> error("Unexpected field-value definition: $containingType")
+                }
+            throw MissingFieldException(typeName, key)
+        }
+        return backingMap[key]
+    }
+
+    override fun equals(other: Any?): Boolean =
+        other is Schema.FieldValues<*, *> &&
+            containingType == other.containingType &&
+            entries == other.entries
+
+    override fun hashCode(): Int = 31 * containingType.hashCode() + backingMap.hashCode()
+
+    override fun toString(): String = backingMap.toString()
+}
+
+private fun coerceInputLikeFields(
+    type: Schema.InputObjectLike,
+    fields: Map<String, Any?>,
+    context: String,
+): Map<String, Schema.InputValue?> =
+    fields.mapValues { (fieldName, value) ->
+        val field =
+            type.fields[fieldName]
+                ?: throw ClassCastException("$context has no input field named $fieldName")
+        coerceInputValue(field.typeExpr, value, "$context.$fieldName")
+    }
+
+private fun coerceInputValue(
+    typeExpr: Schema.TypeExpr<Schema.InputType>,
+    value: Any?,
+    path: String,
+): Schema.InputValue? {
+    if (value == null) {
+        if (!typeExpr.isNullable) throw inputValueClassCast(path, typeExpr.baseType, value)
+        return null
+    }
+    if (value == Schema.ErrorValue) return Schema.ErrorValue
+    if (value is Schema.VariableValue) return value
+
+    return when (typeExpr) {
+        is Schema.TypeExpr.Named -> coerceNamedInputValue(typeExpr.baseType, value, path)
+        is Schema.TypeExpr.List -> {
+            val elements =
+                when (value) {
+                    is Schema.InputListValue -> value.values
+                    is kotlin.collections.List<*> -> value
+                    else -> throw inputValueClassCast(path, typeExpr.baseType, value)
+                }
+            Schema.InputListValue.of(
+                typeExpr = typeExpr.elementType,
+                values =
+                    elements.mapIndexed { index, element ->
+                        coerceInputValue(typeExpr.elementType, element, "$path[$index]")
+                    },
+            )
+        }
+    }
+}
+
+private fun coerceNamedInputValue(
+    type: Schema.InputType,
+    value: Any,
+    path: String,
+): Schema.InputValue =
+    when (type) {
+        Schema.IntType ->
+            when (value) {
+                is Schema.IntValue -> value
+                is Int -> Schema.IntValue.of(value)
+                else -> throw inputValueClassCast(path, type, value)
+            }
+
+        Schema.FloatType ->
+            when (value) {
+                is Schema.FloatValue -> value
+                is Double -> Schema.FloatValue.of(value)
+                else -> throw inputValueClassCast(path, type, value)
+            }
+
+        Schema.StringType ->
+            when (value) {
+                is Schema.StringValue -> value
+                is String -> Schema.StringValue.of(value)
+                else -> throw inputValueClassCast(path, type, value)
+            }
+
+        Schema.BooleanType ->
+            when (value) {
+                is Schema.BooleanValue -> value
+                is Boolean -> Schema.BooleanValue.of(value)
+                else -> throw inputValueClassCast(path, type, value)
+            }
+
+        Schema.IDType ->
+            when (value) {
+                is Schema.IDValue -> value
+                is String -> Schema.IDValue.of(value)
+                else -> throw inputValueClassCast(path, type, value)
+            }
+
+        is Schema.EnumType ->
+            when (value) {
+                is Schema.EnumValue ->
+                    if (value.type == type) value else throw inputValueClassCast(path, type, value)
+                is String -> Schema.EnumValue.of(type, value)
+                else -> throw inputValueClassCast(path, type, value)
+            }
+
+        is Schema.InputObjectType ->
+            when (value) {
+                is Schema.InputObjectValue ->
+                    if (value.type == type) value else throw inputValueClassCast(path, type, value)
+                is Map<*, *> -> Schema.InputObjectValue.of(type, value.toStringKeyedMap(path))
+                else -> throw inputValueClassCast(path, type, value)
+            }
+    }
+
+private fun Map<*, *>.toStringKeyedMap(path: String): Map<String, Any?> =
+    entries.associate { (key, value) ->
+        if (key !is String) {
+            throw ClassCastException(
+                "$path requires String field names, got ${key?.let { it::class.simpleName }}",
+            )
+        }
+        key to value
+    }
+
+private fun inputValueClassCast(
+    path: String,
+    type: Schema.InputType,
+    value: Any?,
+): ClassCastException =
+    ClassCastException(
+        "$path requires ${type.typeName}, got ${value?.let { it::class.simpleName } ?: "null"}",
+    )
+
+private fun Schema.InputValue?.conformsTo(
+    typeExpr: Schema.TypeExpr<Schema.InputType>,
+): Boolean =
+    when (this) {
+        null -> typeExpr.isNullable
+        Schema.ErrorValue, is Schema.VariableValue -> true
+        is Schema.InputListValue ->
+            typeExpr is Schema.TypeExpr.List &&
+                typeExpr.elementType.canContainPure(this.typeExpr)
+        is Schema.TypedValue ->
+            typeExpr is Schema.TypeExpr.Named && typeExpr.baseType == type
+        else -> typeExpr is Schema.TypeExpr.Named && typeExpr.baseType == (this as Schema.SimpleValue).type
+    }
+
+private fun Schema.OutputValue?.conformsTo(
+    typeExpr: Schema.TypeExpr<Schema.OutputType>,
+): Boolean =
+    when (this) {
+        null -> typeExpr.isNullable
+        Schema.ErrorValue -> true
+        is Schema.OutputListValue ->
+            typeExpr is Schema.TypeExpr.List &&
+                typeExpr.elementType.canContainPure(this.typeExpr)
+        is Schema.TypedValue ->
+            typeExpr is Schema.TypeExpr.Named &&
+                when (val expected = typeExpr.baseType) {
+                    is Schema.CompositeType ->
+                        type is Schema.ObjectType && type in expected.possibleTypes
+                    else -> expected == type
+                }
+        is Schema.SimpleValue ->
+            typeExpr is Schema.TypeExpr.Named && typeExpr.baseType == type
+    }
+
+internal fun Schema.TypeExpr<Schema.Type>.canContainPure(
+    inner: Schema.TypeExpr<Schema.Type>,
+): Boolean {
+    if (!isNullable && inner.isNullable) return false
+    return when (this) {
+        is Schema.TypeExpr.List ->
+            inner is Schema.TypeExpr.List && elementType.canContainPure(inner.elementType)
+        is Schema.TypeExpr.Named -> {
+            if (inner !is Schema.TypeExpr.Named) return false
+            val outerType = baseType
+            val innerType = inner.baseType
+            when {
+                outerType is Schema.InputType || innerType is Schema.InputType ->
+                    outerType == innerType
+                outerType is Schema.CompositeType && innerType is Schema.ObjectType ->
+                    innerType in outerType.possibleTypes
+                else -> outerType == innerType
+            }
+        }
+    }
+}
 
 private fun Schema.InputValue?.containsVariableValue(): Boolean =
     when {
         this == null || this == Schema.ErrorValue -> false
         this is Schema.VariableValue -> true
         this is Schema.InputListValue ->
-            inputListValues.any { it.containsVariableValue() }
+            values.any { it.containsVariableValue() }
 
         this is Schema.InputObjectValue ->
             fieldValues.values.any { it.containsVariableValue() }

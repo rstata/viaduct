@@ -2,8 +2,8 @@ package semantics
 
 import model.Assumptions
 import model.Fragment
-import model.GJSchema
 import model.Schema
+import model.selectionsFrom
 import model.registry.ExecutorRegistry
 import model.registry.FieldResolver
 import model.registry.MissingExecutorException
@@ -24,14 +24,14 @@ class WorldInjectionTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 variableValues = { schema ->
-                    mapOf("requestedId" to schema.idValue("bound"))
+                    mapOf("requestedId" to Schema.IDValue.of("bound"))
                 },
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf<Schema.ObjectType, NodeResolver>(
                         user to
-                            NodeResolver { id ->
-                                schema.objectValue(
+                            model.testing.nodeResolverOf { id ->
+                                Schema.ObjectValue.of(
                                     type = user,
                                     fields = mapOf(schema.key(user, "id") to id),
                                 )
@@ -42,21 +42,18 @@ class WorldInjectionTest {
                     val user = schema.type("User") as Schema.ObjectType
                     val userField = schema.field("Query", "user")
                     val queryFragment =
-                        object : Fragment {
-                            override val nominalType = schema.query
-                            override val subselections = selectionForestOf()
-                        }
+                        Fragment.of(schema.query, selectionForestOf())
                     mapOf<Schema.OutputField, FieldResolver>(
                         userField to
-                            FieldResolver(
+                            model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ ->
-                                    schema.objectValue(
+                                    Schema.ObjectValue.of(
                                         type = user,
                                         fields =
                                             mapOf(
                                                 schema.key(user, "id") to
-                                                    schema.idValue("field"),
+                                                    Schema.IDValue.of("field"),
                                             ),
                                     )
                                 },
@@ -71,7 +68,6 @@ class WorldInjectionTest {
 
         assertEquals(schema, world.schema)
         assertEquals(registry, world.executorRegistry)
-        assertEquals(schema, testWorld.instance(GJSchema::class.java))
         assertEquals(registry, testWorld.instance(ExecutorRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
         assertEquals(
@@ -83,8 +79,8 @@ class WorldInjectionTest {
 
         val user = schema.type("User") as Schema.ObjectType
         val node =
-            registry.nodeResolver(user).function(
-                schema.idValue("node"),
+            registry.resolver(user).function(
+                Schema.IDValue.of("node"),
             )
         assertEquals(
             "node",
@@ -94,12 +90,12 @@ class WorldInjectionTest {
         )
 
         val userField = schema.field("Query", "user")
-        val (_, fieldResolverFunction) = registry.fieldResolver(userField)
+        val (_, fieldResolverFunction) = registry.resolver(userField)
         val field =
             assertIs<Schema.ObjectValue>(
                 fieldResolverFunction(
-                    schema.objectValue(schema.query, emptyMap()),
-                    schema.argumentsValue(userField, emptyMap()),
+                    Schema.ObjectValue.of(schema.query, emptyMap()),
+                    Schema.ArgumentsValue.of(userField, emptyMap()),
                 ),
             )
         assertEquals(
@@ -137,9 +133,9 @@ class WorldInjectionTest {
 
         assertFalse(world.variableValues.containsKey("requestedId"))
         assertFailsWith<MissingExecutorException> {
-            world.executorRegistry.nodeResolver(user)
+            world.executorRegistry.resolver(user)
         }
-        world.executorRegistry.fieldResolver(
+        world.executorRegistry.resolver(
             world.schema.field("Query", "user"),
         )
     }
@@ -166,7 +162,7 @@ private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
 ): Schema.ObjectKey =
-    objectKey(
+    Schema.ObjectKey.of(
         field = field(type.typeName, fieldName),
         arguments = emptyMap(),
     )

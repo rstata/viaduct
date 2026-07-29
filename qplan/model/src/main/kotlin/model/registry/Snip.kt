@@ -63,7 +63,7 @@ fun Schema.ObjectType.snip(
     require(result.type == this) {
         "Node resolver $typeName cannot project an object of type ${result.type.typeName}"
     }
-    require(world.executorRegistry.hasNodeResolver(this)) {
+    require(this in world.executorRegistry) {
         "No node resolver is registered for $typeName"
     }
     val applicableSelections = selections.filter { result.type in it.possibleTypes }
@@ -76,26 +76,22 @@ fun Schema.ObjectType.snip(
                 val crossesBoundary =
                     concreteField.fieldName == "id" ||
                         concreteField.fieldName == "__typename" ||
-                        world.executorRegistry.hasFieldResolver(concreteField)
+                        concreteField in world.executorRegistry
                 if (crossesBoundary) return@mapNotNull null
 
                 val value = result.fieldValues.getValue(key)
-                val firstSelection = fieldSelections.first()
                 val selectedValue =
-                    if (firstSelection.isLeaf) {
+                    if (concreteField.typeExpr.baseType is Schema.SimpleType) {
                         value
                     } else {
-                        val subselections =
-                            fieldSelections
-                                .flatMap { it.subselections }
-                                .toSelectionForest()
+                        val subselections = fieldSelections.flatMap { it.subselections }
                         value.snipOutput(subselections)
                     }
                 key to selectedValue
             }
             .toMap()
 
-    return world.schema.objectValue(result.type, selectedFields)
+    return Schema.ObjectValue.of(result.type, selectedFields)
 }
 
 context(world: Assumptions)
@@ -112,22 +108,18 @@ private fun Schema.ObjectValue.snip(
                 if (world.behavioral(concreteField)) return@mapNotNull null
 
                 val value = fieldValues.getValue(key)
-                val firstSelection = fieldSelections.first()
                 val selectedValue =
-                    if (firstSelection.isLeaf) {
+                    if (concreteField.typeExpr.baseType is Schema.SimpleType) {
                         value
                     } else {
-                        val subselections =
-                            fieldSelections
-                                .flatMap { it.subselections }
-                                .toSelectionForest()
+                        val subselections = fieldSelections.flatMap { it.subselections }
                         value.snipOutput(subselections)
                     }
                 key to selectedValue
             }
             .toMap()
 
-    return world.schema.objectValue(type, selectedFields)
+    return Schema.ObjectValue.of(type, selectedFields)
 }
 
 context(world: Assumptions)
@@ -140,9 +132,10 @@ private fun Schema.OutputValue?.snipOutput(
         -> this
 
         is Schema.ObjectValue -> snip(selections)
-        is Schema.ListValue ->
-            world.schema.outputListValue(
-                outputListValues.map { it.snipOutput(selections) },
+        is Schema.OutputListValue ->
+            Schema.OutputListValue.of(
+                typeExpr = typeExpr,
+                values = values.map { it.snipOutput(selections) },
             )
 
         is Schema.SimpleValue -> {
@@ -155,7 +148,7 @@ private fun Schema.OutputValue?.snipOutput(
 
 context(world: Assumptions)
 private fun Selection.concreteObjectKey(type: Schema.ObjectType): Schema.ObjectKey =
-    world.schema.objectKey(
+    Schema.ObjectKey.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
         arguments = key.arguments.fieldValues,
     )

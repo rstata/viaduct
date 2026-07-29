@@ -20,21 +20,21 @@ We have a fairly complete algebra at this point and a definition of correct reso
 
 ### World And Schema
 
-Each reasoning exercise fixes exactly one `Assumptions` and one canonical `Schema`. `Assumptions` supplies the schema, variable bindings, executor registry, concrete-field `behavioral` predicate, and parsing of validated named fragments into `SpecSelection` values. Dependency-injection composition scopes the public world bindings as singletons; there are no JVM-global schema or variable declarations.
+Each reasoning exercise fixes exactly one `Assumptions` and one canonical `Schema`. `Assumptions` supplies the schema, variable bindings, executor registry, and concrete-field `behavioral` predicate. Parsing validated named fragments into `SpecSelection` values is test-fixture or composition infrastructure outside the semantic model. There are no JVM-global schema or variable declarations.
 
-Every schema definition has one canonical object, so ordinary `==` means that two definitions denote the same schema element. Every non-error `Schema.Value`, `Schema.ArgumentsValue`, and `Schema.ObjectKey` is constructed through that schema. `Schema.ErrorValue` is schema-independent.
+Every schema definition has one canonical object, so ordinary `==` means that two definitions from that schema denote the same schema element; cross-schema equality is outside the model. Every non-error `Schema.Value`, `Schema.ArgumentsValue`, and `Schema.ObjectKey` is constructed through a factory on its precise semantic category. `Schema.ErrorValue` is schema-independent.
 
 `Schema.ObjectKey` is the shared alias-free coordinate for selections, resolved object values, and OER cells. It contains a canonical output field and its coerced arguments. `Schema.ObjectValue.fieldValues` is a `Schema.ObjectFieldValues` map keyed by `Schema.ObjectKey`, while `ObjectEngineResult.keys` is the set of `Schema.ObjectKey` coordinates whose cells are present. Every key present in either value carries a field owned by that value's concrete `Schema.ObjectType` and contains no unresolved variables; keys outside those values may carry abstract-type fields or unresolved variables. A `Schema.ObjectValue` can therefore contain multiple values for one output field under distinct argument tuples.
 
-`ObjectEngineResult` is a finite value tree. A present object field has one `Cell` containing a nullable value and a check result; absence differs from a present null. The carrier need not expose a public construction mechanism for the semantic layer to define a relation over its stipulated values; the absence of constructible OER witnesses is intentional for this step, not a gap to fill.
+`ObjectEngineResult` is a finite, structurally comparable value tree constructed by `ObjectEngineResult.of`. A present object field and each list element has one `EngineResult.Cell` containing a nullable value and a check result; absence differs from a present null. Object and list factories eagerly establish recursive schema conformance, and list results carry their element `typeExpr` even when empty.
 
 ### Selections And Fragments
 
 `SpecSelection` represents GraphQL-shaped, post-validation selections. [`SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt) flattens them into field-resolution `Selection` occurrences.
 
-A `Selection` carries a canonical `Schema.ObjectKey`, nominal composite type, possible concrete parent types, and nested selections. Inline fragment structure has been flattened into the nominal and possible-type information. A `SelectionForest` is a Guava `Multiset`: source order is erased while occurrence multiplicity is preserved.
+A `Selection` carries a canonical `Schema.ObjectKey`, nominal composite type, possible concrete parent types, and nested selections. Inline fragment structure has been flattened into the nominal and possible-type information. A `SelectionForest` is an equality-free finite occurrence family: source order is erased while occurrence multiplicity is preserved.
 
-Semantic equality for `Selection` is intentionally undefined. Host-language equality used to construct a multiset is bookkeeping and must not be used for semantic deduplication, intersection, or membership reasoning.
+Semantic equality for `Selection` is intentionally undefined. `SelectionForest` therefore exposes permutation-invariant occurrence operations without membership, deduplication, hashing, equality-based counting, or forest equality.
 
 A `Fragment` contains a nominal composite type and a flattened `SelectionForest`. A field resolver's `objectFragment` describes the object-valued input that must be resolved before invoking its selection-independent function.
 
@@ -48,26 +48,26 @@ For a concrete field, `behavioral(field)` is true for engine-supplied `__typenam
 
 ### Resolver Demand
 
-The executor registry derives an acyclic resolver-demand graph. Its nodes are registered `Resolver` objects, and every resolver object occurs at exactly one resolver coordinate.
+The externally supplied executor registry contains an acyclic resolver-demand graph over canonical `ResolverSite` schema elements. `Schema.ObjectType` and `Schema.OutputField` are site candidates; membership in one registry makes a candidate an actual resolver coordinate.
 
-For a field resolver `R`, `R.mayDemandFrom` contains exactly the resolvers directly implicated by selections reachable from `R.objectFragment`. A selection directly implicates:
+For a registered field site `f`, `registry.mayDemandFrom(f)` contains exactly the registered schema sites directly implicated by selections reachable from its resolver's object fragment. A selection directly implicates:
 
-- the node resolver, when present, for every object type in `selection.possibleTypes`; and
-- the field resolver, when present, at each concrete possible type combined with `selection.key.field.fieldName`.
+- the registered object-type site, when present, for every object type in `selection.possibleTypes`; and
+- the registered output-field site, when present, at each concrete possible type combined with `selection.key.field.fieldName`.
 
-`R.mayBeDemandedBy` is the exact transpose of `mayDemandFrom`. The factory rejects a self-cycle or longer demand cycle with `IllegalArgumentException`.
+`registry.mayBeDemandedBy(site)` is the exact transpose of `mayDemandFrom`. Pre-reasoning registry assembly rejects a self-cycle or longer demand cycle with `IllegalArgumentException`.
 
-The intended demand interpretation starts with the resolvers directly implicated by an external selection forest and takes the least superset closed under `mayDemandFrom`. The relation is a conservative possibility relation because the selections that induce an edge retain type conditions that may not apply to the runtime concrete object.
+The intended demand interpretation starts with the registered sites directly implicated by an external selection forest and takes the least superset closed under `mayDemandFrom`. The relation is a conservative possibility relation because the selections that induce an edge retain type conditions that may not apply to the runtime concrete object.
 
-This is a resolver-demand graph, not a graph of every invocation input, value provenance fact, or scheduling prerequisite. In particular, the `id` passed to a node resolver is an engine-supplied addressing input and does not create a demand edge. Node resolvers have no `objectFragment`, so their `mayDemandFrom` sets are empty even though other resolvers may demand from them.
+This is a resolver-demand graph, not a graph of every invocation input, value provenance fact, or scheduling prerequisite. In particular, the `id` passed to a node resolver is an engine-supplied addressing input and does not create a demand edge. Object-type sites have no outgoing adjacency because node resolvers have no `objectFragment`, though field sites may demand from them.
 
-The graph and its checks are implemented in [`ExecutorRegistry.kt`](./model/src/main/kotlin/model/registry/ExecutorRegistry.kt). [`ResolverDemandTest.kt`](./model/src/test/kotlin/model/registry/ResolverDemandTest.kt) exercises nested reachability, polymorphic node and field implication, transposition, empty node demand, and cycle rejection.
+The graph API is defined in [`ExecutorRegistry.kt`](./model/src/main/kotlin/model/registry/ExecutorRegistry.kt), while assembly and invariant checks are pre-reasoning fixture infrastructure. [`ResolverDemandTest.kt`](./model/src/test/kotlin/model/registry/ResolverDemandTest.kt) exercises nested reachability, polymorphic node and field implication, transposition, empty node demand, and cycle rejection.
 
 ## Current Scope
 
-Inputs are post-validation and all named fragment spreads are assumed to have been inlined. `Assumptions.selectionsFrom` accepts one named fragment definition as a parsing envelope, ignores its name, and rejects nested named spreads.
+Inputs are post-validation and all named fragment spreads are assumed to have been inlined. The `TestWorld` parsing fixture accepts one named fragment definition as a parsing envelope, ignores its name, and rejects nested named spreads before supplying `SpecSelection` values to semantic reasoning.
 
-`@skip` and `@include` belong to the eventual field-resolution model but are deferred. Applied directives are currently rejected. Query fragments, variable providers, `@parent`, lazy executor values, checkers, and raw-versus-checked dependency distinctions are also not yet modeled. `ObjectEngineResult.Cell.check` remains in the carrier algebra for that future work, but the initial `correctResolution` judgment is explicitly check-insensitive.
+`@skip` and `@include` belong to the eventual field-resolution model but are deferred. Applied directives are currently rejected. Query fragments, variable providers, `@parent`, lazy executor values, checkers, and raw-versus-checked dependency distinctions are also not yet modeled. `EngineResult.Cell.check` remains in the carrier algebra for that future work, but the initial `correctResolution` judgment is explicitly check-insensitive.
 
 `correctResolution` is defined only when every variable needed by an applicable required-cell `Schema.ObjectKey` can be instantiated from `world.variableValues`. Variables occurring only in guards or branches inapplicable to the judged runtime object do not restrict the judgment's domain. After instantiation, an argument tuple containing `Schema.ErrorValue` requires the error cell mandated by the OER carrier invariant and does not invoke the registered field resolver.
 

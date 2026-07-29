@@ -2,6 +2,7 @@ package semantics.spec
 
 import model.Schema
 import model.SelectionForest
+import model.selectionsFrom
 import model.spec.SpecSelection
 import model.testing.TestWorld
 import kotlin.test.Test

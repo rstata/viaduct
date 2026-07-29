@@ -1,114 +1,154 @@
 package model
 
 /**
- * A value in an [ObjectEngineResult] tree.
+ * A finite, well-founded value in an [ObjectEngineResult] tree.
  *
- * ### Invariant: engine-result-well-foundedness
- *
- * This is an inductively defined algebraic value: every [EngineResult] is finite and
- * well-founded, and every child of a [ListEngineResult] or [ObjectEngineResult] is a strictly
- * smaller value. Kotlin object identity, reference sharing, self-reference, and cycles are not
- * part of this model.
- *
- * ### Invariant: oer-result-nullability
- *
- * A null [ObjectEngineResult] cell occurs only when its [Schema.ObjectKey.field] has a nullable
- * [Schema.OutputField.type]. Object lookup enforces this invariant. List elements are typed by
- * their surrounding schema context rather than by the [ListEngineResult] carrier.
- *
- * ### Equality
- *
- * Implementations compare result values structurally over their documented properties; schema
- * definitions within those properties use the canonical `==` equality documented by [Schema].
+ * Engine-result equality is structural over the documented properties. Schema definitions within
+ * those properties use the canonical equality documented by [Schema].
  */
-sealed interface EngineResult
+sealed interface EngineResult {
+    /**
+     * One resolved value and its retained checker result.
+     *
+     * A cell is used both for object fields and list elements. [check] remains uninterpreted by the
+     * current correctness judgment.
+     */
+    sealed interface Cell {
+        val value: EngineResult?
+        val check: Schema.BooleanValue
+
+        companion object {
+            fun of(
+                value: EngineResult?,
+                check: Schema.BooleanValue,
+            ): Cell = CellImpl(value, check)
+        }
+    }
+}
 
 /**
- * An object result similar to the result of the GraphQL ExecuteSelectionSet algorithm.
+ * A finite object result whose [cells] are exact, alias-free schema coordinates.
  *
- * [keys] exposes the finite domain of present [Schema.ObjectKey] instances. Two object results are
- * equal exactly when their concrete [type] and key sets match and [fetch] returns equal [Cell] values
- * for every present key.
- *
- * ### Invariant: oer-present-key-validity
- *
- * Every present [Schema.ObjectKey] has a canonical [Schema.ObjectKey.field] whose
- * [Schema.OutputField.containingType] is a concrete [Schema.ObjectType], never an abstract
- * [Schema.InterfaceType] or [Schema.UnionType], and that concrete type equals [type]. Its
- * argument fields are fully coerced to non-variable values: no argument recursively contains a
- * [Schema.VariableValue]. Consequently, the identity of keys present in an OER is canonical and
- * does not depend on conservative symbolic equality.
- *
- * ### Invariant: oer-error-argument-cell
- *
- * For every present [Schema.ObjectKey] whose arguments recursively contain [Schema.ErrorValue],
- * [fetch] returns a [Cell] whose [Cell.value] and [Cell.check] are both [Schema.ErrorValue].
+ * Every key belongs to [type], contains no unresolved variables, and has a value that conforms
+ * recursively to the field's type expression. A key containing [Schema.ErrorValue] has an error
+ * value and error check.
  */
-sealed class ObjectEngineResult : EngineResult {
-    abstract val type: Schema.ObjectType
+sealed interface ObjectEngineResult : EngineResult {
+    val type: Schema.ObjectType
+    val cells: Map<Schema.ObjectKey, EngineResult.Cell>
 
-    /**
-     * The finite set of keys present in this result.
-     *
-     * ### Invariant: oer-key-domain
-     *
-     * For every [Schema.ObjectKey] `key`, `key in keys` exactly when [fetch] returns one [Cell]; when
-     * `key !in keys`, [fetch] throws [MissingFieldException]. The set has no modeled order.
-     */
-    abstract val keys: Set<Schema.ObjectKey>
+    val keys: Set<Schema.ObjectKey>
+        get() = cells.keys
 
-    /**
-     * One present field's resolved value and retained check component.
-     *
-     * [check] is an uninterpreted carrier value in the current model. This package does not define
-     * how it is produced or what its Boolean value means; those rules belong to future checker
-     * semantics. A semantic judgment may explicitly declare itself check-insensitive and observe
-     * only field presence and [value]. Future checker-aware correctness judgments will interpret
-     * and account for [check] alongside [value].
-     */
-    data class Cell(
-        val value: EngineResult?,
-        val check: Schema.BooleanValue,
-    )
+    /** @throws MissingFieldException when [key] is absent */
+    fun fetch(key: Schema.ObjectKey): EngineResult.Cell =
+        cells[key]
+            ?: throw MissingFieldException(type.typeName, key.field.fieldName)
 
-    /**
-     * Fetches the cell for [key].
-     *
-     * A null [Cell.value] represents a present field whose GraphQL value is null. A missing key
-     * throws [MissingFieldException].
-     *
-     * In this mathematical model, lookup always terminates. Its only possible outcomes are
-     * returning exactly one [Cell] or throwing [MissingFieldException].
-     *
-     * @throws MissingFieldException when [key] is not present
-     * @throws IllegalStateException when a non-null field contains a null value
-     */
-    fun fetch(key: Schema.ObjectKey): Cell {
-        val cell = fetchCell(key)
-        check(key.field.type.isNullable || cell.value != null) {
-            "Non-null field ${key.field.containingType.typeName}/${key.field.fieldName} " +
-                "cannot contain a null engine result"
+    companion object {
+        fun of(
+            type: Schema.ObjectType,
+            cells: Map<Schema.ObjectKey, EngineResult.Cell>,
+        ): ObjectEngineResult {
+            require(cells.keys.all { it.field.containingType == type }) {
+                "${type.typeName} result contains a field owned by another type"
+            }
+            require(cells.keys.none { it.arguments.containsVariableValue() }) {
+                "${type.typeName} result keys cannot contain unresolved variables"
+            }
+            cells.forEach { (key, cell) ->
+                if (key.arguments.containsErrorValue()) {
+                    require(cell.value == Schema.ErrorValue && cell.check == Schema.ErrorValue) {
+                        "A key containing an argument error must contain an error value and check"
+                    }
+                }
+                require(cell.value.conformsTo(key.field.typeExpr)) {
+                    "${type.typeName}/${key.field.fieldName} result does not conform to " +
+                        key.field.typeExpr
+                }
+            }
+            return ObjectEngineResultImpl(type, cells)
         }
-        return cell
-    }
-
-    protected abstract fun fetchCell(key: Schema.ObjectKey): Cell
-}
-
-class ListEngineResult private constructor(
-    private val elements: List<EngineResult?>,
-) : EngineResult,
-    List<EngineResult?> by elements {
-    override fun equals(other: Any?): Boolean =
-        other is ListEngineResult &&
-            elements == other.elements
-
-    override fun hashCode(): Int = elements.hashCode()
-
-    override fun toString(): String = elements.toString()
-
-    internal companion object {
-        fun create(elements: List<EngineResult?>): ListEngineResult =
-            ListEngineResult(elements.toList())
     }
 }
+
+/**
+ * A typed list result whose elements retain checker results.
+ *
+ * [typeExpr] is the expected type of each element, including its nullability and any nested list
+ * wrappers.
+ */
+sealed interface ListEngineResult : EngineResult, List<EngineResult.Cell> {
+    val typeExpr: Schema.TypeExpr<Schema.OutputType>
+
+    companion object {
+        fun of(
+            typeExpr: Schema.TypeExpr<Schema.OutputType>,
+            cells: List<EngineResult.Cell>,
+        ): ListEngineResult {
+            require(cells.all { it.value.conformsTo(typeExpr) }) {
+                "List engine result contains an element incompatible with $typeExpr"
+            }
+            return ListEngineResultImpl(typeExpr, cells)
+        }
+    }
+}
+
+private data class CellImpl(
+    override val value: EngineResult?,
+    override val check: Schema.BooleanValue,
+) : EngineResult.Cell
+
+private data class ObjectEngineResultImpl(
+    override val type: Schema.ObjectType,
+    override val cells: Map<Schema.ObjectKey, EngineResult.Cell>,
+) : ObjectEngineResult
+
+private data class ListEngineResultImpl(
+    override val typeExpr: Schema.TypeExpr<Schema.OutputType>,
+    private val cells: List<EngineResult.Cell>,
+) : ListEngineResult,
+    List<EngineResult.Cell> by cells
+
+internal fun EngineResult?.conformsTo(
+    typeExpr: Schema.TypeExpr<Schema.OutputType>,
+): Boolean =
+    when (this) {
+        null -> typeExpr.isNullable
+        Schema.ErrorValue -> true
+        is Schema.SimpleValue ->
+            typeExpr is Schema.TypeExpr.Named && typeExpr.baseType == type
+        is ObjectEngineResult ->
+            if (typeExpr is Schema.TypeExpr.Named) {
+                val declaredType = typeExpr.baseType
+                declaredType is Schema.CompositeType && type in declaredType.possibleTypes
+            } else {
+                false
+            }
+        is ListEngineResult ->
+            typeExpr is Schema.TypeExpr.List &&
+                typeExpr.elementType.canContainPure(this.typeExpr)
+    }
+
+private fun Schema.ArgumentsValue.containsVariableValue(): Boolean =
+    fieldValues.values.any { it.containsVariableValue() }
+
+private fun Schema.ArgumentsValue.containsErrorValue(): Boolean =
+    fieldValues.values.any { it.containsErrorValue() }
+
+private fun Schema.InputValue?.containsVariableValue(): Boolean =
+    when {
+        this == null || this == Schema.ErrorValue -> false
+        this is Schema.VariableValue -> true
+        this is Schema.InputListValue -> values.any { it.containsVariableValue() }
+        this is Schema.InputObjectValue -> fieldValues.values.any { it.containsVariableValue() }
+        else -> false
+    }
+
+private fun Schema.InputValue?.containsErrorValue(): Boolean =
+    when {
+        this == Schema.ErrorValue -> true
+        this is Schema.InputListValue -> values.any { it.containsErrorValue() }
+        this is Schema.InputObjectValue -> fieldValues.values.any { it.containsErrorValue() }
+        else -> false
+    }

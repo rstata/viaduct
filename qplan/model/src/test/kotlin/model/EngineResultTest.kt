@@ -10,6 +10,53 @@ import kotlin.test.assertSame
 
 class EngineResultTest {
     @Test
+    fun `node reference contains the node id`() {
+        val world = TestWorld.fromSDL(NODE_SCHEMA_SDL).assumptions
+        val schema = world.schema
+        val user = schema.type("User") as Schema.ObjectType
+        val idField = schema.field("User", "id")
+        val id = Value.ID.of("1")
+
+        val result =
+            context(world) {
+                EngineResult.Object.nodeRef(idField, id)
+            }
+
+        val idKey = Value.Key.of(idField, emptyMap())
+        assertEquals(user, result.type)
+        assertEquals(setOf(idKey), result.keys)
+        assertEquals(id, result.fetch(idKey).value)
+    }
+
+    @Test
+    fun `node reference rejects a non-id field`() {
+        val world = TestWorld.fromSDL(NODE_SCHEMA_SDL).assumptions
+
+        assertFailsWith<IllegalArgumentException> {
+            context(world) {
+                EngineResult.Object.nodeRef(
+                    world.schema.field("User", "name"),
+                    Value.ID.of("1"),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `node reference rejects a non-Node type`() {
+        val world = TestWorld.fromSDL(NODE_SCHEMA_SDL).assumptions
+
+        assertFailsWith<IllegalArgumentException> {
+            context(world) {
+                EngineResult.Object.nodeRef(
+                    world.schema.field("Other", "id"),
+                    Value.ID.of("1"),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `list engine result retains its elements`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val elementType = schema.field("Query", "value").typeExpr
@@ -294,6 +341,26 @@ class EngineResultTest {
             type User {
               first: String
               second: String
+            }
+            """
+
+        const val NODE_SCHEMA_SDL =
+            """
+            interface Node {
+              id: ID!
+            }
+
+            type User implements Node {
+              id: ID!
+              name: String!
+            }
+
+            type Other {
+              id: ID!
+            }
+
+            type Query {
+              user: User
             }
             """
     }

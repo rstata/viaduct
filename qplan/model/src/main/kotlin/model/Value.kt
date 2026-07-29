@@ -1,5 +1,7 @@
 package model
 
+import model.invariants.conformsToSchemaType
+
 /**
  * A GraphQL semantic value.
  *
@@ -40,6 +42,11 @@ sealed interface Value {
         val intValue: kotlin.Int
 
         companion object {
+            /**
+             * ### Invariant: int-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(value: kotlin.Int): Int = IntValueImpl(value)
         }
     }
@@ -56,6 +63,11 @@ sealed interface Value {
         val floatValue: Double
 
         companion object {
+            /**
+             * ### Invariant: float-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(value: Double): Float {
                 require(value.isFinite()) { "GraphQL Float values must be finite" }
                 return FloatValueImpl(value)
@@ -70,6 +82,11 @@ sealed interface Value {
         val stringValue: kotlin.String
 
         companion object {
+            /**
+             * ### Invariant: string-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(value: kotlin.String): String = StringValueImpl(value)
         }
     }
@@ -81,6 +98,11 @@ sealed interface Value {
         val booleanValue: kotlin.Boolean
 
         companion object {
+            /**
+             * ### Invariant: boolean-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(value: kotlin.Boolean): Boolean = BooleanValueImpl(value)
         }
     }
@@ -92,6 +114,11 @@ sealed interface Value {
         val idValue: kotlin.String
 
         companion object {
+            /**
+             * ### Invariant: id-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(value: kotlin.String): ID = IDValueImpl(value)
         }
     }
@@ -107,6 +134,11 @@ sealed interface Value {
         val enumValue: kotlin.String
 
         companion object {
+            /**
+             * ### Invariant: enum-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 type: Schema.EnumType,
                 value: kotlin.String,
@@ -129,11 +161,16 @@ sealed interface Value {
         override val values: kotlin.collections.List<Input?>
 
         companion object {
+            /**
+             * ### Invariant: input-list-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 typeExpr: TypeExpr<Schema.InputType>,
                 values: kotlin.collections.List<Input?>,
             ): InputList {
-                require(values.all { it.conformsTo(typeExpr) }) {
+                require(values.all { it.conformsToSchemaType(typeExpr) }) {
                     "Input list element does not conform to $typeExpr"
                 }
                 return InputListValueImpl(typeExpr, values)
@@ -145,11 +182,16 @@ sealed interface Value {
         override val values: kotlin.collections.List<Output?>
 
         companion object {
+            /**
+             * ### Invariant: output-list-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 typeExpr: TypeExpr<Schema.OutputType>,
                 values: kotlin.collections.List<Output?>,
             ): OutputList {
-                require(values.all { it.conformsTo(typeExpr) }) {
+                require(values.all { it.conformsToSchemaType(typeExpr) }) {
                     "Output list element does not conform to $typeExpr"
                 }
                 return OutputListValueImpl(typeExpr, values)
@@ -179,6 +221,11 @@ sealed interface Value {
         override val fieldValues: Fields<Schema.InputObjectType, Input>
 
         companion object {
+            /**
+             * ### Invariant: input-object-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 type: Schema.InputObjectType,
                 fields: Map<kotlin.String, Any?>,
@@ -205,6 +252,11 @@ sealed interface Value {
         override val fieldValues: Fields<Schema.FieldArguments, Input>
 
         companion object {
+            /**
+             * ### Invariant: arguments-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 field: Schema.OutputField,
                 fields: Map<kotlin.String, Any?>,
@@ -237,11 +289,21 @@ sealed interface Value {
         val arguments: Arguments
 
         companion object {
+            /**
+             * ### Invariant: map-key-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 field: Schema.OutputField,
                 arguments: Map<kotlin.String, Any?>,
             ): Key = of(field, Arguments.of(field, arguments))
 
+            /**
+             * ### Invariant: arguments-key-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 field: Schema.OutputField,
                 arguments: Arguments,
@@ -267,14 +329,26 @@ sealed interface Value {
         val fieldValues: ObjectFields
 
         companion object {
+            /**
+             * ### Invariant: object-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 type: Schema.ObjectType,
-                fields: Map<Key, Output?>,
-            ): Object =
-                ObjectValueImpl(
+                fields: Map<Key, Output?> = emptyMap(),
+            ): Object {
+                fields.forEach { (key, value) ->
+                    require(value.conformsToSchemaType(key.field.typeExpr)) {
+                        "${type.typeName}/${key.field.fieldName} value does not conform to " +
+                            key.field.typeExpr
+                    }
+                }
+                return ObjectValueImpl(
                     type = type,
                     fieldValues = ObjectFieldValuesImpl(type, fields),
                 )
+            }
         }
     }
 
@@ -320,6 +394,11 @@ sealed interface Value {
         val variableName: kotlin.String
 
         companion object {
+            /**
+             * ### Invariant: variable-value-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(variableName: kotlin.String): Variable = VariableValueImpl(variableName)
         }
     }
@@ -629,36 +708,6 @@ private fun Map<*, *>.toStringKeyedMap(): Map<String, Any?> =
     entries.associate { (key, value) ->
         if (key !is String) throw ClassCastException()
         key to value
-    }
-
-private fun Value.Input?.conformsTo(typeExpr: TypeExpr<Schema.InputType>): Boolean =
-    when (this) {
-        null -> typeExpr.isNullable
-        Value.Error, is Value.Variable -> true
-        is Value.InputList ->
-            typeExpr is TypeExpr.List &&
-                typeExpr.elementType.canContainPure(this.typeExpr)
-        is Value.Typed ->
-            typeExpr is TypeExpr.Named && typeExpr.baseType == type
-        else -> typeExpr is TypeExpr.Named && typeExpr.baseType == (this as Value.Simple).type
-    }
-
-private fun Value.Output?.conformsTo(typeExpr: TypeExpr<Schema.OutputType>): Boolean =
-    when (this) {
-        null -> typeExpr.isNullable
-        Value.Error -> true
-        is Value.OutputList ->
-            typeExpr is TypeExpr.List &&
-                typeExpr.elementType.canContainPure(this.typeExpr)
-        is Value.Typed ->
-            typeExpr is TypeExpr.Named &&
-                when (val expected = typeExpr.baseType) {
-                    is Schema.CompositeType ->
-                        type is Schema.ObjectType && type in expected.possibleTypes
-                    else -> expected == type
-                }
-        is Value.Simple ->
-            typeExpr is TypeExpr.Named && typeExpr.baseType == type
     }
 
 internal fun Value.Input?.containsVariableValue(): Boolean =

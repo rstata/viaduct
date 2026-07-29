@@ -42,11 +42,11 @@ A `Fragment` contains a nominal composite type and a flattened `SelectionForest`
 
 ### Resolver Interpretation
 
-The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a nullable, selection-independent `Value.Output`. A node resolver stores a selection-independent lookup from `Value.ID` to `Value.Object`.
+The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a nullable, selection-independent `Value.Output`. A node resolver stores a selection-independent lookup from `Value.ID` to `Value.Object`; every returned object contains the canonical argumentless `id` field equal to the lookup ID.
 
 `snip` supplies the conceptual additional selection input by projecting a resolver's fixed output result. Holding the ordinary function inputs fixed therefore produces coherent projections for different requested selections.
 
-For a concrete field, `behavioral(field)` is true for engine-supplied `__typename`, an explicit field resolver, and every non-`id` field on a type with a node resolver. Field-resolver projection retains selected passive fields and stops at behavioral boundaries, leaving only the `id` bridge of a nested node reference. Node-resolver projection has a distinct root rule: it omits root `id`, `__typename`, and explicit field-resolver fields while retaining fields supplied by that node resolver.
+For a concrete field, `behavioral(field)` is true for engine-supplied `__typename`, an explicit field resolver, and every non-`id` field on a type with a node resolver. Field-resolver projection retains selected passive fields and stops at behavioral boundaries, leaving only the `id` bridge of a nested node reference. Node-resolver projection has a distinct root rule: it omits root `id`, `__typename`, and explicit field-resolver fields while retaining fields supplied by that node resolver. The raw node-resolver value repeats its input `id`, but that normalization does not attribute the root `id` OER cell to the node resolver.
 
 ### Resolver Demand
 

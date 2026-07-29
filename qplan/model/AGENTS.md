@@ -6,6 +6,8 @@ This project defines the carrier algebra for reasoning about Viaduct field resol
 
 The carrier defines values that may occur in an OER tree; it does not define which OER is correct for an operation. Keep correctness, demand derivation, executor attribution, and interpretation of checker results in separate semantic domains.
 
+The `model.invariants` package defines reusable relations used to state carrier and world invariants precisely. Factory KDocs state the invariant postconditions established for every constructed result; because carrier implementations are sealed behind those factories, these postconditions are universally quantified over carrier values in the fixed reasoning world.
+
 ## Domain Assumptions
 
 `EngineResult` values are finite, inductively defined algebraic values. Kotlin object sharing, reference identity, self-reference, and cyclic runtime object graphs are outside the model.  ("OER" which stands for object engine-result is a common shorthand for the `EngineResult.Object` type.)

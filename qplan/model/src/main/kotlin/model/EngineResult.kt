@@ -1,5 +1,7 @@
 package model
 
+import model.invariants.conformsToSchemaType
+
 /**
  * A finite, well-founded field-resolution result.
  *
@@ -17,10 +19,16 @@ sealed interface EngineResult {
         val value: EngineResult?
         val check: Value.Boolean
 
+        /** The canonical cell whose value and check are both [Value.Error]. */
+        data object Error : Cell {
+            override val value: EngineResult = Value.Error
+            override val check: Value.Boolean = Value.Error
+        }
+
         companion object {
             fun of(
                 value: EngineResult?,
-                check: Value.Boolean,
+                check: Value.Boolean = Value.Boolean.of(true),
             ): Cell = CellImpl(value, check)
         }
     }
@@ -44,6 +52,56 @@ sealed interface EngineResult {
                 ?: throw MissingFieldException(type.typeName, key.field.fieldName)
 
         companion object {
+            /**
+             * Constructs the node reference containing [id] at [idField].
+             *
+             * ### Invariant: node-reference-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             *
+             * [idField] must be the canonical argumentless `id: ID` field of a concrete type that
+             * nominally implements the canonical `Node` interface.
+             *
+             * @throws IllegalArgumentException when [idField] is not a Node type's `id` field
+             */
+            context(world: Assumptions)
+            fun nodeRef(
+                idField: Schema.OutputField,
+                id: Value.ID,
+            ): Object {
+                val type = idField.containingType
+                require(type is Schema.ObjectType) {
+                    "A node reference ID field must belong to a concrete object type"
+                }
+                require(world.schema.field(type.typeName, "id") == idField) {
+                    "${type.typeName}/${idField.fieldName} is not its canonical id field"
+                }
+                require(idField.arguments == Schema.NoArguments) {
+                    "Node reference ID field ${type.typeName}/id must take no arguments"
+                }
+                require(idField.typeExpr.baseType == Schema.IDType) {
+                    "Node reference ID field ${type.typeName}/id must be ID-typed"
+                }
+                val nodeType = world.schema.type("Node")
+                require(
+                    nodeType is Schema.InterfaceType &&
+                        world.schema.relation(nodeType, type) == Schema.TypeRelation.WIDER_THAN,
+                ) {
+                    "Node reference type ${type.typeName} must implement Node"
+                }
+
+                val idKey = Value.Key.of(idField, emptyMap())
+                return of(
+                    type = type,
+                    cells = mapOf(idKey to Cell.of(id)),
+                )
+            }
+
+            /**
+             * ### Invariant: object-engine-result-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 type: Schema.ObjectType,
                 cells: Map<Value.Key, Cell>,
@@ -60,7 +118,7 @@ sealed interface EngineResult {
                             "A key containing an argument error must contain an error value and check"
                         }
                     }
-                    require(cell.value.conformsTo(key.field.typeExpr)) {
+                    require(cell.value.conformsToSchemaType(key.field.typeExpr)) {
                         "${type.typeName}/${key.field.fieldName} result does not conform to " +
                             key.field.typeExpr
                     }
@@ -79,11 +137,16 @@ sealed interface EngineResult {
         val typeExpr: TypeExpr<Schema.OutputType>
 
         companion object {
+            /**
+             * ### Invariant: list-engine-result-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
             fun of(
                 typeExpr: TypeExpr<Schema.OutputType>,
                 cells: kotlin.collections.List<Cell>,
             ): List {
-                require(cells.all { it.value.conformsTo(typeExpr) }) {
+                require(cells.all { it.value.conformsToSchemaType(typeExpr) }) {
                     "List engine result contains an element incompatible with $typeExpr"
                 }
                 return ListResultImpl(typeExpr, cells)
@@ -200,26 +263,6 @@ private fun EngineResult.Cell.union(other: EngineResult.Cell): EngineResult.Cell
         check = check,
     )
 }
-
-internal fun EngineResult?.conformsTo(
-    typeExpr: TypeExpr<Schema.OutputType>,
-): Boolean =
-    when (this) {
-        null -> typeExpr.isNullable
-        Value.Error -> true
-        is Value.Simple ->
-            typeExpr is TypeExpr.Named && typeExpr.baseType == type
-        is EngineResult.Object ->
-            if (typeExpr is TypeExpr.Named) {
-                val declaredType = typeExpr.baseType
-                declaredType is Schema.CompositeType && type in declaredType.possibleTypes
-            } else {
-                false
-            }
-        is EngineResult.List ->
-            typeExpr is TypeExpr.List &&
-                typeExpr.elementType.canContainPure(this.typeExpr)
-    }
 
 private fun Value.Arguments.containsVariableValue(): Boolean =
     fieldValues.values.any { it.containsVariableValue() }

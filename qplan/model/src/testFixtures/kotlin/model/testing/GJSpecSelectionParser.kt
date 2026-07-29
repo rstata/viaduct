@@ -1,0 +1,152 @@
+package model.testing
+
+import graphql.language.Document
+import graphql.language.Field
+import graphql.language.FragmentDefinition
+import graphql.language.FragmentSpread
+import graphql.language.InlineFragment
+import graphql.language.SelectionSet
+import graphql.parser.Parser
+import graphql.schema.GraphQLCompositeType
+import graphql.schema.GraphQLTypeUtil
+import graphql.validation.ValidationErrorType
+import graphql.validation.Validator
+import java.util.Locale
+import model.Schema
+import model.VariableBindings
+import model.spec.SpecSelection
+
+internal class GJSpecSelectionParser(
+    private val schema: GJSchema,
+    private val variableValues: VariableBindings,
+) {
+    fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, List<SpecSelection>> {
+        val document = Parser.parse(fragment)
+        val definition =
+            document.definitions.singleOrNull() as? FragmentDefinition
+                ?: throw IllegalArgumentException("Expected exactly one named fragment definition")
+        require(definition.directives.isEmpty()) {
+            "Applied directives are deferred from the current spec-selection model"
+        }
+        validateFragment(document)
+
+        val typeConditionName = definition.typeCondition.name!!
+        val typeCondition = schema.type(typeConditionName) as Schema.CompositeType
+        val graphQLTypeCondition =
+            schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
+        return typeCondition to decodeSelectionSet(definition.selectionSet, graphQLTypeCondition)
+    }
+
+    private fun validateFragment(document: Document) {
+        val errors =
+            Validator()
+                .validateDocument(schema.graphQLSchema, document, Locale.ENGLISH)
+                .filterNot { it.validationErrorType in STANDALONE_FRAGMENT_ERRORS }
+        require(errors.isEmpty()) {
+            errors.joinToString(
+                prefix = "Invalid GraphQL fragment: ",
+                separator = "; ",
+            ) { it.message }
+        }
+    }
+
+    private fun decodeSelectionSet(
+        selectionSet: SelectionSet,
+        typeInScope: GraphQLCompositeType,
+    ): List<SpecSelection> =
+        selectionSet.selections.map { selection ->
+            when (selection) {
+                is Field -> decodeField(selection, typeInScope)
+                is InlineFragment -> decodeInlineFragment(selection, typeInScope)
+                is FragmentSpread ->
+                    throw IllegalArgumentException(
+                        "Named fragment spreads must be inlined before constructing spec selections",
+                    )
+                else -> throw IllegalArgumentException("Unexpected GraphQL selection: $selection")
+            }
+        }
+
+    private fun decodeField(
+        field: Field,
+        typeInScope: GraphQLCompositeType,
+    ): SpecSelection.Field {
+        require(field.directives.isEmpty()) {
+            "Applied directives are deferred from the current spec-selection model"
+        }
+        val fieldDefinition =
+            graphql.introspection.Introspection.getFieldDef(
+                schema.graphQLSchema,
+                typeInScope,
+                field.name,
+            )!!
+        val suppliedArguments = field.arguments.associateBy { it.name }
+        val arguments =
+            fieldDefinition.arguments
+                .mapNotNull { argumentDefinition ->
+                    val suppliedArgument = suppliedArguments[argumentDefinition.name]
+                    when {
+                        suppliedArgument != null ->
+                            argumentDefinition.name to
+                                decodeLiteral(
+                                    type = argumentDefinition.type,
+                                    value = suppliedArgument.value,
+                                    variableValues = variableValues,
+                                    schema = schema,
+                                )
+                        argumentDefinition.hasSetDefaultValue() ->
+                            argumentDefinition.name to
+                                decodeInputValue(
+                                    argumentDefinition.type,
+                                    argumentDefinition.argumentDefaultValue,
+                                    variableValues,
+                                    schema,
+                                )
+                        else -> null
+                    }
+                }.toMap()
+        val subselections =
+            field.selectionSet?.let { selectionSet ->
+                val resultType =
+                    GraphQLTypeUtil.unwrapAll(fieldDefinition.type) as GraphQLCompositeType
+                decodeSelectionSet(selectionSet, resultType)
+            }
+        return SpecSelection.Field.of(
+            alias = field.alias,
+            field = schema.field(typeInScope.name, field.name),
+            arguments = arguments,
+            subselections = subselections,
+        )
+    }
+
+    private fun decodeInlineFragment(
+        fragment: InlineFragment,
+        typeInScope: GraphQLCompositeType,
+    ): SpecSelection.InlineFragment {
+        require(fragment.directives.isEmpty()) {
+            "Applied directives are deferred from the current spec-selection model"
+        }
+        val typeConditionName = fragment.typeCondition?.name
+        val graphQLTypeCondition =
+            typeConditionName?.let {
+                schema.graphQLSchema.getType(it) as GraphQLCompositeType
+            }
+        val modelTypeCondition =
+            typeConditionName?.let { schema.type(it) as Schema.CompositeType }
+        return SpecSelection.InlineFragment.of(
+            typeCondition = modelTypeCondition,
+            selections =
+                decodeSelectionSet(
+                    fragment.selectionSet,
+                    graphQLTypeCondition ?: typeInScope,
+                ),
+        )
+    }
+
+    private companion object {
+        val STANDALONE_FRAGMENT_ERRORS =
+            setOf(
+                ValidationErrorType.UnusedFragment,
+                ValidationErrorType.UndefinedVariable,
+            )
+    }
+}

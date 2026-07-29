@@ -18,10 +18,22 @@ package model
  * Resolving this fragment produces the selection-independent object supplied to a
  * [model.registry.FieldResolverFunction].
  */
-interface Fragment {
+sealed interface Fragment {
     /** The nominal type carried by this fragment. */
     val nominalType: Schema.CompositeType
 
     /** The selections nested within this fragment. */
     val subselections: SelectionForest
+
+    companion object {
+        fun of(
+            nominalType: Schema.CompositeType,
+            subselections: SelectionForest,
+        ): Fragment = FragmentImpl(nominalType, subselections)
+    }
 }
+
+private class FragmentImpl(
+    override val nominalType: Schema.CompositeType,
+    override val subselections: SelectionForest,
+) : Fragment

@@ -21,8 +21,8 @@ class ResolverDemandTest {
                     val user = schema.type("User") as Schema.ObjectType
                     val admin = schema.type("Admin") as Schema.ObjectType
                     mapOf(
-                        user to NodeResolver { error("Not invoked") },
-                        admin to NodeResolver { error("Not invoked") },
+                        user to model.testing.nodeResolverOf { error("Not invoked") },
+                        admin to model.testing.nodeResolverOf { error("Not invoked") },
                     )
                 },
                 fieldResolvers = { schema ->
@@ -87,32 +87,28 @@ class ResolverDemandTest {
         val registry = world.executorRegistry
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
-        val queryNode = registry.fieldResolver(schema.field("Query", "node"))
-        val consumer = registry.fieldResolver(schema.field("Query", "consumer"))
-        val outer = registry.fieldResolver(schema.field("Query", "outer"))
-        val userResolved = registry.fieldResolver(schema.field("User", "resolved"))
-        val adminResolved = registry.fieldResolver(schema.field("Admin", "resolved"))
-        val userNode = registry.nodeResolver(user)
-        val adminNode = registry.nodeResolver(admin)
+        val queryNode = schema.field("Query", "node")
+        val consumer = schema.field("Query", "consumer")
+        val outer = schema.field("Query", "outer")
+        val userResolved = schema.field("User", "resolved")
+        val adminResolved = schema.field("Admin", "resolved")
 
         assertEquals(
-            setOf(queryNode, userNode, adminNode, userResolved, adminResolved),
-            consumer.mayDemandFrom,
+            setOf(queryNode, user, admin, userResolved, adminResolved),
+            registry.mayDemandFrom(consumer),
         )
-        assertEquals(setOf(consumer), outer.mayDemandFrom)
-        assertTrue(queryNode.mayDemandFrom.isEmpty())
-        assertTrue(userNode.mayDemandFrom.isEmpty())
-        assertTrue(adminNode.mayDemandFrom.isEmpty())
-        assertTrue(userResolved.mayDemandFrom.isEmpty())
-        assertTrue(adminResolved.mayDemandFrom.isEmpty())
+        assertEquals(setOf(consumer), registry.mayDemandFrom(outer))
+        assertTrue(registry.mayDemandFrom(queryNode).isEmpty())
+        assertTrue(registry.mayDemandFrom(userResolved).isEmpty())
+        assertTrue(registry.mayDemandFrom(adminResolved).isEmpty())
 
-        assertEquals(setOf(outer), consumer.mayBeDemandedBy)
-        assertEquals(setOf(consumer), queryNode.mayBeDemandedBy)
-        assertEquals(setOf(consumer), userNode.mayBeDemandedBy)
-        assertEquals(setOf(consumer), adminNode.mayBeDemandedBy)
-        assertEquals(setOf(consumer), userResolved.mayBeDemandedBy)
-        assertEquals(setOf(consumer), adminResolved.mayBeDemandedBy)
-        assertTrue(outer.mayBeDemandedBy.isEmpty())
+        assertEquals(setOf(outer), registry.mayBeDemandedBy(consumer))
+        assertEquals(setOf(consumer), registry.mayBeDemandedBy(queryNode))
+        assertEquals(setOf(consumer), registry.mayBeDemandedBy(user))
+        assertEquals(setOf(consumer), registry.mayBeDemandedBy(admin))
+        assertEquals(setOf(consumer), registry.mayBeDemandedBy(userResolved))
+        assertEquals(setOf(consumer), registry.mayBeDemandedBy(adminResolved))
+        assertTrue(registry.mayBeDemandedBy(outer).isEmpty())
     }
 
     @Test
@@ -202,7 +198,7 @@ class ResolverDemandTest {
             """.trimIndent()
 
         fun resolver(fragment: Fragment): FieldResolver =
-            FieldResolver(
+            model.testing.fieldResolverOf(
                 objectFragment = fragment,
                 function = { _, _ -> error("Not invoked") },
             )
@@ -211,10 +207,7 @@ class ResolverDemandTest {
             nominalType: Schema.CompositeType,
             selections: SelectionForest = selectionForestOf(),
         ): Fragment =
-            object : Fragment {
-                override val nominalType = nominalType
-                override val subselections = selections
-            }
+            Fragment.of(nominalType, selections)
 
         fun selection(
             schema: Schema,
@@ -225,7 +218,7 @@ class ResolverDemandTest {
         ): Selection =
             Selection.of(
                 key =
-                    schema.objectKey(
+                    Schema.ObjectKey.of(
                         field = schema.field(nominalType.typeName, fieldName),
                         arguments = emptyMap(),
                     ),

@@ -38,5 +38,5 @@ private fun EngineResult?.engineResultConformsToTypename(): Boolean =
         -> true
 
         is ObjectEngineResult -> objectConformsToTypename()
-        is ListEngineResult -> all { element -> element.engineResultConformsToTypename() }
+        is ListEngineResult -> all { cell -> cell.value.engineResultConformsToTypename() }
     }

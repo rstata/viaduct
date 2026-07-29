@@ -15,29 +15,32 @@ class VariableValuesTest {
                 schemaSDL = SCHEMA_SDL,
                 variableValues = { schema ->
                     mapOf(
-                        "count" to schema.intValue(7),
+                        "count" to Schema.IntValue.of(7),
                         "nothing" to null,
                     )
                 },
             )
         val schema = world.schema
         val variablesType = schema.type("Variables") as Schema.InputObjectType
-        val unresolved = schema.variableValue("unresolved")
-        val other = schema.variableValue("other")
+        val unresolved = Schema.VariableValue.of("unresolved")
+        val other = Schema.VariableValue.of("other")
         val variableValues = world.assumptions.variableValues
         val value =
-            schema.inputObjectValue(
+            Schema.InputObjectValue.of(
                 type = variablesType,
                 fields =
                     mapOf(
-                        "count" to schema.variableValue("count"),
-                        "nothing" to schema.variableValue("nothing"),
+                        "count" to Schema.VariableValue.of("count"),
+                        "nothing" to Schema.VariableValue.of("nothing"),
                         "nested" to
-                            schema.inputListValue(
-                                listOf(
+                            Schema.InputListValue.of(
+                                typeExpr =
+                                    (variablesType.fields.getValue("nested").typeExpr as
+                                        Schema.TypeExpr.List).elementType,
+                                values = listOf(
                                     unresolved,
                                     other,
-                                    schema.variableValue("unresolved"),
+                                    Schema.VariableValue.of("unresolved"),
                                 ),
                             ),
                     ),
@@ -56,7 +59,7 @@ class VariableValuesTest {
             listOf(unresolved, other, unresolved),
             assertIs<Schema.InputListValue>(
                 instantiated.fieldValues["nested"],
-            ).inputListValues,
+            ).values,
         )
 
         val exception =
@@ -67,7 +70,7 @@ class VariableValuesTest {
 
         assertNull(
             variableValues.instantiateAllVariables(
-                schema.variableValue("nothing"),
+                Schema.VariableValue.of("nothing"),
             ),
         )
         assertEquals(
@@ -88,16 +91,18 @@ class VariableValuesTest {
                     schemaSDL = SCHEMA_SDL,
                     variableValues = { schema ->
                         val inputType = schema.type("Input") as Schema.InputObjectType
-                        first = schema.variableValue("first")
-                        second = schema.variableValue("second")
-                        third = schema.variableValue("third")
+                        first = Schema.VariableValue.of("first")
+                        second = Schema.VariableValue.of("second")
+                        third = Schema.VariableValue.of("third")
                         mapOf(
                             "list" to
-                                schema.inputListValue(
-                                    listOf(first, second, schema.variableValue("first")),
+                                Schema.InputListValue.of(
+                                    typeExpr = Schema.TypeExpr.Named.of(Schema.IntType),
+                                    values =
+                                        listOf(first, second, Schema.VariableValue.of("first")),
                                 ),
                             "object" to
-                                schema.inputObjectValue(
+                                Schema.InputObjectValue.of(
                                     type = inputType,
                                     fields = mapOf("value" to third),
                                 ),

@@ -58,7 +58,7 @@ class ContextParametersTest {
     context(world: Assumptions)
     private fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue = world.run {
         val copiedFields = fieldValues.toMap()
-        schema.objectValue(type, copiedFields)
+        Schema.ObjectValue.of(type, copiedFields)
     }
 
     context(world: Assumptions)
@@ -69,15 +69,11 @@ class ContextParametersTest {
         TestWorld.fromSDL(
             schemaSDL = SCHEMA_SDL,
             fieldResolvers = { schema ->
-                val fragment =
-                    object : Fragment {
-                        override val nominalType = schema.query
-                        override val subselections = selectionForestOf()
-                    }
+                val fragment = Fragment.of(schema.query, selectionForestOf())
                 schema.query.fields.values
                     .filter { it.fieldName != "__typename" }
                     .associateWith {
-                        FieldResolver(
+                        model.testing.fieldResolverOf(
                             objectFragment = fragment,
                             function = { _, _ -> error("Not invoked") },
                         )
@@ -86,17 +82,17 @@ class ContextParametersTest {
         ).assumptions
 
     private fun Assumptions.sourceObject(): Schema.ObjectValue =
-        schema.objectValue(
+        Schema.ObjectValue.of(
             type = schema.query,
             fields =
                 mapOf(
-                    schema.key("id") to schema.idValue("query"),
-                    schema.key("name") to schema.stringValue("Query"),
+                    schema.key("id") to Schema.IDValue.of("query"),
+                    schema.key("name") to Schema.StringValue.of("Query"),
                 ),
         )
 
     private fun Schema.key(fieldName: String): Schema.ObjectKey =
-        objectKey(
+        Schema.ObjectKey.of(
             field = field("Query", fieldName),
             arguments = emptyMap(),
         )

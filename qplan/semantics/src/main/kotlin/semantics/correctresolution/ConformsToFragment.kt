@@ -16,8 +16,8 @@ import model.SelectionForest
  * are then specialized to that concrete type and have all variables instantiated before lookup.
  * Null and error values stop recursive requirements. Cells not required by [fragment] are permitted.
  *
- * This predicate trusts the fragment's post-validation schema compatibility and does not duplicate
- * [conformsToSchema]. It observes cell presence and values, but never cell check components.
+ * This predicate trusts the fragment's post-validation schema compatibility and the engine-result
+ * carrier invariants established by its factories. It observes values, but not check components.
  *
  * @throws model.MissingVariablesException when an applicable required key contains an unbound
  * variable
@@ -52,12 +52,12 @@ private fun EngineResult?.engineResultConformsToFragment(
 
         is ObjectEngineResult -> objectConformsToFragment(selections)
         is ListEngineResult ->
-            all { element -> element.engineResultConformsToFragment(selections) }
+            all { cell -> cell.value.engineResultConformsToFragment(selections) }
     }
 
 context(world: Assumptions)
 internal fun Selection.concreteObjectKey(type: Schema.ObjectType): Schema.ObjectKey =
-    world.schema.objectKey(
+    Schema.ObjectKey.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
         arguments =
             key.arguments.fieldValues.mapValues { (_, value) ->

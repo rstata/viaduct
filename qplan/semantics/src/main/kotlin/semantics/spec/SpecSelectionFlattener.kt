@@ -13,9 +13,8 @@ import model.toSelectionForest
  *
  * Fields become [Selection] values, while inline fragments are removed after contributing their
  * type conditions to the fields they contain. Each source field occurrence contributes one member
- * to the returned [SelectionForest], which erases source order while preserving occurrences.
- * Host-language equality used while producing the multiset does not define semantic equality for
- * [Selection].
+ * to the returned [SelectionForest], which erases source order while preserving occurrences and
+ * does not define semantic equality for [Selection].
  */
 context(world: Assumptions)
 fun flatten(
@@ -35,10 +34,10 @@ private fun flattenSelectionSet(
     selections: List<SpecSelection>,
     context: SelectionContext,
 ): SelectionForest =
-    selections
-        .flatMap { selection ->
+    selections.fold(selectionForestOf()) { result, selection ->
+        result +
             when (selection) {
-                is SpecSelection.Field -> listOf(selection.flattenField(context))
+                is SpecSelection.Field -> selectionForestOf(selection.flattenField(context))
                 is SpecSelection.InlineFragment -> {
                     val fragmentContext =
                         selection.typeCondition?.let { typeCondition ->
@@ -51,8 +50,7 @@ private fun flattenSelectionSet(
                     flattenSelectionSet(selection.selections, fragmentContext)
                 }
             }
-        }
-        .toSelectionForest()
+    }
 
 context(world: Assumptions)
 private fun SpecSelection.Field.flattenField(context: SelectionContext): Selection {
@@ -62,7 +60,7 @@ private fun SpecSelection.Field.flattenField(context: SelectionContext): Selecti
             fieldName,
         )
     val flattenedSubselections =
-        when (val resultType = field.type.baseType) {
+        when (val resultType = field.typeExpr.baseType) {
             is Schema.SimpleType -> selectionForestOf()
 
             is Schema.CompositeType ->
@@ -77,7 +75,7 @@ private fun SpecSelection.Field.flattenField(context: SelectionContext): Selecti
 
     return Selection.of(
         key =
-            world.schema.objectKey(
+            Schema.ObjectKey.of(
                 field = field,
                 arguments = arguments,
             ),

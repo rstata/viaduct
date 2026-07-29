@@ -1,34 +1,47 @@
 package model
 
-import com.google.common.collect.ImmutableMultiset
-import com.google.common.collect.Multiset
-
 /**
  * A free commutative collection of opaque [Selection] occurrences.
  *
  * ### Invariant: selection-forest-occurrences
  *
- * Each flattened GraphQL field occurrence contributes one member. Iteration is available for
- * permutation-invariant consumption, and [Collection.size] observes the total number of occurrences.
+ * Each flattened GraphQL field occurrence contributes one member, and [size] observes the total
+ * number of occurrences.
  *
  * ### Equality And Mutability
  *
- * The equality and hashing used by the host [Multiset] implementation are production bookkeeping
- * only: they do not define semantic equality for [Selection]. In particular, consumers must not use
- * equality-based multiset operations as semantic operations unless a separate argument first defines
- * the required selection equivalence.
- *
- * Model producers return immutable snapshots even though the [Multiset] interface exposes mutation.
+ * Selection and forest equality are undefined. This interface therefore exposes only operations
+ * that preserve occurrences without comparing payloads or observing an order.
  */
-typealias SelectionForest = Multiset<Selection>
+sealed interface SelectionForest {
+    val size: Int
 
-/** Constructs an immutable [SelectionForest] containing the supplied occurrences. */
+    fun isEmpty(): Boolean
+
+    fun all(predicate: (Selection) -> Boolean): Boolean
+
+    fun filter(predicate: (Selection) -> Boolean): SelectionForest
+
+    fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest
+
+    fun <K> groupBy(keySelector: (Selection) -> K): Map<K, SelectionForest>
+
+    fun forEach(action: (Selection) -> Unit)
+
+    fun single(): Selection
+
+    fun single(predicate: (Selection) -> Boolean): Selection
+
+    operator fun plus(other: SelectionForest): SelectionForest
+}
+
+/** Constructs a [SelectionForest] containing the supplied occurrences. */
 fun selectionForestOf(vararg selections: Selection): SelectionForest =
-    ImmutableMultiset.copyOf(selections.asList())
+    SelectionForestImpl(selections.asList())
 
-/** Copies these occurrences into an immutable [SelectionForest]. */
+/** Constructs a [SelectionForest] from these occurrences. */
 fun Iterable<Selection>.toSelectionForest(): SelectionForest =
-    ImmutableMultiset.copyOf(this)
+    SelectionForestImpl(toList())
 
 /**
  * A post-validation field-selection occurrence used for Viaduct field resolution.
@@ -55,7 +68,7 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
  * selections can or need to be compared; proofs must not rely on selection equality until that
  * requirement is established.
  */
-interface Selection {
+sealed interface Selection {
     /**
      * Exact object-field coordinate being selected.
      *
@@ -141,7 +154,7 @@ interface Selection {
      * The field's type expression may wrap that base type in lists or non-null constraints.
      */
     val isLeaf: Boolean
-        get() = key.field.type.baseType is Schema.SimpleType
+        get() = key.field.typeExpr.baseType is Schema.SimpleType
 
     companion object {
         /**
@@ -160,24 +173,62 @@ interface Selection {
                 "Selection possible types must be contained by ${nominalType.typeName}"
             }
             require(
-                key.field.type.baseType is Schema.CompositeType || subselections.isEmpty(),
+                key.field.typeExpr.baseType is Schema.CompositeType || subselections.isEmpty(),
             ) {
                 "Leaf selection ${nominalType.typeName}.${key.field.fieldName} has subselections"
             }
 
-            return DefaultSelection(
+            return SelectionImpl(
                 key = key,
                 nominalType = nominalType,
-                possibleTypes = possibleTypes.toSet(),
-                subselections = subselections.toSelectionForest(),
+                possibleTypes = possibleTypes,
+                subselections = subselections,
             )
         }
     }
 }
 
-private class DefaultSelection(
+private class SelectionImpl(
     override val key: Schema.ObjectKey,
     override val nominalType: Schema.CompositeType,
     override val possibleTypes: Set<Schema.ObjectType>,
     override val subselections: SelectionForest,
 ) : Selection
+
+private class SelectionForestImpl(
+    private val occurrences: List<Selection>,
+) : SelectionForest {
+    override val size: Int
+        get() = occurrences.size
+
+    override fun isEmpty(): Boolean = occurrences.isEmpty()
+
+    override fun all(predicate: (Selection) -> Boolean): Boolean = occurrences.all(predicate)
+
+    override fun filter(predicate: (Selection) -> Boolean): SelectionForest =
+        SelectionForestImpl(occurrences.filter(predicate))
+
+    override fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest =
+        SelectionForestImpl(
+            occurrences.flatMap { selection ->
+                (transform(selection) as SelectionForestImpl).occurrences
+            },
+        )
+
+    override fun <K> groupBy(keySelector: (Selection) -> K): Map<K, SelectionForest> =
+        occurrences
+            .groupBy(keySelector)
+            .mapValues { (_, selections) -> SelectionForestImpl(selections) }
+
+    override fun forEach(action: (Selection) -> Unit) {
+        occurrences.forEach(action)
+    }
+
+    override fun single(): Selection = occurrences.single()
+
+    override fun single(predicate: (Selection) -> Boolean): Selection =
+        occurrences.single(predicate)
+
+    override fun plus(other: SelectionForest): SelectionForest =
+        SelectionForestImpl(occurrences + (other as SelectionForestImpl).occurrences)
+}

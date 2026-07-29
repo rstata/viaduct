@@ -27,7 +27,7 @@ class AssumptionsTest {
 
         val node = assertIs<SpecSelection.Field>(selections.single())
         assertEquals(
-            assumptions.schema.variableValue("filter"),
+            Schema.VariableValue.of("filter"),
             node.arguments.getValue("filter"),
         )
     }
@@ -41,9 +41,9 @@ class AssumptionsTest {
                     val filterType = schema.type("Filter") as Schema.InputObjectType
                     mapOf(
                         "filter" to
-                            schema.inputObjectValue(
+                            Schema.InputObjectValue.of(
                                 type = filterType,
-                                fields = mapOf("limit" to schema.intValue(5)),
+                                fields = mapOf("limit" to Schema.IntValue.of(5)),
                             ),
                     )
                 },
@@ -103,7 +103,7 @@ class AssumptionsTest {
         val tags = assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
         assertEquals(
             "one",
-            assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
+            assertIs<Schema.StringValue>(tags.values.single()).stringValue,
         )
 
         val id = assertIs<SpecSelection.Field>(node.subselections.orEmpty().single())
@@ -169,8 +169,8 @@ class AssumptionsTest {
         assertEquals(Schema.NoArguments, typeName.arguments)
         assertEquals(emptyMap(), Schema.NoArguments.fields)
         assertEquals(
-            Schema.TypeExpr.Named(Schema.StringType, isNullable = false),
-            typeName.type,
+            Schema.TypeExpr.Named.of(Schema.StringType, isNullable = false),
+            typeName.typeExpr,
         )
 
         val actors = schema.field("Query", "actors")
@@ -182,17 +182,17 @@ class AssumptionsTest {
         ).forEach { field ->
             assertEquals(Schema.NoArguments, field.arguments)
         }
-        val emptyArguments = schema.argumentsValue(actors, emptyMap())
-        val otherEmptyArguments = schema.argumentsValue(typeName, emptyMap())
+        val emptyArguments = Schema.ArgumentsValue.of(actors, emptyMap())
+        val otherEmptyArguments = Schema.ArgumentsValue.of(typeName, emptyMap())
         assertEquals(emptyArguments, otherEmptyArguments)
         assertEquals(Schema.NoArguments, emptyArguments.type)
         assertEquals(emptyArguments.type, emptyArguments.fieldValues.containingType)
         assertEquals(
-            Schema.TypeExpr.List(
-                elementType = Schema.TypeExpr.Named(actor, isNullable = false),
+            Schema.TypeExpr.List.of(
+                elementType = Schema.TypeExpr.Named.of(actor, isNullable = false),
                 isNullable = false,
             ),
-            actors.type,
+            actors.typeExpr,
         )
 
         val nodeField = schema.field("Query", "node")
@@ -206,7 +206,7 @@ class AssumptionsTest {
             assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
         val filterValue = assertIs<Schema.InputObjectValue>(filterDefault.value)
         val nodeArguments =
-            schema.argumentsValue(
+            Schema.ArgumentsValue.of(
                 field = nodeField,
                 fields = mapOf("filter" to filterValue),
             )
@@ -229,10 +229,10 @@ class AssumptionsTest {
             )
         assertEquals(
             "a",
-            assertIs<Schema.StringValue>(tags.inputListValues.single()).stringValue,
+            assertIs<Schema.StringValue>(tags.values.single()).stringValue,
         )
         val nodeKey =
-            schema.objectKey(
+            Schema.ObjectKey.of(
                 field = nodeField,
                 arguments = mapOf("filter" to filterValue),
             )
@@ -241,18 +241,18 @@ class AssumptionsTest {
         assertEquals(filterValue, nodeKey.arguments.fieldValues["filter"])
         assertEquals(
             nodeKey,
-            schema.objectKey(
+            Schema.ObjectKey.of(
                 field = nodeField,
                 arguments = mapOf("filter" to filterValue),
             ),
         )
         val interfaceIdKey =
-            schema.objectKey(
+            Schema.ObjectKey.of(
                 field = schema.field("Node", "id"),
                 arguments = emptyMap(),
             )
         val objectIdKey =
-            schema.objectKey(
+            Schema.ObjectKey.of(
                 field = schema.field("User", "id"),
                 arguments = emptyMap(),
             )
@@ -271,7 +271,7 @@ class AssumptionsTest {
         assertEquals(filter, limitInputField.containingType)
         assertEquals("limit", limitInputField.name)
         assertFalse(limitInputField.isRequired)
-        assertFalse(filter.fields.getValue("tags").type.isBaseTypeNullable)
+        assertFalse(filter.fields.getValue("tags").typeExpr.isBaseTypeNullable)
     }
 
     @Test
@@ -279,12 +279,12 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val user = schema.type("User") as Schema.ObjectType
         val friend = schema.field("User", "friend")
-        val firstKey = schema.objectKey(friend, mapOf("limit" to 1))
-        val secondKey = schema.objectKey(friend, mapOf("limit" to 2))
-        val friendValue = schema.objectValue(user, emptyMap())
+        val firstKey = Schema.ObjectKey.of(friend, mapOf("limit" to 1))
+        val secondKey = Schema.ObjectKey.of(friend, mapOf("limit" to 2))
+        val friendValue = Schema.ObjectValue.of(user, emptyMap())
 
         val value =
-            schema.objectValue(
+            Schema.ObjectValue.of(
                 type = user,
                 fields =
                     mapOf(
@@ -298,23 +298,23 @@ class AssumptionsTest {
         assertEquals(null, value.fieldValues[secondKey])
 
         assertFailsWith<IllegalArgumentException> {
-            schema.objectValue(
+            Schema.ObjectValue.of(
                 type = user,
                 fields =
                     mapOf(
-                        schema.objectKey(schema.field("Node", "id"), emptyMap()) to
-                            schema.idValue("abstract"),
+                        Schema.ObjectKey.of(schema.field("Node", "id"), emptyMap()) to
+                            Schema.IDValue.of("abstract"),
                     ),
             )
         }
         assertFailsWith<IllegalArgumentException> {
-            schema.objectValue(
+            Schema.ObjectValue.of(
                 type = user,
                 fields =
                     mapOf(
-                        schema.objectKey(
+                        Schema.ObjectKey.of(
                             friend,
-                            mapOf("limit" to schema.variableValue("limit")),
+                            mapOf("limit" to Schema.VariableValue.of("limit")),
                         ) to friendValue,
                     ),
             )
@@ -326,7 +326,7 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val filter =
-            schema.inputObjectValue(
+            Schema.InputObjectValue.of(
                 type = filterType,
                 fields =
                     mapOf(
@@ -340,7 +340,7 @@ class AssumptionsTest {
         assertEquals(
             listOf("one", "two"),
             assertIs<Schema.InputListValue>(filter.fieldValues["tags"])
-                .inputListValues
+                .values
                 .map { assertIs<Schema.StringValue>(it).stringValue },
         )
         assertEquals(
@@ -350,7 +350,7 @@ class AssumptionsTest {
 
         val nodeField = schema.field("Query", "node")
         val arguments =
-            schema.argumentsValue(
+            Schema.ArgumentsValue.of(
                 field = nodeField,
                 fields =
                     mapOf(
@@ -375,37 +375,37 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val otherRole =
-            schema.enumValue(
+            Schema.EnumValue.of(
                 schema.type("OtherRole") as Schema.EnumType,
                 "MEMBER",
             )
 
         assertFailsWith<ClassCastException> {
-            schema.inputObjectValue(
+            Schema.InputObjectValue.of(
                 type = filterType,
                 fields = mapOf("limit" to "twenty"),
             )
         }
         assertFailsWith<ClassCastException> {
-            schema.inputObjectValue(
+            Schema.InputObjectValue.of(
                 type = filterType,
                 fields = mapOf("tags" to listOf(null)),
             )
         }
         assertFailsWith<ClassCastException> {
-            schema.inputObjectValue(
+            Schema.InputObjectValue.of(
                 type = filterType,
                 fields = mapOf("missing" to 1),
             )
         }
         assertFailsWith<ClassCastException> {
-            schema.argumentsValue(
+            Schema.ArgumentsValue.of(
                 field = schema.field("Query", "node"),
                 fields = mapOf("filter" to 1),
             )
         }
         assertFailsWith<ClassCastException> {
-            schema.inputObjectValue(
+            Schema.InputObjectValue.of(
                 type = filterType,
                 fields = mapOf("role" to otherRole),
             )

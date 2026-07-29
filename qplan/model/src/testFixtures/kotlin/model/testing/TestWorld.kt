@@ -7,17 +7,12 @@ import com.google.inject.Provides
 import com.google.inject.ProvisionException
 import jakarta.inject.Singleton
 import model.Assumptions
-import model.FieldResolvers
 import model.Fragment
-import model.GJSchema
-import model.NodeResolvers
 import model.Schema
-import model.SchemaSDL
-import model.VariableValues
 import model.registry.ExecutorRegistry
 import model.registry.FieldResolver
 import model.registry.NodeResolver
-import model.selectionForestOf
+import model.spec.SpecSelection
 
 /**
  * One Guice-assembled reasoning world for model and semantics tests.
@@ -25,7 +20,8 @@ import model.selectionForestOf
 class TestWorld private constructor(
     private val injector: Injector,
 ) {
-    val schema: GJSchema = injector.getInstance(GJSchema::class.java)
+    private val gjSchema: GJSchema = injector.getInstance(GJSchema::class.java)
+    val schema: Schema = gjSchema
     val executorRegistry: ExecutorRegistry =
         injector.getInstance(ExecutorRegistry::class.java)
     val assumptions: Assumptions =
@@ -33,14 +29,17 @@ class TestWorld private constructor(
 
     fun <T : Any> instance(type: Class<T>): T = injector.getInstance(type)
 
+    fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, List<SpecSelection>> =
+        GJSpecSelectionParser(gjSchema, assumptions.variableValues).selectionsFrom(fragment)
+
     companion object {
         fun fromSDL(
             schemaSDL: String,
-            variableValues: (GJSchema) -> Map<String, Schema.Value?> = { emptyMap() },
+            variableValues: (Schema) -> Map<String, Schema.Value?> = { emptyMap() },
             nodeResolvers:
-                (GJSchema) -> Map<Schema.ObjectType, NodeResolver> = { emptyMap() },
+                (Schema) -> Map<Schema.ObjectType, NodeResolver> = { emptyMap() },
             fieldResolvers:
-                ((GJSchema) -> Map<Schema.OutputField, FieldResolver>)? = null,
+                ((Schema) -> Map<Schema.OutputField, FieldResolver>)? = null,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -65,9 +64,9 @@ class TestWorld private constructor(
 @JvmSuppressWildcards
 private class TestWorldModule(
     private val schemaSDL: String,
-    private val variableValues: (GJSchema) -> Map<String, Schema.Value?>,
-    private val nodeResolvers: (GJSchema) -> Map<Schema.ObjectType, NodeResolver>,
-    private val fieldResolvers: ((GJSchema) -> Map<Schema.OutputField, FieldResolver>)?,
+    private val variableValues: (Schema) -> Map<String, Schema.Value?>,
+    private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolver>,
+    private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolver>)?,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -103,7 +102,7 @@ private class TestWorldModule(
         @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolver>,
         @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolver>,
     ): ExecutorRegistry =
-        ExecutorRegistry.of(
+        executorRegistryOf(
             schema = schema,
             nodeResolvers = nodeResolvers,
             fieldResolvers = fieldResolvers,
@@ -125,15 +124,11 @@ private class TestWorldModule(
     private fun defaultQueryResolvers(
         schema: GJSchema,
     ): Map<Schema.OutputField, FieldResolver> {
-        val queryFragment =
-            object : Fragment {
-                override val nominalType = schema.query
-                override val subselections = selectionForestOf()
-            }
+        val queryFragment = Fragment.of(schema.query, model.selectionForestOf())
         return schema.query.fields.values
             .filter { it.fieldName != "__typename" }
             .associateWith {
-                FieldResolver(
+                fieldResolverOf(
                     objectFragment = queryFragment,
                     function = { _, _ -> Schema.ErrorValue },
                 )

@@ -35,11 +35,11 @@ private fun ObjectEngineResult.objectConformsToResolvers(): Boolean {
         val fieldResolverConforms =
             if (
                 key.arguments.argumentsContainErrorValue() ||
-                !registry.hasFieldResolver(key.field)
+                key.field !in registry
             ) {
                 true
             } else {
-                val resolver = registry.fieldResolver(key.field)
+                val resolver = registry.resolver(key.field)
                 val input = materializeFragmentValue(resolver.objectFragment)
                 val resolverValue = resolver.function(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
@@ -59,7 +59,7 @@ private fun ObjectEngineResult.nodeResolverConforms(): Boolean {
     val idResult = fetch(idKey).value
     if (idResult == Schema.ErrorValue || idResult !is Schema.IDValue) return false
 
-    val resolverValue = world.executorRegistry.nodeResolver(type).function(idResult)
+    val resolverValue = world.executorRegistry.resolver(type).function(idResult)
     return nodeResolverValueConforms(resolverValue)
 }
 
@@ -72,7 +72,7 @@ private fun EngineResult?.engineResultConformsToResolvers(): Boolean =
         -> true
 
         is ObjectEngineResult -> objectConformsToResolvers()
-        is ListEngineResult -> all { element -> element.engineResultConformsToResolvers() }
+        is ListEngineResult -> all { cell -> cell.value.engineResultConformsToResolvers() }
     }
 
 context(world: Assumptions)
@@ -91,13 +91,11 @@ private fun ObjectEngineResult.materializeSelectedObjectValue(
             .groupBy { selection -> selection.concreteObjectKey(type) }
             .mapValues { (key, fieldSelections) ->
                 val subselections =
-                    fieldSelections
-                        .flatMap { selection -> selection.subselections }
-                        .toSelectionForest()
+                    fieldSelections.flatMap { selection -> selection.subselections }
                 fetch(key).value.materializeEngineResultValue(subselections)
             }
 
-    return world.schema.objectValue(type, selectedFields)
+    return Schema.ObjectValue.of(type, selectedFields)
 }
 
 context(world: Assumptions)
@@ -110,8 +108,12 @@ private fun EngineResult?.materializeEngineResultValue(
         is Schema.SimpleValue -> this
         is ObjectEngineResult -> materializeSelectedObjectValue(selections)
         is ListEngineResult ->
-            world.schema.outputListValue(
-                map { element -> element.materializeEngineResultValue(selections) },
+            Schema.OutputListValue.of(
+                typeExpr = typeExpr,
+                values =
+                    map { cell ->
+                        cell.value.materializeEngineResultValue(selections)
+                    },
             )
     }
 
@@ -134,11 +136,11 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 
         is ListEngineResult ->
             resolverValue != Schema.ErrorValue &&
-                resolverValue is Schema.ListValue &&
-                size == resolverValue.outputListValues.size &&
+            resolverValue is Schema.OutputListValue &&
+                size == resolverValue.values.size &&
                 indices.all { index ->
-                    get(index).engineResultConformsToResolverValue(
-                        resolverValue.outputListValues[index],
+                    get(index).value.engineResultConformsToResolverValue(
+                        resolverValue.values[index],
                     )
                 }
     }
@@ -152,7 +154,7 @@ private fun ObjectEngineResult.nodeResolverValueConforms(
         fieldBelongsToResolver = { field ->
             field.fieldName != "id" &&
                 field.fieldName != "__typename" &&
-                !world.executorRegistry.hasFieldResolver(field)
+                field !in world.executorRegistry
         },
     )
 

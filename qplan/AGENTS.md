@@ -1,42 +1,50 @@
 # Query Planning Model Guidance
 
-In Markdown files, keep each prose paragraph and each individual list item on a single physical line.
-
 ## Purpose
 
-This repository uses compiling Kotlin as a precise modeling language for reasoning about Viaduct query execution and resolver demand. Viaduct decomposes query execution into two phases, field resolution and field completion, and the work in this directory specifically targets field resolution.  Read [Query Plan Research](./evergreen.md) for the durable problem statement, established findings, correctness constraints, and open questions that motivate the code.
+This repository uses compiling Kotlin as a precise modeling language for reasoning about Viaduct field resolution and resolver demand. Read [Query Plan Research](./evergreen.md) for the durable problem statement, established findings, correctness constraints, and open questions.
 
-## This is math, not programming!
+## This Is Math, Not Programming
 
-Semantic Kotlin expressions denote mathematical functions, relations, and values. `resolver.function(input, arguments)` denotes application of a stipulated function.  It is not an event and implies no execution, invocation, effects, timing, ordering, allocation, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
+Semantic Kotlin declarations denote mathematical sets, values, functions, and relations. `resolver.function(input, arguments)` denotes application of a stipulated function; it is not an event and implies no execution, invocation, effects, timing, ordering, allocation, caching, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
 
-## State
+Function-valued model properties denote deterministic mathematical maps on their documented domains. Determinism means that equal inputs yield equal outputs; it does not define Kotlin equality for the function values themselves.
 
-* The [`model` project](./model/AGENTS.md) defines the carrier algebra and its invariants. Our model encompases GraphQL schemas, GraphQL selection sets, GraphQL values, and a representation of the result of field resolution.
+A semantic operation may be partial. When such an operation throws, its input is outside its mathematical domain and the exception is not a modeled output. Modeled values such as `Schema.ErrorValue` remain ordinary members of a codomain and are distinct from thrown exceptions.
 
-* The [`semantics` project](./semantics/AGENTS.md) defines transformations, predicates, and other reasoning over that algebra.
+Maps, sets, lists, and occurrence families denote finite mathematical collections. Do not infer mutation, implementation type, iteration order, allocation, or complexity from their Kotlin representation. Positional order is semantic only where a declaration explicitly says so.
+
+Kotlin identity, equality, inheritance, generic variance, and exhaustiveness are representation tools; they acquire mathematical meaning only through the model's documented contracts. In particular, do not infer GraphQL subtyping, coercion, interface implementation, or semantic equality merely from Kotlin types or host-language behavior.
+
+Each reasoning exercise fixes one `Assumptions` and one canonical `Schema`. These are mathematical globals rather than JVM globals: semantic functions receive them explicitly and never combine definitions or values from different reasoning worlds.
+
+Schema decoding, GraphQL parsing, registry assembly, dependency injection, and implementations of externally supplied interfaces prepare a world before reasoning begins. This pre-reasoning infrastructure may use implementation techniques that semantic model logic deliberately excludes.
+
+Trust carrier invariants established by model factories or stipulated external inputs. Downstream reasoning should not defensively re-check those invariants; retain checks only when they establish a construction boundary, validate raw external input, or express a precondition not already guaranteed by the carrier.
+
+Compilation and tests provide finite evidence that the model is internally consistent and behaves as illustrated. They do not prove mathematical assumptions, semantic claims, or completeness.
+
+## Shared Implementation Discipline
+
+Type aliases introduce no new semantics. For example, a resolver-function alias only abbreviates a Kotlin function type. Put invariants on the properties, parameters, results, or declarations that use an alias rather than expecting the alias to carry them.
+
+Semantic values are assumed immutable as they pass through the model. Do not add defensive collection snapshots solely to guard against mutation.
+
+Semantic logic uses immutable collection types and purely functional transformations such as `map`, `filter`, `fold`, and `+`. Do not use mutable state, mutable collection types, local mutable builders, or mutation hidden inside builder APIs in reasoning code. Pre-reasoning parsing, schema decoding, registry assembly, and composition infrastructure are outside this restriction.
+
+Every context function in semantic logic uses `context(world: Assumptions)`, even when it currently needs only one part of the world such as `world.schema`. Do not introduce narrower `Schema` contexts or make `Assumptions` a subtype of `Schema`.
+
+Context parameters compose implicitly but are not implicit receivers. Access members as `world.schema`, `world.variableValues`, and `world.executorRegistry`. Prefer explicit `world` qualification when only a few members are used; when a body benefits from a receiver, use `world.run { ... }`, declare the return type explicitly, and do not use `world.apply { ... }` to produce a modeled result.
+
+See [Context Parameters and the `Assumptions` World](./context-params.md) for rationale, examples, and testing guidance.
+
+## Projects
+
+The [`model` project](./model/AGENTS.md) defines the carrier algebra and its invariants over GraphQL schemas, selections, values, resolver inputs, and field-resolution results.
+
+The [`semantics` project](./semantics/AGENTS.md) defines transformations, predicates, and other reasoning over that algebra.
 
 Consult each project's local guidance before changing it.
-
-## Validation
-
-This directory is a multi-project Gradle build consisting of two projects, `model` and `semantics`, each of which has a validation suite: from this directory run `./gradlew check` for the complete repository validation.
-
-## Shared Modeling Discipline
-
-The Kotlin code must compile, but it is not intended to become running production code. Read declarations as mathematical sets, values, functions, and relations unless their documentation gives them operational semantics.
-
-Do not defensively re-check invariants already established by model factories or documented carrier contracts. Downstream model operations should trust those invariants so their code exposes only the intended mathematics. Keep checks that establish invariants at construction boundaries, validate raw external input, or enforce preconditions not implied by established invariants.
-
-`Assumptions` contains the schema, variable bindings, executors, and derived resolver predicates stipulated for one reasoning world. Each reasoning exercise has exactly one `Assumptions` and one `Schema`; dependency-injection composition scopes their public bindings as singletons. These are mathematical globals rather than JVM-global values: code receives them explicitly, constructs every `Schema.Value` other than the schema-independent `Schema.ErrorValue` through that schema's factories, and does not combine values or definitions from different reasoning exercises.
-
-Treat one dependency injector as one reasoning world. Qualify raw world inputs with `@SchemaSDL`, `@VariableValues`, `@NodeResolvers`, or `@FieldResolvers`; construct variable values and resolver functions from that injector's one `GJSchema`; and scope the public `GJSchema`, `ExecutorRegistry`, and `Assumptions` bindings as singletons. DI-framework modules belong in test or application composition code, never a main source set in this repository.
-
-Tests that need a reasoning world must construct it through `model.testing.TestWorld`; do not call `GJSchema.fromSDL`, `Assumptions.of`, or `ExecutorRegistry.of` directly from an ordinary test source set.
-
-Every element of a reasoning world's schema has exactly one canonical definition object. Schema definition classes retain the default reference-based `Any.equals` and `Any.hashCode`, so `a == b` exactly when `a` and `b` represent the same schema element. Compare schema definitions with `==`, `!=`, and ordinary collection operations such as `contains`; do not use identity-specific operators, hashes, or collection scans.
-
-Compilation and tests provide finite evidence that the model is internally consistent and behaves as illustrated. They do not prove its mathematical assumptions or semantic claims.
 
 ## Claims And Arguments
 
@@ -48,25 +56,20 @@ Record important propositions in [`claims.md`](./claims.md). Give each claim a s
 
 An optional paragraph of two to five sentences may follow when the claim needs clarification, but keep supporting reasoning out of the registry.
 
-When a claim has a supporting proof, derivation, or body of evidence, put it in `arguments/<claim-label>.md`. State the argument's scope and assumptions there, distinguish finite test evidence from proof, and identify any observations or cases the argument intentionally excludes. An argument file is optional: the absence of one means the claim is currently being assumed or recorded without support, not that support should be inferred.
+When a claim has a supporting proof, derivation, or body of evidence, put it in `arguments/<claim-label>.md`. State the argument's scope and assumptions there, distinguish finite test evidence from proof, and identify any observations or cases the argument intentionally excludes. An argument file is optional: absence means that support has not been recorded, not that it should be inferred.
 
 Update a claim and its argument together whenever code or later reasoning strengthens, weakens, or invalidates either one.
 
-## Invariants
+## Documentation
 
-Document carrier and world invariants at the closest applicable type or property using a KDoc heading `### Invariant: kebab-case-label`. Labels are globally unique across both invariants and the claims in [`claims.md`](./claims.md); `checkDocumentationLabels` enforces the shared namespace and generates `build/reports/documentation-labels.txt`. State related cross-property constraints conjunctively in one block, do not restate invariants already established by referenced types, and keep preconditions, operation semantics, and derived claims outside invariant blocks.
+In Markdown files, keep each prose paragraph and each individual list item on one physical line.
 
-## Context Parameters for World Assumptions
+Document carrier and world invariants at the closest applicable type or property using a KDoc heading `### Invariant: kebab-case-label`. Labels are globally unique across invariants and claims; `checkDocumentationLabels` enforces the shared namespace.
 
-Use a Kotlin context parameter named `world` for functions interpreted under one reasoning world's `Assumptions`:
+State related cross-property constraints conjunctively in one invariant block. Do not restate invariants already established by referenced types, and keep preconditions, operation semantics, and derived claims outside invariant blocks.
 
-```kotlin
-context(world: Assumptions)
-fun ...
-```
+Keep package-wide assumptions and scope boundaries in `AGENTS.md` files. Keep KDoc focused on invariants and semantics specific to the declaration it documents.
 
-Context parameters compose implicitly: a function with an `Assumptions` context may directly call another function requiring the same context. They are not implicit receivers, so access a world member as `world.schema`, `world.variableValues`, `world.executorRegistry`, or `world.selectionsFrom(...)`.
+## Validation
 
-Prefer explicit `world` qualification when only a few members are used. For a body that benefits from making `world` a receiver, use `world.run { ... }` and declare the function's return type explicitly. Do not use `world.apply { ... }` to produce a modeled result: `apply` returns `world`, not the lambda's result.
-
-See [Context Parameters and the `Assumptions` World](./context-params.md) for rationale, examples, and testing guidance.
+Run `./gradlew check` from this directory for complete repository validation.

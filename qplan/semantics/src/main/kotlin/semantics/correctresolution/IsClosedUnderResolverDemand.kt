@@ -34,8 +34,8 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(): Boolean {
     return keys.all { key ->
         val fieldResolverDemandIsClosed =
             key.arguments.argumentsContainErrorValue() ||
-                !registry.hasFieldResolver(key.field) ||
-                conformsToFragment(registry.fieldResolver(key.field).objectFragment)
+                key.field !in registry ||
+                conformsToFragment(registry.resolver(key.field).objectFragment)
 
         fieldResolverDemandIsClosed &&
             fetch(key).value.engineResultIsClosedUnderResolverDemand()
@@ -52,7 +52,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(): Boolean =
 
         is ObjectEngineResult -> objectIsClosedUnderResolverDemand()
         is ListEngineResult ->
-            all { element -> element.engineResultIsClosedUnderResolverDemand() }
+            all { cell -> cell.value.engineResultIsClosedUnderResolverDemand() }
     }
 
 internal fun Schema.ArgumentsValue.argumentsContainErrorValue(): Boolean =
@@ -62,7 +62,7 @@ private fun Schema.InputValue?.inputValueContainsErrorValue(): Boolean =
     when {
         this == Schema.ErrorValue -> true
         this is Schema.InputListValue ->
-            inputListValues.any { element -> element.inputValueContainsErrorValue() }
+            values.any { element -> element.inputValueContainsErrorValue() }
 
         this is Schema.InputObjectValue ->
             fieldValues.values.any { value -> value.inputValueContainsErrorValue() }

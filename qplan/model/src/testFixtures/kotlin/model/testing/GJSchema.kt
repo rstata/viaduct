@@ -1,8 +1,9 @@
-package model
+package model.testing
 
 import graphql.schema.GraphQLSchema
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
+import model.Schema
 
 /**
  * A [Schema] decoded from GraphQL SDL.
@@ -12,7 +13,7 @@ import graphql.schema.idl.UnExecutableSchemaGenerator
  * The retained GraphQL Java schema is used by [Assumptions] to parse and validate selections without
  * decoding a second model schema.
  */
-class GJSchema private constructor(
+internal class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,
     private val decodedSchema: Schema,
 ) : Schema by decodedSchema {

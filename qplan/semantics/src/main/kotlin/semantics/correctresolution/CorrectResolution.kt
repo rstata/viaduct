@@ -21,7 +21,6 @@ import model.ObjectEngineResult
 context(world: Assumptions)
 fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
     rootedAndWellTyped(fragment) &&         // Are both result and fragment rooted on the `Query` type?
-        conformsToSchema() &&               // Does the result conform to the schema?
         conformsToFragment(fragment) &&     // Does the result conform to the fragment?
         isClosedUnderResolverDemand() &&    // Have the RSSes of all necessary resolvers (transitively) been satisfied
         conformsToResolvers() &&            // Do the actual values in the result conform to what the resolvers product?

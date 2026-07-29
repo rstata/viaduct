@@ -29,7 +29,7 @@ sealed interface SpecSelection {
      * [arguments] identify the selected schema field invocation; [alias] affects its GraphQL
      * response key but not the field invocation.
      */
-    interface Field : SpecSelection {
+    sealed interface Field : SpecSelection {
         /** The response alias, or null when the response key is [fieldName]. */
         val alias: String?
 
@@ -77,27 +77,20 @@ sealed interface SpecSelection {
                 arguments: Map<String, Schema.InputValue?>,
                 subselections: List<SpecSelection>?,
             ): Field {
-                val defensiveArguments = arguments.toMap()
-                val defensiveSubselections = subselections?.toList()
-                when (field.type.baseType) {
+                when (field.typeExpr.baseType) {
                     is Schema.SimpleType ->
-                        require(defensiveSubselections == null) {
+                        require(subselections == null) {
                             "Simple field ${field.containingType.typeName}.${field.fieldName} " +
                                 "must not have subselections"
                         }
 
                     is Schema.CompositeType ->
-                        require(!defensiveSubselections.isNullOrEmpty()) {
+                        require(!subselections.isNullOrEmpty()) {
                             "Composite field ${field.containingType.typeName}.${field.fieldName} " +
                                 "requires a non-empty selection set"
                         }
                 }
-                return object : Field {
-                    override val alias = alias
-                    override val fieldName = field.fieldName
-                    override val arguments = defensiveArguments
-                    override val subselections = defensiveSubselections
-                }
+                return FieldImpl(alias, field.fieldName, arguments, subselections)
             }
         }
     }
@@ -108,7 +101,7 @@ sealed interface SpecSelection {
      * This node does not descend into the object-value tree. It only nests [selections] beneath an
      * optional type condition. Applied directives are not represented.
      */
-    interface InlineFragment : SpecSelection {
+    sealed interface InlineFragment : SpecSelection {
         /**
          * The fragment's canonical composite type condition, or null when it has no type condition.
          *
@@ -142,15 +135,23 @@ sealed interface SpecSelection {
                 typeCondition: Schema.CompositeType?,
                 selections: List<SpecSelection>,
             ): InlineFragment {
-                val defensiveSelections = selections.toList()
-                require(defensiveSelections.isNotEmpty()) {
+                require(selections.isNotEmpty()) {
                     "Inline fragment requires a non-empty selection set"
                 }
-                return object : InlineFragment {
-                    override val typeCondition = typeCondition
-                    override val selections = defensiveSelections
-                }
+                return InlineFragmentImpl(typeCondition, selections)
             }
         }
     }
 }
+
+private class FieldImpl(
+    override val alias: String?,
+    override val fieldName: String,
+    override val arguments: Map<String, Schema.InputValue?>,
+    override val subselections: List<SpecSelection>?,
+) : SpecSelection.Field
+
+private class InlineFragmentImpl(
+    override val typeCondition: Schema.CompositeType?,
+    override val selections: List<SpecSelection>,
+) : SpecSelection.InlineFragment

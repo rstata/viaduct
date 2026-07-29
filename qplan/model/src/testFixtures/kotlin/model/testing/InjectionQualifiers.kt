@@ -1,4 +1,4 @@
-package model
+package model.testing
 
 import jakarta.inject.Qualifier
 

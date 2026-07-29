@@ -8,7 +8,7 @@ The carrier defines values that may occur in an OER tree; it does not define whi
 
 ## Domain Assumptions
 
-`EngineResult` values are finite, inductively defined algebraic values. Kotlin object sharing, reference identity, self-reference, and cyclic runtime object graphs are outside the model.
+`EngineResult` values are finite, inductively defined algebraic values. Kotlin object sharing, reference identity, self-reference, and cyclic runtime object graphs are outside the model.  ("OER" which stands for object engine-result is a common shorthand for the `EngineResult.Object` type.)
 
 Schema definitions form reciprocal graphs: type definitions contain fields, while fields and arguments navigate back to their containing definitions. `Assumptions.schema` externally stipulates one complete canonical graph; schema decoding and reciprocal graph assembly are not semantic model operations.
 

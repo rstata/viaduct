@@ -19,11 +19,11 @@ import model.idKeyOf
  * This predicate observes cell presence and values, but never cell check components.
  */
 context(world: Assumptions)
-suspend fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
+fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
     objectIsClosedUnderResolverDemand()
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.objectIsClosedUnderResolverDemand(): Boolean {
+private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(): Boolean {
     val registry = world.executorRegistry
     if (keys.isNotEmpty()) {
         world.idKeyOf(type)?.let { idKey ->
@@ -43,7 +43,7 @@ private suspend fun ObjectEngineResult.objectIsClosedUnderResolverDemand(): Bool
 }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.engineResultIsClosedUnderResolverDemand(): Boolean =
+private fun EngineResult?.engineResultIsClosedUnderResolverDemand(): Boolean =
     when (this) {
         null,
         Schema.ErrorValue,

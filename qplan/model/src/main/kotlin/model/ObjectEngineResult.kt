@@ -83,7 +83,7 @@ sealed class ObjectEngineResult : EngineResult {
      * @throws MissingFieldException when [key] is not present
      * @throws IllegalStateException when a non-null field contains a null value
      */
-    suspend fun fetch(key: Schema.ObjectKey): Cell {
+    fun fetch(key: Schema.ObjectKey): Cell {
         val cell = fetchCell(key)
         check(key.field.type.isNullable || cell.value != null) {
             "Non-null field ${key.field.containingType.typeName}/${key.field.fieldName} " +
@@ -92,7 +92,7 @@ sealed class ObjectEngineResult : EngineResult {
         return cell
     }
 
-    protected abstract suspend fun fetchCell(key: Schema.ObjectKey): Cell
+    protected abstract fun fetchCell(key: Schema.ObjectKey): Cell
 }
 
 class ListEngineResult private constructor(

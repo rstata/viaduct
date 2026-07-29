@@ -22,11 +22,11 @@ import model.toSelectionForest
  * cell is present. It observes cell values but never cell check components.
  */
 context(world: Assumptions)
-suspend fun ObjectEngineResult.conformsToResolvers(): Boolean =
+fun ObjectEngineResult.conformsToResolvers(): Boolean =
     objectConformsToResolvers()
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.objectConformsToResolvers(): Boolean {
+private fun ObjectEngineResult.objectConformsToResolvers(): Boolean {
     if (!nodeResolverConforms()) return false
 
     val registry = world.executorRegistry
@@ -50,7 +50,7 @@ private suspend fun ObjectEngineResult.objectConformsToResolvers(): Boolean {
 }
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.nodeResolverConforms(): Boolean {
+private fun ObjectEngineResult.nodeResolverConforms(): Boolean {
     if (keys.isEmpty()) return true
 
     val idKey = world.idKeyOf(type) ?: return true
@@ -64,7 +64,7 @@ private suspend fun ObjectEngineResult.nodeResolverConforms(): Boolean {
 }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.engineResultConformsToResolvers(): Boolean =
+private fun EngineResult?.engineResultConformsToResolvers(): Boolean =
     when (this) {
         null,
         Schema.ErrorValue,
@@ -76,13 +76,13 @@ private suspend fun EngineResult?.engineResultConformsToResolvers(): Boolean =
     }
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.materializeFragmentValue(
+private fun ObjectEngineResult.materializeFragmentValue(
     fragment: Fragment,
 ): Schema.ObjectValue =
     materializeSelectedObjectValue(fragment.subselections)
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
+private fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: SelectionForest,
 ): Schema.ObjectValue {
     val selectedFields =
@@ -101,7 +101,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
 }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.materializeEngineResultValue(
+private fun EngineResult?.materializeEngineResultValue(
     selections: SelectionForest,
 ): Schema.OutputValue? =
     when (this) {
@@ -116,7 +116,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
     }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.engineResultConformsToResolverValue(
+private fun EngineResult?.engineResultConformsToResolverValue(
     resolverValue: Schema.OutputValue?,
 ): Boolean =
     when (this) {
@@ -144,7 +144,7 @@ private suspend fun EngineResult?.engineResultConformsToResolverValue(
     }
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.nodeResolverValueConforms(
+private fun ObjectEngineResult.nodeResolverValueConforms(
     resolverValue: Schema.ObjectValue,
 ): Boolean =
     objectFieldsConformToResolverValue(
@@ -157,7 +157,7 @@ private suspend fun ObjectEngineResult.nodeResolverValueConforms(
     )
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.objectFieldsConformToResolverValue(
+private fun ObjectEngineResult.objectFieldsConformToResolverValue(
     resolverValue: Schema.ObjectValue,
     fieldBelongsToResolver: (Schema.OutputField) -> Boolean,
 ): Boolean {

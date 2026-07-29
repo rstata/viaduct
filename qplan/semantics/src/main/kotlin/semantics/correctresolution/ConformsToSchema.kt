@@ -13,11 +13,11 @@ import model.Schema
  * type as the bottom value. This predicate observes each cell's value but not its check component.
  */
 context(world: Assumptions)
-suspend fun ObjectEngineResult.conformsToSchema(): Boolean = 
+fun ObjectEngineResult.conformsToSchema(): Boolean = 
     keys.all { key -> fetch(key).value.engineResultConformsToSchema(key.field.type) }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.engineResultConformsToSchema(schemaType: Schema.TypeExpr<Schema.OutputType>): Boolean =
+private fun EngineResult?.engineResultConformsToSchema(schemaType: Schema.TypeExpr<Schema.OutputType>): Boolean =
     when (this) {
         null -> schemaType.isNullable
         is Schema.ErrorValue -> true

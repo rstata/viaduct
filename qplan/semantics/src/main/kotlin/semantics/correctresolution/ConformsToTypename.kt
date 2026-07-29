@@ -13,11 +13,11 @@ import model.Schema
  * never cell check components.
  */
 context(world: Assumptions)
-suspend fun ObjectEngineResult.conformsToTypename(): Boolean =
+fun ObjectEngineResult.conformsToTypename(): Boolean =
     objectConformsToTypename()
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.objectConformsToTypename(): Boolean =
+private fun ObjectEngineResult.objectConformsToTypename(): Boolean =
     keys.all { key ->
         val value = fetch(key).value
         if (key.field.fieldName == "__typename") {
@@ -30,7 +30,7 @@ private suspend fun ObjectEngineResult.objectConformsToTypename(): Boolean =
     }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.engineResultConformsToTypename(): Boolean =
+private fun EngineResult?.engineResultConformsToTypename(): Boolean =
     when (this) {
         null,
         Schema.ErrorValue,

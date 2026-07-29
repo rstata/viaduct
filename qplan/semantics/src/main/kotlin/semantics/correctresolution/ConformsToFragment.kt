@@ -23,11 +23,11 @@ import model.SelectionForest
  * variable
  */
 context(world: Assumptions)
-suspend fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
+fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
     objectConformsToFragment(fragment.subselections)
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.objectConformsToFragment(
+private fun ObjectEngineResult.objectConformsToFragment(
     selections: SelectionForest,
 ): Boolean =
     selections.all { selection ->
@@ -41,7 +41,7 @@ private suspend fun ObjectEngineResult.objectConformsToFragment(
     }
 
 context(world: Assumptions)
-private suspend fun EngineResult?.engineResultConformsToFragment(
+private fun EngineResult?.engineResultConformsToFragment(
     selections: SelectionForest,
 ): Boolean =
     when (this) {

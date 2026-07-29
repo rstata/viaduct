@@ -11,7 +11,7 @@ The main result so far is the predicate:
 package semantics.correctresolution
 
 context(world: Assumptions)
-suspend fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
+fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
 ```
 which defines whether or not its target parameter is a correct resolution for the provided `fragment`.
 

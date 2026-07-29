@@ -19,7 +19,7 @@ import model.ObjectEngineResult
  * be reasoned about as inductively-defined relations, not recursive routines.
  */
 context(world: Assumptions)
-suspend fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
+fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
     rootedAndWellTyped(fragment) &&         // Are both result and fragment rooted on the `Query` type?
         conformsToSchema() &&               // Does the result conform to the schema?
         conformsToFragment(fragment) &&     // Does the result conform to the fragment?

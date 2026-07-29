@@ -12,12 +12,12 @@ class EngineResultTest {
         val elementType = schema.field("Query", "value").typeExpr
         val first =
             EngineResult.Cell.of(
-                Schema.StringValue.of("one"),
-                Schema.BooleanValue.of(true),
+                Value.String.of("one"),
+                Value.Boolean.of(true),
             )
-        val second = EngineResult.Cell.of(null, Schema.BooleanValue.of(true))
+        val second = EngineResult.Cell.of(null, Value.Boolean.of(true))
         val result =
-            ListEngineResult.of(
+            EngineResult.List.of(
                 typeExpr = elementType,
                 cells = listOf(first, second),
             )
@@ -34,7 +34,7 @@ class EngineResultTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val elementType = schema.field("Query", "value").typeExpr
 
-        val result = ListEngineResult.of(elementType, emptyList())
+        val result = EngineResult.List.of(elementType, emptyList())
 
         assertEquals(elementType, result.typeExpr)
         assertEquals(0, result.size)
@@ -44,14 +44,14 @@ class EngineResultTest {
     fun `object result factory rejects values that violate field typing`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val key =
-            Schema.ObjectKey.of(
+            Value.Key.of(
                 schema.field("Query", "required"),
                 emptyMap(),
             )
-        val cell = EngineResult.Cell.of(null, Schema.BooleanValue.of(true))
+        val cell = EngineResult.Cell.of(null, Value.Boolean.of(true))
 
         assertFailsWith<IllegalArgumentException> {
-            ObjectEngineResult.of(schema.query, mapOf(key to cell))
+            EngineResult.Object.of(schema.query, mapOf(key to cell))
         }
     }
 
@@ -61,12 +61,12 @@ class EngineResultTest {
         val elementType = schema.field("Query", "value").typeExpr
         val cell =
             EngineResult.Cell.of(
-                Schema.IntValue.of(1),
-                Schema.BooleanValue.of(true),
+                Value.Int.of(1),
+                Value.Boolean.of(true),
             )
 
         assertFailsWith<IllegalArgumentException> {
-            ListEngineResult.of(elementType, listOf(cell))
+            EngineResult.List.of(elementType, listOf(cell))
         }
     }
 

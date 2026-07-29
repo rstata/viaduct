@@ -11,8 +11,8 @@ class TypeExprTest {
 
     @Test
     fun `outer nullability controls compatibility`() {
-        val nullable = Schema.TypeExpr.Named.of(Schema.StringType)
-        val nonNull = Schema.TypeExpr.Named.of(Schema.StringType, isNullable = false)
+        val nullable = TypeExpr.Named.of(Schema.StringType)
+        val nonNull = TypeExpr.Named.of(Schema.StringType, isNullable = false)
 
         context(world.assumptions) {
             assertTrue(nullable.canContain(nullable))
@@ -25,18 +25,18 @@ class TypeExprTest {
     @Test
     fun `list wrappers recurse and named input types match exactly`() {
         val strings =
-            Schema.TypeExpr.List.of(
-                Schema.TypeExpr.Named.of(Schema.StringType, isNullable = false),
+            TypeExpr.List.of(
+                TypeExpr.Named.of(Schema.StringType, isNullable = false),
             )
         val nullableStrings =
-            Schema.TypeExpr.List.of(Schema.TypeExpr.Named.of(Schema.StringType))
-        val ints = Schema.TypeExpr.List.of(Schema.TypeExpr.Named.of(Schema.IntType))
+            TypeExpr.List.of(TypeExpr.Named.of(Schema.StringType))
+        val ints = TypeExpr.List.of(TypeExpr.Named.of(Schema.IntType))
 
         context(world.assumptions) {
             assertTrue(nullableStrings.canContain(strings))
             assertFalse(strings.canContain(nullableStrings))
             assertFalse(strings.canContain(ints))
-            assertFalse(strings.canContain(Schema.TypeExpr.Named.of(Schema.StringType)))
+            assertFalse(strings.canContain(TypeExpr.Named.of(Schema.StringType)))
         }
     }
 
@@ -46,10 +46,10 @@ class TypeExprTest {
         val actor = schema.type("Actor") as Schema.UnionType
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
-        val nodeExpr = Schema.TypeExpr.Named.of(node)
-        val actorExpr = Schema.TypeExpr.Named.of(actor)
-        val userExpr = Schema.TypeExpr.Named.of(user, isNullable = false)
-        val adminExpr = Schema.TypeExpr.Named.of(admin)
+        val nodeExpr = TypeExpr.Named.of(node)
+        val actorExpr = TypeExpr.Named.of(actor)
+        val userExpr = TypeExpr.Named.of(user, isNullable = false)
+        val adminExpr = TypeExpr.Named.of(admin)
 
         context(world.assumptions) {
             assertTrue(nodeExpr.canContain(userExpr))

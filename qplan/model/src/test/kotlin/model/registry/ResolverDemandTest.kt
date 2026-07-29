@@ -4,6 +4,7 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.Value
 import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -197,7 +198,7 @@ class ResolverDemandTest {
             }
             """.trimIndent()
 
-        fun resolver(fragment: Fragment): FieldResolver =
+        fun resolver(fragment: Fragment): Resolver.Field =
             model.testing.fieldResolverOf(
                 objectFragment = fragment,
                 function = { _, _ -> error("Not invoked") },
@@ -218,7 +219,7 @@ class ResolverDemandTest {
         ): Selection =
             Selection.of(
                 key =
-                    Schema.ObjectKey.of(
+                    Value.Key.of(
                         field = schema.field(nominalType.typeName, fieldName),
                         arguments = emptyMap(),
                     ),

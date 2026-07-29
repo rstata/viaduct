@@ -10,7 +10,7 @@ Semantic Kotlin declarations denote mathematical sets, values, functions, and re
 
 Function-valued model properties denote deterministic mathematical maps on their documented domains. Determinism means that equal inputs yield equal outputs; it does not define Kotlin equality for the function values themselves.
 
-A semantic operation may be partial. When such an operation throws, its input is outside its mathematical domain and the exception is not a modeled output. Modeled values such as `Schema.ErrorValue` remain ordinary members of a codomain and are distinct from thrown exceptions.
+A semantic operation may be partial. When such an operation throws, its input is outside its mathematical domain and the exception is not a modeled output. Modeled values such as `Value.Error` remain ordinary members of a codomain and are distinct from thrown exceptions.
 
 Maps, sets, lists, and occurrence families denote finite mathematical collections. Do not infer mutation, implementation type, iteration order, allocation, or complexity from their Kotlin representation. Positional order is semantic only where a declaration explicitly says so.
 

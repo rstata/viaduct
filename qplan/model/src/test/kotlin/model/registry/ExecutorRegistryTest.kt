@@ -4,6 +4,8 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.TypeExpr
+import model.Value
 import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -21,11 +23,11 @@ class ExecutorRegistryTest {
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<Schema.ObjectType, NodeResolver>(
+                    mapOf<Schema.ObjectType, Resolver.Node>(
                         user to
                             model.testing.nodeResolverOf { id ->
                                 assertEquals("42", id.idValue)
-                                Schema.ObjectValue.of(
+                                Value.Object.of(
                                     user,
                                     mapOf(schema.key(user, "id") to id),
                                 )
@@ -37,20 +39,20 @@ class ExecutorRegistryTest {
                     val userField = schema.field("Query", "user")
                     val queryFragment =
                         Fragment.of(schema.query, selectionForestOf())
-                    mapOf<Schema.OutputField, FieldResolver>(
+                    mapOf<Schema.OutputField, Resolver.Field>(
                         userField to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { parent, arguments ->
                                     assertEquals(
-                                        Schema.ObjectValue.of(schema.query, emptyMap()),
+                                        Value.Object.of(schema.query, emptyMap()),
                                         parent,
                                     )
                                     assertEquals(Schema.NoArguments, arguments.type)
-                                    Schema.ObjectValue.of(
+                                    Value.Object.of(
                                         user,
                                         mapOf(
-                                            schema.key(user, "id") to Schema.IDValue.of("42"),
+                                            schema.key(user, "id") to Value.ID.of("42"),
                                         ),
                                     )
                                 },
@@ -59,12 +61,12 @@ class ExecutorRegistryTest {
                 },
             )
         val schema = world.schema
-        val query = Schema.ObjectValue.of(schema.query, emptyMap())
+        val query = Value.Object.of(schema.query, emptyMap())
         val userType = schema.type("User") as Schema.ObjectType
         val user =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 userType,
-                mapOf(schema.key(userType, "id") to Schema.IDValue.of("42")),
+                mapOf(schema.key(userType, "id") to Value.ID.of("42")),
             )
         val userField = schema.field("Query", "user")
         val registry = world.executorRegistry
@@ -73,7 +75,7 @@ class ExecutorRegistryTest {
         assertEquals(registry, assumptions.executorRegistry)
         assertEquals(
             user,
-            registry.resolver(userType).function(Schema.IDValue.of("42")),
+            registry.resolver(userType).function(Value.ID.of("42")),
         )
         val (objectFragment, fieldResolverFunction) =
             registry.resolver(userField)
@@ -83,7 +85,7 @@ class ExecutorRegistryTest {
             user,
             fieldResolverFunction(
                 query,
-                Schema.ArgumentsValue.of(userField, emptyMap()),
+                Value.Arguments.of(userField, emptyMap()),
             ),
         )
     }
@@ -104,51 +106,51 @@ class ExecutorRegistryTest {
                 fieldResolvers = { schema ->
                     val fragment =
                         Fragment.of(schema.query, selectionForestOf())
-                    mapOf<Schema.OutputField, FieldResolver>(
+                    mapOf<Schema.OutputField, Resolver.Field>(
                         schema.field("Query", "scalar") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> Schema.StringValue.of("value") },
+                            model.testing.fieldResolverOf(fragment) { _, _ -> Value.String.of("value") },
                         schema.field("Query", "list") to
                             model.testing.fieldResolverOf(fragment) { _, _ ->
-                                Schema.OutputListValue.of(
+                                Value.OutputList.of(
                                     typeExpr =
                                         (
                                             schema.field("Query", "list").typeExpr as
-                                                Schema.TypeExpr.List<Schema.OutputType>
+                                                TypeExpr.List<Schema.OutputType>
                                         ).elementType,
-                                    values = listOf(Schema.StringValue.of("value"), null),
+                                    values = listOf(Value.String.of("value"), null),
                                 )
                             },
                         schema.field("Query", "nullable") to
                             model.testing.fieldResolverOf(fragment) { _, _ -> null },
                         schema.field("Query", "failed") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> Schema.ErrorValue },
+                            model.testing.fieldResolverOf(fragment) { _, _ -> Value.Error },
                     )
                 },
             )
         val schema = world.schema
-        val parent = Schema.ObjectValue.of(schema.query, emptyMap())
+        val parent = Value.Object.of(schema.query, emptyMap())
         val outputs =
             listOf("scalar", "list", "nullable", "failed").associateWith { fieldName ->
                 val field = schema.field("Query", fieldName)
                 world.executorRegistry
                     .resolver(field)
-                    .function(parent, Schema.ArgumentsValue.of(field, emptyMap()))
+                    .function(parent, Value.Arguments.of(field, emptyMap()))
             }
 
-        assertEquals(Schema.StringValue.of("value"), outputs.getValue("scalar"))
+        assertEquals(Value.String.of("value"), outputs.getValue("scalar"))
         assertEquals(
-            Schema.OutputListValue.of(
+            Value.OutputList.of(
                 typeExpr =
                     (
                         schema.field("Query", "list").typeExpr as
-                            Schema.TypeExpr.List<Schema.OutputType>
+                            TypeExpr.List<Schema.OutputType>
                     ).elementType,
-                values = listOf(Schema.StringValue.of("value"), null),
+                values = listOf(Value.String.of("value"), null),
             ),
             outputs.getValue("list"),
         )
         assertEquals(null, outputs.getValue("nullable"))
-        assertEquals(Schema.ErrorValue, outputs.getValue("failed"))
+        assertEquals(Value.Error, outputs.getValue("failed"))
 
         outputs.forEach { (fieldName, output) ->
             val projection =
@@ -364,7 +366,7 @@ class ExecutorRegistryTest {
         val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
         val user = schema.type("User") as Schema.ObjectType
-        val result = Schema.ObjectValue.of(user, emptyMap())
+        val result = Value.Object.of(user, emptyMap())
 
         with(world.assumptions) {
             assertFailsWith<IllegalArgumentException> {
@@ -380,34 +382,34 @@ class ExecutorRegistryTest {
     fun `snips selected fields recursively through objects and lists`() {
         val fixture = Fixture()
         val friend =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("friend"),
-                    fixture.key("name") to Schema.StringValue.of("Friend"),
+                    fixture.key("id") to Value.ID.of("friend"),
+                    fixture.key("name") to Value.String.of("Friend"),
                 ),
             )
         val peer =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("peer"),
-                    fixture.key("name") to Schema.StringValue.of("Peer"),
+                    fixture.key("id") to Value.ID.of("peer"),
+                    fixture.key("name") to Value.String.of("Peer"),
                 ),
             )
         val source =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("target"),
-                    fixture.key("name") to Schema.StringValue.of("Target"),
+                    fixture.key("id") to Value.ID.of("target"),
+                    fixture.key("name") to Value.String.of("Target"),
                     fixture.key("friend") to friend,
                     fixture.key("peers") to
-                        Schema.OutputListValue.of(
+                        Value.OutputList.of(
                             typeExpr =
                                 (
                                     fixture.schema.field("User", "peers").typeExpr as
-                                        Schema.TypeExpr.List<Schema.OutputType>
+                                        TypeExpr.List<Schema.OutputType>
                                 ).elementType,
                             values = listOf(peer, null),
                         ),
@@ -434,7 +436,7 @@ class ExecutorRegistryTest {
             )
 
         val result =
-            assertIs<Schema.ObjectValue>(
+            assertIs<Value.Object>(
                 with(fixture.assumptions) {
                     fixture.userField.snip(source, selections)
                 },
@@ -446,13 +448,13 @@ class ExecutorRegistryTest {
         )
         assertEquals(
             "target",
-            assertIs<Schema.IDValue>(result.fieldValues[fixture.key("id")]).idValue,
+            assertIs<Value.ID>(result.fieldValues[fixture.key("id")]).idValue,
         )
         val snippedFriend =
-            assertIs<Schema.ObjectValue>(result.fieldValues[fixture.key("friend")])
+            assertIs<Value.Object>(result.fieldValues[fixture.key("friend")])
         assertEquals(setOf(fixture.key("id")), snippedFriend.fieldValues.keys)
-        val peers = assertIs<Schema.OutputListValue>(result.fieldValues[fixture.key("peers")])
-        val snippedPeer = assertIs<Schema.ObjectValue>(peers.values.first())
+        val peers = assertIs<Value.OutputList>(result.fieldValues[fixture.key("peers")])
+        val snippedPeer = assertIs<Value.Object>(peers.values.first())
         assertEquals(setOf(fixture.key("name")), snippedPeer.fieldValues.keys)
         assertEquals(null, peers.values.last())
     }
@@ -461,13 +463,13 @@ class ExecutorRegistryTest {
     fun `snip omits selections conditioned on another concrete type`() {
         val fixture = Fixture()
         val source =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
-                mapOf(fixture.key("id") to Schema.IDValue.of("target")),
+                mapOf(fixture.key("id") to Value.ID.of("target")),
             )
 
         val result =
-            assertIs<Schema.ObjectValue>(
+            assertIs<Value.Object>(
                 with(fixture.assumptions) {
                     fixture.userField.snip(
                         source,
@@ -483,15 +485,15 @@ class ExecutorRegistryTest {
     fun `field-resolver snip stops before an argument-bearing field resolver`() {
         val fixture = Fixture()
         val source =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("target"),
+                    fixture.key("id") to Value.ID.of("target"),
                 ),
             )
 
         val result =
-            assertIs<Schema.ObjectValue>(
+            assertIs<Value.Object>(
                 with(fixture.assumptions) {
                     fixture.userField.snip(
                         source,
@@ -543,16 +545,16 @@ class ExecutorRegistryTest {
     fun `field-resolver snip retains only a nested node reference`() {
         val fixture = Fixture(withNodeResolver = true)
         val source =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("target"),
-                    fixture.key("name") to Schema.StringValue.of("Target"),
+                    fixture.key("id") to Value.ID.of("target"),
+                    fixture.key("name") to Value.String.of("Target"),
                 ),
             )
 
         val result =
-            assertIs<Schema.ObjectValue>(
+            assertIs<Value.Object>(
                 with(fixture.assumptions) {
                     fixture.userField.snip(
                         source,
@@ -571,19 +573,19 @@ class ExecutorRegistryTest {
     fun `node-resolver snip retains its fields and stops at nested boundaries`() {
         val fixture = Fixture(withNodeResolver = true)
         val friend =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("friend"),
-                    fixture.key("name") to Schema.StringValue.of("Friend"),
+                    fixture.key("id") to Value.ID.of("friend"),
+                    fixture.key("name") to Value.String.of("Friend"),
                 ),
             )
         val source =
-            Schema.ObjectValue.of(
+            Value.Object.of(
                 fixture.user,
                 mapOf(
-                    fixture.key("id") to Schema.IDValue.of("target"),
-                    fixture.key("name") to Schema.StringValue.of("Target"),
+                    fixture.key("id") to Value.ID.of("target"),
+                    fixture.key("name") to Value.String.of("Target"),
                     fixture.key("friend") to friend,
                 ),
             )
@@ -614,7 +616,7 @@ class ExecutorRegistryTest {
             result.fieldValues.keys,
         )
         val snippedFriend =
-            assertIs<Schema.ObjectValue>(result.fieldValues[fixture.key("friend")])
+            assertIs<Value.Object>(result.fieldValues[fixture.key("friend")])
         assertEquals(setOf(fixture.key("id")), snippedFriend.fieldValues.keys)
     }
 
@@ -653,7 +655,7 @@ class ExecutorRegistryTest {
                     userField to
                         model.testing.fieldResolverOf(
                             objectFragment = fragment,
-                            function = { _, _ -> Schema.ObjectValue.of(user, emptyMap()) },
+                            function = { _, _ -> Value.Object.of(user, emptyMap()) },
                         ),
                 )
             },
@@ -699,8 +701,8 @@ class ExecutorRegistryTest {
         val user = schema.type("User") as Schema.ObjectType
         val userField = schema.field("Query", "user")
 
-        fun key(fieldName: String): Schema.ObjectKey =
-            Schema.ObjectKey.of(
+        fun key(fieldName: String): Value.Key =
+            Value.Key.of(
                 field = schema.field(user.typeName, fieldName),
                 arguments = emptyMap(),
             )
@@ -715,7 +717,7 @@ class ExecutorRegistryTest {
             val nominalType = schema.type(typeName) as Schema.CompositeType
             return Selection.of(
                 key =
-                    Schema.ObjectKey.of(
+                    Value.Key.of(
                         field = schema.field(typeName, fieldName),
                         arguments = emptyMap(),
                     ),
@@ -729,8 +731,8 @@ class ExecutorRegistryTest {
     private fun Schema.key(
         type: Schema.ObjectType,
         fieldName: String,
-    ): Schema.ObjectKey =
-        Schema.ObjectKey.of(
+    ): Value.Key =
+        Value.Key.of(
             field = field(type.typeName, fieldName),
             arguments = emptyMap(),
         )

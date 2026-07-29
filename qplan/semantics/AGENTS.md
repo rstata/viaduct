@@ -10,7 +10,7 @@ The principal judgment is:
 
 ```kotlin
 context(world: Assumptions)
-fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean
+fun EngineResult.Object.correctResolution(fragment: Fragment): Boolean
 ```
 
 This predicate characterizes whether an OER is a correct field-resolution result for a fragment under one reasoning world.

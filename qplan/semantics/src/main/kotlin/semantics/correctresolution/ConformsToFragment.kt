@@ -3,11 +3,10 @@ package semantics.correctresolution
 import model.Assumptions
 import model.EngineResult
 import model.Fragment
-import model.ListEngineResult
-import model.ObjectEngineResult
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.Value
 
 /**
  * Whether this result contains every cell required by [fragment].
@@ -23,11 +22,11 @@ import model.SelectionForest
  * variable
  */
 context(world: Assumptions)
-fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
+fun EngineResult.Object.conformsToFragment(fragment: Fragment): Boolean =
     objectConformsToFragment(fragment.subselections)
 
 context(world: Assumptions)
-private fun ObjectEngineResult.objectConformsToFragment(
+private fun EngineResult.Object.objectConformsToFragment(
     selections: SelectionForest,
 ): Boolean =
     selections.all { selection ->
@@ -46,18 +45,18 @@ private fun EngineResult?.engineResultConformsToFragment(
 ): Boolean =
     when (this) {
         null,
-        Schema.ErrorValue,
-        is Schema.SimpleValue,
+        Value.Error,
+        is Value.Simple,
         -> true
 
-        is ObjectEngineResult -> objectConformsToFragment(selections)
-        is ListEngineResult ->
+        is EngineResult.Object -> objectConformsToFragment(selections)
+        is EngineResult.List ->
             all { cell -> cell.value.engineResultConformsToFragment(selections) }
     }
 
 context(world: Assumptions)
-internal fun Selection.concreteObjectKey(type: Schema.ObjectType): Schema.ObjectKey =
-    Schema.ObjectKey.of(
+internal fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
+    Value.Key.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
         arguments =
             key.arguments.fieldValues.mapValues { (_, value) ->

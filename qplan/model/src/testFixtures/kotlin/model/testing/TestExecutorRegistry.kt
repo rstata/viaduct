@@ -1,47 +1,45 @@
 package model.testing
 
 import model.Fragment
-import model.ResolverSite
 import model.Schema
 import model.Selection
 import model.registry.ExecutorRegistry
-import model.registry.FieldResolver
 import model.registry.FieldResolverFunction
 import model.registry.MissingExecutorException
-import model.registry.NodeResolver
 import model.registry.NodeResolverFunction
+import model.registry.Resolver
 
-fun nodeResolverOf(function: NodeResolverFunction): NodeResolver =
+fun nodeResolverOf(function: NodeResolverFunction): Resolver.Node =
     NodeResolverImpl(function)
 
 fun fieldResolverOf(
     objectFragment: Fragment,
     function: FieldResolverFunction,
-): FieldResolver = FieldResolverImpl(objectFragment, function)
+): Resolver.Field = FieldResolverImpl(objectFragment, function)
 
 private class NodeResolverImpl(
     override val function: NodeResolverFunction,
-) : NodeResolver
+) : Resolver.Node
 
 private class FieldResolverImpl(
     override val objectFragment: Fragment,
     override val function: FieldResolverFunction,
-) : FieldResolver
+) : Resolver.Field
 
 internal fun executorRegistryOf(
     schema: Schema,
-    nodeResolvers: Map<Schema.ObjectType, NodeResolver>,
-    fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+    nodeResolvers: Map<Schema.ObjectType, Resolver.Node>,
+    fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
 ): ExecutorRegistry =
     TestExecutorRegistry(schema, nodeResolvers, fieldResolvers)
 
 private class TestExecutorRegistry(
     private val schema: Schema,
-    private val nodeResolvers: Map<Schema.ObjectType, NodeResolver>,
-    private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+    private val nodeResolvers: Map<Schema.ObjectType, Resolver.Node>,
+    private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
 ) : ExecutorRegistry {
-    private val outgoing: Map<Schema.OutputField, Set<ResolverSite>>
-    private val incoming: Map<ResolverSite, Set<Schema.OutputField>>
+    private val outgoing: Map<Schema.OutputField, Set<Schema.ResolverSite>>
+    private val incoming: Map<Schema.ResolverSite, Set<Schema.OutputField>>
 
     init {
         val nodeType =
@@ -114,7 +112,7 @@ private class TestExecutorRegistry(
                 implicatedSites(resolver.objectFragment)
             }
         requireAcyclic(outgoing)
-        val allSites: Set<ResolverSite> = nodeResolvers.keys + fieldResolvers.keys
+        val allSites: Set<Schema.ResolverSite> = nodeResolvers.keys + fieldResolvers.keys
         incoming =
             allSites.associateWith { site ->
                 outgoing
@@ -123,7 +121,7 @@ private class TestExecutorRegistry(
             }
     }
 
-    override fun contains(site: ResolverSite): Boolean =
+    override fun contains(site: Schema.ResolverSite): Boolean =
         when (site) {
             is Schema.ObjectType -> {
                 validateCanonicalType(site)
@@ -135,24 +133,24 @@ private class TestExecutorRegistry(
             }
         }
 
-    override fun resolver(type: Schema.ObjectType): NodeResolver {
+    override fun resolver(type: Schema.ObjectType): Resolver.Node {
         validateCanonicalType(type)
         return nodeResolvers[type] ?: throw MissingExecutorException(type.typeName)
     }
 
-    override fun resolver(field: Schema.OutputField): FieldResolver {
+    override fun resolver(field: Schema.OutputField): Resolver.Field {
         validateCanonicalField(field)
         return fieldResolvers[field]
             ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)
     }
 
-    override fun mayDemandFrom(field: Schema.OutputField): Set<ResolverSite> {
+    override fun mayDemandFrom(field: Schema.OutputField): Set<Schema.ResolverSite> {
         validateCanonicalField(field)
         return outgoing[field]
             ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)
     }
 
-    override fun mayBeDemandedBy(site: ResolverSite): Set<Schema.OutputField> {
+    override fun mayBeDemandedBy(site: Schema.ResolverSite): Set<Schema.OutputField> {
         require(site in this) { "Resolver site is not registered" }
         return incoming.getValue(site)
     }
@@ -173,15 +171,15 @@ private class TestExecutorRegistry(
         }
     }
 
-    private fun implicatedSites(fragment: Fragment): Set<ResolverSite> {
-        val result = mutableSetOf<ResolverSite>()
+    private fun implicatedSites(fragment: Fragment): Set<Schema.ResolverSite> {
+        val result = mutableSetOf<Schema.ResolverSite>()
         fragment.subselections.forEach { selection ->
             result.addImplicatedBy(selection)
         }
         return result
     }
 
-    private fun MutableSet<ResolverSite>.addImplicatedBy(selection: Selection) {
+    private fun MutableSet<Schema.ResolverSite>.addImplicatedBy(selection: Selection) {
         selection.possibleTypes.forEach { possibleType ->
             if (possibleType in nodeResolvers) add(possibleType)
             possibleType.fields[selection.key.field.fieldName]
@@ -193,10 +191,10 @@ private class TestExecutorRegistry(
         }
     }
 
-    private fun requireAcyclic(outgoing: Map<Schema.OutputField, Set<ResolverSite>>) {
-        val state = mutableMapOf<ResolverSite, VisitState>()
+    private fun requireAcyclic(outgoing: Map<Schema.OutputField, Set<Schema.ResolverSite>>) {
+        val state = mutableMapOf<Schema.ResolverSite, VisitState>()
 
-        fun visit(site: ResolverSite) {
+        fun visit(site: Schema.ResolverSite) {
             when (state[site]) {
                 VisitState.VISITING ->
                     throw IllegalArgumentException(

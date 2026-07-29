@@ -2,6 +2,7 @@ package semantics.spec
 
 import model.Schema
 import model.SelectionForest
+import model.Value
 import model.selectionsFrom
 import model.spec.SpecSelection
 import model.testing.TestWorld
@@ -84,7 +85,7 @@ class SpecSelectionFlattenerTest {
         )
         assertEquals(
             "beta",
-            assertIs<Schema.StringValue>(
+            assertIs<Value.String>(
                 release.key.arguments.fieldValues["channel"],
             ).stringValue,
         )

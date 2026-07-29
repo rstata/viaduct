@@ -15,49 +15,49 @@ class VariableValuesTest {
                 schemaSDL = SCHEMA_SDL,
                 variableValues = { schema ->
                     mapOf(
-                        "count" to Schema.IntValue.of(7),
+                        "count" to Value.Int.of(7),
                         "nothing" to null,
                     )
                 },
             )
         val schema = world.schema
         val variablesType = schema.type("Variables") as Schema.InputObjectType
-        val unresolved = Schema.VariableValue.of("unresolved")
-        val other = Schema.VariableValue.of("other")
+        val unresolved = Value.Variable.of("unresolved")
+        val other = Value.Variable.of("other")
         val variableValues = world.assumptions.variableValues
         val value =
-            Schema.InputObjectValue.of(
+            Value.InputObject.of(
                 type = variablesType,
                 fields =
                     mapOf(
-                        "count" to Schema.VariableValue.of("count"),
-                        "nothing" to Schema.VariableValue.of("nothing"),
+                        "count" to Value.Variable.of("count"),
+                        "nothing" to Value.Variable.of("nothing"),
                         "nested" to
-                            Schema.InputListValue.of(
+                            Value.InputList.of(
                                 typeExpr =
                                     (variablesType.fields.getValue("nested").typeExpr as
-                                        Schema.TypeExpr.List).elementType,
+                                        TypeExpr.List).elementType,
                                 values = listOf(
                                     unresolved,
                                     other,
-                                    Schema.VariableValue.of("unresolved"),
+                                    Value.Variable.of("unresolved"),
                                 ),
                             ),
                     ),
             )
 
         val instantiated =
-            assertIs<Schema.InputObjectValue>(variableValues.instantiateVariables(value))
+            assertIs<Value.InputObject>(variableValues.instantiateVariables(value))
         assertEquals(
             7,
-            assertIs<Schema.IntValue>(
+            assertIs<Value.Int>(
                 instantiated.fieldValues["count"],
             ).intValue,
         )
         assertNull(instantiated.fieldValues["nothing"])
         assertEquals(
             listOf(unresolved, other, unresolved),
-            assertIs<Schema.InputListValue>(
+            assertIs<Value.InputList>(
                 instantiated.fieldValues["nested"],
             ).values,
         )
@@ -70,20 +70,20 @@ class VariableValuesTest {
 
         assertNull(
             variableValues.instantiateAllVariables(
-                Schema.VariableValue.of("nothing"),
+                Value.Variable.of("nothing"),
             ),
         )
         assertEquals(
-            Schema.ErrorValue,
-            variableValues.instantiateAllVariables(Schema.ErrorValue),
+            Value.Error,
+            variableValues.instantiateAllVariables(Value.Error),
         )
     }
 
     @Test
     fun `binding validation reports every nested variable once`() {
-        lateinit var first: Schema.VariableValue
-        lateinit var second: Schema.VariableValue
-        lateinit var third: Schema.VariableValue
+        lateinit var first: Value.Variable
+        lateinit var second: Value.Variable
+        lateinit var third: Value.Variable
 
         val exception =
             assertFailsWith<MissingVariablesException> {
@@ -91,18 +91,18 @@ class VariableValuesTest {
                     schemaSDL = SCHEMA_SDL,
                     variableValues = { schema ->
                         val inputType = schema.type("Input") as Schema.InputObjectType
-                        first = Schema.VariableValue.of("first")
-                        second = Schema.VariableValue.of("second")
-                        third = Schema.VariableValue.of("third")
+                        first = Value.Variable.of("first")
+                        second = Value.Variable.of("second")
+                        third = Value.Variable.of("third")
                         mapOf(
                             "list" to
-                                Schema.InputListValue.of(
-                                    typeExpr = Schema.TypeExpr.Named.of(Schema.IntType),
+                                Value.InputList.of(
+                                    typeExpr = TypeExpr.Named.of(Schema.IntType),
                                     values =
-                                        listOf(first, second, Schema.VariableValue.of("first")),
+                                        listOf(first, second, Value.Variable.of("first")),
                                 ),
                             "object" to
-                                Schema.InputObjectValue.of(
+                                Value.InputObject.of(
                                     type = inputType,
                                     fields = mapOf("value" to third),
                                 ),

@@ -23,7 +23,7 @@ For example, the following is mathematical pseudocode rather than a declaration 
 
 ```text
 world |- forall(
-    obj: Schema.ObjectValue,
+    obj: Value.Object,
     behavioralField: Schema.OutputField,
     selections: SelectionForest,
 ) {
@@ -40,11 +40,11 @@ A function that already has an `Assumptions` context may directly call another f
 
 ```kotlin
 context(world: Assumptions)
-fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue =
-    world.schema.objectValue(type, fieldValues)
+fun Value.Object.copyInWorld(): Value.Object =
+    Value.Object.of(type, fieldValues)
 
 context(world: Assumptions)
-fun Schema.ObjectValue.copyTwiceInWorld(): Schema.ObjectValue =
+fun Value.Object.copyTwiceInWorld(): Value.Object =
     copyInWorld().copyInWorld()
 ```
 
@@ -56,13 +56,13 @@ A context parameter is not an implicit receiver. Access members of `Assumptions`
 
 ```kotlin
 context(world: Assumptions)
-fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue =
-    world.schema.objectValue(type, fieldValues)
+fun Value.Object.copyInWorld(): Value.Object =
+    Value.Object.of(type, fieldValues)
 ```
 
-The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories such as `objectValue` belong to `Schema`, so call them through `world.schema`; they are not members of `Assumptions`.
+The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories belong to their precise `Value` variants rather than to `Schema` or `Assumptions`.
 
-Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Schema.ObjectValue.snip`.
+Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Value.Object.snip`.
 
 ## Receiver-Style Bodies
 
@@ -70,13 +70,13 @@ When an assumption-heavy body reads more clearly with `world` as an implicit rec
 
 ```kotlin
 context(world: Assumptions)
-fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue = world.run {
+fun Value.Object.copyInWorld(): Value.Object = world.run {
     val copiedFields = fieldValues.toMap()
-    schema.objectValue(type, copiedFields)
+    Value.Object.of(type, copiedFields)
 }
 ```
 
-Inside the `run` body, `schema` resolves against the `Assumptions` receiver while `type` and `fieldValues` remain available from the `Schema.ObjectValue` extension receiver. Functions requiring the same `Assumptions` context also remain callable.
+Inside the `run` body, `schema` resolves against the `Assumptions` receiver while `type` and `fieldValues` remain available from the `Value.Object` extension receiver. Functions requiring the same `Assumptions` context also remain callable.
 
 Use `run`, not `apply`, when the function returns a modeled result. `run` returns the lambda result; `apply` returns its receiver, which would be `world`.
 
@@ -97,6 +97,6 @@ Inside another function with `context(world: Assumptions)`, call context-depende
 
 ## Testing Context Usage
 
-[ContextParametersTest.kt](./model/src/test/kotlin/model/ContextParametersTest.kt) uses real `Assumptions`, `Schema`, and `Schema.ObjectValue` values to exercise context establishment, implicit composition, receiver-style bodies, and `snip`.
+[ContextParametersTest.kt](./model/src/test/kotlin/model/ContextParametersTest.kt) uses real `Assumptions`, `Schema`, and `Value.Object` values to exercise context establishment, implicit composition, receiver-style bodies, and `snip`.
 
 Compilation is the primary evidence for receiver and context resolution. Runtime assertions additionally verify that receiver-style functions return the intended model value rather than the `Assumptions` receiver.

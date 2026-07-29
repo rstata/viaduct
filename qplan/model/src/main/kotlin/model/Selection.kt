@@ -80,11 +80,11 @@ sealed interface Selection {
      *
      * ### Representation
      *
-     * [Schema.ObjectKey.field] is the canonical schema field intended by this selection, and
+     * [Value.Key.field] is the canonical schema field intended by this selection, and
      * its containing type is [nominalType]. Non-variable argument values are in their coerced
-     * semantic form. An argument may contain a [Schema.VariableValue] when the variable is unbound.
+     * semantic form. An argument may contain a [Value.Variable] when the variable is unbound.
      * Such keys use the model's conservative equality: they merge only when they are definitely
-     * equal. Because a selection key is outside an OER or [Schema.ObjectValue], its field may belong
+     * equal. Because a selection key is outside an OER or [Value.Object], its field may belong
      * to an abstract [Schema.InterfaceType] or [Schema.UnionType], and its arguments may contain
      * unresolved variables. Before a key is present in either value, its field must belong to the
      * applicable concrete [Schema.ObjectType] and its variables must be instantiated.
@@ -92,7 +92,7 @@ sealed interface Selection {
      * Compared to GraphQL selections, field-resolver selections use the object key rather than
      * response keys.
      */
-    val key: Schema.ObjectKey
+    val key: Value.Key
 
     /**
      * The immediate type context of [key].
@@ -161,7 +161,7 @@ sealed interface Selection {
          * Constructs a selection that satisfies the invariant documented on [Selection].
          */
         fun of(
-            key: Schema.ObjectKey,
+            key: Value.Key,
             nominalType: Schema.CompositeType,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
@@ -189,7 +189,7 @@ sealed interface Selection {
 }
 
 private class SelectionImpl(
-    override val key: Schema.ObjectKey,
+    override val key: Value.Key,
     override val nominalType: Schema.CompositeType,
     override val possibleTypes: Set<Schema.ObjectType>,
     override val subselections: SelectionForest,

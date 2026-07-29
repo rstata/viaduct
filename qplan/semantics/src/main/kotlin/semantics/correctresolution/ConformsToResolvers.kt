@@ -2,12 +2,10 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
-import model.Fragment
 import model.Schema
-import model.SelectionForest
 import model.Value
 import model.idKeyOf
-import model.toSelectionForest
+import semantics.materialize
 
 /**
  * Whether every activated resolver agrees with the values attributed to it in this result tree.
@@ -39,7 +37,7 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
                 true
             } else {
                 val resolver = registry.resolver(key.field)
-                val input = materializeFragmentValue(resolver.objectFragment)
+                val input = materialize(resolver.objectFragment)
                 val resolverValue = resolver.function(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }
@@ -72,48 +70,6 @@ private fun EngineResult?.engineResultConformsToResolvers(): Boolean =
 
         is EngineResult.Object -> objectConformsToResolvers()
         is EngineResult.List -> all { cell -> cell.value.engineResultConformsToResolvers() }
-    }
-
-context(world: Assumptions)
-private fun EngineResult.Object.materializeFragmentValue(
-    fragment: Fragment,
-): Value.Object =
-    materializeSelectedObjectValue(fragment.subselections)
-
-context(world: Assumptions)
-private fun EngineResult.Object.materializeSelectedObjectValue(
-    selections: SelectionForest,
-): Value.Object {
-    val selectedFields =
-        selections
-            .filter { selection -> type in selection.possibleTypes }
-            .groupBy { selection -> selection.concreteObjectKey(type) }
-            .mapValues { (key, fieldSelections) ->
-                val subselections =
-                    fieldSelections.flatMap { selection -> selection.subselections }
-                fetch(key).value.materializeEngineResultValue(subselections)
-            }
-
-    return Value.Object.of(type, selectedFields)
-}
-
-context(world: Assumptions)
-private fun EngineResult?.materializeEngineResultValue(
-    selections: SelectionForest,
-): Value.Output? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.Object -> materializeSelectedObjectValue(selections)
-        is EngineResult.List ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values =
-                    map { cell ->
-                        cell.value.materializeEngineResultValue(selections)
-                    },
-            )
     }
 
 context(world: Assumptions)

@@ -4,6 +4,7 @@ import model.Assumptions
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.Value
 import model.toSelectionForest
 
 /**
@@ -32,9 +33,9 @@ import model.toSelectionForest
  */
 context(world: Assumptions)
 fun Schema.OutputField.snip(
-    result: Schema.OutputValue?,
+    result: Value.Output?,
     selections: SelectionForest,
-): Schema.OutputValue? {
+): Value.Output? {
     require(world.behavioral(this)) {
         "Field ${containingType.typeName}/$fieldName is not behavioral"
     }
@@ -57,9 +58,9 @@ fun Schema.OutputField.snip(
  */
 context(world: Assumptions)
 fun Schema.ObjectType.snip(
-    result: Schema.ObjectValue,
+    result: Value.Object,
     selections: SelectionForest,
-): Schema.ObjectValue {
+): Value.Object {
     require(result.type == this) {
         "Node resolver $typeName cannot project an object of type ${result.type.typeName}"
     }
@@ -91,13 +92,13 @@ fun Schema.ObjectType.snip(
             }
             .toMap()
 
-    return Schema.ObjectValue.of(result.type, selectedFields)
+    return Value.Object.of(result.type, selectedFields)
 }
 
 context(world: Assumptions)
-private fun Schema.ObjectValue.snip(
+private fun Value.Object.snip(
     selections: SelectionForest,
-): Schema.ObjectValue {
+): Value.Object {
     val applicableSelections = selections.filter { type in it.possibleTypes }
 
     val selectedFields =
@@ -119,26 +120,26 @@ private fun Schema.ObjectValue.snip(
             }
             .toMap()
 
-    return Schema.ObjectValue.of(type, selectedFields)
+    return Value.Object.of(type, selectedFields)
 }
 
 context(world: Assumptions)
-private fun Schema.OutputValue?.snipOutput(
+private fun Value.Output?.snipOutput(
     selections: SelectionForest,
-): Schema.OutputValue? =
+): Value.Output? =
     when (this) {
         null,
-        Schema.ErrorValue,
+        Value.Error,
         -> this
 
-        is Schema.ObjectValue -> snip(selections)
-        is Schema.OutputListValue ->
-            Schema.OutputListValue.of(
+        is Value.Object -> snip(selections)
+        is Value.OutputList ->
+            Value.OutputList.of(
                 typeExpr = typeExpr,
                 values = values.map { it.snipOutput(selections) },
             )
 
-        is Schema.SimpleValue -> {
+        is Value.Simple -> {
             require(selections.isEmpty()) {
                 "Cannot apply subselections to a simple value $this"
             }
@@ -147,8 +148,8 @@ private fun Schema.OutputValue?.snipOutput(
     }
 
 context(world: Assumptions)
-private fun Selection.concreteObjectKey(type: Schema.ObjectType): Schema.ObjectKey =
-    Schema.ObjectKey.of(
+private fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
+    Value.Key.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
         arguments = key.arguments.fieldValues,
     )

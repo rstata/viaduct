@@ -9,9 +9,9 @@ import jakarta.inject.Singleton
 import model.Assumptions
 import model.Fragment
 import model.Schema
+import model.Value
 import model.registry.ExecutorRegistry
-import model.registry.FieldResolver
-import model.registry.NodeResolver
+import model.registry.Resolver
 import model.spec.SpecSelection
 
 /**
@@ -35,11 +35,11 @@ class TestWorld private constructor(
     companion object {
         fun fromSDL(
             schemaSDL: String,
-            variableValues: (Schema) -> Map<String, Schema.Value?> = { emptyMap() },
+            variableValues: (Schema) -> Map<String, Value?> = { emptyMap() },
             nodeResolvers:
-                (Schema) -> Map<Schema.ObjectType, NodeResolver> = { emptyMap() },
+                (Schema) -> Map<Schema.ObjectType, Resolver.Node> = { emptyMap() },
             fieldResolvers:
-                ((Schema) -> Map<Schema.OutputField, FieldResolver>)? = null,
+                ((Schema) -> Map<Schema.OutputField, Resolver.Field>)? = null,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -64,9 +64,9 @@ class TestWorld private constructor(
 @JvmSuppressWildcards
 private class TestWorldModule(
     private val schemaSDL: String,
-    private val variableValues: (Schema) -> Map<String, Schema.Value?>,
-    private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolver>,
-    private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolver>)?,
+    private val variableValues: (Schema) -> Map<String, Value?>,
+    private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, Resolver.Node>,
+    private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -82,25 +82,25 @@ private class TestWorldModule(
 
     @Provides
     @VariableValues
-    fun variableValues(schema: GJSchema): Map<String, Schema.Value?> =
+    fun variableValues(schema: GJSchema): Map<String, Value?> =
         variableValues.invoke(schema)
 
     @Provides
     @NodeResolvers
-    fun nodeResolvers(schema: GJSchema): Map<Schema.ObjectType, NodeResolver> =
+    fun nodeResolvers(schema: GJSchema): Map<Schema.ObjectType, Resolver.Node> =
         nodeResolvers.invoke(schema)
 
     @Provides
     @FieldResolvers
-    fun fieldResolvers(schema: GJSchema): Map<Schema.OutputField, FieldResolver> =
+    fun fieldResolvers(schema: GJSchema): Map<Schema.OutputField, Resolver.Field> =
         fieldResolvers?.invoke(schema) ?: defaultQueryResolvers(schema)
 
     @Provides
     @Singleton
     fun executorRegistry(
         schema: GJSchema,
-        @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolver>,
-        @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+        @NodeResolvers nodeResolvers: Map<Schema.ObjectType, Resolver.Node>,
+        @FieldResolvers fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     ): ExecutorRegistry =
         executorRegistryOf(
             schema = schema,
@@ -112,7 +112,7 @@ private class TestWorldModule(
     @Singleton
     fun assumptions(
         schema: GJSchema,
-        @VariableValues variableValues: Map<String, Schema.Value?>,
+        @VariableValues variableValues: Map<String, Value?>,
         executorRegistry: ExecutorRegistry,
     ): Assumptions =
         Assumptions.of(
@@ -123,14 +123,14 @@ private class TestWorldModule(
 
     private fun defaultQueryResolvers(
         schema: GJSchema,
-    ): Map<Schema.OutputField, FieldResolver> {
+    ): Map<Schema.OutputField, Resolver.Field> {
         val queryFragment = Fragment.of(schema.query, model.selectionForestOf())
         return schema.query.fields.values
             .filter { it.fieldName != "__typename" }
             .associateWith {
                 fieldResolverOf(
                     objectFragment = queryFragment,
-                    function = { _, _ -> Schema.ErrorValue },
+                    function = { _, _ -> Value.Error },
                 )
             }
     }

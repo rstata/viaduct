@@ -4,12 +4,13 @@ import graphql.schema.GraphQLSchema
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
 import model.Schema
+import model.Value
 
 /**
  * A [Schema] decoded from GraphQL SDL.
  *
  * Construct the reasoning world's one schema before its values and assumptions so every non-error
- * value is created through this exact canonical graph. [Schema.ErrorValue] is schema-independent.
+ * value is created through this exact canonical graph. [Value.Error] is schema-independent.
  * The retained GraphQL Java schema is used by [Assumptions] to parse and validate selections without
  * decoding a second model schema.
  */

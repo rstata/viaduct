@@ -2,6 +2,7 @@ package model.spec
 
 import model.Assumptions
 import model.Schema
+import model.Value
 
 /**
  * A post-validation selection in a GraphQL-spec selection set.
@@ -48,10 +49,10 @@ sealed interface SpecSelection {
          *
          * ### Representation
          *
-         * Non-variable values are in coerced form. A value may contain a [Schema.VariableValue]
+         * Non-variable values are in coerced form. A value may contain a [Value.Variable]
          * when that variable is unbound.
          */
-        val arguments: Map<String, Schema.InputValue?>
+        val arguments: Map<String, Value.Input?>
 
         /**
          * The selection set on this field's result.
@@ -74,7 +75,7 @@ sealed interface SpecSelection {
             fun of(
                 alias: String?,
                 field: Schema.OutputField,
-                arguments: Map<String, Schema.InputValue?>,
+                arguments: Map<String, Value.Input?>,
                 subselections: List<SpecSelection>?,
             ): Field {
                 when (field.typeExpr.baseType) {
@@ -147,7 +148,7 @@ sealed interface SpecSelection {
 private class FieldImpl(
     override val alias: String?,
     override val fieldName: String,
-    override val arguments: Map<String, Schema.InputValue?>,
+    override val arguments: Map<String, Value.Input?>,
     override val subselections: List<SpecSelection>?,
 ) : SpecSelection.Field
 

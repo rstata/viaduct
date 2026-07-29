@@ -23,16 +23,16 @@ sealed interface Assumptions {
     companion object {
         fun of(
             schema: Schema,
-            bindings: Map<String, Schema.Value?>,
+            bindings: Map<String, Value?>,
             executorRegistry: ExecutorRegistry,
         ): Assumptions = AssumptionsImpl(schema, bindings, executorRegistry)
     }
 }
 
 /** Returns [type]'s canonical argumentless `id` key when it has a node resolver. */
-fun Assumptions.idKeyOf(type: Schema.ObjectType): Schema.ObjectKey? =
+fun Assumptions.idKeyOf(type: Schema.ObjectType): Value.Key? =
     if (type in executorRegistry) {
-        Schema.ObjectKey.of(
+        Value.Key.of(
             field = schema.field(type.typeName, "id"),
             arguments = emptyMap(),
         )
@@ -42,11 +42,11 @@ fun Assumptions.idKeyOf(type: Schema.ObjectType): Schema.ObjectKey? =
 
 private class AssumptionsImpl(
     override val schema: Schema,
-    bindings: Map<String, Schema.Value?>,
+    bindings: Map<String, Value?>,
     override val executorRegistry: ExecutorRegistry,
 ) : Assumptions {
     override val variableValues: VariableBindings =
-        VariableBindings.from(schema, bindings)
+        VariableBindings.from(bindings)
 
     override fun behavioral(field: Schema.OutputField): Boolean {
         val containingType = field.containingType

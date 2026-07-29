@@ -2,9 +2,8 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
-import model.ListEngineResult
-import model.ObjectEngineResult
 import model.Schema
+import model.Value
 import model.idKeyOf
 
 /**
@@ -19,11 +18,11 @@ import model.idKeyOf
  * This predicate observes cell presence and values, but never cell check components.
  */
 context(world: Assumptions)
-fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
+fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
     objectIsClosedUnderResolverDemand()
 
 context(world: Assumptions)
-private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(): Boolean {
+private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
     val registry = world.executorRegistry
     if (keys.isNotEmpty()) {
         world.idKeyOf(type)?.let { idKey ->
@@ -46,25 +45,25 @@ context(world: Assumptions)
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(): Boolean =
     when (this) {
         null,
-        Schema.ErrorValue,
-        is Schema.SimpleValue,
+        Value.Error,
+        is Value.Simple,
         -> true
 
-        is ObjectEngineResult -> objectIsClosedUnderResolverDemand()
-        is ListEngineResult ->
+        is EngineResult.Object -> objectIsClosedUnderResolverDemand()
+        is EngineResult.List ->
             all { cell -> cell.value.engineResultIsClosedUnderResolverDemand() }
     }
 
-internal fun Schema.ArgumentsValue.argumentsContainErrorValue(): Boolean =
+internal fun Value.Arguments.argumentsContainErrorValue(): Boolean =
     fieldValues.values.any { value -> value.inputValueContainsErrorValue() }
 
-private fun Schema.InputValue?.inputValueContainsErrorValue(): Boolean =
+private fun Value.Input?.inputValueContainsErrorValue(): Boolean =
     when {
-        this == Schema.ErrorValue -> true
-        this is Schema.InputListValue ->
+        this == Value.Error -> true
+        this is Value.InputList ->
             values.any { element -> element.inputValueContainsErrorValue() }
 
-        this is Schema.InputObjectValue ->
+        this is Value.InputObject ->
             fieldValues.values.any { value -> value.inputValueContainsErrorValue() }
 
         else -> false

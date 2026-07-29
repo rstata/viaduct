@@ -3,11 +3,11 @@ package semantics
 import model.Assumptions
 import model.Fragment
 import model.Schema
+import model.Value
 import model.selectionsFrom
 import model.registry.ExecutorRegistry
-import model.registry.FieldResolver
 import model.registry.MissingExecutorException
-import model.registry.NodeResolver
+import model.registry.Resolver
 import model.selectionForestOf
 import model.testing.TestWorld
 import semantics.spec.flatten
@@ -24,14 +24,14 @@ class WorldInjectionTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 variableValues = { schema ->
-                    mapOf("requestedId" to Schema.IDValue.of("bound"))
+                    mapOf("requestedId" to Value.ID.of("bound"))
                 },
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<Schema.ObjectType, NodeResolver>(
+                    mapOf<Schema.ObjectType, Resolver.Node>(
                         user to
                             model.testing.nodeResolverOf { id ->
-                                Schema.ObjectValue.of(
+                                Value.Object.of(
                                     type = user,
                                     fields = mapOf(schema.key(user, "id") to id),
                                 )
@@ -43,17 +43,17 @@ class WorldInjectionTest {
                     val userField = schema.field("Query", "user")
                     val queryFragment =
                         Fragment.of(schema.query, selectionForestOf())
-                    mapOf<Schema.OutputField, FieldResolver>(
+                    mapOf<Schema.OutputField, Resolver.Field>(
                         userField to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ ->
-                                    Schema.ObjectValue.of(
+                                    Value.Object.of(
                                         type = user,
                                         fields =
                                             mapOf(
                                                 schema.key(user, "id") to
-                                                    Schema.IDValue.of("field"),
+                                                    Value.ID.of("field"),
                                             ),
                                     )
                                 },
@@ -72,7 +72,7 @@ class WorldInjectionTest {
         assertEquals(world, testWorld.instance(Assumptions::class.java))
         assertEquals(
             "bound",
-            assertIs<Schema.IDValue>(
+            assertIs<Value.ID>(
                 world.variableValues["requestedId"],
             ).idValue,
         )
@@ -80,11 +80,11 @@ class WorldInjectionTest {
         val user = schema.type("User") as Schema.ObjectType
         val node =
             registry.resolver(user).function(
-                Schema.IDValue.of("node"),
+                Value.ID.of("node"),
             )
         assertEquals(
             "node",
-            assertIs<Schema.IDValue>(
+            assertIs<Value.ID>(
                 node.fieldValues[schema.key(user, "id")],
             ).idValue,
         )
@@ -92,15 +92,15 @@ class WorldInjectionTest {
         val userField = schema.field("Query", "user")
         val (_, fieldResolverFunction) = registry.resolver(userField)
         val field =
-            assertIs<Schema.ObjectValue>(
+            assertIs<Value.Object>(
                 fieldResolverFunction(
-                    Schema.ObjectValue.of(schema.query, emptyMap()),
-                    Schema.ArgumentsValue.of(userField, emptyMap()),
+                    Value.Object.of(schema.query, emptyMap()),
+                    Value.Arguments.of(userField, emptyMap()),
                 ),
             )
         assertEquals(
             "field",
-            assertIs<Schema.IDValue>(
+            assertIs<Value.ID>(
                 field.fieldValues[schema.key(user, "id")],
             ).idValue,
         )
@@ -161,8 +161,8 @@ class WorldInjectionTest {
 private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
-): Schema.ObjectKey =
-    Schema.ObjectKey.of(
+): Value.Key =
+    Value.Key.of(
         field = field(type.typeName, fieldName),
         arguments = emptyMap(),
     )

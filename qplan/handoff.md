@@ -10,11 +10,11 @@ Read [Query Plan Research](./evergreen.md) for the durable production evidence, 
 
 The long-term goal is a query-plan and query-execution design that supports one-shot resolver execution. For every demanded runtime producer identity in the supported scope, the design should aggregate complete in-scope demand before dispatch and invoke that producer at most once. One-shot is per runtime producer identity, not per schema coordinate: distinct objects, list items, argument tuples, concrete types, or execution epochs may still require distinct invocations. Repeatedly invoking or materializing the same producer identity as later demand appears is a contrasting approach, not the target.
 
-The current model is building a plan-independent correctness judgment over `ObjectEngineResult`. That judgment should characterize valid field-resolution results without mentioning planner nodes, readiness, dependency counts, or execution order, so the eventual one-shot plan and executor can be judged against it. OER coordinates are `Schema.ObjectKey` values carrying canonical schema output fields and fully coerced arguments; response aliases, response keys, response ordering, and external response assembly belong to field completion and remain outside the model. [Query Plan Research](./evergreen.md) records the production motivation, one-shot proof obligations, and hard cases.
+The current model is building a plan-independent correctness judgment over `EngineResult.Object`. That judgment should characterize valid field-resolution results without mentioning planner nodes, readiness, dependency counts, or execution order, so the eventual one-shot plan and executor can be judged against it. OER coordinates are `Value.Key` values carrying canonical schema output fields and fully coerced arguments; response aliases, response keys, response ordering, and external response assembly belong to field completion and remain outside the model. [Query Plan Research](./evergreen.md) records the production motivation, one-shot proof obligations, and hard cases.
 
 ## Next Step Goal
 
-We have a fairly complete algebra at this point and a definition of correct resolution.  At this point we're a little stuck as to large next steps, so in each session we've just been experimenting with various ideas.  What we have identified is that the predicate `isClosedUnderResolverDemand` (`isClosed` for short) -- a subpredicate of `correctResolution` -- is what makes our problem a difficult one.  In particular, we are trying to understand how demand "flows" into the resolvers that are implied by an correctly-resolved `ObjectEngineResult`.
+We have a fairly complete algebra at this point and a definition of correct resolution.  At this point we're a little stuck as to large next steps, so in each session we've just been experimenting with various ideas.  What we have identified is that the predicate `isClosedUnderResolverDemand` (`isClosed` for short) -- a subpredicate of `correctResolution` -- is what makes our problem a difficult one.  In particular, we are trying to understand how demand "flows" into the resolvers that are implied by an correctly-resolved `EngineResult.Object`.
 
 ## Current Model
 
@@ -22,17 +22,17 @@ We have a fairly complete algebra at this point and a definition of correct reso
 
 Each reasoning exercise fixes exactly one `Assumptions` and one canonical `Schema`. `Assumptions` supplies the schema, variable bindings, executor registry, and concrete-field `behavioral` predicate. Parsing validated named fragments into `SpecSelection` values is test-fixture or composition infrastructure outside the semantic model. There are no JVM-global schema or variable declarations.
 
-Every schema definition has one canonical object, so ordinary `==` means that two definitions from that schema denote the same schema element; cross-schema equality is outside the model. Every non-error `Schema.Value`, `Schema.ArgumentsValue`, and `Schema.ObjectKey` is constructed through a factory on its precise semantic category. `Schema.ErrorValue` is schema-independent.
+Every schema definition has one canonical object, so ordinary `==` means that two definitions from that schema denote the same schema element; cross-schema equality is outside the model. Every non-error `Value`, `Value.Arguments`, and `Value.Key` is constructed through a factory on its precise semantic category. `Value.Error` is schema-independent.
 
-`Schema.ObjectKey` is the shared alias-free coordinate for selections, resolved object values, and OER cells. It contains a canonical output field and its coerced arguments. `Schema.ObjectValue.fieldValues` is a `Schema.ObjectFieldValues` map keyed by `Schema.ObjectKey`, while `ObjectEngineResult.keys` is the set of `Schema.ObjectKey` coordinates whose cells are present. Every key present in either value carries a field owned by that value's concrete `Schema.ObjectType` and contains no unresolved variables; keys outside those values may carry abstract-type fields or unresolved variables. A `Schema.ObjectValue` can therefore contain multiple values for one output field under distinct argument tuples.
+`Value.Key` is the shared alias-free coordinate for selections, resolved object values, and OER cells. It contains a canonical output field and its coerced arguments. `Value.Object.fieldValues` is a `Value.ObjectFields` map keyed by `Value.Key`, while `EngineResult.Object.keys` is the set of `Value.Key` coordinates whose cells are present. Every key present in either value carries a field owned by that value's concrete `Schema.ObjectType` and contains no unresolved variables; keys outside those values may carry abstract-type fields or unresolved variables. A `Value.Object` can therefore contain multiple values for one output field under distinct argument tuples.
 
-`ObjectEngineResult` is a finite, structurally comparable value tree constructed by `ObjectEngineResult.of`. A present object field and each list element has one `EngineResult.Cell` containing a nullable value and a check result; absence differs from a present null. Object and list factories eagerly establish recursive schema conformance, and list results carry their element `typeExpr` even when empty.
+`EngineResult.Object` is a finite, structurally comparable value tree constructed by `EngineResult.Object.of`. A present object field and each list element has one `EngineResult.Cell` containing a nullable value and a check result; absence differs from a present null. Object and list factories eagerly establish recursive schema conformance, and list results carry their element `typeExpr` even when empty.
 
 ### Selections And Fragments
 
 `SpecSelection` represents GraphQL-shaped, post-validation selections. [`SpecSelectionFlattener.kt`](./semantics/src/main/kotlin/semantics/spec/SpecSelectionFlattener.kt) flattens them into field-resolution `Selection` occurrences.
 
-A `Selection` carries a canonical `Schema.ObjectKey`, nominal composite type, possible concrete parent types, and nested selections. Inline fragment structure has been flattened into the nominal and possible-type information. A `SelectionForest` is an equality-free finite occurrence family: source order is erased while occurrence multiplicity is preserved.
+A `Selection` carries a canonical `Value.Key`, nominal composite type, possible concrete parent types, and nested selections. Inline fragment structure has been flattened into the nominal and possible-type information. A `SelectionForest` is an equality-free finite occurrence family: source order is erased while occurrence multiplicity is preserved.
 
 Semantic equality for `Selection` is intentionally undefined. `SelectionForest` therefore exposes permutation-invariant occurrence operations without membership, deduplication, hashing, equality-based counting, or forest equality.
 
@@ -40,7 +40,7 @@ A `Fragment` contains a nominal composite type and a flattened `SelectionForest`
 
 ### Resolver Interpretation
 
-The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a nullable, selection-independent `Schema.OutputValue`. A node resolver stores a selection-independent lookup from `Schema.IDValue` to `Schema.ObjectValue`.
+The executor registry fixes node and field resolvers for the world. A field resolver stores its required `objectFragment` and a function from the resolved fragment value and coerced arguments to a nullable, selection-independent `Value.Output`. A node resolver stores a selection-independent lookup from `Value.ID` to `Value.Object`.
 
 `snip` supplies the conceptual additional selection input by projecting a resolver's fixed output result. Holding the ordinary function inputs fixed therefore produces coherent projections for different requested selections.
 
@@ -48,7 +48,7 @@ For a concrete field, `behavioral(field)` is true for engine-supplied `__typenam
 
 ### Resolver Demand
 
-The externally supplied executor registry contains an acyclic resolver-demand graph over canonical `ResolverSite` schema elements. `Schema.ObjectType` and `Schema.OutputField` are site candidates; membership in one registry makes a candidate an actual resolver coordinate.
+The externally supplied executor registry contains an acyclic resolver-demand graph over canonical `Schema.ResolverSite` elements. `Schema.ObjectType` and `Schema.OutputField` are site candidates; membership in one registry makes a candidate an actual resolver coordinate.
 
 For a registered field site `f`, `registry.mayDemandFrom(f)` contains exactly the registered schema sites directly implicated by selections reachable from its resolver's object fragment. A selection directly implicates:
 
@@ -69,7 +69,7 @@ Inputs are post-validation and all named fragment spreads are assumed to have be
 
 `@skip` and `@include` belong to the eventual field-resolution model but are deferred. Applied directives are currently rejected. Query fragments, variable providers, `@parent`, lazy executor values, checkers, and raw-versus-checked dependency distinctions are also not yet modeled. `EngineResult.Cell.check` remains in the carrier algebra for that future work, but the initial `correctResolution` judgment is explicitly check-insensitive.
 
-`correctResolution` is defined only when every variable needed by an applicable required-cell `Schema.ObjectKey` can be instantiated from `world.variableValues`. Variables occurring only in guards or branches inapplicable to the judged runtime object do not restrict the judgment's domain. After instantiation, an argument tuple containing `Schema.ErrorValue` requires the error cell mandated by the OER carrier invariant and does not invoke the registered field resolver.
+`correctResolution` is defined only when every variable needed by an applicable required-cell `Value.Key` can be instantiated from `world.variableValues`. Variables occurring only in guards or branches inapplicable to the judged runtime object do not restrict the judgment's domain. After instantiation, an argument tuple containing `Value.Error` requires the error cell mandated by the OER carrier invariant and does not invoke the registered field resolver.
 
 Every argument-bearing output field is currently assumed to have an explicit field resolver. Production namespace exceptions are outside the model.
 

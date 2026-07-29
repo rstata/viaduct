@@ -4,6 +4,7 @@ import model.Assumptions
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.Value
 import model.selectionForestOf
 import model.spec.SpecSelection
 import model.toSelectionForest
@@ -75,7 +76,7 @@ private fun SpecSelection.Field.flattenField(context: SelectionContext): Selecti
 
     return Selection.of(
         key =
-            Schema.ObjectKey.of(
+            Value.Key.of(
                 field = field,
                 arguments = arguments,
             ),

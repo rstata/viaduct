@@ -3,10 +3,9 @@ package semantics.correctresolution
 import model.Assumptions
 import model.EngineResult
 import model.Fragment
-import model.ListEngineResult
-import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
+import model.Value
 import model.idKeyOf
 import model.toSelectionForest
 
@@ -22,11 +21,11 @@ import model.toSelectionForest
  * cell is present. It observes cell values but never cell check components.
  */
 context(world: Assumptions)
-fun ObjectEngineResult.conformsToResolvers(): Boolean =
+fun EngineResult.Object.conformsToResolvers(): Boolean =
     objectConformsToResolvers()
 
 context(world: Assumptions)
-private fun ObjectEngineResult.objectConformsToResolvers(): Boolean {
+private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
     if (!nodeResolverConforms()) return false
 
     val registry = world.executorRegistry
@@ -50,14 +49,14 @@ private fun ObjectEngineResult.objectConformsToResolvers(): Boolean {
 }
 
 context(world: Assumptions)
-private fun ObjectEngineResult.nodeResolverConforms(): Boolean {
+private fun EngineResult.Object.nodeResolverConforms(): Boolean {
     if (keys.isEmpty()) return true
 
     val idKey = world.idKeyOf(type) ?: return true
     if (idKey !in keys) return false
 
     val idResult = fetch(idKey).value
-    if (idResult == Schema.ErrorValue || idResult !is Schema.IDValue) return false
+    if (idResult == Value.Error || idResult !is Value.ID) return false
 
     val resolverValue = world.executorRegistry.resolver(type).function(idResult)
     return nodeResolverValueConforms(resolverValue)
@@ -67,24 +66,24 @@ context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolvers(): Boolean =
     when (this) {
         null,
-        Schema.ErrorValue,
-        is Schema.SimpleValue,
+        Value.Error,
+        is Value.Simple,
         -> true
 
-        is ObjectEngineResult -> objectConformsToResolvers()
-        is ListEngineResult -> all { cell -> cell.value.engineResultConformsToResolvers() }
+        is EngineResult.Object -> objectConformsToResolvers()
+        is EngineResult.List -> all { cell -> cell.value.engineResultConformsToResolvers() }
     }
 
 context(world: Assumptions)
-private fun ObjectEngineResult.materializeFragmentValue(
+private fun EngineResult.Object.materializeFragmentValue(
     fragment: Fragment,
-): Schema.ObjectValue =
+): Value.Object =
     materializeSelectedObjectValue(fragment.subselections)
 
 context(world: Assumptions)
-private fun ObjectEngineResult.materializeSelectedObjectValue(
+private fun EngineResult.Object.materializeSelectedObjectValue(
     selections: SelectionForest,
-): Schema.ObjectValue {
+): Value.Object {
     val selectedFields =
         selections
             .filter { selection -> type in selection.possibleTypes }
@@ -95,20 +94,20 @@ private fun ObjectEngineResult.materializeSelectedObjectValue(
                 fetch(key).value.materializeEngineResultValue(subselections)
             }
 
-    return Schema.ObjectValue.of(type, selectedFields)
+    return Value.Object.of(type, selectedFields)
 }
 
 context(world: Assumptions)
 private fun EngineResult?.materializeEngineResultValue(
     selections: SelectionForest,
-): Schema.OutputValue? =
+): Value.Output? =
     when (this) {
         null -> null
-        Schema.ErrorValue -> Schema.ErrorValue
-        is Schema.SimpleValue -> this
-        is ObjectEngineResult -> materializeSelectedObjectValue(selections)
-        is ListEngineResult ->
-            Schema.OutputListValue.of(
+        Value.Error -> Value.Error
+        is Value.Simple -> this
+        is EngineResult.Object -> materializeSelectedObjectValue(selections)
+        is EngineResult.List ->
+            Value.OutputList.of(
                 typeExpr = typeExpr,
                 values =
                     map { cell ->
@@ -119,24 +118,24 @@ private fun EngineResult?.materializeEngineResultValue(
 
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolverValue(
-    resolverValue: Schema.OutputValue?,
+    resolverValue: Value.Output?,
 ): Boolean =
     when (this) {
         null -> resolverValue == null
-        Schema.ErrorValue -> resolverValue == Schema.ErrorValue
-        is Schema.SimpleValue -> this == resolverValue
+        Value.Error -> resolverValue == Value.Error
+        is Value.Simple -> this == resolverValue
 
-        is ObjectEngineResult ->
-            resolverValue != Schema.ErrorValue &&
-                resolverValue is Schema.ObjectValue &&
+        is EngineResult.Object ->
+            resolverValue != Value.Error &&
+                resolverValue is Value.Object &&
                 objectFieldsConformToResolverValue(
                     resolverValue = resolverValue,
                     fieldBelongsToResolver = { field -> !world.behavioral(field) },
                 )
 
-        is ListEngineResult ->
-            resolverValue != Schema.ErrorValue &&
-            resolverValue is Schema.OutputListValue &&
+        is EngineResult.List ->
+            resolverValue != Value.Error &&
+            resolverValue is Value.OutputList &&
                 size == resolverValue.values.size &&
                 indices.all { index ->
                     get(index).value.engineResultConformsToResolverValue(
@@ -146,8 +145,8 @@ private fun EngineResult?.engineResultConformsToResolverValue(
     }
 
 context(world: Assumptions)
-private fun ObjectEngineResult.nodeResolverValueConforms(
-    resolverValue: Schema.ObjectValue,
+private fun EngineResult.Object.nodeResolverValueConforms(
+    resolverValue: Value.Object,
 ): Boolean =
     objectFieldsConformToResolverValue(
         resolverValue = resolverValue,
@@ -159,8 +158,8 @@ private fun ObjectEngineResult.nodeResolverValueConforms(
     )
 
 context(world: Assumptions)
-private fun ObjectEngineResult.objectFieldsConformToResolverValue(
-    resolverValue: Schema.ObjectValue,
+private fun EngineResult.Object.objectFieldsConformToResolverValue(
+    resolverValue: Value.Object,
     fieldBelongsToResolver: (Schema.OutputField) -> Boolean,
 ): Boolean {
     if (type != resolverValue.type) return false

@@ -22,16 +22,16 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 ## Output Representations
 
-`ObjectEngineResult` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value; list results carry their element `typeExpr` even when empty.
+`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value; list results carry their element `typeExpr` even when empty.
 
-`Schema.OutputValue` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
+`Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 
-`Schema.ObjectValue` fields and OER cells are keyed by exact `Schema.ObjectKey` coordinates, preserving distinct coerced argument tuples for one field.
+`Value.Object` fields and OER cells are keyed by exact `Value.Key` coordinates, preserving distinct coerced argument tuples for one field.
 
-The `Schema.Value` model is incomplete: lazy values, node references, and similar engine-specific intermediate values are not yet represented.
+The `Value` model is incomplete: lazy values, node references, and similar engine-specific intermediate values are not yet represented.
 
 ## Intentional Differences From Existing Viaduct
 
-`Schema.ObjectKey` does not include a response alias. Canonical output fields and fully coerced arguments determine field-resolution identity; aliases and response ordering belong to external field completion.
+`Value.Key` does not include a response alias. Canonical output fields and fully coerced arguments determine field-resolution identity; aliases and response ordering belong to external field completion.
 
-Every key present in an `ObjectEngineResult` or `Schema.ObjectValue` belongs to that value's concrete `Schema.ObjectType` and contains no unresolved variables. Keys used by selections may instead carry abstract fields or unresolved variables and must be specialized and instantiated before entering either value.
+Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and contains no unresolved variables. Keys used by selections may instead carry abstract fields or unresolved variables and must be specialized and instantiated before entering either value.

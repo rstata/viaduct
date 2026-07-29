@@ -1,6 +1,6 @@
 package model
 
-import model.registry.FieldResolver
+import model.registry.Resolver
 import model.registry.snip
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -18,7 +18,7 @@ class ContextParametersTest {
                 source.copyInWorld()
             }
 
-        assertIs<Schema.ObjectValue>(result)
+        assertIs<Value.Object>(result)
         assertEquals(source, result)
         assertEquals(world.schema.query, result.type)
     }
@@ -42,7 +42,7 @@ class ContextParametersTest {
         val source = world.sourceObject()
 
         val result =
-            assertIs<Schema.ObjectValue>(
+            assertIs<Value.Object>(
                 context(world) {
                     world.schema.field("Query", "self").snip(
                         source,
@@ -56,13 +56,13 @@ class ContextParametersTest {
     }
 
     context(world: Assumptions)
-    private fun Schema.ObjectValue.copyInWorld(): Schema.ObjectValue = world.run {
+    private fun Value.Object.copyInWorld(): Value.Object = world.run {
         val copiedFields = fieldValues.toMap()
-        Schema.ObjectValue.of(type, copiedFields)
+        Value.Object.of(type, copiedFields)
     }
 
     context(world: Assumptions)
-    private fun Schema.ObjectValue.copyTwiceInWorld(): Schema.ObjectValue =
+    private fun Value.Object.copyTwiceInWorld(): Value.Object =
         copyInWorld().copyInWorld()
 
     private fun assumptions(): Assumptions =
@@ -81,18 +81,18 @@ class ContextParametersTest {
             },
         ).assumptions
 
-    private fun Assumptions.sourceObject(): Schema.ObjectValue =
-        Schema.ObjectValue.of(
+    private fun Assumptions.sourceObject(): Value.Object =
+        Value.Object.of(
             type = schema.query,
             fields =
                 mapOf(
-                    schema.key("id") to Schema.IDValue.of("query"),
-                    schema.key("name") to Schema.StringValue.of("Query"),
+                    schema.key("id") to Value.ID.of("query"),
+                    schema.key("name") to Value.String.of("Query"),
                 ),
         )
 
-    private fun Schema.key(fieldName: String): Schema.ObjectKey =
-        Schema.ObjectKey.of(
+    private fun Schema.key(fieldName: String): Value.Key =
+        Value.Key.of(
             field = field("Query", fieldName),
             arguments = emptyMap(),
         )

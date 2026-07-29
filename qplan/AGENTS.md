@@ -64,7 +64,7 @@ Update a claim and its argument together whenever code or later reasoning streng
 
 In Markdown files, keep each prose paragraph and each individual list item on one physical line.
 
-Document carrier and world invariants at the closest applicable type or property using a KDoc heading `### Invariant: kebab-case-label`. Labels are globally unique across invariants and claims; `checkDocumentationLabels` enforces the shared namespace.
+Document carrier invariants on the factory functions that establish them, not on implementation constructors. Document externally stipulated world invariants at the closest applicable type or property. Use a KDoc heading `### Invariant: kebab-case-label`; labels are globally unique across invariants and claims, and `checkDocumentationLabels` enforces the shared namespace.
 
 State related cross-property constraints conjunctively in one invariant block. Do not restate invariants already established by referenced types, and keep preconditions, operation semantics, and derived claims outside invariant blocks.
 

@@ -109,7 +109,7 @@ A node resolver is registered at a concrete node type `T`. We model it as a dete
 N_T : ID_T ⇀ Object(T)
 ```
 
-Its only ordinary input is an identifier whose embedded type is `T`. Its output contains the fields owned by the node resolver for that object. The function is partial because the identifier may not denote an existing node.
+Its only ordinary input is an identifier whose embedded type is `T`. Its output repeats that identifier at the canonical argumentless `id` field and contains the fields owned by the node resolver for that object. Repeating the identifier normalizes the raw object value; it does not make the node resolver the owner of the root `id` OER cell. The function is partial because the identifier may not denote an existing node.
 
 A node resolver is not attached to one parent field. It can provide a `T` object wherever a node reference to `T` occurs in the query. This is why the registry coordinate is the concrete type rather than a field coordinate.
 
@@ -152,7 +152,7 @@ Starting from a field resolver's field, follow demanded fields recursively:
 3. It stops before a nested field having its own field resolver; that field resolver owns the nested field.
 4. It stops at a nested node-valued field after materializing the node's `id`; the node resolver selected by that ID owns the remaining fields of the node occurrence.
 
-A node resolver follows the same recursive rule from inside its node object, with one important difference: it does not own the root node's `id`. That ID was the input used to dispatch the node resolver. The [Viaduct node resolver documentation](https://viaduct.airbnb.tech/docs/developers/resolvers/node_resolvers/) makes the same distinction.
+A node resolver follows the same recursive rule from inside its node object, with one important difference: although its raw object repeats the root node's `id`, it does not own that OER field. That ID was the input used to dispatch the node resolver. The [Viaduct node resolver documentation](https://viaduct.airbnb.tech/docs/developers/resolvers/node_resolvers/) makes the same ownership distinction.
 
 We can summarize the ownership transfer at a node boundary as:
 

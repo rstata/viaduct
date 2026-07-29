@@ -20,6 +20,14 @@ typealias FieldResolverFunction =
  * [Schema.ResolverSite] elements instead.
  */
 sealed interface Resolver : Executor {
+    /**
+     * A node resolver registered at one concrete object type.
+     *
+     * ### Invariant: node-resolver-output-id
+     *
+     * For every [Value.ID] in [function]'s domain, its result contains the registered type's
+     * canonical argumentless `id` key mapped to that same input ID.
+     */
     interface Node : Resolver {
         val function: NodeResolverFunction
     }

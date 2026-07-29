@@ -334,7 +334,7 @@ Broad interfaces and unions may make conservative expansion expensive even when 
 
 A field-resolver OSS is rooted on the parent type and includes the resolver field wrapper. A node-resolver OSS is already rooted on the node type. Recursive same-type fields make type equality useless as a discriminator.
 
-Projecting a field-resolver result to its OSS retains selected non-behavioral fields and stops before every behavioral field. This lets a containing resolver materialize the `id` of a nested node reference without taking responsibility for the node resolver's remaining fields or engine-supplied `__typename`. Projecting a node-resolver result uses a distinct root rule: it omits the root `id` bridge, engine-supplied `__typename`, and explicit field-resolver fields; retains fields supplied by that node resolver; and then uses ordinary behavioral boundaries below the root.
+Projecting a field-resolver result to its OSS retains selected non-behavioral fields and stops before every behavioral field. This lets a containing resolver materialize the `id` of a nested node reference without taking responsibility for the node resolver's remaining fields or engine-supplied `__typename`. Every raw node-resolver object repeats the canonical `id` used for its lookup, but raw presence does not transfer ownership of that field. Projecting a node-resolver result therefore uses a distinct root rule: it omits the root `id` bridge, engine-supplied `__typename`, and explicit field-resolver fields; retains fields supplied by that node resolver; and then uses ordinary behavioral boundaries below the root.
 
 ### Abstract and covariant recursion
 

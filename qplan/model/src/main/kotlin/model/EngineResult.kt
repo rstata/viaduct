@@ -92,6 +92,91 @@ sealed interface EngineResult {
     }
 }
 
+/**
+ * Returns the structural union of this nullable result and [other].
+ *
+ * Two null values have a null union. A null and non-null value have no union. For two non-null
+ * values, this partial mathematical function is defined only for results of the same variant.
+ *
+ * @throws IllegalArgumentException when the union is undefined
+ */
+fun EngineResult?.union(other: EngineResult?): EngineResult? {
+    if (this == null) {
+        require(other == null) { "Cannot union null and non-null engine results" }
+        return null
+    }
+    require(other != null) { "Cannot union null and non-null engine results" }
+
+    return when (this) {
+        is Value.Simple -> {
+            require(other is Value.Simple) {
+                "Cannot union different engine-result variants"
+            }
+            require(this == other) { "Cannot union unequal simple engine results" }
+            this
+        }
+
+        is EngineResult.List -> {
+            require(other is EngineResult.List) {
+                "Cannot union different engine-result variants"
+            }
+            union(other)
+        }
+
+        is EngineResult.Object -> {
+            require(other is EngineResult.Object) {
+                "Cannot union different engine-result variants"
+            }
+            union(other)
+        }
+    }
+}
+
+/**
+ * Returns the object result containing the union of every cell present in either operand.
+ *
+ * A cell present in both operands is unioned componentwise. A cell present in only one operand is
+ * retained unchanged.
+ *
+ * @throws IllegalArgumentException when the object types differ or any shared cell has no union
+ */
+fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
+    require(type == other.type) {
+        "Cannot union object engine results of different types"
+    }
+
+    val unionCells =
+        (keys + other.keys).associateWith { key ->
+            when {
+                key !in keys -> other.fetch(key)
+                key !in other.keys -> fetch(key)
+                else -> fetch(key).union(other.fetch(key))
+            }
+        }
+    return EngineResult.Object.of(type, unionCells)
+}
+
+/**
+ * Returns the position-wise union of this list and [other].
+ *
+ * The operands must have equal element type expressions and lengths.
+ *
+ * @throws IllegalArgumentException when the type expressions or lengths differ, or when any
+ * corresponding cells have no union
+ */
+fun EngineResult.List.union(other: EngineResult.List): EngineResult.List {
+    require(typeExpr == other.typeExpr) {
+        "Cannot union list engine results with different element types"
+    }
+    require(size == other.size) {
+        "Cannot union list engine results of different lengths"
+    }
+    return EngineResult.List.of(
+        typeExpr = typeExpr,
+        cells = indices.map { index -> this[index].union(other[index]) },
+    )
+}
+
 private data class CellImpl(
     override val value: EngineResult?,
     override val check: Value.Boolean,
@@ -107,6 +192,14 @@ private data class ListResultImpl(
     private val cells: kotlin.collections.List<EngineResult.Cell>,
 ) : EngineResult.List,
     kotlin.collections.List<EngineResult.Cell> by cells
+
+private fun EngineResult.Cell.union(other: EngineResult.Cell): EngineResult.Cell {
+    require(check == other.check) { "Cannot union engine-result cells with unequal checks" }
+    return EngineResult.Cell.of(
+        value = value.union(other.value),
+        check = check,
+    )
+}
 
 internal fun EngineResult?.conformsTo(
     typeExpr: TypeExpr<Schema.OutputType>,

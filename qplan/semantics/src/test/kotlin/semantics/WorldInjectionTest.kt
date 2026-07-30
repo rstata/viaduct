@@ -1,15 +1,14 @@
 package semantics
 
 import model.Assumptions
-import model.Fragment
 import model.Schema
 import model.Value
+import model.emptyFragmentOf
+import model.fragmentFrom
 import model.objectOf
-import model.selectionsFrom
 import model.registry.ExecutorRegistry
 import model.registry.MissingExecutorException
 import model.registry.Resolver
-import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,8 +38,7 @@ class WorldInjectionTest {
                 },
                 fieldResolvers = { schema ->
                     val userField = schema.field("Query", "user")
-                    val queryFragment =
-                        Fragment.of(schema.query, selectionForestOf())
+                    val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, Resolver.Field>(
                         userField to
                             model.testing.fieldResolverOf(
@@ -98,8 +96,8 @@ class WorldInjectionTest {
             ).idValue,
         )
 
-        val (_, selections) =
-            world.selectionsFrom(
+        val selections =
+            world.fragmentFrom(
                 """
                 fragment ignored on Query {
                   user {
@@ -107,7 +105,7 @@ class WorldInjectionTest {
                   }
                 }
                 """.trimIndent(),
-            )
+            ).subselections
         assertEquals(userField, selections.single().key.field)
         assertEquals(
             schema.field("User", "id"),

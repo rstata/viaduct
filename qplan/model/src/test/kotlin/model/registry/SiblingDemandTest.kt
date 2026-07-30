@@ -4,6 +4,8 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.Value
+import model.emptyFragmentOf
+import model.fragmentFrom
 import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -78,41 +80,33 @@ class SiblingDemandTest {
         TestWorld.fromSDL(
             schemaSDL = SCHEMA_SDL,
             fieldResolvers = { schema ->
-                val query = schema.query
-                val payload = schema.type("Payload") as Schema.ObjectType
-                val siblingSelection =
-                    Selection.of(
-                        key = schema.key(query, "sibling", mapOf("input" to 1)),
-                        nominalType = query,
-                        possibleTypes = setOf(query),
-                        subselections =
-                            selectionForestOf(
-                                Selection.of(
-                                    key = schema.key(payload, "nested"),
-                                    nominalType = payload,
-                                    possibleTypes = setOf(payload),
-                                    subselections = selectionForestOf(),
-                                ),
-                            ),
-                    )
-                val inapplicableSelection =
-                    Selection.of(
-                        key = schema.key(query, "other"),
-                        nominalType = query,
-                        possibleTypes = emptySet(),
-                        subselections = selectionForestOf(),
-                    )
                 val consumerFragment =
-                    Fragment.of(
-                        nominalType = query,
-                        subselections =
-                            if (includeInapplicableSelection) {
-                                selectionForestOf(inapplicableSelection)
-                            } else {
-                                selectionForestOf(siblingSelection)
-                            },
-                    )
-                val emptyFragment = Fragment.of(query, selectionForestOf())
+                    if (includeInapplicableSelection) {
+                        val query = schema.query
+                        Fragment.of(
+                            nominalType = query,
+                            subselections =
+                                selectionForestOf(
+                                    Selection.of(
+                                        key = schema.key(query, "other"),
+                                        nominalType = query,
+                                        possibleTypes = emptySet(),
+                                        subselections = selectionForestOf(),
+                                    ),
+                                ),
+                        )
+                    } else {
+                        schema.fragmentFrom(
+                            """
+                            fragment ignored on Query {
+                              sibling(input: 1) {
+                                nested
+                              }
+                            }
+                            """.trimIndent(),
+                        )
+                    }
+                val emptyFragment = schema.emptyFragmentOf("Query")
                 mapOf(
                     schema.field("Query", "consumer") to
                         model.testing.fieldResolverOf(

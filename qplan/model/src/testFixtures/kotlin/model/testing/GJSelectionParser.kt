@@ -12,7 +12,6 @@ import graphql.schema.GraphQLTypeUtil
 import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import java.util.Locale
-import model.Assumptions
 import model.Schema
 import model.SelectionForest
 import model.VariableBindings
@@ -20,11 +19,9 @@ import model.spec.SpecSelection
 import model.spec.flatten
 
 internal class GJSelectionParser(
-    private val world: Assumptions,
+    private val schema: GJSchema,
+    private val variableValues: VariableBindings,
 ) {
-    private val schema = world.schema as GJSchema
-    private val variableValues: VariableBindings = world.variableValues
-
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
         val document = Parser.parse(fragment)
         val definition =
@@ -41,10 +38,7 @@ internal class GJSelectionParser(
             schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
         val specSelections =
             decodeSelectionSet(definition.selectionSet, graphQLTypeCondition)
-        val selections =
-            context(world) {
-                flatten(typeCondition, specSelections)
-            }
+        val selections = flatten(schema, typeCondition, specSelections)
         return typeCondition to selections
     }
 

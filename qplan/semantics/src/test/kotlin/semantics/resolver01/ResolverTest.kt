@@ -1,13 +1,12 @@
 package semantics.resolver01
 
 import kotlinx.coroutines.runBlocking
-import model.Fragment
 import model.Schema
 import model.Value
+import model.emptyFragmentOf
+import model.fragmentFrom
 import model.objectOf
 import model.registry.Resolver
-import model.selectionsFrom
-import model.selectionForestOf
 import model.testing.TestWorld
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverFragmentsEnabled
@@ -35,9 +34,8 @@ class ResolverTest {
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
                 val world = testWorld.assumptions
-                val (nominalType, selections) =
-                    testWorld.selectionsFrom(testCase.query.source)
-                val fragment = Fragment.of(nominalType, selections)
+                val fragment = world.fragmentFrom(testCase.query.source)
+                val selections = fragment.subselections
                 val result =
                     context(world) {
                         world.objectOf("Query").resolve(selections)
@@ -55,14 +53,14 @@ class ResolverTest {
     fun `resolves typename as the concrete object type`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val schema = world.schema
-        val (nominalType, selections) =
-            world.selectionsFrom(
+        val selections =
+            world.fragmentFrom(
                 """
                 fragment ignored on Query {
                   __typename
                 }
                 """.trimIndent(),
-            )
+            ).subselections
         val result =
             context(world) {
                 world.objectOf("Query").resolve(selections)
@@ -99,7 +97,7 @@ class ResolverTest {
                     mapOf<Schema.OutputField, Resolver.Field>(
                         viewer to
                             model.testing.fieldResolverOf(
-                                objectFragment = schema.emptyFragment(schema.query),
+                            objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { _, arguments ->
                                     val id = arguments.fieldValues.getValue("id")
                                     require(id != Value.Error && id is Value.ID)
@@ -110,7 +108,7 @@ class ResolverTest {
                             ),
                         greeting to
                             model.testing.fieldResolverOf(
-                                objectFragment = schema.emptyFragment(user),
+                            objectFragment = schema.emptyFragmentOf("User"),
                                 function = { input, arguments ->
                                     require(input.fieldValues.isEmpty())
                                     val prefix =
@@ -123,8 +121,8 @@ class ResolverTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val (nominalType, selections) =
-            world.selectionsFrom(
+        val fragment =
+            world.fragmentFrom(
                 """
                 fragment ignored on Query {
                   viewer(id: "1") {
@@ -135,6 +133,7 @@ class ResolverTest {
                 }
                 """.trimIndent(),
             )
+        val selections = fragment.subselections
         val result =
             context(world) {
                 world.objectOf("Query").resolve(selections)
@@ -142,7 +141,7 @@ class ResolverTest {
 
         assertTrue(
             context(world) {
-                result.correctResolution(Fragment.of(nominalType, selections))
+                result.correctResolution(fragment)
             },
         )
     }
@@ -166,9 +165,6 @@ class ResolverTest {
             """.trimIndent()
     }
 }
-
-private fun Schema.emptyFragment(type: Schema.ObjectType): Fragment =
-    Fragment.of(type, selectionForestOf())
 
 private fun Schema.key(
     type: Schema.ObjectType,

@@ -2,10 +2,8 @@ package model.registry
 
 import model.Fragment
 import model.Schema
-import model.Selection
-import model.SelectionForest
-import model.Value
-import model.selectionForestOf
+import model.emptyFragmentOf
+import model.fragmentFrom
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,60 +25,37 @@ class ResolverDemandTest {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val query = schema.query
-                    val node = schema.type("Node") as Schema.InterfaceType
-                    val user = schema.type("User") as Schema.ObjectType
-                    val admin = schema.type("Admin") as Schema.ObjectType
-                    val result = schema.type("Result") as Schema.ObjectType
-                    val resolvedSelection =
-                        selection(
-                            schema = schema,
-                            nominalType = node,
-                            fieldName = "resolved",
-                            possibleTypes = setOf(user, admin),
-                            subselections =
-                                selectionForestOf(
-                                    selection(
-                                        schema = schema,
-                                        nominalType = result,
-                                        fieldName = "value",
-                                    ),
-                                ),
-                        )
                     val consumerFragment =
-                        fragment(
-                            nominalType = query,
-                            selections =
-                                selectionForestOf(
-                                    selection(
-                                        schema = schema,
-                                        nominalType = query,
-                                        fieldName = "node",
-                                        subselections = selectionForestOf(resolvedSelection),
-                                    ),
-                                ),
+                        schema.fragmentFrom(
+                            """
+                            fragment ignored on Query {
+                              node {
+                                resolved {
+                                  value
+                                }
+                              }
+                            }
+                            """.trimIndent(),
                         )
                     val outerFragment =
-                        fragment(
-                            nominalType = query,
-                            selections =
-                                selectionForestOf(
-                                    selection(
-                                        schema = schema,
-                                        nominalType = query,
-                                        fieldName = "consumer",
-                                    ),
-                                ),
+                        schema.fragmentFrom(
+                            """
+                            fragment ignored on Query {
+                              consumer {
+                                value
+                              }
+                            }
+                            """.trimIndent(),
                         )
                     mapOf(
-                        schema.field("Query", "node") to resolver(fragment(query)),
+                        schema.field("Query", "node") to resolver(schema.emptyFragmentOf("Query")),
                         schema.field("Query", "consumer") to
                             resolver(consumerFragment),
                         schema.field("Query", "outer") to resolver(outerFragment),
                         schema.field("User", "resolved") to
-                            resolver(fragment(user)),
+                            resolver(schema.emptyFragmentOf("User")),
                         schema.field("Admin", "resolved") to
-                            resolver(fragment(admin)),
+                            resolver(schema.emptyFragmentOf("Admin")),
                     )
                 },
             )
@@ -119,34 +94,29 @@ class ResolverDemandTest {
                 TestWorld.fromSDL(
                     schemaSDL = CYCLE_SCHEMA,
                     fieldResolvers = { schema ->
-                        val query = schema.query
                         mapOf(
                             schema.field("Query", "a") to
                                 resolver(
-                                    fragment(
-                                        nominalType = query,
-                                        selections =
-                                            selectionForestOf(
-                                                selection(
-                                                    schema = schema,
-                                                    nominalType = query,
-                                                    fieldName = "b",
-                                                ),
-                                            ),
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Query {
+                                          b {
+                                            value
+                                          }
+                                        }
+                                        """.trimIndent(),
                                     ),
                                 ),
                             schema.field("Query", "b") to
                                 resolver(
-                                    fragment(
-                                        nominalType = query,
-                                        selections =
-                                            selectionForestOf(
-                                                selection(
-                                                    schema = schema,
-                                                    nominalType = query,
-                                                    fieldName = "a",
-                                                ),
-                                            ),
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Query {
+                                          a {
+                                            value
+                                          }
+                                        }
+                                        """.trimIndent(),
                                     ),
                                 ),
                         )
@@ -204,28 +174,5 @@ class ResolverDemandTest {
                 function = { _, _ -> error("Not invoked") },
             )
 
-        fun fragment(
-            nominalType: Schema.CompositeType,
-            selections: SelectionForest = selectionForestOf(),
-        ): Fragment =
-            Fragment.of(nominalType, selections)
-
-        fun selection(
-            schema: Schema,
-            nominalType: Schema.CompositeType,
-            fieldName: String,
-            possibleTypes: Set<Schema.ObjectType> = nominalType.possibleTypes,
-            subselections: SelectionForest = selectionForestOf(),
-        ): Selection =
-            Selection.of(
-                key =
-                    Value.Key.of(
-                        field = schema.field(nominalType.typeName, fieldName),
-                        arguments = emptyMap(),
-                    ),
-                nominalType = nominalType,
-                possibleTypes = possibleTypes,
-                subselections = subselections,
-            )
     }
 }

@@ -19,24 +19,36 @@ context(world: Assumptions)
 fun flatten(
     typeInScope: Schema.CompositeType,
     selectionSet: List<SpecSelection>,
+): SelectionForest =
+    flatten(
+        schema = world.schema,
+        typeInScope = typeInScope,
+        selectionSet = selectionSet,
+    )
+
+internal fun flatten(
+    schema: Schema,
+    typeInScope: Schema.CompositeType,
+    selectionSet: List<SpecSelection>,
 ): SelectionForest {
     val initialContext =
         SelectionContext(
             nominalType = typeInScope,
             possibleTypes = typeInScope.possibleTypes,
         )
-    return flattenSelectionSet(selectionSet, initialContext)
+    return flattenSelectionSet(schema, selectionSet, initialContext)
 }
 
-context(world: Assumptions)
 private fun flattenSelectionSet(
+    schema: Schema,
     selections: List<SpecSelection>,
     context: SelectionContext,
 ): SelectionForest =
     selections.fold(selectionForestOf()) { result, selection ->
         result +
             when (selection) {
-                is SpecSelection.Field -> selectionForestOf(selection.flattenField(context))
+                is SpecSelection.Field ->
+                    selectionForestOf(selection.flattenField(schema, context))
                 is SpecSelection.InlineFragment -> {
                     val fragmentContext =
                         selection.typeCondition?.let { typeCondition ->
@@ -46,15 +58,17 @@ private fun flattenSelectionSet(
                                     context.possibleTypes intersect typeCondition.possibleTypes,
                             )
                         } ?: context
-                    flattenSelectionSet(selection.selections, fragmentContext)
+                    flattenSelectionSet(schema, selection.selections, fragmentContext)
                 }
             }
     }
 
-context(world: Assumptions)
-private fun SpecSelection.Field.flattenField(context: SelectionContext): Selection {
+private fun SpecSelection.Field.flattenField(
+    schema: Schema,
+    context: SelectionContext,
+): Selection {
     val field =
-        world.schema.field(
+        schema.field(
             context.nominalType.typeName,
             fieldName,
         )
@@ -64,6 +78,7 @@ private fun SpecSelection.Field.flattenField(context: SelectionContext): Selecti
 
             is Schema.CompositeType ->
                 flattenSelectionSet(
+                    schema,
                     subselections.orEmpty(),
                     SelectionContext(
                         nominalType = resultType,

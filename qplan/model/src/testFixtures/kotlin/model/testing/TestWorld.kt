@@ -7,10 +7,10 @@ import com.google.inject.Provides
 import com.google.inject.ProvisionException
 import jakarta.inject.Singleton
 import model.Assumptions
-import model.Fragment
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.emptyFragmentOf
 import model.registry.ExecutorRegistry
 import model.registry.Resolver
 import model.selectionsFrom
@@ -129,7 +129,7 @@ private class TestWorldModule(
     private fun defaultQueryResolvers(
         schema: GJSchema,
     ): Map<Schema.OutputField, Resolver.Field> {
-        val queryFragment = Fragment.of(schema.query, model.selectionForestOf())
+        val queryFragment = schema.emptyFragmentOf("Query")
         return schema.query.fields.values
             .filter { it.fieldName != "__typename" }
             .associateWith {

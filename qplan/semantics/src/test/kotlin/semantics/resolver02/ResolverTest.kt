@@ -5,14 +5,11 @@ import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
-import model.Fragment
 import model.Schema
-import model.Selection
-import model.SelectionForest
 import model.Value
+import model.emptyFragmentOf
+import model.fragmentFrom
 import model.objectOf
-import model.selectionsFrom
-import model.selectionForestOf
 import model.testing.TestWorld
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverFragmentsEnabled
@@ -123,7 +120,6 @@ class ResolverTest {
             TestWorld.fromSDL(
                 schemaSDL = FLAT_SCHEMA_SDL,
                 fieldResolvers = { schema ->
-                    val query = schema.query
                     val user = schema.objectType("User")
                     val firstNameKey = schema.key(user, "firstName")
                     val lastNameKey = schema.key(user, "lastName")
@@ -132,7 +128,7 @@ class ResolverTest {
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
-                                objectFragment = schema.fragment(query),
+                                objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { input, _ ->
                                     require(input.fieldValues.isEmpty())
                                     schema.objectOf("User") {
@@ -144,10 +140,13 @@ class ResolverTest {
                         schema.field("User", "displayName") to
                             model.testing.fieldResolverOf(
                                 objectFragment =
-                                    schema.fragment(
-                                        user,
-                                        schema.selection(user, "firstName"),
-                                        schema.selection(user, "lastName"),
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on User {
+                                          firstName
+                                          lastName
+                                        }
+                                        """.trimIndent(),
                                     ),
                                 function = { input, _ ->
                                     require(
@@ -166,9 +165,12 @@ class ResolverTest {
                         schema.field("User", "greeting") to
                             model.testing.fieldResolverOf(
                                 objectFragment =
-                                    schema.fragment(
-                                        user,
-                                        schema.selection(user, "displayName"),
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on User {
+                                          displayName
+                                        }
+                                        """.trimIndent(),
                                     ),
                                 function = { input, _ ->
                                     require(input.fieldValues.keys == setOf(displayNameKey))
@@ -217,7 +219,6 @@ class ResolverTest {
             TestWorld.fromSDL(
                 schemaSDL = NESTED_SCHEMA_SDL,
                 fieldResolvers = { schema ->
-                    val query = schema.query
                     val user = schema.objectType("User")
                     val profile = schema.objectType("Profile")
                     val profileKey = schema.key(user, "profile")
@@ -227,7 +228,7 @@ class ResolverTest {
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
-                                objectFragment = schema.fragment(query),
+                                objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { _, _ ->
                                     schema.objectOf("User") {
                                         "profile" setTo
@@ -240,9 +241,12 @@ class ResolverTest {
                         schema.field("Profile", "rendered") to
                             model.testing.fieldResolverOf(
                                 objectFragment =
-                                    schema.fragment(
-                                        profile,
-                                        schema.selection(profile, "raw"),
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Profile {
+                                          raw
+                                        }
+                                        """.trimIndent(),
                                     ),
                                 function = { input, _ ->
                                     require(input.fieldValues.keys == setOf(rawKey))
@@ -254,15 +258,14 @@ class ResolverTest {
                         schema.field("User", "message") to
                             model.testing.fieldResolverOf(
                                 objectFragment =
-                                    schema.fragment(
-                                        user,
-                                        schema.selection(
-                                            user,
-                                            "profile",
-                                            selectionForestOf(
-                                                schema.selection(profile, "rendered"),
-                                            ),
-                                        ),
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on User {
+                                          profile {
+                                            rendered
+                                          }
+                                        }
+                                        """.trimIndent(),
                                     ),
                                 function = { input, _ ->
                                     require(input.fieldValues.keys == setOf(profileKey))
@@ -315,18 +318,16 @@ class ResolverTest {
     }
 
     context(world: model.Assumptions)
-    private fun parsedFragment(source: String): Pair<Fragment, SelectionForest> {
-        val (nominalType, selections) = world.selectionsFrom(source)
-        return Fragment.of(nominalType, selections) to selections
-    }
+    private fun parsedFragment(source: String) =
+        world.fragmentFrom(source).let { it to it.subselections }
 
     private fun generatedResolutionIsCorrect(
         testWorld: TestWorld,
         querySource: String,
     ): Boolean {
         val world = testWorld.assumptions
-        val (nominalType, selections) = testWorld.selectionsFrom(querySource)
-        val fragment = Fragment.of(nominalType, selections)
+        val fragment = world.fragmentFrom(querySource)
+        val selections = fragment.subselections
         val result =
             context(world) {
                 world.objectOf("Query").resolve(selections)
@@ -372,27 +373,6 @@ class ResolverTest {
 
 private fun Schema.objectType(typeName: String): Schema.ObjectType =
     type(typeName) as Schema.ObjectType
-
-private fun Schema.fragment(
-    type: Schema.ObjectType,
-    vararg selections: Selection,
-): Fragment =
-    Fragment.of(
-        nominalType = type,
-        subselections = selectionForestOf(*selections),
-    )
-
-private fun Schema.selection(
-    type: Schema.ObjectType,
-    fieldName: String,
-    subselections: SelectionForest = selectionForestOf(),
-): Selection =
-    Selection.of(
-        key = key(type, fieldName),
-        nominalType = type,
-        possibleTypes = setOf(type),
-        subselections = subselections,
-    )
 
 private fun Schema.key(
     type: Schema.ObjectType,

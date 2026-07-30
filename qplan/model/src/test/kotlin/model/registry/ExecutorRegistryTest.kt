@@ -3,9 +3,10 @@ package model.registry
 import model.Fragment
 import model.Schema
 import model.Selection
-import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.emptyFragmentOf
+import model.fragmentFrom
 import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -36,8 +37,7 @@ class ExecutorRegistryTest {
                 },
                 fieldResolvers = { schema ->
                     val userField = schema.field("Query", "user")
-                    val queryFragment =
-                        Fragment.of(schema.query, selectionForestOf())
+                    val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, Resolver.Field>(
                         userField to
                             model.testing.fieldResolverOf(
@@ -99,8 +99,7 @@ class ExecutorRegistryTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val fragment =
-                        Fragment.of(schema.query, selectionForestOf())
+                    val fragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, Resolver.Field>(
                         schema.field("Query", "scalar") to
                             model.testing.fieldResolverOf(fragment) { _, _ -> Value.String.of("value") },
@@ -224,8 +223,7 @@ class ExecutorRegistryTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 fieldResolvers = { schema ->
-                    val queryFragment =
-                        Fragment.of(schema.query, selectionForestOf())
+                    val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf(
                         foreignUserField to
                             model.testing.fieldResolverOf(
@@ -297,11 +295,8 @@ class ExecutorRegistryTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 fieldResolvers = { schema ->
-                    val queryFragment =
-                        Fragment.of(schema.query, selectionForestOf())
-                    val node = schema.type("Node") as Schema.InterfaceType
-                    val nodeFragment =
-                        Fragment.of(node, selectionForestOf())
+                    val queryFragment = schema.emptyFragmentOf("Query")
+                    val nodeFragment = schema.emptyFragmentOf("Node")
                     mapOf(
                         schema.field("Query", "user") to
                             model.testing.fieldResolverOf(
@@ -340,9 +335,7 @@ class ExecutorRegistryTest {
                         mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
                     },
                     fieldResolvers = { schema ->
-                        val user = schema.type("User") as Schema.ObjectType
-                        val fragment =
-                            Fragment.of(user, selectionForestOf())
+                        val fragment = schema.emptyFragmentOf("User")
                         mapOf(
                             schema.field("User", fieldName) to
                                 model.testing.fieldResolverOf(
@@ -394,24 +387,32 @@ class ExecutorRegistryTest {
                 "peers" setTo listOf(peer, null)
             }
         val selections =
-            selectionForestOf(
-                fixture.selection("Node", "id"),
-                fixture.selection(
-                    typeName = "User",
-                    fieldName = "friend",
-                    subselections = selectionForestOf(fixture.selection("Node", "id")),
-                ),
-                fixture.selection(
-                    typeName = "User",
-                    fieldName = "peers",
-                    subselections = selectionForestOf(fixture.selection("Node", "name")),
-                ),
-                fixture.selection(
-                    typeName = "Node",
-                    fieldName = "name",
-                    possibleTypes = emptySet(),
-                ),
-            )
+            fixture.schema.fragmentFrom(
+                """
+                fragment ignored on Node {
+                  id
+                  ... on User {
+                    friend {
+                      ... on Node {
+                        id
+                      }
+                    }
+                    peers {
+                      ... on Node {
+                        name
+                      }
+                    }
+                  }
+                }
+                """.trimIndent(),
+            ).subselections +
+                selectionForestOf(
+                    fixture.selection(
+                        typeName = "Node",
+                        fieldName = "name",
+                        possibleTypes = emptySet(),
+                    ),
+                )
 
         val result =
             assertIs<Value.Object>(
@@ -450,7 +451,13 @@ class ExecutorRegistryTest {
                 with(fixture.assumptions) {
                     fixture.userField.snip(
                         source,
-                        selectionForestOf(fixture.selection("Admin", "level")),
+                        fixture.schema.fragmentFrom(
+                            """
+                            fragment ignored on Admin {
+                              level
+                            }
+                            """.trimIndent(),
+                        ).subselections,
                     )
                 },
             )
@@ -471,7 +478,15 @@ class ExecutorRegistryTest {
                 with(fixture.assumptions) {
                     fixture.userField.snip(
                         source,
-                        selectionForestOf(fixture.selection("User", "search")),
+                        fixture.schema.fragmentFrom(
+                            """
+                            fragment ignored on User {
+                              search {
+                                id
+                              }
+                            }
+                            """.trimIndent(),
+                        ).subselections,
                     )
                 },
             )
@@ -529,10 +544,14 @@ class ExecutorRegistryTest {
                 with(fixture.assumptions) {
                     fixture.userField.snip(
                         source,
-                        selectionForestOf(
-                            fixture.selection("Node", "id"),
-                            fixture.selection("Node", "name"),
-                        ),
+                        fixture.schema.fragmentFrom(
+                            """
+                            fragment ignored on Node {
+                              id
+                              name
+                            }
+                            """.trimIndent(),
+                        ).subselections,
                     )
                 },
             )
@@ -555,21 +574,26 @@ class ExecutorRegistryTest {
                 "friend" setTo friend
             }
         val selections =
-            selectionForestOf(
-                fixture.selection("Node", "id"),
-                fixture.selection("Node", "name"),
-                fixture.selection("User", "__typename"),
-                fixture.selection("User", "search"),
-                fixture.selection(
-                    typeName = "User",
-                    fieldName = "friend",
-                    subselections =
-                        selectionForestOf(
-                            fixture.selection("Node", "id"),
-                            fixture.selection("Node", "name"),
-                        ),
-                ),
-            )
+            fixture.schema.fragmentFrom(
+                """
+                fragment ignored on Node {
+                  id
+                  name
+                  ... on User {
+                    __typename
+                    search {
+                      id
+                    }
+                    friend {
+                      ... on Node {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+                """.trimIndent(),
+            ).subselections
 
         val result =
             with(fixture.assumptions) {
@@ -640,12 +664,8 @@ class ExecutorRegistryTest {
                     }
                 },
                 fieldResolvers = { schema ->
-                    val query = schema.query
-                    val user = schema.type("User") as Schema.ObjectType
-                    val queryFragment =
-                        Fragment.of(query, selectionForestOf())
-                    val userFragment =
-                        Fragment.of(user, selectionForestOf())
+                    val queryFragment = schema.emptyFragmentOf("Query")
+                    val userFragment = schema.emptyFragmentOf("User")
                     mapOf(
                         schema.field("Query", "user") to
                             model.testing.fieldResolverOf(
@@ -676,7 +696,6 @@ class ExecutorRegistryTest {
             fieldName: String,
             possibleTypes: Set<Schema.ObjectType> =
                 (schema.type(typeName) as Schema.CompositeType).possibleTypes,
-            subselections: SelectionForest = selectionForestOf(),
         ): model.Selection {
             val nominalType = schema.type(typeName) as Schema.CompositeType
             return Selection.of(
@@ -687,7 +706,7 @@ class ExecutorRegistryTest {
                     ),
                 nominalType = nominalType,
                 possibleTypes = possibleTypes,
-                subselections = subselections,
+                subselections = selectionForestOf(),
             )
         }
     }

@@ -7,14 +7,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class AssumptionsTest {
     @Test
     fun `preserves an unbound fragment variable as a variable value`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
-        val (_, selections) =
-            assumptions.selectionsFrom(
+        val fragment =
+            assumptions.fragmentFrom(
                 """
                 fragment ignored on Query {
                   node(filter: ${'$'}filter) {
@@ -24,7 +25,7 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        val node = selections.single()
+        val node = fragment.subselections.single()
         assertEquals(
             Value.Variable.of("filter"),
             node.key.arguments.fieldValues.getValue("filter"),
@@ -54,8 +55,8 @@ class AssumptionsTest {
             )
         val filterType = world.schema.type("Filter")
 
-        val (_, selections) =
-            assumptions.selectionsFrom(
+        val fragment =
+            assumptions.fragmentFrom(
                 """
                 fragment ignored on Query {
                   node(filter: ${'$'}filter) {
@@ -65,7 +66,7 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        val node = selections.single()
+        val node = fragment.subselections.single()
         assertEquals(filter, node.key.arguments.fieldValues.getValue("filter"))
         assertEquals(filterType, filter.type)
         assertEquals(assumptions.schema.type("Filter"), filter.type)
@@ -75,8 +76,8 @@ class AssumptionsTest {
     fun `parses and validates a named fragment against the retained schema`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
-        val (typeCondition, selections) =
-            assumptions.selectionsFrom(
+        val fragment =
+            assumptions.fragmentFrom(
                 """
                 fragment ignored on Query {
                   result: node(filter: {tags: "one", role: ADMIN}) {
@@ -86,8 +87,8 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        assertEquals(assumptions.schema.query, typeCondition)
-        val node = selections.single()
+        assertEquals(assumptions.schema.query, fragment.nominalType)
+        val node = fragment.subselections.single()
         assertEquals("node", node.key.field.fieldName)
 
         val filter =
@@ -117,7 +118,7 @@ class AssumptionsTest {
 
         val exception =
             assertFailsWith<IllegalArgumentException> {
-                assumptions.selectionsFrom(
+                assumptions.fragmentFrom(
                     """
                     fragment ignored on Query {
                       missing
@@ -127,6 +128,48 @@ class AssumptionsTest {
             }
 
         assertContains(exception.message.orEmpty(), "missing")
+    }
+
+    @Test
+    fun `parses a fragment from a schema with explicit variable bindings`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val filter =
+            Value.InputObject.of(
+                type = filterType,
+                fields = mapOf("limit" to Value.Int.of(5)),
+            )
+
+        val fragment =
+            schema.fragmentFrom(
+                source =
+                    """
+                    fragment ignored on Query {
+                      node(filter: ${'$'}filter) {
+                        id
+                      }
+                    }
+                    """.trimIndent(),
+                bindings = mapOf("filter" to filter),
+            )
+
+        assertEquals(
+            filter,
+            fragment.subselections.single().key.arguments.fieldValues.getValue("filter"),
+        )
+    }
+
+    @Test
+    fun `constructs empty fragments that GraphQL text cannot express`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+
+        val worldFragment = assumptions.emptyFragmentOf("Query")
+        val schemaFragment = assumptions.schema.emptyFragmentOf("Query")
+
+        assertEquals(assumptions.schema.query, worldFragment.nominalType)
+        assertEquals(assumptions.schema.query, schemaFragment.nominalType)
+        assertTrue(worldFragment.subselections.isEmpty())
+        assertTrue(schemaFragment.subselections.isEmpty())
     }
 
     @Test

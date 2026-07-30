@@ -69,7 +69,7 @@ class ContextParametersTest {
         TestWorld.fromSDL(
             schemaSDL = SCHEMA_SDL,
             fieldResolvers = { schema ->
-                val fragment = Fragment.of(schema.query, selectionForestOf())
+                val fragment = schema.emptyFragmentOf("Query")
                 schema.query.fields.values
                     .filter { it.fieldName != "__typename" }
                     .associateWith {

@@ -13,6 +13,7 @@ import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -545,18 +546,15 @@ internal data class ObjectPlan(
     fun materializeObject(
         schema: Schema,
         inputId: Value.ID?,
-    ): Value.Object {
-        val type = schema.type(typeName) as Schema.ObjectType
-        return Value.Object.of(
-            type = type,
-            fields =
-                fields.map { (coordinate, plan) ->
-                    val field = schema.field(coordinate.typeName, coordinate.fieldName)
-                    Value.Key.of(field, emptyMap()) to
-                        plan.materialize(schema, field.typeExpr, inputId)
-                }.toMap(),
-        )
-    }
+    ): Value.Object =
+        schema.objectOf(typeName) {
+            fields.forEach { (coordinate, plan) ->
+                require(coordinate.typeName == typeName)
+                val outputField = schema.field(typeName, coordinate.fieldName)
+                field(coordinate.fieldName) setTo
+                    plan.materialize(schema, outputField.typeExpr, inputId)
+            }
+        }
 
     override fun selectedPaths(prefix: String): Set<String> =
         fields.flatMap { (coordinate, plan) ->

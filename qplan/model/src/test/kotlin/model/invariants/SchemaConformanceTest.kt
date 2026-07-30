@@ -3,6 +3,7 @@ package model.invariants
 import model.EngineResult
 import model.Schema
 import model.Value
+import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -13,16 +14,10 @@ class SchemaConformanceTest {
     fun `factory-constructed values conform to schema`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val schema = world.schema
-        val user = schema.type("User") as Schema.ObjectType
-        val nameKey = schema.key(user, "name")
         val value =
-            Value.Object.of(
-                type = user,
-                fields =
-                    mapOf(
-                        nameKey to Value.String.of("Ada"),
-                    ),
-            )
+            world.objectOf("User") {
+                "name" setTo "Ada"
+            }
 
         assertTrue(
             context(world) {

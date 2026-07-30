@@ -9,10 +9,11 @@ import jakarta.inject.Singleton
 import model.Assumptions
 import model.Fragment
 import model.Schema
+import model.SelectionForest
 import model.Value
 import model.registry.ExecutorRegistry
 import model.registry.Resolver
-import model.spec.SpecSelection
+import model.selectionsFrom
 
 /**
  * One Guice-assembled reasoning world for model and semantics tests.
@@ -29,8 +30,8 @@ class TestWorld private constructor(
 
     fun <T : Any> instance(type: Class<T>): T = injector.getInstance(type)
 
-    fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, List<SpecSelection>> =
-        GJSpecSelectionParser(gjSchema, assumptions.variableValues).selectionsFrom(fragment)
+    fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> =
+        assumptions.selectionsFrom(fragment)
 
     companion object {
         fun fromSDL(

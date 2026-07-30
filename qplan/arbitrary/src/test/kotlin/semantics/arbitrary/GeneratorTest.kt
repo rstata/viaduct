@@ -22,7 +22,7 @@ class GeneratorTest {
             val (nominalType, selections) = world.selectionsFrom(query.source)
 
             assertEquals(world.schema.query, nominalType)
-            assert(selections.isNotEmpty())
+            assertFalse(selections.isEmpty())
         }
     }
 

@@ -12,4 +12,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "qplanning"
 
-include("model", "semantics")
+include("arbitrary", "model", "semantics")

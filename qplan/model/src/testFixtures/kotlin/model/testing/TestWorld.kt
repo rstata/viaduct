@@ -40,6 +40,7 @@ class TestWorld private constructor(
                 (Schema) -> Map<Schema.ObjectType, Resolver.Node> = { emptyMap() },
             fieldResolvers:
                 ((Schema) -> Map<Schema.OutputField, Resolver.Field>)? = null,
+            noTransitiveDemand: Boolean = false,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -48,6 +49,7 @@ class TestWorld private constructor(
                         variableValues = variableValues,
                         nodeResolvers = nodeResolvers,
                         fieldResolvers = fieldResolvers,
+                        noTransitiveDemand = noTransitiveDemand,
                     ),
                 )
             return try {
@@ -67,6 +69,7 @@ private class TestWorldModule(
     private val variableValues: (Schema) -> Map<String, Value?>,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, Resolver.Node>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
+    private val noTransitiveDemand: Boolean,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -119,6 +122,7 @@ private class TestWorldModule(
             schema = schema,
             bindings = variableValues,
             executorRegistry = executorRegistry,
+            noTransitiveDemand = noTransitiveDemand,
         )
 
     private fun defaultQueryResolvers(

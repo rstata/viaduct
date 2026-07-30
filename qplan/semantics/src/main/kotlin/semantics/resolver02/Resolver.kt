@@ -38,6 +38,7 @@ private fun Value.Object.closeResolverDemand(
         selections.filter { selection -> type in selection.possibleTypes }
     val groupedSelections =
         applicableSelections.groupBy { selection -> selection.concreteObjectKey(type) }
+    if (world.noTransitiveDemand && expanded.isNotEmpty()) return groupedSelections
     val unexpandedResolverKeys =
         groupedSelections.keys.filter { key ->
             key !in expanded &&

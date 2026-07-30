@@ -142,7 +142,7 @@ tasks.register("check") {
     group = "verification"
     description = "Runs all repository checks."
     dependsOn(checkDocumentationLabels)
-    dependsOn(":model:check", ":semantics:check")
+    dependsOn(":arbitrary:check", ":model:check", ":semantics:check")
 }
 
 subprojects {

@@ -109,32 +109,11 @@ private fun coerceOutputValue(
 
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
-                Schema.IntType ->
-                    requireType<Int>(value, type).let(Value.Int::of)
-                Schema.FloatType ->
-                    requireType<Double>(value, type).let(Value.Float::of)
-                Schema.StringType ->
-                    requireType<String>(value, type).let(Value.String::of)
-                Schema.BooleanType ->
-                    requireType<Boolean>(value, type).let(Value.Boolean::of)
-                Schema.IDType ->
-                    requireType<String>(value, type).let(Value.ID::of)
-                is Schema.EnumType ->
-                    Value.Enum.of(type, requireType<String>(value, type))
+                is Schema.SimpleType -> coerceSimpleValue(type, value)
                 is Schema.CompositeType ->
                     throw IllegalArgumentException(
                         "Expected an object value for ${type.typeName}",
                     )
             }
     }
-}
-
-private inline fun <reified T : Any> requireType(
-    value: Any,
-    type: Schema.Type,
-): T {
-    require(value is T) {
-        "Expected ${T::class.simpleName} for ${type.typeName}"
-    }
-    return value
 }

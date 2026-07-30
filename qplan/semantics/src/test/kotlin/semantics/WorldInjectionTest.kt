@@ -9,6 +9,7 @@ import model.objectOf
 import model.registry.ExecutorRegistry
 import model.registry.MissingExecutorException
 import model.registry.Resolver
+import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -70,32 +71,18 @@ class WorldInjectionTest {
 
         val user = schema.type("User") as Schema.ObjectType
         val node =
-            registry.resolver(user).function(
-                Value.ID.of("node"),
-            )
-        assertEquals(
-            "node",
-            assertIs<Value.ID>(
-                node.fieldValues[schema.key(user, "id")],
-            ).idValue,
-        )
+            context(world) {
+                registry
+                    .resolver(user)
+                    .resolve(
+                        type = user,
+                        id = Value.ID.of("node"),
+                        transitiveDemand = selectionForestOf(),
+                    )
+            }
+        assertEquals(emptySet(), node.fieldValues.keys)
 
         val userField = schema.field("Query", "user")
-        val (_, fieldResolverFunction) = registry.resolver(userField)
-        val field =
-            assertIs<Value.Object>(
-                fieldResolverFunction(
-                    world.objectOf("Query"),
-                    Value.Arguments.of(userField, emptyMap()),
-                ),
-            )
-        assertEquals(
-            "field",
-            assertIs<Value.ID>(
-                field.fieldValues[schema.key(user, "id")],
-            ).idValue,
-        )
-
         val selections =
             world.fragmentFrom(
                 """
@@ -106,6 +93,25 @@ class WorldInjectionTest {
                 }
                 """.trimIndent(),
             ).subselections
+        val field =
+            assertIs<Value.Object>(
+                context(world) {
+                    registry
+                        .resolver(userField)
+                        .resolve(
+                            input = world.objectOf("Query"),
+                            arguments = Value.Arguments.of(userField, emptyMap()),
+                            transitiveDemand = selections.single().subselections,
+                        )
+                },
+            )
+        assertEquals(
+            "field",
+            assertIs<Value.ID>(
+                field.fieldValues[schema.key(user, "id")],
+            ).idValue,
+        )
+
         assertEquals(userField, selections.single().key.field)
         assertEquals(
             schema.field("User", "id"),

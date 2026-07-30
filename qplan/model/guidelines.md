@@ -14,9 +14,9 @@ A semantic category is a modeled set of values represented by an interface hiera
 
 A concrete variant is one particular form of value in a category, such as `EngineResult.Object` within `EngineResult` or `TypeExpr.List` within `TypeExpr`.
 
-A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `EngineResult.Object`, `EngineResult.Cell`, `Value.Key`, and ordinary schema values are examples.
+A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `EngineResult.Object`, `EngineResult.Cell`, `Value.Key`, `Resolver.Node`, and `Resolver.Field` are examples.
 
-An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema`, `ExecutorRegistry`, `Resolver.Node`, and `Resolver.Field` are examples.
+An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema` and `ExecutorRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `Resolver.Node` and `Resolver.Field`.
 
 Pre-reasoning infrastructure is code that prepares externally supplied inputs before semantic reasoning begins. SDL decoding, GraphQL parsing, registry assembly, and private test-fixture implementations are examples.
 
@@ -34,7 +34,7 @@ Keep functions requiring non-mathematical inputs or producing non-mathematical o
 
 Public semantic categories are sealed interfaces unless the category itself is intentionally supplied by external composition code. For example, `EngineResult` and `Schema.Type` are sealed, while externally supplied roots such as `Schema` and `ExecutorRegistry` are open interfaces.
 
-Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `EngineResult.Object` is sealed around its private implementation, while externally implemented `Schema.ObjectType` and `Resolver.Field` are open leaves. Their enclosing categories, such as `Schema.Type` and `Resolver`, remain sealed.
+Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `EngineResult.Object` is sealed around its private implementation, while externally implemented `Schema.ObjectType` is an open leaf. Its enclosing category, `Schema.Type`, remains sealed.
 
 Public singleton semantic values are `data object` declarations. `Value.Error`, `Value.Default.Absent`, and built-in scalar type definitions are examples.
 
@@ -62,15 +62,15 @@ Prefer a private data-class implementation when its generated structural equalit
 
 ## Construction
 
-Distinguish logic-constructible types from externally supplied types. OERs and schema values are logic-constructible; `Schema`, `ExecutorRegistry`, and resolver definitions are externally supplied.
+Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned resolver wrappers are logic-constructible; `Schema` and `ExecutorRegistry` are externally supplied. Resolver functions are supplied during pre-reasoning assembly, while `Resolver.Node` and `Resolver.Field` encapsulate those functions behind model-owned factories and public demand-projection operations.
 
-Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `EngineResult.Cell`, and `Value.Int` have factories. Abstract categories such as `EngineResult` and `Value` need no factory when their concrete variants provide the construction operations.
+Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `EngineResult.Cell`, `Value.Int`, `Resolver.Node`, and `Resolver.Field` have factories. Abstract categories such as `EngineResult`, `Value`, and `Resolver` need no factory when their concrete variants provide the construction operations.
 
 Logic-constructible types use private `FooImpl` classes by preference, such as `ObjectKeyImpl` implementing `Value.Key`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
-Externally supplied types have no model construction factory or main-source implementation. For example, test-fixture code privately implements `Schema.ObjectType`, `Resolver.Node`, and `ExecutorRegistry` while semantic code sees only their public interfaces.
+Externally supplied types have no model construction factory or main-source implementation. For example, test-fixture code privately implements `Schema.ObjectType` and `ExecutorRegistry` while semantic code sees only their public interfaces.
 
-Keep schema decoding, GraphQL parsing, resolver implementations, registry assembly, dependency-injection modules, and other pre-reasoning composition outside production semantic source sets. Tests that need a complete reasoning world construct it through `model.testing.TestWorld`; ordinary test sources do not decode schemas or assemble registries directly.
+Keep schema decoding, GraphQL parsing, resolver-function definitions, registry assembly, dependency-injection modules, and other pre-reasoning composition outside production semantic source sets. The model-owned resolver wrappers are the boundary that hides those functions from semantic algorithms. Tests that need a complete reasoning world construct it through `model.testing.TestWorld`; ordinary test sources do not decode schemas or assemble registries directly.
 
 Constructors are private where possible and otherwise internal. Internal model code may call an internal constructor directly, but factory use remains preferred.
 

@@ -3,8 +3,11 @@ package semantics.correctresolution
 import model.Assumptions
 import model.EngineResult
 import model.Schema
+import model.Selection
+import model.SelectionForest
 import model.Value
 import model.idKeyOf
+import model.selectionForestOf
 import semantics.materialize
 
 /**
@@ -38,7 +41,12 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
             } else {
                 val resolver = registry.resolver(key.field)
                 val input = materialize(resolver.objectFragment)
-                val resolverValue = resolver.function(input, key.arguments)
+                val resolverValue =
+                    resolver.resolve(
+                        input = input,
+                        arguments = key.arguments,
+                        transitiveDemand = value.observedDemand(),
+                    )
                 value.engineResultConformsToResolverValue(resolverValue)
             }
 
@@ -56,9 +64,49 @@ private fun EngineResult.Object.nodeResolverConforms(): Boolean {
     val idResult = fetch(idKey).value
     if (idResult == Value.Error || idResult !is Value.ID) return false
 
-    val resolverValue = world.executorRegistry.resolver(type).function(idResult)
+    val resolverValue =
+        world.executorRegistry
+            .resolver(type)
+            .resolve(
+                type = type,
+                id = idResult,
+                transitiveDemand = observedDemand(),
+            )
     return nodeResolverValueConforms(resolverValue)
 }
+
+/**
+ * Returns the concrete demand whose coordinates are present in this result subtree.
+ *
+ * This is an observational device for stating extensional resolver agreement, not a demand-planning
+ * operation. [conformsToFragment] and [isClosedUnderResolverDemand] separately establish that every
+ * externally and internally required coordinate is present.
+ */
+private fun EngineResult?.observedDemand(): SelectionForest =
+    when (this) {
+        null,
+        Value.Error,
+        is Value.Simple,
+        -> selectionForestOf()
+
+        is EngineResult.Object ->
+            keys.fold(selectionForestOf()) { demand, key ->
+                demand +
+                    selectionForestOf(
+                        Selection.of(
+                            key = key,
+                            nominalType = type,
+                            possibleTypes = setOf(type),
+                            subselections = fetch(key).value.observedDemand(),
+                        ),
+                    )
+            }
+
+        is EngineResult.List ->
+            fold(selectionForestOf()) { demand, cell ->
+                demand + cell.value.observedDemand()
+            }
+    }
 
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolvers(): Boolean =

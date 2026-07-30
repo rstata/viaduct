@@ -317,6 +317,91 @@ class ResolverTest {
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
 
+    @Test
+    fun `bounds recursive output selection forests by demand`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL = RECURSIVE_SCHEMA_SDL,
+                fieldResolvers = { schema ->
+                    val chain = schema.objectType("Chain")
+                    val nextKey = schema.key(chain, "next")
+                    val labelKey = schema.key(chain, "label")
+                    mapOf(
+                        schema.field("Query", "chain") to
+                            model.testing.fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ ->
+                                    schema.objectOf("Chain") {
+                                        "label" setTo "first"
+                                        "next" setTo
+                                            objectOf("Chain") {
+                                                "label" setTo "second"
+                                                "next" setTo null
+                                            }
+                                    }
+                                },
+                            ),
+                        schema.field("Chain", "computed") to
+                            model.testing.fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Chain {
+                                          next {
+                                            label
+                                          }
+                                        }
+                                        """.trimIndent(),
+                                    ),
+                                function = { input, _ ->
+                                    val next =
+                                        input.fieldValues.getValue(nextKey) as Value.Object
+                                    val label =
+                                        next.fieldValues.getValue(labelKey) as Value.String
+                                    Value.String.of(label.stringValue)
+                                },
+                            ),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val (fragment, selections) =
+            context(world) {
+                parsedFragment(
+                    """
+                    fragment ignored on Query {
+                      chain {
+                        computed
+                      }
+                    }
+                    """.trimIndent(),
+                )
+            }
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(selections)
+            }
+
+        val chain =
+            assertIs<EngineResult.Object>(
+                result.fetch(schema.key(schema.query, "chain")).value,
+            )
+        val next =
+            assertIs<EngineResult.Object>(
+                chain.fetch(schema.key(schema.objectType("Chain"), "next")).value,
+            )
+        assertEquals(setOf("label"), next.keys.map { it.field.fieldName }.toSet())
+        assertEquals(
+            "second",
+            assertIs<Value.String>(
+                chain.fetch(schema.key(schema.objectType("Chain"), "computed")).value,
+            ).stringValue,
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
     context(world: model.Assumptions)
     private fun parsedFragment(source: String) =
         world.fragmentFrom(source).let { it to it.subselections }
@@ -366,6 +451,19 @@ class ResolverTest {
 
             type Query {
               viewer: User!
+            }
+            """.trimIndent()
+
+        val RECURSIVE_SCHEMA_SDL =
+            """
+            type Chain {
+              label: String!
+              next: Chain
+              computed: String!
+            }
+
+            type Query {
+              chain: Chain!
             }
             """.trimIndent()
     }

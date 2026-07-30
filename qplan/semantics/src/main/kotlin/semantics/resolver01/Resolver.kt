@@ -48,7 +48,8 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
                             key.field.fieldName == "__typename" ->
                                 Value.String.of(type.typeName)
 
-                            key.field in world.executorRegistry -> resolveField(key)
+                            key.field in world.executorRegistry ->
+                                resolveField(key, subselections)
                             else -> {
                                 // The producing resolver supplies demanded output-selection fields.
                                 fieldValues.getValue(key)
@@ -64,14 +65,18 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
 }
 
 context(world: Assumptions)
-private fun Value.Object.resolveField(key: Value.Key): Value.Output? {
+private fun Value.Object.resolveField(
+    key: Value.Key,
+    selections: SelectionForest,
+): Value.Output? {
     val resolver = world.executorRegistry.resolver(key.field)
     require(resolver.objectFragment.subselections.isEmpty()) {
         "Resolver for ${type.typeName}/${key.field.fieldName} has a nonempty object fragment"
     }
-    return resolver.function(
-        Value.Object.of(type),
-        key.arguments,
+    return resolver.resolve(
+        input = Value.Object.of(type),
+        arguments = key.arguments,
+        transitiveDemand = selections,
     )
 }
 
@@ -120,8 +125,16 @@ fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {
     val resolverResult =
         world.executorRegistry
             .resolver(type)
-            .function(id)
-            .resolve(selections)
+            .resolve(
+                type = type,
+                id = id,
+                transitiveDemand = selections,
+            )
+            .resolve(
+                selections.filter { selection ->
+                    selection.key.field.fieldName != "id"
+                },
+            )
 
     return nodeRef.union(resolverResult)
 }

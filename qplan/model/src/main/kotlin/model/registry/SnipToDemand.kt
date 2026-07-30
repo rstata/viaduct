@@ -5,46 +5,58 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.toSelectionForest
+import model.idKeyOf
 
 /**
- * Supplies the selection input of this behavioral field's interpretation by projecting [result] to
- * its output selection set.
+ * Supplies the selection input of a field resolver by projecting this selection-independent result
+ * to the requested [demand].
  *
- * For fixed non-selection inputs, the field's behavior produces [result] before [selections] are
- * considered. Projecting that same output for different requested selections makes the results
- * agree at every coordinate selected by both.
+ * For fixed non-selection inputs, the field's behavior produces this result before [demand] is
+ * considered. Projecting that same output for different demands makes the results agree at every
+ * coordinate selected by both.
  *
  * Simple, null, and error results are unchanged. List results are projected element-wise. Object
- * projection retains selected non-behavioral fields and stops before every field for which
+ * projection retains demanded non-behavioral fields and stops before every field for which
  * [Assumptions.behavioral] is true. This leaves a nested node's `id` field in the containing
- * resolver's output while omitting fields supplied by that node's resolver or by explicit field
- * resolvers. A type-conditioned selection that does not apply to a concrete object is omitted
- * before its nominal type is checked.
+ * resolver's output whenever a nested node is reached, even when `id` was not demanded, while
+ * omitting fields supplied by that node's resolver or by explicit field resolvers. A
+ * type-conditioned selection that does not apply to a concrete object is omitted before its
+ * nominal type is checked.
  *
  * This operation's reasoning scope assumes that every argument-bearing output field has an explicit
  * field resolver. Such a field is therefore a behavioral boundary, and every retained field is
  * argumentless.
  *
- * This must be a canonical behavioral field. Every applicable selection must be declared on the
- * concrete object type or one of its nominal supertypes.
+ * Every applicable selection in [demand] must be declared on the concrete object type or one of
+ * its nominal supertypes.
  *
  * @throws IllegalArgumentException when a precondition is not met
  */
 context(world: Assumptions)
-fun Schema.OutputField.snip(
-    result: Value.Output?,
-    selections: SelectionForest,
-): Value.Output? {
-    require(world.behavioral(this)) {
-        "Field ${containingType.typeName}/$fieldName is not behavioral"
+fun Value.Output?.snipToDemand(demand: SelectionForest): Value.Output? =
+    when (this) {
+        null,
+        Value.Error,
+        -> this
+
+        is Value.Object -> snipObjectToDemand(demand)
+        is Value.OutputList ->
+            Value.OutputList.of(
+                typeExpr = typeExpr,
+                values = values.map { it.snipToDemand(demand) },
+            )
+
+        is Value.Simple -> {
+            require(demand.isEmpty()) {
+                "Cannot apply subselections to a simple value $this"
+            }
+            this
+        }
     }
-    return result.snipOutput(selections)
-}
 
 /**
  * Supplies the selection input of this node resolver by projecting [result] to the node resolver's
- * output selection set.
+ * requested [demand].
  *
  * At the root, projection retains fields supplied by this node resolver but omits the node's `id`
  * bridge field and fields with explicit field resolvers. Below the root it stops at every
@@ -52,14 +64,15 @@ fun Schema.OutputField.snip(
  * supply its own behavioral fields without crossing into another resolver's behavior.
  *
  * This must be [result]'s canonical type and must have a registered node resolver. Every applicable
- * selection must be declared on the concrete object type or one of its nominal supertypes.
+ * selection in [demand] must be declared on the concrete object type or one of its nominal
+ * supertypes.
  *
  * @throws IllegalArgumentException when a precondition is not met
  */
 context(world: Assumptions)
-fun Schema.ObjectType.snip(
+fun Schema.ObjectType.snipToDemand(
     result: Value.Object,
-    selections: SelectionForest,
+    demand: SelectionForest,
 ): Value.Object {
     require(result.type == this) {
         "Node resolver $typeName cannot project an object of type ${result.type.typeName}"
@@ -67,10 +80,10 @@ fun Schema.ObjectType.snip(
     require(this in world.executorRegistry) {
         "No node resolver is registered for $typeName"
     }
-    val applicableSelections = selections.filter { result.type in it.possibleTypes }
+    val applicableDemand = demand.filter { result.type in it.possibleTypes }
 
     val selectedFields =
-        applicableSelections
+        applicableDemand
             .groupBy { it.concreteObjectKey(result.type) }
             .mapNotNull { (key, fieldSelections) ->
                 val concreteField = key.field
@@ -86,7 +99,7 @@ fun Schema.ObjectType.snip(
                         value
                     } else {
                         val subselections = fieldSelections.flatMap { it.subselections }
-                        value.snipOutput(subselections)
+                        value.snipToDemand(subselections)
                     }
                 key to selectedValue
             }
@@ -96,13 +109,13 @@ fun Schema.ObjectType.snip(
 }
 
 context(world: Assumptions)
-private fun Value.Object.snip(
-    selections: SelectionForest,
+private fun Value.Object.snipObjectToDemand(
+    demand: SelectionForest,
 ): Value.Object {
-    val applicableSelections = selections.filter { type in it.possibleTypes }
+    val applicableDemand = demand.filter { type in it.possibleTypes }
 
     val selectedFields =
-        applicableSelections
+        applicableDemand
             .groupBy { it.concreteObjectKey(type) }
             .mapNotNull { (key, fieldSelections) ->
                 val concreteField = key.field
@@ -114,42 +127,25 @@ private fun Value.Object.snip(
                         value
                     } else {
                         val subselections = fieldSelections.flatMap { it.subselections }
-                        value.snipOutput(subselections)
+                        value.snipToDemand(subselections)
                     }
                 key to selectedValue
             }
             .toMap()
+    val nodeReference =
+        world.idKeyOf(type)?.let { idKey ->
+            mapOf(idKey to fieldValues.getValue(idKey))
+        }.orEmpty()
 
-    return Value.Object.of(type, selectedFields)
+    return Value.Object.of(type, selectedFields + nodeReference)
 }
-
-context(world: Assumptions)
-private fun Value.Output?.snipOutput(
-    selections: SelectionForest,
-): Value.Output? =
-    when (this) {
-        null,
-        Value.Error,
-        -> this
-
-        is Value.Object -> snip(selections)
-        is Value.OutputList ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values = values.map { it.snipOutput(selections) },
-            )
-
-        is Value.Simple -> {
-            require(selections.isEmpty()) {
-                "Cannot apply subselections to a simple value $this"
-            }
-            this
-        }
-    }
 
 context(world: Assumptions)
 private fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
     Value.Key.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments = key.arguments.fieldValues,
+        arguments =
+            key.arguments.fieldValues.mapValues { (_, value) ->
+                value?.let(world.variableValues::instantiateAllVariables)
+            },
     )

@@ -24,15 +24,14 @@ For example, the following is mathematical pseudocode rather than a declaration 
 ```text
 world |- forall(
     obj: Value.Object,
-    behavioralField: Schema.OutputField,
-    selections: SelectionForest,
+    demand: SelectionForest,
 ) {
-    snippable(obj, behavioralField, selections) implies
-        behavioralField.snip(obj, selections).type == obj.type
+    snippable(obj, demand) implies
+        obj.snipToDemand(demand).type == obj.type
 }
 ```
 
-Here `snippable` abbreviates the documented preconditions of `snip`. A context parameter reflects the `world |-` premise directly while allowing operations such as `snip` to use the schema and other fixed assumptions.
+Here `snippable` abbreviates the documented preconditions of `snipToDemand`. A context parameter reflects the `world |-` premise directly while allowing operations such as `snipToDemand` to use the schema and other fixed assumptions.
 
 ## Context Parameters Compose
 
@@ -62,7 +61,7 @@ fun Value.Object.copyInWorld(): Value.Object =
 
 The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories belong to their precise `Value` variants rather than to `Schema` or `Assumptions`.
 
-Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Value.Object.snip`.
+Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Value.Output?.snipToDemand`.
 
 ## Receiver-Style Bodies
 
@@ -89,7 +88,7 @@ Context parameters are not global variables. Establish an `Assumptions` value at
 ```kotlin
 val result =
     context(world) {
-        behavioralField.snip(objectValue, selectionForestOf())
+        objectValue.snipToDemand(selectionForestOf())
     }
 ```
 
@@ -97,6 +96,6 @@ Inside another function with `context(world: Assumptions)`, call context-depende
 
 ## Testing Context Usage
 
-[ContextParametersTest.kt](./model/src/test/kotlin/model/ContextParametersTest.kt) uses real `Assumptions`, `Schema`, and `Value.Object` values to exercise context establishment, implicit composition, receiver-style bodies, and `snip`.
+[ContextParametersTest.kt](./model/src/test/kotlin/model/ContextParametersTest.kt) uses real `Assumptions`, `Schema`, and `Value.Object` values to exercise context establishment, implicit composition, receiver-style bodies, and `snipToDemand`.
 
 Compilation is the primary evidence for receiver and context resolution. Runtime assertions additionally verify that receiver-style functions return the intended model value rather than the `Assumptions` receiver.

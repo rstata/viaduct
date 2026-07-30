@@ -1,7 +1,7 @@
 package model
 
 import model.registry.Resolver
-import model.registry.snip
+import model.registry.snipToDemand
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,17 +37,14 @@ class ContextParametersTest {
     }
 
     @Test
-    fun `a call boundary supplies the real assumptions context to snip`() {
+    fun `a call boundary supplies the real assumptions context to snipToDemand`() {
         val world = assumptions()
         val source = world.sourceObject()
 
         val result =
             assertIs<Value.Object>(
                 context(world) {
-                    world.schema.field("Query", "self").snip(
-                        source,
-                        selectionForestOf(),
-                    )
+                    source.snipToDemand(selectionForestOf())
                 },
             )
 

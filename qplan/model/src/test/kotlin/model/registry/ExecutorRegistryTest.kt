@@ -68,20 +68,32 @@ class ExecutorRegistryTest {
         val assumptions = world.assumptions
 
         assertEquals(registry, assumptions.executorRegistry)
+        val nodeResult =
+            context(assumptions) {
+                registry
+                    .resolver(userType)
+                    .resolve(
+                        type = userType,
+                        id = Value.ID.of("42"),
+                        transitiveDemand = selectionForestOf(),
+                    )
+            }
         assertEquals(
-            user,
-            registry.resolver(userType).function(Value.ID.of("42")),
+            schema.objectOf("User"),
+            nodeResult,
         )
-        val (objectFragment, fieldResolverFunction) =
-            registry.resolver(userField)
-        assertEquals(schema.query, objectFragment.nominalType)
-        assertTrue(objectFragment.subselections.isEmpty())
+        val fieldResolver = registry.resolver(userField)
+        assertEquals(schema.query, fieldResolver.objectFragment.nominalType)
+        assertTrue(fieldResolver.objectFragment.subselections.isEmpty())
         assertEquals(
             user,
-            fieldResolverFunction(
-                query,
-                Value.Arguments.of(userField, emptyMap()),
-            ),
+            context(assumptions) {
+                fieldResolver.resolve(
+                    input = query,
+                    arguments = Value.Arguments.of(userField, emptyMap()),
+                    transitiveDemand = selectionForestOf(),
+                )
+            },
         )
     }
 
@@ -126,9 +138,15 @@ class ExecutorRegistryTest {
         val outputs =
             listOf("scalar", "list", "nullable", "failed").associateWith { fieldName ->
                 val field = schema.field("Query", fieldName)
-                world.executorRegistry
-                    .resolver(field)
-                    .function(parent, Value.Arguments.of(field, emptyMap()))
+                context(world.assumptions) {
+                    world.executorRegistry
+                        .resolver(field)
+                        .resolve(
+                            input = parent,
+                            arguments = Value.Arguments.of(field, emptyMap()),
+                            transitiveDemand = selectionForestOf(),
+                        )
+                }
             }
 
         assertEquals(Value.String.of("value"), outputs.getValue("scalar"))
@@ -146,10 +164,10 @@ class ExecutorRegistryTest {
         assertEquals(null, outputs.getValue("nullable"))
         assertEquals(Value.Error, outputs.getValue("failed"))
 
-        outputs.forEach { (fieldName, output) ->
+        outputs.forEach { (_, output) ->
             val projection =
                 with(world.assumptions) {
-                    schema.field("Query", fieldName).snip(output, selectionForestOf())
+                    output.snipToDemand(selectionForestOf())
                 }
             assertEquals(output, projection)
         }
@@ -350,7 +368,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `public snip functions require a behavioral field or node resolver coordinate`() {
+    fun `node snipToDemand requires a node resolver coordinate`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
         val user = schema.type("User") as Schema.ObjectType
@@ -358,10 +376,7 @@ class ExecutorRegistryTest {
 
         with(world.assumptions) {
             assertFailsWith<IllegalArgumentException> {
-                schema.field("User", "name").snip(result, selectionForestOf())
-            }
-            assertFailsWith<IllegalArgumentException> {
-                user.snip(result, selectionForestOf())
+                user.snipToDemand(result, selectionForestOf())
             }
         }
     }
@@ -417,7 +432,7 @@ class ExecutorRegistryTest {
         val result =
             assertIs<Value.Object>(
                 with(fixture.assumptions) {
-                    fixture.userField.snip(source, selections)
+                    source.snipToDemand(selections)
                 },
             )
 
@@ -439,7 +454,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `snip omits selections conditioned on another concrete type`() {
+    fun `snipToDemand omits selections conditioned on another concrete type`() {
         val fixture = Fixture()
         val source =
             fixture.assumptions.objectOf("User") {
@@ -449,8 +464,7 @@ class ExecutorRegistryTest {
         val result =
             assertIs<Value.Object>(
                 with(fixture.assumptions) {
-                    fixture.userField.snip(
-                        source,
+                    source.snipToDemand(
                         fixture.schema.fragmentFrom(
                             """
                             fragment ignored on Admin {
@@ -466,7 +480,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `field-resolver snip stops before an argument-bearing field resolver`() {
+    fun `field-resolver snipToDemand stops before an argument-bearing field resolver`() {
         val fixture = Fixture()
         val source =
             fixture.assumptions.objectOf("User") {
@@ -476,8 +490,7 @@ class ExecutorRegistryTest {
         val result =
             assertIs<Value.Object>(
                 with(fixture.assumptions) {
-                    fixture.userField.snip(
-                        source,
+                    source.snipToDemand(
                         fixture.schema.fragmentFrom(
                             """
                             fragment ignored on User {
@@ -488,6 +501,70 @@ class ExecutorRegistryTest {
                             """.trimIndent(),
                         ).subselections,
                     )
+                },
+            )
+
+        assertEquals(emptySet(), result.fieldValues.keys)
+    }
+
+    @Test
+    fun `snipToDemand does not expand resolver demand`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      firstName: String!
+                      lastName: String!
+                      greeting: String!
+                    }
+
+                    type Query {
+                      viewer: User!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "viewer") to
+                            model.testing.fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                        schema.field("User", "greeting") to
+                            model.testing.fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on User {
+                                          firstName
+                                          lastName
+                                        }
+                                        """.trimIndent(),
+                                    ),
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val source =
+            world.objectOf("User") {
+                "firstName" setTo "Ada"
+                "lastName" setTo "Lovelace"
+            }
+        val demand =
+            world.fragmentFrom(
+                """
+                fragment ignored on User {
+                  greeting
+                }
+                """.trimIndent(),
+            ).subselections
+
+        val result =
+            assertIs<Value.Object>(
+                context(world) {
+                    source.snipToDemand(demand)
                 },
             )
 
@@ -531,7 +608,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `field-resolver snip retains only a nested node reference`() {
+    fun `field-resolver snipToDemand retains only a nested node reference`() {
         val fixture = Fixture(withNodeResolver = true)
         val source =
             fixture.assumptions.objectOf("User") {
@@ -542,12 +619,10 @@ class ExecutorRegistryTest {
         val result =
             assertIs<Value.Object>(
                 with(fixture.assumptions) {
-                    fixture.userField.snip(
-                        source,
+                    source.snipToDemand(
                         fixture.schema.fragmentFrom(
                             """
                             fragment ignored on Node {
-                              id
                               name
                             }
                             """.trimIndent(),
@@ -560,7 +635,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `node-resolver snip retains its fields and stops at nested boundaries`() {
+    fun `node-resolver snipToDemand retains its fields and stops at nested boundaries`() {
         val fixture = Fixture(withNodeResolver = true)
         val friend =
             fixture.assumptions.objectOf("User") {
@@ -597,7 +672,7 @@ class ExecutorRegistryTest {
 
         val result =
             with(fixture.assumptions) {
-                fixture.user.snip(source, selections)
+                fixture.user.snipToDemand(source, selections)
             }
 
         assertEquals(

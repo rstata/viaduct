@@ -2,9 +2,12 @@ package semantics.resolver02
 
 import model.Assumptions
 import model.EngineResult
+import model.Schema
+import model.Selection
 import model.SelectionForest
 import model.Value
 import model.idKeyOf
+import model.registry.Resolver
 import model.registry.demandsFromSibling
 import model.selectionForestOf
 import model.union
@@ -16,29 +19,49 @@ import semantics.materialize
  * Returns the result for [selections] and all transitive resolver demand on this concrete object.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
-    val closedSelections = closeResolverDemand(selections)
-    val orderedKeys = dependencyOrder(closedSelections.keys)
-    val emptyResult = EngineResult.Object.of(type, emptyMap())
+fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
+    resolve(
+        selections = selections,
+        resolved = EngineResult.Object.of(type, emptyMap()),
+    )
 
-    return orderedKeys.fold(emptyResult) { result, key ->
-        result.union(resolveKey(key, closedSelections.getValue(key), result))
+context(world: Assumptions)
+private fun Value.Object.resolve(
+    selections: SelectionForest,
+    resolved: EngineResult.Object,
+): EngineResult.Object {
+    require(resolved.type == type) {
+        "Initial result type ${resolved.type.typeName} does not match $type"
+    }
+
+    val closedDemand = closeResolverDemand(selections)
+    val selectionsByKey =
+        closedDemand.groupBy { selection -> selection.concreteObjectKey(type) }
+    val orderedKeys = dependencyOrder(selectionsByKey.keys - resolved.keys)
+    return orderedKeys.fold(resolved) { result, key ->
+        result.union(resolveKey(key, selectionsByKey.getValue(key), result))
     }
 }
 
 /**
- * Returns the applicable selections by concrete key, including all transitive resolver demand.
+ * Returns the applicable demand, including all transitive resolver demand on this concrete object.
  */
 context(world: Assumptions)
 private fun Value.Object.closeResolverDemand(
     selections: SelectionForest,
+): SelectionForest =
+    type.closeResolverDemand(selections)
+
+context(world: Assumptions)
+private fun Schema.ObjectType.closeResolverDemand(
+    selections: SelectionForest,
     expanded: Set<Value.Key> = emptySet(),
-): Map<Value.Key, SelectionForest> {
+): SelectionForest {
     val applicableSelections =
-        selections.filter { selection -> type in selection.possibleTypes }
+        selections.filter { selection -> this in selection.possibleTypes }
     val groupedSelections =
-        applicableSelections.groupBy { selection -> selection.concreteObjectKey(type) }
-    if (world.noTransitiveDemand && expanded.isNotEmpty()) return groupedSelections
+        applicableSelections.groupBy { selection -> selection.concreteObjectKey(this) }
+    if (world.noTransitiveDemand && expanded.isNotEmpty()) return applicableSelections
     val unexpandedResolverKeys =
         groupedSelections.keys.filter { key ->
             key !in expanded &&
@@ -46,7 +69,7 @@ private fun Value.Object.closeResolverDemand(
                 key.field in world.executorRegistry
         }.toSet()
 
-    if (unexpandedResolverKeys.isEmpty()) return groupedSelections
+    if (unexpandedResolverKeys.isEmpty()) return applicableSelections
 
     val resolverDemand =
         unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
@@ -127,7 +150,12 @@ private fun Value.Object.resolveKey(
                         val resolver = world.executorRegistry.resolver(key.field)
                         // Closure and dependency order put the complete input in this prefix.
                         val input = resolved.materialize(resolver.objectFragment)
-                        resolver.function(input, key.arguments)
+                        resolver.resolve(
+                            input = input,
+                            arguments = key.arguments,
+                            transitiveDemand =
+                                subselections + resolver.outputSelectionForest(subselections),
+                        )
                     }
 
                     else -> {
@@ -184,11 +212,128 @@ fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {
     }
 
     val nodeRef = EngineResult.Object.nodeRef(idKey.field, id)
-    val resolverResult =
-        world.executorRegistry
-            .resolver(type)
-            .function(id)
-            .resolve(selections)
+    return world.executorRegistry
+        .resolver(type)
+        .let { resolver ->
+            resolver.resolve(
+                type = type,
+                id = id,
+                transitiveDemand =
+                    selections + resolver.outputSelectionForest(selections),
+            )
+        }
+        .resolve(
+            selections = selections,
+            resolved = nodeRef,
+        )
+}
 
-    return nodeRef.union(resolverResult)
+/**
+ * Returns this field resolver's finite output selection forest relative to [demand].
+ *
+ * A field resolver owns every non-behavioral field of its result. Ownership is unfolded completely
+ * along acyclic paths. At each concrete object, locally closed resolver demand bounds further
+ * unfolding when a path returns to an ancestor type, so a recursive output selection set remains
+ * finite.
+ */
+context(world: Assumptions)
+private fun Resolver.Field.outputSelectionForest(demand: SelectionForest): SelectionForest =
+    demand.outputSelectionForest(OutputSelectionRoot.FIELD)
+
+/**
+ * Returns this node resolver's finite output selection forest relative to [demand].
+ *
+ * A node resolver owns its root fields other than `id`, `__typename`, and fields with explicit
+ * field resolvers. Descendant ownership follows ordinary behavioral boundaries. Recursive
+ * ownership is unfolded only as far as locally closed [demand].
+ */
+context(world: Assumptions)
+private fun Resolver.Node.outputSelectionForest(demand: SelectionForest): SelectionForest =
+    demand.outputSelectionForest(OutputSelectionRoot.NODE)
+
+context(world: Assumptions)
+private fun SelectionForest.outputSelectionForest(
+    root: OutputSelectionRoot,
+): SelectionForest =
+    groupBy(Selection::possibleTypes)
+        .keys
+        .flatten()
+        .toSet()
+        .fold(selectionForestOf()) { result, possibleType ->
+            result +
+                possibleType.outputSelectionForest(
+                    demand = this,
+                    root = root,
+                    ancestors = emptySet(),
+                )
+        }
+
+context(world: Assumptions)
+private fun Schema.ObjectType.outputSelectionForest(
+    demand: SelectionForest,
+    root: OutputSelectionRoot,
+    ancestors: Set<Schema.ObjectType>,
+): SelectionForest {
+    val closedDemand = closeResolverDemand(demand)
+    return fields.values.fold(selectionForestOf()) { result, field ->
+        if (!root.owns(field)) {
+            result
+        } else {
+            val nestedDemand =
+                closedDemand
+                    .filter { selection ->
+                        this in selection.possibleTypes &&
+                            selection.key.field.fieldName == field.fieldName
+                    }
+                    .flatMap(Selection::subselections)
+            val outputType = field.typeExpr.baseType
+            val nestedOutputSelectionForest =
+                if (outputType is Schema.CompositeType) {
+                    outputType.possibleTypes.fold(selectionForestOf()) { nestedResult, possibleType ->
+                        val recursive =
+                            possibleType == this || possibleType in ancestors
+                        if (recursive && nestedDemand.isEmpty()) {
+                            nestedResult
+                        } else {
+                            nestedResult +
+                                possibleType.outputSelectionForest(
+                                    demand = nestedDemand,
+                                    root = OutputSelectionRoot.DESCENDANT,
+                                    ancestors = ancestors + this,
+                                )
+                        }
+                    }
+                } else {
+                    selectionForestOf()
+                }
+            result +
+                selectionForestOf(
+                    Selection.of(
+                        key = Value.Key.of(field, emptyMap()),
+                        nominalType = this,
+                        possibleTypes = setOf(this),
+                        subselections = nestedOutputSelectionForest,
+                    ),
+                )
+        }
+    }
+}
+
+context(world: Assumptions)
+private fun OutputSelectionRoot.owns(field: Schema.OutputField): Boolean =
+    when (this) {
+        OutputSelectionRoot.FIELD,
+        OutputSelectionRoot.DESCENDANT,
+        -> !world.behavioral(field)
+
+        OutputSelectionRoot.NODE ->
+            field.fieldName != "id" &&
+                field.fieldName != "__typename" &&
+                field !in world.executorRegistry
+    }
+
+private enum class OutputSelectionRoot {
+    FIELD,
+    NODE,
+    DESCENDANT,
 }

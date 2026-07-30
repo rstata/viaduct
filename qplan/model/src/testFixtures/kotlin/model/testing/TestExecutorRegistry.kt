@@ -10,21 +10,12 @@ import model.registry.NodeResolverFunction
 import model.registry.Resolver
 
 fun nodeResolverOf(function: NodeResolverFunction): Resolver.Node =
-    NodeResolverImpl(function)
+    Resolver.Node.of(function)
 
 fun fieldResolverOf(
     objectFragment: Fragment,
     function: FieldResolverFunction,
-): Resolver.Field = FieldResolverImpl(objectFragment, function)
-
-private class NodeResolverImpl(
-    override val function: NodeResolverFunction,
-) : Resolver.Node
-
-private class FieldResolverImpl(
-    override val objectFragment: Fragment,
-    override val function: FieldResolverFunction,
-) : Resolver.Field
+): Resolver.Field = Resolver.Field.of(objectFragment, function)
 
 internal fun executorRegistryOf(
     schema: Schema,

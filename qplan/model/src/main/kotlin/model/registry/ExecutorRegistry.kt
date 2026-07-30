@@ -1,7 +1,9 @@
 package model.registry
 
+import model.Assumptions
 import model.Fragment
 import model.Schema
+import model.SelectionForest
 import model.Value
 
 sealed interface Executor
@@ -25,20 +27,56 @@ sealed interface Resolver : Executor {
      *
      * ### Invariant: node-resolver-output-id
      *
-     * For every [Value.ID] in [function]'s domain, its result contains the registered type's
-     * canonical argumentless `id` key mapped to that same input ID.
+     * For every [Value.ID] in the construction function's domain, its result contains the
+     * registered type's canonical argumentless `id` key mapped to that same input ID.
      */
-    interface Node : Resolver {
-        val function: NodeResolverFunction
+    class Node private constructor(
+        private val function: NodeResolverFunction,
+    ) : Resolver {
+        /**
+         * Applies this node resolver and projects its selection-independent result to
+         * [transitiveDemand].
+         */
+        context(world: Assumptions)
+        fun resolve(
+            type: Schema.ObjectType,
+            id: Value.ID,
+            transitiveDemand: SelectionForest,
+        ): Value.Object =
+            type.snipToDemand(
+                result = function(id),
+                demand = transitiveDemand,
+            )
+
+        companion object {
+            fun of(function: NodeResolverFunction): Node = Node(function)
+        }
     }
 
-    interface Field : Resolver {
-        val objectFragment: Fragment
-        val function: FieldResolverFunction
+    class Field private constructor(
+        val objectFragment: Fragment,
+        private val function: FieldResolverFunction,
+    ) : Resolver {
+        /**
+         * Applies this field resolver and projects its selection-independent result to
+         * [transitiveDemand].
+         */
+        context(world: Assumptions)
+        fun resolve(
+            input: Value.Object,
+            arguments: Value.Arguments,
+            transitiveDemand: SelectionForest,
+        ): Value.Output? =
+            function(input, arguments).snipToDemand(transitiveDemand)
 
         operator fun component1(): Fragment = objectFragment
 
-        operator fun component2(): FieldResolverFunction = function
+        companion object {
+            fun of(
+                objectFragment: Fragment,
+                function: FieldResolverFunction,
+            ): Field = Field(objectFragment, function)
+        }
     }
 }
 

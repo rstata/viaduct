@@ -18,6 +18,34 @@ import kotlin.test.assertTrue
 
 class ResolverTest {
     @Test
+    fun `resolves typename as the concrete object type`() {
+        val world = TestWorld.fromSDL(FLAT_SCHEMA_SDL).assumptions
+        val schema = world.schema
+        val (fragment, selections) =
+            context(world) {
+                parsedFragment(
+                    """
+                    fragment ignored on Query {
+                      __typename
+                    }
+                    """.trimIndent(),
+                )
+            }
+
+        val result =
+            context(world) {
+                Value.Object.of(schema.query).resolve(selections)
+            }
+
+        val typeName =
+            assertIs<Value.String>(
+                result.fetch(schema.key(schema.query, "__typename")).value,
+            )
+        assertEquals("Query", typeName.stringValue)
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
     fun `closes and orders transitive sibling resolver demand`() {
         val testWorld =
             TestWorld.fromSDL(

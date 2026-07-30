@@ -14,8 +14,8 @@ import semantics.correctresolution.concreteObjectKey
  *
  * A selected field with a registered field resolver is resolved from its arguments and an empty
  * object of the receiver's type. This version is therefore defined only for activated field
- * resolvers whose object fragments are empty. Every other selected field must already be present
- * in the receiver.
+ * resolvers whose object fragments are empty. The engine supplies `__typename` from the receiver's
+ * concrete type. Every other selected field must already be present in the receiver.
  *
  * The initial receiver may be an empty Query object because every non-`__typename` Query field has
  * a registered field resolver. Nested node references are delegated to [resolveNode].
@@ -44,11 +44,15 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
                     val subselections =
                         fieldSelections.flatMap { selection -> selection.subselections }
                     val fieldValue =
-                        if (key.field in world.executorRegistry) {
-                            resolveField(key)
-                        } else {
-                            // The producing resolver supplies its demanded output-selection fields.
-                            fieldValues.getValue(key)
+                        when {
+                            key.field.fieldName == "__typename" ->
+                                Value.String.of(type.typeName)
+
+                            key.field in world.executorRegistry -> resolveField(key)
+                            else -> {
+                                // The producing resolver supplies demanded output-selection fields.
+                                fieldValues.getValue(key)
+                            }
                         }
                     EngineResult.Cell.of(
                         value = fieldValue.resolve(subselections),

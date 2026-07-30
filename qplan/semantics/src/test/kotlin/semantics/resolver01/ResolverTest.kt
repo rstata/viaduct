@@ -10,9 +10,40 @@ import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import semantics.spec.flatten
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ResolverTest {
+    @Test
+    fun `resolves typename as the concrete object type`() {
+        val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val schema = world.schema
+        val (nominalType, specSelections) =
+            world.selectionsFrom(
+                """
+                fragment ignored on Query {
+                  __typename
+                }
+                """.trimIndent(),
+            )
+        val selections =
+            context(world) {
+                flatten(nominalType, specSelections)
+            }
+
+        val result =
+            context(world) {
+                Value.Object.of(schema.query).resolve(selections)
+            }
+
+        val typeName =
+            assertIs<Value.String>(
+                result.fetch(schema.key(schema.query, "__typename")).value,
+            )
+        assertEquals("Query", typeName.stringValue)
+    }
+
     @Test
     fun `resolves an empty Query through field and node resolvers`() {
         val testWorld =

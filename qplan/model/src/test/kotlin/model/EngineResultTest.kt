@@ -10,6 +10,46 @@ import kotlin.test.assertSame
 
 class EngineResultTest {
     @Test
+    fun `fixture DSL constructs nested argument-bearing results`() {
+        val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val schema = world.schema
+        val result =
+            world.engineResultOf("User") {
+                field("lookup", "limit" to 1) resolvesTo "one"
+                "aliases" resolvesTo listOf("A", null)
+                "friend" resolvesTo
+                    engineResultOf("User") {
+                        "first" resolvesTo "Grace"
+                    }
+            }
+
+        assertEquals(
+            "one",
+            assertIs<Value.String>(
+                result.fetch(schema.key("User", "lookup", "limit" to 1)).value,
+            ).stringValue,
+        )
+        val aliases =
+            assertIs<EngineResult.List>(
+                result.fetch(schema.key("User", "aliases")).value,
+            )
+        assertEquals(
+            listOf("A", null),
+            aliases.map { cell -> (cell.value as? Value.String)?.stringValue },
+        )
+        val friend =
+            assertIs<EngineResult.Object>(
+                result.fetch(schema.key("User", "friend")).value,
+            )
+        assertEquals(
+            "Grace",
+            assertIs<Value.String>(
+                friend.fetch(schema.key("User", "first")).value,
+            ).stringValue,
+        )
+    }
+
+    @Test
     fun `node reference contains the node id`() {
         val world = TestWorld.fromSDL(NODE_SCHEMA_SDL).assumptions
         val schema = world.schema
@@ -58,23 +98,14 @@ class EngineResultTest {
 
     @Test
     fun `list engine result retains its elements`() {
-        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val schema = world.schema
         val elementType = schema.field("Query", "value").typeExpr
-        val first =
-            EngineResult.Cell.of(
-                Value.String.of("one"),
-                Value.Boolean.of(true),
-            )
-        val second = EngineResult.Cell.of(null, Value.Boolean.of(true))
-        val result =
-            EngineResult.List.of(
-                typeExpr = elementType,
-                cells = listOf(first, second),
-            )
+        val result = world.listResultOf(elementType, "one", null)
 
-        assertEquals<List<EngineResult.Cell>>(
-            listOf(first, second),
-            result,
+        assertEquals(
+            listOf(Value.String.of("one"), null),
+            result.map(EngineResult.Cell::value),
         )
         assertEquals(elementType, result.typeExpr)
     }
@@ -164,23 +195,8 @@ class EngineResultTest {
     fun `list engine results union corresponding cells`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val elementType = schema.field("Query", "value").typeExpr
-        val check = Value.Boolean.of(true)
-        val left =
-            EngineResult.List.of(
-                elementType,
-                listOf(
-                    EngineResult.Cell.of(Value.String.of("same"), check),
-                    EngineResult.Cell.of(null, check),
-                ),
-            )
-        val right =
-            EngineResult.List.of(
-                elementType,
-                listOf(
-                    EngineResult.Cell.of(Value.String.of("same"), check),
-                    EngineResult.Cell.of(null, check),
-                ),
-            )
+        val left = schema.listResultOf(elementType, "same", null)
+        val right = schema.listResultOf(elementType, "same", null)
 
         assertEquals(left, left.union(right))
     }
@@ -190,8 +206,7 @@ class EngineResultTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val stringType = schema.field("Query", "value").typeExpr
         val intType = schema.field("Query", "integer").typeExpr
-        val check = Value.Boolean.of(true)
-        val stringCell = EngineResult.Cell.of(Value.String.of("value"), check)
+        val stringResult = schema.listResultOf(stringType, "value")
 
         assertFailsWith<IllegalArgumentException> {
             EngineResult.List
@@ -201,24 +216,15 @@ class EngineResultTest {
         assertFailsWith<IllegalArgumentException> {
             EngineResult.List
                 .of(stringType, emptyList())
-                .union(EngineResult.List.of(stringType, listOf(stringCell)))
+                .union(stringResult)
         }
         assertFailsWith<IllegalArgumentException> {
-            EngineResult.List
-                .of(stringType, listOf(EngineResult.Cell.of(null, check)))
-                .union(EngineResult.List.of(stringType, listOf(stringCell)))
+            schema.listResultOf(stringType, null).union(stringResult)
         }
         assertFailsWith<IllegalArgumentException> {
-            EngineResult.List
-                .of(
-                    stringType,
-                    listOf(EngineResult.Cell.of(Value.String.of("left"), check)),
-                ).union(
-                    EngineResult.List.of(
-                        stringType,
-                        listOf(EngineResult.Cell.of(Value.String.of("right"), check)),
-                    ),
-                )
+            schema
+                .listResultOf(stringType, "left")
+                .union(schema.listResultOf(stringType, "right"))
         }
     }
 
@@ -227,27 +233,23 @@ class EngineResultTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val check = Value.Boolean.of(true)
         val leftUser =
-            schema.objectEngineResult(
-                "User",
-                "first" to EngineResult.Cell.of(Value.String.of("first"), check),
-            )
+            schema.engineResultOf("User") {
+                "first".resolvesTo("first", check)
+            }
         val rightUser =
-            schema.objectEngineResult(
-                "User",
-                "second" to EngineResult.Cell.of(Value.String.of("second"), check),
-            )
+            schema.engineResultOf("User") {
+                "second".resolvesTo("second", check)
+            }
         val left =
-            schema.objectEngineResult(
-                "Query",
-                "first" to EngineResult.Cell.of(Value.String.of("first"), check),
-                "user" to EngineResult.Cell.of(leftUser, check),
-            )
+            schema.engineResultOf("Query") {
+                "first".resolvesTo("first", check)
+                "user".resolvesTo(leftUser, check)
+            }
         val right =
-            schema.objectEngineResult(
-                "Query",
-                "second" to EngineResult.Cell.of(Value.String.of("second"), check),
-                "user" to EngineResult.Cell.of(rightUser, check),
-            )
+            schema.engineResultOf("Query") {
+                "second".resolvesTo("second", check)
+                "user".resolvesTo(rightUser, check)
+            }
 
         val union = left.union(right)
 
@@ -282,49 +284,34 @@ class EngineResultTest {
 
         assertFailsWith<IllegalArgumentException> {
             schema
-                .objectEngineResult(
-                    "Query",
-                    "first" to EngineResult.Cell.of(Value.String.of("left"), trueCheck),
-                ).union(
-                    schema.objectEngineResult(
-                        "Query",
-                        "first" to EngineResult.Cell.of(Value.String.of("right"), trueCheck),
-                    ),
+                .engineResultOf("Query") {
+                    "first".resolvesTo("left", trueCheck)
+                }.union(
+                    schema.engineResultOf("Query") {
+                        "first".resolvesTo("right", trueCheck)
+                    },
                 )
         }
         assertFailsWith<IllegalArgumentException> {
             schema
-                .objectEngineResult(
-                    "Query",
-                    "first" to EngineResult.Cell.of(Value.String.of("same"), trueCheck),
-                ).union(
-                    schema.objectEngineResult(
-                        "Query",
-                        "first" to EngineResult.Cell.of(Value.String.of("same"), falseCheck),
-                    ),
+                .engineResultOf("Query") {
+                    "first".resolvesTo("same", trueCheck)
+                }.union(
+                    schema.engineResultOf("Query") {
+                        "first".resolvesTo("same", falseCheck)
+                    },
                 )
         }
         assertFailsWith<IllegalArgumentException> {
-            schema.objectEngineResult("Query").union(schema.objectEngineResult("User"))
+            schema.engineResultOf("Query").union(schema.engineResultOf("User"))
         }
-    }
-
-    private fun Schema.objectEngineResult(
-        typeName: String,
-        vararg fields: Pair<String, EngineResult.Cell>,
-    ): EngineResult.Object {
-        val type = type(typeName) as Schema.ObjectType
-        val cells =
-            fields.associate { (fieldName, cell) ->
-                key(typeName, fieldName) to cell
-            }
-        return EngineResult.Object.of(type, cells)
     }
 
     private fun Schema.key(
         typeName: String,
         fieldName: String,
-    ): Value.Key = Value.Key.of(field(typeName, fieldName), emptyMap())
+        vararg arguments: Pair<String, Any?>,
+    ): Value.Key = Value.Key.of(field(typeName, fieldName), arguments.toMap())
 
     private companion object {
         const val SCHEMA_SDL =
@@ -341,6 +328,9 @@ class EngineResultTest {
             type User {
               first: String
               second: String
+              aliases: [String]
+              friend: User
+              lookup(limit: Int): String
             }
             """
 

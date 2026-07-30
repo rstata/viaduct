@@ -16,18 +16,7 @@ The current model is building a plan-independent correctness judgment over `Engi
 
 The latest experiment completed [`semantics.resolver02`](./semantics/src/main/kotlin/semantics/resolver02/Resolver.kt), extending the naive depth-first constructor to field resolvers with nonempty `objectFragment`s. At each concrete object, it closes the local selection forest under resolver demand, orders exact sibling `Value.Key` coordinates by their dependencies, resolves them in that order, and materializes each resolver's fragment input from the partial OER established by its predecessors. Recursive descent handles demand introduced below a sibling independently at that nested object.
 
-The next step is not `resolver03`. Before beginning adversarial validation, complete two quick preparation tasks:
-
-- Have the project owner manually review the latest `resolver02`, sibling-demand, and fragment-materialization code.
-- Investigate lightweight DSLs for constructing schemas, selections, fragments, resolver registries, values, and expected OERs so subsequent test cases can state their semantic scenario fluently without repetitive fixture mechanics.
-
-Then begin adversarial validation of `resolver02` and the model around it. The validation plan is intentionally not yet complete, but should combine three mutually supporting lines of work:
-
-- Add focused unit tests that deliberately stress the boundaries of the current scope and the interactions among exact argument tuples, duplicate selection occurrences, type conditions, variables and argument errors, nulls, lists, passive nested objects, node references, and transitive object-fragment demand.
-- Investigate porting or adapting Viaduct's `arb` system so property tests can generate coherent schemas, registries, fragments, resolver values, and runtime types. The central generated property should be that resolving an in-domain Query fragment yields an OER satisfying `correctResolution`; generators should also shrink failures into useful counterexamples.
-- Establish a rigorous argument, with an exact statement of the constructor's domain, that `resolver02` produces a correct resolution. Likely intermediate obligations include termination of local demand closure, existence of the dependency order under registry acyclicity, completeness of each materialized resolver input, preservation of external fragment coverage, closure under transitive resolver demand, and conformance to every resolver. Record stable propositions in `claims.md` and substantive arguments in `arguments/`, explicitly distinguishing proof from finite test evidence.
-
-This phase should be willing to find that either the constructor or the current correctness judgment is wrong or underspecified. Counterexamples should first sharpen the theorem's domain or expose a missing invariant; only then should the implementation or model be changed. One-shot planning remains the long-term destination, but `resolver02` should become a trustworthy reference construction before it is used as an oracle or comparison point.
+The next step is not `resolver03` but rather generate some informal "proof of correctness" for the two existing resolvers first.
 
 ## Current Model
 

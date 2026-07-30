@@ -1,8 +1,8 @@
 package model.invariants
 
-import model.EngineResult
 import model.Schema
 import model.Value
+import model.engineResultOf
 import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -30,17 +30,10 @@ class SchemaConformanceTest {
     @Test
     fun `factory-constructed engine results conform to schema`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val schema = world.schema
-        val user = schema.type("User") as Schema.ObjectType
         val result =
-            EngineResult.Object.of(
-                type = user,
-                cells =
-                    mapOf(
-                        schema.key(user, "name") to
-                            EngineResult.Cell.of(Value.String.of("Ada")),
-                    ),
-            )
+            world.engineResultOf("User") {
+                "name" resolvesTo "Ada"
+            }
 
         assertTrue(
             context(world) {

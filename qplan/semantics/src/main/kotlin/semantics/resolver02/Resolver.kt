@@ -13,16 +13,7 @@ import semantics.correctresolution.concreteObjectKey
 import semantics.materialize
 
 /**
- * Resolves [selections] against an already-produced object value.
- *
- * Before descending, this operation closes the local selection forest under the object fragments
- * of its selected field resolvers. It then resolves sibling keys in dependency order, materializing
- * each resolver's input from the partial result established by its predecessors.
- *
- * A selected field without a registered field resolver remains in the output selection set of the
- * resolver that produced this object. That producing resolver therefore supplies its value. The
- * initial receiver may be an empty Query object because every non-`__typename` Query field has a
- * registered field resolver.
+ * Returns the result for [selections] and all transitive resolver demand on this concrete object.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
@@ -35,6 +26,9 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
     }
 }
 
+/**
+ * Returns the applicable selections by concrete key, including all transitive resolver demand.
+ */
 context(world: Assumptions)
 private fun Value.Object.closeResolverDemand(
     selections: SelectionForest,
@@ -63,6 +57,9 @@ private fun Value.Object.closeResolverDemand(
     )
 }
 
+/**
+ * Returns a topological ordering of [keys] using Kahn's algorithm, with demand before consumption.
+ */
 context(world: Assumptions)
 private fun Value.Object.dependencyOrder(
     keys: Set<Value.Key>,
@@ -83,6 +80,9 @@ private fun Value.Object.dependencyOrder(
     )
 }
 
+/**
+ * Returns the unresolved sibling keys demanded by the field resolver for [consumer].
+ */
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
     consumer: Value.Key,
@@ -102,6 +102,9 @@ private fun Value.Object.dependenciesOf(
         }.toSet()
 }
 
+/**
+ * Returns a one-cell object result for [key] and its merged [fieldSelections].
+ */
 context(world: Assumptions)
 private fun Value.Object.resolveKey(
     key: Value.Key,
@@ -115,25 +118,35 @@ private fun Value.Object.resolveKey(
             val subselections =
                 fieldSelections.flatMap { selection -> selection.subselections }
             val fieldValue =
-                if (key.field in world.executorRegistry) {
-                    val resolver = world.executorRegistry.resolver(key.field)
-                    // Closure and dependency order put the resolver's complete input in this prefix.
-                    val input = resolved.materialize(resolver.objectFragment)
-                    resolver.function(input, key.arguments)
-                } else {
-                    // The producing resolver supplies its demanded output-selection fields.
-                    fieldValues.getValue(key)
+                when {
+                    key.field.fieldName == "__typename" ->
+                        Value.String.of(type.typeName)
+
+                    key.field in world.executorRegistry -> {
+                        val resolver = world.executorRegistry.resolver(key.field)
+                        // Closure and dependency order put the complete input in this prefix.
+                        val input = resolved.materialize(resolver.objectFragment)
+                        resolver.function(input, key.arguments)
+                    }
+
+                    else -> {
+                        // The producing resolver supplies demanded output-selection fields.
+                        fieldValues.getValue(key)
+                    }
                 }
             EngineResult.Cell.of(
-                value = fieldValue.resolve(subselections),
+                value = fieldValue.resolveValue(subselections),
             )
         }
 
     return EngineResult.Object.of(type, mapOf(key to cell))
 }
 
+/**
+ * Returns this nullable resolver output resolved for [selections] throughout its value tree.
+ */
 context(world: Assumptions)
-private fun Value.Output?.resolve(selections: SelectionForest): EngineResult? =
+private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResult? =
     when (this) {
         null -> null
         Value.Error -> Value.Error
@@ -152,14 +165,14 @@ private fun Value.Output?.resolve(selections: SelectionForest): EngineResult? =
                 cells =
                     values.map { value ->
                         EngineResult.Cell.of(
-                            value = value.resolve(selections),
+                            value = value.resolveValue(selections),
                         )
                     },
             )
     }
 
 /**
- * Resolves this ID-bearing node reference, then delegates its resolver value to [resolve].
+ * Returns the selected node-resolver result together with this reference's retained `id` bridge.
  */
 context(world: Assumptions)
 fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {

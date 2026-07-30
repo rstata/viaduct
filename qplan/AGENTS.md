@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This repository uses compiling Kotlin as a precise modeling language for reasoning about Viaduct field resolution and resolver demand. Read [Query Plan Research](./evergreen.md) for the durable problem statement, established findings, correctness constraints, and open questions.
+This repository uses compiling Kotlin as a precise mathematical modeling language for reasoning about Viaduct field resolution and resolver demand, in the specification role that TLA+ could otherwise play. Read [Query Plan Research](./evergreen.md) for the durable problem statement, established findings, correctness constraints, and open questions.
+
+Keep the Kotlin model suitable as a blueprint for a possible future translation into TLA+ in which its stated theorems could become machine-checked proof obligations. Make mathematical domains, functions, relations, invariants, assumptions, and theorem boundaries explicit, but do not imply that a TLA+ translation or mechanically checked proof already exists.
 
 ## This Is Math, Not Programming
 

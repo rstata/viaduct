@@ -10,6 +10,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.objectOf
 import model.selectionsFrom
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -19,7 +20,6 @@ import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.resolverTestBatch
 import semantics.correctresolution.correctResolution
-import semantics.spec.flatten
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -106,7 +106,7 @@ class ResolverTest {
 
         val result =
             context(world) {
-                Value.Object.of(schema.query).resolve(selections)
+                world.objectOf("Query").resolve(selections)
             }
 
         val typeName =
@@ -135,14 +135,10 @@ class ResolverTest {
                                 objectFragment = schema.fragment(query),
                                 function = { input, _ ->
                                     require(input.fieldValues.isEmpty())
-                                    Value.Object.of(
-                                        type = user,
-                                        fields =
-                                            mapOf(
-                                                firstNameKey to Value.String.of("Ada"),
-                                                lastNameKey to Value.String.of("Lovelace"),
-                                            ),
-                                    )
+                                    schema.objectOf("User") {
+                                        "firstName" setTo "Ada"
+                                        "lastName" setTo "Lovelace"
+                                    }
                                 },
                             ),
                         schema.field("User", "displayName") to
@@ -201,7 +197,7 @@ class ResolverTest {
 
         val result =
             context(world) {
-                Value.Object.of(schema.query).resolve(selections)
+                world.objectOf("Query").resolve(selections)
             }
 
         val viewer =
@@ -233,21 +229,12 @@ class ResolverTest {
                             model.testing.fieldResolverOf(
                                 objectFragment = schema.fragment(query),
                                 function = { _, _ ->
-                                    Value.Object.of(
-                                        type = user,
-                                        fields =
-                                            mapOf(
-                                                profileKey to
-                                                    Value.Object.of(
-                                                        type = profile,
-                                                        fields =
-                                                            mapOf(
-                                                                rawKey to
-                                                                    Value.String.of("engineer"),
-                                                            ),
-                                                    ),
-                                            ),
-                                    )
+                                    schema.objectOf("User") {
+                                        "profile" setTo
+                                            objectOf("Profile") {
+                                                "raw" setTo "engineer"
+                                            }
+                                    }
                                 },
                             ),
                         schema.field("Profile", "rendered") to
@@ -309,7 +296,7 @@ class ResolverTest {
 
         val result =
             context(world) {
-                Value.Object.of(schema.query).resolve(selections)
+                world.objectOf("Query").resolve(selections)
             }
 
         val viewer =
@@ -329,8 +316,7 @@ class ResolverTest {
 
     context(world: model.Assumptions)
     private fun parsedFragment(source: String): Pair<Fragment, SelectionForest> {
-        val (nominalType, specSelections) = world.selectionsFrom(source)
-        val selections = flatten(nominalType, specSelections)
+        val (nominalType, selections) = world.selectionsFrom(source)
         return Fragment.of(nominalType, selections) to selections
     }
 
@@ -339,15 +325,11 @@ class ResolverTest {
         querySource: String,
     ): Boolean {
         val world = testWorld.assumptions
-        val (nominalType, specSelections) = testWorld.selectionsFrom(querySource)
-        val selections =
-            context(world) {
-                flatten(nominalType, specSelections)
-            }
+        val (nominalType, selections) = testWorld.selectionsFrom(querySource)
         val fragment = Fragment.of(nominalType, selections)
         val result =
             context(world) {
-                Value.Object.of(world.schema.query).resolve(selections)
+                world.objectOf("Query").resolve(selections)
             }
         return context(world) {
             result.correctResolution(fragment)

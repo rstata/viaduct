@@ -1,10 +1,8 @@
-package semantics.spec
+package model.spec
 
 import model.Schema
 import model.SelectionForest
 import model.Value
-import model.selectionsFrom
-import model.spec.SpecSelection
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,18 +13,10 @@ class SpecSelectionFlattenerTest {
     @Test
     fun `fields use object keys instead of response aliases`() {
         val fixture = SchemaFixture()
-        val (typeInScope, selectionSet) =
-            fixture.assumptions.selectionsFrom(
-                """
-                fragment ignored on Query {
-                  release: version
-                }
-                """.trimIndent(),
-            )
         val result =
             fixture.flatten(
-                typeInScope = typeInScope,
-                selectionSet = selectionSet,
+                fixture.query,
+                listOf(fixture.field("Query", "version", alias = "release")),
             )
 
         val version = result.single()
@@ -42,17 +32,14 @@ class SpecSelectionFlattenerTest {
     @Test
     fun `flattening preserves duplicate field occurrences without source order`() {
         val fixture = SchemaFixture()
-        val (typeInScope, selectionSet) =
-            fixture.assumptions.selectionsFrom(
-                """
-                fragment ignored on Query {
-                  version
-                  version
-                }
-                """.trimIndent(),
+        val result =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field("Query", "version"),
+                    fixture.field("Query", "version"),
+                ),
             )
-
-        val result = fixture.flatten(typeInScope, selectionSet)
         val versionField = fixture.schema.field("Query", "version")
 
         assertEquals(2, result.size)
@@ -62,20 +49,20 @@ class SpecSelectionFlattenerTest {
     @Test
     fun `field arguments become values of the canonical argument definition`() {
         val fixture = SchemaFixture()
-        val (typeInScope, selectionSet) =
-            fixture.assumptions.selectionsFrom(
-                """
-                fragment ignored on Query {
-                  release(channel: "beta")
-                }
-                """.trimIndent(),
+        val result =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        containingType = "Query",
+                        fieldName = "release",
+                        arguments = mapOf("channel" to Value.String.of("beta")),
+                    ),
+                ),
             )
 
-        val release =
-            fixture
-                .flatten(typeInScope, selectionSet)
-                .single()
-        val field = fixture.assumptions.schema.field("Query", "release")
+        val release = result.single()
+        val field = fixture.schema.field("Query", "release")
 
         assertEquals(field, release.key.field)
         assertEquals(field.arguments, release.key.arguments.type)
@@ -94,27 +81,38 @@ class SpecSelectionFlattenerTest {
     @Test
     fun `selection keys may retain abstract nominal fields and cumulative possible types`() {
         val fixture = SchemaFixture()
-        val (typeInScope, selectionSet) =
-            fixture.assumptions.selectionsFrom(
-                """
-                fragment ignored on Query {
-                  pet {
-                    ... on Dog {
-                      ... on Pet {
-                        name
-                      }
-                      ... {
-                        barkVolume
-                      }
-                    }
-                  }
-                }
-                """.trimIndent(),
-            )
         val result =
             fixture.flatten(
-                typeInScope = typeInScope,
-                selectionSet = selectionSet,
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        containingType = "Query",
+                        fieldName = "pet",
+                        subselections =
+                            listOf(
+                                fixture.inlineFragment(
+                                    typeCondition = fixture.dog,
+                                    selections =
+                                        listOf(
+                                            fixture.inlineFragment(
+                                                typeCondition = fixture.pet,
+                                                selections =
+                                                    listOf(
+                                                        fixture.field("Pet", "name"),
+                                                    ),
+                                            ),
+                                            fixture.inlineFragment(
+                                                typeCondition = null,
+                                                selections =
+                                                    listOf(
+                                                        fixture.field("Dog", "barkVolume"),
+                                                    ),
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                ),
             )
 
         val pet = result.single()
@@ -133,22 +131,25 @@ class SpecSelectionFlattenerTest {
     @Test
     fun `descending through a field resets the child type context`() {
         val fixture = SchemaFixture()
-        val (typeInScope, selectionSet) =
-            fixture.assumptions.selectionsFrom(
-                """
-                fragment ignored on Pet {
-                  ... on Dog {
-                    friend {
-                      name
-                    }
-                  }
-                }
-                """.trimIndent(),
-            )
         val result =
             fixture.flatten(
-                typeInScope = typeInScope,
-                selectionSet = selectionSet,
+                fixture.pet,
+                listOf(
+                    fixture.inlineFragment(
+                        typeCondition = fixture.dog,
+                        selections =
+                            listOf(
+                                fixture.field(
+                                    containingType = "Dog",
+                                    fieldName = "friend",
+                                    subselections =
+                                        listOf(
+                                            fixture.field("Pet", "name"),
+                                        ),
+                                ),
+                            ),
+                    ),
+                ),
             )
 
         val friend = result.single()
@@ -163,22 +164,24 @@ class SpecSelectionFlattenerTest {
     @Test
     fun `pairwise-valid nested fragments may have no cumulative possible type`() {
         val fixture = SchemaFixture()
-        val (typeInScope, selectionSet) =
-            fixture.assumptions.selectionsFrom(
-                """
-                fragment ignored on I1 {
-                  ... on I2 {
-                    ... on I3 {
-                      x
-                    }
-                  }
-                }
-                """.trimIndent(),
-            )
         val result =
             fixture.flatten(
-                typeInScope = typeInScope,
-                selectionSet = selectionSet,
+                fixture.i1,
+                listOf(
+                    fixture.inlineFragment(
+                        typeCondition = fixture.i2,
+                        selections =
+                            listOf(
+                                fixture.inlineFragment(
+                                    typeCondition = fixture.i3,
+                                    selections =
+                                        listOf(
+                                            fixture.field("I3", "x"),
+                                        ),
+                                ),
+                            ),
+                    ),
+                ),
             )
 
         val x = result.single()
@@ -196,14 +199,35 @@ class SpecSelectionFlattenerTest {
         val cat = schema.type("Cat") as Schema.ObjectType
         val pet = schema.type("Pet") as Schema.InterfaceType
         val i1 = schema.type("I1") as Schema.InterfaceType
+        val i2 = schema.type("I2") as Schema.InterfaceType
         val i3 = schema.type("I3") as Schema.InterfaceType
+
+        fun field(
+            containingType: String,
+            fieldName: String,
+            alias: String? = null,
+            arguments: Map<String, Value.Input?> = emptyMap(),
+            subselections: List<SpecSelection>? = null,
+        ): SpecSelection.Field =
+            SpecSelection.Field.of(
+                alias = alias,
+                field = schema.field(containingType, fieldName),
+                arguments = arguments,
+                subselections = subselections,
+            )
+
+        fun inlineFragment(
+            typeCondition: Schema.CompositeType?,
+            selections: List<SpecSelection>,
+        ): SpecSelection.InlineFragment =
+            SpecSelection.InlineFragment.of(typeCondition, selections)
 
         fun flatten(
             typeInScope: Schema.CompositeType,
             selectionSet: List<SpecSelection>,
         ): SelectionForest =
             context(assumptions) {
-                semantics.spec.flatten(typeInScope, selectionSet)
+                model.spec.flatten(typeInScope, selectionSet)
             }
     }
 

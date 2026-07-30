@@ -4,13 +4,13 @@ import model.Assumptions
 import model.Fragment
 import model.Schema
 import model.Value
+import model.objectOf
 import model.selectionsFrom
 import model.registry.ExecutorRegistry
 import model.registry.MissingExecutorException
 import model.registry.Resolver
 import model.selectionForestOf
 import model.testing.TestWorld
-import semantics.spec.flatten
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -31,15 +31,13 @@ class WorldInjectionTest {
                     mapOf<Schema.ObjectType, Resolver.Node>(
                         user to
                             model.testing.nodeResolverOf { id ->
-                                Value.Object.of(
-                                    type = user,
-                                    fields = mapOf(schema.key(user, "id") to id),
-                                )
+                                schema.objectOf("User") {
+                                    "id" setTo id
+                                }
                             },
                     )
                 },
                 fieldResolvers = { schema ->
-                    val user = schema.type("User") as Schema.ObjectType
                     val userField = schema.field("Query", "user")
                     val queryFragment =
                         Fragment.of(schema.query, selectionForestOf())
@@ -48,14 +46,9 @@ class WorldInjectionTest {
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ ->
-                                    Value.Object.of(
-                                        type = user,
-                                        fields =
-                                            mapOf(
-                                                schema.key(user, "id") to
-                                                    Value.ID.of("field"),
-                                            ),
-                                    )
+                                    schema.objectOf("User") {
+                                        "id" setTo "field"
+                                    }
                                 },
                             ),
                     )
@@ -94,7 +87,7 @@ class WorldInjectionTest {
         val field =
             assertIs<Value.Object>(
                 fieldResolverFunction(
-                    Value.Object.of(schema.query, emptyMap()),
+                    world.objectOf("Query"),
                     Value.Arguments.of(userField, emptyMap()),
                 ),
             )
@@ -105,7 +98,7 @@ class WorldInjectionTest {
             ).idValue,
         )
 
-        val (typeInScope, specSelections) =
+        val (_, selections) =
             world.selectionsFrom(
                 """
                 fragment ignored on Query {
@@ -115,10 +108,6 @@ class WorldInjectionTest {
                 }
                 """.trimIndent(),
             )
-        val selections =
-            context(world) {
-                flatten(typeInScope, specSelections)
-            }
         assertEquals(userField, selections.single().key.field)
         assertEquals(
             schema.field("User", "id"),

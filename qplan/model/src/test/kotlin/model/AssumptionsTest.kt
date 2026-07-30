@@ -1,6 +1,5 @@
 package model
 
-import model.spec.SpecSelection
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -25,10 +24,10 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        val node = assertIs<SpecSelection.Field>(selections.single())
+        val node = selections.single()
         assertEquals(
             Value.Variable.of("filter"),
-            node.arguments.getValue("filter"),
+            node.key.arguments.fieldValues.getValue("filter"),
         )
     }
 
@@ -66,8 +65,8 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        val node = assertIs<SpecSelection.Field>(selections.single())
-        assertEquals(filter, node.arguments.getValue("filter"))
+        val node = selections.single()
+        assertEquals(filter, node.key.arguments.fieldValues.getValue("filter"))
         assertEquals(filterType, filter.type)
         assertEquals(assumptions.schema.type("Filter"), filter.type)
     }
@@ -88,11 +87,13 @@ class AssumptionsTest {
             )
 
         assertEquals(assumptions.schema.query, typeCondition)
-        val node = assertIs<SpecSelection.Field>(selections.single())
-        assertEquals("result", node.alias)
-        assertEquals("node", node.fieldName)
+        val node = selections.single()
+        assertEquals("node", node.key.field.fieldName)
 
-        val filter = assertIs<Value.InputObject>(node.arguments.getValue("filter"))
+        val filter =
+            assertIs<Value.InputObject>(
+                node.key.arguments.fieldValues.getValue("filter"),
+            )
         assertEquals(assumptions.schema.type("Filter"), filter.type)
         val role = assertIs<Value.Enum>(filter.fieldValues["role"])
         assertEquals(assumptions.schema.type("Role"), role.type)
@@ -106,8 +107,8 @@ class AssumptionsTest {
             assertIs<Value.String>(tags.values.single()).stringValue,
         )
 
-        val id = assertIs<SpecSelection.Field>(node.subselections.orEmpty().single())
-        assertEquals("id", id.fieldName)
+        val id = node.subselections.single()
+        assertEquals("id", id.key.field.fieldName)
     }
 
     @Test
@@ -281,17 +282,13 @@ class AssumptionsTest {
         val friend = schema.field("User", "friend")
         val firstKey = Value.Key.of(friend, mapOf("limit" to 1))
         val secondKey = Value.Key.of(friend, mapOf("limit" to 2))
-        val friendValue = Value.Object.of(user, emptyMap())
+        val friendValue = schema.objectOf("User")
 
         val value =
-            Value.Object.of(
-                type = user,
-                fields =
-                    mapOf(
-                        firstKey to friendValue,
-                        secondKey to null,
-                    ),
-            )
+            schema.objectOf("User") {
+                field("friend", "limit" to 1) setTo friendValue
+                field("friend", "limit" to 2) setTo null
+            }
 
         assertEquals(setOf(firstKey, secondKey), value.fieldValues.keys)
         assertEquals(friendValue, value.fieldValues[firstKey])

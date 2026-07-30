@@ -4,6 +4,7 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.Value
+import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -121,7 +122,7 @@ class SiblingDemandTest {
                     schema.field("Query", "sibling") to
                         model.testing.fieldResolverOf(
                             objectFragment = emptyFragment,
-                            function = { _, _ -> Value.Object.of(payload) },
+                            function = { _, _ -> schema.objectOf("Payload") },
                         ),
                     schema.field("Query", "other") to
                         model.testing.fieldResolverOf(

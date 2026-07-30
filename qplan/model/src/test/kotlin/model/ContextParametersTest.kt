@@ -82,20 +82,10 @@ class ContextParametersTest {
         ).assumptions
 
     private fun Assumptions.sourceObject(): Value.Object =
-        Value.Object.of(
-            type = schema.query,
-            fields =
-                mapOf(
-                    schema.key("id") to Value.ID.of("query"),
-                    schema.key("name") to Value.String.of("Query"),
-                ),
-        )
-
-    private fun Schema.key(fieldName: String): Value.Key =
-        Value.Key.of(
-            field = field("Query", fieldName),
-            arguments = emptyMap(),
-        )
+        objectOf("Query") {
+            "id" setTo "query"
+            "name" setTo "Query"
+        }
 
     private companion object {
         val SCHEMA_SDL =

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import model.Fragment
 import model.Schema
 import model.Value
+import model.objectOf
 import model.registry.Resolver
 import model.selectionsFrom
 import model.selectionForestOf
@@ -13,7 +14,6 @@ import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
-import semantics.spec.flatten
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -35,16 +35,12 @@ class ResolverTest {
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
                 val world = testWorld.assumptions
-                val (nominalType, specSelections) =
+                val (nominalType, selections) =
                     testWorld.selectionsFrom(testCase.query.source)
-                val selections =
-                    context(world) {
-                        flatten(nominalType, specSelections)
-                    }
                 val fragment = Fragment.of(nominalType, selections)
                 val result =
                     context(world) {
-                        Value.Object.of(world.schema.query).resolve(selections)
+                        world.objectOf("Query").resolve(selections)
                     }
 
                 assertTrue(
@@ -59,7 +55,7 @@ class ResolverTest {
     fun `resolves typename as the concrete object type`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val schema = world.schema
-        val (nominalType, specSelections) =
+        val (nominalType, selections) =
             world.selectionsFrom(
                 """
                 fragment ignored on Query {
@@ -67,14 +63,9 @@ class ResolverTest {
                 }
                 """.trimIndent(),
             )
-        val selections =
-            context(world) {
-                flatten(nominalType, specSelections)
-            }
-
         val result =
             context(world) {
-                Value.Object.of(schema.query).resolve(selections)
+                world.objectOf("Query").resolve(selections)
             }
 
         val typeName =
@@ -91,19 +82,13 @@ class ResolverTest {
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    val idKey = schema.key(user, "id")
-                    val nameKey = schema.key(user, "name")
                     mapOf<Schema.ObjectType, Resolver.Node>(
                         user to
                             model.testing.nodeResolverOf { id ->
-                                Value.Object.of(
-                                    type = user,
-                                    fields =
-                                        mapOf(
-                                            idKey to id,
-                                            nameKey to Value.String.of("Ada"),
-                                        ),
-                                )
+                                schema.objectOf("User") {
+                                    "id" setTo id
+                                    "name" setTo "Ada"
+                                }
                             },
                     )
                 },
@@ -118,13 +103,9 @@ class ResolverTest {
                                 function = { _, arguments ->
                                     val id = arguments.fieldValues.getValue("id")
                                     require(id != Value.Error && id is Value.ID)
-                                    Value.Object.of(
-                                        type = user,
-                                        fields =
-                                            mapOf(
-                                                schema.key(user, "id") to id,
-                                            ),
-                                    )
+                                    schema.objectOf("User") {
+                                        "id" setTo id
+                                    }
                                 },
                             ),
                         greeting to
@@ -142,7 +123,7 @@ class ResolverTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val (nominalType, specSelections) =
+        val (nominalType, selections) =
             world.selectionsFrom(
                 """
                 fragment ignored on Query {
@@ -154,14 +135,9 @@ class ResolverTest {
                 }
                 """.trimIndent(),
             )
-        val selections =
-            context(world) {
-                flatten(nominalType, specSelections)
-            }
-
         val result =
             context(world) {
-                Value.Object.of(schema.query, emptyMap()).resolve(selections)
+                world.objectOf("Query").resolve(selections)
             }
 
         assertTrue(

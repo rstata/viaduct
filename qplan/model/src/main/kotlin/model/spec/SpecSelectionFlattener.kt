@@ -1,4 +1,4 @@
-package semantics.spec
+package model.spec
 
 import model.Assumptions
 import model.Schema
@@ -6,8 +6,6 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.selectionForestOf
-import model.spec.SpecSelection
-import model.toSelectionForest
 
 /**
  * Flattens a spec selection set interpreted with [typeInScope].

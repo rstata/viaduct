@@ -14,6 +14,15 @@ sealed interface Assumptions {
     val executorRegistry: ExecutorRegistry
 
     /**
+     * Whether resolver02 deliberately stops resolver-demand closure after one expansion.
+     *
+     * This fault-injection flag exists to keep an evergreen control showing that generated
+     * properties reject an implementation without transitive demand closure. It is false in every
+     * ordinary reasoning world.
+     */
+    val noTransitiveDemand: Boolean
+
+    /**
      * Whether resolution of [field] crosses a resolver behavior boundary.
      *
      * This function is defined only for a canonical field on a concrete object type.
@@ -25,7 +34,14 @@ sealed interface Assumptions {
             schema: Schema,
             bindings: Map<String, Value?>,
             executorRegistry: ExecutorRegistry,
-        ): Assumptions = AssumptionsImpl(schema, bindings, executorRegistry)
+            noTransitiveDemand: Boolean = false,
+        ): Assumptions =
+            AssumptionsImpl(
+                schema,
+                bindings,
+                executorRegistry,
+                noTransitiveDemand,
+            )
     }
 }
 
@@ -44,6 +60,7 @@ private class AssumptionsImpl(
     override val schema: Schema,
     bindings: Map<String, Value?>,
     override val executorRegistry: ExecutorRegistry,
+    override val noTransitiveDemand: Boolean,
 ) : Assumptions {
     override val variableValues: VariableBindings =
         VariableBindings.from(bindings)

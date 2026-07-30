@@ -40,6 +40,8 @@ See [Context Parameters and the `Assumptions` World](./context-params.md) for ra
 
 ## Projects
 
+The [`arbitrary` project](./arbitrary/AGENTS.md) is pre-reasoning property-test infrastructure. It generates valid external schemas, resolver registries, and queries, then materializes model values through the canonical world factories.
+
 The [`model` project](./model/AGENTS.md) defines the carrier algebra and its invariants over GraphQL schemas, selections, values, resolver inputs, and field-resolution results.
 
 The [`semantics` project](./semantics/AGENTS.md) defines transformations, predicates, and other reasoning over that algebra.

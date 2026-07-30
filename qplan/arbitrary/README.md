@@ -1,0 +1,40 @@
+# Arbitrary
+
+This module generates valid GraphQL schemas, resolver registries, and Query fragments for property-testing the qplanning resolver models. Its design and significant portions of its generator infrastructure are copied or adapted from Viaduct's `oss/core/shared/arbitrary` library at `~/ht/projects/viaduct/oss/core/shared/arbitrary`.
+
+The public generators live in the `semantics.arbitrary` package and are exposed as Kotest property-testing `Arb` values. A generated schema is the common input to independent registry and query generators; `Arb.resolverTestBatch` composes them into one schema, `R` registries, and `Q` queries so a property can evaluate the full `R x Q` product.
+
+## Composition
+
+```kotlin
+val counts = TestCaseCount(
+    schemas = 20,
+    registriesPerSchema = 3,
+    queriesPerSchema = 5,
+)
+val config =
+    Config.default +
+        (ArgumentsEnabled to true) +
+        (ResolverFragmentsEnabled to false)
+
+checkResolverTestCases(counts, config) { testWorld, testCase ->
+    // Parse testCase.query, run the resolver, and judge correctResolution.
+}
+```
+
+`checkResolverTestCases` uses `S` as its outer Kotest iteration count. Each sample contains exactly `R` registries and `Q` queries, and the runner evaluates their Cartesian product while reusing one world per registry. `Arb.resolverTestBatch` and `ResolverTestBatch.cases` remain available when a test needs to control execution directly.
+
+## Generators
+
+- `Arb.schema(config)` generates GraphQL SDL in the model's supported domain.
+- `schema.registry(config)` chooses field and node resolver sites, infers each resolver's output selection paths, generates one constant value for those paths, and optionally generates an acyclic object fragment.
+- `schema.query(config)` generates a valid named Query fragment containing literal arguments only.
+- `Arb.resolverTestBatch(counts, config)` composes the three generators without coordinating registry choices with query choices.
+
+The configuration includes independent switches for arguments, query fragments, resolver fragments, interfaces, unions, lists, and node resolvers, plus weights and size bounds for generated structures and values. Variables are intentionally not generated.
+
+Kotest reports a replay seed for a failing batch. Every individual semantic failure also includes the exact SDL, resolver sites with inferred output paths and object-fragment text, and Query fragment.
+
+## Mutation Control
+
+`Assumptions.noTransitiveDemand` is an explicit fault-injection flag that defaults to `false`. When enabled, resolver02 stops demand closure after one expansion. The evergreen `generated property detects missing transitive demand closure` test runs one fixed generated corpus against both ordinary and mutated resolver02: every case must pass normally, while the mutant must produce a mixture of passing and failing cases.

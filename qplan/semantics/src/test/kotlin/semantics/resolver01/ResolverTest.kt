@@ -1,5 +1,6 @@
 package semantics.resolver01
 
+import kotlinx.coroutines.runBlocking
 import model.Fragment
 import model.Schema
 import model.Value
@@ -7,6 +8,10 @@ import model.registry.Resolver
 import model.selectionsFrom
 import model.selectionForestOf
 import model.testing.TestWorld
+import semantics.arbitrary.Config
+import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.TestCaseCount
+import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
 import semantics.spec.flatten
 import kotlin.test.Test
@@ -15,6 +20,41 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ResolverTest {
+    @Test
+    fun `arbitrary valid worlds resolve correctly`(): Unit =
+        runBlocking {
+            val counts =
+                TestCaseCount(
+                    schemas = 20,
+                    registriesPerSchema = 3,
+                    queriesPerSchema = 5,
+                )
+            val config =
+                Config.default +
+                    (ResolverFragmentsEnabled to false)
+
+            checkResolverTestCases(counts, config) { testWorld, testCase ->
+                val world = testWorld.assumptions
+                val (nominalType, specSelections) =
+                    testWorld.selectionsFrom(testCase.query.source)
+                val selections =
+                    context(world) {
+                        flatten(nominalType, specSelections)
+                    }
+                val fragment = Fragment.of(nominalType, selections)
+                val result =
+                    context(world) {
+                        Value.Object.of(world.schema.query).resolve(selections)
+                    }
+
+                assertTrue(
+                    context(world) {
+                        result.correctResolution(fragment)
+                    },
+                )
+            }
+        }
+
     @Test
     fun `resolves typename as the concrete object type`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions

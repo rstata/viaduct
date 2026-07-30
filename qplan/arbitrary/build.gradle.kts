@@ -1,13 +1,15 @@
 plugins {
     kotlin("jvm")
+    `java-library`
 }
 
 dependencies {
-    implementation(project(":model"))
+    api(project(":model"))
+    api(testFixtures(project(":model")))
+    api("io.kotest:kotest-property-jvm:5.9.1")
 
-    testImplementation(project(":arbitrary"))
-    testImplementation(testFixtures(project(":model")))
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    implementation("com.graphql-java:graphql-java:26.0")
+
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

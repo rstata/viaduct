@@ -1,5 +1,9 @@
 package semantics.resolver02
 
+import io.kotest.property.Arb
+import io.kotest.property.RandomSource
+import io.kotest.property.arbitrary.next
+import kotlinx.coroutines.runBlocking
 import model.EngineResult
 import model.Fragment
 import model.Schema
@@ -9,6 +13,11 @@ import model.Value
 import model.selectionsFrom
 import model.selectionForestOf
 import model.testing.TestWorld
+import semantics.arbitrary.Config
+import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.TestCaseCount
+import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.resolverTestBatch
 import semantics.correctresolution.correctResolution
 import semantics.spec.flatten
 import kotlin.test.Test
@@ -17,6 +26,69 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ResolverTest {
+    @Test
+    fun `arbitrary valid worlds resolve correctly`(): Unit =
+        runBlocking {
+            val counts =
+                TestCaseCount(
+                    schemas = 20,
+                    registriesPerSchema = 3,
+                    queriesPerSchema = 5,
+                )
+            val config =
+                Config.default +
+                    (ResolverFragmentsEnabled to true)
+
+            checkResolverTestCases(counts, config) { testWorld, testCase ->
+                assertTrue(generatedResolutionIsCorrect(testWorld, testCase.query.source))
+            }
+        }
+
+    @Test
+    fun `generated property detects missing transitive demand closure`() {
+        val counts =
+            TestCaseCount(
+                schemas = 2,
+                registriesPerSchema = 3,
+                queriesPerSchema = 5,
+            )
+        val config =
+            Config.default +
+                (ResolverFragmentsEnabled to true)
+        val random = RandomSource.seeded(-2028282154048352130L)
+        val batches =
+            List(counts.schemas) {
+                Arb.resolverTestBatch(counts, config).next(random)
+            }
+        var passingCases = 0
+        var failingCases = 0
+
+        batches.forEach { batch ->
+            batch.registries.forEach { registry ->
+                val ordinaryWorld = registry.world(batch.schema)
+                val mutantWorld =
+                    registry.world(
+                        schema = batch.schema,
+                        noTransitiveDemand = true,
+                    )
+                batch.queries.forEach { query ->
+                    assertTrue(
+                        generatedResolutionIsCorrect(ordinaryWorld, query.source),
+                        "The mutation-control corpus must pass ordinary resolver02",
+                    )
+                    val correct =
+                        runCatching {
+                            generatedResolutionIsCorrect(mutantWorld, query.source)
+                        }.getOrDefault(false)
+                    if (correct) passingCases += 1 else failingCases += 1
+                }
+            }
+        }
+
+        assertTrue(passingCases > 0, "The mutant should not reject every generated case")
+        assertTrue(failingCases > 0, "Generated cases did not detect the transitive-demand mutant")
+    }
+
     @Test
     fun `resolves typename as the concrete object type`() {
         val world = TestWorld.fromSDL(FLAT_SCHEMA_SDL).assumptions
@@ -260,6 +332,26 @@ class ResolverTest {
         val (nominalType, specSelections) = world.selectionsFrom(source)
         val selections = flatten(nominalType, specSelections)
         return Fragment.of(nominalType, selections) to selections
+    }
+
+    private fun generatedResolutionIsCorrect(
+        testWorld: TestWorld,
+        querySource: String,
+    ): Boolean {
+        val world = testWorld.assumptions
+        val (nominalType, specSelections) = testWorld.selectionsFrom(querySource)
+        val selections =
+            context(world) {
+                flatten(nominalType, specSelections)
+            }
+        val fragment = Fragment.of(nominalType, selections)
+        val result =
+            context(world) {
+                Value.Object.of(world.schema.query).resolve(selections)
+            }
+        return context(world) {
+            result.correctResolution(fragment)
+        }
     }
 
     private companion object {

@@ -6,6 +6,10 @@ This is the handoff for continuing work on the query-planning model. It should l
 
 Read [Query Plan Research](./evergreen.md) for the durable production evidence, vocabulary, hard cases, correctness obligations, and validation strategy. [An Idealized Viaduct Query Execution Model](./viaduct-execution.md) for a description of Viaduct's execution model.  [AGENTS.md](./AGENTS.md), [`model/AGENTS.md`](./model/AGENTS.md), and [`semantics/AGENTS.md`](./semantics/AGENTS.md) describe the current state of our modeling effort plus guidelines and procedures for updating that state; read these files before making any modifications.
 
+Compiling Kotlin is the project's present mathematical modeling language, serving the same kind of specification role that TLA+ could serve rather than describing a JVM implementation. The model should also be maintained as a blueprint for a possible future translation into TLA+: its carrier sets, functions, relations, invariants, domain assumptions, and theorem statements should be explicit enough to become a formal specification with corresponding machine-checked proof obligations.
+
+No TLA+ translation or machine-checked proof currently exists. The theorem statements and supporting arguments in [`semantics/theorems.md`](./semantics/theorems.md) are informal mathematical reasoning about the Kotlin model, while compilation, examples, and tests provide only finite consistency and counterexample-finding evidence; a future TLA+ translation and its mechanically checked proofs would be separate artifacts.
+
 ## Long Term Goal
 
 The long-term goal is a query-plan and query-execution design that supports one-shot resolver execution. For every demanded runtime producer identity in the supported scope, the design should aggregate complete in-scope demand before dispatch and invoke that producer at most once. One-shot is per runtime producer identity, not per schema coordinate: distinct objects, list items, argument tuples, concrete types, or execution epochs may still require distinct invocations. Repeatedly invoking or materializing the same producer identity as later demand appears is a contrasting approach, not the target.
@@ -16,7 +20,7 @@ The current model is building a plan-independent correctness judgment over `Engi
 
 The latest experiment completed [`semantics.resolver02`](./semantics/src/main/kotlin/semantics/resolver02/Resolver.kt), extending the naive depth-first constructor to field resolvers with nonempty `objectFragment`s. At each concrete object, it closes the local selection forest under resolver demand, orders exact sibling `Value.Key` coordinates by their dependencies, resolves them in that order, and materializes each resolver's fragment input from the partial OER established by its predecessors. Recursive descent handles demand introduced below a sibling independently at that nested object.
 
-The next step is not `resolver03` but rather generate some informal "proof of correctness" for the two existing resolvers first.
+The current work is not `resolver03`; it is establishing informal correctness theorems for the existing resolver functions, especially `resolver02`. Rather than prove `correctResolution` as one monolithic proposition, prove separately that a resolver's result satisfies each predicate in its conjunction: `rootedAndWellTyped`, `conformsToFragment`, `isClosedUnderResolverDemand`, `conformsToResolvers`, and `conformsToTypename`. The `resolver02` theorem for `isClosedUnderResolverDemand` is now recorded in [`semantics/theorems.md`](./semantics/theorems.md); continue with the remaining predicates and then assemble those results into the overall correctness theorem.
 
 ## Current Model
 
@@ -59,6 +63,20 @@ When traversal encounters an object type with a node resolver, that value is int
 This constructor is intentionally depth-first and may apply a resolver again when recursive demand reaches it again; it is not the one-shot execution design. [`resolver01/ResolverTest.kt`](./semantics/src/test/kotlin/semantics/resolver01/ResolverTest.kt) starts from an empty Query object and demonstrates that the initial construction satisfies `correctResolution` when all activated field-resolver object fragments are empty.
 
 [`resolver02`](./semantics/src/main/kotlin/semantics/resolver02/Resolver.kt) closes each concrete object's selections under the top-level object-fragment demand of activated field resolvers. [`Schema.OutputField.demandsFromSibling`](./model/src/main/kotlin/model/registry/SiblingDemand.kt) relates a consumer field to an exact sibling `Value.Key`, preserving argument tuples while interpreting type conditions and variable bindings. A local topological order ensures every required sibling subtree is present before [`materialize`](./semantics/src/main/kotlin/semantics/Materialize.kt) projects the resolver's exact input from the partial OER. Its tests cover transitive sibling dependencies and resolver demand nested below a required sibling.
+
+### Correctness Theorems
+
+[`semantics/theorems.md`](./semantics/theorems.md) is the working record for informal correctness theorem statements and supporting arguments about the semantic resolver functions. It is organized as one second-level section per theorem. Each theorem section begins with `### Claim`, which states the resolver, its domain assumptions, and the predicate established for its result; continues with `### Proof structure`, which names the supporting lemmas and explains how their conjunction supports the claim; and then gives one `### Lemma N: Descriptive Title` subsection per lemma, containing both the lemma claim and its argument. This decomposition should expose useful boundaries for a possible future TLA+ formalization, but it is not itself a machine-checked proof.
+
+The proof program treats the conjuncts of [`correctResolution`](./semantics/src/main/kotlin/semantics/correctresolution/CorrectResolution.kt) independently before combining them. This keeps schema/root compatibility, fragment coverage, resolver-demand closure, resolver-value conformance, and `__typename` conformance from becoming branches of one oversized induction. A theorem may strengthen its induction hypothesis with auxiliary properties such as selection coverage or root-relaxed node closure when the target predicate depends on them.
+
+The first recorded theorem states that `resolver02`, applied to an empty Query value and a Query-rooted fragment in its domain, yields an OER satisfying `isClosedUnderResolverDemand`. Its proof has three parts:
+
+- **Down, transitive demand inclusion:** closing an object's selection forest includes every applicable selection required by every activated field resolver, including requirements introduced transitively by added resolver selections.
+- **Across, dependency availability:** before a key is resolved, every sibling subtree required by its object fragment is already resolved and present in the prefix OER, so materializing the resolver input is defined.
+- **Up, recursive satisfaction:** each resolved cell value satisfies all subselections accumulated for its key, and every nested object or list is itself resolver-demand closed; node references receive their canonical `id` bridge through `resolveNode`.
+
+The Across lemma establishes that `resolver02` can construct the result without reading absent input. The extensional `isClosedUnderResolverDemand` conclusion follows from the Down and Up lemmas: Down ensures every local resolver obligation is represented, while Up ensures those selections are satisfied and the same property holds recursively. The Across prefix induction and Up resolution-derivation induction are mutually supporting at a field-resolver key, and `theorems.md` states the decreasing measures that make this non-circular.
 
 ### Resolver Demand
 

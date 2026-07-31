@@ -18,6 +18,13 @@ import model.VariableBindings
 import model.spec.SpecSelection
 import model.spec.flatten
 
+/**
+ * Parses and validates external GraphQL fragment text against the unaugmented source schema.
+ *
+ * Decoded selections are then mapped to canonical definitions in [schema]. Synthetic lowering
+ * fields cannot be selected in the source text and enter semantic demand only through generated
+ * resolver fragments.
+ */
 internal class GJSelectionParser(
     private val schema: GJSchema,
     private val variableValues: VariableBindings,

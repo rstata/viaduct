@@ -107,7 +107,6 @@ private class RegistryGenerator(
             if (config[NodeResolversEnabled]) {
                 schema.objects
                     .filter(ObjectDefinition::implementsNode)
-                    .filter { chance(0.6) }
                     .mapTo(linkedSetOf(), ObjectDefinition::name)
             } else {
                 emptySet()

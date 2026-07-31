@@ -28,7 +28,7 @@ class WorldInjectionTest {
                 },
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<Schema.ObjectType, Resolver.Node>(
+                    mapOf(
                         user to
                             model.testing.nodeResolverOf { id ->
                                 schema.objectOf("User") {
@@ -69,20 +69,21 @@ class WorldInjectionTest {
             ).idValue,
         )
 
+        val userField = schema.field("Query", "user")
+        val userIdField = schema.field("Query", "user\$id")
         val user = schema.type("User") as Schema.ObjectType
-        val node =
+        val bridge =
             context(world) {
                 registry
-                    .resolver(user)
+                    .resolver(userIdField)
                     .resolve(
-                        type = user,
-                        id = Value.ID.of("node"),
+                        input = world.objectOf("Query"),
+                        arguments = Value.Arguments.of(userIdField, emptyMap()),
                         transitiveDemand = selectionForestOf(),
                     )
             }
-        assertEquals(emptySet(), node.fieldValues.keys)
+        assertIs<Value.ID>(bridge)
 
-        val userField = schema.field("Query", "user")
         val selections =
             world.fragmentFrom(
                 """
@@ -99,7 +100,13 @@ class WorldInjectionTest {
                     registry
                         .resolver(userField)
                         .resolve(
-                            input = world.objectOf("Query"),
+                            input =
+                                Value.Object.of(
+                                    schema.query,
+                                    mapOf(
+                                        Value.Key.of(userIdField, emptyMap()) to bridge,
+                                    ),
+                                ),
                             arguments = Value.Arguments.of(userField, emptyMap()),
                             transitiveDemand = selections.single().subselections,
                         )
@@ -122,12 +129,9 @@ class WorldInjectionTest {
     @Test
     fun `guice supplies required query resolvers when resolver inputs are omitted`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val user = world.schema.type("User") as Schema.ObjectType
 
         assertFalse(world.variableValues.containsKey("requestedId"))
-        assertFailsWith<MissingExecutorException> {
-            world.executorRegistry.resolver(user)
-        }
+        assertFalse(world.schema.field("User", "id") in world.executorRegistry)
         world.executorRegistry.resolver(
             world.schema.field("Query", "user"),
         )

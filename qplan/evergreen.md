@@ -40,9 +40,11 @@ Viaduct decomposes GraphQL field execution into field resolution followed by fie
 
 This model emphatically assumes that every argument-bearing output field has an explicit field resolver. Consequently, a field without a resolver is argumentless, and projection can stop at resolver boundaries without grouping passive values by argument-sensitive keys. Production namespace exceptions to the resolver requirement are outside the current model.
 
-Every non-`__typename` Query field has an explicit field resolver. Field resolvers are registered only at concrete object-field coordinates and return nullable output values; node resolvers are registered only for concrete object types that nominally implement the canonical `Node` interface.
+Every non-`__typename`, non-synthetic Query field has an explicit canonical field resolver. Canonical field resolvers are registered only at concrete object-field coordinates and return nullable output values. Production and test-fixture inputs may still distinguish raw node resolvers at concrete `Node` implementations, but fixture composition lowers those inputs to field resolvers before semantic reasoning.
 
-For a canonical field on a concrete object type, `behavioral(field)` means that the field is the engine-supplied `__typename`, has an explicit field resolver, or belongs to a type with a node resolver and is not `id`. The predicate is deliberately undefined for abstract-type fields. A node's `id` is an engine bridge materialized by the resolver that produced the node reference.
+For a canonical field on a concrete object type, `behavioral(field)` means exactly that the field is the engine-supplied `__typename` or has a registered field resolver. The predicate is deliberately undefined for abstract-type fields. Fixture lowering represents a source node-valued field `foo(args)` with an internal `foo$id(args)` bridge and a generated field resolver at `foo(args)`; the bridge is explicit resolver demand rather than an exception in `behavioral`.
+
+The fixture-supported lowering domain requires a node-valued source field to be declared as `Node` or a subtype whose every possible concrete type has a raw node resolver. Mixed node-resolved and inline possible types are rejected. Synthetic bridge type expressions preserve list and nullability shape, arguments remain on both `foo` and `foo$id`, and fixture typed IDs retain the concrete type needed for abstract and per-list-element dispatch.
 
 The modeled input is a post-validation selection set. Named fragment spreads are assumed to have been inlined before this boundary; inline fragments remain because their type conditions affect field applicability. Directive-controlled applicability, including `@skip` and `@include`, belongs to field resolution and is therefore in the project's eventual scope even when a modeling phase explicitly defers it.
 
@@ -58,7 +60,7 @@ The following findings have direct evidence:
 4. The initial `ExecutionParameters.queryPlanIndex` does not contain every plan that execution may use. Lazily materialized type plans are absent until materialization.  
 5. An owning plan's index is also not universally self-contained. Cycle backedges may refer to plans absent from that nested index.  
 6. Selection traversal type and variable-resolution target are different. A Query-typed child plan can still have a variable-provider RSS targeting the current object.  
-7. Field-resolver and node-resolver OSSes have different root shapes. Parent type and return type equality cannot determine whether an OSS has already been descended.  
+7. Production field-resolver and node-resolver OSSes have different source-world root shapes. Parent type and return type equality cannot determine whether an OSS has already been descended; the canonical model removes this distinction through explicit field lowering.
 8. Abstract recursive OSS traversal must retain concrete ancestor masks needed by `@cycle`.  
 9. Canonical, alias-free dependency demand is not automatically the same artifact as the public output selection fragment.  
 10. Prior selection reconstruction has lost named fragments, type constraints, target scope, and other execution context in multiple independent bugs.
@@ -204,7 +206,7 @@ The lazy closure work exposed several concrete examples:
 - lazy `FieldTypeChildPlans` and their dependencies were absent from the original execution index;  
 - cycle backedges were absent from the nested owner's index;  
 - Query-typed plan selections and object-scoped variable providers had different targets;  
-- field-resolver and node-resolver OSS roots required different handling;  
+- production field-resolver and node-resolver OSS roots required different source-world handling;
 - same parent and return type names did not imply the same root shape;  
 - abstract OSS traversal needed a concrete ancestor mask.
 
@@ -330,11 +332,11 @@ Type-checker plans can be materialized only for applicable concrete types in the
 
 Broad interfaces and unions may make conservative expansion expensive even when it is correct.
 
-### Field and node OSS root shapes
+### Source Node Ownership And Canonical Lowering
 
-A field-resolver OSS is rooted on the parent type and includes the resolver field wrapper. A node-resolver OSS is already rooted on the node type. Recursive same-type fields make type equality useless as a discriminator.
+A production field-resolver OSS is rooted on the parent type and includes the resolver field wrapper, while a production node-resolver OSS is already rooted on the node type. Recursive same-type fields make type equality useless as a discriminator in that source representation.
 
-Projecting a field-resolver result to its OSS retains selected non-behavioral fields and stops before every behavioral field. This lets a containing resolver materialize the `id` of a nested node reference without taking responsibility for the node resolver's remaining fields or engine-supplied `__typename`. Every raw node-resolver object repeats the canonical `id` used for its lookup, but raw presence does not transfer ownership of that field. Projecting a node-resolver result therefore uses a distinct root rule: it omits the root `id` bridge, engine-supplied `__typename`, and explicit field-resolver fields; retains fields supplied by that node resolver; and then uses ordinary behavioral boundaries below the root.
+The canonical model normalizes that distinction before reasoning. For source `foo(args): NodeType`, the containing producer supplies the synthetic `foo$id(args)` coordinate, and a generated field resolver at `foo(args)` requires that exact bridge and performs typed-ID dispatch. The loaded object's fields are then handled by ordinary field-resolver ownership, so projection has one root rule and stops only at canonical behavioral fields. Correctness closure, resolver conformance, and the registry demand graph consequently need no object-type resolver site or node-specific bridge exception.
 
 ### Abstract and covariant recursion
 
@@ -384,7 +386,7 @@ At minimum, retain these tests:
 
 1. **Split prediction oracle:** claimed `{a, b}` with predictions `{a}` and `{b}` must fail one-shot producer validation.  
 2. **Two-RSS convergence:** the `Query.a` / `Query.foo` counterexample must supply the union before one invocation or be explicitly outside the supported scope.
-3. **Same-type OSS root:** a field such as `Profile.profile: Profile` must descend through the field wrapper, while a `Profile` node resolver must not.  
+3. **Node-lowering root normalization:** source behavior for a field such as `Profile.profile: Profile` and a `Profile` node resolver must lower to the explicit `profile$id` producer and generated `profile` loader without relying on type equality or a distinct canonical root rule.
 4. **Lazy type-plan dependency:** a type-checker plan with a variable-provider or nested RSS must remain discoverable.  
 5. **Cycle backedge:** a legal checker cycle must terminate and resolve the correct plan owner.  
 6. **Abstract concrete cycle:** a concrete covariant `@cycle` must find its concrete ancestor mask.  
@@ -430,7 +432,7 @@ The existing arbitrary Viaduct generators and `DeepArbSuite` can exercise combin
 - aliases, arguments, variables, and directives;  
 - named and inline fragments;  
 - legal cycles;  
-- node resolvers and repeated IDs;  
+- raw node resolvers, lowered bridges, typed abstract dispatch, and repeated IDs;
 - failures and null ancestors.
 
 Preserve seeds and full generated descriptors. Shrink failing cases. Distinguish generator timeouts or unrelated stack overflows from completed oracle runs.

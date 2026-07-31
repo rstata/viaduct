@@ -29,6 +29,18 @@ import model.TypeExpr
 import model.Value
 import model.VariableBindings
 
+/** Suffix reserved for fixture-generated canonical node-ID bridge fields. */
+internal const val NODE_ID_BRIDGE_SUFFIX = "\$id"
+
+/**
+ * Decodes external GraphQL SDL into the canonical fixture schema.
+ *
+ * In addition to GraphQL-visible fields, the decoded schema contains a synthetic `foo$id` field
+ * for every GraphQL field `foo` whose declared base output type is `Node` or implements `Node`.
+ * Each bridge repeats `foo`'s arguments and replaces its named node type with `ID` while preserving
+ * every list and nullability layer. These fields belong only to the lowered reasoning world and are
+ * never parsed from GraphQL text.
+ */
 internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
 ) {
@@ -68,6 +80,7 @@ internal class GJSchemaDecoder(
         populatePossibleTypes()
         populateInputFields()
         populateCompositeFields()
+        populateNodeIdBridgeFields()
 
         return schema
     }
@@ -231,6 +244,65 @@ internal class GJSchemaDecoder(
             )
         compositeFields.getValue(type)[field.fieldName] = field
     }
+
+    private fun populateNodeIdBridgeFields() {
+        val nodeType = types["Node"] as? Schema.InterfaceType ?: return
+        compositeFields.forEach { (containingType, fields) ->
+            fields.values
+                .toList()
+                .filter { field ->
+                    val baseType = field.typeExpr.baseType
+                    baseType is Schema.CompositeType &&
+                        schema.relation(nodeType, baseType) in
+                        setOf(
+                            Schema.TypeRelation.SAME,
+                            Schema.TypeRelation.WIDER_THAN,
+                        )
+                }.forEach { nodeField ->
+                    val bridgeName = nodeField.fieldName + NODE_ID_BRIDGE_SUFFIX
+                    require(bridgeName !in fields) {
+                        "Synthetic node-ID bridge collides with $bridgeName"
+                    }
+                    val arguments =
+                        fieldArgumentsOf(
+                            definitions =
+                                nodeField.arguments.fields.values
+                                    .map { it as Schema.FieldArgument },
+                            name = { argument -> argument.argumentName },
+                        ) { argument, argumentType ->
+                            FieldArgumentImpl(
+                                argumentName = argument.argumentName,
+                                containingType = argumentType,
+                                typeExpr = argument.typeExpr,
+                                defaultValue = argument.defaultValue,
+                            )
+                        }
+                    fields[bridgeName] =
+                        OutputFieldImpl(
+                            fieldName = bridgeName,
+                            containingType = containingType,
+                            typeExpr = nodeIdTypeExpr(nodeField.typeExpr),
+                            arguments = arguments,
+                        )
+                }
+        }
+    }
+
+    private fun nodeIdTypeExpr(
+        typeExpr: TypeExpr<Schema.OutputType>,
+    ): TypeExpr<Schema.OutputType> =
+        when (typeExpr) {
+            is TypeExpr.Named ->
+                TypeExpr.Named.of(
+                    baseType = Schema.IDType,
+                    isNullable = typeExpr.isNullable,
+                )
+            is TypeExpr.List ->
+                TypeExpr.List.of(
+                    elementType = nodeIdTypeExpr(typeExpr.elementType),
+                    isNullable = typeExpr.isNullable,
+                )
+        }
 
     private fun decodeOutputType(type: GraphQLOutputType): TypeExpr<Schema.OutputType> =
         decodeType(type) { typeName ->

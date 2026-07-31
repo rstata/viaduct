@@ -4,7 +4,7 @@
 
 Viaduct is an implementation of [GraphQL](https://spec.graphql.org/September2025/). It executes GraphQL operations according to a schema and returns the tree-shaped result prescribed by GraphQL. This document considers only [query operations](https://spec.graphql.org/September2025/#sec-Query) and only the field-resolution part of execution. Mutation ordering, subscriptions, incremental delivery, directives, field completion, error propagation, and response serialization are outside its scope.
 
-The production system has APIs for batching, selective resolution, subqueries, scopes, and other concerns. We deliberately omit those details here. The aim is a small mathematical model that explains which resolver is responsible for each value, what information that resolver receives, and how resolver responsibilities compose into a result.
+The production system has APIs for batching, selective resolution, subqueries, scopes, and other concerns. We deliberately omit those details here. The aim is a small source-world description that explains which resolver is responsible for each value, what information that resolver receives, and how resolver responsibilities compose into a result. The qplanning canonical model subsequently lowers this two-kind source vocabulary to field resolvers only.
 
 The central idea is that a query induces a tree of demanded values, but responsibility for producing that tree moves between resolvers at explicit boundaries. A resolver owns a maximal region of the tree, called its output selection set. An explicit field resolver starts a new region at its field, while a node-valued field starts a new region after the containing resolver has produced the node's identifier.
 
@@ -41,7 +41,7 @@ type Listing implements Node @resolver {
 
 The `@resolver` notation is illustrative. A type-level annotation registers a node resolver for that concrete node type; a field-level annotation registers a field resolver at that concrete field coordinate.
 
-Viaduct automatically adds `Query.node` when a schema uses the `Node` interface. This field has a built-in field resolver. In the idealized model, `F_Query.node` has an empty `objectFragment` and turns its ID argument into a node reference; the concrete type embedded in that reference then selects the node resolver.
+Viaduct automatically adds `Query.node` when a schema uses the `Node` interface. This field has a built-in field resolver. In the source-world description, `F_Query.node` has an empty `objectFragment` and turns its ID argument into a node reference; the concrete type embedded in that reference then selects the node resolver. Fixture composition later lowers this boundary to synthetic field coordinates.
 
 ## Queries and results
 
@@ -97,13 +97,13 @@ Thus `"User:42"` stands for something like `(User, 42)`. The serialized form is 
 
 The embedded type matters when a schema field has an abstract result type such as `Node`. The schema tells us only that the result is some node; the identifier tells us at runtime whether this occurrence is a `User`, a `Listing`, or another concrete implementation.
 
-## The two resolver kinds
+## Source Resolver Inputs
 
 Let `T` be a concrete object type and `f` a field declared on `T`.
 
 ### Node resolvers
 
-A node resolver is registered at a concrete node type `T`. We model it as a deterministic partial function:
+A node resolver is registered at a concrete node type `T`. In the external source vocabulary it is a deterministic partial function:
 
 ```text
 N_T : ID_T ⇀ Object(T)
@@ -111,7 +111,7 @@ N_T : ID_T ⇀ Object(T)
 
 Its only ordinary input is an identifier whose embedded type is `T`. Its output repeats that identifier at the canonical argumentless `id` field and contains the fields owned by the node resolver for that object. Repeating the identifier normalizes the raw object value; it does not make the node resolver the owner of the root `id` OER cell. The function is partial because the identifier may not denote an existing node.
 
-A node resolver is not attached to one parent field. It can provide a `T` object wherever a node reference to `T` occurs in the query. This is why the registry coordinate is the concrete type rather than a field coordinate.
+A node resolver is not attached to one parent field. It can provide a `T` object wherever a node reference to `T` occurs in the query. This is why the source input is associated with a concrete type even though the canonical registry has only field coordinates.
 
 ### Field resolvers
 
@@ -141,9 +141,19 @@ F_User.displayName({ firstName, lastName }, {}) =
 
 The production documentation calls this fragment a [required selection set](https://viaduct.airbnb.tech/docs/developers/resolvers/field_resolvers/). In this model, `objectFragment` names the fragment itself, while the resolved value of that fragment is the field resolver's first input.
 
+## Canonical Field-Only Lowering
+
+The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. For every source node-valued field `foo(args)`, schema decoding adds a hidden `foo$id(args)` field whose named output is `ID` and whose list and nullability structure matches `foo`.
+
+If `foo` has a source field resolver, its canonical producer is relocated to `foo$id` and adapted to extract a typed global ID from each node reference. A generated canonical field resolver remains at `foo`; its exact argument-dependent `objectFragment` requires `foo$id(args)`, and its function decodes each typed ID and applies the appropriate raw node lookup. Both coordinates retain the source arguments, so `foo(a)` and `foo(b)` remain distinct `Value.Key` values.
+
+Typed fixture IDs carry the concrete object type as well as the internal ID. This lets one generated loader dispatch each element of an abstract `Node` list independently. The current lowering accepts only fields declared as `Node` or a subtype whose every possible concrete type has a raw node resolver; it rejects possible-type sets that mix node-resolved and inline object values.
+
+After this composition step, `Resolver.Node`, object-type resolver coordinates, node references, and node-specific ownership rules do not exist in the canonical algebra. The registry, resolver-demand graph, correctness predicates, and resolver constructors see only ordinary and generated field resolvers. Synthetic `$id` fields are explicit internal dependencies and never appear in GraphQL input text.
+
 ## Output selection sets and ownership
 
-Every resolver is responsible for its entire output selection set, or OSS. Despite the name, an OSS is not literally one GraphQL selection set. It is the maximal portion of the demanded result reachable from a resolver before responsibility crosses to another resolver.
+In the source-world description, every resolver is responsible for its entire output selection set, or OSS. Despite the name, an OSS is not literally one GraphQL selection set. It is the maximal portion of the demanded result reachable from a resolver before responsibility crosses to another resolver.
 
 Starting from a field resolver's field, follow demanded fields recursively:
 
@@ -166,9 +176,11 @@ The containing resolver therefore cannot omit the ID merely because the client d
 
 The OSS rule separates ownership from demand. A client selection or an `objectFragment` says which values are needed. Resolver boundaries say which resolver must provide each needed value.
 
+Canonical lowering preserves this transfer as the ordinary field dependency `foo(args) -> foo$id(args)`. The generated loader owns `foo`, the containing producer owns or resolves `foo$id`, and all further ownership uses the same field-resolver boundary rule.
+
 ## Resolution as closure of obligations
 
-The idealized model does not prescribe a traversal order or a concurrency strategy. Instead, a correct resolution is the least result-shaped collection of resolver obligations closed under the following rules:
+The source-world description does not prescribe a traversal order or a concurrency strategy. Instead, a correct resolution is the least result-shaped collection of resolver obligations closed under the following rules:
 
 1. Each selected root field creates an obligation for its field resolver on `Query`, including the built-in resolver `F_Query.node`.
 2. A field-resolver obligation creates obligations for every field demanded by its `objectFragment`.
@@ -180,6 +192,8 @@ The idealized model does not prescribe a traversal order or a concurrency strate
 This is a closure because resolver inputs can introduce demand that was not written in the client query. In particular, a field resolver's `objectFragment` may require fields owned by other resolvers. Those requirements must themselves be resolved before the field resolver has its complete input.
 
 The rules describe dependencies, not execution events. An implementation may schedule independent obligations concurrently, batch compatible node lookups, or reuse a materialization, provided the resulting values satisfy the same ownership and input requirements.
+
+Under canonical lowering, rules 4 and 5 are represented without a distinct obligation kind: the generated field resolver for `foo` requires `foo$id`, and resolving `foo` recursively activates ordinary field resolvers on the loaded object.
 
 ## Example 1: a field resolver and its object fragment
 
@@ -310,7 +324,7 @@ An implementation may recognize that both occurrences refer to the same node ID 
 
 ## Compact formal summary
 
-For a validated query `Q`, a schema `S`, a node-resolver registry `N`, and a field-resolver registry `F`, resolution constructs a result tree `R` satisfying these conditions:
+For a validated query `Q`, a schema `S`, a source node-resolver registry `N`, and a source field-resolver registry `F`, resolution constructs a result tree `R` satisfying these conditions:
 
 - Every field collected from `Q` has a corresponding position in `R`, subject to ordinary GraphQL applicability, field merging, and nullability rules deferred by this model.
 - Every value at a field-resolver coordinate `<T, f>`, whether tenant-defined or built-in, is supplied by `F_T.f` from its coerced arguments and a resolved value of `Fragment_T.f`.
@@ -320,6 +334,8 @@ For a validated query `Q`, a schema `S`, a node-resolver registry `N`, and a fie
 - Equal node IDs at distinct result positions do not identify those positions. `R` remains a tree.
 
 These conditions characterize acceptable resolution without choosing a query-plan representation or execution order. A planner and executor are correct relative to this model when their completed result satisfies the conditions and every resolver application receives the inputs and demand assigned to it.
+
+The canonical qplanning formulation states the same obligations over the lowered schema and one field-resolver registry: each source node-valued `foo(args)` is represented by `foo$id(args)` plus the generated loader at `foo(args)`, and typed IDs preserve the concrete dispatch formerly expressed by `N`.
 
 ## References
 

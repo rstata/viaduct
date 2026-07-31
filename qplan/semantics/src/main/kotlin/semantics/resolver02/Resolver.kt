@@ -6,7 +6,6 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.idKeyOf
 import model.registry.Resolver
 import model.registry.demandsFromSibling
 import model.selectionForestOf
@@ -73,7 +72,11 @@ private fun Schema.ObjectType.closeResolverDemand(
 
     val resolverDemand =
         unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
-            demand + world.executorRegistry.resolver(key.field).objectFragment.subselections
+            demand +
+                world.executorRegistry
+                    .resolver(key.field)
+                    .objectFragment(key.arguments)
+                    .subselections
         }
     return closeResolverDemand(
         selections = applicableSelections + resolverDemand,
@@ -122,7 +125,7 @@ private fun Value.Object.dependenciesOf(
     return unresolved
         .filter { sibling ->
             sibling != consumer &&
-                consumer.field.demandsFromSibling(sibling)
+                consumer.demandsFromSibling(sibling)
         }.toSet()
 }
 
@@ -148,8 +151,9 @@ private fun Value.Object.resolveKey(
 
                     key.field in world.executorRegistry -> {
                         val resolver = world.executorRegistry.resolver(key.field)
+                        val objectFragment = resolver.objectFragment(key.arguments)
                         // Closure and dependency order put the complete input in this prefix.
-                        val input = resolved.materialize(resolver.objectFragment)
+                        val input = resolved.materialize(objectFragment)
                         resolver.resolve(
                             input = input,
                             arguments = key.arguments,
@@ -181,12 +185,7 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
         Value.Error -> Value.Error
         is Value.Simple -> this
 
-        is Value.Object ->
-            if (type in world.executorRegistry) {
-                resolveNode(selections)
-            } else {
-                resolve(selections)
-            }
+        is Value.Object -> resolve(selections)
 
         is Value.OutputList ->
             EngineResult.List.of(
@@ -201,34 +200,6 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
     }
 
 /**
- * Returns the selected node-resolver result together with this reference's retained `id` bridge.
- */
-context(world: Assumptions)
-fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {
-    val idKey = requireNotNull(world.idKeyOf(type))
-    val id = fieldValues.getValue(idKey)
-    require(id != Value.Error && id is Value.ID) {
-        "Node reference ${type.typeName}/${idKey.field.fieldName} must contain a non-error ID"
-    }
-
-    val nodeRef = EngineResult.Object.nodeRef(idKey.field, id)
-    return world.executorRegistry
-        .resolver(type)
-        .let { resolver ->
-            resolver.resolve(
-                type = type,
-                id = id,
-                transitiveDemand =
-                    selections + resolver.outputSelectionForest(selections),
-            )
-        }
-        .resolve(
-            selections = selections,
-            resolved = nodeRef,
-        )
-}
-
-/**
  * Returns this field resolver's finite output selection forest relative to [demand].
  *
  * A field resolver owns every non-behavioral field of its result. Ownership is unfolded completely
@@ -238,23 +209,10 @@ fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {
  */
 context(world: Assumptions)
 private fun Resolver.Field.outputSelectionForest(demand: SelectionForest): SelectionForest =
-    demand.outputSelectionForest(OutputSelectionRoot.FIELD)
-
-/**
- * Returns this node resolver's finite output selection forest relative to [demand].
- *
- * A node resolver owns its root fields other than `id`, `__typename`, and fields with explicit
- * field resolvers. Descendant ownership follows ordinary behavioral boundaries. Recursive
- * ownership is unfolded only as far as locally closed [demand].
- */
-context(world: Assumptions)
-private fun Resolver.Node.outputSelectionForest(demand: SelectionForest): SelectionForest =
-    demand.outputSelectionForest(OutputSelectionRoot.NODE)
+    demand.outputSelectionForest()
 
 context(world: Assumptions)
-private fun SelectionForest.outputSelectionForest(
-    root: OutputSelectionRoot,
-): SelectionForest =
+private fun SelectionForest.outputSelectionForest(): SelectionForest =
     groupBy(Selection::possibleTypes)
         .keys
         .flatten()
@@ -263,7 +221,6 @@ private fun SelectionForest.outputSelectionForest(
             result +
                 possibleType.outputSelectionForest(
                     demand = this,
-                    root = root,
                     ancestors = emptySet(),
                 )
         }
@@ -271,12 +228,11 @@ private fun SelectionForest.outputSelectionForest(
 context(world: Assumptions)
 private fun Schema.ObjectType.outputSelectionForest(
     demand: SelectionForest,
-    root: OutputSelectionRoot,
     ancestors: Set<Schema.ObjectType>,
 ): SelectionForest {
     val closedDemand = closeResolverDemand(demand)
     return fields.values.fold(selectionForestOf()) { result, field ->
-        if (!root.owns(field)) {
+        if (world.behavioral(field)) {
             result
         } else {
             val nestedDemand =
@@ -298,7 +254,6 @@ private fun Schema.ObjectType.outputSelectionForest(
                             nestedResult +
                                 possibleType.outputSelectionForest(
                                     demand = nestedDemand,
-                                    root = OutputSelectionRoot.DESCENDANT,
                                     ancestors = ancestors + this,
                                 )
                         }
@@ -317,23 +272,4 @@ private fun Schema.ObjectType.outputSelectionForest(
                 )
         }
     }
-}
-
-context(world: Assumptions)
-private fun OutputSelectionRoot.owns(field: Schema.OutputField): Boolean =
-    when (this) {
-        OutputSelectionRoot.FIELD,
-        OutputSelectionRoot.DESCENDANT,
-        -> !world.behavioral(field)
-
-        OutputSelectionRoot.NODE ->
-            field.fieldName != "id" &&
-                field.fieldName != "__typename" &&
-                field !in world.executorRegistry
-    }
-
-private enum class OutputSelectionRoot {
-    FIELD,
-    NODE,
-    DESCENDANT,
 }

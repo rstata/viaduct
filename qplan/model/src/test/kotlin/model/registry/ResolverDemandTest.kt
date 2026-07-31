@@ -64,24 +64,25 @@ class ResolverDemandTest {
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
         val queryNode = schema.field("Query", "node")
+        val queryNodeId = schema.field("Query", "node\$id")
         val consumer = schema.field("Query", "consumer")
         val outer = schema.field("Query", "outer")
         val userResolved = schema.field("User", "resolved")
         val adminResolved = schema.field("Admin", "resolved")
 
         assertEquals(
-            setOf(queryNode, user, admin, userResolved, adminResolved),
+            setOf(queryNode, userResolved, adminResolved),
             registry.mayDemandFrom(consumer),
         )
         assertEquals(setOf(consumer), registry.mayDemandFrom(outer))
-        assertTrue(registry.mayDemandFrom(queryNode).isEmpty())
+        assertEquals(setOf(queryNodeId), registry.mayDemandFrom(queryNode))
+        assertTrue(registry.mayDemandFrom(queryNodeId).isEmpty())
         assertTrue(registry.mayDemandFrom(userResolved).isEmpty())
         assertTrue(registry.mayDemandFrom(adminResolved).isEmpty())
 
         assertEquals(setOf(outer), registry.mayBeDemandedBy(consumer))
         assertEquals(setOf(consumer), registry.mayBeDemandedBy(queryNode))
-        assertEquals(setOf(consumer), registry.mayBeDemandedBy(user))
-        assertEquals(setOf(consumer), registry.mayBeDemandedBy(admin))
+        assertEquals(setOf(queryNode), registry.mayBeDemandedBy(queryNodeId))
         assertEquals(setOf(consumer), registry.mayBeDemandedBy(userResolved))
         assertEquals(setOf(consumer), registry.mayBeDemandedBy(adminResolved))
         assertTrue(registry.mayBeDemandedBy(outer).isEmpty())

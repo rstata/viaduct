@@ -30,7 +30,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 `Value.Object` fields and OER cells are keyed by exact `Value.Key` coordinates, preserving distinct coerced argument tuples for one field.
 
-The `Value` model is incomplete: lazy values, node references, and similar engine-specific intermediate values are not yet represented.
+The `Value` model is incomplete: lazy values and similar engine-specific intermediate values are not represented. Raw node references exist only as external test-fixture inputs and are lowered to synthetic ID bridge values before semantic reasoning; the canonical value algebra has no distinct node-reference variant.
 
 ## Intentional Differences From Existing Viaduct
 

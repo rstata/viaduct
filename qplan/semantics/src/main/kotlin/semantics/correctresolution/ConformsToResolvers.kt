@@ -6,7 +6,6 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.idKeyOf
 import model.selectionForestOf
 import semantics.materialize
 
@@ -14,9 +13,9 @@ import semantics.materialize
  * Whether every activated resolver agrees with the values attributed to it in this result tree.
  *
  * Field resolvers receive the containing object materialized according to their object fragment.
- * Node resolvers receive the containing object's `id`. Returned values are compared recursively
- * with the OER, stopping before coordinates supplied by another resolver or by the engine. The
- * complete OER tree is still traversed, so those coordinates are checked by their own resolvers.
+ * Returned values are compared recursively with the OER, stopping before coordinates supplied by
+ * another resolver or by the engine. The complete OER tree is still traversed, so those
+ * coordinates are checked by their own resolvers.
  *
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
  * cell is present. It observes cell values but never cell check components.
@@ -27,8 +26,6 @@ fun EngineResult.Object.conformsToResolvers(): Boolean =
 
 context(world: Assumptions)
 private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
-    if (!nodeResolverConforms()) return false
-
     val registry = world.executorRegistry
     return keys.all { key ->
         val value = fetch(key).value
@@ -40,7 +37,7 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
                 true
             } else {
                 val resolver = registry.resolver(key.field)
-                val input = materialize(resolver.objectFragment)
+                val input = materialize(resolver.objectFragment(key.arguments))
                 val resolverValue =
                     resolver.resolve(
                         input = input,
@@ -52,27 +49,6 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
 
         fieldResolverConforms && value.engineResultConformsToResolvers()
     }
-}
-
-context(world: Assumptions)
-private fun EngineResult.Object.nodeResolverConforms(): Boolean {
-    if (keys.isEmpty()) return true
-
-    val idKey = world.idKeyOf(type) ?: return true
-    if (idKey !in keys) return false
-
-    val idResult = fetch(idKey).value
-    if (idResult == Value.Error || idResult !is Value.ID) return false
-
-    val resolverValue =
-        world.executorRegistry
-            .resolver(type)
-            .resolve(
-                type = type,
-                id = idResult,
-                transitiveDemand = observedDemand(),
-            )
-    return nodeResolverValueConforms(resolverValue)
 }
 
 /**
@@ -147,19 +123,6 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                     )
                 }
     }
-
-context(world: Assumptions)
-private fun EngineResult.Object.nodeResolverValueConforms(
-    resolverValue: Value.Object,
-): Boolean =
-    objectFieldsConformToResolverValue(
-        resolverValue = resolverValue,
-        fieldBelongsToResolver = { field ->
-            field.fieldName != "id" &&
-                field.fieldName != "__typename" &&
-                field !in world.executorRegistry
-        },
-    )
 
 context(world: Assumptions)
 private fun EngineResult.Object.objectFieldsConformToResolverValue(

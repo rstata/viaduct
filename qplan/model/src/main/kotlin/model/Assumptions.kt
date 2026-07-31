@@ -25,7 +25,9 @@ sealed interface Assumptions {
     /**
      * Whether resolution of [field] crosses a resolver behavior boundary.
      *
-     * This function is defined only for a canonical field on a concrete object type.
+     * This function is defined only for a canonical field on a concrete object type and is true
+     * exactly for engine-supplied `__typename` or a registered field resolver. Synthetic fixture
+     * bridges have no implicit special status.
      */
     fun behavioral(field: Schema.OutputField): Boolean
 
@@ -45,17 +47,6 @@ sealed interface Assumptions {
     }
 }
 
-/** Returns [type]'s canonical argumentless `id` key when it has a node resolver. */
-fun Assumptions.idKeyOf(type: Schema.ObjectType): Value.Key? =
-    if (type in executorRegistry) {
-        Value.Key.of(
-            field = schema.field(type.typeName, "id"),
-            arguments = emptyMap(),
-        )
-    } else {
-        null
-    }
-
 private class AssumptionsImpl(
     override val schema: Schema,
     bindings: Map<String, Value?>,
@@ -74,7 +65,6 @@ private class AssumptionsImpl(
             "${containingType.typeName}/${field.fieldName} is not canonical in this world"
         }
         return field.fieldName == "__typename" ||
-            field in executorRegistry ||
-            (containingType in executorRegistry && field.fieldName != "id")
+            field in executorRegistry
     }
 }

@@ -19,13 +19,13 @@ import kotlin.test.assertTrue
 
 class ExecutorRegistryTest {
     @Test
-    fun `looks up and invokes node and field resolvers by schema coordinate`() {
+    fun `lowers node and field resolvers to field coordinates`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<Schema.ObjectType, Resolver.Node>(
+                    mapOf(
                         user to
                             model.testing.nodeResolverOf { id ->
                                 assertEquals("42", id.idValue)
@@ -58,40 +58,55 @@ class ExecutorRegistryTest {
             )
         val schema = world.schema
         val query = schema.objectOf("Query")
-        val userType = schema.type("User") as Schema.ObjectType
         val user =
             schema.objectOf("User") {
                 "id" setTo "42"
             }
         val userField = schema.field("Query", "user")
+        val userIdField = schema.field("Query", "user\$id")
         val registry = world.executorRegistry
         val assumptions = world.assumptions
 
         assertEquals(registry, assumptions.executorRegistry)
-        val nodeResult =
+        assertTrue(userField in registry)
+        assertTrue(userIdField in registry)
+        assertEquals(setOf(userIdField), registry.mayDemandFrom(userField))
+        val bridgeValue =
             context(assumptions) {
                 registry
-                    .resolver(userType)
+                    .resolver(userIdField)
                     .resolve(
-                        type = userType,
-                        id = Value.ID.of("42"),
+                        input = query,
+                        arguments = Value.Arguments.of(userIdField, emptyMap()),
                         transitiveDemand = selectionForestOf(),
                     )
             }
-        assertEquals(
-            schema.objectOf("User"),
-            nodeResult,
-        )
+        assertIs<Value.ID>(bridgeValue)
         val fieldResolver = registry.resolver(userField)
-        assertEquals(schema.query, fieldResolver.objectFragment.nominalType)
-        assertTrue(fieldResolver.objectFragment.subselections.isEmpty())
+        val arguments = Value.Arguments.of(userField, emptyMap())
+        val objectFragment = fieldResolver.objectFragment(arguments)
+        assertEquals(schema.query, objectFragment.nominalType)
+        assertEquals(1, objectFragment.subselections.size)
         assertEquals(
             user,
             context(assumptions) {
                 fieldResolver.resolve(
-                    input = query,
-                    arguments = Value.Arguments.of(userField, emptyMap()),
-                    transitiveDemand = selectionForestOf(),
+                    input =
+                        Value.Object.of(
+                            schema.query,
+                            mapOf(
+                                Value.Key.of(userIdField, emptyMap()) to bridgeValue,
+                            ),
+                        ),
+                    arguments = arguments,
+                    transitiveDemand =
+                        schema.fragmentFrom(
+                            """
+                            fragment ignored on User {
+                              id
+                            }
+                            """.trimIndent(),
+                        ).subselections,
                 )
             },
         )
@@ -178,18 +193,9 @@ class ExecutorRegistryTest {
         val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
         val registry = world.executorRegistry
-        val userType = schema.type("User") as Schema.ObjectType
         val userField = schema.field("User", "name")
 
-        assertFalse(schema.query in registry)
         assertFalse(schema.field("Node", "name") in registry)
-
-        val missingNode =
-            assertFailsWith<MissingExecutorException> {
-                registry.resolver(userType)
-            }
-        assertEquals("User", missingNode.typeName)
-        assertEquals(null, missingNode.fieldName)
 
         val missingField =
             assertFailsWith<MissingExecutorException> {
@@ -199,11 +205,6 @@ class ExecutorRegistryTest {
         assertEquals("name", missingField.fieldName)
 
         val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        assertFailsWith<IllegalArgumentException> {
-            registry.resolver(
-                foreignSchema.type("User") as Schema.ObjectType,
-            )
-        }
         assertFailsWith<IllegalArgumentException> {
             registry.resolver(foreignSchema.field("User", "name"))
         }
@@ -363,20 +364,6 @@ class ExecutorRegistryTest {
                         )
                     },
                 )
-            }
-        }
-    }
-
-    @Test
-    fun `node snipToDemand requires a node resolver coordinate`() {
-        val world = TestWorld.fromSDL(SCHEMA_SDL)
-        val schema = world.schema
-        val user = schema.type("User") as Schema.ObjectType
-        val result = world.assumptions.objectOf("User")
-
-        with(world.assumptions) {
-            assertFailsWith<IllegalArgumentException> {
-                user.snipToDemand(result, selectionForestOf())
             }
         }
     }
@@ -572,7 +559,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `behavioral is defined by concrete field and node resolvers`() {
+    fun `behavioral is defined only by concrete field resolvers`() {
         val fieldFixture = Fixture()
         val nodeFixture = Fixture(withNodeResolver = true)
 
@@ -590,7 +577,7 @@ class ExecutorRegistryTest {
         assertTrue(
             nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "__typename")),
         )
-        assertTrue(
+        assertFalse(
             nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "name")),
         )
         assertTrue(
@@ -608,7 +595,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `field-resolver snipToDemand retains only a nested node reference`() {
+    fun `field-resolver snipToDemand has no implicit node ownership boundary`() {
         val fixture = Fixture(withNodeResolver = true)
         val source =
             fixture.assumptions.objectOf("User") {
@@ -631,57 +618,7 @@ class ExecutorRegistryTest {
                 },
             )
 
-        assertEquals(setOf(fixture.key("id")), result.fieldValues.keys)
-    }
-
-    @Test
-    fun `node-resolver snipToDemand retains its fields and stops at nested boundaries`() {
-        val fixture = Fixture(withNodeResolver = true)
-        val friend =
-            fixture.assumptions.objectOf("User") {
-                "id" setTo "friend"
-                "name" setTo "Friend"
-            }
-        val source =
-            fixture.assumptions.objectOf("User") {
-                "id" setTo "target"
-                "name" setTo "Target"
-                "friend" setTo friend
-            }
-        val selections =
-            fixture.schema.fragmentFrom(
-                """
-                fragment ignored on Node {
-                  id
-                  name
-                  ... on User {
-                    __typename
-                    search {
-                      id
-                    }
-                    friend {
-                      ... on Node {
-                        id
-                        name
-                      }
-                    }
-                  }
-                }
-                """.trimIndent(),
-            ).subselections
-
-        val result =
-            with(fixture.assumptions) {
-                fixture.user.snipToDemand(source, selections)
-            }
-
-        assertEquals(
-            setOf(fixture.key("name"), fixture.key("friend")),
-            result.fieldValues.keys,
-        )
-        val snippedFriend =
-            assertIs<Value.Object>(result.fieldValues[fixture.key("friend")])
-        assertEquals(setOf(fixture.key("id")), snippedFriend.fieldValues.keys)
+        assertEquals(setOf(fixture.key("name")), result.fieldValues.keys)
     }
 
     @Test

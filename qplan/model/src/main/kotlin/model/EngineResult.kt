@@ -53,51 +53,6 @@ sealed interface EngineResult {
 
         companion object {
             /**
-             * Constructs the node reference containing [id] at [idField].
-             *
-             * ### Invariant: node-reference-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             *
-             * [idField] must be the canonical argumentless `id: ID` field of a concrete type that
-             * nominally implements the canonical `Node` interface.
-             *
-             * @throws IllegalArgumentException when [idField] is not a Node type's `id` field
-             */
-            context(world: Assumptions)
-            fun nodeRef(
-                idField: Schema.OutputField,
-                id: Value.ID,
-            ): Object {
-                val type = idField.containingType
-                require(type is Schema.ObjectType) {
-                    "A node reference ID field must belong to a concrete object type"
-                }
-                require(world.schema.field(type.typeName, "id") == idField) {
-                    "${type.typeName}/${idField.fieldName} is not its canonical id field"
-                }
-                require(idField.arguments == Schema.NoArguments) {
-                    "Node reference ID field ${type.typeName}/id must take no arguments"
-                }
-                require(idField.typeExpr.baseType == Schema.IDType) {
-                    "Node reference ID field ${type.typeName}/id must be ID-typed"
-                }
-                val nodeType = world.schema.type("Node")
-                require(
-                    nodeType is Schema.InterfaceType &&
-                        world.schema.relation(nodeType, type) == Schema.TypeRelation.WIDER_THAN,
-                ) {
-                    "Node reference type ${type.typeName} must implement Node"
-                }
-
-                val idKey = Value.Key.of(idField, emptyMap())
-                return of(
-                    type = type,
-                    cells = mapOf(idKey to Cell.of(id)),
-                )
-            }
-
-            /**
              * ### Invariant: object-engine-result-factory-schema-conformance
              *
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.

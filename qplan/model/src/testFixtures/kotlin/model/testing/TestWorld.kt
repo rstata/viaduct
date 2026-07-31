@@ -34,11 +34,19 @@ class TestWorld private constructor(
         assumptions.selectionsFrom(fragment)
 
     companion object {
+        /**
+         * Composes ordinary GraphQL and raw resolver inputs into one canonical reasoning world.
+         *
+         * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] are lowered
+         * with node-valued source field resolvers into synthetic `$id` bridge fields and generated
+         * field resolvers before [Assumptions] is constructed, so semantic code observes only
+         * field resolver coordinates.
+         */
         fun fromSDL(
             schemaSDL: String,
             variableValues: (Schema) -> Map<String, Value?> = { emptyMap() },
             nodeResolvers:
-                (Schema) -> Map<Schema.ObjectType, Resolver.Node> = { emptyMap() },
+                (Schema) -> Map<Schema.ObjectType, NodeResolverFunction> = { emptyMap() },
             fieldResolvers:
                 ((Schema) -> Map<Schema.OutputField, Resolver.Field>)? = null,
             noTransitiveDemand: Boolean = false,
@@ -68,7 +76,7 @@ class TestWorld private constructor(
 private class TestWorldModule(
     private val schemaSDL: String,
     private val variableValues: (Schema) -> Map<String, Value?>,
-    private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, Resolver.Node>,
+    private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
     private val noTransitiveDemand: Boolean,
 ) : AbstractModule() {
@@ -91,7 +99,7 @@ private class TestWorldModule(
 
     @Provides
     @NodeResolvers
-    fun nodeResolvers(schema: GJSchema): Map<Schema.ObjectType, Resolver.Node> =
+    fun nodeResolvers(schema: GJSchema): Map<Schema.ObjectType, NodeResolverFunction> =
         nodeResolvers.invoke(schema)
 
     @Provides
@@ -103,7 +111,7 @@ private class TestWorldModule(
     @Singleton
     fun executorRegistry(
         schema: GJSchema,
-        @NodeResolvers nodeResolvers: Map<Schema.ObjectType, Resolver.Node>,
+        @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
         @FieldResolvers fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     ): ExecutorRegistry =
         executorRegistryOf(
@@ -131,7 +139,10 @@ private class TestWorldModule(
     ): Map<Schema.OutputField, Resolver.Field> {
         val queryFragment = schema.emptyFragmentOf("Query")
         return schema.query.fields.values
-            .filter { it.fieldName != "__typename" }
+            .filter {
+                it.fieldName != "__typename" &&
+                    !it.fieldName.endsWith(NODE_ID_BRIDGE_SUFFIX)
+            }
             .associateWith {
                 fieldResolverOf(
                     objectFragment = queryFragment,

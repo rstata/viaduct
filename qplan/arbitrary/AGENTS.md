@@ -16,4 +16,4 @@ Generated object fragments are acyclic by construction and are still checked by 
 
 ## Validation
 
-Run `./gradlew :arbitrary:test` for generator validity and configuration tests. The resolver01 and resolver02 property tests in `semantics` are the end-to-end judgment: they parse and flatten each generated query through the test fixture, apply the semantic resolver constructor, and require the result to satisfy `correctResolution`.
+Run `./gradlew :arbitrary:test` for generator validity and configuration tests. The resolver01 and resolver02 property tests in `semantics` are the green end-to-end judgments: they parse and flatten each generated query through the test fixture, apply the semantic resolver constructor, and require the result to satisfy `correctResolution`. Resolver03 copies the Resolver02 property corpus but is intentionally red until selective transitive demand can be aggregated before resolver application.

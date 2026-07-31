@@ -20,11 +20,41 @@ The current model is building a plan-independent correctness judgment over `Engi
 
 The current validated constructors are [`semantics.resolver01`](./semantics/src/main/kotlin/semantics/resolver01/Resolver.kt) and [`semantics.resolver02`](./semantics/src/main/kotlin/semantics/resolver02/Resolver.kt). Raw selection-independent resolver functions are private to the model module. Resolver01 applies only the public selective `resolve(..., transitiveDemand)` operation, and its tests pass because every activated field-resolver object fragment is empty.
 
-Resolver02 deliberately models non-selective resolvers through two private `outputSelectionForest(demand)` extensions, one for field resolvers and one for node resolvers. Before applying the public selective API, it adds the resolver's demand-relative OSS to the supplied selections. The OSS includes every owned field along acyclic paths and uses locally closed supplied demand to bound recursive ownership paths. Resolver02's deterministic, recursive, arbitrary, and mutation-control tests pass, and the full `./gradlew check` is green at this handoff.
+Resolver02 deliberately models non-selective resolvers through two private `outputSelectionForest(demand)` extensions, one for field resolvers and one for node resolvers. Before applying the public selective API, it adds the resolver's demand-relative OSS to the supplied selections. The OSS includes every owned field along acyclic paths and uses locally closed supplied demand to bound recursive ownership paths. Resolver02's deterministic, recursive, arbitrary, and mutation-control tests pass.
 
-The immediate next step is to clone Resolver02 into Resolver03 without this OSS demand expansion and solve pre-application transitive demand aggregation for genuinely selective resolvers. That work must not restore raw-function access, move demand closure into `snipToDemand`, or reuse Resolver02's private non-selective helper as the selective solution.
+[`semantics.resolver03`](./semantics/src/main/kotlin/semantics/resolver03/Resolver.kt) is the cloned selective experiment. It retains Resolver02's local demand closure and dependency ordering but omits the private OSS expansion, so it supplies only currently known selections to each resolver. Its copied deterministic and arbitrary tests intentionally fail with missing passive values; this is the counterexample state from which the selective one-shot cycle must be solved. Consequently the full `./gradlew check` is intentionally red, while the Resolver01 and Resolver02 focused suites remain green.
 
-The next-next step, after Resolver03 works for selective resolvers, is to return to the theorem program in [`semantics/theorems.md`](./semantics/theorems.md): establish the remaining `correctResolution` conjuncts for the relevant resolver constructors and then assemble those results into overall correctness theorems.
+The immediate next step is to make Resolver03 aggregate complete transitive demand before applying a genuinely selective resolver. That work must not restore raw-function access, move demand closure into `snipToDemand`, or reuse Resolver02's private non-selective helper as the selective solution.
+
+Start with a pure semantic operation that transforms an initial `SelectionForest` into a guarded transitive resolver-demand forest without receiving a `Value.Output`. The operation must rebase each activated field resolver's object-relative `objectFragment` onto the path from the producer to that resolver occurrence. While lifting the fragment, preserve its exact `Value.Key` coordinates and arguments, the ancestor and local `possibleTypes` guards at the coordinates they constrain, and the ownership boundary at which each obligation can be fulfilled. The key open design question is what explicit path, ancestry, and ownership context this recursive operation needs in addition to the forest itself.
+
+Compute the result as a finite least fixed point: begin with the producer's requested selections, add the guarded object-fragment requirements of every resolver occurrence those selections can activate, traverse the newly added requirements for further resolver occurrences, and stop when no new obligations remain. Follow only paths introduced by the operation or by resolver fragments; do not enumerate the producer's OSS or unfold a recursive schema independently of those finite paths. `ExecutorRegistry.mayDemandFrom` may bound or order this process, but its schema-site relation is not a sufficient representation because the result must remain path-shaped and retain guards, arguments, and target ownership.
+
+Pre-dispatch demand need not be minimal as an unguarded field set when the producer determines the concrete type. The intended criterion is guarded minimality: preserve the finite union of conditionally necessary alternatives, and require specialization under each concrete runtime type assignment to yield exactly the demand needed for that assignment. If such guarded alternatives cannot be bounded without observing the result, the remaining choices are explicit conservative over-selection, separating type discovery from materialization, or excluding the shape from the one-shot domain; applying the same producer again is not the target.
+
+Drive the first derivation with the deterministic Resolver03 counterexamples before using the arbitrary corpus:
+
+- `viewer { greeting }`: `greeting` needs `displayName`, which needs passive `firstName` and `lastName`.
+- `viewer { message }`: `message` needs `profile { rendered }`, and `rendered` needs passive `raw`.
+- `chain { computed }`: `computed` needs `next { label }`; closure must discover this finite recursive path without unfolding `Chain.next` indefinitely.
+
+Test the pure guarded-demand operation directly on those shapes, then apply it before each Resolver03 field and node resolver call, rerun the deterministic tests, and finally run the arbitrary property test covering interfaces, unions, lists, arguments, field resolvers, and node resolvers. Retain nested node `id` bridges and the distinct node-resolver root ownership rule. Keep Resolver02 unchanged, keep `snipToDemand` a projection of exactly its supplied demand, do not weaken correctness predicates to infer missing values, and defer Resolver03 theorem claims until the constructor is true. Keep the eventual one-shot claim scoped to runtime producer identity rather than plan occurrence.
+
+Useful verification commands are:
+
+```sh
+./gradlew :model:test :arbitrary:test :semantics:test \
+  --tests 'semantics.correctresolution.*' \
+  --tests semantics.WorldInjectionTest \
+  --tests semantics.resolver01.ResolverTest \
+  --tests semantics.resolver02.ResolverTest
+
+./gradlew :semantics:test --tests semantics.resolver03.ResolverTest
+```
+
+At this counterexample checkpoint the first command is green. The second compiles Resolver03 and reports six tests completed with five `MissingFieldException` failures; only the `__typename` test passes. The full `./gradlew check` is therefore intentionally red.
+
+The next-next step, after Resolver03 works for selective resolvers, is to return to the theorem program in [`semantics/theorems.md`](./semantics/theorems.md): establish the remaining `correctResolution` conjuncts for the relevant resolver constructors and then assemble those results into overall correctness theorems. The existing theorem remains specifically scoped to Resolver02's resolver-demand closure and is not evidence that Resolver03 is correct.
 
 ## Current Model
 
@@ -68,19 +98,13 @@ This constructor is intentionally depth-first and may apply a resolver again whe
 
 [`resolver02`](./semantics/src/main/kotlin/semantics/resolver02/Resolver.kt) closes each concrete object's selections under the top-level object-fragment demand of activated field resolvers. [`Schema.OutputField.demandsFromSibling`](./model/src/main/kotlin/model/registry/SiblingDemand.kt) relates a consumer field to an exact sibling `Value.Key`, preserving argument tuples while interpreting type conditions and variable bindings. A local topological order makes already-discovered sibling inputs available to [`materialize`](./semantics/src/main/kotlin/semantics/Materialize.kt). Before applying a resolver, Resolver02 adds the resolver's private, demand-bounded `outputSelectionForest` to its supplied demand, making the selective model API expose the complete output of the deliberately non-selective resolver case.
 
+[`resolver03`](./semantics/src/main/kotlin/semantics/resolver03/Resolver.kt) is structurally identical through local closure, dependency ordering, materialization, and recursive resolution. Its field and node resolver applications omit Resolver02's OSS expansion and pass only the selections known at that point. Demand discovered after entering a produced object can therefore refer to passive values already removed by `snipToDemand`, which is why Resolver03's tests are intentionally red.
+
 ### Correctness Theorems
 
-[`semantics/theorems.md`](./semantics/theorems.md) is the working record for informal correctness theorem statements and supporting arguments about the semantic resolver functions. It is organized as one second-level section per theorem. Each theorem section begins with `### Claim`, which states the resolver, its domain assumptions, and the predicate established for its result; continues with `### Proof structure`, which names the supporting lemmas and explains how their conjunction supports the claim; and then gives one `### Lemma N: Descriptive Title` subsection per lemma, containing both the lemma claim and its argument. This decomposition should expose useful boundaries for a possible future TLA+ formalization, but it is not itself a machine-checked proof.
+[`semantics/theorems.md`](./semantics/theorems.md) records informal mathematical claims and supporting arguments; it is not a machine-checked proof artifact. Its current theorem is specific to Resolver02 and claims that, in its stated domain, Resolver02 produces a result satisfying `isClosedUnderResolverDemand`.
 
-The proof program treats the conjuncts of [`correctResolution`](./semantics/src/main/kotlin/semantics/correctresolution/CorrectResolution.kt) independently before combining them. This keeps schema/root compatibility, fragment coverage, resolver-demand closure, resolver-value conformance, and `__typename` conformance from becoming branches of one oversized induction. A theorem may strengthen its induction hypothesis with auxiliary properties such as selection coverage or root-relaxed node closure when the target predicate depends on them.
-
-The first recorded theorem states that `resolver02`, applied to an empty Query value and a Query-rooted fragment in its domain, yields an OER satisfying `isClosedUnderResolverDemand`. Its proof decomposition is:
-
-- **Down, transitive demand inclusion:** closing an object's selection forest includes every applicable selection required by every activated field resolver, including requirements introduced transitively by added resolver selections.
-- **Across, dependency availability:** before a key is resolved, every sibling subtree required by its object fragment is already resolved and present in the prefix OER, so materializing the resolver input is defined.
-- **Up, recursive satisfaction:** each resolved cell value satisfies all subselections accumulated for its key, and every nested object or list is itself resolver-demand closed; node references receive their canonical `id` bridge through `resolveNode`.
-
-The Across lemma establishes that `resolver02` can construct the result without reading absent input. The extensional `isClosedUnderResolverDemand` conclusion follows from the Down and Up lemmas: Down ensures every local resolver obligation is represented, while Up ensures those selections are satisfied and the same property holds recursively. The Across prefix induction and Up resolution-derivation induction are mutually supporting at a field-resolver key, and `theorems.md` states the decreasing measures that make this non-circular.
+That theorem does not concern Resolver03, does not establish full `correctResolution`, and does not prove selective one-shot execution. Further theorem work remains deferred until Resolver03's selective constructor is no longer false.
 
 ### Resolver Demand
 

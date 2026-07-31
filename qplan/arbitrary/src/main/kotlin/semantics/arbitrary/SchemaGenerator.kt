@@ -147,9 +147,10 @@ private class SchemaGenerator(
                     fields = fields,
                 )
             }
+        val nonNodeObjectNames = objectNames.filterNot(nodeNames::contains)
         val generatedInterface =
-            if (config[InterfacesEnabled]) {
-                val members = nonEmptySubset(objectNames)
+            if (config[InterfacesEnabled] && nonNodeObjectNames.isNotEmpty()) {
+                val members = nonEmptySubset(nonNodeObjectNames)
                 val commonField =
                     FieldDefinitionSpec(
                         ownerName = "GeneratedInterface",
@@ -187,10 +188,10 @@ private class SchemaGenerator(
                 }
             }
         val generatedUnion =
-            if (config[UnionsEnabled]) {
+            if (config[UnionsEnabled] && nonNodeObjectNames.isNotEmpty()) {
                 UnionDefinitionSpec(
                     name = "GeneratedUnion",
-                    members = nonEmptySubset(objectNames),
+                    members = nonEmptySubset(nonNodeObjectNames),
                 )
             } else {
                 null

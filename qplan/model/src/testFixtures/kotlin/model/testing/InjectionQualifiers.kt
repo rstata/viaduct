@@ -3,7 +3,7 @@ package model.testing
 import jakarta.inject.Qualifier
 
 /**
- * The GraphQL SDL from which the reasoning world's schema is constructed.
+ * The external GraphQL SDL from which the source and augmented canonical schemas are constructed.
  */
 @Qualifier
 @MustBeDocumented
@@ -27,7 +27,10 @@ annotation class SchemaSDL
 annotation class VariableValues
 
 /**
- * The node-resolver functions fixed for the reasoning world.
+ * The raw external node-resolver functions supplied before fixture lowering.
+ *
+ * Registry composition consumes these functions and exposes only generated field resolvers to the
+ * reasoning world.
  */
 @Qualifier
 @MustBeDocumented
@@ -39,7 +42,10 @@ annotation class VariableValues
 annotation class NodeResolvers
 
 /**
- * The field-resolver functions fixed for the reasoning world.
+ * The raw external field resolvers supplied before fixture lowering.
+ *
+ * Registry composition may relocate and adapt node-valued producers before exposing canonical
+ * field resolvers to the reasoning world.
  */
 @Qualifier
 @MustBeDocumented

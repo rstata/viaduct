@@ -2,18 +2,15 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
-import model.Schema
 import model.Value
-import model.idKeyOf
 
 /**
  * Whether every resolver activated by this result has its required input in the same result tree.
  *
  * A present field cell activates its registered field resolver unless its arguments contain an
- * error. The containing object must then conform to that resolver's object fragment. A nonempty
- * object whose concrete type has a node resolver activates that resolver and must contain its
- * argumentless `id` bridge cell. Recursing through every present value makes these requirements
- * transitive while preserving the type guards interpreted by [conformsToFragment].
+ * error. The containing object must then conform to that resolver's object fragment. Recursing
+ * through every present value makes these requirements transitive while preserving the type guards
+ * interpreted by [conformsToFragment].
  *
  * This predicate observes cell presence and values, but never cell check components.
  */
@@ -24,17 +21,14 @@ fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
 context(world: Assumptions)
 private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
     val registry = world.executorRegistry
-    if (keys.isNotEmpty()) {
-        world.idKeyOf(type)?.let { idKey ->
-            if (idKey !in keys) return false
-        }
-    }
 
     return keys.all { key ->
         val fieldResolverDemandIsClosed =
             key.arguments.argumentsContainErrorValue() ||
                 key.field !in registry ||
-                conformsToFragment(registry.resolver(key.field).objectFragment)
+                conformsToFragment(
+                    registry.resolver(key.field).objectFragment(key.arguments),
+                )
 
         fieldResolverDemandIsClosed &&
             fetch(key).value.engineResultIsClosedUnderResolverDemand()

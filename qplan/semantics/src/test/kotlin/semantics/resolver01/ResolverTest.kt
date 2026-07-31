@@ -80,7 +80,7 @@ class ResolverTest {
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf<Schema.ObjectType, Resolver.Node>(
+                    mapOf(
                         user to
                             model.testing.nodeResolverOf { id ->
                                 schema.objectOf("User") {

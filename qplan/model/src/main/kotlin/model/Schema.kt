@@ -132,16 +132,6 @@ interface Schema {
     }
 
     /**
-     * A canonical schema element that may serve as a resolver coordinate.
-     *
-     * An object type or output field becomes an actual resolver coordinate only when it belongs to
-     * an [model.registry.ExecutorRegistry]. Separate node-site and field-site wrappers are
-     * intentionally absent: they would capture only local shape constraints rather than registry
-     * membership, canonical ownership, special-field exclusions, or demand-graph invariants.
-     */
-    sealed interface ResolverSite
-
-    /**
      * A named type definition.
      *
      * ### Invariant: schema-type-name-uniqueness
@@ -259,7 +249,7 @@ interface Schema {
      * extensions and inherited interface fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
      */
-    interface ObjectType : CompositeType, ResolverSite
+    interface ObjectType : CompositeType
 
     /**
      * An interface type.
@@ -336,7 +326,7 @@ interface Schema {
      * `containingType.fields[fieldName] == this`, and [typeExpr]'s base type is canonical in the same
      * schema. [arguments] is the input-object-like definition of the complete argument tuple.
      */
-    interface OutputField : ResolverSite {
+    interface OutputField {
         val fieldName: String
         val containingType: CompositeType
         val typeExpr: TypeExpr<OutputType>

@@ -18,3 +18,5 @@ This predicate characterizes whether an OER is a correct field-resolution result
 ## Dependencies
 
 Main code depends only on `model`. Schema parsing, dependency injection, registry assembly, and other pre-reasoning composition belong in test fixtures or application composition code.
+
+Semantic code reasons over the canonical field-only executor registry. Raw node resolvers, node references, typed-ID encoding, and `$id` schema augmentation are fixture-composition concerns; generated node loaders enter semantic reasoning as ordinary field resolvers with explicit bridge fragments.

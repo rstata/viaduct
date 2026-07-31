@@ -2,10 +2,11 @@ package model.registry
 
 import model.Assumptions
 import model.Schema
+import model.SelectionForest
 import model.Value
 
 /**
- * Whether this registered field resolver directly demands [siblingKey] at the top level of its
+ * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
  * object fragment.
  *
  * This relation is defined only when this field and [siblingKey] belong to the same concrete object
@@ -19,10 +20,44 @@ import model.Value
  * @throws MissingExecutorException when this field has no registered field resolver
  */
 context(world: Assumptions)
-fun Schema.OutputField.demandsFromSibling(
+fun Value.Key.demandsFromSibling(
     siblingKey: Value.Key,
 ): Boolean {
-    val objectType = containingType
+    val field = this.field
+    return field.demandsFromSibling(
+        siblingKey = siblingKey,
+        selections =
+            world.executorRegistry
+                .resolver(field)
+                .objectFragment(arguments)
+                .subselections,
+    )
+}
+
+/**
+ * Whether this registered field resolver's representative object fragment directly demands
+ * [siblingKey].
+ *
+ * This schema-coordinate relation is used for pre-reasoning registry analysis. Semantic resolution
+ * uses the [Value.Key] overload so an argument-dependent fragment can preserve the consumer's exact
+ * argument tuple.
+ */
+context(world: Assumptions)
+fun Schema.OutputField.demandsFromSibling(
+    siblingKey: Value.Key,
+): Boolean =
+    demandsFromSibling(
+        siblingKey = siblingKey,
+        selections = world.executorRegistry.resolver(this).objectFragment.subselections,
+    )
+
+context(world: Assumptions)
+private fun Schema.OutputField.demandsFromSibling(
+    siblingKey: Value.Key,
+    selections: SelectionForest,
+): Boolean {
+    val field = this
+    val objectType = field.containingType
     val sibling = siblingKey.field
     require(objectType is Schema.ObjectType && sibling.containingType == objectType) {
         "Sibling demand is defined only for fields on the same concrete object type"
@@ -30,7 +65,6 @@ fun Schema.OutputField.demandsFromSibling(
     require(world.schema.field(objectType.typeName, sibling.fieldName) == sibling) {
         "${objectType.typeName}/${sibling.fieldName} is not canonical in this world"
     }
-    val selections = world.executorRegistry.resolver(this).objectFragment.subselections
     return !selections.all { selection ->
         objectType !in selection.possibleTypes ||
             selection.concreteObjectKey(objectType) != siblingKey

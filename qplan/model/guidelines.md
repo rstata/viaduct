@@ -14,9 +14,9 @@ A semantic category is a modeled set of values represented by an interface hiera
 
 A concrete variant is one particular form of value in a category, such as `EngineResult.Object` within `EngineResult` or `TypeExpr.List` within `TypeExpr`.
 
-A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `EngineResult.Object`, `EngineResult.Cell`, `Value.Key`, `Resolver.Node`, and `Resolver.Field` are examples.
+A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `EngineResult.Object`, `EngineResult.Cell`, `Value.Key`, and `Resolver.Field` are examples.
 
-An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema` and `ExecutorRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `Resolver.Node` and `Resolver.Field`.
+An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema` and `ExecutorRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `Resolver.Field`.
 
 Pre-reasoning infrastructure is code that prepares externally supplied inputs before semantic reasoning begins. SDL decoding, GraphQL parsing, registry assembly, and private test-fixture implementations are examples.
 
@@ -54,7 +54,7 @@ Schema-canonical equality applies only to `Schema` and schema-definition graph e
 
 Undefined equality means that Kotlin `==`, `equals`, hashing, membership in equality-based collections, map-key use, deduplication, and other equality-dependent operations have no semantic interpretation for that category. `Selection`, `Fragment`, resolver values, resolver functions, and `Assumptions` are examples.
 
-Semantic logic must not apply equality-dependent operations to undefined-equality values. For example, key a resolver-demand graph by canonical `Schema.ResolverSite` elements rather than resolver objects, and represent selections with an equality-free occurrence family rather than a `Multiset<Selection>`.
+Semantic logic must not apply equality-dependent operations to undefined-equality values. For example, key a resolver-demand graph by canonical `Schema.OutputField` elements rather than resolver objects, and represent selections with an equality-free occurrence family rather than a `Multiset<Selection>`.
 
 `SelectionForest` supports occurrence count, emptiness, permutation-invariant traversal, filtering, transformation, and concatenation. It does not expose membership, deduplication, equality-based counting, hashing, forest equality, or observable ordering.
 
@@ -62,9 +62,9 @@ Prefer a private data-class implementation when its generated structural equalit
 
 ## Construction
 
-Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned resolver wrappers are logic-constructible; `Schema` and `ExecutorRegistry` are externally supplied. Resolver functions are supplied during pre-reasoning assembly, while `Resolver.Node` and `Resolver.Field` encapsulate those functions behind model-owned factories and public demand-projection operations.
+Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned field-resolver wrappers are logic-constructible; `Schema` and `ExecutorRegistry` are externally supplied. Field-resolver functions are supplied during pre-reasoning assembly and encapsulated by `Resolver.Field` behind a model-owned factory and public demand-projection operation. External raw node lookups, when accepted by composition infrastructure, are lowered to field resolvers before the canonical registry is exposed.
 
-Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `EngineResult.Cell`, `Value.Int`, `Resolver.Node`, and `Resolver.Field` have factories. Abstract categories such as `EngineResult`, `Value`, and `Resolver` need no factory when their concrete variants provide the construction operations.
+Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `EngineResult.Cell`, `Value.Int`, and `Resolver.Field` have factories. Abstract categories such as `EngineResult`, `Value`, and `Resolver` need no factory when their concrete variants provide the construction operations.
 
 Logic-constructible types use private `FooImpl` classes by preference, such as `ObjectKeyImpl` implementing `Value.Key`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 

@@ -5,7 +5,6 @@ import model.EngineResult
 import model.Schema
 import model.SelectionForest
 import model.Value
-import model.idKeyOf
 import model.registry.demandsFromSibling
 import model.selectionForestOf
 import model.union
@@ -75,7 +74,11 @@ private fun Schema.ObjectType.closeResolverDemand(
 
     val resolverDemand =
         unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
-            demand + world.executorRegistry.resolver(key.field).objectFragment.subselections
+            demand +
+                world.executorRegistry
+                    .resolver(key.field)
+                    .objectFragment(key.arguments)
+                    .subselections
         }
     return closeResolverDemand(
         selections = applicableSelections + resolverDemand,
@@ -124,7 +127,7 @@ private fun Value.Object.dependenciesOf(
     return unresolved
         .filter { sibling ->
             sibling != consumer &&
-                consumer.field.demandsFromSibling(sibling)
+                consumer.demandsFromSibling(sibling)
         }.toSet()
 }
 
@@ -150,8 +153,9 @@ private fun Value.Object.resolveKey(
 
                     key.field in world.executorRegistry -> {
                         val resolver = world.executorRegistry.resolver(key.field)
+                        val objectFragment = resolver.objectFragment(key.arguments)
                         // Closure and dependency order put the complete input in this prefix.
-                        val input = resolved.materialize(resolver.objectFragment)
+                        val input = resolved.materialize(objectFragment)
                         resolver.resolve(
                             input = input,
                             arguments = key.arguments,
@@ -182,12 +186,7 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
         Value.Error -> Value.Error
         is Value.Simple -> this
 
-        is Value.Object ->
-            if (type in world.executorRegistry) {
-                resolveNode(selections)
-            } else {
-                resolve(selections)
-            }
+        is Value.Object -> resolve(selections)
 
         is Value.OutputList ->
             EngineResult.List.of(
@@ -200,28 +199,3 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
                     },
             )
     }
-
-/**
- * Returns the selected node-resolver result together with this reference's retained `id` bridge.
- */
-context(world: Assumptions)
-fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {
-    val idKey = requireNotNull(world.idKeyOf(type))
-    val id = fieldValues.getValue(idKey)
-    require(id != Value.Error && id is Value.ID) {
-        "Node reference ${type.typeName}/${idKey.field.fieldName} must contain a non-error ID"
-    }
-
-    val nodeRef = EngineResult.Object.nodeRef(idKey.field, id)
-    return world.executorRegistry
-        .resolver(type)
-        .resolve(
-            type = type,
-            id = id,
-            transitiveDemand = selections,
-        )
-        .resolve(
-            selections = selections,
-            resolved = nodeRef,
-        )
-}

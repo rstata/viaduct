@@ -7,17 +7,26 @@ import model.Schema
 import model.Value
 
 /**
- * A [Schema] decoded from GraphQL SDL.
+ * A fixture pair of the GraphQL-visible source schema and the canonical decoded [Schema].
  *
  * Construct the reasoning world's one schema before its values and assumptions so every non-error
- * value is created through this exact canonical graph. [Value.Error] is schema-independent.
- * The retained GraphQL Java schema is used by [Assumptions] to parse and validate selections without
- * decoding a second model schema.
+ * value is created through this exact canonical graph. The canonical graph may contain synthetic
+ * `$id` bridge fields absent from the retained GraphQL Java schema. [Value.Error] is
+ * schema-independent. The retained source schema parses and validates GraphQL selections, ensuring
+ * those inputs cannot name synthetic fields.
  */
 internal class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,
     private val decodedSchema: Schema,
 ) : Schema by decodedSchema {
+    /** The canonical concrete object types available to fixture registry lowering. */
+    internal val objectTypes: List<Schema.ObjectType>
+        get() =
+            graphQLSchema.allTypesAsList
+                .filterIsInstance<graphql.schema.GraphQLObjectType>()
+                .filterNot { it.name.startsWith("__") }
+                .map { type(it.name) as Schema.ObjectType }
+
     companion object {
         private val STANDARD_SCALAR_NAMES = setOf("Int", "Float", "String", "Boolean", "ID")
         private val STANDARD_DIRECTIVE_NAMES =

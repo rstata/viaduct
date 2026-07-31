@@ -10,7 +10,9 @@ Generated schema, query, and resolver-fragment text is external input and is val
 
 Schema and registry assembly may use ordinary generator state and Kotlin collections. Every semantic `Value`, `Value.Key`, `Fragment`, and `Selection` is constructed through its precise model factory against the canonical schema of the generated world.
 
-Field-resolver sites are chosen before output selection sets and values are derived. Each field resolver closes over one constant selection-independent value that inhabits its inferred output selection set. Node resolver values additionally substitute the input ID to satisfy the model's node-resolver invariant.
+Source field-resolver sites are chosen before output selection sets and values are derived. Each source field resolver closes over one constant selection-independent value that inhabits its inferred output selection set. When node resolvers are enabled, every generated `Node` implementation receives a raw node resolver whose value substitutes the input ID; fixture composition then lowers those raw functions and node-valued source fields into canonical field resolvers and synthetic `$id` bridge fields.
+
+Generated non-`Node` interfaces and unions contain only non-`Node` objects. This keeps their possible-type sets disjoint from fixture-lowered node outputs because the current lowering rejects abstract outputs that mix node-resolved and inline objects.
 
 Generated object fragments are acyclic by construction and are still checked by the ordinary registry assembly invariant. Queries and registries are generated independently from their common schema.
 

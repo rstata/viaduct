@@ -2,139 +2,167 @@ package semantics.resolver01
 
 import model.Assumptions
 import model.EngineResult
+import model.Schema
 import model.SelectionForest
 import model.Value
-import model.idKeyOf
+import model.registry.demandsFromSibling
+import model.selectionForestOf
 import model.union
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.correctresolution.concreteObjectKey
+import semantics.materialize
 
 /**
  * Resolves [selections] against an already-produced object value.
  *
- * A selected field with a registered field resolver is resolved from its arguments and an empty
- * object of the receiver's type. This version is therefore defined only for activated field
- * resolvers whose object fragments are empty. The engine supplies `__typename` from the receiver's
- * concrete type. Every other selected field must already be present in the receiver.
- *
- * The initial receiver may be an empty Query object because every non-`__typename` Query field has
- * a registered field resolver. Nested node references are delegated to [resolveNode].
- *
- * ### Domain
- *
- * A selected field without a registered field resolver remains in the output selection set of the
- * resolver that produced the receiver. Resolver values are assumed to contain every demanded field
- * in that output selection set, so the receiver contains the corresponding concrete key. A nested
- * node value crosses an ownership boundary before this lookup: [resolveNode] applies the node
- * resolver, and this operation then walks that resolver's value instead.
- *
- * @throws IllegalArgumentException when an activated field resolver has a nonempty object fragment
- * @throws model.MissingFieldException when an unregistered selected field is absent
+ * Resolver01 closes and orders exact local field-resolver input demand. Its ordinary test domain
+ * still gives source field resolvers empty object fragments; fixture-generated node loaders use
+ * synthetic sibling ID bridge fields and therefore require this generic local field dependency.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
-    val cells =
-        selections
-            .filter { selection -> type in selection.possibleTypes }
-            .groupBy { selection -> selection.concreteObjectKey(type) }
-            .mapValues { (key, fieldSelections) ->
-                if (key.arguments.argumentsContainErrorValue()) {
-                    EngineResult.Cell.Error
-                } else {
-                    val subselections =
-                        fieldSelections.flatMap { selection -> selection.subselections }
-                    val fieldValue =
-                        when {
-                            key.field.fieldName == "__typename" ->
-                                Value.String.of(type.typeName)
+fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
+    resolve(
+        selections = selections,
+        resolved = EngineResult.Object.of(type, emptyMap()),
+    )
 
-                            key.field in world.executorRegistry ->
-                                resolveField(key, subselections)
-                            else -> {
-                                // The producing resolver supplies demanded output-selection fields.
-                                fieldValues.getValue(key)
-                            }
-                        }
-                    EngineResult.Cell.of(
-                        value = fieldValue.resolve(subselections),
-                    )
-                }
-            }
-
-    return EngineResult.Object.of(type, cells)
+context(world: Assumptions)
+private fun Value.Object.resolve(
+    selections: SelectionForest,
+    resolved: EngineResult.Object,
+): EngineResult.Object {
+    val closedDemand = type.closeResolverDemand(selections)
+    val selectionsByKey =
+        closedDemand.groupBy { selection -> selection.concreteObjectKey(type) }
+    val orderedKeys = dependencyOrder(selectionsByKey.keys - resolved.keys)
+    return orderedKeys.fold(resolved) { result, key ->
+        result.union(resolveKey(key, selectionsByKey.getValue(key), result))
+    }
 }
 
 context(world: Assumptions)
-private fun Value.Object.resolveField(
-    key: Value.Key,
+private fun Schema.ObjectType.closeResolverDemand(
     selections: SelectionForest,
-): Value.Output? {
-    val resolver = world.executorRegistry.resolver(key.field)
-    require(resolver.objectFragment.subselections.isEmpty()) {
-        "Resolver for ${type.typeName}/${key.field.fieldName} has a nonempty object fragment"
-    }
-    return resolver.resolve(
-        input = Value.Object.of(type),
-        arguments = key.arguments,
-        transitiveDemand = selections,
+    expanded: Set<Value.Key> = emptySet(),
+): SelectionForest {
+    val applicableSelections =
+        selections.filter { selection -> this in selection.possibleTypes }
+    val groupedSelections =
+        applicableSelections.groupBy { selection -> selection.concreteObjectKey(this) }
+    val unexpandedResolverKeys =
+        groupedSelections.keys.filter { key ->
+            key !in expanded &&
+                !key.arguments.argumentsContainErrorValue() &&
+                key.field in world.executorRegistry
+        }.toSet()
+
+    if (unexpandedResolverKeys.isEmpty()) return applicableSelections
+
+    val resolverDemand =
+        unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
+            demand +
+                world.executorRegistry
+                    .resolver(key.field)
+                    .objectFragment(key.arguments)
+                    .subselections
+        }
+    return closeResolverDemand(
+        selections = applicableSelections + resolverDemand,
+        expanded = expanded + unexpandedResolverKeys,
     )
 }
 
 context(world: Assumptions)
-private fun Value.Output?.resolve(selections: SelectionForest): EngineResult? =
+private fun Value.Object.dependencyOrder(
+    keys: Set<Value.Key>,
+    ordered: List<Value.Key> = emptyList(),
+): List<Value.Key> {
+    if (keys.isEmpty()) return ordered
+
+    val ready =
+        keys.filter { key ->
+            dependenciesOf(key, keys).isEmpty()
+        }.toSet()
+    require(ready.isNotEmpty()) {
+        "Resolver dependencies on ${type.typeName} contain a cycle"
+    }
+    return dependencyOrder(
+        keys = keys - ready,
+        ordered = ordered + ready,
+    )
+}
+
+context(world: Assumptions)
+private fun Value.Object.dependenciesOf(
+    consumer: Value.Key,
+    unresolved: Set<Value.Key>,
+): Set<Value.Key> {
+    if (
+        consumer.arguments.argumentsContainErrorValue() ||
+        consumer.field !in world.executorRegistry
+    ) {
+        return emptySet()
+    }
+
+    return unresolved
+        .filter { sibling ->
+            sibling != consumer &&
+                consumer.demandsFromSibling(sibling)
+        }.toSet()
+}
+
+context(world: Assumptions)
+private fun Value.Object.resolveKey(
+    key: Value.Key,
+    fieldSelections: SelectionForest,
+    resolved: EngineResult.Object,
+): EngineResult.Object {
+    val cell =
+        if (key.arguments.argumentsContainErrorValue()) {
+            EngineResult.Cell.Error
+        } else {
+            val subselections =
+                fieldSelections.flatMap { selection -> selection.subselections }
+            val fieldValue =
+                when {
+                    key.field.fieldName == "__typename" ->
+                        Value.String.of(type.typeName)
+
+                    key.field in world.executorRegistry -> {
+                        val resolver = world.executorRegistry.resolver(key.field)
+                        val objectFragment = resolver.objectFragment(key.arguments)
+                        resolver.resolve(
+                            input = resolved.materialize(objectFragment),
+                            arguments = key.arguments,
+                            transitiveDemand = subselections,
+                        )
+                    }
+
+                    else -> fieldValues.getValue(key)
+                }
+            EngineResult.Cell.of(
+                value = fieldValue.resolveValue(subselections),
+            )
+        }
+
+    return EngineResult.Object.of(type, mapOf(key to cell))
+}
+
+context(world: Assumptions)
+private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResult? =
     when (this) {
         null -> null
         Value.Error -> Value.Error
         is Value.Simple -> this
-
-        is Value.Object ->
-            if (type in world.executorRegistry) {
-                resolveNode(selections)
-            } else {
-                resolve(selections)
-            }
-
+        is Value.Object -> resolve(selections)
         is Value.OutputList ->
             EngineResult.List.of(
                 typeExpr = typeExpr,
                 cells =
                     values.map { value ->
                         EngineResult.Cell.of(
-                            value = value.resolve(selections),
+                            value = value.resolveValue(selections),
                         )
                     },
             )
     }
-
-/**
- * Resolves this ID-bearing node reference, then delegates its resolver value to [resolve].
- *
- * The reference supplies the node's `id`. The registered node resolver repeats that `id` in its
- * returned object and supplies the remaining selected fields. The bridge retains `id` in the OER
- * even when it was not selected and checks agreement through union when it was selected.
- */
-context(world: Assumptions)
-fun Value.Object.resolveNode(selections: SelectionForest): EngineResult.Object {
-    val idKey = requireNotNull(world.idKeyOf(type))
-    val id = fieldValues.getValue(idKey)
-    require(id != Value.Error && id is Value.ID) {
-        "Node reference ${type.typeName}/${idKey.field.fieldName} must contain a non-error ID"
-    }
-
-    val nodeRef = EngineResult.Object.nodeRef(idKey.field, id)
-    val resolverResult =
-        world.executorRegistry
-            .resolver(type)
-            .resolve(
-                type = type,
-                id = id,
-                transitiveDemand = selections,
-            )
-            .resolve(
-                selections.filter { selection ->
-                    selection.key.field.fieldName != "id"
-                },
-            )
-
-    return nodeRef.union(resolverResult)
-}

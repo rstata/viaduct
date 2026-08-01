@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records durable context for designing Viaduct query planning and execution to support one-shot resolver execution. Within the supported execution scope, every runtime producer identity should receive complete in-scope demand before dispatch and execute at most once.
+This document records durable context for designing Viaduct query planning and execution to support one-shot resolver execution. Within the supported feature scope, every resolver-bearing OER occurrence should receive complete in-scope demand before its resolver is applied, and that resolver should be applied exactly once while constructing that occurrence.
 
 The emphasis is therefore on:
 
@@ -20,16 +20,18 @@ Current proposals, class shapes, implementation milestones, and migration sequen
 
 Viaduct currently discovers much of its resolver demand during execution. Fields and child plans begin running as traversal encounters them, while promises, OER cells, and memoization impose ordering through later reads. This makes complete demand aggregation difficult for selective resolvers: multiple plan occurrences can converge on the same producer after its invocation has already started.
 
-The project goal is a query-plan and execution design that supports one-shot resolver execution. For every demanded runtime producer identity in the supported scope, planning must aggregate complete in-scope demand before dispatch so that later consumers do not require another invocation or materialization of that producer. One-shot is defined per runtime producer identity, not per schema coordinate: distinct objects, list items, arguments, concrete types, or execution epochs may still require distinct invocations.
+The project goal is a query-plan and execution design that supports one-shot resolver execution. Planning must aggregate complete in-scope demand for each resolver-bearing OER field cell before its resolver is applied so that later consumers of that same cell do not require another application or materialization. Multiple plan or selection occurrences that converge on one alias-free OER cell contribute to the same one-shot obligation.
 
-Local, lazy demand discovery cannot provide that guarantee merely by waiting on promises or recursively walking the plan occurrence that reached the resolver first. The design must bound possible contributors before dispatch, preserve unresolved applicability as guards, conservatively over-select when exact activation is unavailable, isolate work into a distinct producer identity or execution scope, or explicitly exclude the shape. Repeatedly materializing the same producer as new demand arrives is useful contrasting prior art, not the target design.
+One-shot is not a cross-tree deduplication guarantee. Distinct OER occurrences remain distinct even when they carry the same node identifier, use the same resolver coordinate and arguments, or contain structurally equal values; each may have its resolver applied independently. Node caching, request deduplication, and batching may share work beneath those applications, but their cache identity is deliberately outside the one-shot identity used here.
+
+Local, lazy demand discovery cannot provide that guarantee merely by waiting on promises or recursively walking the plan occurrence that reached the resolver first. The design must bound possible contributors before dispatch, preserve unresolved applicability as guards, conservatively over-select when exact activation is unavailable, isolate work into a distinct OER occurrence or execution scope, or explicitly exclude the shape. Repeatedly materializing the same resolver-bearing OER occurrence as new demand arrives is useful contrasting prior art, not the target design.
 
 Several other conclusions are durable:
 
 - Demand and ownership are different. Query selections and RSSes describe what data is needed; a resolver's OSS describes which paths that resolver owns.  
 - One-shot execution correctness is producer-specific. Eventual union coverage of an OER does not prove that the invocation that produced it received complete demand. This is an execution/materialization proof obligation, distinct from extensional predicates over acceptable OERs.
 - An extensional correctness predicate may be defined over stipulated OER carrier values without defining how to construct those values. Such a specification does not by itself require an OER factory, concrete implementation, builder, test fixture, or execution algorithm.
-- Plan occurrence is not producer identity. Static paths are templates; runtime identity also depends on target OER, field identity and arguments, concrete type, ancestry, and execution epoch.  
+- Plan occurrence is not the one-shot identity. Several plan occurrences can contribute demand to one OER cell, while different OER occurrences never become one one-shot obligation merely because their node IDs or values match.
 - Runtime type, request variables, and object identity prevent execution from being wholly static. A useful plan may still eagerly bound all possible dependencies while binding concrete instances at runtime.  
 - Query plan ownership, dependency target, concrete applicability, and OSS root shape must be explicit. Reconstructing them from incidental type equality or a single plan index has produced real bugs.  
 - Validation must be capable of distinguishing the producer from cache hits and must exercise actual execution, not only a second interpreter of planning semantics.
@@ -47,6 +49,10 @@ For a canonical field on a concrete object type, `behavioral(field)` means exact
 The fixture-supported lowering domain requires a node-valued source field to be declared as `Node` or a subtype whose every possible concrete type has a raw node resolver. Mixed node-resolved and inline possible types are rejected. Synthetic bridge type expressions preserve list and nullability shape, arguments remain on both `foo` and `foo$id`, and fixture typed IDs retain the concrete type needed for abstract and per-list-element dispatch.
 
 The modeled input is a post-validation selection set. Named fragment spreads are assumed to have been inlined before this boundary; inline fragments remain because their type conditions affect field applicability. Directive-controlled applicability, including `@skip` and `@include`, belongs to field resolution and is therefore in the project's eventual scope even when a modeling phase explicitly defers it.
+
+For this project, a one-shot identity is one resolver-bearing field cell at one concrete OER object occurrence, identified by its parent OER occurrence and concrete `Value.Key`. Demand reaching that cell through multiple client selections or dependency paths must be combined before its sole resolver application. A field with the same key under another object or list occurrence is a different one-shot identity.
+
+This definition intentionally does not identify OER occurrences by node ID. Two result-tree positions containing the same global ID are separate occurrences and may independently apply the same node resolver. Any cache or batch layer that recognizes their common ID is an optimization beneath the semantic one-shot boundary, not an obligation of query planning.
 
 ## Epistemic status
 
@@ -98,7 +104,7 @@ Using stable terms helps separate findings from one proposal's class names.
 - **Producer:** A resolver or engine mechanism that supplies one or more OER values.  
 - **Consumer:** A resolver, checker, completion step, or other operation that reads those values.  
 - **Occurrence:** One appearance of a field or dependency in a client selection or child plan.  
-- **Producer identity:** The execution identity used to decide whether occurrences share one invocation or result. It is more specific than a schema coordinate and may differ from a response path.  
+- **One-shot producer identity:** One resolver-bearing field cell at one concrete OER object occurrence, determined by the parent occurrence and concrete `Value.Key`. Multiple demand occurrences may converge on it, but a field cell elsewhere in the result tree is a different identity even when node IDs, resolver coordinates, arguments, or values match.
 - **Demand:** The fields and paths consumers may need from a producer.  
 - **Ownership:** The fields and paths a producer is responsible for supplying, represented by its OSS.  
 - **Coverage:** The fields and paths a particular materialization actually supplied.  
@@ -122,11 +128,11 @@ Query.a query RSS:  foo { x y }
 
 Both RSS occurrences reach the same memoized `Query.foo`. Whichever occurrence wins invokes the resolver with its local demand. The sibling later reuses the same result and claims an additional field. In an observed execution, the winning invocation received `{x, y}` and execution later claimed `z`.
 
-The failure does not depend on fragments and is not inherently limited to the query root. It arises whenever independently reached plan occurrences converge on one producer identity with different demand.
+The failure does not depend on fragments and is not inherently limited to the query root. It arises whenever independently reached plan occurrences converge on one resolver-bearing OER cell with different demand.
 
 The durable lesson is:
 
-> A one-shot completeness argument must aggregate over the producer's complete in-scope equivalence class, not merely over dependencies reachable from the first plan occurrence.
+> A one-shot completeness argument must aggregate over every in-scope demand occurrence targeting the same resolver-bearing OER cell, not merely over dependencies reachable from the first plan occurrence.
 
 ### Waiting for contributors is not a completeness proof
 
@@ -187,17 +193,14 @@ A cached plan cannot generally know:
 
 This does not imply that dependencies must be discovered lazily. It implies that a static plan describes possible work and guards, while runtime binds concrete instances and activates applicable alternatives.
 
-A static path or schema coordinate is not a resolver invocation. Runtime producer identity may include:
+A static path or schema coordinate is not a resolver application. The one-shot identity is bound at runtime from:
 
 - execution epoch;  
-- target or parent OER occurrence;  
-- resolver coordinate and concrete dispatcher variant;  
-- exact field key and canonical arguments;  
-- concrete type;  
-- ancestry and list indices;  
-- applicable conditions or variant identity.
+- parent OER occurrence, including ancestry and list indices;
+- exact concrete field key and canonical arguments; and
+- concrete resolver coordinate or dispatcher variant.
 
-Any aggregation algorithm must use an identity compatible with execution's actual memoization and batching behavior.
+Any aggregation algorithm must combine all demand that targets that OER cell before its resolver application. It must not merge distinct OER cells merely because a node cache or batch layer would treat their underlying lookups as equivalent.
 
 ### Plan semantics cannot be reconstructed from incidental state
 
@@ -235,13 +238,13 @@ These criteria are execution-algorithm proof obligations that are intentionally 
 
 ### Producer completeness
 
-For every demanded producer identity `P` in the supported scope, every in-scope, producer-owned field that execution consumes from `P` must be covered by the demand supplied to its sole invocation:
+For every demanded resolver-bearing OER occurrence `P` in the supported scope, every in-scope, producer-owned field that execution consumes from `P` must be covered by the demand supplied to its sole resolver application:
 
 ```
 ConsumedOwnedFields(P) subset-of SuppliedDemand(P) subset-of OSS(P)
 ```
 
-Later materialization of `P` does not satisfy the one-shot contract. Work that cannot meet this relation must be assigned a distinct producer identity or execution scope, conservatively covered before dispatch, or declared unsupported.
+Later materialization of `P` does not satisfy the one-shot contract. Work that cannot meet this relation must be assigned a distinct OER occurrence or execution scope, conservatively covered before dispatch, or declared unsupported.
 
 Permitted engine bridges such as `Node.id` should be modeled explicitly rather than hidden as exceptions.
 
@@ -249,11 +252,11 @@ Permitted engine bridges such as `Node.id` should be modeled explicitly rather t
 
 Every producer, checker, variable provider, runtime type step, or other prerequisite that execution may require in the supported scope must be represented before dispatch by the planning mechanism.
 
-Runtime may bind or activate pre-bounded alternatives. If runtime can introduce an unbounded new dependency for an existing producer identity, that feature is outside the one-shot scope until the design can bound, isolate, or reject it.
+Runtime may bind or activate pre-bounded alternatives. If runtime can introduce an unbounded new dependency for an existing resolver-bearing OER occurrence, that feature is outside the one-shot scope until the design can bound, isolate, or reject it.
 
 ### Identity agreement
 
-The identity used to aggregate demand must agree with the identity used to memoize, cache, batch, or otherwise coalesce execution. Two occurrences must not share demand if execution treats them as different producers, and must not dispatch independently with partial demand if execution treats them as one producer.
+The identity used to aggregate demand must agree with OER occurrence construction. Multiple selection or dependency occurrences targeting one OER cell must not apply its resolver independently with partial demand, while distinct OER cells must not have their demand merged merely because an underlying cache or batch layer can coalesce their work.
 
 Tests should use the production OER key and argument-coercion logic, not an approximation based on field name.
 
@@ -277,7 +280,7 @@ Dependency discovery and demand aggregation must terminate in the presence of:
 - abstract and covariant recursion;  
 - checker raw-slot dependencies.
 
-Termination keys must preserve distinctions that affect target, ownership, type applicability, or producer identity. Deduplicating only by selection-set object or type name can collapse meaningful paths.
+Termination keys must preserve distinctions that affect target, ownership, type applicability, or the target OER occurrence. Deduplicating only by selection-set object or type name can collapse meaningful paths.
 
 ### Liveness and failure completion
 
@@ -320,11 +323,11 @@ A deeply nested resolver can issue demand against Query or another explicit targ
 
 These cases should not be assumed equivalent to ordinary current-object RSSes. A design may isolate them, rerun them, or represent them explicitly, but must state the choice.
 
-### Variables whose values require execution
+### `fromField` variables whose values require execution
 
-A selective field's argument or condition can depend on a variable provider, whose own RSS may require object or query data. The variable-resolution target may differ from the child plan's selection type.
+A selective field's argument or condition can depend on a `fromField` variable provider, whose own RSS obtains the variable value from a path in an object or Query OER. The variable-resolution target may differ from the child plan's selection type.
 
-If the value needed to decide producer identity or demand depends on the same producer's output, exact pre-dispatch merging may be cyclic. The shape cannot remain in the one-shot scope unless conservative demand or isolated execution breaks that cycle; otherwise it must be rejected or excluded.
+If the value needed to decide the target OER key or its demand depends on that same occurrence's output, exact pre-dispatch merging may be cyclic. The shape cannot remain in the one-shot scope unless conservative demand or isolated execution breaks that cycle; otherwise it must be rejected or excluded.
 
 ### Lazy concrete-type plans
 
@@ -362,11 +365,13 @@ Resolver RSSes normally consume visible, policy-checked values. Checker RSSes in
 
 ### Parent traversal
 
-`@parent` demand targets an ancestor OER rather than a descendant path. List ancestry makes the target occurrence-specific. Parent-mediated and direct demand can be merged only after they resolve to the same ancestor producer identity.
+`@parent` demand targets an ancestor OER rather than a descendant path. List ancestry makes the target occurrence-specific. Parent-mediated and direct demand can be merged only after they resolve to the same ancestor OER cell.
 
 ### Nodes and repeated IDs
 
 Different paths can produce distinct runtime OER occurrences for the same node ID. Node data loaders may batch, cache, cover, or re-execute those requests according to their own identity rules. Static path identity and node cache identity should not be conflated.
+
+These occurrences are deliberately outside any cross-tree one-shot requirement: applying the same node resolver separately at each occurrence is correct. The one-shot obligation applies independently inside each occurrence; shared-ID caching and batching are separate optimizations.
 
 ### Mutations, subscriptions, and incremental work
 
@@ -458,7 +463,7 @@ Useful measurements include:
 - number of possible versus activated alternatives;  
 - demand before and after ownership projection;  
 - over-selection ratio;  
-- invocation count per producer identity;
+- invocation count per resolver-bearing OER occurrence;
 - missing-demand or scope-exclusion frequency;
 - batching quality;  
 - number and duration of blocked dependencies;  
@@ -509,7 +514,7 @@ MAT and one-shot query planning answer different questions.
 
 It is therefore a demand/coverage representation, not a complete dependency graph or scheduler.
 
-MAT's ability to fetch only the missing difference supports repeated materialization when demand arrives late. That makes it useful contrasting prior art and potentially useful infrastructure outside the declared one-shot scope, but repeated materialization of one producer identity is not the project endpoint. A one-shot design may reuse typed demand, coverage, and difference operations when their semantics fit without adopting repeated execution as its correctness strategy.
+MAT's ability to fetch only the missing difference supports repeated materialization when demand arrives late. That makes it useful contrasting prior art and potentially useful infrastructure outside the declared one-shot scope, but repeated materialization of one resolver-bearing OER occurrence is not the project endpoint. A one-shot design may reuse typed demand, coverage, and difference operations when their semantics fit without adopting repeated execution as its correctness strategy.
 
 ### Durable lessons from MAT
 
@@ -525,14 +530,14 @@ MAT's ability to fetch only the missing difference supports repeated materializa
 
 1. What exact scope receives the one-shot completeness guarantee?
 2. How does the design reject or isolate demand outside that scope without silently becoming multi-shot?
-3. What identity determines whether two occurrences share one producer?  
-4. Does that identity exactly match OER memoization, node caching, and batching behavior?  
+3. Do multiple demand paths target the same resolver-bearing OER cell or distinct OER occurrences?
+4. Does aggregation match OER occurrence construction without conflating it with node caching or batching identity?
 5. Which dependencies are bounded statically, and which values are bound at runtime?  
 6. Can runtime introduce new dependency edges, or only activate bounded alternatives?  
 7. How are variable providers and their targets represented?  
 8. How are concrete type alternatives bounded without excessive over-selection?  
 9. How are query-root re-entrancy, explicit targets, and `ctx.query()` isolated or integrated?  
-10. How are `@parent` and list ancestry normalized to producer identity?  
+10. How are `@parent` and list ancestry normalized to the target ancestor OER occurrence?
 11. How are checker raw-slot and visible-value dependencies distinguished?  
 12. What representation is used for internal demand, actual coverage, resolver-visible selections, and completion?  
 13. How are aliases, arguments, directives, and fragments preserved where required?  

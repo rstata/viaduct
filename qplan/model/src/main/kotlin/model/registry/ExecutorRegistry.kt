@@ -19,9 +19,18 @@ typealias FieldResolverFunction =
  * fields instead.
  */
 sealed interface Resolver : Executor {
+    /**
+     * A field resolver and its object-valued input requirements.
+     *
+     * [objectFragment] is the representative direct requirement. [extendedFragment] starts with
+     * that requirement and additionally roots the transitive requirements of resolver occurrences
+     * reached within it. The argument-taking forms preserve exact argument-dependent coordinates.
+     */
     class Field private constructor(
         val objectFragment: Fragment,
+        val extendedFragment: Fragment,
         private val objectFragmentFunction: (Value.Arguments) -> Fragment,
+        private val extendedFragmentFunction: (Value.Arguments) -> Fragment,
         private val function: FieldResolverFunction,
         private val projectionDemand: (SelectionForest) -> SelectionForest,
     ) : Resolver {
@@ -35,6 +44,10 @@ sealed interface Resolver : Executor {
          */
         fun objectFragment(arguments: Value.Arguments): Fragment =
             objectFragmentFunction(arguments)
+
+        /** Returns the transitive extension of the object fragment for this exact argument tuple. */
+        fun extendedFragment(arguments: Value.Arguments): Fragment =
+            extendedFragmentFunction(arguments)
 
         /**
          * Applies this field resolver and projects its selection-independent result to
@@ -59,7 +72,9 @@ sealed interface Resolver : Executor {
         fun mapOutput(transform: (Value.Output?) -> Value.Output?): Field =
             Field(
                 objectFragment = objectFragment,
+                extendedFragment = extendedFragment,
                 objectFragmentFunction = objectFragmentFunction,
+                extendedFragmentFunction = extendedFragmentFunction,
                 function = { input, arguments -> transform(function(input, arguments)) },
                 projectionDemand = projectionDemand,
             )
@@ -73,10 +88,36 @@ sealed interface Resolver : Executor {
         fun mapDemand(transform: (SelectionForest) -> SelectionForest): Field =
             Field(
                 objectFragment = objectFragment,
+                extendedFragment = extendedFragment,
                 objectFragmentFunction = objectFragmentFunction,
+                extendedFragmentFunction = extendedFragmentFunction,
                 function = function,
                 projectionDemand = { demand -> transform(projectionDemand(demand)) },
             )
+
+        /**
+         * Returns this resolver with the precomputed transitive extension of [objectFragment].
+         *
+         * Registry assembly applies this pre-reasoning operation after resolver lowering and
+         * dependency analysis. The extension is rooted at the same object type and contains the
+         * requirements of resolver fields reached within [objectFragment].
+         */
+        fun withExtendedFragment(
+            extendedFragment: Fragment,
+            extendedFragmentFunction: (Value.Arguments) -> Fragment,
+        ): Field {
+            require(extendedFragment.nominalType == objectFragment.nominalType) {
+                "Extended fragment type must match object fragment type"
+            }
+            return Field(
+                objectFragment = objectFragment,
+                extendedFragment = extendedFragment,
+                objectFragmentFunction = objectFragmentFunction,
+                extendedFragmentFunction = extendedFragmentFunction,
+                function = function,
+                projectionDemand = projectionDemand,
+            )
+        }
 
         companion object {
             fun of(
@@ -85,7 +126,9 @@ sealed interface Resolver : Executor {
             ): Field =
                 Field(
                     objectFragment = objectFragment,
+                    extendedFragment = objectFragment,
                     objectFragmentFunction = { objectFragment },
+                    extendedFragmentFunction = { objectFragment },
                     function = function,
                     projectionDemand = { it },
                 )
@@ -104,7 +147,9 @@ sealed interface Resolver : Executor {
             ): Field =
                 Field(
                     objectFragment = objectFragment,
+                    extendedFragment = objectFragment,
                     objectFragmentFunction = objectFragmentFunction,
+                    extendedFragmentFunction = objectFragmentFunction,
                     function = function,
                     projectionDemand = { it },
                 )

@@ -3,6 +3,7 @@ package semantics.resolver03
 import model.Assumptions
 import model.EngineResult
 import model.Schema
+import model.Selection
 import model.SelectionForest
 import model.Value
 import model.registry.demandsFromSibling
@@ -14,10 +15,6 @@ import semantics.materialize
 
 /**
  * Returns the result for [selections] and all transitive resolver demand on this concrete object.
- *
- * This selective experiment supplies only demand known before each resolver application. Demand
- * discovered after entering a resolver result may therefore require a passive value that
- * `snipToDemand` already removed, leaving this operation undefined.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
@@ -159,7 +156,7 @@ private fun Value.Object.resolveKey(
                         resolver.resolve(
                             input = input,
                             arguments = key.arguments,
-                            transitiveDemand = subselections,
+                            transitiveDemand = subselections.withExtendedResolverDemand(),
                         )
                     }
 
@@ -198,4 +195,43 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
                         )
                     },
             )
+    }
+
+/**
+ * Adds the precomputed input requirements of every resolver occurrence in this demand.
+ *
+ * Each resolver's extended fragment is rooted at its occurrence's containing object. Recursing
+ * through subselections retains the path and type guards that locate nested occurrences.
+ */
+context(world: Assumptions)
+private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
+    flatMap { selection ->
+        val nestedDemand = selection.subselections.withExtendedResolverDemand()
+        val rootedSelection =
+            Selection.of(
+                key = selection.key,
+                nominalType = selection.nominalType,
+                possibleTypes = selection.possibleTypes,
+                subselections = nestedDemand,
+            )
+        val resolverDemand =
+            selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
+                val key = selection.concreteObjectKey(possibleType)
+                if (
+                    key.arguments.argumentsContainErrorValue() ||
+                    key.field !in world.executorRegistry
+                ) {
+                    demand
+                } else {
+                    val resolver = world.executorRegistry.resolver(key.field)
+                    val fragment =
+                        if (world.noTransitiveDemand) {
+                            resolver.objectFragment(key.arguments)
+                        } else {
+                            resolver.extendedFragment(key.arguments)
+                        }
+                    demand + fragment.subselections
+                }
+            }
+        selectionForestOf(rootedSelection) + resolverDemand
     }

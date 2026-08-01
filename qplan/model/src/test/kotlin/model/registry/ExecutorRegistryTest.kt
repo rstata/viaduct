@@ -113,6 +113,56 @@ class ExecutorRegistryTest {
     }
 
     @Test
+    fun `extended fragments preserve exact arguments on lowered node bridges`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
+
+                    type User implements Node {
+                      id: ID!
+                    }
+
+                    type Query {
+                      user(id: ID!): User!
+                    }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val user = schema.type("User") as Schema.ObjectType
+                    mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
+                },
+                fieldResolvers = { schema ->
+                    val user = schema.field("Query", "user")
+                    mapOf(
+                        user to
+                            model.testing.fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                    )
+                },
+            )
+        val schema = world.schema
+        val user = schema.field("Query", "user")
+        val bridge = schema.field("Query", "user\$id")
+        val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
+        val extended =
+            world.executorRegistry
+                .resolver(user)
+                .extendedFragment(arguments)
+        val bridgeSelection = extended.subselections.single()
+
+        assertEquals(bridge, bridgeSelection.key.field)
+        assertEquals(
+            Value.ID.of("42"),
+            bridgeSelection.key.arguments.fieldValues.getValue("id"),
+        )
+    }
+
+    @Test
     fun `field resolvers return the complete nullable output-value algebra`() {
         val world =
             TestWorld.fromSDL(

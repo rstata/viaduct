@@ -14,7 +14,7 @@ sealed interface Assumptions {
     val executorRegistry: ExecutorRegistry
 
     /**
-     * Whether resolver02 deliberately stops resolver-demand closure after one expansion.
+     * Whether resolver-demand construction deliberately stops after one expansion.
      *
      * This fault-injection flag exists to keep an evergreen control showing that generated
      * properties reject an implementation without transitive demand closure. It is false in every

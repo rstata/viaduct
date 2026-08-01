@@ -11,6 +11,7 @@ import model.registry.FieldResolverFunction
 import model.registry.MissingExecutorException
 import model.registry.Resolver
 import model.selectionForestOf
+import model.toSelectionForest
 
 /**
  * A raw external node lookup accepted only by test-fixture composition.
@@ -455,9 +456,11 @@ private class NodeResolverLowering(
 
 private class TestExecutorRegistry(
     private val schema: Schema,
-    private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+    fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
 ) : ExecutorRegistry {
+    private val sourceFieldResolvers = fieldResolvers
+    private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
     private val outgoing: Map<Schema.OutputField, Set<Schema.OutputField>>
     private val incoming: Map<Schema.OutputField, Set<Schema.OutputField>>
 
@@ -497,6 +500,27 @@ private class TestExecutorRegistry(
                 implicatedFields(resolver.objectFragment) + additionalDemand[field].orEmpty()
             }
         requireAcyclic(outgoing)
+        this.fieldResolvers =
+            dependencyOrder(outgoing).fold(emptyMap()) { extendedResolvers, field ->
+                val resolver = fieldResolvers.getValue(field)
+                extendedResolvers +
+                    (
+                        field to
+                            resolver.withExtendedFragment(
+                                extendedFragment =
+                                    extendFragment(
+                                        fragment = resolver.objectFragment,
+                                        extendedResolvers = extendedResolvers,
+                                    ),
+                                extendedFragmentFunction = { arguments ->
+                                    extendFragment(
+                                        fragment = resolver.objectFragment(arguments),
+                                        extendedResolvers = extendedResolvers,
+                                    )
+                                },
+                            )
+                    )
+            }
         incoming =
             fieldResolvers.keys.associateWith { site ->
                 outgoing
@@ -548,13 +572,104 @@ private class TestExecutorRegistry(
     private fun MutableSet<Schema.OutputField>.addImplicatedBy(selection: Selection) {
         selection.possibleTypes.forEach { possibleType ->
             possibleType.fields[selection.key.field.fieldName]
-                ?.takeIf { it in fieldResolvers }
+                ?.takeIf { it in sourceFieldResolvers }
                 ?.let(::add)
         }
         selection.subselections.forEach { subselection ->
             addImplicatedBy(subselection)
         }
     }
+
+    private fun dependencyOrder(
+        outgoing: Map<Schema.OutputField, Set<Schema.OutputField>>,
+        remaining: Set<Schema.OutputField> = outgoing.keys,
+        ordered: List<Schema.OutputField> = emptyList(),
+    ): List<Schema.OutputField> {
+        if (remaining.isEmpty()) return ordered
+
+        val ready =
+            remaining.filterTo(linkedSetOf()) { field ->
+                outgoing.getValue(field).none { dependency -> dependency in remaining }
+            }
+        require(ready.isNotEmpty()) {
+            "Resolver object fragments contain a demand cycle"
+        }
+        return dependencyOrder(
+            outgoing = outgoing,
+            remaining = remaining - ready,
+            ordered = ordered + ready,
+        )
+    }
+
+    private fun extendFragment(
+        fragment: Fragment,
+        extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
+    ): Fragment {
+        val additions = mutableListOf<Selection>()
+        fragment.nominalType.possibleTypes.forEach { possibleType ->
+            collectExtensions(
+                selections = fragment.subselections,
+                objectType = possibleType,
+                path = emptyList(),
+                extendedResolvers = extendedResolvers,
+                additions = additions,
+            )
+        }
+        return Fragment.of(
+            nominalType = fragment.nominalType,
+            subselections = fragment.subselections + additions.toSelectionForest(),
+        )
+    }
+
+    private fun collectExtensions(
+        selections: model.SelectionForest,
+        objectType: Schema.ObjectType,
+        path: List<Selection>,
+        extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
+        additions: MutableList<Selection>,
+    ) {
+        selections.forEach { selection ->
+            if (objectType !in selection.possibleTypes) return@forEach
+
+            val field = objectType.fields.getValue(selection.key.field.fieldName)
+            extendedResolvers[field]
+                ?.extendedFragment(selection.key.arguments.retarget(field))
+                ?.subselections
+                ?.let { requirements ->
+                    rootAt(path, requirements).forEach(additions::add)
+                }
+
+            val outputType = field.typeExpr.baseType as? Schema.CompositeType
+                ?: return@forEach
+            outputType.possibleTypes.forEach { possibleType ->
+                collectExtensions(
+                    selections = selection.subselections,
+                    objectType = possibleType,
+                    path = path + selection,
+                    extendedResolvers = extendedResolvers,
+                    additions = additions,
+                )
+            }
+        }
+    }
+
+    private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
+        Value.Arguments.of(field, fieldValues)
+
+    private fun rootAt(
+        path: List<Selection>,
+        requirements: model.SelectionForest,
+    ): model.SelectionForest =
+        path.asReversed().fold(requirements) { rooted, selection ->
+            selectionForestOf(
+                Selection.of(
+                    key = selection.key,
+                    nominalType = selection.nominalType,
+                    possibleTypes = selection.possibleTypes,
+                    subselections = rooted,
+                ),
+            )
+        }
 
     private fun requireAcyclic(
         outgoing: Map<Schema.OutputField, Set<Schema.OutputField>>,
@@ -575,7 +690,7 @@ private class TestExecutorRegistry(
             state[field] = VisitState.VISITED
         }
 
-        fieldResolvers.keys.forEach(::visit)
+        outgoing.keys.forEach(::visit)
     }
 
     private enum class VisitState {

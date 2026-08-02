@@ -47,8 +47,8 @@ AppliedTree ==
              StoredBindingValue <- EmptyBindingValue,
              ExpectedBindingValue <- EmptyBindingValue
 
-ResolverApplicationWorld ==
-    /\ ReturnedResultWorld
+ResolverApplicationBaseWorld ==
+    /\ ReturnedResultBaseWorld
     /\ MaterializationWorld
     /\ OutputWork \in [OutputObservations -> WorkItems]
     /\ ResolverFunction
@@ -62,6 +62,10 @@ ResolverApplicationWorld ==
            WorkCell[
                OutputWork[ResultObservation[observation]]]
                = ObservationResolver[observation]
+
+ResolverApplicationWorld ==
+    /\ ResolverApplicationBaseWorld
+    /\ ReturnedProjectionCoverage
 
 AppliedCorrect == AppliedTree!CorrectResolution
 

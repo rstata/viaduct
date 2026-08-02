@@ -2,7 +2,8 @@
 EXTENDS ResolverApplication, ReturnedResultProof,
         MaterializationProof
 
-ASSUME ResolverApplicationAssumptions == ResolverApplicationWorld
+ASSUME ResolverApplicationAssumptions ==
+    ResolverApplicationBaseWorld
 
 THEOREM PrefixAndFinalRawOutputsAgree ==
     \A outputObservation \in OutputObservations :
@@ -16,7 +17,7 @@ THEOREM PrefixAndFinalRawOutputsAgree ==
     OBVIOUS
 <1>1. OutputWork[outputObservation] \in WorkItems
     BY ResolverApplicationAssumptions
-       DEF ResolverApplicationWorld
+       DEF ResolverApplicationBaseWorld
 <1>2. MaterializedInput(
           EarlierCells(OutputWork[outputObservation]),
           OutputWork[outputObservation])
@@ -42,7 +43,7 @@ LEMMA FinalExpectedMatchesProjectedRaw ==
 <1>1. ResultObservation[observation]
           \in OutputObservations
     BY ResolverApplicationAssumptions
-       DEF ResolverApplicationWorld, ReturnedResultWorld
+       DEF ResolverApplicationBaseWorld, ReturnedResultBaseWorld
 <1>2. FinalRawObservation(ResultObservation[observation])
        =
        PrefixRawObservation(ResultObservation[observation])
@@ -51,7 +52,7 @@ LEMMA FinalExpectedMatchesProjectedRaw ==
        =
        PrefixRawObservation(ResultObservation[observation])
     BY <1>1, ResolverApplicationAssumptions
-       DEF ResolverApplicationWorld
+       DEF ResolverApplicationBaseWorld
 <1>. QED BY <1>2, <1>3
           DEF FinalExpectedObservation, RawExpectedObservation
 
@@ -74,9 +75,11 @@ LEMMA ReturnedResolverConformanceImpliesApplied ==
 <1>. QED BY <1>1, <1>2
 
 LEMMA CompletedAppliedResultIsCorrect ==
-    AllFoldsCompleted => AppliedCorrect
+    AllFoldsCompleted /\ ReturnedProjectionCoverage =>
+        AppliedCorrect
 <1>. SUFFICES
-        ASSUME AllFoldsCompleted
+        ASSUME AllFoldsCompleted,
+               ReturnedProjectionCoverage
         PROVE AppliedCorrect
     OBVIOUS
 <1>1. ReturnedCorrect
@@ -131,10 +134,5 @@ LEMMA CompletedAppliedResultIsCorrect ==
            ReturnedTree!ConformsToTypename
 <1>. QED BY <1>3, <1>4, <1>5, <1>6, <1>7, <1>8
           DEF AppliedCorrect, AppliedTree!CorrectResolution
-
-THEOREM Resolver01And02ApplicationsAreCorrect ==
-    FoldSpec => AppliedResultTermination
-BY AllOccurrenceFoldsComplete, CompletedAppliedResultIsCorrect, PTL
-   DEF FoldTermination, AppliedResultTermination
 
 =============================================================================

@@ -16,9 +16,7 @@ java "-DTLA-Library=$(pwd):$(pwd)/tla:$library" -cp "$jar" tla2sany.SANY "$@"
 description = "Model-check a TLA+ specification with TLC"
 dir = "{{cwd}}"
 run = '''
-jar="$(mise where github:tlaplus/tlaplus)/tla2tools.jar"
-library="$(mise where github:tlaplus/tlapm)/lib/tlaps"
-java "-DTLA-Library=$(pwd):$(pwd)/tla:$library" -jar "$jar" "$@"
+bash "$(pwd)/tla/check-tlc.sh" "$@"
 '''
 
 [tasks."tla:prove"]

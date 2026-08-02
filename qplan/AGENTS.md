@@ -38,7 +38,7 @@ Semantic logic uses immutable collection types and purely functional transformat
 
 Every context function in semantic logic uses `context(world: Assumptions)`, even when it currently needs only one part of the world such as `world.schema`. Do not introduce narrower `Schema` contexts or make `Assumptions` a subtype of `Schema`.
 
-Context parameters compose implicitly but are not implicit receivers. Access members as `world.schema`, `world.variableValues`, and `world.executorRegistry`. Prefer explicit `world` qualification when only a few members are used; when a body benefits from a receiver, use `world.run { ... }`, declare the return type explicitly, and do not use `world.apply { ... }` to produce a modeled result.
+Context parameters compose implicitly but are not implicit receivers. Access members as `world.schema` and `world.executorRegistry`. Prefer explicit `world` qualification when only a few members are used; when a body benefits from a receiver, use `world.run { ... }`, declare the return type explicitly, and do not use `world.apply { ... }` to produce a modeled result.
 
 See [Context Parameters and the `Assumptions` World](./context-params.md) for rationale, examples, and testing guidance.
 

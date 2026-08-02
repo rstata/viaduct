@@ -15,6 +15,9 @@ import semantics.materialize
 
 /**
  * Returns the result for [selections] and all transitive resolver demand on this concrete object.
+ *
+ * Every supplied or resolver-introduced selection applicable at an object visited by this
+ * operation must contain no [Value.Variable] in its key arguments.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =

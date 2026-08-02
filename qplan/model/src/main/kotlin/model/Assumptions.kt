@@ -3,14 +3,13 @@ package model
 import model.registry.ExecutorRegistry
 
 /**
- * The fixed schema, bindings, and executors under which model values and operations are interpreted.
+ * The fixed schema and executors under which model values and operations are interpreted.
  *
  * Equality is undefined for assumptions. Exactly one value is fixed for a reasoning exercise, and
  * every schema definition referenced by its model values belongs to [schema].
  */
 sealed interface Assumptions {
     val schema: Schema
-    val variableValues: VariableBindings
     val executorRegistry: ExecutorRegistry
 
     /**
@@ -34,13 +33,11 @@ sealed interface Assumptions {
     companion object {
         fun of(
             schema: Schema,
-            bindings: Map<String, Value?>,
             executorRegistry: ExecutorRegistry,
             noTransitiveDemand: Boolean = false,
         ): Assumptions =
             AssumptionsImpl(
                 schema,
-                bindings,
                 executorRegistry,
                 noTransitiveDemand,
             )
@@ -49,13 +46,9 @@ sealed interface Assumptions {
 
 private class AssumptionsImpl(
     override val schema: Schema,
-    bindings: Map<String, Value?>,
     override val executorRegistry: ExecutorRegistry,
     override val noTransitiveDemand: Boolean,
 ) : Assumptions {
-    override val variableValues: VariableBindings =
-        VariableBindings.from(bindings)
-
     override fun behavioral(field: Schema.OutputField): Boolean {
         val containingType = field.containingType
         require(containingType is Schema.ObjectType) {

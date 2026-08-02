@@ -26,7 +26,8 @@ import model.Value
  * argumentless.
  *
  * Every applicable selection in [demand] must be declared on the concrete object type or one of
- * its nominal supertypes.
+ * its nominal supertypes. Every selection applicable at an object visited by this operation must
+ * contain no [Value.Variable] in its key arguments.
  *
  * @throws IllegalArgumentException when a precondition is not met
  */
@@ -83,8 +84,5 @@ context(world: Assumptions)
 private fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
     Value.Key.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments =
-            key.arguments.fieldValues.mapValues { (_, value) ->
-                value?.let(world.variableValues::instantiateAllVariables)
-            },
+        arguments = key.arguments.fieldValues,
     )

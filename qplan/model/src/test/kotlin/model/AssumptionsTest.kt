@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class AssumptionsTest {
@@ -30,46 +31,10 @@ class AssumptionsTest {
             Value.Variable.of("filter"),
             node.key.arguments.fieldValues.getValue("filter"),
         )
-    }
-
-    @Test
-    fun `instantiates a bound fragment variable with its binding`() {
-        val world =
-            TestWorld.fromSDL(
-                schemaSDL = SCHEMA_SDL,
-                variableValues = { schema ->
-                    val filterType = schema.type("Filter") as Schema.InputObjectType
-                    mapOf(
-                        "filter" to
-                            Value.InputObject.of(
-                                type = filterType,
-                                fields = mapOf("limit" to Value.Int.of(5)),
-                            ),
-                    )
-                },
-            )
-        val assumptions = world.assumptions
-        val filter =
-            assertIs<Value.InputObject>(
-                assumptions.variableValues["filter"],
-            )
-        val filterType = world.schema.type("Filter")
-
-        val fragment =
-            assumptions.fragmentFrom(
-                """
-                fragment ignored on Query {
-                  node(filter: ${'$'}filter) {
-                    id
-                  }
-                }
-                """.trimIndent(),
-            )
-
-        val node = fragment.subselections.single()
-        assertEquals(filter, node.key.arguments.fieldValues.getValue("filter"))
-        assertEquals(filterType, filter.type)
-        assertEquals(assumptions.schema.type("Filter"), filter.type)
+        assertNotEquals(
+            Value.Variable.of("other"),
+            node.key.arguments.fieldValues.getValue("filter"),
+        )
     }
 
     @Test
@@ -160,6 +125,31 @@ class AssumptionsTest {
     }
 
     @Test
+    fun `rejects operation bindings containing unresolved variables`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val filter =
+            Value.InputObject.of(
+                type = filterType,
+                fields = mapOf("limit" to Value.Variable.of("nested")),
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            schema.fragmentFrom(
+                source =
+                    """
+                    fragment ignored on Query {
+                      node(filter: ${'$'}filter) {
+                        id
+                      }
+                    }
+                    """.trimIndent(),
+                bindings = mapOf("filter" to filter),
+            )
+        }
+    }
+
+    @Test
     fun `constructs empty fragments that GraphQL text cannot express`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
@@ -173,18 +163,11 @@ class AssumptionsTest {
     }
 
     @Test
-    fun `constructs assumptions from a schema and qualified variable values`() {
-        val world =
-            TestWorld.fromSDL(
-                schemaSDL = SCHEMA_SDL,
-                variableValues = {
-                    mapOf("failed" to Value.Error)
-                },
-            )
+    fun `constructs assumptions from a schema and executor registry`() {
+        val world = TestWorld.fromSDL(schemaSDL = SCHEMA_SDL)
         val assumptions = world.assumptions
 
         assertEquals(world.schema, assumptions.schema)
-        assertEquals(Value.Error, assumptions.variableValues["failed"])
 
         val schema = assumptions.schema
         val query = schema.query

@@ -24,6 +24,7 @@ import java.math.BigInteger
 
 class ArbitraryQuery internal constructor(
     val source: String,
+    val selectionDepth: Int,
 ) {
     override fun toString(): String = source
 }
@@ -41,14 +42,18 @@ private class QueryGenerator(
     private val random: RandomSource,
 ) {
     fun generate(): ArbitraryQuery {
+        val selectionSet = selectionSet("Query", depth = 0)
         val fragment =
             FragmentDefinition
                 .newFragmentDefinition()
                 .name("Generated")
                 .typeCondition(TypeName("Query"))
-                .selectionSet(selectionSet("Query", depth = 0))
+                .selectionSet(selectionSet)
                 .build()
-        return ArbitraryQuery(AstPrinter.printAst(fragment).trim())
+        return ArbitraryQuery(
+            source = AstPrinter.printAst(fragment).trim(),
+            selectionDepth = selectionSet.maximumFieldDepth(),
+        )
     }
 
     private fun selectionSet(
@@ -59,17 +64,25 @@ private class QueryGenerator(
         val candidates =
             schema.fieldsOn(typeName) +
                 syntheticFields(typeName, objectType?.implementsNode == true)
-        if (depth >= config[MaxSelectionDepth]) {
+        if (depth >= config[MaxSelectionDepth] - 1) {
             return SelectionSet.newSelectionSet()
                 .selection(Field.newField("__typename").build())
                 .build()
         }
 
         val count = Arb.int(1..minOf(3, candidates.size)).next(random)
+        val requiredField =
+            schema.deepFields[typeName]
+                ?.takeIf { depth < config[MinimumSelectionDepth] }
+                ?.let { fieldName -> candidates.single { it.name == fieldName } }
+        val selectedFields =
+            listOfNotNull(requiredField) +
+                candidates
+                    .filterNot { it == requiredField }
+                    .shuffled(random)
+                    .take(count - if (requiredField == null) 0 else 1)
         val directSelections =
-            candidates
-                .shuffled(random)
-                .take(count)
+            selectedFields
                 .flatMap { field ->
                     val selection = fieldSelection(field, depth)
                     buildList {
@@ -209,4 +222,13 @@ private class QueryGenerator(
 
     private fun chance(weight: Double): Boolean =
         Arb.double(0.0, 1.0).next(random) < weight
+
+    private fun SelectionSet.maximumFieldDepth(): Int =
+        selections.maxOfOrNull { selection ->
+            when (selection) {
+                is Field -> 1 + (selection.selectionSet?.maximumFieldDepth() ?: 0)
+                is InlineFragment -> selection.selectionSet.maximumFieldDepth()
+                else -> 0
+            }
+        } ?: 0
 }

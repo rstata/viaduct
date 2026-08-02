@@ -13,6 +13,7 @@ import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.VariableCoordinate
 import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -28,9 +29,11 @@ class ArbitraryRegistry internal constructor(
     val nodeResolverSites: Set<String>,
     val outputSelectionSets: Map<String, Set<String>>,
     val objectFragmentSources: Map<FieldCoordinate, String>,
+    val variableProviderSources: Map<String, String>,
     internal val fieldValues: Map<FieldCoordinate, ValuePlan>,
     internal val nodeValues: Map<String, ObjectPlan>,
     internal val objectFragments: Map<FieldCoordinate, FragmentPlan>,
+    internal val variableProviders: List<VariableProviderPlan>,
 ) {
     fun world(
         schema: ArbitrarySchema,
@@ -64,11 +67,41 @@ class ArbitraryRegistry internal constructor(
                         )
                 }.toMap()
             },
+            variableProviders = { canonicalSchema ->
+                variableProviders.associate { provider ->
+                    val sourceField =
+                        schema
+                            .objectNamed(provider.owner.typeName)
+                            .fields
+                            .single { it.name == provider.owner.fieldName }
+                    val loweredToNodeBridge =
+                        schema.isComposite(sourceField.type.namedType) &&
+                            schema
+                                .possibleObjects(sourceField.type.namedType)
+                                .all { possibleType -> possibleType.name in nodeResolverSites }
+                    val canonicalFieldName =
+                        if (loweredToNodeBridge) {
+                            provider.owner.fieldName + "\$id"
+                        } else {
+                            provider.owner.fieldName
+                        }
+                    val field =
+                        canonicalSchema.field(
+                            provider.owner.typeName,
+                            canonicalFieldName,
+                        ) as Schema.ObjectField
+                    VariableCoordinate.of(
+                        field,
+                        Value.Variable.of(provider.variableName),
+                    ) to provider.selection.materialize(canonicalSchema, field.containingType)
+                }
+            },
             noTransitiveDemand = noTransitiveDemand,
         )
         objectFragmentSources.values
             .filter(String::isNotEmpty)
             .forEach(world::selectionsFrom)
+        variableProviderSources.values.forEach(world::selectionsFrom)
         return world
     }
 
@@ -79,6 +112,13 @@ class ArbitraryRegistry internal constructor(
                 appendLine("  $site OSS=${outputSelectionSets[site.toString()].orEmpty().sorted()}")
                 val fragment = objectFragmentSources.getValue(site)
                 if (fragment.isNotEmpty()) appendLine(fragment.prependIndent("    "))
+            }
+            appendLine("variables:")
+            variableProviders.sortedBy(VariableProviderPlan::variableName).forEach { provider ->
+                appendLine(
+                    "  \$${provider.variableName} owner=${provider.owner}",
+                )
+                appendLine(provider.source().prependIndent("    "))
             }
             appendLine("node resolvers:")
             nodeResolverSites.sorted().forEach { site ->
@@ -134,9 +174,10 @@ private class RegistryGenerator(
                 )
             }
         val ranks = fieldSites.withIndex().associate { (rank, site) -> site to rank }
+        val variableProviders = mutableListOf<VariableProviderPlan>()
         val objectFragments =
             fieldSites.associateWith { site ->
-                fragmentPlan(site, ranks)
+                fragmentPlan(site, ranks, variableProviders)
             }
         val oss =
             buildMap {
@@ -153,20 +194,30 @@ private class RegistryGenerator(
             outputSelectionSets = oss,
             objectFragmentSources =
                 objectFragments.mapValues { (_, fragment) -> fragment.source() },
+            variableProviderSources =
+                variableProviders.associate { provider ->
+                    provider.variableName to provider.source()
+                },
             fieldValues = fieldValues,
             nodeValues = nodeValues,
             objectFragments = objectFragments,
+            variableProviders = variableProviders,
         )
     }
 
     private fun fragmentPlan(
         consumer: FieldCoordinate,
         ranks: Map<FieldCoordinate, Int>,
+        variableProviders: MutableList<VariableProviderPlan>,
     ): FragmentPlan {
-        if (!config[ResolverFragmentsEnabled] || !chance(0.65)) {
+        if (
+            !config[ResolverFragmentsEnabled] ||
+            !chance(config[ResolverFragmentWeight])
+        ) {
             return FragmentPlan(consumer.typeName, emptyList())
         }
-        return FragmentPlan(
+        val fragment =
+            FragmentPlan(
             ownerName = consumer.typeName,
             selections =
                 fragmentSelections(
@@ -176,6 +227,7 @@ private class RegistryGenerator(
                     depth = 0,
                 ),
         )
+        return fragment.withVariableProvider(consumer, ranks, variableProviders)
     }
 
     private fun fragmentSelections(
@@ -238,6 +290,129 @@ private class RegistryGenerator(
                 )
             }
     }
+
+    private fun FragmentPlan.withVariableProvider(
+        consumer: FieldCoordinate,
+        ranks: Map<FieldCoordinate, Int>,
+        variableProviders: MutableList<VariableProviderPlan>,
+    ): FragmentPlan {
+        if (
+            !config[ResolverVariablesEnabled] ||
+            !chance(config[ResolverVariableWeight])
+        ) {
+            return this
+        }
+        val candidate =
+            argumentOccurrences()
+                .shuffled(random)
+                .firstNotNullOfOrNull { occurrence ->
+                    variableProviderPaths(
+                        ownerName = ownerName,
+                        scalar = occurrence.argument.scalar,
+                        consumerRank = ranks.getValue(consumer),
+                        ranks = ranks,
+                    ).shuffled(random)
+                        .firstOrNull()
+                        ?.let { provider -> occurrence to provider }
+                } ?: return this
+        val variableName = "resolverVar${ranks.getValue(consumer)}"
+        variableProviders +=
+            VariableProviderPlan(
+                owner = consumer,
+                variableName = variableName,
+                selection = candidate.second,
+            )
+        return copy(
+            selections =
+                selections.replaceArgument(
+                    selectionPath = candidate.first.selectionPath,
+                    argumentName = candidate.first.argument.name,
+                    value = VariableInputPlan(variableName),
+                ),
+        )
+    }
+
+    private fun FragmentPlan.argumentOccurrences(): List<ArgumentOccurrence> =
+        argumentOccurrences(
+            ownerName = ownerName,
+            selections = selections,
+            selectionPath = emptyList(),
+        )
+
+    private fun argumentOccurrences(
+        ownerName: String,
+        selections: List<FragmentSelectionPlan>,
+        selectionPath: List<Int>,
+    ): List<ArgumentOccurrence> =
+        selections.flatMapIndexed { index, selection ->
+            val field =
+                schema
+                    .objectNamed(ownerName)
+                    .fields
+                    .singleOrNull { it.name == selection.fieldName }
+                    ?: return@flatMapIndexed emptyList()
+            val path = selectionPath + index
+            field.arguments.map { argument ->
+                ArgumentOccurrence(path, argument)
+            } +
+                (
+                    schema.objects
+                        .singleOrNull { it.name == field.type.namedType }
+                        ?.let { nestedOwner ->
+                            argumentOccurrences(
+                                ownerName = nestedOwner.name,
+                                selections = selection.subselections,
+                                selectionPath = path,
+                            )
+                        }.orEmpty()
+                )
+        }
+
+    private fun variableProviderPaths(
+        ownerName: String,
+        scalar: ScalarKind,
+        consumerRank: Int,
+        ranks: Map<FieldCoordinate, Int>,
+    ): List<FragmentSelectionPlan> =
+        schema
+            .objectNamed(ownerName)
+            .fields
+            .filter { field ->
+                field.arguments.isEmpty() &&
+                    !field.type.nullable &&
+                    !field.type.list &&
+                    (
+                        field.coordinate !in fieldSites ||
+                            ranks.getValue(field.coordinate) < consumerRank
+                    )
+            }.flatMap { field ->
+                when {
+                    field.type.namedType == scalar.graphQLName ->
+                        listOf(
+                            FragmentSelectionPlan(
+                                fieldName = field.name,
+                                arguments = emptyMap(),
+                                subselections = emptyList(),
+                            ),
+                        )
+
+                    schema.objects.any { it.name == field.type.namedType } ->
+                        variableProviderPaths(
+                            ownerName = field.type.namedType,
+                            scalar = scalar,
+                            consumerRank = consumerRank,
+                            ranks = ranks,
+                        ).map { nested ->
+                            FragmentSelectionPlan(
+                                fieldName = field.name,
+                                arguments = emptyMap(),
+                                subselections = listOf(nested),
+                            )
+                        }
+
+                    else -> emptyList()
+                }
+            }
 
     private fun inputLiteral(scalar: ScalarKind): InputLiteralPlan {
         val salt = Arb.int(0..10_000).next(random)
@@ -385,7 +560,7 @@ internal data class FragmentPlan(
 
 internal data class FragmentSelectionPlan(
     val fieldName: String,
-    val arguments: Map<String, InputLiteralPlan>,
+    val arguments: Map<String, InputValuePlan>,
     val subselections: List<FragmentSelectionPlan>,
 ) {
     fun source(indent: String): String =
@@ -406,21 +581,79 @@ internal data class FragmentSelectionPlan(
                 subselections.forEach { append(it.source("$indent  ")) }
                 appendLine("$indent}")
             }
-        }
+    }
+
+    fun materialize(
+        schema: Schema,
+        owner: Schema.ObjectType,
+    ): Selection =
+        listOf(this).materialize(schema, owner).single()
+}
+
+internal sealed interface InputValuePlan {
+    fun materialize(): Any?
+
+    fun source(): String
 }
 
 internal data class InputLiteralPlan(
     val scalar: ScalarKind,
     val value: Any,
-) {
-    fun materialize(): Any = value
+) : InputValuePlan {
+    override fun materialize(): Any = value
 
-    fun source(): String =
+    override fun source(): String =
         when (scalar) {
             ScalarKind.BOOLEAN, ScalarKind.FLOAT, ScalarKind.INT -> value.toString()
             ScalarKind.ID, ScalarKind.STRING ->
                 "\"" + (value as String).replace("\\", "\\\\").replace("\"", "\\\"") + "\""
         }
+}
+
+internal data class VariableInputPlan(
+    val variableName: String,
+) : InputValuePlan {
+    override fun materialize(): Value.Variable = Value.Variable.of(variableName)
+
+    override fun source(): String = "\$$variableName"
+}
+
+internal data class VariableProviderPlan(
+    val owner: FieldCoordinate,
+    val variableName: String,
+    val selection: FragmentSelectionPlan,
+) {
+    fun source(): String =
+        FragmentPlan(owner.typeName, listOf(selection)).source()
+}
+
+private data class ArgumentOccurrence(
+    val selectionPath: List<Int>,
+    val argument: ArgumentDefinitionSpec,
+)
+
+private fun List<FragmentSelectionPlan>.replaceArgument(
+    selectionPath: List<Int>,
+    argumentName: String,
+    value: InputValuePlan,
+): List<FragmentSelectionPlan> {
+    val selectedIndex = selectionPath.first()
+    return mapIndexed { index, selection ->
+        when {
+            index != selectedIndex -> selection
+            selectionPath.size == 1 ->
+                selection.copy(arguments = selection.arguments + (argumentName to value))
+            else ->
+                selection.copy(
+                    subselections =
+                        selection.subselections.replaceArgument(
+                            selectionPath = selectionPath.drop(1),
+                            argumentName = argumentName,
+                            value = value,
+                        ),
+                )
+        }
+    }
 }
 
 private fun List<FragmentSelectionPlan>.materialize(

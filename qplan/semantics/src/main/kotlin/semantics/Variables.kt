@@ -17,10 +17,10 @@ internal fun Fragment.variables(): Set<Value.Variable> =
 internal fun Selection.variables(): Set<Value.Variable> =
     key.arguments.variables() + subselections.variables()
 
-private fun SelectionForest.variables(): Set<Value.Variable> =
+internal fun SelectionForest.variables(): Set<Value.Variable> =
     flatMapToSet { it.variables() }
 
-private fun Value.Arguments.variables(): Set<Value.Variable> =
+internal fun Value.Arguments.variables(): Set<Value.Variable> =
     fieldValues.values.fold(emptySet()) { result, value -> result + value.variables() }
 
 private fun Value.Input?.variables(): Set<Value.Variable> =

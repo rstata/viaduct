@@ -168,7 +168,11 @@ sealed interface Resolver : Executor {
  * globally unique variable names, exact transpose, and acyclicity across output fields and
  * [VariableCoordinate] values. Every variable provider is one path selection relative to its
  * coordinate's containing object, and variables referenced by a field resolver's object fragment
- * or one of its providers belong to that same field.
+ * or one of its providers belong to that same field. An argument-dependent fragment may
+ * transparently forward a caller's variables through its argument tuple without redefining them.
+ * A provider path must terminate at an input-compatible value, but compatibility between that
+ * value's precise type and every argument position consuming the variable is externally stipulated
+ * rather than validated by this registry.
  */
 interface ExecutorRegistry {
     operator fun contains(field: Schema.OutputField): Boolean

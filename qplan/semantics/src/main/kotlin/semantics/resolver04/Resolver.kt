@@ -25,16 +25,24 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
         resolved = EngineResult.Object.of(type, emptyMap()),
     )
 
+/**
+ * [ambientSelections] is already-known demand on this OER while a variable provider is being
+ * resolved. Demand closure includes matching concrete-key occurrences and conservatively applies
+ * the variable-free child demand of a symbolic key to every directly demanded concrete occurrence
+ * of the same field. A provider dependency and an operation or sibling requirement that later
+ * converge on one cell therefore contribute to one selective resolver application.
+ */
 context(world: Assumptions)
 private fun Value.Object.resolve(
     selections: SelectionForest,
     resolved: EngineResult.Object,
+    ambientSelections: SelectionForest? = null,
 ): EngineResult.Object {
     require(resolved.type == type) {
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
 
-    val closure = closeResolverDemand(selections, resolved)
+    val closure = closeResolverDemand(selections, resolved, ambientSelections = ambientSelections)
     val selectionsByKey =
         closure.selections.groupBy { selection -> selection.concreteObjectKey(type) }
     val orderedKeys = dependencyOrder(selectionsByKey.keys - closure.resolved.keys, closure.resolved)
@@ -51,9 +59,17 @@ private fun Value.Object.closeResolverDemand(
     selections: SelectionForest,
     resolved: EngineResult.Object,
     expanded: Set<Value.Key> = emptySet(),
+    ambientSelections: SelectionForest? = null,
 ): DemandClosure {
-    val applicableSelections =
+    val directlyApplicableSelections =
         selections.filter { selection -> type in selection.possibleTypes }
+    val directlyDemandedKeys =
+        directlyApplicableSelections
+            .groupBy { selection -> selection.concreteObjectKey(type) }
+            .keys
+    val applicableSelections =
+        directlyApplicableSelections +
+            ambientSelections.matchingAmbientDemand(directlyDemandedKeys)
     val groupedSelections =
         applicableSelections.groupBy { selection -> selection.concreteObjectKey(type) }
     if (world.noTransitiveDemand && expanded.isNotEmpty()) {
@@ -70,20 +86,39 @@ private fun Value.Object.closeResolverDemand(
         return DemandClosure(applicableSelections, resolved)
     }
 
-    val (resolvedVariables, resolverDemand) =
-        unexpandedResolverKeys.fold(resolved to selectionForestOf()) { (result, demand), key ->
-            val fragment =
-                world.executorRegistry
-                    .resolver(key.field)
-                    .objectFragment(key.arguments)
-            val withVariables = resolveVariables(fragment.variables(), result)
-            val instantiated = fragment.instantiateVariables(withVariables.variableValues)
-            withVariables to (demand + instantiated.subselections)
+    val fragments =
+        unexpandedResolverKeys.map { key ->
+            world.executorRegistry
+                .resolver(key.field)
+                .objectFragment(key.arguments)
+        }
+    // Provider paths and concrete transitive requirements must share one selective demand closure.
+    val ambientFragmentDemand =
+        fragments.fold(selectionForestOf()) { demand, fragment ->
+            demand + fragment.subselections
+        }.withExtendedResolverDemand()
+            .filter { selection -> selection.subselections.variables().isEmpty() }
+    val resolvedVariables =
+        resolveVariables(
+            variables =
+                fragments.fold(emptySet()) { variables, fragment ->
+                    variables + fragment.variables()
+                },
+            resolved = resolved,
+            ambientSelections = applicableSelections + ambientFragmentDemand,
+        )
+    val resolverDemand =
+        fragments.fold(selectionForestOf()) { demand, fragment ->
+            demand +
+                fragment
+                    .instantiateVariables(resolvedVariables.variableValues)
+                    .subselections
         }
     return closeResolverDemand(
         selections = applicableSelections + resolverDemand,
         resolved = resolvedVariables,
         expanded = expanded + unexpandedResolverKeys,
+        ambientSelections = ambientSelections,
     )
 }
 
@@ -96,18 +131,35 @@ context(world: Assumptions)
 private fun Value.Object.resolveVariables(
     variables: Set<Value.Variable>,
     resolved: EngineResult.Object,
+    ambientSelections: SelectionForest,
 ): EngineResult.Object =
     variables.fold(resolved) { result, variable ->
         if (variable in result.variableValues) {
             result
         } else {
             val provider = world.executorRegistry.variable(variable)
-            val withDependencies = resolveVariables(provider.variables(), result)
+            val withDependencies =
+                resolveVariables(
+                    variables = provider.variables(),
+                    resolved = result,
+                    ambientSelections = ambientSelections,
+                )
             val instantiated = provider.instantiateVariables(withDependencies.variableValues)
+            val extendedProviderDemand =
+                selectionForestOf(instantiated).withExtendedResolverDemand()
+            val providerDemand =
+                selectionForestOf(instantiated) +
+                    extendedProviderDemand
+                        .filter { selection -> selection.variables().isEmpty() }
             val withProvider =
                 resolve(
-                    selections = selectionForestOf(instantiated),
+                    selections = providerDemand,
                     resolved = withDependencies,
+                    ambientSelections =
+                        ambientSelections +
+                            extendedProviderDemand.filter { selection ->
+                                selection.subselections.variables().isEmpty()
+                            },
                 )
             val value = withProvider.readVariable(instantiated)
             withProvider.union(
@@ -119,6 +171,40 @@ private fun Value.Object.resolveVariables(
             )
         }
     }
+
+context(world: Assumptions)
+private fun SelectionForest?.matchingAmbientDemand(
+    directlyDemandedKeys: Set<Value.Key>,
+): SelectionForest =
+    this?.flatMap { selection ->
+        directlyDemandedKeys.fold(selectionForestOf()) { demand, key ->
+            demand + selection.matchingAmbientDemand(key)
+        }
+    } ?: selectionForestOf()
+
+context(world: Assumptions)
+private fun Selection.matchingAmbientDemand(key: Value.Key): SelectionForest {
+    val objectType = key.field.containingType as Schema.ObjectType
+    if (objectType !in possibleTypes) return selectionForestOf()
+    val concreteKey = concreteObjectKey(objectType)
+    if (concreteKey.field != key.field) return selectionForestOf()
+    if (concreteKey.arguments == key.arguments) return selectionForestOf(this)
+    if (this.key.arguments.variables().isEmpty() || subselections.variables().isNotEmpty()) {
+        return selectionForestOf()
+    }
+    return selectionForestOf(
+        Selection.of(
+            key =
+                Value.Key.of(
+                    field = this.key.field,
+                    arguments = key.arguments.fieldValues,
+                ),
+            nominalType = nominalType,
+            possibleTypes = possibleTypes,
+            subselections = subselections,
+        ),
+    )
+}
 
 /**
  * Returns a topological ordering of [keys] using Kahn's algorithm, with demand before consumption.

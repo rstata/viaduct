@@ -130,6 +130,32 @@ class GeneratorTest {
     }
 
     @Test
+    fun `abstract selections can omit concrete implementation defaults`() {
+        val config =
+            Config.default +
+                (ImplementationArgumentDefaultWeight to 1.0) +
+                (SchemaObjectCount to 3..5) +
+                (QueryFieldCount to 4..6)
+        val random = RandomSource.seeded(731997L)
+        var generatedSchemas = 0
+        var activatedQueries = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val query = schema.query(config).next(random)
+            if (schema.features.hasImplementationArgumentDefaults) {
+                generatedSchemas += 1
+            }
+            if (query.features.hasAbstractImplementationDefaultSelection) {
+                activatedQueries += 1
+            }
+        }
+
+        assertTrue(generatedSchemas > 0)
+        assertTrue(activatedQueries > 0)
+    }
+
+    @Test
     fun `minimum selection depth forces a valid deep query path`() {
         val config =
             Config.default +
@@ -180,6 +206,141 @@ class GeneratorTest {
         }
 
         assertTrue(generatedVariables > 0)
+    }
+
+    @Test
+    fun `list variable providers preserve required element nullability`() {
+        val target =
+            ListVariableTarget(
+                scalar = ScalarKind.ID,
+                nullable = false,
+                elementNullable = false,
+            )
+
+        assertTrue(
+            target.matches(
+                OutputTypeSpec(
+                    namedType = "ID",
+                    nullable = false,
+                    list = true,
+                    elementNullable = false,
+                ),
+            ),
+        )
+        assertFalse(
+            target.matches(
+                OutputTypeSpec(
+                    namedType = "ID",
+                    nullable = false,
+                    list = true,
+                    elementNullable = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `coverage profile reaches every current scope generator category`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 4..6) +
+                (InputObjectCount to 2..3) +
+                (InputObjectFieldCount to 2..4) +
+                (InputObjectTypeWeight to 0.6) +
+                (InputListTypeWeight to 0.6) +
+                (MaxInputTypeDepth to 3) +
+                (FieldArgumentWeight to 0.9) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (ListTypeWeight to 0.45) +
+                (NullableTypeWeight to 0.5) +
+                (RecursiveOutputEdgeWeight to 0.5) +
+                (DuplicateSelectionWeight to 0.8) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 4) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 2..3)
+        val random = RandomSource.seeded(440044L)
+        val reached = linkedSetOf<String>()
+
+        repeat(400) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val query = schema.query(config).next(random)
+            try {
+                registry.world(schema)
+            } catch (failure: Throwable) {
+                throw AssertionError("Generated invalid schema:\n${schema.sdl}", failure)
+            }
+
+            with(schema.features) {
+                if (hasListArguments) reached += "list arguments"
+                if (hasInputObjectArguments) reached += "input-object arguments"
+                if (hasInputObjectListArguments) reached += "input-object list arguments"
+                if (hasRecursiveInputTypes) reached += "recursive input types"
+                if (hasRecursiveOutputEdges) reached += "recursive output types"
+                if (hasImplementationArgumentDefaults) {
+                    reached += "implementation argument defaults"
+                }
+                if (hasInterfaces) reached += "interfaces"
+                if (hasUnions) reached += "unions"
+            }
+            with(registry.features) {
+                if (inputSensitiveResolvers > 0) reached += "input-sensitive resolvers"
+                if (argumentSensitiveResolvers > 0) reached += "argument-sensitive resolvers"
+                if (inputAndArgumentSensitiveResolvers > 0) {
+                    reached += "input-and-argument-sensitive resolvers"
+                }
+                if (maximumVariablesPerOwner > 1) reached += "multiple variables per owner"
+                if (hasNestedInputVariable) reached += "nested input variables"
+                if (hasListVariable) reached += "list variables"
+                if (hasNullableProvider) reached += "nullable providers"
+                if (hasAbstractProviderPath) reached += "abstract provider paths"
+                if (hasAbstractResolverFragment) reached += "abstract resolver fragments"
+            }
+            with(query.features) {
+                if (hasExactKeyAliasConvergence) reached += "exact-key alias convergence"
+                if (hasDistinctArgumentSelections) reached += "distinct argument tuples"
+                if (hasMultipleAbstractInlineFragmentBranches) {
+                    reached += "multiple abstract branches"
+                }
+                if (hasAbstractImplementationDefaultSelection) {
+                    reached += "abstract implementation defaults"
+                }
+            }
+
+            val world = registry.world(schema)
+            world.selectionsFrom(query.source)
+            world.selectionsFrom(query.permutationEquivalentSource)
+        }
+
+        val expected =
+            setOf(
+                "list arguments",
+                "input-object arguments",
+                "input-object list arguments",
+                "recursive input types",
+                "recursive output types",
+                "implementation argument defaults",
+                "interfaces",
+                "unions",
+                "input-sensitive resolvers",
+                "argument-sensitive resolvers",
+                "input-and-argument-sensitive resolvers",
+                "multiple variables per owner",
+                "nested input variables",
+                "list variables",
+                "nullable providers",
+                "abstract provider paths",
+                "abstract resolver fragments",
+                "exact-key alias convergence",
+                "distinct argument tuples",
+                "multiple abstract branches",
+                "abstract implementation defaults",
+            )
+        assertEquals(emptySet(), expected - reached, "Unreached categories: ${expected - reached}")
     }
 
     private companion object {

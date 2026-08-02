@@ -38,7 +38,13 @@ class ResolverTest {
                     (ResolverFragmentsEnabled to true)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
-                assertTrue(generatedResolutionIsCorrect(testWorld, testCase.query.source))
+                val result = generatedResolution(testWorld, testCase.query.source)
+                val permuted =
+                    generatedResolution(
+                        testWorld,
+                        testCase.query.permutationEquivalentSource,
+                    )
+                assertEquals(result, permuted)
             }
         }
 
@@ -507,6 +513,14 @@ class ResolverTest {
         testWorld: TestWorld,
         querySource: String,
     ): Boolean {
+        generatedResolution(testWorld, querySource)
+        return true
+    }
+
+    private fun generatedResolution(
+        testWorld: TestWorld,
+        querySource: String,
+    ): EngineResult.Object {
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom(querySource)
         val selections = fragment.subselections
@@ -515,7 +529,8 @@ class ResolverTest {
                 world.objectOf("Query").resolve(selections)
             }
         return context(world) {
-            result.correctResolution(fragment)
+            check(result.correctResolution(fragment))
+            result
         }
     }
 

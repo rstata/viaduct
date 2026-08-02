@@ -44,7 +44,6 @@ class TestWorld private constructor(
          */
         fun fromSDL(
             schemaSDL: String,
-            variableValues: (Schema) -> Map<String, Value?> = { emptyMap() },
             nodeResolvers:
                 (Schema) -> Map<Schema.ObjectType, NodeResolverFunction> = { emptyMap() },
             fieldResolvers:
@@ -55,7 +54,6 @@ class TestWorld private constructor(
                 Guice.createInjector(
                     TestWorldModule(
                         schemaSDL = schemaSDL,
-                        variableValues = variableValues,
                         nodeResolvers = nodeResolvers,
                         fieldResolvers = fieldResolvers,
                         noTransitiveDemand = noTransitiveDemand,
@@ -75,7 +73,6 @@ class TestWorld private constructor(
 @JvmSuppressWildcards
 private class TestWorldModule(
     private val schemaSDL: String,
-    private val variableValues: (Schema) -> Map<String, Value?>,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
     private val noTransitiveDemand: Boolean,
@@ -91,11 +88,6 @@ private class TestWorldModule(
     fun schema(
         @SchemaSDL schemaSDL: String,
     ): GJSchema = GJSchema.fromSDL(schemaSDL)
-
-    @Provides
-    @VariableValues
-    fun variableValues(schema: GJSchema): Map<String, Value?> =
-        variableValues.invoke(schema)
 
     @Provides
     @NodeResolvers
@@ -124,12 +116,10 @@ private class TestWorldModule(
     @Singleton
     fun assumptions(
         schema: GJSchema,
-        @VariableValues variableValues: Map<String, Value?>,
         executorRegistry: ExecutorRegistry,
     ): Assumptions =
         Assumptions.of(
             schema = schema,
-            bindings = variableValues,
             executorRegistry = executorRegistry,
             noTransitiveDemand = noTransitiveDemand,
         )

@@ -6,8 +6,7 @@ import model.invariants.conformsToSchemaType
  * A GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
- * by the interface. When an input value contains unbound [Variable] instances, equality is
- * conservative as described by [Variable].
+ * by the interface. [Variable] equality is exact name equality.
  *
  * ### Invariant: schema-value-canonicality
  *
@@ -154,9 +153,7 @@ sealed interface Value {
         val values: kotlin.collections.List<Value?>
     }
 
-    /**
-     * An input list. Equality is conservative when it contains nested unbound [Variable] values.
-     */
+    /** An input list with structural equality over its type expression and elements. */
     sealed interface InputList : Input, List<Schema.InputType> {
         override val values: kotlin.collections.List<Input?>
 
@@ -215,7 +212,7 @@ sealed interface Value {
         val fieldValues: Fields<Schema.InputObjectLike, Input>
     }
 
-    /** An input object whose fields may contain nested unbound [Variable] instances. */
+    /** An input object whose fields may contain nested [Variable] instances. */
     sealed interface InputObject : Input, Typed, InputLike {
         override val type: Schema.InputObjectType
         override val fieldValues: Fields<Schema.InputObjectType, Input>
@@ -244,8 +241,8 @@ sealed interface Value {
     /**
      * The values supplied for one output field's complete argument definition.
      *
-     * A value may contain nested unbound [Variable] instances when it belongs to a [Key] used
-     * outside a [Value.Object] or [EngineResult.Object].
+     * A value may contain nested [Variable] instances when it belongs to a [Key] used outside a
+     * [Value.Object] or [EngineResult.Object].
      */
     sealed interface Arguments : InputLike {
         override val type: Schema.FieldArguments
@@ -387,8 +384,7 @@ sealed interface Value {
     /**
      * A symbolic reference to an execution variable.
      *
-     * Equality is conservative for unbound variables: two such values compare equal only when they
-     * have the same name.
+     * Two variables are equal exactly when they have the same name.
      */
     sealed interface Variable : Input {
         val variableName: kotlin.String

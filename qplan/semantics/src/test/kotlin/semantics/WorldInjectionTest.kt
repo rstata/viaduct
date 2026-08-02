@@ -23,9 +23,6 @@ class WorldInjectionTest {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
-                variableValues = { schema ->
-                    mapOf("requestedId" to Value.ID.of("bound"))
-                },
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf(
@@ -62,12 +59,6 @@ class WorldInjectionTest {
         assertEquals(registry, world.executorRegistry)
         assertEquals(registry, testWorld.instance(ExecutorRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
-        assertEquals(
-            "bound",
-            assertIs<Value.ID>(
-                world.variableValues["requestedId"],
-            ).idValue,
-        )
 
         val userField = schema.field("Query", "user")
         val userIdField = schema.field("Query", "user\$id")
@@ -130,7 +121,6 @@ class WorldInjectionTest {
     fun `guice supplies required query resolvers when resolver inputs are omitted`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
-        assertFalse(world.variableValues.containsKey("requestedId"))
         assertFalse(world.schema.field("User", "id") in world.executorRegistry)
         world.executorRegistry.resolver(
             world.schema.field("Query", "user"),

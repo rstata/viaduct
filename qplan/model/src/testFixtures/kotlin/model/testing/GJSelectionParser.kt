@@ -14,7 +14,7 @@ import graphql.validation.Validator
 import java.util.Locale
 import model.Schema
 import model.SelectionForest
-import model.VariableBindings
+import model.Value
 import model.spec.SpecSelection
 import model.spec.flatten
 
@@ -27,7 +27,7 @@ import model.spec.flatten
  */
 internal class GJSelectionParser(
     private val schema: GJSchema,
-    private val variableValues: VariableBindings,
+    private val variableValues: Map<String, Value.Input?>,
 ) {
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
         val document = Parser.parse(fragment)

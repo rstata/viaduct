@@ -27,7 +27,6 @@ import graphql.schema.InputValueWithState
 import model.Schema
 import model.TypeExpr
 import model.Value
-import model.VariableBindings
 
 /** Suffix reserved for fixture-generated canonical node-ID bridge fields. */
 internal const val NODE_ID_BRIDGE_SUFFIX = "\$id"
@@ -52,7 +51,7 @@ internal class GJSchemaDecoder(
     private val possibleTypeSets =
         linkedMapOf<Schema.CompositeType, MutableSet<Schema.ObjectType>>()
     private lateinit var schema: Schema
-    private lateinit var noVariableValues: VariableBindings
+    private val noVariableValues: Map<String, Value.Input?> = emptyMap()
 
     fun decode(): Schema {
         require(graphQLSchema.mutationType == null) {
@@ -75,8 +74,6 @@ internal class GJSchemaDecoder(
                 types = types.toMap(),
                 graphQLSchema = graphQLSchema,
             )
-        noVariableValues = VariableBindings.from(emptyMap())
-
         populatePossibleTypes()
         populateInputFields()
         populateCompositeFields()
@@ -385,7 +382,7 @@ internal class GJSchemaDecoder(
 internal fun decodeInputValue(
     type: GraphQLInputType,
     value: InputValueWithState,
-    variableValues: VariableBindings,
+    variableValues: Map<String, Value.Input?>,
     schema: Schema,
 ): Value.Input? =
     if (value.isLiteral) {
@@ -397,7 +394,7 @@ internal fun decodeInputValue(
 internal fun decodeLiteral(
     type: GraphQLInputType,
     value: GraphQLValue<*>,
-    variableValues: VariableBindings,
+    variableValues: Map<String, Value.Input?>,
     schema: Schema,
 ): Value.Input? {
     if (value is VariableReference) {
@@ -492,7 +489,7 @@ private inline fun decodeInputObjectFields(
     type: GraphQLInputObjectType,
     isFieldSupplied: (String) -> Boolean,
     decodeSupplied: (GraphQLInputType, String) -> Value.Input?,
-    variableValues: VariableBindings,
+    variableValues: Map<String, Value.Input?>,
     schema: Schema,
 ): Value.Input {
     val fields =
@@ -524,7 +521,7 @@ private inline fun decodeInputObjectFields(
 private fun decodeObjectLiteral(
     type: GraphQLInputObjectType,
     value: ObjectValue,
-    variableValues: VariableBindings,
+    variableValues: Map<String, Value.Input?>,
     schema: Schema,
 ): Value.Input {
     val suppliedFields = value.objectFields.associateBy { it.name }
@@ -542,7 +539,7 @@ private fun decodeObjectLiteral(
 private fun decodeExternal(
     type: GraphQLInputType,
     value: Any?,
-    variableValues: VariableBindings,
+    variableValues: Map<String, Value.Input?>,
     schema: Schema,
 ): Value.Input? {
     if (value == null) {
@@ -642,7 +639,7 @@ private fun decodeModelInputType(
 private fun decodeObjectExternal(
     type: GraphQLInputObjectType,
     value: Any,
-    variableValues: VariableBindings,
+    variableValues: Map<String, Value.Input?>,
     schema: Schema,
 ): Value.Input {
     val valueMap = value as Map<*, *>

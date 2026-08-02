@@ -59,7 +59,7 @@ fun Value.Object.copyInWorld(): Value.Object =
     Value.Object.of(type, fieldValues)
 ```
 
-The current world surface includes `world.schema`, `world.variableValues`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories belong to their precise `Value` variants rather than to `Schema` or `Assumptions`.
+The current world surface includes `world.schema`, `world.executorRegistry`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories belong to their precise `Value` variants rather than to `Schema` or `Assumptions`.
 
 Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Value.Output?.snipToDemand`.
 

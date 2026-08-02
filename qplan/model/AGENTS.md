@@ -20,7 +20,7 @@ Input-object fields and output-field arguments share `InputLikeField`. Input-obj
 
 Kotlin inheritance and generic variance classify carrier values but do not define GraphQL interface implementation, output subtyping, input coercion, or type variance. Use canonical schema relations and documented carrier invariants for those facts.
 
-`FieldValues`, `ObjectFieldValues`, and `VariableBindings` deliberately throw when lookup is outside their domain. Check `containsKey` before lookup when absence is possible; generic `Map` helpers such as `getOrElse` may call the throwing `get`.
+`FieldValues` and `ObjectFieldValues` deliberately throw when lookup is outside their domain. Check `containsKey` before lookup when absence is possible; generic `Map` helpers such as `getOrElse` may call the throwing `get`.
 
 ## Output Representations
 

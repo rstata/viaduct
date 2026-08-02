@@ -15,18 +15,6 @@ import jakarta.inject.Qualifier
 annotation class SchemaSDL
 
 /**
- * The model variable values fixed for the reasoning world.
- */
-@Qualifier
-@MustBeDocumented
-@Retention(AnnotationRetention.RUNTIME)
-@Target(
-    AnnotationTarget.FUNCTION,
-    AnnotationTarget.VALUE_PARAMETER,
-)
-annotation class VariableValues
-
-/**
  * The raw external node-resolver functions supplied before fixture lowering.
  *
  * Registry composition consumes these functions and exposes only generated field resolvers to the

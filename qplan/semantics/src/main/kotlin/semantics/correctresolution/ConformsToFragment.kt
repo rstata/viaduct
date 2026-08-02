@@ -12,14 +12,13 @@ import model.Value
  * Whether this result contains every cell required by [fragment].
  *
  * Each selection is first guarded by the runtime concrete object type. Applicable selection keys
- * are then specialized to that concrete type and have all variables instantiated before lookup.
- * Null and error values stop recursive requirements. Cells not required by [fragment] are permitted.
+ * are then specialized to that concrete type before lookup. Null and error values stop recursive
+ * requirements. Cells not required by [fragment] are permitted.
  *
  * This predicate trusts the fragment's post-validation schema compatibility and the engine-result
  * carrier invariants established by its factories. It observes values, but not check components.
  *
- * @throws model.MissingVariablesException when an applicable required key contains an unbound
- * variable
+ * This operation is defined only when applicable selection keys contain no variables.
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToFragment(fragment: Fragment): Boolean =
@@ -58,8 +57,5 @@ context(world: Assumptions)
 internal fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
     Value.Key.of(
         field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments =
-            key.arguments.fieldValues.mapValues { (_, value) ->
-                value?.let(world.variableValues::instantiateAllVariables)
-            },
+        arguments = key.arguments.fieldValues,
     )

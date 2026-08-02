@@ -10,7 +10,9 @@ import semantics.correctresolution.concreteObjectKey
 /**
  * Materializes the object value selected by [fragment] from this result.
  *
- * This operation is defined when this result contains every cell selected by [fragment].
+ * This operation is defined when this result contains every cell selected by [fragment] and every
+ * selection applicable at an object visited by this operation contains no [Value.Variable] in its
+ * key arguments.
  */
 context(world: Assumptions)
 fun EngineResult.Object.materialize(fragment: Fragment): Value.Object =

@@ -49,8 +49,7 @@ sealed interface SpecSelection {
          *
          * ### Representation
          *
-         * Non-variable values are in coerced form. A value may contain a [Value.Variable]
-         * when that variable is unbound.
+         * Non-variable values are in coerced form. A value may contain a [Value.Variable].
          */
         val arguments: Map<String, Value.Input?>
 

@@ -18,6 +18,8 @@ import semantics.materialize
  * Resolver01 closes and orders exact local field-resolver input demand. Its ordinary test domain
  * still gives source field resolvers empty object fragments; fixture-generated node loaders use
  * synthetic sibling ID bridge fields and therefore require this generic local field dependency.
+ * Every supplied or resolver-introduced selection applicable at an object visited by this
+ * operation must contain no [Value.Variable] in its key arguments.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =

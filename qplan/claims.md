@@ -12,7 +12,13 @@
 
 **[resolver03-guarded-producer-completeness-proof]** Under the exact registry-extension assumption in `tla/Resolver03.tla`, TLAPS proves that each activated nested resolver occurrence's guarded transitive requirement tokens are included in its owning producer's supplied demand before that producer's unique application.
 
+**[resolver03-composed-application-proof]** Under the finite extensional result-tree, deterministic materialization, observation-alignment, and exact registry-extension assumptions in `tla/Resolver03Application.tla`, TLAPS proves that the occurrence product fold terminates in a Resolver03 result satisfying every modeled `correctResolution` conjunct.
+
 **[resolver04-variable-order-and-ambient-seal-proof]** Under the unified acyclic site-order and complete ambient-contribution assumptions in `tla/Resolver04.tla`, TLAPS proves that provider recursion has finite rank, fragment variables are bound from their providers before the defining field is applied, and all modeled converging operation, provider, and sibling demand is sealed into that field's supplied demand.
+
+**[resolver04-provider-path-evaluation-proof]** Under the finite validated-path and ranked-list assumptions in `tla/ProviderPathEvaluation.tla`, TLAPS proves exact object-field traversal, null/error suffix absorption, and structural terminal conversion to an input value, and `tla/ProviderReads.tla` requires the Resolver04 provider read at its actual root cell to equal that result.
+
+**[resolver04-composed-application-proof]** Under the finite extensional Resolver03 assumptions plus validated provider-read, variable-site, and ambient-contribution assumptions in `tla/Resolver04Application.tla`, TLAPS proves that the occurrence product fold terminates in a Resolver04 result satisfying every modeled `correctResolution` conjunct, including final provider-read variable conformance.
 
 **[resolver-result-tree-refinement-proof]** Under the finite extensional carrier and observation-alignment assumptions in `tla/ResultTree.tla` through `tla/ValueConstruction.tla`, TLAPS proves that Resolver01 and Resolver02 construction postconditions imply every conjunct of the modeled `correctResolution` judgment.
 

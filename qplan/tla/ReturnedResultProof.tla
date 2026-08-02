@@ -2,7 +2,7 @@
 EXTENDS ReturnedResult, OccurrenceFoldsProof, ProjectionProof,
         TreeConstructionProof
 
-ASSUME ReturnedResultAssumptions == ReturnedResultWorld
+ASSUME ReturnedResultAssumptions == ReturnedResultBaseWorld
 
 LEMMA ReturnedCellsAreFinal ==
     AllFoldsCompleted => BuiltCells = PresentCells
@@ -48,9 +48,11 @@ BY Isa
        EmptyBindingVariable, EmptyBindingValue
 
 LEMMA ReturnedConformsToResolvers ==
-    ReturnedTree!ConformsToResolvers
+    ReturnedProjectionCoverage =>
+        ReturnedTree!ConformsToResolvers
 <1>. SUFFICES
-        ASSUME NEW observation \in Observations
+        ASSUME ReturnedProjectionCoverage,
+               NEW observation \in Observations
         PROVE
             ProjectedActualObservation[observation] =
                 RawExpectedObservation[observation]
@@ -60,7 +62,7 @@ LEMMA ReturnedConformsToResolvers ==
                 Project(
                     SuppliedDemand[
                         ObservationResolver[observation]])
-    BY ReturnedResultAssumptions DEF ReturnedResultWorld
+    BY DEF ReturnedProjectionCoverage
 <1>. QED BY <1>1 DEF ProjectedActualObservation,
                     RawExpectedObservation, Project
 
@@ -73,23 +75,19 @@ LEMMA ReturnedConformsToTypename ==
     BY DEF ReturnedTree!ConformsToTypename
 <1>1. cell \in Cells
     BY ReturnedResultAssumptions
-       DEF ReturnedResultWorld, FoldWorld, ConstructionWorld,
+       DEF ReturnedResultBaseWorld, FoldWorld, ConstructionWorld,
            World, WorldCarriers, BuiltCells, CompletedWork
 <1>. QED BY <1>1 DEF GeneratedCellValue
 
 THEOREM CompletedReturnedResultIsCorrect ==
-    AllFoldsCompleted => ReturnedCorrect
+    AllFoldsCompleted /\ ReturnedProjectionCoverage =>
+        ReturnedCorrect
 BY ReturnedConformsToFragment, ReturnedClosesResolverDemand,
    ReturnedConformsToVariables, ReturnedConformsToResolvers,
    ReturnedConformsToTypename, ReturnedResultAssumptions
    DEF ReturnedCorrect, ReturnedTree!CorrectResolution,
-       ReturnedTree!RootedAndWellTyped, ReturnedResultWorld,
+       ReturnedTree!RootedAndWellTyped, ReturnedResultBaseWorld,
        FoldWorld, ConstructionWorld, World,
        RootedAndWellTyped
-
-THEOREM Resolver01And02ReturnedResultCorrect ==
-    FoldSpec => ReturnedResultTermination
-BY AllOccurrenceFoldsComplete, CompletedReturnedResultIsCorrect, PTL
-   DEF FoldTermination, ReturnedResultTermination
 
 =============================================================================

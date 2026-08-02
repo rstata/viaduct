@@ -51,7 +51,7 @@ ReturnedTree ==
              StoredBindingValue <- EmptyBindingValue,
              ExpectedBindingValue <- EmptyBindingValue
 
-ReturnedResultWorld ==
+ReturnedResultBaseWorld ==
     /\ FoldWorld
     /\ ProjectionWorld
     /\ RootedAndWellTyped
@@ -60,13 +60,20 @@ ReturnedResultWorld ==
            \in [Observations -> OutputObservations]
     /\ SuppliedDemand \in [Cells -> SUBSET DemandTokens]
     /\ \A observation \in Observations :
-           /\ ResultObservation[observation]
-                  \in PassiveObservations
-           /\ ResultObservation[observation]
-                  \in DOMAIN
-                        Project(
-                            SuppliedDemand[
-                                ObservationResolver[observation]])
+           ResultObservation[observation]
+               \in PassiveObservations
+
+ReturnedProjectionCoverage ==
+    \A observation \in Observations :
+        ResultObservation[observation]
+            \in DOMAIN
+                  Project(
+                      SuppliedDemand[
+                          ObservationResolver[observation]])
+
+ReturnedResultWorld ==
+    /\ ReturnedResultBaseWorld
+    /\ ReturnedProjectionCoverage
 
 ReturnedCorrect == ReturnedTree!CorrectResolution
 

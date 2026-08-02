@@ -24,7 +24,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 ## Output Representations
 
-`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value; list results carry their element `typeExpr` even when empty.
+`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value; each object result also carries its resolved nullable input values for execution variables, distinguishing absence from a null binding. List results carry their element `typeExpr` even when empty.
 
 `Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 

@@ -14,11 +14,24 @@ import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.arbitrary.Config
+import semantics.arbitrary.ExplicitFieldResolverWeight
+import semantics.arbitrary.FieldArgumentWeight
+import semantics.arbitrary.ObjectFieldCount
+import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverVariableWeight
+import semantics.arbitrary.ResolverVariablesEnabled
+import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.resolverTestBatch
+import semantics.correctresolution.conformsToFragment
+import semantics.correctresolution.conformsToResolvers
+import semantics.correctresolution.conformsToTypename
+import semantics.correctresolution.conformsToVariables
 import semantics.correctresolution.correctResolution
+import semantics.correctresolution.isClosedUnderResolverDemand
+import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -203,6 +216,335 @@ class ResolverTest {
     }
 
     @Test
+    fun `merges provider demand with a sibling resolver fragment before applying its producer`() {
+        var producerApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      narrow: Int!
+                      broad: Int!
+                    }
+
+                    type User {
+                      result: Int!
+                      derived: Int!
+                      use(value: Int!): Int!
+                      producer: Payload!
+                    }
+
+                    type Query {
+                      viewer: User!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val derivedKey = Value.Key.of(schema.field("User", "derived"), emptyMap())
+                    val useKey = Value.Key.of(schema.field("User", "use"), mapOf("value" to 2))
+                    val producerKey = Value.Key.of(schema.field("User", "producer"), emptyMap())
+                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    mapOf(
+                        schema.field("Query", "viewer") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ -> schema.objectOf("User") },
+                        schema.field("User", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on User {
+                                      derived
+                                      use(value: ${'$'}value)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { input, _ ->
+                                val derived = input.fieldValues.getValue(derivedKey) as Value.Int
+                                val use = input.fieldValues.getValue(useKey) as Value.Int
+                                Value.Int.of(derived.intValue + use.intValue)
+                            },
+                        schema.field("User", "derived") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { producer { broad } }",
+                                ),
+                            ) { input, _ ->
+                                val producer =
+                                    input.fieldValues.getValue(producerKey) as Value.Object
+                                producer.fieldValues.getValue(broadKey)
+                            },
+                        schema.field("User", "use") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("User"),
+                            ) { _, arguments ->
+                                arguments.fieldValues.getValue("value") as Value.Int
+                            },
+                        schema.field("User", "producer") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("User"),
+                            ) { _, _ ->
+                                producerApplications += 1
+                                schema.objectOf("Payload") {
+                                    "narrow" setTo 2
+                                    "broad" setTo 3
+                                }
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    mapOf(
+                        VariableCoordinate.of(
+                            schema.field("User", "result") as Schema.ObjectField,
+                            Value.Variable.of("value"),
+                        ) to
+                            schema.fragmentFrom(
+                                "fragment ignored on User { producer { narrow } }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { viewer { result } }")
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+        val viewer =
+            assertIs<EngineResult.Object>(
+                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+            )
+
+        assertEquals(1, producerApplications)
+        assertEquals(
+            Value.Int.of(5),
+            viewer.fetch(Value.Key.of(world.schema.field("User", "result"), emptyMap())).value,
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
+    fun `extends a variable argument selection before applying its provider producer`() {
+        var producerApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      narrow: Int!
+                      broad: Int!
+                    }
+
+                    type User {
+                      result: Int!
+                      middle(value: Int!): Int!
+                      final: Int!
+                      producer: Payload!
+                    }
+
+                    type Query {
+                      viewer: User!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val middleKey = Value.Key.of(schema.field("User", "middle"), mapOf("value" to 2))
+                    val finalKey = Value.Key.of(schema.field("User", "final"), emptyMap())
+                    val producerKey = Value.Key.of(schema.field("User", "producer"), emptyMap())
+                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    mapOf(
+                        schema.field("Query", "viewer") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ -> schema.objectOf("User") },
+                        schema.field("User", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { middle(value: ${'$'}value) }",
+                                ),
+                            ) { input, _ ->
+                                input.fieldValues.getValue(middleKey)
+                            },
+                        schema.field("User", "middle") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { final }",
+                                ),
+                            ) { input, arguments ->
+                                val final = input.fieldValues.getValue(finalKey) as Value.Int
+                                val value =
+                                    arguments.fieldValues.getValue("value") as Value.Int
+                                Value.Int.of(final.intValue + value.intValue)
+                            },
+                        schema.field("User", "final") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { producer { broad } }",
+                                ),
+                            ) { input, _ ->
+                                val producer =
+                                    input.fieldValues.getValue(producerKey) as Value.Object
+                                producer.fieldValues.getValue(broadKey)
+                            },
+                        schema.field("User", "producer") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("User"),
+                            ) { _, _ ->
+                                producerApplications += 1
+                                schema.objectOf("Payload") {
+                                    "narrow" setTo 2
+                                    "broad" setTo 3
+                                }
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    mapOf(
+                        VariableCoordinate.of(
+                            schema.field("User", "result") as Schema.ObjectField,
+                            Value.Variable.of("value"),
+                        ) to
+                            schema.fragmentFrom(
+                                "fragment ignored on User { producer { narrow } }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { viewer { result } }")
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+        val viewer =
+            assertIs<EngineResult.Object>(
+                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+            )
+
+        assertEquals(1, producerApplications)
+        assertEquals(
+            Value.Int.of(5),
+            viewer.fetch(Value.Key.of(world.schema.field("User", "result"), emptyMap())).value,
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
+    fun `merges operation demand with a sibling transitively required by a provider`() {
+        var primaryApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      narrow: Int!
+                      shallow: Int!
+                      deep: Int!
+                    }
+
+                    type User {
+                      result: Int!
+                      use(value: Int!): Int!
+                      primary: Payload!
+                      secondary: Payload!
+                    }
+
+                    type Query {
+                      viewer: User!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val useKey = Value.Key.of(schema.field("User", "use"), mapOf("value" to 1))
+                    val primaryKey = Value.Key.of(schema.field("User", "primary"), emptyMap())
+                    val shallowKey = Value.Key.of(schema.field("Payload", "shallow"), emptyMap())
+                    mapOf(
+                        schema.field("Query", "viewer") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ -> schema.objectOf("User") },
+                        schema.field("User", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { use(value: ${'$'}value) }",
+                                ),
+                            ) { input, _ ->
+                                input.fieldValues.getValue(useKey)
+                            },
+                        schema.field("User", "use") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("User"),
+                            ) { _, arguments ->
+                                arguments.fieldValues.getValue("value") as Value.Int
+                            },
+                        schema.field("User", "primary") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("User"),
+                            ) { _, _ ->
+                                primaryApplications += 1
+                                schema.objectOf("Payload") {
+                                    "shallow" setTo 1
+                                    "deep" setTo 3
+                                }
+                            },
+                        schema.field("User", "secondary") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { primary { shallow } }",
+                                ),
+                            ) { input, _ ->
+                                val primary =
+                                    input.fieldValues.getValue(primaryKey) as Value.Object
+                                val shallow = primary.fieldValues.getValue(shallowKey)
+                                schema.objectOf("Payload") {
+                                    "narrow" setTo shallow
+                                }
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    mapOf(
+                        VariableCoordinate.of(
+                            schema.field("User", "result") as Schema.ObjectField,
+                            Value.Variable.of("value"),
+                        ) to
+                            schema.fragmentFrom(
+                                "fragment ignored on User { secondary { narrow } }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment =
+            world.fragmentFrom(
+                "fragment ignored on Query { viewer { primary { deep } result } }",
+            )
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+        val viewer =
+            assertIs<EngineResult.Object>(
+                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+            )
+        val primary =
+            assertIs<EngineResult.Object>(
+                viewer.fetch(Value.Key.of(world.schema.field("User", "primary"), emptyMap())).value,
+            )
+
+        assertEquals(1, primaryApplications)
+        assertEquals(
+            Value.Int.of(3),
+            primary.fetch(Value.Key.of(world.schema.field("Payload", "deep"), emptyMap())).value,
+        )
+        assertEquals(
+            Value.Int.of(1),
+            viewer.fetch(Value.Key.of(world.schema.field("User", "result"), emptyMap())).value,
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
     fun `resolves recursive variable dependencies`() {
         val testWorld =
             TestWorld.fromSDL(
@@ -271,6 +613,198 @@ class ResolverTest {
             result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
+    fun `merges field demand when distinct variables resolve to the same value`() {
+        var yApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      x: Int!
+                      y(value: Int!): Int!
+                      raw: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val yKey = Value.Key.of(schema.field("Query", "y"), mapOf("value" to 2))
+                    mapOf(
+                        schema.field("Query", "x") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      y(value: ${'$'}first)
+                                      y(value: ${'$'}second)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { input, _ ->
+                                require(input.fieldValues.keys == setOf(yKey))
+                                input.fieldValues.getValue(yKey)
+                            },
+                        schema.field("Query", "y") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, arguments ->
+                                yApplications += 1
+                                arguments.fieldValues.getValue("value") as Value.Int
+                            },
+                        schema.field("Query", "raw") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ -> Value.Int.of(2) },
+                    )
+                },
+                variableProviders = { schema ->
+                    val owner = schema.field("Query", "x") as Schema.ObjectField
+                    val provider =
+                        schema.fragmentFrom(
+                            "fragment ignored on Query { raw }",
+                        ).subselections.single()
+                    mapOf(
+                        VariableCoordinate.of(owner, Value.Variable.of("first")) to provider,
+                        VariableCoordinate.of(owner, Value.Variable.of("second")) to provider,
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { x }")
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        assertEquals(1, yApplications)
+        assertEquals(
+            mapOf(
+                Value.Variable.of("first") to Value.Int.of(2),
+                Value.Variable.of("second") to Value.Int.of(2),
+            ),
+            result.variableValues,
+        )
+        assertEquals(
+            Value.Int.of(2),
+            result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
+    fun `merges symbolic demand when variables from different resolvers converge`() {
+        var sourceApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      narrow: Int!
+                      broad: Int!
+                    }
+
+                    type Query {
+                      result: Int!
+                      middle: Int!
+                      source(value: Int!): Payload!
+                      raw: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val sourceKey =
+                        Value.Key.of(schema.field("Query", "source"), mapOf("value" to 1))
+                    val narrowKey = Value.Key.of(schema.field("Payload", "narrow"), emptyMap())
+                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    mapOf(
+                        schema.field("Query", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      source(value: ${'$'}late) {
+                                        broad
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { input, _ ->
+                                val source = input.fieldValues.getValue(sourceKey) as Value.Object
+                                source.fieldValues.getValue(broadKey)
+                            },
+                        schema.field("Query", "middle") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      source(value: ${'$'}early) {
+                                        narrow
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { input, _ ->
+                                val source = input.fieldValues.getValue(sourceKey) as Value.Object
+                                source.fieldValues.getValue(narrowKey)
+                            },
+                        schema.field("Query", "source") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, arguments ->
+                                sourceApplications += 1
+                                assertEquals(Value.Int.of(1), arguments.fieldValues["value"])
+                                schema.objectOf("Payload") {
+                                    "narrow" setTo 1
+                                    "broad" setTo 3
+                                }
+                            },
+                        schema.field("Query", "raw") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ -> Value.Int.of(1) },
+                    )
+                },
+                variableProviders = { schema ->
+                    mapOf(
+                        VariableCoordinate.of(
+                            schema.field("Query", "result") as Schema.ObjectField,
+                            Value.Variable.of("late"),
+                        ) to
+                            schema.fragmentFrom(
+                                "fragment ignored on Query { middle }",
+                            ).subselections.single(),
+                        VariableCoordinate.of(
+                            schema.field("Query", "middle") as Schema.ObjectField,
+                            Value.Variable.of("early"),
+                        ) to
+                            schema.fragmentFrom(
+                                "fragment ignored on Query { raw }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
+
+        val resolved =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        assertEquals(1, sourceApplications)
+        assertEquals(
+            mapOf(
+                Value.Variable.of("early") to Value.Int.of(1),
+                Value.Variable.of("late") to Value.Int.of(1),
+            ),
+            resolved.variableValues,
+        )
+        assertEquals(
+            Value.Int.of(3),
+            resolved.fetch(Value.Key.of(world.schema.field("Query", "result"), emptyMap())).value,
+        )
+        assertTrue(context(world) { resolved.correctResolution(fragment) })
     }
 
     @Test
@@ -526,6 +1060,7 @@ class ResolverTest {
     @Test
     fun `arbitrary valid worlds resolve correctly`(): Unit =
         runBlocking {
+            var activatedVariableCases = 0
             val counts =
                 TestCaseCount(
                     schemas = 20,
@@ -534,11 +1069,25 @@ class ResolverTest {
                 )
             val config =
                 Config.default +
-                    (ResolverFragmentsEnabled to true)
+                    (SchemaObjectCount to 3..5) +
+                    (ObjectFieldCount to 3..5) +
+                    (FieldArgumentWeight to 0.7) +
+                    (ExplicitFieldResolverWeight to 0.6) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 0.9) +
+                    (ResolverVariablesEnabled to true) +
+                    (ResolverVariableWeight to 1.0)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
-                assertTrue(generatedResolutionIsCorrect(testWorld, testCase.query.source))
+                val result = generatedResolution(testWorld, testCase.query.source)
+                if (result.hasVariableValues()) {
+                    activatedVariableCases += 1
+                }
             }
+            assertTrue(
+                activatedVariableCases > 0,
+                "Resolver04 property activated no resolver variables",
+            )
         }
 
     @Test
@@ -910,6 +1459,14 @@ class ResolverTest {
         testWorld: TestWorld,
         querySource: String,
     ): Boolean {
+        generatedResolution(testWorld, querySource)
+        return true
+    }
+
+    private fun generatedResolution(
+        testWorld: TestWorld,
+        querySource: String,
+    ): EngineResult.Object {
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom(querySource)
         val selections = fragment.subselections
@@ -917,10 +1474,35 @@ class ResolverTest {
             context(world) {
                 world.objectOf("Query").resolve(selections)
             }
-        return context(world) {
-            result.correctResolution(fragment)
+        context(world) {
+            val checks =
+                mapOf(
+                    "rootedAndWellTyped" to result.rootedAndWellTyped(fragment),
+                    "conformsToFragment" to result.conformsToFragment(fragment),
+                    "isClosedUnderResolverDemand" to result.isClosedUnderResolverDemand(),
+                    "conformsToVariables" to result.conformsToVariables(),
+                    "conformsToResolvers" to result.conformsToResolvers(),
+                    "conformsToTypename" to result.conformsToTypename(),
+                )
+            check(checks.values.all { it }) {
+                "Incorrect generated resolution: " +
+                    checks.filterValues { correct -> !correct }.keys.joinToString()
+            }
         }
+        return result
     }
+
+    private fun EngineResult?.hasVariableValues(): Boolean =
+        when (this) {
+            is EngineResult.Object ->
+                variableValues.isNotEmpty() ||
+                    keys.any { key -> fetch(key).value.hasVariableValues() }
+            is EngineResult.List -> any { cell -> cell.value.hasVariableValues() }
+            null,
+            Value.Error,
+            is Value.Simple,
+            -> false
+        }
 
     private companion object {
         val FLAT_SCHEMA_SDL =

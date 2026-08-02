@@ -760,11 +760,12 @@ private class TestExecutorRegistry(
 
             selection.key.arguments.variables().forEach { variable ->
                 val coordinate = variableCoordinate(variable)
-                require(coordinate.field == ownerField)
-                extendedVariables
-                    .getValue(coordinate)
-                    .subselections
-                    .forEach(additions::add)
+                if (coordinate.field == ownerField) {
+                    extendedVariables
+                        .getValue(coordinate)
+                        .subselections
+                        .forEach(additions::add)
+                }
             }
 
             val outputType = field.typeExpr.baseType as? Schema.CompositeType

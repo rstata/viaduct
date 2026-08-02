@@ -25,6 +25,7 @@ class ArbitrarySchema internal constructor(
     internal val query: ObjectDefinition,
     internal val interfaces: List<InterfaceDefinitionSpec>,
     internal val unions: List<UnionDefinitionSpec>,
+    internal val deepFields: Map<String, String>,
 ) {
     internal val allObjects: List<ObjectDefinition>
         get() = listOf(query) + objects
@@ -120,7 +121,16 @@ private class SchemaGenerator(
     private val random: RandomSource,
 ) {
     fun generate(): ArbitrarySchema {
-        val objectCount = Arb.int(config[SchemaObjectCount]).next(random)
+        val minimumDepth = config[MinimumSelectionDepth]
+        require(minimumDepth <= config[MaxSelectionDepth]) {
+            "Minimum selection depth cannot exceed maximum selection depth"
+        }
+        require(minimumDepth <= config[SchemaObjectCount].last) {
+            "Schema object count must permit the minimum selection depth"
+        }
+        val objectCountRange =
+            maxOf(config[SchemaObjectCount].first, minimumDepth)..config[SchemaObjectCount].last
+        val objectCount = Arb.int(objectCountRange).next(random)
         val objectNames = (0 until objectCount).map { "Object$it" }
         val nodeNames =
             if (config[InterfacesEnabled] && config[NodeResolversEnabled]) {
@@ -132,13 +142,20 @@ private class SchemaGenerator(
             objectNames.mapIndexed { index, name ->
                 val laterObjects = objectNames.drop(index + 1)
                 val fieldCount = Arb.int(config[ObjectFieldCount]).next(random)
-                val fields =
+                val generatedFields =
                     (0 until fieldCount).map { fieldIndex ->
                         field(
                             ownerName = name,
                             name = "field$fieldIndex",
                             objectTargets = laterObjects,
                         )
+                    }
+                val fields =
+                    if (index < minimumDepth - 1) {
+                        listOf(deepField(name, objectNames[index + 1])) +
+                            generatedFields.drop(1)
+                    } else {
+                        generatedFields
                     }
                 ObjectDefinition(
                     name = name,
@@ -229,19 +246,26 @@ private class SchemaGenerator(
                 interfaces.map(InterfaceDefinitionSpec::name) +
                 unions.map(UnionDefinitionSpec::name)
         val queryFieldCount = Arb.int(config[QueryFieldCount]).next(random)
+        val generatedQueryFields =
+            (0 until queryFieldCount).map { index ->
+                field(
+                    ownerName = "Query",
+                    name = "query$index",
+                    objectTargets = queryTargets,
+                    preferObject = true,
+                )
+            }
         val query =
             ObjectDefinition(
                 name = "Query",
                 implementsNode = false,
                 interfaces = emptySet(),
                 fields =
-                    (0 until queryFieldCount).map { index ->
-                        field(
-                            ownerName = "Query",
-                            name = "query$index",
-                            objectTargets = queryTargets,
-                            preferObject = true,
-                        )
+                    if (minimumDepth > 0) {
+                        listOf(deepField("Query", objectNames.first(), "query0")) +
+                            generatedQueryFields.drop(1)
+                    } else {
+                        generatedQueryFields
                     },
             )
         val definitions =
@@ -255,8 +279,33 @@ private class SchemaGenerator(
             AstPrinter.printAst(
                 Document.newDocument().definitions(definitions).build(),
             ).trim()
-        return ArbitrarySchema(sdl, objects, query, interfaces, unions)
+        val deepFields =
+            buildMap {
+                if (minimumDepth > 0) put("Query", "query0")
+                (0 until minimumDepth - 1).forEach { index ->
+                    put(objectNames[index], "field0")
+                }
+            }
+        return ArbitrarySchema(sdl, objects, query, interfaces, unions, deepFields)
     }
+
+    private fun deepField(
+        ownerName: String,
+        targetName: String,
+        fieldName: String = "field0",
+    ): FieldDefinitionSpec =
+        FieldDefinitionSpec(
+            ownerName = ownerName,
+            name = fieldName,
+            type =
+                OutputTypeSpec(
+                    namedType = targetName,
+                    nullable = false,
+                    list = false,
+                    elementNullable = false,
+                ),
+            arguments = emptyList(),
+        )
 
     private fun field(
         ownerName: String,

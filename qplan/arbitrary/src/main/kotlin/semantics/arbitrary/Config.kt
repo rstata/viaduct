@@ -53,6 +53,7 @@ object NullValueWeight : ConfigKey<Double>(0.15, ::weight)
 object ErrorValueWeight : ConfigKey<Double>(0.05, ::weight)
 object AliasWeight : ConfigKey<Double>(0.2, ::weight)
 object DuplicateSelectionWeight : ConfigKey<Double>(0.15, ::weight)
+object MinimumSelectionDepth : ConfigKey<Int>(0, ::nonNegative)
 object MaxSelectionDepth : ConfigKey<Int>(4, ::positive)
 object ListValueSize : ConfigKey<IntRange>(0..3, ::range)
 object ArgumentsEnabled : ConfigKey<Boolean>(true, { null })
@@ -62,7 +63,10 @@ object UnionsEnabled : ConfigKey<Boolean>(true, { null })
 object ListsEnabled : ConfigKey<Boolean>(true, { null })
 object NodeResolversEnabled : ConfigKey<Boolean>(true, { null })
 object ResolverFragmentsEnabled : ConfigKey<Boolean>(true, { null })
+object ResolverFragmentWeight : ConfigKey<Double>(0.65, ::weight)
 object ResolverFragmentDepth : ConfigKey<Int>(2, ::nonNegative)
+object ResolverVariablesEnabled : ConfigKey<Boolean>(false, { null })
+object ResolverVariableWeight : ConfigKey<Double>(0.5, ::weight)
 
 data class TestCaseCount(
     val schemas: Int = 10,

@@ -23,5 +23,6 @@ fun EngineResult.Object.correctResolution(fragment: Fragment): Boolean =
     rootedAndWellTyped(fragment) &&         // Are both result and fragment rooted on the `Query` type?
         conformsToFragment(fragment) &&     // Does the result conform to the fragment?
         isClosedUnderResolverDemand() &&    // Have the RSSes of all necessary resolvers (transitively) been satisfied
+        conformsToVariables() &&            // Do stored variables equal their field-relative provider values?
         conformsToResolvers() &&            // Do the actual values conform to what the resolvers produce?
         conformsToTypename()                // Where the __typename field exists does it have the right value?

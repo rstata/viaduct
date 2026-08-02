@@ -220,7 +220,7 @@ internal class GJSchemaDecoder(
                             )
                         }
                     val modelField =
-                        OutputFieldImpl(
+                        outputFieldOf(
                             fieldName = graphQLField.name,
                             containingType = modelType,
                             typeExpr = decodeOutputType(graphQLField.type),
@@ -233,7 +233,7 @@ internal class GJSchemaDecoder(
 
     private fun addTypeNameField(type: Schema.CompositeType) {
         val field =
-            OutputFieldImpl(
+            outputFieldOf(
                 fieldName = "__typename",
                 containingType = type,
                 typeExpr = TypeExpr.Named.of(Schema.StringType, isNullable = false),
@@ -275,7 +275,7 @@ internal class GJSchemaDecoder(
                             )
                         }
                     fields[bridgeName] =
-                        OutputFieldImpl(
+                        outputFieldOf(
                             fieldName = bridgeName,
                             containingType = containingType,
                             typeExpr = nodeIdTypeExpr(nodeField.typeExpr),
@@ -692,6 +692,25 @@ private class OutputFieldImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
     override val arguments: Schema.FieldArguments,
 ) : Schema.OutputField
+
+private class ObjectFieldImpl(
+    override val fieldName: String,
+    override val containingType: Schema.ObjectType,
+    override val typeExpr: TypeExpr<Schema.OutputType>,
+    override val arguments: Schema.FieldArguments,
+) : Schema.ObjectField
+
+private fun outputFieldOf(
+    fieldName: String,
+    containingType: Schema.CompositeType,
+    typeExpr: TypeExpr<Schema.OutputType>,
+    arguments: Schema.FieldArguments,
+): Schema.OutputField =
+    if (containingType is Schema.ObjectType) {
+        ObjectFieldImpl(fieldName, containingType, typeExpr, arguments)
+    } else {
+        OutputFieldImpl(fieldName, containingType, typeExpr, arguments)
+    }
 
 private class InputFieldImpl(
     override val fieldName: String,

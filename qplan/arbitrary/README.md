@@ -31,7 +31,7 @@ checkResolverTestCases(counts, config) { testWorld, testCase ->
 - `schema.query(config)` generates a valid named Query fragment containing literal arguments only.
 - `Arb.resolverTestBatch(counts, config)` composes the three generators without coordinating registry choices with query choices.
 
-The configuration includes independent switches for arguments, query fragments, resolver fragments, interfaces, unions, lists, and raw node resolvers, plus weights and size bounds for generated structures and values. Variables are intentionally not generated. Enabling node resolvers registers every generated `Node` implementation, while generated non-`Node` interfaces and unions exclude `Node` objects so fixture lowering never receives a mixed node-resolved and inline possible-type set.
+The configuration includes independent switches for arguments, query fragments, resolver fragments, interfaces, unions, lists, and raw node resolvers, plus weights and size bounds for generated structures and values. Variables are intentionally not generated, so generated Resolver04 cases exercise its variable-free subset while deterministic tests cover variable providers. Enabling node resolvers registers every generated `Node` implementation, while generated non-`Node` interfaces and unions exclude `Node` objects so fixture lowering never receives a mixed node-resolved and inline possible-type set.
 
 Kotest reports a replay seed for a failing batch. Every individual semantic failure also includes the exact SDL, resolver sites with inferred output paths and object-fragment text, and Query fragment.
 

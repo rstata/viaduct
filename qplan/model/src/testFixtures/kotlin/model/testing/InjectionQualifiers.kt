@@ -43,3 +43,13 @@ annotation class NodeResolvers
     AnnotationTarget.VALUE_PARAMETER,
 )
 annotation class FieldResolvers
+
+/** Resolver-relative variable provider selections supplied before registry assembly. */
+@Qualifier
+@MustBeDocumented
+@Retention(AnnotationRetention.RUNTIME)
+@Target(
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.VALUE_PARAMETER,
+)
+annotation class VariableProviders

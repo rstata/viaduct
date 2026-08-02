@@ -7,6 +7,7 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.selectionForestOf
+import semantics.instantiateVariables
 import semantics.materialize
 
 /**
@@ -37,7 +38,12 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
                 true
             } else {
                 val resolver = registry.resolver(key.field)
-                val input = materialize(resolver.objectFragment(key.arguments))
+                val input =
+                    materialize(
+                        resolver
+                            .objectFragment(key.arguments)
+                            .instantiateVariables(variableValues),
+                    )
                 val resolverValue =
                     resolver.resolve(
                         input = input,

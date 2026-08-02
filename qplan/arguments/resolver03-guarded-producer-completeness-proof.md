@@ -1,0 +1,5 @@
+# Argument for [resolver03-guarded-producer-completeness-proof]
+
+`tla/Resolver03.tla` represents every guarded requirement by an opaque token whose identity retains its containing-object path, concrete-type branch, exact key, and arguments. The registry-extension assumption requires each nested occurrence's exact `ExtendedByOccurrence` set to cover its required tokens, and `AggregatedExtendedDemand` roots those tokens in the owning producer's supplied demand. TLAPS proves `ExtendedDemandIsProducerComplete` and combines it with the shared termination and unique-application theorem as `Resolver03LocalCorrectness`.
+
+This result proves the producer-completeness step once registry extension is known sound; it does not independently refine the Kotlin registry builder to the token relation. Resolver determinism, projection coherence, passive-output coverage, value recursion, and schema conformance remain assumptions at this proof layer. `Resolver03MC` explores a small guarded bridge-shaped instance with TLC.

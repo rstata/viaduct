@@ -1,0 +1,481 @@
+package semantics.arbitrary
+
+import model.EngineResult
+import model.Schema
+import model.Selection
+import model.SelectionForest
+import model.TypeExpr
+import model.Value
+import model.registry.ExecutorRegistry
+
+/**
+ * Resource limits for diagnostic resolution witnesses.
+ *
+ * Witnesses are test infrastructure, not semantic results. Bounds make accidental use on an
+ * unexpectedly large generated value fail explicitly instead of retaining an unbounded trace.
+ */
+data class ResolutionWitnessBounds(
+    val maxApplications: Int = 1_000_000,
+    val maxResultNodes: Int = 1_000_000,
+    val maxOperationSelections: Int = 100_000,
+    val maxClosureSites: Int = 10_000,
+    val maxFingerprintNodes: Int = 100_000,
+    val maxFingerprintCharacters: Int = 1_000_000,
+) {
+    init {
+        require(maxApplications > 0)
+        require(maxResultNodes > 0)
+        require(maxOperationSelections > 0)
+        require(maxClosureSites > 0)
+        require(maxFingerprintNodes > 0)
+        require(maxFingerprintCharacters > 0)
+    }
+}
+
+class ResolutionWitnessBoundExceededException(
+    bound: String,
+    maximum: Int,
+) : IllegalStateException("Resolution witness exceeded $bound bound of $maximum")
+
+/** A deterministic, permutation-invariant structural description used only for diagnostics. */
+@JvmInline
+value class ResolutionFingerprint(
+    val value: String,
+)
+
+/**
+ * The source-world identity of one field-resolver application.
+ *
+ * Fixture-lowered `foo$id` fields are normalized to the source coordinate `foo`. Their
+ * [Value.Arguments] still retain their canonical argument-definition owner.
+ */
+data class ResolverApplicationKey(
+    val sourceField: FieldCoordinate,
+    val arguments: Value.Arguments,
+)
+
+data class ResolverApplicationRecord(
+    val key: ResolverApplicationKey,
+    val inputFingerprint: ResolutionFingerprint,
+    val suppliedDemandFingerprint: ResolutionFingerprint?,
+) {
+    companion object {
+        fun capture(
+            sourceField: FieldCoordinate,
+            arguments: Value.Arguments,
+            input: Value.Object,
+            suppliedDemand: SelectionForest? = null,
+            bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+        ): ResolverApplicationRecord =
+            ResolverApplicationRecord(
+                key = ResolverApplicationKey(sourceField, arguments),
+                inputFingerprint = input.resolutionFingerprint(bounds),
+                suppliedDemandFingerprint = suppliedDemand?.resolutionFingerprint(bounds),
+            )
+    }
+}
+
+/** Mutable bounded recorder intended to be snapshotted before an extensional oracle is run. */
+class ResolutionApplicationLog(
+    private val bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+) {
+    private val records = mutableListOf<ResolverApplicationRecord>()
+
+    fun record(
+        sourceField: FieldCoordinate,
+        arguments: Value.Arguments,
+        input: Value.Object,
+        suppliedDemand: SelectionForest? = null,
+    ): ResolverApplicationRecord {
+        if (records.size >= bounds.maxApplications) {
+            throw ResolutionWitnessBoundExceededException(
+                "application",
+                bounds.maxApplications,
+            )
+        }
+        return ResolverApplicationRecord
+            .capture(sourceField, arguments, input, suppliedDemand, bounds)
+            .also(records::add)
+    }
+
+    fun snapshot(): ResolutionWitness = ResolutionWitness(records.toList())
+
+    fun clear() {
+        records.clear()
+    }
+}
+
+data class ResolutionWitness(
+    val applications: List<ResolverApplicationRecord>,
+) {
+    fun applicationCounts(): Map<ResolverApplicationKey, Int> =
+        applications.groupingBy(ResolverApplicationRecord::key).eachCount()
+
+    fun duplicateApplications(): Map<ResolverApplicationKey, Int> =
+        applicationCounts().filterValues { count -> count > 1 }
+
+    fun unrelatedApplications(
+        allowed: AllowedResolverSiteClosure,
+    ): List<ResolverApplicationRecord> =
+        applications.filter { application ->
+            application.key.sourceField !in allowed.sourceFields
+        }
+}
+
+sealed interface ResultOccurrenceStep {
+    data class Field(
+        val canonicalField: FieldCoordinate,
+        val argumentsFingerprint: ResolutionFingerprint,
+    ) : ResultOccurrenceStep
+
+    data class ListElement(
+        val index: Int,
+    ) : ResultOccurrenceStep
+}
+
+/**
+ * One registered resolver-bearing cell found by traversing a returned result independently of the
+ * resolver constructors and correctness predicates.
+ */
+data class RegisteredResolverCell(
+    val applicationKey: ResolverApplicationKey,
+    val canonicalField: FieldCoordinate,
+    val occurrencePath: List<ResultOccurrenceStep>,
+)
+
+fun EngineResult?.registeredResolverCells(
+    registry: ExecutorRegistry,
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): List<RegisteredResolverCell> {
+    val result = mutableListOf<RegisteredResolverCell>()
+    var visitedNodes = 0
+
+    fun visit(
+        value: EngineResult?,
+        path: List<ResultOccurrenceStep>,
+    ) {
+        visitedNodes += 1
+        if (visitedNodes > bounds.maxResultNodes) {
+            throw ResolutionWitnessBoundExceededException(
+                "result-node",
+                bounds.maxResultNodes,
+            )
+        }
+        if (value == null || value == Value.Error || value is Value.Simple) return
+
+        when (value) {
+            is EngineResult.Object -> {
+                value.keys
+                    .sortedBy { key -> key.canonicalFingerprint(bounds).value }
+                    .forEach { key ->
+                        val canonicalField = key.field.fieldCoordinate()
+                        val fieldStep =
+                            ResultOccurrenceStep.Field(
+                                canonicalField = canonicalField,
+                                argumentsFingerprint = key.arguments.resolutionFingerprint(bounds),
+                            )
+                        val fieldPath = path + fieldStep
+                        if (key.field in registry && !key.arguments.containsErrorValue()) {
+                            result +=
+                                RegisteredResolverCell(
+                                    applicationKey =
+                                        ResolverApplicationKey(
+                                            sourceField = key.field.sourceFieldCoordinate(),
+                                            arguments = key.arguments,
+                                        ),
+                                    canonicalField = canonicalField,
+                                    occurrencePath = fieldPath,
+                                )
+                        }
+                        visit(value.fetch(key).value, fieldPath)
+                    }
+            }
+
+            is EngineResult.List ->
+                value.forEachIndexed { index, cell ->
+                    visit(
+                        cell.value,
+                        path + ResultOccurrenceStep.ListElement(index),
+                    )
+                }
+
+            Value.Error,
+            is Value.Simple,
+            -> Unit
+        }
+    }
+
+    visit(this, emptyList())
+    return result
+}
+
+fun EngineResult?.registeredResolverCellCounts(
+    registry: ExecutorRegistry,
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): Map<ResolverApplicationKey, Int> =
+    registeredResolverCells(registry, bounds)
+        .groupingBy(RegisteredResolverCell::applicationKey)
+        .eachCount()
+
+private fun Value.Arguments.containsErrorValue(): Boolean =
+    fieldValues.values.any { value -> value.containsErrorValue() }
+
+private fun Value.Input?.containsErrorValue(): Boolean =
+    when {
+        this == Value.Error -> true
+        this is Value.InputList -> values.any { value -> value.containsErrorValue() }
+        this is Value.InputObject ->
+            fieldValues.values.any { value -> value.containsErrorValue() }
+        else -> false
+    }
+
+/**
+ * Resolver sites conservatively reachable from fields directly selected by an operation.
+ *
+ * All possible concrete types are considered. The closure retains variable sites internally, but
+ * [sourceFields] contains only field sites because application records represent field resolvers.
+ */
+data class AllowedResolverSiteClosure(
+    val directlySelectedSites: Set<Schema.ObjectField>,
+    val sites: Set<Schema.ResolverSite>,
+    val canonicalFields: Set<FieldCoordinate>,
+    val sourceFields: Set<FieldCoordinate>,
+)
+
+fun SelectionForest.allowedResolverSiteClosure(
+    registry: ExecutorRegistry,
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): AllowedResolverSiteClosure {
+    val directlySelected = linkedSetOf<Schema.ObjectField>()
+    var visitedSelections = 0
+
+    fun collect(selections: SelectionForest) {
+        selections.forEach { selection ->
+            visitedSelections += 1
+            if (visitedSelections > bounds.maxOperationSelections) {
+                throw ResolutionWitnessBoundExceededException(
+                    "operation-selection",
+                    bounds.maxOperationSelections,
+                )
+            }
+            selection.possibleTypes.forEach { possibleType ->
+                val field = possibleType.fields[selection.key.field.fieldName]
+                if (field is Schema.ObjectField && field in registry) {
+                    directlySelected += field
+                }
+            }
+            collect(selection.subselections)
+        }
+    }
+
+    collect(this)
+    val closure = linkedSetOf<Schema.ResolverSite>()
+    val pending = ArrayDeque<Schema.ResolverSite>()
+    directlySelected.forEach { site ->
+        closure += site
+        pending += site
+    }
+    if (closure.size > bounds.maxClosureSites) {
+        throw ResolutionWitnessBoundExceededException(
+            "closure-site",
+            bounds.maxClosureSites,
+        )
+    }
+    while (pending.isNotEmpty()) {
+        val site = pending.removeFirst()
+        registry.mayDemandFrom(site).forEach { dependency ->
+            if (closure.add(dependency)) {
+                if (closure.size > bounds.maxClosureSites) {
+                    throw ResolutionWitnessBoundExceededException(
+                        "closure-site",
+                        bounds.maxClosureSites,
+                    )
+                }
+                pending += dependency
+            }
+        }
+    }
+
+    val fields = closure.filterIsInstance<Schema.ObjectField>()
+    return AllowedResolverSiteClosure(
+        directlySelectedSites = directlySelected,
+        sites = closure,
+        canonicalFields = fields.mapTo(linkedSetOf(), Schema.OutputField::fieldCoordinate),
+        sourceFields = fields.mapTo(linkedSetOf(), Schema.OutputField::sourceFieldCoordinate),
+    )
+}
+
+fun Value.Arguments.resolutionFingerprint(
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): ResolutionFingerprint =
+    ResolutionFingerprint(
+        FingerprintBudget(bounds).arguments(this),
+    )
+
+fun Value.Object.resolutionFingerprint(
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): ResolutionFingerprint =
+    ResolutionFingerprint(
+        FingerprintBudget(bounds).output(this),
+    )
+
+fun SelectionForest.resolutionFingerprint(
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): ResolutionFingerprint =
+    ResolutionFingerprint(
+        FingerprintBudget(bounds).forest(this),
+    )
+
+private class FingerprintBudget(
+    private val bounds: ResolutionWitnessBounds,
+) {
+    private var nodes = 0
+
+    fun arguments(arguments: Value.Arguments): String =
+        node(
+            "args(" +
+                arguments.fieldValues.entries
+                    .sortedBy(Map.Entry<String, Value.Input?>::key)
+                    .joinToString(",") { (name, value) ->
+                        atom(name) + "=" + input(value)
+                    } +
+                ")",
+        )
+
+    fun output(value: Value.Output?): String =
+        when {
+            value == null -> node("null")
+            value == Value.Error -> node("error")
+            value is Value.Int -> node("int:${value.intValue}")
+            value is Value.Float -> node("float:${value.floatValue.toBits()}")
+            value is Value.String -> node("string:${atom(value.stringValue)}")
+            value is Value.Boolean -> node("boolean:${value.booleanValue}")
+            value is Value.ID -> node("id:${atom(value.idValue)}")
+            value is Value.Enum ->
+                node("enum:${atom(value.type.typeName)}:${atom(value.enumValue)}")
+            value is Value.OutputList ->
+                node(
+                    "list:${typeExpr(value.typeExpr)}[" +
+                        value.values.joinToString(separator = ",", transform = ::output) +
+                        "]",
+                )
+            value is Value.Object ->
+                node(
+                    "object:${atom(value.type.typeName)}{" +
+                        value.fieldValues.entries
+                            .map { (key, fieldValue) ->
+                                canonicalKey(key) + "=" + output(fieldValue)
+                            }.sorted()
+                            .joinToString(",") +
+                        "}",
+                )
+            else -> error("Unsupported output value $value")
+        }
+
+    fun forest(forest: SelectionForest): String {
+        val selections = mutableListOf<String>()
+        forest.forEach { selection -> selections += selection(selection) }
+        return node("forest[" + selections.sorted().joinToString(",") + "]")
+    }
+
+    private fun selection(selection: Selection): String =
+        node(
+            "selection(" +
+                canonicalKey(selection.key) +
+                ";nominal=" + atom(selection.nominalType.typeName) +
+                ";possible=" +
+                selection.possibleTypes
+                    .map { type -> atom(type.typeName) }
+                    .sorted()
+                    .joinToString(",", "[", "]") +
+                ";children=" + forest(selection.subselections) +
+                ")",
+        )
+
+    private fun canonicalKey(key: Value.Key): String =
+        node(
+            "key(" +
+                atom(key.field.containingType.typeName) +
+                "/" + atom(key.field.fieldName) +
+                ";" + arguments(key.arguments) +
+                ")",
+        )
+
+    private fun input(value: Value.Input?): String =
+        when {
+            value == null -> node("null")
+            value == Value.Error -> node("error")
+            value is Value.Variable -> node("variable:${atom(value.variableName)}")
+            value is Value.Int -> node("int:${value.intValue}")
+            value is Value.Float -> node("float:${value.floatValue.toBits()}")
+            value is Value.String -> node("string:${atom(value.stringValue)}")
+            value is Value.Boolean -> node("boolean:${value.booleanValue}")
+            value is Value.ID -> node("id:${atom(value.idValue)}")
+            value is Value.Enum ->
+                node("enum:${atom(value.type.typeName)}:${atom(value.enumValue)}")
+            value is Value.InputList ->
+                node(
+                    "list:${typeExpr(value.typeExpr)}[" +
+                        value.values.joinToString(separator = ",", transform = ::input) +
+                        "]",
+                )
+            value is Value.InputObject ->
+                node(
+                    "input-object:${atom(value.type.typeName)}{" +
+                        value.fieldValues.entries
+                            .sortedBy(Map.Entry<String, Value.Input?>::key)
+                            .joinToString(",") { (name, fieldValue) ->
+                                atom(name) + "=" + input(fieldValue)
+                            } +
+                        "}",
+                )
+            else -> error("Unsupported input value $value")
+        }
+
+    private fun typeExpr(typeExpr: TypeExpr<Schema.Type>): String =
+        when (typeExpr) {
+            is TypeExpr.Named ->
+                "named(${atom(typeExpr.baseType.typeName)},nullable=${typeExpr.isNullable})"
+            is TypeExpr.List ->
+                "list(${typeExpr(typeExpr.elementType)},nullable=${typeExpr.isNullable})"
+        }
+
+    private fun node(value: String): String {
+        nodes += 1
+        if (nodes > bounds.maxFingerprintNodes) {
+            throw ResolutionWitnessBoundExceededException(
+                "fingerprint-node",
+                bounds.maxFingerprintNodes,
+            )
+        }
+        if (value.length > bounds.maxFingerprintCharacters) {
+            throw ResolutionWitnessBoundExceededException(
+                "fingerprint-character",
+                bounds.maxFingerprintCharacters,
+            )
+        }
+        return value
+    }
+
+    private fun atom(value: String): String = "${value.length}:$value"
+}
+
+private fun Value.Key.canonicalFingerprint(
+    bounds: ResolutionWitnessBounds,
+): ResolutionFingerprint =
+    ResolutionFingerprint(
+        "${field.containingType.typeName.length}:${field.containingType.typeName}/" +
+            "${field.fieldName.length}:${field.fieldName};" +
+            arguments.resolutionFingerprint(bounds).value,
+    )
+
+private fun Schema.OutputField.fieldCoordinate(): FieldCoordinate =
+    FieldCoordinate(containingType.typeName, fieldName)
+
+private fun Schema.OutputField.sourceFieldCoordinate(): FieldCoordinate =
+    FieldCoordinate(
+        containingType.typeName,
+        fieldName.removeSuffix(NODE_ID_BRIDGE_SUFFIX),
+    )
+
+private const val NODE_ID_BRIDGE_SUFFIX = "\$id"

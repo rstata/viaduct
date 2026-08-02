@@ -12,6 +12,7 @@ import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.arbitrary.Config
+import semantics.arbitrary.ImplementationArgumentDefaultWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
@@ -26,6 +27,7 @@ class ResolverTest {
     @Test
     fun `arbitrary valid worlds resolve correctly`(): Unit =
         runBlocking {
+            var activatedImplementationDefaultCases = 0
             val counts =
                 TestCaseCount(
                     schemas = 20,
@@ -34,11 +36,25 @@ class ResolverTest {
                 )
             val config =
                 Config.default +
+                    (ImplementationArgumentDefaultWeight to 1.0) +
                     (ResolverFragmentsEnabled to true)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
-                assertTrue(generatedResolutionIsCorrect(testWorld, testCase.query.source))
+                if (testCase.query.features.hasAbstractImplementationDefaultSelection) {
+                    activatedImplementationDefaultCases += 1
+                }
+                val result = generatedResolution(testWorld, testCase.query.source)
+                val permuted =
+                    generatedResolution(
+                        testWorld,
+                        testCase.query.permutationEquivalentSource,
+                )
+                assertEquals(result, permuted)
             }
+            assertTrue(
+                activatedImplementationDefaultCases > 0,
+                "Resolver03 property activated no abstract implementation defaults",
+            )
         }
 
     @Test
@@ -410,6 +426,14 @@ class ResolverTest {
         testWorld: TestWorld,
         querySource: String,
     ): Boolean {
+        generatedResolution(testWorld, querySource)
+        return true
+    }
+
+    private fun generatedResolution(
+        testWorld: TestWorld,
+        querySource: String,
+    ): EngineResult.Object {
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom(querySource)
         val selections = fragment.subselections
@@ -418,7 +442,8 @@ class ResolverTest {
                 world.objectOf("Query").resolve(selections)
             }
         return context(world) {
-            result.correctResolution(fragment)
+            check(result.correctResolution(fragment))
+            result
         }
     }
 

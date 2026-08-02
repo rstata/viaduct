@@ -1,0 +1,132 @@
+package semantics.resolver03
+
+import kotlinx.coroutines.runBlocking
+import model.fragmentFrom
+import model.objectOf
+import semantics.arbitrary.Config
+import semantics.arbitrary.DuplicateSelectionWeight
+import semantics.arbitrary.ExplicitFieldResolverWeight
+import semantics.arbitrary.FieldArgumentWeight
+import semantics.arbitrary.NodeResolversEnabled
+import semantics.arbitrary.ObjectFieldCount
+import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverProgramKind
+import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.TestCaseCount
+import semantics.arbitrary.allowedResolverSiteClosure
+import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.registeredResolverCellCounts
+import semantics.correctresolution.correctResolution
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class ResolverWitnessTest {
+    @Test
+    fun `generated construction witness is exact minimal and permutation invariant`(): Unit =
+        runBlocking {
+            val counts = TestCaseCount(schemas = 12, registriesPerSchema = 2, queriesPerSchema = 4)
+            val config =
+                Config.default +
+                    (SchemaObjectCount to 4..6) +
+                    (ObjectFieldCount to 4..6) +
+                    (FieldArgumentWeight to 0.8) +
+                    (ExplicitFieldResolverWeight to 0.8) +
+                    (DuplicateSelectionWeight to 0.8) +
+                    (ResolverFragmentsEnabled to true) +
+                    (NodeResolversEnabled to false)
+            var inputSensitiveApplications = 0
+            var argumentSensitiveApplications = 0
+            var exactAliasCases = 0
+            var activatedExactAliasCases = 0
+            var activatedDistinctArgumentCases = 0
+
+            checkResolverTestCases(counts, config) { testWorld, testCase ->
+                val world = testWorld.assumptions
+                val registry = testCase.registry
+                val fragment = world.fragmentFrom(testCase.query.source)
+                registry.clearResolutionWitness()
+                val result =
+                    context(world) {
+                        world.objectOf("Query").resolve(fragment.subselections)
+                    }
+                val witness = registry.resolutionWitness()
+                val expectedApplications =
+                    result.registeredResolverCellCounts(world.executorRegistry)
+                assertEquals(expectedApplications, witness.applicationCounts())
+                assertTrue(
+                    witness.unrelatedApplications(
+                        fragment.subselections.allowedResolverSiteClosure(world.executorRegistry),
+                    ).isEmpty(),
+                    "Resolver applied outside operation/registry demand closure",
+                )
+                assertTrue(context(world) { result.correctResolution(fragment) })
+
+                witness.applications.forEach { application ->
+                    when (registry.resolverProgram(application.key.sourceField)) {
+                        ResolverProgramKind.INPUT_SENSITIVE ->
+                            inputSensitiveApplications += 1
+                        ResolverProgramKind.ARGUMENT_SENSITIVE ->
+                            argumentSensitiveApplications += 1
+                        ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE -> {
+                            inputSensitiveApplications += 1
+                            argumentSensitiveApplications += 1
+                        }
+                        ResolverProgramKind.CONSTANT -> Unit
+                    }
+                }
+                if (testCase.query.features.hasExactKeyAliasConvergence) {
+                    exactAliasCases += 1
+                }
+                if (
+                    witness.applications.any { application ->
+                        application.key.sourceField in
+                            testCase.query.features.exactKeyAliasSourceFields
+                    }
+                ) {
+                    activatedExactAliasCases += 1
+                }
+                if (
+                    witness.applications
+                        .filter { application ->
+                            application.key.sourceField in
+                                testCase.query.features.distinctArgumentSourceFields
+                        }.groupBy { application -> application.key.sourceField }
+                        .any { (_, applications) ->
+                            applications.map { application -> application.key.arguments }
+                                .distinct()
+                                .size > 1
+                        }
+                ) {
+                    activatedDistinctArgumentCases += 1
+                }
+
+                val permuted =
+                    world.fragmentFrom(testCase.query.permutationEquivalentSource)
+                registry.clearResolutionWitness()
+                val permutedResult =
+                    context(world) {
+                        world.objectOf("Query").resolve(permuted.subselections)
+                    }
+                val permutedWitness = registry.resolutionWitness()
+                assertEquals(result, permutedResult)
+                assertEquals(witness.applicationCounts(), permutedWitness.applicationCounts())
+                assertEquals(
+                    witness.applications
+                        .map { it.key to it.inputFingerprint }
+                        .groupingBy { it }
+                        .eachCount(),
+                    permutedWitness.applications
+                        .map { it.key to it.inputFingerprint }
+                        .groupingBy { it }
+                        .eachCount(),
+                )
+            }
+
+            assertTrue(inputSensitiveApplications >= 10)
+            assertTrue(argumentSensitiveApplications >= 10)
+            assertTrue(exactAliasCases >= 10)
+            assertTrue(activatedExactAliasCases >= 10)
+            assertTrue(activatedDistinctArgumentCases >= 10)
+        }
+}

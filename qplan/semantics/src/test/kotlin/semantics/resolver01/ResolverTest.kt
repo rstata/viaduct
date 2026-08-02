@@ -46,6 +46,14 @@ class ResolverTest {
                         result.correctResolution(fragment)
                     },
                 )
+
+                val permutedFragment =
+                    world.fragmentFrom(testCase.query.permutationEquivalentSource)
+                val permutedResult =
+                    context(world) {
+                        world.objectOf("Query").resolve(permutedFragment.subselections)
+                    }
+                assertEquals(result, permutedResult)
             }
         }
 

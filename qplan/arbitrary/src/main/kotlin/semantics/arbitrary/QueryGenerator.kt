@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import graphql.language.Argument
+import graphql.language.ArrayValue
 import graphql.language.AstPrinter
 import graphql.language.BooleanValue
 import graphql.language.Field
@@ -8,15 +9,18 @@ import graphql.language.FloatValue
 import graphql.language.FragmentDefinition
 import graphql.language.InlineFragment
 import graphql.language.IntValue
+import graphql.language.NullValue
+import graphql.language.ObjectField
+import graphql.language.ObjectValue
 import graphql.language.Selection
 import graphql.language.SelectionSet
 import graphql.language.StringValue
 import graphql.language.TypeName
+import graphql.language.Value
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.arbitrary
 import io.kotest.property.arbitrary.double
-import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
 import java.math.BigDecimal
@@ -24,10 +28,24 @@ import java.math.BigInteger
 
 class ArbitraryQuery internal constructor(
     val source: String,
+    val permutationEquivalentSource: String,
     val selectionDepth: Int,
+    val features: QueryFeatures,
 ) {
     override fun toString(): String = source
 }
+
+data class QueryFeatures(
+    val hasAliases: Boolean,
+    val hasDuplicateSelections: Boolean,
+    val hasDistinctArgumentSelections: Boolean,
+    val hasExactKeyAliasConvergence: Boolean,
+    val hasAbstractInlineFragmentBranches: Boolean,
+    val hasMultipleAbstractInlineFragmentBranches: Boolean,
+    val hasAbstractImplementationDefaultSelection: Boolean,
+    val exactKeyAliasSourceFields: Set<FieldCoordinate>,
+    val distinctArgumentSourceFields: Set<FieldCoordinate>,
+)
 
 fun ArbitrarySchema.query(config: Config = Config.default): Arb<ArbitraryQuery> {
     val generatedSchema = this
@@ -41,20 +59,29 @@ private class QueryGenerator(
     private val config: Config,
     private val random: RandomSource,
 ) {
+    private val features = MutableQueryFeatures()
+    private var nextAlias = 0
+
     fun generate(): ArbitraryQuery {
         val selectionSet = selectionSet("Query", depth = 0)
-        val fragment =
-            FragmentDefinition
-                .newFragmentDefinition()
-                .name("Generated")
-                .typeCondition(TypeName("Query"))
-                .selectionSet(selectionSet)
-                .build()
+        val fragment = fragment(selectionSet)
+        val permutationEquivalentFragment = fragment(selectionSet.permuted())
         return ArbitraryQuery(
             source = AstPrinter.printAst(fragment).trim(),
+            permutationEquivalentSource =
+                AstPrinter.printAst(permutationEquivalentFragment).trim(),
             selectionDepth = selectionSet.maximumFieldDepth(),
+            features = features.snapshot(),
         )
     }
+
+    private fun fragment(selectionSet: SelectionSet): FragmentDefinition =
+        FragmentDefinition
+            .newFragmentDefinition()
+            .name("Generated")
+            .typeCondition(TypeName("Query"))
+            .selectionSet(selectionSet)
+            .build()
 
     private fun selectionSet(
         typeName: String,
@@ -84,17 +111,45 @@ private class QueryGenerator(
         val directSelections =
             selectedFields
                 .flatMap { field ->
-                    val selection = fieldSelection(field, depth)
+                    if (field.hasImplementationOnlyDefault()) {
+                        features.hasAbstractImplementationDefaultSelection = true
+                    }
+                    val arguments = field.arguments.map(::argument)
+                    val selection = fieldSelection(field, depth, arguments = arguments)
                     buildList {
                         add(selection)
                         if (chance(config[DuplicateSelectionWeight])) {
                             add(selection)
+                            features.hasDuplicateSelections = true
                         }
                         if (
                             field.arguments.isNotEmpty() &&
                             chance(config[DuplicateSelectionWeight])
                         ) {
-                            add(fieldSelection(field, depth, forceAlias = true))
+                            add(
+                                fieldSelection(
+                                    field = field,
+                                    depth = depth,
+                                    arguments = arguments.distinctFrom(field),
+                                    forceAlias = true,
+                                ),
+                            )
+                            features.hasDistinctArgumentSelections = true
+                            features.distinctArgumentSourceFields +=
+                                field.possibleSourceCoordinates()
+                        }
+                        if (
+                            schema.isComposite(field.type.namedType) &&
+                            (
+                                schema.fieldsOn(field.type.namedType).isNotEmpty() ||
+                                    config[QueryFragmentsEnabled]
+                            ) &&
+                            chance(config[DuplicateSelectionWeight])
+                        ) {
+                            addAll(exactKeyAliasConvergence(field, depth, arguments))
+                            features.hasExactKeyAliasConvergence = true
+                            features.exactKeyAliasSourceFields +=
+                                field.possibleSourceCoordinates()
                         }
                     }
                 }
@@ -106,14 +161,27 @@ private class QueryGenerator(
                 possibleObjects.isNotEmpty() &&
                 chance(0.75)
             ) {
-                val concrete = Arb.element(possibleObjects).next(random)
-                listOf(
-                    InlineFragment
-                        .newInlineFragment()
-                        .typeCondition(TypeName(concrete.name))
-                        .selectionSet(selectionSet(concrete.name, depth + 1))
-                        .build(),
-                )
+                val maximumBranches = minOf(3, possibleObjects.size)
+                val branchCount =
+                    if (maximumBranches > 1) {
+                        Arb.int(2..maximumBranches).next(random)
+                    } else {
+                        1
+                    }
+                features.hasAbstractInlineFragmentBranches = true
+                if (branchCount > 1) {
+                    features.hasMultipleAbstractInlineFragmentBranches = true
+                }
+                possibleObjects
+                    .shuffled(random)
+                    .take(branchCount)
+                    .map { concrete ->
+                        InlineFragment
+                            .newInlineFragment()
+                            .typeCondition(TypeName(concrete.name))
+                            .selectionSet(selectionSet(concrete.name, depth + 1))
+                            .build()
+                    }
             } else {
                 emptyList()
             }
@@ -126,19 +194,23 @@ private class QueryGenerator(
     private fun fieldSelection(
         field: FieldDefinitionSpec,
         depth: Int,
+        arguments: List<Argument> = field.arguments.map(::argument),
         forceAlias: Boolean = false,
     ): Selection<*> {
         val alias =
             if (forceAlias || chance(config[AliasWeight])) {
-                "alias${Arb.int(0..10_000).next(random)}"
+                "alias${nextAlias++}"
             } else {
                 null
             }
+        if (alias != null) {
+            features.hasAliases = true
+        }
         val builder =
             Field
                 .newField(field.name)
                 .alias(alias)
-                .arguments(field.arguments.map(::argument))
+                .arguments(arguments)
         val objectType =
             field.type.namedType.takeIf(schema::isComposite)
         if (objectType != null) {
@@ -161,17 +233,257 @@ private class QueryGenerator(
         }
     }
 
+    private fun List<Argument>.distinctFrom(field: FieldDefinitionSpec): List<Argument> {
+        require(size == field.arguments.size && isNotEmpty())
+        val changedIndex = indices.first()
+        return mapIndexed { index, argument ->
+            if (index != changedIndex) {
+                argument
+            } else {
+                Argument
+                    .newArgument()
+                    .name(argument.name)
+                    .value(
+                        distinctInputValue(
+                            field.arguments[index].type,
+                            argument.value,
+                        ),
+                    ).build()
+            }
+        }
+    }
+
+    private fun distinctInputValue(
+        type: InputTypeSpec,
+        current: Value<*>,
+    ): Value<*> =
+        when (current) {
+            is NullValue -> inputValue(type, allowNull = false)
+            is BooleanValue ->
+                BooleanValue.newBooleanValue(!current.isValue).build()
+            is IntValue ->
+                IntValue.newIntValue(current.value + BigInteger.ONE).build()
+            is FloatValue ->
+                FloatValue.newFloatValue(current.value + BigDecimal.ONE).build()
+            is StringValue ->
+                StringValue.newStringValue(current.value + "-distinct").build()
+            is ArrayValue -> {
+                require(type is ListInputTypeSpec)
+                if (current.values.isEmpty()) {
+                    ArrayValue
+                        .newArrayValue()
+                        .value(inputValue(type.element, allowNull = false))
+                        .build()
+                } else {
+                    ArrayValue.newArrayValue().values(emptyList()).build()
+                }
+            }
+            is ObjectValue -> {
+                require(type is InputObjectInputTypeSpec)
+                val definition =
+                    schema.inputObjects.single { candidate -> candidate.name == type.name }
+                val changed = definition.fields.first()
+                ObjectValue
+                    .newObjectValue()
+                    .objectFields(
+                        current.objectFields.map { field ->
+                            if (field.name == changed.name) {
+                                ObjectField
+                                    .newObjectField()
+                                    .name(field.name)
+                                    .value(distinctInputValue(changed.type, field.value))
+                                    .build()
+                            } else {
+                                field
+                            }
+                        },
+                    ).build()
+            }
+            else -> error("Unsupported generated input value $current")
+        }
+
+    private fun exactKeyAliasConvergence(
+        field: FieldDefinitionSpec,
+        depth: Int,
+        arguments: List<Argument>,
+    ): List<Field> {
+        val typename = Field.newField("__typename").build()
+        val directDemand =
+            schema
+                .fieldsOn(field.type.namedType)
+                .shuffled(random)
+                .firstOrNull()
+                ?.let { demandedField ->
+                    fieldSelection(
+                        field = demandedField,
+                        depth = depth + 1,
+                        forceAlias = false,
+                    )
+                }
+        val additionalDemand =
+            directDemand
+                ?: run {
+                    require(config[QueryFragmentsEnabled])
+                    val concrete =
+                        schema
+                            .possibleObjects(field.type.namedType)
+                            .shuffled(random)
+                            .first()
+                    val demandedField = schema.fieldsOn(concrete.name).shuffled(random).first()
+                    InlineFragment
+                        .newInlineFragment()
+                        .typeCondition(TypeName(concrete.name))
+                        .selectionSet(
+                            SelectionSet
+                                .newSelectionSet()
+                                .selection(
+                                    fieldSelection(
+                                        field = demandedField,
+                                        depth = depth + 1,
+                                        forceAlias = false,
+                                    ),
+                                ).build(),
+                        ).build()
+                }
+
+        fun alias(selectionSet: SelectionSet): Field {
+            features.hasAliases = true
+            return Field
+                .newField(field.name)
+                .alias("alias${nextAlias++}")
+                .arguments(arguments)
+                .selectionSet(selectionSet)
+                .build()
+        }
+
+        return listOf(
+            alias(SelectionSet.newSelectionSet().selection(typename).build()),
+            alias(
+                SelectionSet
+                    .newSelectionSet()
+                    .selections(listOf(typename, additionalDemand))
+                    .build(),
+            ),
+        )
+    }
+
+    private fun FieldDefinitionSpec.possibleSourceCoordinates(): Set<FieldCoordinate> =
+        if (schema.allObjects.any { objectType -> objectType.name == ownerName }) {
+            setOf(coordinate)
+        } else {
+            schema
+                .possibleObjects(ownerName)
+                .mapTo(linkedSetOf()) { possibleType ->
+                    FieldCoordinate(possibleType.name, name)
+                }
+        }
+
+    private fun FieldDefinitionSpec.hasImplementationOnlyDefault(): Boolean {
+        val interfaceType =
+            schema.interfaces.singleOrNull { candidate -> candidate.name == ownerName }
+                ?: return false
+        val abstractArguments = arguments.mapTo(linkedSetOf(), ArgumentDefinitionSpec::name)
+        return interfaceType.members.any { memberName ->
+            schema
+                .objectNamed(memberName)
+                .fields
+                .singleOrNull { field -> field.name == name }
+                ?.arguments
+                .orEmpty()
+                .any { argument ->
+                    argument.name !in abstractArguments && argument.defaultValue != null
+            }
+        }
+    }
+
     private fun argument(definition: ArgumentDefinitionSpec): Argument {
+        return Argument
+            .newArgument()
+            .name(definition.name)
+            .value(inputValue(definition.type))
+            .build()
+    }
+
+    private fun inputValue(
+        type: InputTypeSpec,
+        objectPath: Set<String> = emptySet(),
+        allowNull: Boolean = true,
+    ): Value<*> {
+        if (type is ListInputTypeSpec && type.element.reachesAny(objectPath)) {
+            return ArrayValue.newArrayValue().values(emptyList()).build()
+        }
+        if (
+            type is InputObjectInputTypeSpec &&
+            type.nullable &&
+            type.reachesAny(objectPath)
+        ) {
+            return NullValue.newNullValue().build()
+        }
+        if (allowNull && type.nullable && chance(config[NullValueWeight])) {
+            return NullValue.newNullValue().build()
+        }
+        return when (type) {
+            is ScalarInputTypeSpec -> scalarValue(type.scalar)
+            is ListInputTypeSpec -> {
+                val size = Arb.int(config[ListValueSize]).next(random)
+                ArrayValue
+                    .newArrayValue()
+                    .values(List(size) { inputValue(type.element, objectPath) })
+                    .build()
+            }
+            is InputObjectInputTypeSpec -> {
+                if (type.name in objectPath) {
+                    require(type.nullable) {
+                        "Recursive input-object edge ${type.name} must be nullable"
+                    }
+                    NullValue.newNullValue().build()
+                } else {
+                    val definition =
+                        schema.inputObjects.single { candidate -> candidate.name == type.name }
+                    ObjectValue
+                        .newObjectValue()
+                        .objectFields(
+                            definition.fields.map { field ->
+                                ObjectField
+                                    .newObjectField()
+                                    .name(field.name)
+                                    .value(inputValue(field.type, objectPath + type.name))
+                                    .build()
+                            },
+                        ).build()
+                }
+            }
+        }
+    }
+
+    private fun InputTypeSpec.reachesAny(
+        targets: Set<String>,
+        visited: Set<String> = emptySet(),
+    ): Boolean =
+        when (this) {
+            is ScalarInputTypeSpec -> false
+            is ListInputTypeSpec -> element.reachesAny(targets, visited)
+            is InputObjectInputTypeSpec -> {
+                name in targets ||
+                    (
+                        name !in visited &&
+                            schema.inputObjects
+                                .single { it.name == name }
+                                .fields
+                                .any { field -> field.type.reachesAny(targets, visited + name) }
+                    )
+            }
+        }
+
+    private fun scalarValue(scalar: ScalarKind): Value<*> {
         val salt = Arb.int(0..10_000).next(random)
-        val value =
-            when (definition.scalar) {
+        return when (scalar) {
                 ScalarKind.BOOLEAN -> BooleanValue.newBooleanValue(salt % 2 == 0).build()
                 ScalarKind.FLOAT -> FloatValue.newFloatValue(BigDecimal("$salt.5")).build()
                 ScalarKind.ID -> StringValue.newStringValue("id-$salt").build()
                 ScalarKind.INT -> IntValue.newIntValue(BigInteger.valueOf(salt.toLong())).build()
                 ScalarKind.STRING -> StringValue.newStringValue("value-$salt").build()
-            }
-        return Argument.newArgument().name(definition.name).value(value).build()
+        }
     }
 
     private fun syntheticFields(
@@ -223,6 +535,70 @@ private class QueryGenerator(
     private fun chance(weight: Double): Boolean =
         Arb.double(0.0, 1.0).next(random) < weight
 
+    private fun SelectionSet.permuted(): SelectionSet =
+        SelectionSet
+            .newSelectionSet()
+            .selections(
+                selections
+                    .map { selection ->
+                        when (selection) {
+                            is Field -> {
+                                val builder =
+                                    Field
+                                        .newField(selection.name)
+                                        .alias(
+                                            selection.alias?.let { alias ->
+                                                "permuted_$alias"
+                                            },
+                                        ).arguments(
+                                            selection.arguments
+                                                .map { argument ->
+                                                    Argument
+                                                        .newArgument()
+                                                        .name(argument.name)
+                                                        .value(argument.value.permuted())
+                                                        .build()
+                                                }.reversed(),
+                                        )
+                                selection.selectionSet?.let { child ->
+                                    builder.selectionSet(child.permuted())
+                                }
+                                builder.build()
+                            }
+                            is InlineFragment ->
+                                InlineFragment
+                                    .newInlineFragment()
+                                    .typeCondition(selection.typeCondition)
+                                    .selectionSet(selection.selectionSet.permuted())
+                                    .build()
+                            else -> selection
+                        }
+                    }.shuffled(random),
+            ).build()
+
+    private fun Value<*>.permuted(): Value<*> =
+        when (this) {
+            is ArrayValue ->
+                ArrayValue
+                    .newArrayValue()
+                    .values(values.map { value -> value.permuted() })
+                    .build()
+            is ObjectValue ->
+                ObjectValue
+                    .newObjectValue()
+                    .objectFields(
+                        objectFields
+                            .map { field ->
+                                ObjectField
+                                    .newObjectField()
+                                    .name(field.name)
+                                    .value(field.value.permuted())
+                                    .build()
+                            }.reversed(),
+                    ).build()
+            else -> this
+        }
+
     private fun SelectionSet.maximumFieldDepth(): Int =
         selections.maxOfOrNull { selection ->
             when (selection) {
@@ -231,4 +607,31 @@ private class QueryGenerator(
                 else -> 0
             }
         } ?: 0
+
+    private class MutableQueryFeatures {
+        var hasAliases: Boolean = false
+        var hasDuplicateSelections: Boolean = false
+        var hasDistinctArgumentSelections: Boolean = false
+        var hasExactKeyAliasConvergence: Boolean = false
+        var hasAbstractInlineFragmentBranches: Boolean = false
+        var hasMultipleAbstractInlineFragmentBranches: Boolean = false
+        var hasAbstractImplementationDefaultSelection: Boolean = false
+        val exactKeyAliasSourceFields = linkedSetOf<FieldCoordinate>()
+        val distinctArgumentSourceFields = linkedSetOf<FieldCoordinate>()
+
+        fun snapshot(): QueryFeatures =
+            QueryFeatures(
+                hasAliases = hasAliases,
+                hasDuplicateSelections = hasDuplicateSelections,
+                hasDistinctArgumentSelections = hasDistinctArgumentSelections,
+                hasExactKeyAliasConvergence = hasExactKeyAliasConvergence,
+                hasAbstractInlineFragmentBranches = hasAbstractInlineFragmentBranches,
+                hasMultipleAbstractInlineFragmentBranches =
+                    hasMultipleAbstractInlineFragmentBranches,
+                hasAbstractImplementationDefaultSelection =
+                    hasAbstractImplementationDefaultSelection,
+                exactKeyAliasSourceFields = exactKeyAliasSourceFields.toSet(),
+                distinctArgumentSourceFields = distinctArgumentSourceFields.toSet(),
+            )
+    }
 }

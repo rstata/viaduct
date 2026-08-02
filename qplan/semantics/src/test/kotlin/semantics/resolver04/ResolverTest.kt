@@ -16,6 +16,7 @@ import model.testing.TestWorld
 import semantics.arbitrary.Config
 import semantics.arbitrary.ExplicitFieldResolverWeight
 import semantics.arbitrary.FieldArgumentWeight
+import semantics.arbitrary.ImplementationArgumentDefaultWeight
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
@@ -808,6 +809,198 @@ class ResolverTest {
     }
 
     @Test
+    fun `merges variable-bearing demand before sealing a shared producer`() {
+        var sourceApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      narrow: Int!
+                      broad: Int!
+                      computed(value: Int!): Int!
+                    }
+
+                    type Query {
+                      result: Int!
+                      source: Payload!
+                      helper(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val sourceKey = Value.Key.of(schema.field("Query", "source"), emptyMap())
+                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    val computedKey =
+                        Value.Key.of(schema.field("Payload", "computed"), mapOf("value" to 2))
+                    mapOf(
+                        schema.field("Query", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      source {
+                                        broad
+                                        computed(value: ${'$'}later)
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { input, _ ->
+                                val source = input.fieldValues.getValue(sourceKey) as Value.Object
+                                val broad = source.fieldValues.getValue(broadKey) as Value.Int
+                                val computed = source.fieldValues.getValue(computedKey) as Value.Int
+                                Value.Int.of(broad.intValue + computed.intValue)
+                            },
+                        schema.field("Query", "source") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ ->
+                                sourceApplications += 1
+                                schema.objectOf("Payload") {
+                                    "narrow" setTo 1
+                                    "broad" setTo 3
+                                }
+                            },
+                        schema.field("Query", "helper") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, arguments ->
+                                val value =
+                                    arguments.fieldValues.getValue("value") as Value.Int
+                                Value.Int.of(value.intValue + 1)
+                            },
+                        schema.field("Payload", "computed") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Payload"),
+                            ) { _, arguments ->
+                                arguments.fieldValues.getValue("value") as Value.Int
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val owner = schema.field("Query", "result") as Schema.ObjectField
+                    mapOf(
+                        VariableCoordinate.of(owner, Value.Variable.of("later")) to
+                            schema.fragmentFrom(
+                                "fragment ignored on Query { helper(value: ${'$'}early) }",
+                            ).subselections.single(),
+                        VariableCoordinate.of(owner, Value.Variable.of("early")) to
+                            schema.fragmentFrom(
+                                "fragment ignored on Query { source { narrow } }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
+
+        val resolved =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        assertEquals(1, sourceApplications)
+        assertEquals(
+            mapOf(
+                Value.Variable.of("early") to Value.Int.of(1),
+                Value.Variable.of("later") to Value.Int.of(2),
+            ),
+            resolved.variableValues,
+        )
+        assertEquals(
+            Value.Int.of(5),
+            resolved.fetch(Value.Key.of(world.schema.field("Query", "result"), emptyMap())).value,
+        )
+        assertTrue(context(world) { resolved.correctResolution(fragment) })
+    }
+
+    @Test
+    fun `keeps symbolic demand on the exact argument occurrence selected after binding`() {
+        var sourceApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      narrow: Int!
+                      broad: Int!
+                    }
+
+                    type Query {
+                      result: Int!
+                      source(k: Int!): Payload!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val sourceKey =
+                        Value.Key.of(schema.field("Query", "source"), mapOf("k" to 2))
+                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    mapOf(
+                        schema.field("Query", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      source(k: ${'$'}k) {
+                                        broad
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { input, _ ->
+                                val source = input.fieldValues.getValue(sourceKey) as Value.Object
+                                source.fieldValues.getValue(broadKey)
+                            },
+                        schema.field("Query", "source") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, arguments ->
+                                sourceApplications += 1
+                                val k = arguments.fieldValues.getValue("k") as Value.Int
+                                when (k.intValue) {
+                                    1 ->
+                                        schema.objectOf("Payload") {
+                                            "narrow" setTo 2
+                                        }
+                                    2 ->
+                                        schema.objectOf("Payload") {
+                                            "broad" setTo 7
+                                        }
+                                    else -> error("Unexpected source argument ${k.intValue}")
+                                }
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    mapOf(
+                        VariableCoordinate.of(
+                            schema.field("Query", "result") as Schema.ObjectField,
+                            Value.Variable.of("k"),
+                        ) to
+                            schema.fragmentFrom(
+                                "fragment ignored on Query { source(k: 1) { narrow } }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
+
+        val resolved =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        assertEquals(2, sourceApplications)
+        assertEquals(Value.Int.of(2), resolved.variableValues.getValue(Value.Variable.of("k")))
+        assertEquals(
+            Value.Int.of(7),
+            resolved.fetch(Value.Key.of(world.schema.field("Query", "result"), emptyMap())).value,
+        )
+        assertTrue(context(world) { resolved.correctResolution(fragment) })
+    }
+
+    @Test
     fun `instantiates variable references in nested object-fragment keys`() {
         val testWorld =
             TestWorld.fromSDL(
@@ -1061,6 +1254,7 @@ class ResolverTest {
     fun `arbitrary valid worlds resolve correctly`(): Unit =
         runBlocking {
             var activatedVariableCases = 0
+            var activatedImplementationDefaultCases = 0
             val counts =
                 TestCaseCount(
                     schemas = 20,
@@ -1072,6 +1266,7 @@ class ResolverTest {
                     (SchemaObjectCount to 3..5) +
                     (ObjectFieldCount to 3..5) +
                     (FieldArgumentWeight to 0.7) +
+                    (ImplementationArgumentDefaultWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 0.6) +
                     (ResolverFragmentsEnabled to true) +
                     (ResolverFragmentWeight to 0.9) +
@@ -1079,7 +1274,16 @@ class ResolverTest {
                     (ResolverVariableWeight to 1.0)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
+                if (testCase.query.features.hasAbstractImplementationDefaultSelection) {
+                    activatedImplementationDefaultCases += 1
+                }
                 val result = generatedResolution(testWorld, testCase.query.source)
+                val permuted =
+                    generatedResolution(
+                        testWorld,
+                        testCase.query.permutationEquivalentSource,
+                    )
+                assertEquals(result, permuted)
                 if (result.hasVariableValues()) {
                     activatedVariableCases += 1
                 }
@@ -1087,6 +1291,10 @@ class ResolverTest {
             assertTrue(
                 activatedVariableCases > 0,
                 "Resolver04 property activated no resolver variables",
+            )
+            assertTrue(
+                activatedImplementationDefaultCases > 0,
+                "Resolver04 property activated no abstract implementation defaults",
             )
         }
 

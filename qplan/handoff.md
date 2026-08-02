@@ -8,7 +8,19 @@ Read [Query Plan Research](./evergreen.md) for the durable production evidence, 
 
 Compiling Kotlin is the project's present mathematical modeling language, serving the same kind of specification role that TLA+ could serve rather than describing a JVM implementation. The model should also be maintained as a blueprint for a possible future translation into TLA+: its carrier sets, functions, relations, invariants, domain assumptions, and theorem statements should be explicit enough to become a formal specification with corresponding machine-checked proof obligations.
 
-No TLA+ translation or machine-checked proof currently exists. The theorem statements and supporting arguments in [`semantics/theorems.md`](./semantics/theorems.md) are informal mathematical reasoning about the Kotlin model, while compilation, examples, and tests provide only finite consistency and counterexample-finding evidence; a future TLA+ translation and its mechanically checked proofs would be separate artifacts.
+A scoped TLA+ construction-calculus translation and machine-checked proof baseline now exists in [`tla`](./tla). TLAPS proves finite least demand closure, dependency-order safety and termination, one mathematical application position per exact resolver key and concrete OER occurrence, Resolver03 guarded producer completeness under the exact registry-extension assumption, and Resolver04 provider ordering and ambient-demand sealing under its explicit assumptions. It now also proves a finite extensional result-tree model of every `correctResolution` conjunct, occurrence-indexed Resolver01/02 demand lifting, finite observation projection coherence, and simultaneous termination and completion of every reachable occurrence fold. [`tla/README.md`](./tla/README.md) records the remaining theorem boundary: structural extraction of Kotlin schema, selection, value, list, materialization, union, and resolver-comparison operations into those finite atoms is not yet proved, so this baseline must not be quoted as a complete TLAPS proof of the Kotlin model.
+
+## TLA+ Toolchain
+
+The repository has a project-local TLA+ toolchain declared in [`mise.toml`](./mise.toml) and resolved in [`mise.lock`](./mise.lock). It includes Amazon Corretto Java 21.0.4.7.1; TLA+ Tools 1.7.4, whose `tla2tools.jar` supplies the SANY parser and TLC model checker; and TLAPS 1.5.0, whose `tlapm` proof manager can use the bundled Z3, Zenon, Isabelle, and LS4 backends. TLAPS 1.5.0 is selected because the newer 1.6.0 rolling Linux build requires glibc 2.38 while the current host provides glibc 2.35; the configured TLAPS installer is consequently restricted to Linux x86-64.
+
+Run `mise install` from this directory to install the pinned tools. The project defines these wrappers:
+
+- `mise run tla:parse -- path/to/Spec.tla` parses and semantically checks a module with SANY.
+- `mise run tla:check -- path/to/Spec.tla` model-checks a specification with TLC, using `Spec.cfg` by default.
+- `mise run tla:prove -- path/to/Spec.tla` checks the module's proofs with TLAPS.
+
+The SANY and TLC wrappers add TLAPS's standard-module directory to the TLA+ library path automatically. Installation has been validated by parsing the bundled `Euclid.tla` example and having TLAPS prove all 37 of its obligations. This establishes that the proof toolchain runs; it does not establish any theorem about the resolver model.
 
 ## Long Term Goal
 
@@ -32,12 +44,21 @@ Resolver04 extends that construction with `fromObjectField`-style execution vari
 
 Variable providers and field resolvers share one acyclic demand graph over `Schema.ResolverSite`. This lets registry extension include a provider's field requirements before demand is sealed at a selective producer boundary. Deterministic tests cover direct, nested selective, recursive, list, null, equal-valued convergence, and overlapping provider/operation demand cases. Resolver04's arbitrary generator can produce globally unique variables, type-compatible provider paths, argument-bearing fragments, aliased query selections, and deep transitive dependencies; the regular property requires at least one generated result to contain a resolved variable binding, while the gated stress property requires bindings in at least ten percent of 10,000 or more cases at a minimum query depth of four.
 
-The modeling roadmap is:
+The initial TLA+ workstream translated the shared construction calculus and the Resolver01 through Resolver04 deltas into scoped modules, prioritizing Resolver03 and Resolver04 while retaining explicit weaker statements for Resolver01 and Resolver02. The baseline made partial progress against this proof program:
+
+1. Define TLA+ carrier sets, world assumptions, schema and value invariants, selection and fragment operations, resolver-demand relations, and the plan-independent correctness judgments corresponding to the canonical Kotlin model.
+2. Translate each resolver algorithm as a mathematical operator or state machine without introducing implementation behavior absent from the Kotlin semantics.
+3. State separate, scoped theorems for demand closure, sound dependency discovery, producer completeness, one application per resolver-bearing OER occurrence, result correctness, and termination; do not collapse those claims into response equality or one blanket theorem.
+4. Use TLC over deliberately small finite schemas, values, fragments, polymorphic branches, lists, argument tuples, lowered node bridges, and variable-provider graphs to find counterexamples to the translation and theorem statements.
+5. Use TLAPS to prove the supporting lemmas and final theorems once the TLC models stabilize, recording exactly which assumptions and deferred features delimit each result.
+6. Keep the Kotlin model, informal arguments, TLA+ specification, TLC configurations, and TLAPS proofs aligned as the model changes; compilation, Kotlin tests, and TLC exploration remain finite evidence rather than substitutes for TLAPS proofs.
+
+The next proof workstream is to prove that the structural Kotlin schema/value carriers, selection and fragment recursion, `materialize`, `resolveValue`, object/list union, `observedDemand`, and resolver-value comparison induce the finite atoms and alignment relations already used by the extensional TLA+ result-tree, product-fold, and projection modules. In particular, returned OER `PresentKeys` must align with terminal product-fold `BuiltKeys`. After that refinement baseline, continue the feature roadmap:
 
 1. Add `@parent`, preserving the exact ancestor OER occurrence through object and list ancestry and rooting its demand at that ancestor.
 2. Add checkers, including field and type checker ordering, checker results, and the distinction between raw-slot dependencies and policy-checked values.
 
-For each stage, preserve the scoped one-shot rule per resolver-bearing OER occurrence and extend the deterministic and arbitrary counterexamples before moving to the next stage. The theorem program in [`semantics/theorems.md`](./semantics/theorems.md) should be advanced with the model: state Resolver04's guarded-demand, variable, and one-shot claims for the currently supported scope, then revise their assumptions as each roadmap feature is incorporated. The existing theorem remains specifically scoped to variable-free Resolver02 and is not by itself evidence for Resolver03 or Resolver04.
+For each stage, preserve the scoped one-shot rule per resolver-bearing OER occurrence, extend the deterministic and arbitrary counterexamples, and revise both the informal and machine-checked theorem assumptions before moving to the next stage. The existing theorem in [`semantics/theorems.md`](./semantics/theorems.md) remains specifically scoped to variable-free Resolver02 and is not by itself evidence for Resolver03 or Resolver04.
 
 Use `./gradlew check` for complete validation. Focused checks are `./gradlew :model:test --tests model.registry.ExecutorRegistryTest --tests model.registry.ResolverDemandTest` and `./gradlew :semantics:test --tests semantics.resolver04.ResolverTest`.
 

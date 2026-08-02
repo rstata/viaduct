@@ -1,0 +1,5 @@
+# Argument for [resolver04-variable-order-and-ambient-seal-proof]
+
+`tla/Resolver04.tla` adds field and variable sites to one finite dependency-first `SiteOrder`. TLAPS proves that every provider dependency has a strictly earlier sequence position, every variable referenced by a required field fragment is among those earlier dependencies, resolved bindings equal their stipulated provider reads, and every exact-field ambient contribution is included in the field's aggregated demand. These lemmas combine with Resolver03's guarded producer-completeness theorem in `Resolver04LocalCorrectness`.
+
+The ambient-seal result assumes contribution discovery is complete before the target field is constructed; this is the formal non-lateness obligation corresponding to Resolver04's ambient-selection retargeting. Provider-path validity, substitution semantics, precise input compatibility, and Kotlin-to-TLA refinement remain explicit assumptions. `Resolver04MC` checks a finite model with a provider resolver, variable site, bridge, and converging operation/provider/sibling demand.

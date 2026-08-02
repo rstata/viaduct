@@ -5,6 +5,7 @@ import model.Schema
 import model.Selection
 import model.TypeExpr
 import model.Value
+import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.registry.ExecutorRegistry
 import model.registry.FieldResolverFunction
@@ -33,12 +34,14 @@ internal fun executorRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+    variableProviders: Map<VariableCoordinate, Selection>,
 ): ExecutorRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
     return TestExecutorRegistry(
         schema = schema,
         fieldResolvers = lowering.fieldResolvers,
         additionalDemand = lowering.additionalDemand,
+        variableProviders = variableProviders,
     )
 }
 
@@ -458,11 +461,14 @@ private class TestExecutorRegistry(
     private val schema: Schema,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
+    variableProviders: Map<VariableCoordinate, Selection>,
 ) : ExecutorRegistry {
     private val sourceFieldResolvers = fieldResolvers
     private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
-    private val outgoing: Map<Schema.OutputField, Set<Schema.OutputField>>
-    private val incoming: Map<Schema.OutputField, Set<Schema.OutputField>>
+    private val variableProviders: Map<VariableCoordinate, Selection> = variableProviders
+    private val coordinatesByVariable: Map<Value.Variable, VariableCoordinate>
+    private val outgoing: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>
+    private val incoming: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>
 
     init {
         fieldResolvers.forEach { (field, resolver) ->
@@ -495,34 +501,97 @@ private class TestExecutorRegistry(
                 missingQueryFields.map { it.fieldName }.sorted().joinToString()
         }
 
+        variableProviders.forEach { (coordinate, selection) ->
+            validateCanonicalField(coordinate.field, "variable-defining field")
+            require(coordinate.field in fieldResolvers) {
+                "Variable ${coordinate.variable.variableName} belongs to an unregistered resolver"
+            }
+            require(selection.nominalType == coordinate.field.containingType) {
+                "Variable ${coordinate.variable.variableName} selection is not relative to " +
+                    "${coordinate.field.containingType.typeName}/${coordinate.field.fieldName}"
+            }
+            require(coordinate.field.containingType in selection.possibleTypes) {
+                "Variable ${coordinate.variable.variableName} selection does not apply to its object"
+            }
+            validateVariablePath(selection)
+        }
+        val coordinatesByName = variableProviders.keys.groupBy { it.variable.variableName }
+        require(coordinatesByName.values.all { it.size == 1 }) {
+            "Variable names must be globally unique across field resolvers"
+        }
+        coordinatesByVariable =
+            variableProviders.keys.associateBy(VariableCoordinate::variable)
+
+        val objectFieldResolvers =
+            fieldResolvers.mapKeys { (field, _) -> field as Schema.ObjectField }
         outgoing =
-            fieldResolvers.mapValues { (field, resolver) ->
-                implicatedFields(resolver.objectFragment) + additionalDemand[field].orEmpty()
+            buildMap {
+                objectFieldResolvers.forEach { (field, resolver) ->
+                    put(
+                        field,
+                        implicatedSites(resolver.objectFragment, field) +
+                            additionalDemand[field].orEmpty().map {
+                                it as Schema.ObjectField
+                            },
+                    )
+                }
+                variableProviders.forEach { (coordinate, selection) ->
+                    put(
+                        coordinate,
+                        implicatedSites(
+                            Fragment.of(
+                                coordinate.field.containingType,
+                                selectionForestOf(selection),
+                            ),
+                            coordinate.field,
+                        ),
+                    )
+                }
             }
         requireAcyclic(outgoing)
-        this.fieldResolvers =
-            dependencyOrder(outgoing).fold(emptyMap()) { extendedResolvers, field ->
-                val resolver = fieldResolvers.getValue(field)
-                extendedResolvers +
-                    (
-                        field to
-                            resolver.withExtendedFragment(
-                                extendedFragment =
-                                    extendFragment(
-                                        fragment = resolver.objectFragment,
-                                        extendedResolvers = extendedResolvers,
-                                    ),
-                                extendedFragmentFunction = { arguments ->
-                                    extendFragment(
-                                        fragment = resolver.objectFragment(arguments),
-                                        extendedResolvers = extendedResolvers,
-                                    )
-                                },
-                            )
-                    )
+        val extendedResolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
+        val extendedVariables = mutableMapOf<VariableCoordinate, Fragment>()
+        dependencyOrder(outgoing).forEach { site ->
+            when (site) {
+                is Schema.ObjectField -> {
+                    val resolver = fieldResolvers.getValue(site)
+                    extendedResolvers[site] =
+                        resolver.withExtendedFragment(
+                            extendedFragment =
+                                extendFragment(
+                                    fragment = resolver.objectFragment,
+                                    ownerField = site,
+                                    extendedResolvers = extendedResolvers,
+                                    extendedVariables = extendedVariables,
+                                ),
+                            extendedFragmentFunction = { arguments ->
+                                extendFragment(
+                                    fragment = resolver.objectFragment(arguments),
+                                    ownerField = site,
+                                    extendedResolvers = extendedResolvers,
+                                    extendedVariables = extendedVariables,
+                                )
+                            },
+                        )
+                }
+                is VariableCoordinate -> {
+                    extendedVariables[site] =
+                        extendFragment(
+                            fragment =
+                                Fragment.of(
+                                    site.field.containingType,
+                                    selectionForestOf(variableProviders.getValue(site)),
+                                ),
+                            ownerField = site.field,
+                            extendedResolvers = extendedResolvers,
+                            extendedVariables = extendedVariables,
+                        )
+                }
             }
+        }
+        this.fieldResolvers = extendedResolvers
         incoming =
-            fieldResolvers.keys.associateWith { site ->
+            outgoing.keys.associateWith { site ->
                 outgoing
                     .filterValues { site in it }
                     .keys
@@ -540,15 +609,45 @@ private class TestExecutorRegistry(
             ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)
     }
 
-    override fun mayDemandFrom(field: Schema.OutputField): Set<Schema.OutputField> {
-        validateCanonicalField(field)
-        return outgoing[field]
-            ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)
+    override fun variable(variable: Value.Variable): Selection =
+        variableProviders.getValue(variableCoordinate(variable))
+
+    override fun variableCoordinate(variable: Value.Variable): VariableCoordinate =
+        coordinatesByVariable[variable]
+            ?: throw NoSuchElementException("Missing variable provider: \$${variable.variableName}")
+
+    override fun mayDemandFrom(site: Schema.ResolverSite): Set<Schema.ResolverSite> {
+        validateResolverSite(site)
+        return outgoing.getValue(site)
     }
 
-    override fun mayBeDemandedBy(field: Schema.OutputField): Set<Schema.OutputField> {
-        require(field in this) { "Resolver field is not registered" }
-        return incoming.getValue(field)
+    override fun mayBeDemandedBy(site: Schema.ResolverSite): Set<Schema.ResolverSite> {
+        validateResolverSite(site)
+        return incoming.getValue(site)
+    }
+
+    private fun validateResolverSite(site: Schema.ResolverSite) {
+        when (site) {
+            is Schema.ObjectField -> require(site in this) { "Resolver field is not registered" }
+            is VariableCoordinate ->
+                require(variableProviders.keys.any { it == site }) {
+                    "Variable coordinate is not registered"
+                }
+        }
+    }
+
+    private fun validateVariablePath(selection: Selection) {
+        val outputType = selection.key.field.typeExpr
+        if (selection.subselections.isEmpty()) {
+            require(outputType.baseType is Schema.InputType) {
+                "Variable provider paths must terminate at input-compatible values"
+            }
+        } else {
+            require(outputType is TypeExpr.Named && outputType.baseType is Schema.CompositeType) {
+                "Variable provider paths cannot traverse lists or simple values"
+            }
+            validateVariablePath(selection.subselections.single())
+        }
     }
 
     private fun validateCanonicalField(
@@ -561,35 +660,49 @@ private class TestExecutorRegistry(
         }
     }
 
-    private fun implicatedFields(fragment: Fragment): Set<Schema.OutputField> {
-        val result = mutableSetOf<Schema.OutputField>()
+    private fun implicatedSites(
+        fragment: Fragment,
+        ownerField: Schema.ObjectField,
+    ): Set<Schema.ResolverSite> {
+        val result = mutableSetOf<Schema.ResolverSite>()
         fragment.subselections.forEach { selection ->
-            result.addImplicatedBy(selection)
+            result.addImplicatedBy(selection, ownerField)
         }
         return result
     }
 
-    private fun MutableSet<Schema.OutputField>.addImplicatedBy(selection: Selection) {
+    private fun MutableSet<Schema.ResolverSite>.addImplicatedBy(
+        selection: Selection,
+        ownerField: Schema.ObjectField,
+    ) {
         selection.possibleTypes.forEach { possibleType ->
             possibleType.fields[selection.key.field.fieldName]
                 ?.takeIf { it in sourceFieldResolvers }
-                ?.let(::add)
+                ?.let { add(it as Schema.ObjectField) }
+        }
+        selection.key.arguments.variables().forEach { variable ->
+            val coordinate = variableCoordinate(variable)
+            require(coordinate.field == ownerField) {
+                "Variable \$${variable.variableName} is not defined by " +
+                    "${ownerField.containingType.typeName}/${ownerField.fieldName}"
+            }
+            add(coordinate)
         }
         selection.subselections.forEach { subselection ->
-            addImplicatedBy(subselection)
+            addImplicatedBy(subselection, ownerField)
         }
     }
 
     private fun dependencyOrder(
-        outgoing: Map<Schema.OutputField, Set<Schema.OutputField>>,
-        remaining: Set<Schema.OutputField> = outgoing.keys,
-        ordered: List<Schema.OutputField> = emptyList(),
-    ): List<Schema.OutputField> {
+        outgoing: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>,
+        remaining: Set<Schema.ResolverSite> = outgoing.keys,
+        ordered: List<Schema.ResolverSite> = emptyList(),
+    ): List<Schema.ResolverSite> {
         if (remaining.isEmpty()) return ordered
 
         val ready =
-            remaining.filterTo(linkedSetOf()) { field ->
-                outgoing.getValue(field).none { dependency -> dependency in remaining }
+            remaining.filterTo(linkedSetOf()) { site ->
+                outgoing.getValue(site).none { dependency -> dependency in remaining }
             }
         require(ready.isNotEmpty()) {
             "Resolver object fragments contain a demand cycle"
@@ -603,7 +716,9 @@ private class TestExecutorRegistry(
 
     private fun extendFragment(
         fragment: Fragment,
+        ownerField: Schema.ObjectField,
         extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
+        extendedVariables: Map<VariableCoordinate, Fragment>,
     ): Fragment {
         val additions = mutableListOf<Selection>()
         fragment.nominalType.possibleTypes.forEach { possibleType ->
@@ -611,7 +726,9 @@ private class TestExecutorRegistry(
                 selections = fragment.subselections,
                 objectType = possibleType,
                 path = emptyList(),
+                ownerField = ownerField,
                 extendedResolvers = extendedResolvers,
+                extendedVariables = extendedVariables,
                 additions = additions,
             )
         }
@@ -625,7 +742,9 @@ private class TestExecutorRegistry(
         selections: model.SelectionForest,
         objectType: Schema.ObjectType,
         path: List<Selection>,
+        ownerField: Schema.ObjectField,
         extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
+        extendedVariables: Map<VariableCoordinate, Fragment>,
         additions: MutableList<Selection>,
     ) {
         selections.forEach { selection ->
@@ -639,6 +758,15 @@ private class TestExecutorRegistry(
                     rootAt(path, requirements).forEach(additions::add)
                 }
 
+            selection.key.arguments.variables().forEach { variable ->
+                val coordinate = variableCoordinate(variable)
+                require(coordinate.field == ownerField)
+                extendedVariables
+                    .getValue(coordinate)
+                    .subselections
+                    .forEach(additions::add)
+            }
+
             val outputType = field.typeExpr.baseType as? Schema.CompositeType
                 ?: return@forEach
             outputType.possibleTypes.forEach { possibleType ->
@@ -646,7 +774,9 @@ private class TestExecutorRegistry(
                     selections = selection.subselections,
                     objectType = possibleType,
                     path = path + selection,
+                    ownerField = ownerField,
                     extendedResolvers = extendedResolvers,
+                    extendedVariables = extendedVariables,
                     additions = additions,
                 )
             }
@@ -672,12 +802,12 @@ private class TestExecutorRegistry(
         }
 
     private fun requireAcyclic(
-        outgoing: Map<Schema.OutputField, Set<Schema.OutputField>>,
+        outgoing: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>,
     ) {
-        val state = mutableMapOf<Schema.OutputField, VisitState>()
+        val state = mutableMapOf<Schema.ResolverSite, VisitState>()
 
-        fun visit(field: Schema.OutputField) {
-            when (state[field]) {
+        fun visit(site: Schema.ResolverSite) {
+            when (state[site]) {
                 VisitState.VISITING ->
                     throw IllegalArgumentException(
                         "Resolver object fragments contain a demand cycle",
@@ -685,9 +815,9 @@ private class TestExecutorRegistry(
                 VisitState.VISITED -> return
                 null -> Unit
             }
-            state[field] = VisitState.VISITING
-            outgoing.getValue(field).forEach(::visit)
-            state[field] = VisitState.VISITED
+            state[site] = VisitState.VISITING
+            outgoing.getValue(site).forEach(::visit)
+            state[site] = VisitState.VISITED
         }
 
         outgoing.keys.forEach(::visit)
@@ -698,3 +828,16 @@ private class TestExecutorRegistry(
         VISITED,
     }
 }
+
+private fun Value.Arguments.variables(): Set<Value.Variable> =
+    fieldValues.values.flatMapTo(linkedSetOf()) { it.variables() }
+
+private fun Value.Input?.variables(): Set<Value.Variable> =
+    when {
+        this == null || this == Value.Error -> emptySet()
+        this is Value.Variable -> setOf(this)
+        this is Value.InputList -> values.flatMapTo(linkedSetOf()) { it.variables() }
+        this is Value.InputObject ->
+            fieldValues.values.flatMapTo(linkedSetOf()) { it.variables() }
+        else -> emptySet()
+    }

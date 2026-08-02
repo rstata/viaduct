@@ -3,8 +3,10 @@ package model.registry
 import model.Assumptions
 import model.Fragment
 import model.Schema
+import model.Selection
 import model.SelectionForest
 import model.Value
+import model.VariableCoordinate
 
 sealed interface Executor
 
@@ -158,11 +160,15 @@ sealed interface Resolver : Executor {
 }
 
 /**
- * The externally supplied field resolvers fixed for one reasoning world.
+ * The externally supplied field resolvers and field-relative variable providers fixed for one
+ * reasoning world.
  *
  * An output field is an actual resolver coordinate exactly when [contains] returns true. The
- * registry satisfies canonical schema ownership, special-field exclusions, query coverage, exact
- * transpose, and acyclicity.
+ * registry satisfies canonical schema ownership, special-field exclusions, query coverage,
+ * globally unique variable names, exact transpose, and acyclicity across output fields and
+ * [VariableCoordinate] values. Every variable provider is one path selection relative to its
+ * coordinate's containing object, and variables referenced by a field resolver's object fragment
+ * or one of its providers belong to that same field.
  */
 interface ExecutorRegistry {
     operator fun contains(field: Schema.OutputField): Boolean
@@ -170,11 +176,17 @@ interface ExecutorRegistry {
     /** Defined only when [field] is registered. */
     fun resolver(field: Schema.OutputField): Resolver.Field
 
-    /** The registered fields directly demanded by this registered field. */
-    fun mayDemandFrom(field: Schema.OutputField): Set<Schema.OutputField>
+    /** The provider selection for the globally registered [variable]. */
+    fun variable(variable: Value.Variable): Selection
 
-    /** The registered fields that may directly demand this registered field. */
-    fun mayBeDemandedBy(field: Schema.OutputField): Set<Schema.OutputField>
+    /** The unique resolver-relative coordinate of the globally registered [variable]. */
+    fun variableCoordinate(variable: Value.Variable): VariableCoordinate
+
+    /** The resolver sites directly demanded by [site]. */
+    fun mayDemandFrom(site: Schema.ResolverSite): Set<Schema.ResolverSite>
+
+    /** The resolver sites that may directly demand [site]. */
+    fun mayBeDemandedBy(site: Schema.ResolverSite): Set<Schema.ResolverSite>
 }
 
 /** Indicates that no executor is defined at a valid schema coordinate. */

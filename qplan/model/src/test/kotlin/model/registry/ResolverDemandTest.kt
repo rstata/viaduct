@@ -4,6 +4,8 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.Value
+import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.TestWorld
@@ -13,6 +15,142 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ResolverDemandTest {
+    @Test
+    fun `includes field-relative variables in the resolver demand graph`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      x: Int
+                      y(b: Int): Int
+                      z(c: Int): Int
+                      raw: Int
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "x") to
+                            resolver(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      y(b: ${'$'}b)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ),
+                        schema.field("Query", "y") to resolver(schema.emptyFragmentOf("Query")),
+                        schema.field("Query", "z") to resolver(schema.emptyFragmentOf("Query")),
+                        schema.field("Query", "raw") to resolver(schema.emptyFragmentOf("Query")),
+                    )
+                },
+                variableProviders = { schema ->
+                    val owner = schema.field("Query", "x") as Schema.ObjectField
+                    mapOf(
+                        VariableCoordinate.of(owner, Value.Variable.of("b")) to
+                            schema.fragmentFrom(
+                                """
+                                fragment ignored on Query {
+                                  z(c: ${'$'}c)
+                                }
+                                """.trimIndent(),
+                            ).subselections.single(),
+                        VariableCoordinate.of(owner, Value.Variable.of("c")) to
+                            schema.fragmentFrom(
+                                """
+                                fragment ignored on Query {
+                                  raw
+                                }
+                                """.trimIndent(),
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val schema = world.schema
+        val registry = world.executorRegistry
+        val x = schema.field("Query", "x")
+        val y = schema.field("Query", "y")
+        val z = schema.field("Query", "z")
+        val raw = schema.field("Query", "raw")
+        val b = registry.variableCoordinate(Value.Variable.of("b"))
+        val c = registry.variableCoordinate(Value.Variable.of("c"))
+
+        assertEquals(setOf(y, b), registry.mayDemandFrom(x))
+        assertEquals(setOf(z, c), registry.mayDemandFrom(b))
+        assertEquals(setOf(raw), registry.mayDemandFrom(c))
+        assertEquals(setOf(x), registry.mayBeDemandedBy(b))
+        assertEquals(setOf(b), registry.mayBeDemandedBy(c))
+    }
+
+    @Test
+    fun `rejects repeated global variable names and variable cycles`() {
+        val schemaSDL =
+            """
+            type Query {
+              x: Int
+              y: Int
+              z(a: Int, b: Int): Int
+            }
+            """.trimIndent()
+        val duplicate =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL = schemaSDL,
+                    fieldResolvers = { schema ->
+                        schema.query.fields.values
+                            .filter { it.fieldName != "__typename" }
+                            .associateWith { resolver(schema.emptyFragmentOf("Query")) }
+                    },
+                    variableProviders = { schema ->
+                        mapOf(
+                            VariableCoordinate.of(
+                                schema.field("Query", "x") as Schema.ObjectField,
+                                Value.Variable.of("same"),
+                            ) to
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { y }",
+                                ).subselections.single(),
+                            VariableCoordinate.of(
+                                schema.field("Query", "y") as Schema.ObjectField,
+                                Value.Variable.of("same"),
+                            ) to
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { x }",
+                                ).subselections.single(),
+                        )
+                    },
+                )
+            }
+        assertTrue(duplicate.message!!.contains("globally unique"))
+
+        val cycle =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL = schemaSDL,
+                    fieldResolvers = { schema ->
+                        schema.query.fields.values
+                            .filter { it.fieldName != "__typename" }
+                            .associateWith { resolver(schema.emptyFragmentOf("Query")) }
+                    },
+                    variableProviders = { schema ->
+                        val owner = schema.field("Query", "x") as Schema.ObjectField
+                        mapOf(
+                            VariableCoordinate.of(owner, Value.Variable.of("a")) to
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { z(b: ${'$'}b) }",
+                                ).subselections.single(),
+                            VariableCoordinate.of(owner, Value.Variable.of("b")) to
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { z(a: ${'$'}a) }",
+                                ).subselections.single(),
+                        )
+                    },
+                )
+            }
+        assertTrue(cycle.message!!.contains("demand cycle"))
+    }
+
     @Test
     fun `derives resolver demand from all reachable selections and their possible types`() {
         val world =

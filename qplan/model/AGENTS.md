@@ -16,6 +16,8 @@ Schema definitions form reciprocal graphs: type definitions contain fields, whil
 
 Nesting declarations under `Schema` provides namespacing only. A nested schema definition does not retain an enclosing `Schema` instance; canonical ownership follows from the one-world assumption and the definitions carried by values.
 
+`Schema.ResolverSite` is the common demand-graph domain for output fields and `VariableCoordinate` values. A variable coordinate pairs one globally named `Value.Variable` with the concrete object field whose resolver defines it; registry assembly establishes canonical ownership and global name uniqueness.
+
 Input-object fields and output-field arguments share `InputLikeField`. Input-object values and output-field argument tuples share `InputLikeValue`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `ArgumentsValue` instances remain ordinary structural values rather than singletons.
 
 Kotlin inheritance and generic variance classify carrier values but do not define GraphQL interface implementation, output subtyping, input coercion, or type variance. Use canonical schema relations and documented carrier invariants for those facts.

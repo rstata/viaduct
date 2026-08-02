@@ -24,6 +24,9 @@ sealed interface SelectionForest {
 
     fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest
 
+    /** The union of the sets produced independently from each occurrence. */
+    fun <T> flatMapToSet(transform: (Selection) -> Set<T>): Set<T>
+
     fun <K> groupBy(keySelector: (Selection) -> K): Map<K, SelectionForest>
 
     fun forEach(action: (Selection) -> Unit)
@@ -218,6 +221,9 @@ private class SelectionForestImpl(
         occurrences
             .groupBy(keySelector)
             .mapValues { (_, selections) -> SelectionForestImpl(selections) }
+
+    override fun <T> flatMapToSet(transform: (Selection) -> Set<T>): Set<T> =
+        occurrences.fold(emptySet()) { result, selection -> result + transform(selection) }
 
     override fun forEach(action: (Selection) -> Unit) {
         occurrences.forEach(action)

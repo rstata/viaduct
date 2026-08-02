@@ -26,8 +26,9 @@ import model.Value
  * argumentless.
  *
  * Every applicable selection in [demand] must be declared on the concrete object type or one of
- * its nominal supertypes. Every selection applicable at an object visited by this operation must
- * contain no [Value.Variable] in its key arguments.
+ * its nominal supertypes. A selection retained below a behavioral boundary must contain no
+ * [Value.Variable] in its key arguments; a behavioral selection may retain symbolic arguments
+ * because projection stops before materializing its key.
  *
  * @throws IllegalArgumentException when a precondition is not met
  */
@@ -58,14 +59,17 @@ private fun Value.Object.snipObjectToDemand(
     demand: SelectionForest,
 ): Value.Object {
     val applicableDemand = demand.filter { type in it.possibleTypes }
+    val passiveDemand =
+        applicableDemand.filter { selection ->
+            val concreteField = type.fields.getValue(selection.key.field.fieldName)
+            !world.behavioral(concreteField)
+        }
 
     val selectedFields =
-        applicableDemand
+        passiveDemand
             .groupBy { it.concreteObjectKey(type) }
             .mapNotNull { (key, fieldSelections) ->
                 val concreteField = key.field
-                if (world.behavioral(concreteField)) return@mapNotNull null
-
                 val value = fieldValues.getValue(key)
                 val selectedValue =
                     if (concreteField.typeExpr.baseType is Schema.SimpleType) {

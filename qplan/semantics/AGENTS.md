@@ -19,4 +19,6 @@ This predicate characterizes whether an OER is a correct field-resolution result
 
 Main code depends only on `model`. Schema parsing, dependency injection, registry assembly, and other pre-reasoning composition belong in test fixtures or application composition code.
 
-Semantic code reasons over the canonical field-only executor registry. Raw node resolvers, node references, typed-ID encoding, and `$id` schema augmentation are fixture-composition concerns; generated node loaders enter semantic reasoning as ordinary field resolvers with explicit bridge fragments.
+Semantic code reasons over canonical field resolvers and field-relative variable providers. Raw node resolvers, node references, typed-ID encoding, and `$id` schema augmentation are fixture-composition concerns; generated node loaders enter semantic reasoning as ordinary field resolvers with explicit bridge fragments.
+
+Resolver04 additionally interprets field-relative variable providers. A registered variable is resolved from one selection path in the defining resolver's containing OER, stored in that OER's `variableValues`, and substituted throughout the resolver's complete object fragment before demand closure, materialization, or resolver comparison. Operation-variable substitution remains pre-reasoning composition and is distinct from these execution-variable bindings.

@@ -10,6 +10,7 @@ import model.Assumptions
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.registry.ExecutorRegistry
 import model.registry.Resolver
@@ -48,6 +49,8 @@ class TestWorld private constructor(
                 (Schema) -> Map<Schema.ObjectType, NodeResolverFunction> = { emptyMap() },
             fieldResolvers:
                 ((Schema) -> Map<Schema.OutputField, Resolver.Field>)? = null,
+            variableProviders:
+                (Schema) -> Map<VariableCoordinate, model.Selection> = { emptyMap() },
             noTransitiveDemand: Boolean = false,
         ): TestWorld {
             val injector =
@@ -56,6 +59,7 @@ class TestWorld private constructor(
                         schemaSDL = schemaSDL,
                         nodeResolvers = nodeResolvers,
                         fieldResolvers = fieldResolvers,
+                        variableProviders = variableProviders,
                         noTransitiveDemand = noTransitiveDemand,
                     ),
                 )
@@ -75,6 +79,7 @@ private class TestWorldModule(
     private val schemaSDL: String,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
+    private val variableProviders: (Schema) -> Map<VariableCoordinate, model.Selection>,
     private val noTransitiveDemand: Boolean,
 ) : AbstractModule() {
     override fun configure() {
@@ -100,16 +105,23 @@ private class TestWorldModule(
         fieldResolvers?.invoke(schema) ?: defaultQueryResolvers(schema)
 
     @Provides
+    @VariableProviders
+    fun variableProviders(schema: GJSchema): Map<VariableCoordinate, model.Selection> =
+        variableProviders.invoke(schema)
+
+    @Provides
     @Singleton
     fun executorRegistry(
         schema: GJSchema,
         @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
         @FieldResolvers fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+        @VariableProviders variableProviders: Map<VariableCoordinate, model.Selection>,
     ): ExecutorRegistry =
         executorRegistryOf(
             schema = schema,
             nodeResolvers = nodeResolvers,
             fieldResolvers = fieldResolvers,
+            variableProviders = variableProviders,
         )
 
     @Provides

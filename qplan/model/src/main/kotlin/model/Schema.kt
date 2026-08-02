@@ -38,6 +38,11 @@ package model
  * concrete implementation, and mutability are not modeled.
  */
 interface Schema {
+    /**
+     * A field or field-relative variable coordinate at which resolver demand may originate or
+     * terminate.
+     */
+    interface ResolverSite
 
     /**
      * The canonical query root.
@@ -326,11 +331,21 @@ interface Schema {
      * `containingType.fields[fieldName] == this`, and [typeExpr]'s base type is canonical in the same
      * schema. [arguments] is the input-object-like definition of the complete argument tuple.
      */
-    interface OutputField {
+    interface OutputField : ResolverSite {
         val fieldName: String
         val containingType: CompositeType
         val typeExpr: TypeExpr<OutputType>
         val arguments: FieldArguments
+    }
+
+    /**
+     * An output field owned by a concrete object type.
+     *
+     * Every output field whose [OutputField.containingType] is an [ObjectType] implements this
+     * interface.
+     */
+    interface ObjectField : OutputField {
+        override val containingType: ObjectType
     }
 
     /**

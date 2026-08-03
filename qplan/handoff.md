@@ -32,35 +32,7 @@ The current model is building a plan-independent correctness judgment over `Engi
 
 ## Next Step Goal
 
-The current validated constructors are [`semantics.resolver01`](./semantics/src/main/kotlin/semantics/resolver01/Resolver.kt), [`semantics.resolver02`](./semantics/src/main/kotlin/semantics/resolver02/Resolver.kt), [`semantics.resolver03`](./semantics/src/main/kotlin/semantics/resolver03/Resolver.kt), and [`semantics.resolver04`](./semantics/src/main/kotlin/semantics/resolver04/Resolver.kt). The canonical model exposes field resolvers plus field-relative variable providers. Raw selection-independent field functions remain private behind `Resolver.Field`, while raw node lookup functions exist only as external test-fixture inputs that are lowered before the reasoning world is constructed.
-
-Resolver03 now aggregates transitive guarded demand before each selective resolver application. Registry assembly processes resolver coordinates in dependency-first `mayDemandFrom` order and attaches an `extendedFragment` to each field resolver. The extension begins with `objectFragment`, walks every finite object path in that fragment, explores each possible concrete type of polymorphic outputs separately, and roots each encountered resolver field's already-computed extension at the encounter path. The exact-arguments accessor performs the same construction from `objectFragment(arguments)`, preserving argument tuples on fixture-lowered `foo$id(args)` bridges.
-
-Before Resolver03 applies a resolver, it walks the supplied output demand and adds the exact extended fragment of each resolver occurrence at its containing-object path. This leaves `snipToDemand` as a projection of exactly its supplied demand, leaves Resolver02 unchanged, and does not inspect a producer result while deriving demand. The deterministic flat, nested, and recursive counterexamples now pass, as do the arbitrary properties covering interfaces, unions, lists, arguments, ordinary field resolvers, and fixture-lowered node loaders. The mutation-control world substitutes immediate `objectFragment` demand and remains detectably false.
-
-Within its current feature set, Resolver03 satisfies the scoped [`resolver03-one-shot-construction`](./claims.md) claim: it groups all applicable demand for each concrete `Value.Key` at one OER object occurrence, computes the transitive guarded requirements before resolver projection, orders required sibling cells first, and applies the resolver once while constructing that cell. Distinct recursive objects and list elements are distinct OER occurrences and therefore receive their own applications. This Kotlin design result is supported by deterministic and arbitrary tests and the argument in [`arguments/resolver03-one-shot-construction.md`](./arguments/resolver03-one-shot-construction.md); the related TLA+ theorem proves the finite extensional construction calculus, not a machine-checked refinement from the Kotlin function or a claim about the deferred features below.
-
-Resolver04 extends that construction with `fromObjectField`-style execution variables. Each globally named variable has one `VariableCoordinate` pairing it with the concrete object field whose resolver defines it, and maps to one provider path relative to that field's containing OER. Before closing or materializing a defining resolver's object fragment, Resolver04 recursively resolves provider dependencies, reads each provider path from the current OER, stores the resulting binding in that OER's `variableValues`, and substitutes those bindings throughout the complete fragment, including nested keys. Intermediate null and error values propagate, terminal lists become input lists, and provider paths may neither traverse lists nor terminate at objects.
-
-Variable providers and field resolvers share one acyclic demand graph over `Schema.ResolverSite`. This lets registry extension include a provider's field requirements before demand is sealed at a selective producer boundary. Deterministic tests cover direct, nested selective, recursive, list, null, equal-valued convergence, and overlapping provider/operation demand cases. Resolver04's arbitrary generator can produce globally unique variables, type-compatible provider paths, argument-bearing fragments, aliased query selections, and deep transitive dependencies; the regular property requires at least one generated result to contain a resolved variable binding, while the gated stress property requires bindings in at least ten percent of 10,000 or more cases at a minimum query depth of four.
-
-The TLA+ workstream translated the shared construction calculus and the Resolver01 through Resolver04 deltas into scoped modules, prioritizing Resolver03 and Resolver04 while retaining explicit projection-coverage premises for Resolver01 and Resolver02. `Resolver03ApplicationProof` derives that premise from exact guarded extension demand and proves eventual `CorrectResolution`. `ProviderPathEvaluationProof` gives each validated provider a finite exact-key trace, derives null/error suffix absorption, and structurally converts terminal nested lists. `Resolver04ApplicationProof` additionally proves that provider roots and variable sites precede defining fields, the actual provider read equals that path result, prefix provider reads equal final reads, direct, guarded, and ambient demand supplies every result observation, and the final stored bindings conform to those provider reads. The finite-extensional baseline addresses the following proof program:
-
-1. Define TLA+ carrier sets, world assumptions, schema and value invariants, selection and fragment operations, resolver-demand relations, and the plan-independent correctness judgments corresponding to the canonical Kotlin model.
-2. Translate each resolver algorithm as a mathematical operator or state machine without introducing implementation behavior absent from the Kotlin semantics.
-3. State separate, scoped theorems for demand closure, sound dependency discovery, producer completeness, one application per resolver-bearing OER occurrence, result correctness, and termination; do not collapse those claims into response equality or one blanket theorem.
-4. Use TLC over deliberately small finite schemas, values, fragments, polymorphic branches, lists, argument tuples, lowered node bridges, and variable-provider graphs to find counterexamples to the translation and theorem statements.
-5. Use TLAPS to prove the supporting lemmas and final theorems once the TLC models stabilize, recording exactly which assumptions and deferred features delimit each result.
-6. Keep the Kotlin model, informal arguments, TLA+ specification, TLC configurations, and TLAPS proofs aligned as the model changes; compilation, Kotlin tests, and TLC exploration remain finite evidence rather than substitutes for TLAPS proofs.
-
-The next proof workstream is to prove that the structural Kotlin schema/value carriers, selection and fragment recursion, `materialize`, `resolveValue`, object/list union, `observedDemand`, and resolver-value comparison induce the finite atoms and alignment relations already used by the extensional TLA+ result-tree, product-fold, and projection modules. In particular, returned OER `PresentKeys` must align with terminal product-fold `BuiltKeys`. After that refinement baseline, continue the feature roadmap:
-
-1. Add `@parent`, preserving the exact ancestor OER occurrence through object and list ancestry and rooting its demand at that ancestor.
-2. Add checkers, including field and type checker ordering, checker results, and the distinction between raw-slot dependencies and policy-checked values.
-
-For each stage, preserve the scoped one-shot rule per resolver-bearing OER occurrence, extend the deterministic and arbitrary counterexamples, and revise both the informal and machine-checked theorem assumptions before moving to the next stage. The existing theorem in [`semantics/theorems.md`](./semantics/theorems.md) remains specifically scoped to variable-free Resolver02 and is not by itself evidence for Resolver03 or Resolver04.
-
-Use `./gradlew check` for complete validation. Focused checks are `./gradlew :model:test --tests model.registry.ExecutorRegistryTest --tests model.registry.ResolverDemandTest` and `./gradlew :semantics:test --tests semantics.resolver04.ResolverTest`.
+The next step goal will be given in the prompt that provides you this handoff document.
 
 ## Current Model
 
@@ -112,7 +84,69 @@ This constructor is intentionally depth-first and may apply a resolver again whe
 
 [`resolver03`](./semantics/src/main/kotlin/semantics/resolver03/Resolver.kt) is structurally identical through local closure, dependency ordering, materialization, and recursive resolution. Before applying a field resolver, it walks the output demand and roots each encountered resolver field's exact `extendedFragment(arguments)` at that occurrence. This guarded expansion makes passive transitive inputs visible to the producing resolver before `snipToDemand` projects its output. Generated node loaders use the same operation, including exact synthetic bridge argument tuples, and do not introduce a distinct semantic rule.
 
-[`resolver04`](./semantics/src/main/kotlin/semantics/resolver04/Resolver.kt) adds field-relative variables while preserving Resolver03's construction. When an activated resolver fragment contains variables, it resolves their registered provider paths against the current OER, recursively resolving provider variables and field demand first. It unions those bindings into the current OER, instantiates the resolver's complete fragment, and then uses the concrete fragment for closure, dependency ordering, materialization, and resolver comparison. The same bindings therefore apply to variable references at every depth of that resolver fragment without being copied into descendant OERs.
+Resolver03 aggregates transitive guarded demand before each selective resolver application. Registry assembly processes resolver coordinates in dependency-first `mayDemandFrom` order and attaches an `extendedFragment` to each field resolver. The extension begins with `objectFragment`, walks every finite object path in that fragment, explores each possible concrete type of polymorphic outputs separately, and roots each encountered resolver field's already-computed extension at the encounter path. The exact-arguments accessor performs the same construction from `objectFragment(arguments)`, preserving argument tuples on fixture-lowered `foo$id(args)` bridges.
+
+Before Resolver03 applies a resolver, it walks the supplied output demand and adds the exact extended fragment of each resolver occurrence at its containing-object path. This leaves `snipToDemand` as a projection of exactly its supplied demand, leaves Resolver02 unchanged, and does not inspect a producer result while deriving demand. The deterministic flat, nested, and recursive counterexamples now pass, as do the arbitrary properties covering interfaces, unions, lists, arguments, ordinary field resolvers, and fixture-lowered node loaders. The mutation-control world substitutes immediate `objectFragment` demand and remains detectably false.
+
+Within its current feature set, Resolver03 satisfies the scoped [`resolver03-one-shot-construction`](./claims.md) claim: it groups all applicable demand for each concrete `Value.Key` at one OER object occurrence, computes the transitive guarded requirements before resolver projection, orders required sibling cells first, and applies the resolver once while constructing that cell. Distinct recursive objects and list elements are distinct OER occurrences and therefore receive their own applications. This Kotlin design result is supported by deterministic and arbitrary tests and the argument in [`arguments/resolver03-one-shot-construction.md`](./arguments/resolver03-one-shot-construction.md); the related TLA+ theorem proves the finite extensional construction calculus, not a machine-checked refinement from the Kotlin function or a claim about the deferred features below.
+
+### Variables Break Naive Depth-First Resolution
+
+Resolver03 demand follows the selection-tree structure. Each resolver's object fragment adds selections rooted at that resolver's parent OER, and any resolver reached by those selections adds its own demand below that occurrence. Every argument tuple is already concrete, so a depth-first traversal of the selection set being executed can collect and resolve all demand below a selection before resolving the selection itself. Returning from a subtree means that subtree is complete.
+
+Resolver04 extends that construction with `fromObjectField`-style execution variables. Each globally named variable has one `VariableCoordinate` pairing it with the concrete object field whose resolver defines it, and maps to one provider path relative to that field's containing OER. Before closing or materializing a defining resolver's object fragment, Resolver04 recursively resolves provider dependencies, reads each provider path from the current OER, stores the resulting binding in that OER's `variableValues`, and substitutes those bindings throughout the complete fragment, including nested keys. Intermediate null and error values propagate, terminal lists become input lists, and provider paths may neither traverse lists nor terminate at objects.
+
+Variable providers and field resolvers share one acyclic demand graph over `Schema.ResolverSite`. This lets registry extension include a provider's field requirements before demand is sealed at a selective producer boundary. Deterministic tests cover direct, nested selective, recursive, list, null, equal-valued convergence, and overlapping provider/operation demand cases. Resolver04's arbitrary generator can produce globally unique variables, type-compatible provider paths, argument-bearing fragments, aliased query selections, and deep transitive dependencies; the regular property requires at least one generated result to contain a resolved variable binding, while the gated stress property requires bindings in at least ten percent of 10,000 or more cases at a minimum query depth of four.
+
+Variables add flows of values that don't follow the tree structure.  A provider reads a value from one path in the OER tree, while uses of that variable insert the value into resolver arguments at other positions in the tree.  Provider and use positions need not have an ancestor-descendant relationship, and in particular resolving the provider may itself require resolving one field of an arbitrarily-deep OER where another field of that same OER contains a use of that variable.
+
+[`ResolverGeneratedRegressionTest`](./semantics/src/test/kotlin/semantics/resolver04/ResolverGeneratedRegressionTest.kt) contains a concrete example.
+
+```graphql
+type Query {
+  source: Object1! # has resolver with no object fragment
+}
+
+type Object2 {
+  field2(arg: String): Int! # has resolver no object fragment
+}
+
+type Object1 {
+  variableConsumer: Int!
+      # has resolver with objectFragment-selections of "{ child { field2(arg: $value) } common }"
+      # also, has a variables provider that binds `value` to the path `common`
+
+  common: String!
+      # has resolver with objectFragment-selections of "{ child { field2(arg: "literal") } }"
+
+  child: Object2! # no object fragment
+}
+```
+
+The `variableConsumer` resolver requires:
+
+```graphql
+child {
+  field2(arg: $value)
+}
+common
+```
+
+The provider defines `$value` as the value of `common`, so `common` is part of the defining resolver's object fragment. But `common` is itself a resolver whose object fragment requires:
+
+```graphql
+child {
+  field2(arg: "literal")
+}
+```
+
+To bind `$value`, resolution must therefore produce the exact `Object1.child` cell and resolve `field2(arg: "literal")` inside its returned `Object2`. `common` then returns a value for `$value` -- let's say it's `"bound"` -- which instantiates the original symbolic selection as `field2(arg: "bound")`. Both demands pass through the same argumentless `Object1.child` cell. A naive post-order traversal has already returned from that `child` subtree before the second exact `field2` key becomes known. Reapplying the `child` resolver would complete the traversal but violate the one-shot requirement.
+
+[`resolver04`](./semantics/src/main/kotlin/semantics/resolver04/Resolver.kt) makes resolution resumable. When an activated resolver fragment contains variables, it resolves their registered provider paths against the current OER, recursively resolving provider variables and field demand first. The partial result used to read a provider is retained in `DemandClosure.resolved`. After bindings are stored in the OER and substituted throughout the defining fragment, Resolver04 computes the now-concrete selection keys.
+
+The `widened` pass intersects those demanded keys with keys already present in `closure.resolved`. For each intersection, `resolveExistingKey` re-enters the existing cell and resolves newly demanded descendants without applying the resolver that produced the cell again. `ResolutionSources` retains the producing resolver's selection-independent output, while required and available speculative demand determine which additional descendants can be resolved from it. `sources.union` merges the enlarged cell back into the result and preserves that source association. The subsequent dependency-ordered fold excludes keys already present in `widened`, preventing a second producer application.
+
+In the example, the existing `child` result grows from containing only `field2(arg: "literal")` to containing both that key and `field2(arg: "bound")`; the `child` resolver is still applied exactly once. Resolver04 therefore does not restore a pure depth-first ordering. It augments the selection tree with variable data-flow dependencies and permits a previously visited subtree to resume after a binding makes new exact demand available.
 
 ### Correctness Theorems
 

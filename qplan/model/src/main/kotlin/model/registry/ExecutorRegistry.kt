@@ -21,6 +21,11 @@ typealias FieldResolverFunction =
  * fields instead.
  */
 sealed interface Resolver : Executor {
+    data class OutputProjection(
+        val source: Value.Output?,
+        val projected: Value.Output?,
+    )
+
     /**
      * A field resolver and its object-valued input requirements.
      *
@@ -62,6 +67,44 @@ sealed interface Resolver : Executor {
             transitiveDemand: SelectionForest,
         ): Value.Output? =
             function(input, arguments).snipToDemand(projectionDemand(transitiveDemand))
+
+        /**
+         * Applies this field resolver once, strictly projects [transitiveDemand], and additionally
+         * projects the recursively available portion of [speculativeDemand].
+         */
+        context(world: Assumptions)
+        fun resolve(
+            input: Value.Object,
+            arguments: Value.Arguments,
+            transitiveDemand: SelectionForest,
+            speculativeDemand: SelectionForest,
+        ): Value.Output? =
+            resolveWithSource(
+                input,
+                arguments,
+                transitiveDemand,
+                speculativeDemand,
+            ).projected
+
+        /**
+         * Applies this resolver once and returns both its raw output and selective projection.
+         */
+        context(world: Assumptions)
+        fun resolveWithSource(
+            input: Value.Object,
+            arguments: Value.Arguments,
+            transitiveDemand: SelectionForest,
+            speculativeDemand: SelectionForest,
+        ): OutputProjection {
+            val output = function(input, arguments)
+            val required = projectionDemand(transitiveDemand)
+            val speculative =
+                output.availableDemand(projectionDemand(speculativeDemand))
+            return OutputProjection(
+                source = output,
+                projected = output.snipToDemand(required + speculative),
+            )
+        }
 
         operator fun component1(): Fragment = objectFragment
 

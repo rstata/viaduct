@@ -222,6 +222,7 @@ sealed interface Value {
              * ### Invariant: input-object-value-factory-schema-conformance
              *
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Declared defaults are materialized for fields absent from [fields].
              */
             fun of(
                 type: Schema.InputObjectType,
@@ -253,6 +254,7 @@ sealed interface Value {
              * ### Invariant: arguments-value-factory-schema-conformance
              *
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Declared defaults are materialized for arguments absent from [fields].
              */
             fun of(
                 field: Schema.OutputField,
@@ -607,13 +609,25 @@ private class FieldValuesImpl<out T : Any, out V : Value>(
 private fun coerceInputLikeFields(
     type: Schema.InputObjectLike,
     fields: Map<String, Any?>,
-): Map<String, Value.Input?> =
-    fields.mapValues { (fieldName, value) ->
-        val field =
-            type.fields[fieldName]
-                ?: throw ClassCastException()
-        coerceInputValue(field.typeExpr, value)
+): Map<String, Value.Input?> {
+    val suppliedFields =
+        fields.mapValues { (fieldName, value) ->
+            val field =
+                type.fields[fieldName]
+                    ?: throw ClassCastException()
+            coerceInputValue(field.typeExpr, value)
+        }
+
+    return buildMap {
+        type.fields.values.forEach { field ->
+            val defaultValue = field.defaultValue
+            if (defaultValue is Value.Default.Present) {
+                put(field.name, defaultValue.value)
+            }
+        }
+        putAll(suppliedFields)
     }
+}
 
 private fun coerceInputValue(
     typeExpr: TypeExpr<Schema.InputType>,

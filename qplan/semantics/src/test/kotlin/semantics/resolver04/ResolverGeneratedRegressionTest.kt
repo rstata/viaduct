@@ -16,6 +16,112 @@ import kotlin.test.assertTrue
 
 class ResolverGeneratedRegressionTest {
     @Test
+    fun `widens a node loaded for a variable provider without reapplying it`() {
+        var nodeApplications = 0
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
+
+                    type Child implements Node {
+                      id: ID!
+                      passive: Boolean!
+                      computed(arg: String!): Int!
+                    }
+
+                    type Container {
+                      child: Child!
+                    }
+
+                    type Query {
+                      container: Container!
+                      result: Int!
+                    }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val child = schema.type("Child") as Schema.ObjectType
+                    mapOf(
+                        child to
+                            model.testing.nodeResolverOf { id ->
+                                nodeApplications += 1
+                                schema.objectOf("Child") {
+                                    "id" setTo id
+                                    "passive" setTo true
+                                }
+                            },
+                    )
+                },
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "container") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ ->
+                                schema.objectOf("Container") {
+                                    "child" setTo
+                                        schema.objectOf("Child") {
+                                            "id" setTo "child-1"
+                                        }
+                                }
+                            },
+                        schema.field("Query", "result") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      container {
+                                        child {
+                                          computed(arg: ${'$'}value)
+                                        }
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { _, _ -> Value.Int.of(1) },
+                        schema.field("Child", "computed") to
+                            model.testing.fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Child { passive }",
+                                ),
+                            ) { _, _ -> Value.Int.of(2) },
+                    )
+                },
+                variableProviders = { schema ->
+                    mapOf(
+                        VariableCoordinate.of(
+                            schema.field("Query", "result") as Schema.ObjectField,
+                            Value.Variable.of("value"),
+                        ) to
+                            schema.fragmentFrom(
+                                """
+                                fragment ignored on Query {
+                                  container {
+                                    child {
+                                      __typename
+                                    }
+                                  }
+                                }
+                                """.trimIndent(),
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        assertEquals(1, nodeApplications)
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
     fun `broadens an already resolved nested object after binding a variable`() {
         val applications = linkedMapOf<String, Int>()
         fun applied(name: String) {

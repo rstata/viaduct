@@ -394,6 +394,52 @@ class AssumptionsTest {
     }
 
     @Test
+    fun `input-like factories apply declared defaults unless explicitly overridden`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val friendField = schema.field("User", "friend")
+        val defaultFriendArguments = Value.Arguments.of(friendField, emptyMap())
+
+        assertEquals(
+            3,
+            assertIs<Value.Int>(defaultFriendArguments.fieldValues["limit"]).intValue,
+        )
+
+        val nodeField = schema.field("Query", "node")
+        val defaultArguments = Value.Arguments.of(nodeField, emptyMap())
+        val defaultFilter =
+            assertIs<Value.InputObject>(defaultArguments.fieldValues["filter"])
+
+        assertEquals(
+            10,
+            assertIs<Value.Int>(defaultFilter.fieldValues["limit"]).intValue,
+        )
+        assertEquals(
+            "MEMBER",
+            assertIs<Value.Enum>(defaultFilter.fieldValues["role"]).enumValue,
+        )
+
+        val explicitFilter =
+            Value.InputObject.of(
+                type = schema.type("Filter") as Schema.InputObjectType,
+                fields = mapOf("limit" to 20, "role" to null),
+            )
+        assertEquals(
+            20,
+            assertIs<Value.Int>(explicitFilter.fieldValues["limit"]).intValue,
+        )
+        assertTrue(explicitFilter.fieldValues.containsKey("role"))
+        assertEquals(null, explicitFilter.fieldValues["role"])
+
+        val explicitNullFriendArguments =
+            Value.Arguments.of(
+                field = friendField,
+                fields = mapOf("limit" to null),
+            )
+        assertTrue(explicitNullFriendArguments.fieldValues.containsKey("limit"))
+        assertEquals(null, explicitNullFriendArguments.fieldValues["limit"])
+    }
+
+    @Test
     fun `input-like factories reject values that do not match the schema`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType

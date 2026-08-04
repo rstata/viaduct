@@ -21,6 +21,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Generated execution witnesses for exact resolver application counts and minimal construction.
+ *
+ * Keep independent trace-oracle and permutation-invariance checks in this suite.
+ */
 class ResolverWitnessTest {
     @Test
     fun `generated construction witness is exact minimal and permutation invariant`(): Unit =

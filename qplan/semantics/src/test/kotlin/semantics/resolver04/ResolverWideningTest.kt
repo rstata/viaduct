@@ -14,7 +14,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class ResolverGeneratedRegressionTest {
+/**
+ * Resumable widening after variable binding reveals demand below an already-resolved cell.
+ *
+ * Keep tests here focused on widening existing values without reapplying their producers.
+ */
+class ResolverWideningTest {
     @Test
     fun `widens a node loaded for a variable provider without reapplying it`() {
         var nodeApplications = 0

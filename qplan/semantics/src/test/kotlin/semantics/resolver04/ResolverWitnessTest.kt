@@ -42,6 +42,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Generated Resolver04 witnesses for exact applications, variable profiles, and permutation parity.
+ *
+ * Keep independent trace-oracle checks here; large-volume execution belongs in the stress suite.
+ */
 class ResolverWitnessTest {
     @Test
     fun `generated variable construction witness is exact minimal and permutation invariant`(): Unit =

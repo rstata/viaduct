@@ -1,4 +1,4 @@
-package semantics.resolver03
+package semantics.resolver04
 
 import model.Fragment
 import model.Selection
@@ -14,7 +14,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class ResolverAdversarialTest {
+/**
+ * Reduced one-off regressions that do not yet form a larger Resolver04 semantic theme.
+ *
+ * Promote related cases to a dedicated themed suite once a common contract emerges.
+ */
+class ResolverRegressionTest {
     @Test
     fun `error-valued resolver argument does not import its transitive demand`() {
         val testWorld =

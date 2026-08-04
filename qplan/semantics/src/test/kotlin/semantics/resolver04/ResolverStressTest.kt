@@ -42,6 +42,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Opt-in high-volume Resolver04 coverage for deep dependency-heavy generated worlds.
+ *
+ * Keep expensive seeded campaigns here so ordinary static and property validation stays small.
+ */
 class ResolverStressTest {
     @Test
     fun `deep dependency-heavy arbitrary worlds resolve correctly`(): Unit =

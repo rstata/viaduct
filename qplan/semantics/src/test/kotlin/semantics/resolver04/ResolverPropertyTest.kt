@@ -14,6 +14,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * Seeded variable-resolution properties spanning nested, list, abstract, and nullable bindings.
+ *
+ * Keep broad repeated variable programs here rather than reduced one-off regressions.
+ */
 class ResolverPropertyTest {
     @Test
     fun `randomized variables cover nested list abstract nullable and multiple bindings`() {

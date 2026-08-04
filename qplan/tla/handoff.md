@@ -16,7 +16,7 @@ Passing TLAPS and TLC currently establishes consistency of the chosen constructi
 
 ## Kotlin Counterexamples The TLA+ Baseline Missed
 
-Three deterministic Resolver04 counterexamples now live in [`../semantics/src/test/kotlin/semantics/resolver04/ResolverTest.kt`](../semantics/src/test/kotlin/semantics/resolver04/ResolverTest.kt) and [`../semantics/src/test/kotlin/semantics/resolver04/ResolverGeneratedRegressionTest.kt`](../semantics/src/test/kotlin/semantics/resolver04/ResolverGeneratedRegressionTest.kt). All are within current scope and currently fail with `MissingFieldException`.
+Three deterministic Resolver04 counterexamples now live in [`ResolverDemandSealingTest`](../semantics/src/test/kotlin/semantics/resolver04/ResolverDemandSealingTest.kt) and [`ResolverWideningTest`](../semantics/src/test/kotlin/semantics/resolver04/ResolverWideningTest.kt). All are within current scope and currently fail with `MissingFieldException`.
 
 1. A variable provider resolves `source { narrow }` before the defining resolver's variable-bearing demand `source { broad computed(value: $later) }` is instantiated. Resolver04 seals the shared `source` occurrence too early, so later materialization cannot read `broad`.
 2. A provider reads `source(k: 1) { narrow }`, producing `$k = 2`, while the defining resolver requires `source(k: $k) { broad }`. `matchingAmbientDemand` retargets the symbolic `broad` demand onto the distinct `source(k: 1)` occurrence, so projection asks a permitted partial output for a field it does not contain.

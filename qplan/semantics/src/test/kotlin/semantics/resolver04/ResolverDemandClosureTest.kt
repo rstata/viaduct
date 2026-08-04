@@ -1,58 +1,45 @@
-package semantics.resolver03
+package semantics.resolver04
 
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
 import model.Schema
+import model.TypeExpr
 import model.Value
+import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.arbitrary.Config
+import semantics.arbitrary.ExplicitFieldResolverWeight
+import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.ImplementationArgumentDefaultWeight
+import semantics.arbitrary.ObjectFieldCount
+import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverVariableWeight
+import semantics.arbitrary.ResolverVariablesEnabled
+import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
+import semantics.correctresolution.conformsToFragment
+import semantics.correctresolution.conformsToResolvers
+import semantics.correctresolution.conformsToTypename
+import semantics.correctresolution.conformsToVariables
 import semantics.correctresolution.correctResolution
+import semantics.correctresolution.isClosedUnderResolverDemand
+import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class ResolverTest {
-    @Test
-    fun `arbitrary valid worlds resolve correctly`(): Unit =
-        runBlocking {
-            var activatedImplementationDefaultCases = 0
-            val counts =
-                TestCaseCount(
-                    schemas = 20,
-                    registriesPerSchema = 3,
-                    queriesPerSchema = 5,
-                )
-            val config =
-                Config.default +
-                    (ImplementationArgumentDefaultWeight to 1.0) +
-                    (ResolverFragmentsEnabled to true)
-
-            checkResolverTestCases(counts, config) { testWorld, testCase ->
-                if (testCase.query.features.hasAbstractImplementationDefaultSelection) {
-                    activatedImplementationDefaultCases += 1
-                }
-                val result = generatedResolution(testWorld, testCase.query.source)
-                val permuted =
-                    generatedResolution(
-                        testWorld,
-                        testCase.query.permutationEquivalentSource,
-                )
-                assertEquals(result, permuted)
-            }
-            assertTrue(
-                activatedImplementationDefaultCases > 0,
-                "Resolver03 property activated no abstract implementation defaults",
-            )
-        }
-
+/**
+ * Resolver03-parity examples for ordinary exact and recursively nested demand closure.
+ *
+ * Keep baseline construction behavior shared by Resolver03 and Resolver04 in this suite.
+ */
+class ResolverDemandClosureTest {
     @Test
     fun `resolves typename as the concrete object type`() {
         val world = TestWorld.fromSDL(FLAT_SCHEMA_SDL).assumptions
@@ -372,23 +359,6 @@ class ResolverTest {
     context(world: model.Assumptions)
     private fun parsedFragment(source: String) =
         world.fragmentFrom(source).let { it to it.subselections }
-
-    private fun generatedResolution(
-        testWorld: TestWorld,
-        querySource: String,
-    ): EngineResult.Object {
-        val world = testWorld.assumptions
-        val fragment = world.fragmentFrom(querySource)
-        val selections = fragment.subselections
-        val result =
-            context(world) {
-                world.objectOf("Query").resolve(selections)
-            }
-        return context(world) {
-            check(result.correctResolution(fragment))
-            result
-        }
-    }
 
     private companion object {
         val FLAT_SCHEMA_SDL =

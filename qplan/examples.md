@@ -2,7 +2,7 @@
 
 These examples describe three distinct jobs performed by the resolution algorithms. Demand closure determines everything needed to construct resolver inputs. Output projection determines everything a producer must retain in its output so that client demand and downstream resolver inputs can be satisfied. Widening handles demand that becomes concrete only after an execution variable is bound.
 
-An `objectFragment` is the resolver's declared input requirement at its containing object. An `extendedFragment` is the same requirement closed transitively under the requirements of every resolver occurrence reachable through it, with occurrence paths and concrete-type guards preserved.
+An `objectFragment` is the resolver's declared input requirement at its containing object. A `predecessorDemand` is the same requirement closed transitively under the requirements of every resolver occurrence reachable through it, with occurrence paths and concrete-type guards preserved.
 
 ## Demand Closure
 
@@ -46,7 +46,7 @@ The direct input requirement of `User.greeting` is not enough by itself. Its `ob
 Registry assembly computes these closures in dependency-first order. Because `firstName` is passive, the closure for `displayName` is just its direct fragment:
 
 ```graphql
-# User.displayName.extendedFragment
+# User.displayName.predecessorDemand
 fragment on User {
   firstName
 }
@@ -55,14 +55,14 @@ fragment on User {
 The direct fragment for `greeting` contains the resolver occurrence `displayName`. Registry assembly roots `displayName`'s already-computed closure at that occurrence, giving:
 
 ```graphql
-# User.greeting.extendedFragment
+# User.greeting.predecessorDemand
 fragment on User {
   displayName
   firstName
 }
 ```
 
-The extension is transitive. If `displayName` had depended on another resolver, that resolver's requirements would already be present inside `displayName.extendedFragment` and would therefore also become part of `greeting.extendedFragment`.
+The closure is transitive. If `displayName` had depended on another resolver, that resolver's requirements would already be present inside `displayName.predecessorDemand` and would therefore also become part of `greeting.predecessorDemand`.
 
 When resolution reaches the concrete `User` object, the initial local demand is:
 
@@ -72,7 +72,7 @@ fragment on User {
 }
 ```
 
-Activating the exact `greeting` resolver occurrence adds its exact extended fragment. The complete local demand becomes:
+Activating the exact `greeting` resolver occurrence adds its exact predecessor demand. The complete local demand becomes:
 
 ```graphql
 fragment on User {
@@ -90,7 +90,7 @@ firstName -> displayName -> greeting
 
 It first reads the passive `firstName` supplied by `Query.user`. It then materializes `{ firstName: "Ada" }` as the input to `displayName`, whose resolver yields `"Ada"`. Finally it materializes `{ displayName: "Ada" }` as the input to `greeting`, whose resolver yields `"Hello, Ada"`.
 
-This combines what might otherwise look like two closure mechanisms. Registry assembly computes each resolver's reusable, guarded transitive closure. At a concrete OER occurrence, the resolution algorithm selects the extended fragments of the exact resolver occurrences activated there and combines them with the local demand. No runtime fixed-point search is needed because each selected extended fragment is already transitively closed.
+This combines what might otherwise look like two closure mechanisms. Registry assembly computes each resolver's reusable, guarded transitive closure. At a concrete OER occurrence, the resolution algorithm selects the predecessor demands of the exact resolver occurrences activated there and combines them with the local demand. No runtime fixed-point search is needed because each selected predecessor demand is already transitively closed.
 
 One question remains: `firstName` originated in the raw output of `Query.user`, but the client asked only for `greeting`. The next section explains why `firstName` survives projection of `Query.user`'s output.
 
@@ -98,10 +98,10 @@ One question remains: `firstName` originated in the raw output of `Query.user`, 
 
 For a producer `P`:
 
-- `P.extendedFragment` closes `P.objectFragment`, so it constructs `P`'s input, including the requirements of each **predecessor** resolver needed to provide that input.
-- Output projection instead needs the `extendedFragment` of each demanded **successor** resolver `S` inside `P`'s output.
+- `P.predecessorDemand` closes `P.objectFragment`, so it constructs `P`'s input, including the requirements of each **predecessor** resolver needed to provide that input.
+- Output projection instead needs the `predecessorDemand` of each demanded **successor** resolver `S` inside `P`'s output.
 
-`withExtendedResolverDemand()` computes this output-projection demand. It collects the extended fragments of a producer's demanded successor resolver occurrences and roots them in the producer's output demand, making those successors' prerequisites visible to the producer before its output is projected.
+`successorDemand()` computes this output-projection demand. It collects the predecessor demands of a producer's demanded successor resolver occurrences and roots them in the producer's output demand, making those successors' prerequisites visible to the producer before its output is projected.
 
 Extend the running schema with:
 
@@ -137,7 +137,7 @@ query {
 The initial call to `Value.Object.resolve` operates on the concrete `Query` OER. Its local demand contains the exact key `Query.project`; `User.greeting` is nested output demand, not a key on that current OER. Closing the input demand for `Query.project` adds nothing:
 
 ```text
-Query.project.extendedFragment = {}
+Query.project.predecessorDemand = {}
 ```
 
 The descendant `User` OER does not exist until `Query.project` yields its result. Before resolution can enter that `User` and close its local demand, the `Query.project` result must be projected.
@@ -162,10 +162,10 @@ Project {
 
 Only after this projection does resolution enter the returned `User` OER. Its local input closure correctly discovers that `greeting` requires `displayName` and transitively requires `firstName`, but the producer projection has already discarded `firstName`.
 
-`withExtendedResolverDemand()` prevents that loss. It walks through the passive `owner` selection, finds the demanded `User.greeting` successor occurrence, and roots `greeting.extendedFragment` at that occurrence's containing `User`. From the Demand Closure section:
+`successorDemand()` prevents that loss. It walks through the passive `owner` selection, finds the demanded `User.greeting` successor occurrence, and roots `greeting.predecessorDemand` at that occurrence's containing `User`. From the Demand Closure section:
 
 ```graphql
-# User.greeting.extendedFragment
+# User.greeting.predecessorDemand
 fragment on User {
   displayName
   firstName
@@ -194,11 +194,11 @@ Project {
 }
 ```
 
-When resolution subsequently enters that `User`, local input closure can construct `displayName` and then `greeting`. The two closures act at different times and in different directions: `Query.project.extendedFragment` constructs the producer's input from predecessors on the current `Query` OER, while `withExtendedResolverDemand()` preserves data needed by successors on descendant OERs inside the producer's output.
+When resolution subsequently enters that `User`, local input closure can construct `displayName` and then `greeting`. The two closures act at different times and in different directions: `Query.project.predecessorDemand` constructs the producer's input from predecessors on the current `Query` OER, while `successorDemand()` preserves data needed by successors on descendant OERs inside the producer's output.
 
 More generally, a resolver must supply the demanded portion of its output selection set. Some fields within that output are boundaries owned by successor resolvers. The producer does not supply the successor field itself, but it must supply any passive values in its own output that those successor resolvers will require as input. Client selections alone do not necessarily name those prerequisites.
 
-`withExtendedResolverDemand()` recursively walks the requested output and adds every encountered successor resolver occurrence's exact `extendedFragment` at its containing-object path. `snipToDemand` then clips the resulting demand at behavioral boundaries, retaining only the demanded passive portion owned by the producer.
+`successorDemand()` recursively walks the requested output and adds every encountered successor resolver occurrence's exact `predecessorDemand` at its containing-object path. `snipToDemand` then clips the resulting demand at behavioral boundaries, retaining only the demanded passive portion owned by the producer.
 
 In a production implementation, the resulting selection forest describes what the selective resolver must generate. The model represents selective resolution as a selection-independent function followed by `snipToDemand`, so the same forest instead describes what must survive projection of the raw resolver output. These are two interpretations of the same requirement: the producer's output must contain everything expected from its output selection set.
 
@@ -206,7 +206,7 @@ The operation can be described as lifting because requirements originating at su
 
 ```text
 successor resolver occurrence
-    -> successor extendedFragment
+    -> successor predecessor demand
     -> root at the successor's containing-object path
     -> producer output demand
     -> producer-owned passive projection
@@ -259,9 +259,9 @@ query {
 }
 ```
 
-The abstract `summary` selection can activate either `User.summary`, whose extended fragment requires `firstName`, or `Organization.summary`, whose extended fragment requires `legalName`. Although the `user` argument makes `Query.subject(user:)` deterministic, the demand collector treats the resolver function as opaque and learns the concrete `Subject` type only from its result.
+The abstract `summary` selection can activate either `User.summary`, whose predecessor demand requires `firstName`, or `Organization.summary`, whose predecessor demand requires `legalName`. Although the `user` argument makes `Query.subject(user:)` deterministic, the demand collector treats the resolver function as opaque and learns the concrete `Subject` type only from its result.
 
-`withExtendedResolverDemand()` therefore lifts both possible successor requirements while preserving the condition under which each applies:
+`successorDemand()` therefore lifts both possible successor requirements while preserving the condition under which each applies:
 
 ```graphql
 # Output demand supplied to Query.subject(user: true) after extension
@@ -350,7 +350,7 @@ fragment on Object1 {
 }
 ```
 
-Registry-computed extended fragments make both structural paths visible before resolution starts, but they cannot turn `field2(arg: $value)` into an exact OER key before `$value` has a value.
+Registry-computed predecessor demands make both structural paths visible before resolution starts, but they cannot turn `field2(arg: $value)` into an exact OER key before `$value` has a value.
 
 To evaluate the provider, resolution first constructs the argumentless `child` cell and resolves `field2(arg: "literal")` in that returned `Object2`. It can then materialize the input to `common`; `common` yields `"bound"`, which is stored as the `$value` binding on the containing `Object1` OER.
 

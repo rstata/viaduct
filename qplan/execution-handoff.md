@@ -157,7 +157,7 @@ Parallelism also clarifies why write-once cells matter. Concurrent workers may r
 
 Resolver05 should reuse rather than replace:
 
-- Resolver03's guarded transitive demand extension.
+- Resolver03's guarded predecessor closure and successor-demand lifting.
 - Resolver04's variable ownership, provider evaluation, substitution, and conservative symbolic-demand coverage.
 - `materialize` as the definition of a resolver's input.
 - `snipToDemand` as selective projection to complete supplied demand.

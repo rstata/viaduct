@@ -186,7 +186,7 @@ class GeneratorTest {
                 checkedSkippedResolvers += 1
                 assertEquals(
                     resolver.objectFragment.subselections.size,
-                    resolver.extendedFragment.subselections.size,
+                    resolver.predecessorDemand.subselections.size,
                     "An error-bearing resolver occurrence imported transitive requirements",
                 )
             }

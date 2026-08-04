@@ -3,11 +3,11 @@ package semantics.resolver04
 import model.Assumptions
 import model.EngineResult
 import model.Fragment
-import model.Selection
 import model.SelectionForest
 import model.Value
 import model.registry.Resolver
 import model.registry.availableDemand
+import model.registry.successorDemand
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.correctresolution.concreteObjectKey
@@ -53,7 +53,7 @@ internal fun Value.Object.resolve(
                     null
                 } else {
                     val resolver = world.executorRegistry.resolver(key.field)
-                    resolver.extendedFragment(key.arguments)
+                    resolver.predecessorDemand(key.arguments)
                 }
             }
     val symbolicInputDemand =
@@ -77,7 +77,7 @@ internal fun Value.Object.resolve(
             resolved = resolved,
             envelope =
                 envelope +
-                    applicableSelections.withExtendedResolverDemand() +
+                    applicableSelections.successorDemand() +
                     symbolicInputDemand,
         )
     // Identity bindings retain descendant variables while current-occurrence variables are replaced.
@@ -252,12 +252,12 @@ private fun Value.Object.resolveKey(
                             resolver
                                 .objectFragment(key.arguments)
                                 .instantiateVariables(resolved.variableValues)
-                        // The extended fragment and dependency order put the complete input here.
+                        // The predecessor demand and dependency order put the complete input here.
                         val input = resolved.materialize(objectFragment)
                         resolver.resolveWithSource(
                             input = input,
                             arguments = key.arguments,
-                            transitiveDemand = subselections.withExtendedResolverDemand(),
+                            transitiveDemand = subselections.successorDemand(),
                             speculativeDemand = availableCoverage,
                         )
                     }
@@ -328,38 +328,4 @@ private fun Value.Output?.resolveValue(
                     },
             )
         }
-    }
-
-/**
- * Extends output demand with every encountered resolver occurrence's prerequisites.
- *
- * Each resolver's extended fragment is rooted at its occurrence's containing object. Recursing
- * through subselections retains the path and type guards that locate successor occurrences.
- */
-context(world: Assumptions)
-private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
-    flatMap { selection ->
-        val nestedDemand = selection.subselections.withExtendedResolverDemand()
-        val rootedSelection =
-            Selection.of(
-                key = selection.key,
-                nominalType = selection.nominalType,
-                possibleTypes = selection.possibleTypes,
-                subselections = nestedDemand,
-            )
-        val resolverDemand =
-            selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-                val key = selection.concreteObjectKey(possibleType)
-                if (
-                    key.arguments.argumentsContainErrorValue() ||
-                    key.field !in world.executorRegistry
-                ) {
-                    demand
-                } else {
-                    val resolver = world.executorRegistry.resolver(key.field)
-                    val fragment = resolver.extendedFragment(key.arguments)
-                    demand + fragment.subselections
-                }
-            }
-        selectionForestOf(rootedSelection) + resolverDemand
     }

@@ -22,6 +22,11 @@ import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
+/**
+ * Mutation sensitivity of generated Resolver03 properties.
+ *
+ * Keep tests here focused on proving that independent resolver-program faults are detected.
+ */
 class ResolverMutationTest {
     @Test
     fun `generated properties reject independent resolver program mutations`() {

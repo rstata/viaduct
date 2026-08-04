@@ -77,7 +77,7 @@ The revised implementation makes that distinction explicit. Registry-computed ex
 
 ## Provider Containment Does Not Restore Depth-First Execution
 
-The regression in `semantics/resolver04/ResolverGeneratedRegressionTest.kt` remains valid even when provider containment holds. Its defining resolver requires:
+The regression in `semantics/resolver04/ResolverWideningTest.kt` remains valid even when provider containment holds. Its defining resolver requires:
 
 ```graphql
 child {

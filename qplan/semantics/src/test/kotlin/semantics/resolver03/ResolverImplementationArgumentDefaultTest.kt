@@ -12,7 +12,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class ResolverCounterexampleTest {
+/**
+ * Concrete implementation argument-default behavior after abstract-field dispatch.
+ *
+ * Keep tests here focused on specialization and transitive demand for implementation defaults.
+ */
+class ResolverImplementationArgumentDefaultTest {
     @Test
     fun `applies a concrete implementation argument default after interface dispatch`() {
         val testWorld =

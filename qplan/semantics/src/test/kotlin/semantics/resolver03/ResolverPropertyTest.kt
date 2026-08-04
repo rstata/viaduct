@@ -15,6 +15,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
+/**
+ * Seeded program-level properties over exact occurrences, arguments, and application counts.
+ *
+ * Keep broad repeated constructions here; deterministic value-shape cases have their own suite.
+ */
 class ResolverPropertyTest {
     @Test
     fun `randomized programs preserve exact occurrences demand and application count`() {
@@ -271,94 +276,6 @@ class ResolverPropertyTest {
         }
         assertTrue(sawEvenMetric)
         assertTrue(sawOddMetric)
-    }
-
-    @Test
-    fun `list null and error elements preserve position and skip descendant resolvers`() {
-        var itemsApplications = 0
-        var computedApplications = 0
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Item {
-                      seed: Int!
-                      computed: Int!
-                    }
-
-                    type Query {
-                      items: [Item]
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val items = schema.field("Query", "items")
-                    val elementType =
-                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    mapOf(
-                        items to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                itemsApplications += 1
-                                Value.OutputList.of(
-                                    elementType,
-                                    listOf(
-                                        null,
-                                        Value.Error,
-                                        schema.objectOf("Item") {
-                                            "seed" setTo 3
-                                        },
-                                    ),
-                                )
-                            },
-                        schema.field("Item", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Item { seed }",
-                                ),
-                            ) { input, _ ->
-                                computedApplications += 1
-                                val seed =
-                                    input.fieldValues.getValue(
-                                        Value.Key.of(
-                                            schema.field("Item", "seed"),
-                                            emptyMap(),
-                                        ),
-                                    ) as Value.Int
-                                Value.Int.of(seed.intValue * 2)
-                            },
-                    )
-                },
-            )
-        val world = testWorld.assumptions
-        val fragment =
-            world.fragmentFrom(
-                "fragment ignored on Query { items { computed } }",
-            )
-        val result =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
-            }
-        val items =
-            assertIs<EngineResult.List>(
-                result.fetch(
-                    Value.Key.of(world.schema.field("Query", "items"), emptyMap()),
-                ).value,
-            )
-
-        assertEquals(3, items.size)
-        assertEquals(null, items[0].value)
-        assertEquals(Value.Error, items[1].value)
-        val item = assertIs<EngineResult.Object>(items[2].value)
-        assertEquals(
-            Value.Int.of(6),
-            item.fetch(
-                Value.Key.of(world.schema.field("Item", "computed"), emptyMap()),
-            ).value,
-        )
-        assertEquals(1, itemsApplications)
-        assertEquals(1, computedApplications)
-        assertTrue(context(world) { result.correctResolution(fragment) })
     }
 
     private fun query(

@@ -77,7 +77,6 @@ class ArbitraryRegistry internal constructor(
 
     fun world(
         schema: ArbitrarySchema,
-        noTransitiveDemand: Boolean = false,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
     ): TestWorld {
         val firstInputs = mutableMapOf<FieldCoordinate, Value.Object>()
@@ -203,7 +202,6 @@ class ArbitraryRegistry internal constructor(
                     ) to provider.selection.materialize(canonicalSchema, field.containingType)
                 }
             },
-            noTransitiveDemand = noTransitiveDemand,
         )
         objectFragmentSources.values
             .filter(String::isNotEmpty)

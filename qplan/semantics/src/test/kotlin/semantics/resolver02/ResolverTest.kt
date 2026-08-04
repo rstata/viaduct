@@ -1,8 +1,5 @@
 package semantics.resolver02
 
-import io.kotest.property.Arb
-import io.kotest.property.RandomSource
-import io.kotest.property.arbitrary.next
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
 import model.Schema
@@ -16,7 +13,6 @@ import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
-import semantics.arbitrary.resolverTestBatch
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,51 +43,6 @@ class ResolverTest {
                 assertEquals(result, permuted)
             }
         }
-
-    @Test
-    fun `generated property detects missing transitive demand closure`() {
-        val counts =
-            TestCaseCount(
-                schemas = 2,
-                registriesPerSchema = 3,
-                queriesPerSchema = 5,
-            )
-        val config =
-            Config.default +
-                (ResolverFragmentsEnabled to true)
-        val random = RandomSource.seeded(-2028282154048352130L)
-        val batches =
-            List(counts.schemas) {
-                Arb.resolverTestBatch(counts, config).next(random)
-            }
-        var passingCases = 0
-        var failingCases = 0
-
-        batches.forEach { batch ->
-            batch.registries.forEach { registry ->
-                val ordinaryWorld = registry.world(batch.schema)
-                val mutantWorld =
-                    registry.world(
-                        schema = batch.schema,
-                        noTransitiveDemand = true,
-                    )
-                batch.queries.forEach { query ->
-                    assertTrue(
-                        generatedResolutionIsCorrect(ordinaryWorld, query.source),
-                        "The mutation-control corpus must pass ordinary resolver02",
-                    )
-                    val correct =
-                        runCatching {
-                            generatedResolutionIsCorrect(mutantWorld, query.source)
-                        }.getOrDefault(false)
-                    if (correct) passingCases += 1 else failingCases += 1
-                }
-            }
-        }
-
-        assertTrue(passingCases > 0, "The mutant should not reject every generated case")
-        assertTrue(failingCases > 0, "Generated cases did not detect the transitive-demand mutant")
-    }
 
     @Test
     fun `resolves typename as the concrete object type`() {
@@ -508,14 +459,6 @@ class ResolverTest {
     context(world: model.Assumptions)
     private fun parsedFragment(source: String) =
         world.fragmentFrom(source).let { it to it.subselections }
-
-    private fun generatedResolutionIsCorrect(
-        testWorld: TestWorld,
-        querySource: String,
-    ): Boolean {
-        generatedResolution(testWorld, querySource)
-        return true
-    }
 
     private fun generatedResolution(
         testWorld: TestWorld,

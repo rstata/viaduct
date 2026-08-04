@@ -64,7 +64,6 @@ The proof fixes a finite canonical world and assumes:
 - finite object, cell, list-position, exact-demand, and resolver-observation atoms faithfully extract the corresponding structural Kotlin values and relations;
 - each modeled result observation is aligned with the exact passive observation copied by `snipToDemand` from the same raw resolver output used by the correctness judgment;
 - terminal product-fold built keys align with the exact cells present in the returned Kotlin OER;
-- `noTransitiveDemand` is false, except for intentionally weaker mutation-control models outside this proof.
 
 The modules exclude directives, `@parent`, checkers, lazy values, cyclic resolver demand, mutations and execution epochs, and cross-tree coalescing.
 

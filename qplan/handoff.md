@@ -6,6 +6,8 @@ This is the handoff for continuing work on the query-planning model. It should l
 
 Read [Query Plan Research](./evergreen.md) for the durable production evidence, vocabulary, hard cases, correctness obligations, and validation strategy. [An Idealized Viaduct Query Execution Model](./viaduct-execution.md) for a description of Viaduct's execution model.  [AGENTS.md](./AGENTS.md), [`model/AGENTS.md`](./model/AGENTS.md), and [`semantics/AGENTS.md`](./semantics/AGENTS.md) describe the current state of our modeling effort plus guidelines and procedures for updating that state; read these files before making any modifications.
 
+[Resolution Algorithms By Example](./examples.md) provides worked GraphQL schemas and execution traces for registry-computed demand closure, successor-demand lifting and type-conditioned output projection, Resolver04 widening after variable binding, and late exact-key convergence.
+
 Compiling Kotlin is the project's present mathematical modeling language, serving the same kind of specification role that TLA+ could serve rather than describing a JVM implementation. The model should also be maintained as a blueprint for a possible future translation into TLA+: its carrier sets, functions, relations, invariants, domain assumptions, and theorem statements should be explicit enough to become a formal specification with corresponding machine-checked proof obligations.
 
 A scoped TLA+ construction-calculus translation and machine-checked proof baseline now exists in [`tla`](./tla). TLAPS proves finite least demand closure, dependency-order safety and termination, one mathematical application position per exact resolver key and concrete OER occurrence, Resolver03 guarded producer completeness under the exact registry-extension assumption, and Resolver04 provider ordering and ambient-demand sealing under its explicit assumptions. It also proves a finite extensional result-tree model of every `correctResolution` conjunct, occurrence-indexed demand lifting, finite observation projection coherence, simultaneous termination and completion of every reachable occurrence fold, equality of prefix and final materialization, Resolver03 derivation of projection coverage, finite validated provider-path traversal with null/error absorption and ranked terminal-list conversion, and Resolver04 final provider-read variable conformance. The composed Resolver03 and Resolver04 theorems each terminate in a result satisfying all six modeled `correctResolution` conjuncts. [`tla/README.md`](./tla/README.md) records the remaining theorem boundary: structural extraction of Kotlin schema, selection, value, list, provider-path traces, materialization, union, and resolver-comparison operations into those finite atoms is not yet proved, so this baseline must not be quoted as a complete TLAPS proof of the Kotlin model.
@@ -108,53 +110,13 @@ Variable providers and field resolvers share one acyclic demand graph over `Sche
 
 Variables add flows of values that don't follow the tree structure.  A provider reads a value from one path in the OER tree, while uses of that variable insert the value into resolver arguments at other positions in the tree.  Provider and use positions need not have an ancestor-descendant relationship, and in particular resolving the provider may itself require resolving one field of an arbitrarily-deep OER where another field of that same OER contains a use of that variable.
 
-[`ResolverGeneratedRegressionTest`](./semantics/src/test/kotlin/semantics/resolver04/ResolverGeneratedRegressionTest.kt) contains a concrete example.
-
-```graphql
-type Query {
-  source: Object1! # has resolver with no object fragment
-}
-
-type Object2 {
-  field2(arg: String): Int! # has resolver no object fragment
-}
-
-type Object1 {
-  variableConsumer: Int!
-      # has resolver with objectFragment-selections of "{ child { field2(arg: $value) } common }"
-      # also, has a variables provider that binds `value` to the path `common`
-
-  common: String!
-      # has resolver with objectFragment-selections of "{ child { field2(arg: "literal") } }"
-
-  child: Object2! # no object fragment
-}
-```
-
-The `variableConsumer` resolver requires:
-
-```graphql
-child {
-  field2(arg: $value)
-}
-common
-```
-
-The provider defines `$value` as the value of `common`, so `common` is part of the defining resolver's object fragment. But `common` is itself a resolver whose object fragment requires:
-
-```graphql
-child {
-  field2(arg: "literal")
-}
-```
-
-To bind `$value`, resolution must therefore produce the exact `Object1.child` cell and resolve `field2(arg: "literal")` inside its returned `Object2`. `common` then returns a value for `$value` -- let's say it's `"bound"` -- which instantiates the original symbolic selection as `field2(arg: "bound")`. Both demands pass through the same argumentless `Object1.child` cell. A naive post-order traversal has already returned from that `child` subtree before the second exact `field2` key becomes known. Reapplying the `child` resolver would complete the traversal but violate the one-shot requirement.
+[Widening for Variables](./examples.md#widening-for-variables) gives the complete commented schema and execution trace for a provider whose binding makes new exact demand appear inside an already-visited child OER. Its [Why One Shot Is Impossible](./examples.md#why-one-shot-is-impossible) appendix distinguishes harmless scalar-key convergence from late-equal occurrences that contribute additional output demand. [`ResolverGeneratedRegressionTest`](./semantics/src/test/kotlin/semantics/resolver04/ResolverGeneratedRegressionTest.kt) contains the corresponding modeled regression.
 
 [`resolver04`](./semantics/src/main/kotlin/semantics/resolver04/Resolver.kt) makes resolution resumable. It obtains input closure from the activated resolvers' exact extended fragments, identifies variables whose defining fields belong to the current concrete object type, and resolves their registered provider paths against that OER while recursively resolving provider variables and field demand first. The partial result used to read providers becomes `resolvedVariables`; after bindings are stored and substituted throughout the applicable selections and extended fragments, Resolver04 computes the now-concrete selection keys.
 
 Resolver04 separates concrete work from symbolic coverage. Registry-computed extended fragments supply input closure; current-occurrence bindings make the applicable demand concrete for exact-key grouping. One symbolic `envelope` supplies optional coverage for a key before variable values are known. The `widened` pass intersects concrete demanded keys with keys already present after provider resolution; for each intersection, `resolveExistingKey` re-enters the existing cell and resolves newly demanded descendants without applying its producer again. `ResolutionSources` retains the producer's selection-independent output so those descendants can be projected from the original source. `sources.union` merges the enlarged cell back into the result and preserves that source association. The subsequent dependency-ordered fold excludes keys already present in `widened`, preventing a second producer application.
 
-In the example, the existing `child` result grows from containing only `field2(arg: "literal")` to containing both that key and `field2(arg: "bound")`; the `child` resolver is still applied exactly once. Resolver04 therefore does not restore a pure depth-first ordering. It augments the selection tree with variable data-flow dependencies and permits a previously visited subtree to resume after a binding makes new exact demand available.
+Resolver04 therefore does not restore a pure depth-first ordering. It augments the selection tree with variable data-flow dependencies and permits a previously visited subtree to resume after a binding makes new exact demand available, without applying the producer of an already-present cell again.
 
 ### Correctness Theorems
 

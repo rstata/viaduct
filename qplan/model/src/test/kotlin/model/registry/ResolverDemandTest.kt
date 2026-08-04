@@ -8,6 +8,7 @@ import model.Value
 import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -579,6 +580,58 @@ class ResolverDemandTest {
                                           }
                                         }
                                         """.trimIndent(),
+                                    ),
+                                ),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(exception.message!!.contains("demand cycle"))
+    }
+
+    @Test
+    fun `conservatively rejects coordinate cycles broken by error arguments`() {
+        val exception =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          first(arg: Int!): Int!
+                          second(arg: Int!): Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val parsedSecond =
+                            schema
+                                .fragmentFrom(
+                                    "fragment ignored on Query { second(arg: 1) }",
+                                ).subselections
+                                .single()
+                        val errorSecond =
+                            Selection.of(
+                                key =
+                                    Value.Key.of(
+                                        parsedSecond.key.field,
+                                        mapOf("arg" to Value.Error),
+                                    ),
+                                nominalType = parsedSecond.nominalType,
+                                possibleTypes = parsedSecond.possibleTypes,
+                                subselections = parsedSecond.subselections,
+                            )
+                        mapOf(
+                            schema.field("Query", "first") to
+                                resolver(
+                                    Fragment.of(
+                                        schema.query,
+                                        selectionForestOf(errorSecond),
+                                    ),
+                                ),
+                            schema.field("Query", "second") to
+                                resolver(
+                                    schema.fragmentFrom(
+                                        "fragment ignored on Query { first(arg: 1) }",
                                     ),
                                 ),
                         )

@@ -134,7 +134,7 @@ For a registered field `f`, `registry.mayDemandFrom(f)` contains the registered 
 
 Registry assembly uses the acyclic relation to process dependencies before their consumers. For each resolver, it computes representative and exact predecessor demand by walking the object fragment's selection occurrences, tracking the root-to-current object path, and adding every encountered resolver's already-computed predecessor demand rooted through that path. Provider paths need no separate root insertion because they are already occurrences in the defining fragment; variables remain graph sites so their values are ordered before exact argument keys are formed. Polymorphic outputs are traversed once per possible concrete object so their local guards and concrete resolver coordinates remain distinct.
 
-The intended demand interpretation starts with the registered fields directly implicated by an external selection forest and takes the least superset closed under `mayDemandFrom`. The relation is a conservative possibility relation because the selections that induce an edge retain type conditions that may not apply to the runtime concrete object.
+The intended demand interpretation starts with the registered fields directly implicated by an external selection forest and takes the least superset closed under `mayDemandFrom`. The relation is intentionally a conservative coordinate-level possibility relation derived from representative fragment shapes rather than an exact-occurrence graph. It retains edges whose type conditions may not apply to the runtime concrete object and edges whose exact occurrence may contain `Value.Error` arguments and therefore never apply its resolver; this conservatism is necessary because argument-dependent exact fragments may replace representative argument values while preserving shape.
 
 This is a resolver-demand graph, not a graph of every invocation input, value provenance fact, or scheduling prerequisite. Fixture lowering makes node loading explicit as an edge from generated `foo` to registered bridge producer `foo$id` when that bridge has its own resolver. A passive bridge remains an exact object-fragment requirement without becoming a registry vertex.
 
@@ -150,7 +150,7 @@ The current `correctResolution` judgment requires its supplied operation fragmen
 
 Every argument-bearing output field is currently assumed to have an explicit field resolver. Production namespace exceptions are outside the model.
 
-The registry currently rejects resolver-demand cycles. `evergreen.md` records legal production RSS cycles as an eventual hard case, so cycle rejection is a present scope constraint rather than a general claim about Viaduct.
+The registry currently rejects every cycle in the conservative coordinate-level resolver-demand graph. This intentionally includes false-positive cycles whose exact active occurrences would be acyclic, such as a syntactic cycle broken by an error-valued resolver argument. `evergreen.md` records legal production RSS cycles as an eventual hard case, so conservative cycle rejection is a present scope constraint rather than a general claim about Viaduct.
 
 Every non-`__typename`, non-synthetic field on `Query` has an explicit canonical field resolver. Canonical field resolvers are registered only at concrete object-field coordinates. Fixture inputs may provide raw node resolvers only for object types that nominally implement the canonical `Node` interface, and lowering rejects mixed node-resolved and inline possible-type sets.
 

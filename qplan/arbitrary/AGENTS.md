@@ -14,7 +14,7 @@ Source field-resolver sites are chosen before output selection sets and values a
 
 Generated non-`Node` interfaces and unions contain only non-`Node` objects. This keeps their possible-type sets disjoint from fixture-lowered node outputs because the current lowering rejects abstract outputs that mix node-resolved and inline objects.
 
-Generated object fragments are acyclic by construction and are still checked by the ordinary registry assembly invariant. Queries and registries are generated independently from their common schema.
+Generated object fragments are acyclic by construction and are still checked by the ordinary registry assembly invariant. Every generated variable provider path is inserted into its defining resolver's object fragment before the variable use is emitted. Queries and registries are generated independently from their common schema.
 
 ## Validation
 

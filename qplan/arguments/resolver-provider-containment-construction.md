@@ -1,0 +1,7 @@
+# Argument for [resolver-provider-containment-construction]
+
+This claim concerns the compiling Kotlin construction boundary, not the TLA+ refinement boundary. `Resolver.Field.ofArgumentRetargeting` recursively rebuilds one representative object-fragment template while changing only each existing key's arguments. Nominal type, field-coordinate occurrences, guards, nesting, and multiplicity are therefore preserved by construction. Fixture-generated node loaders use a real bridge-shaped representative with error-valued argument placeholders, so their exact fragments only retarget values inside that shape.
+
+`TestExecutorRegistry` requires each provider path to match an occurrence path in its defining resolver's representative fragment with exact keys and compatible guards, and installs the same validation on exact fragment access. Registry extension consequently traverses one defining envelope and no longer computes or roots a separate `extendedVariables` fragment. The arbitrary generator explicitly inserts every chosen provider path into that envelope before emitting its variable use.
+
+Focused tests reject absent, wrongly rooted, guard-incompatible, argument-distinct, and exact-retargeted provider paths. Structurally variable fragments are not expressible through the retargeting constructor. Resolver04's deterministic, arbitrary, witness, mutation-control, and generated widening tests are finite consistency evidence.

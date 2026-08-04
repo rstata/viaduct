@@ -45,9 +45,9 @@ The proposed rule is:
 
 This rule is paired with a second registry invariant:
 
-> Every argument-dependent object-fragment function has one fixed selection shape for all argument tuples.
+> Every argument-dependent object fragment is produced by retargeting one fixed selection shape.
 
-After argument values are erased or replaced with placeholders, every `objectFragment(arguments)` must have the same nominal type, field-coordinate occurrences, type guards, nesting, and occurrence multiplicity as the representative `objectFragment`. The function may substitute or forward values into argument positions already present in that shape. It may not add, remove, reorder semantically distinct occurrences, change type conditions, or choose different field paths based on runtime argument values.
+The compiling Kotlin model now enforces this restriction by construction. `Resolver.Field.ofArgumentRetargeting` recursively preserves the representative fragment's nominal type, field-coordinate occurrences, type guards, nesting, and occurrence multiplicity. Its callback may substitute or forward values into argument positions already present in that shape, but cannot add, remove, or choose different structural occurrences.
 
 This is stronger than the existing cycle check. The cycle check rejects a variable used directly or transitively as an input to its own production. The new rule also rejects a use that is outside the production closure but lies in an OER subtree entered by that production.
 
@@ -138,7 +138,7 @@ The validation should produce a diagnostic naming the variable, its defining res
 
 ## Fixed-Shape Argument-Dependent Fragments
 
-Complete eager validation is not possible while `objectFragment(arguments)` may return an arbitrarily different structure over an unbounded argument domain. The proposed companion invariant closes that gap: the representative fragment is the structural envelope for every exact fragment, while the function is limited to substituting or forwarding argument values within that envelope.
+The representative fragment is the structural envelope for every exact fragment, while the constructor callback is limited to substituting or forwarding argument values within that envelope.
 
 Registry construction should enforce or externally establish:
 
@@ -146,7 +146,7 @@ Registry construction should enforce or externally establish:
 shape(objectFragment(arguments)) == shape(representativeObjectFragment)
 ```
 
-for every valid resolver argument tuple. Here `shape` preserves selection coordinates, guards, and tree structure while abstracting argument values. Because an arbitrary Kotlin function cannot be exhaustively inspected, the canonical registry API should eventually represent this operation as a fixed fragment template plus an explicit argument-substitution map, or otherwise stipulate the equality as an external world invariant at construction. Resolver05 must not discover a different fragment shape after execution begins.
+for every valid resolver argument tuple. Here `shape` preserves selection coordinates, guards, and tree structure while abstracting argument values. The canonical registry API now represents this operation as a fixed fragment template plus per-key argument retargeting, so Resolver05 cannot discover a different fragment shape after execution begins.
 
 ## Consequences
 
@@ -156,7 +156,7 @@ If adopted, this restriction would:
 - Restore a depth-first order between each provider branch and every branch using its value.
 - Remove the need to conservatively apply symbolic use demand to a concrete cell encountered during production of that same variable.
 - Make the representative object fragment a complete static structural envelope for every argument tuple.
-- Simplify both Resolver04's ambient/speculative reasoning and Resolver05's obligation-merging rules.
+- Simplify Resolver04 to one symbolic envelope and Resolver05's obligation-merging rules.
 - Reject the current `common` and `child.field2($value)` regression as outside the supported variable domain.
 
 It would not eliminate all variable scheduling. Providers may depend acyclically on other variables, and uses still cannot become exact obligations until their bindings exist. It would make those dependencies order disjoint branches rather than reopen or converge with the provider's production subtree.
@@ -170,7 +170,7 @@ The separate investigation should:
 1. Confirm the intended production semantics of field-relative variable providers and whether provider/use overlap is legal.
 2. Inventory current Resolver04 tests and generated worlds rejected by the proposed prefix rule.
 3. Build minimal examples for direct exact-key convergence, shared passive prefixes, nested resolver prefixes, polymorphic guards, and argument tuples that are provably disjoint.
-4. Replace or constrain arbitrary argument-dependent fragment functions with a fixed fragment shape plus explicit argument substitution.
+4. Evaluate the fixed-template argument-retargeting API against production lowering needs.
 5. Prototype occurrence-path extraction in registry assembly without changing Resolver04.
 6. Compare the complexity removed from Resolver04 and Resolver05 with the valid production shapes lost.
 7. If the invariants are adopted, update [`evergreen.md`](./evergreen.md), all relevant KDoc and guidance, generators, claims, arguments, and handoff documents to describe the restricted domain consistently.

@@ -36,6 +36,8 @@ class ResolverDemandTest {
                                     """
                                     fragment ignored on Query {
                                       y(b: ${'$'}b)
+                                      z(c: ${'$'}c)
+                                      raw
                                     }
                                     """.trimIndent(),
                                 ),
@@ -76,11 +78,11 @@ class ResolverDemandTest {
         val b = registry.variableCoordinate(Value.Variable.of("b"))
         val c = registry.variableCoordinate(Value.Variable.of("c"))
 
-        assertEquals(setOf(y, b), registry.mayDemandFrom(x))
+        assertEquals(setOf(y, z, raw, b, c), registry.mayDemandFrom(x))
         assertEquals(setOf(z, c), registry.mayDemandFrom(b))
         assertEquals(setOf(raw), registry.mayDemandFrom(c))
         assertEquals(setOf(x), registry.mayBeDemandedBy(b))
-        assertEquals(setOf(b), registry.mayBeDemandedBy(c))
+        assertEquals(setOf(x, b), registry.mayBeDemandedBy(c))
     }
 
     @Test
@@ -98,9 +100,24 @@ class ResolverDemandTest {
                 TestWorld.fromSDL(
                     schemaSDL = schemaSDL,
                     fieldResolvers = { schema ->
-                        schema.query.fields.values
+                        val resolvers =
+                            schema.query.fields.values
                             .filter { it.fieldName != "__typename" }
                             .associateWith { resolver(schema.emptyFragmentOf("Query")) }
+                            .toMutableMap()
+                        resolvers[schema.field("Query", "x")] =
+                            resolver(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { y }",
+                                ),
+                            )
+                        resolvers[schema.field("Query", "y")] =
+                            resolver(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { x }",
+                                ),
+                            )
+                        resolvers
                     },
                     variableProviders = { schema ->
                         mapOf(
@@ -129,26 +146,224 @@ class ResolverDemandTest {
                 TestWorld.fromSDL(
                     schemaSDL = schemaSDL,
                     fieldResolvers = { schema ->
-                        schema.query.fields.values
+                        val resolvers =
+                            schema.query.fields.values
                             .filter { it.fieldName != "__typename" }
                             .associateWith { resolver(schema.emptyFragmentOf("Query")) }
+                            .toMutableMap()
+                        resolvers[schema.field("Query", "x")] =
+                            resolver(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      z(a: ${'$'}a, b: 0)
+                                      z(a: 0, b: ${'$'}b)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            )
+                        resolvers
                     },
                     variableProviders = { schema ->
                         val owner = schema.field("Query", "x") as Schema.ObjectField
                         mapOf(
                             VariableCoordinate.of(owner, Value.Variable.of("a")) to
                                 schema.fragmentFrom(
-                                    "fragment ignored on Query { z(b: ${'$'}b) }",
+                                    "fragment ignored on Query { z(a: 0, b: ${'$'}b) }",
                                 ).subselections.single(),
                             VariableCoordinate.of(owner, Value.Variable.of("b")) to
                                 schema.fragmentFrom(
-                                    "fragment ignored on Query { z(a: ${'$'}a) }",
+                                    "fragment ignored on Query { z(a: ${'$'}a, b: 0) }",
                                 ).subselections.single(),
                         )
                     },
                 )
             }
         assertTrue(cycle.message!!.contains("demand cycle"))
+    }
+
+    @Test
+    fun `rejects provider paths outside their defining resolver fragment`() {
+        val absent =
+            assertFailsWith<IllegalArgumentException> {
+                providerContainmentWorld(
+                    ownerFragment =
+                        """
+                        fragment ignored on Query {
+                          consume(value: ${'$'}value)
+                        }
+                        """.trimIndent(),
+                    providerFragment = "fragment ignored on Query { source(id: 1) }",
+                )
+            }
+        assertTrue(absent.message!!.contains("not contained"))
+
+        val wrongRoot =
+            assertFailsWith<IllegalArgumentException> {
+                providerContainmentWorld(
+                    ownerFragment =
+                        """
+                        fragment ignored on Query {
+                          consume(value: ${'$'}value)
+                          source(id: 1)
+                        }
+                        """.trimIndent(),
+                    providerFragment = "fragment ignored on Payload { value }",
+                )
+            }
+        assertTrue(wrongRoot.message!!.contains("not relative"))
+
+        val argumentDistinct =
+            assertFailsWith<IllegalArgumentException> {
+                providerContainmentWorld(
+                    ownerFragment =
+                        """
+                        fragment ignored on Query {
+                          consume(value: ${'$'}value)
+                          source(id: 1)
+                        }
+                        """.trimIndent(),
+                    providerFragment = "fragment ignored on Query { source(id: 2) }",
+                )
+            }
+        assertTrue(argumentDistinct.message!!.contains("not contained"))
+    }
+
+    @Test
+    fun `rejects a provider path with a guard absent from its defining fragment`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        interface Subject {
+                          value: Int!
+                        }
+
+                        type First implements Subject {
+                          value: Int!
+                        }
+
+                        type Second implements Subject {
+                          value: Int!
+                        }
+
+                        type Query {
+                          result: Int!
+                          consume(value: Int!): Int!
+                          subject: Subject!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.field("Query", "result") to
+                                resolver(
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Query {
+                                          consume(value: ${'$'}value)
+                                          subject {
+                                            ... on First {
+                                              value
+                                            }
+                                          }
+                                        }
+                                        """.trimIndent(),
+                                    ),
+                                ),
+                            schema.field("Query", "consume") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                            schema.field("Query", "subject") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val owner = schema.field("Query", "result") as Schema.ObjectField
+                        mapOf(
+                            VariableCoordinate.of(owner, Value.Variable.of("value")) to
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      subject {
+                                        ... on Second {
+                                          value
+                                        }
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ).subselections.single(),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("not contained"))
+    }
+
+    @Test
+    fun `rejects an exact fragment that retargets its contained provider path`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      result(selector: Int!): Int!
+                      consume(value: Int!): Int!
+                      source(id: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val representative =
+                        schema.fragmentFrom(
+                            """
+                            fragment ignored on Query {
+                              consume(value: ${'$'}value)
+                              source(id: 1)
+                            }
+                            """.trimIndent(),
+                        )
+                    val source = schema.field("Query", "source")
+                    mapOf(
+                        schema.field("Query", "result") to
+                            Resolver.Field.ofArgumentRetargeting(
+                                objectFragment = representative,
+                                retargetArguments = { key, _ ->
+                                    if (key.field == source) {
+                                        Value.Arguments.of(source, mapOf("id" to 2))
+                                    } else {
+                                        key.arguments
+                                    }
+                                },
+                                function = { _, _ -> Value.Int.of(1) },
+                            ),
+                        schema.field("Query", "consume") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                        schema.field("Query", "source") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                    )
+                },
+                variableProviders = { schema ->
+                    val owner = schema.field("Query", "result") as Schema.ObjectField
+                    mapOf(
+                        VariableCoordinate.of(owner, Value.Variable.of("value")) to
+                            schema.fragmentFrom(
+                                "fragment ignored on Query { source(id: 1) }",
+                            ).subselections.single(),
+                    )
+                },
+            )
+        val result = world.schema.field("Query", "result")
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                world.executorRegistry
+                    .resolver(result)
+                    .objectFragment(
+                        Value.Arguments.of(result, mapOf("selector" to 2)),
+                    )
+            }
+
+        assertTrue(failure.message!!.contains("not contained"))
     }
 
     @Test
@@ -447,6 +662,45 @@ class ResolverDemandTest {
             model.testing.fieldResolverOf(
                 objectFragment = fragment,
                 function = { _, _ -> error("Not invoked") },
+            )
+
+        fun providerContainmentWorld(
+            ownerFragment: String,
+            providerFragment: String,
+        ): TestWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Payload {
+                      value: Int!
+                    }
+
+                    type Query {
+                      result: Int!
+                      consume(value: Int!): Int!
+                      source(id: Int!): Int!
+                      payload: Payload!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "result") to
+                            resolver(schema.fragmentFrom(ownerFragment)),
+                        schema.field("Query", "consume") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                        schema.field("Query", "source") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                        schema.field("Query", "payload") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                    )
+                },
+                variableProviders = { schema ->
+                    val owner = schema.field("Query", "result") as Schema.ObjectField
+                    mapOf(
+                        VariableCoordinate.of(owner, Value.Variable.of("value")) to
+                            schema.fragmentFrom(providerFragment).subselections.single(),
+                    )
+                },
             )
 
     }

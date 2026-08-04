@@ -518,7 +518,7 @@ private class RegistryGenerator(
                 )
             fragment.copy(
                 selections =
-                    fragment.selections.replaceArgument(
+                    (fragment.selections + candidate.second).replaceArgument(
                         selectionPath = candidate.first.selectionPath,
                         argumentName = candidate.first.argument.name,
                         valuePath = candidate.first.valuePath,

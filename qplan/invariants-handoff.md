@@ -4,6 +4,10 @@
 
 This handoff records a possible simplification of the execution-variable model. Resolver04 currently supports a more general relationship between a resolver's object fragment and its variable providers than the intended Viaduct model appears to require. Before extending Resolver04 or translating more of its machinery into another execution design, we should recover the intended invariants, enforce them at registry construction, and remove every accommodation that exists only for unsupported worlds.
 
+## Outcome
+
+The compiling Kotlin model now enforces provider containment for representative and observed exact fragments, constructs every argument-dependent fragment by retargeting one fixed template, gives generated node loaders a real bridge-shaped representative, inserts generated provider paths into their defining fragments, and removes `extendedVariables` plus independent extended-provider reinjection in Resolver04. Provider sites remain in the acyclic graph for value ordering. Resolver04 now uses one symbolic envelope, concrete demand closure, raw output provenance, and widening because the contained-provider regression still requires an already-produced child OER to accept a newly concrete descendant without reapplying its producer. No TLA+ module or proof was changed.
+
 The goal is not merely to document additional preconditions. The goal is to make the smallest Resolver04 that faithfully models the intended domain.
 
 ## The Missing Provider-Containment Invariant
@@ -14,7 +18,7 @@ The most consequential missing invariant is:
 
 Suppose field resolver `f` defines `$v`, and its provider reads `source { value }` relative to `f`'s containing OER. The intended model requires `f.objectFragment` to include that provider path. The provider describes how to read one value from the resolver input; it does not introduce an independent source of demand outside the input the resolver already declared.
 
-The current executor registry does not enforce this. Instead, registry assembly treats a variable provider as a separate resolver site, computes an `extendedVariables` fragment for it, and roots that extension at the defining fragment's root whenever it encounters a use of the variable. Resolver04 consequently has to reconcile provider demand with the rest of the defining resolver's demand at runtime.
+Before this change, the executor registry did not enforce this. Registry assembly treated a variable provider as a separate resolver site, computed an `extendedVariables` fragment for it, and rooted that extension at the defining fragment's root whenever it encountered a use of the variable. Resolver04 consequently had to reconcile provider demand with the rest of the defining resolver's demand at runtime.
 
 The provider-containment rule applies to exact resolver fragments, not only the representative `Resolver.Field.objectFragment`. An argument-dependent resolver exposes `objectFragment(arguments)`, and the provider must be present whenever the corresponding exact fragment can use the variable.
 
@@ -26,9 +30,7 @@ Provider containment is paired with a fixed-shape restriction on argument-depend
 
 > Every `objectFragment(arguments)` has the same selection shape as the representative `objectFragment`.
 
-After argument values are erased, exact fragments must preserve the representative fragment's nominal type, field-coordinate occurrences, type guards, nesting, and occurrence multiplicity. Argument-dependent functions may only retarget, substitute, or forward values through argument positions already present in that fixed shape. They may not choose different fields, paths, or guards from runtime argument values.
-
-The current `Resolver.Field` API accepts an arbitrary Kotlin function and cannot establish this universal property by inspection. The canonical registry should eventually represent exact fragments as a fixed template plus explicit argument substitution, or stipulate fixed shape as an external world invariant at construction. Lazy discovery of a different fragment shape during execution is outside the intended model.
+Exact fragments preserve the representative fragment's nominal type, field-coordinate occurrences, type guards, nesting, and occurrence multiplicity. `Resolver.Field.ofArgumentRetargeting` recursively rebuilds the representative template and permits its callback to replace only the `Value.Arguments` of each existing key. Different fields, paths, guards, or occurrence counts are therefore unrepresentable through this API. Fixture-generated loaders construct their representative bridge shape explicitly and retarget only its argument values.
 
 Fixed shape makes the representative object fragment a finite structural envelope for every exact argument tuple. Registry validation can establish provider containment and transitive demand against that envelope before execution rather than trying to validate an unbounded family of unrelated fragment structures.
 
@@ -51,16 +53,11 @@ The new invariants must also become part of the repository's consistent written 
 
 ## Why This Should Simplify Registry Assembly
 
-Today `TestExecutorRegistry` constructs two kinds of extension:
-
-- `extendedResolvers`, which roots transitive field-resolver requirements at each occurrence in a resolver fragment.
-- `extendedVariables`, which separately extends provider paths and injects those extensions at the defining fragment's root when a variable use is encountered.
-
-If every provider path is already in the defining object fragment, the second source of structural demand is redundant. Ordinary traversal of the defining fragment already encounters the provider path, and ordinary resolver extension already adds the transitive object fragments of resolver fields on that path. Variables still participate in dependency ordering because their values must be bound before exact argument keys can be formed, but their providers need not be inserted as an independent demand forest.
+`TestExecutorRegistry` now constructs only `extendedResolvers`, rooting transitive field-resolver requirements at each occurrence in a resolver fragment. The former `extendedVariables` extension was redundant: ordinary traversal of the defining fragment already encounters every contained provider path and adds the transitive object fragments of resolver fields on that path. Variables still participate in dependency ordering because their values must be bound before exact argument keys can be formed, but their providers are not inserted as an independent demand forest.
 
 Fixed shape means that this traversal can be performed once over the representative structural envelope. Exact argument tuples change key values within that structure but cannot introduce new provider locations, field paths, guards, or transitive-demand sites.
 
-A first concrete simplification experiment should therefore remove the variable-rooting branch in `collectExtensions` and replace it with validation that each provider path is contained in its owner's fixed fragment shape. Tests and generators that currently rely on implicit provider insertion or argument-dependent structural changes should be updated or rejected.
+Registry construction validates that each provider path is contained in its owner's fixed fragment shape. Tests and generators that previously relied on implicit provider insertion were updated or rejected.
 
 ## Why This Should Simplify Resolver04
 
@@ -76,18 +73,7 @@ This suggests that Resolver04 should be expressible in terms of two artifacts:
 - A symbolic envelope used to preserve all structurally possible producer-owned demand before bindings are known.
 - Concrete demand obtained by substituting bindings and grouping exact `Value.Key` values.
 
-The current implementation instead threads `ambientSelections`, `includeAmbientRoots`, required and speculative forests, matching symbolic demand, variable-free filtering, raw output provenance, and recursive widening through one algorithm. Some distinction between symbolic coverage and concrete work is essential, but provider containment and fixed shape should let us replace much of the dynamic ambient-demand reconciliation with one explicit envelope.
-
-Candidate machinery to re-examine includes:
-
-- Root insertion of `extendedVariables` during registry extension.
-- `matchingAmbientDemand`.
-- `withoutVariableSubselections` and `withoutVariableKeys`.
-- `passiveDemand`.
-- The repeated threading of `ambientSelections` and `includeAmbientRoots`.
-- Whether required and speculative selections need to remain separate at every recursive level.
-
-These are candidates, not established deletions. Each currently protects a concrete counterexample, and simplification is valid only after the replacement invariants or envelope explain that counterexample.
+The revised implementation makes that distinction explicit. Concrete selections alone drive closure and work; one symbolic `envelope` supplies optional producer coverage before bindings are known. This removed `ambientSelections`, `includeAmbientRoots`, `matchingAmbientDemand`, `passiveDemand`, and the repeated required/speculative selection bookkeeping. Raw output provenance and recursive widening remain isolated in `Widening.kt`.
 
 ## Provider Containment Does Not Restore Depth-First Execution
 
@@ -116,17 +102,8 @@ This distinction is central:
 
 > Provider containment can simplify demand collection. It does not eliminate the non-tree execution dependencies introduced by variable values.
 
-## Suggested Validation Work
+## Validation Completed
 
-The next investigation should proceed in small, falsifiable steps:
-
-1. Inventory every deterministic Resolver04 fixture and generated variable plan whose provider path is absent from its defining object fragment.
-2. Add a registry-level containment check and negative tests for absent, wrongly rooted, guard-incompatible, and argument-distinct provider paths.
-3. Replace or constrain arbitrary argument-dependent fragment functions so every exact fragment has the representative fragment's fixed shape.
-4. Update the arbitrary generator so provider paths are selected from, or inserted explicitly into, the defining fragment before variable uses are emitted.
-5. Remove implicit provider-root extension and run the focused registry, Resolver04 property, and stress suites.
-6. Update `evergreen.md` and every relevant KDoc and supporting document so provider containment and fixed fragment shape are assumed consistently throughout the repository.
-7. Re-express Resolver04 around one symbolic demand envelope, deleting ambient helpers only as replacement tests remain green.
-8. Preserve the provider-containment regression above to demonstrate that simplification does not accidentally reintroduce strict depth-first execution.
+The registry has negative coverage for absent, wrongly rooted, guard-incompatible, argument-distinct, and exact-retargeted providers. The generator inserts provider paths into defining fragments, and the generated node loader uses fixed-template argument retargeting. Focused model and Resolver04 tests, the full build, and the 10,000-case stress suite exercise the resulting domain. The contained-provider widening regression remains as evidence that the simplification does not restore strict depth-first execution.
 
 The desired endpoint is a registry whose invariants make illegal variable worlds unrepresentable and a Resolver04 whose remaining complexity corresponds directly to unavoidable variable data flow.

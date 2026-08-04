@@ -191,26 +191,29 @@ private class NodeResolverLowering(
     private fun loaderResolver(field: Schema.OutputField): Resolver.Field {
         val owner = field.containingType as Schema.ObjectType
         val bridge = bridgeField(field)
-        return Resolver.Field.ofArgumentDependent(
-            objectFragment = schema.emptyFragmentOf(owner.typeName),
-            objectFragmentFunction = { arguments ->
-                Fragment.of(
-                    nominalType = owner,
-                    subselections =
-                        selectionForestOf(
-                            Selection.of(
-                                key =
-                                    Value.Key.of(
-                                        field = bridge,
-                                        arguments = arguments.retarget(bridge),
-                                    ),
-                                nominalType = owner,
-                                possibleTypes = setOf(owner),
-                                subselections = selectionForestOf(),
-                            ),
+        val representativeFragment =
+            Fragment.of(
+                nominalType = owner,
+                subselections =
+                    selectionForestOf(
+                        Selection.of(
+                            key =
+                                Value.Key.of(
+                                    field = bridge,
+                                    arguments =
+                                        bridge.arguments.fields.keys.associateWith {
+                                            Value.Error
+                                        },
+                                ),
+                            nominalType = owner,
+                            possibleTypes = setOf(owner),
+                            subselections = selectionForestOf(),
                         ),
-                )
-            },
+                    ),
+            )
+        return Resolver.Field.ofArgumentRetargeting(
+            objectFragment = representativeFragment,
+            retargetArguments = { _, arguments -> arguments.retarget(bridge) },
             function = { input, arguments ->
                 val bridgeKey = Value.Key.of(bridge, arguments.retarget(bridge))
                 loadNodes(
@@ -415,9 +418,6 @@ private class NodeResolverLowering(
         return type to Value.ID.of(encoded.substring(typeNameEnd))
     }
 
-    private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
-        Value.Arguments.of(field, fieldValues)
-
     private fun validateNodeIdField(type: Schema.ObjectType): Schema.OutputField {
         val idField =
             type.fields["id"]
@@ -514,6 +514,10 @@ private class TestExecutorRegistry(
                 "Variable ${coordinate.variable.variableName} selection does not apply to its object"
             }
             validateVariablePath(selection)
+            validateProviderContainment(
+                coordinate.field,
+                fieldResolvers.getValue(coordinate.field).objectFragment,
+            )
         }
         val coordinatesByName = variableProviders.keys.groupBy { it.variable.variableName }
         require(coordinatesByName.values.all { it.size == 1 }) {
@@ -548,9 +552,7 @@ private class TestExecutorRegistry(
                     )
                 }
             }
-        requireAcyclic(outgoing)
         val extendedResolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
-        val extendedVariables = mutableMapOf<VariableCoordinate, Fragment>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
                 is Schema.ObjectField -> {
@@ -560,33 +562,20 @@ private class TestExecutorRegistry(
                             extendedFragment =
                                 extendFragment(
                                     fragment = resolver.objectFragment,
-                                    ownerField = site,
                                     extendedResolvers = extendedResolvers,
-                                    extendedVariables = extendedVariables,
                                 ),
                             extendedFragmentFunction = { arguments ->
                                 extendFragment(
                                     fragment = resolver.objectFragment(arguments),
-                                    ownerField = site,
                                     extendedResolvers = extendedResolvers,
-                                    extendedVariables = extendedVariables,
                                 )
+                            },
+                            validateObjectFragment = { fragment ->
+                                validateProviderContainment(site, fragment)
                             },
                         )
                 }
-                is VariableCoordinate -> {
-                    extendedVariables[site] =
-                        extendFragment(
-                            fragment =
-                                Fragment.of(
-                                    site.field.containingType,
-                                    selectionForestOf(variableProviders.getValue(site)),
-                                ),
-                            ownerField = site.field,
-                            extendedResolvers = extendedResolvers,
-                            extendedVariables = extendedVariables,
-                        )
-                }
+                is VariableCoordinate -> Unit
             }
         }
         this.fieldResolvers = extendedResolvers
@@ -649,6 +638,36 @@ private class TestExecutorRegistry(
             validateVariablePath(selection.subselections.single())
         }
     }
+
+    private fun validateProviderContainment(
+        field: Schema.ObjectField,
+        fragment: Fragment,
+    ) {
+        variableProviders.forEach { (coordinate, provider) ->
+            if (coordinate.field != field) return@forEach
+            require(fragment.subselections.containsProviderPath(provider)) {
+                "Variable ${coordinate.variable.variableName} provider path is not contained by " +
+                    "${field.containingType.typeName}/${field.fieldName} object fragment"
+            }
+        }
+    }
+
+    private fun model.SelectionForest.containsProviderPath(provider: Selection): Boolean =
+        toSelectionList().any { selection ->
+            selection.key == provider.key &&
+                provider.possibleTypes.all { it in selection.possibleTypes } &&
+                (
+                    provider.subselections.isEmpty() ||
+                        selection.subselections.containsProviderPath(
+                            provider.subselections.single(),
+                        )
+                )
+        }
+
+    private fun model.SelectionForest.toSelectionList(): List<Selection> =
+        buildList {
+            this@toSelectionList.forEach(::add)
+        }
 
     private fun validateCanonicalField(
         field: Schema.OutputField,
@@ -716,9 +735,7 @@ private class TestExecutorRegistry(
 
     private fun extendFragment(
         fragment: Fragment,
-        ownerField: Schema.ObjectField,
         extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
-        extendedVariables: Map<VariableCoordinate, Fragment>,
     ): Fragment {
         val additions = mutableListOf<Selection>()
         fragment.nominalType.possibleTypes.forEach { possibleType ->
@@ -726,9 +743,7 @@ private class TestExecutorRegistry(
                 selections = fragment.subselections,
                 objectType = possibleType,
                 path = emptyList(),
-                ownerField = ownerField,
                 extendedResolvers = extendedResolvers,
-                extendedVariables = extendedVariables,
                 additions = additions,
             )
         }
@@ -742,9 +757,7 @@ private class TestExecutorRegistry(
         selections: model.SelectionForest,
         objectType: Schema.ObjectType,
         path: List<Selection>,
-        ownerField: Schema.ObjectField,
         extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
-        extendedVariables: Map<VariableCoordinate, Fragment>,
         additions: MutableList<Selection>,
     ) {
         selections.forEach { selection ->
@@ -758,16 +771,6 @@ private class TestExecutorRegistry(
                     rootAt(path, requirements).forEach(additions::add)
                 }
 
-            selection.key.arguments.variables().forEach { variable ->
-                val coordinate = variableCoordinate(variable)
-                if (coordinate.field == ownerField) {
-                    extendedVariables
-                        .getValue(coordinate)
-                        .subselections
-                        .forEach(additions::add)
-                }
-            }
-
             val outputType = field.typeExpr.baseType as? Schema.CompositeType
                 ?: return@forEach
             outputType.possibleTypes.forEach { possibleType ->
@@ -775,17 +778,12 @@ private class TestExecutorRegistry(
                     selections = selection.subselections,
                     objectType = possibleType,
                     path = path + selection,
-                    ownerField = ownerField,
                     extendedResolvers = extendedResolvers,
-                    extendedVariables = extendedVariables,
                     additions = additions,
                 )
             }
         }
     }
-
-    private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
-        Value.Arguments.of(field, fieldValues)
 
     private fun rootAt(
         path: List<Selection>,
@@ -802,36 +800,13 @@ private class TestExecutorRegistry(
             )
         }
 
-    private fun requireAcyclic(
-        outgoing: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>,
-    ) {
-        val state = mutableMapOf<Schema.ResolverSite, VisitState>()
-
-        fun visit(site: Schema.ResolverSite) {
-            when (state[site]) {
-                VisitState.VISITING ->
-                    throw IllegalArgumentException(
-                        "Resolver object fragments contain a demand cycle",
-                    )
-                VisitState.VISITED -> return
-                null -> Unit
-            }
-            state[site] = VisitState.VISITING
-            outgoing.getValue(site).forEach(::visit)
-            state[site] = VisitState.VISITED
-        }
-
-        outgoing.keys.forEach(::visit)
-    }
-
-    private enum class VisitState {
-        VISITING,
-        VISITED,
-    }
 }
 
 private fun Value.Arguments.variables(): Set<Value.Variable> =
     fieldValues.values.flatMapTo(linkedSetOf()) { it.variables() }
+
+private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
+    Value.Arguments.of(field, fieldValues)
 
 private fun Value.Input?.variables(): Set<Value.Variable> =
     when {

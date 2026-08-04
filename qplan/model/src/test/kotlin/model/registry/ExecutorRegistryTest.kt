@@ -127,6 +127,7 @@ class ExecutorRegistryTest {
                     }
 
                     type Query {
+                      seed: ID!
                       user(id: ID!): User!
                     }
                     """.trimIndent(),
@@ -137,9 +138,17 @@ class ExecutorRegistryTest {
                 fieldResolvers = { schema ->
                     val user = schema.field("Query", "user")
                     mapOf(
-                        user to
+                        schema.field("Query", "seed") to
                             model.testing.fieldResolverOf(
                                 objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ -> error("Not invoked") },
+                            ),
+                        user to
+                            model.testing.fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        "fragment ignored on Query { seed }",
+                                    ),
                                 function = { _, _ -> error("Not invoked") },
                             ),
                     )
@@ -149,16 +158,28 @@ class ExecutorRegistryTest {
         val user = schema.field("Query", "user")
         val bridge = schema.field("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
-        val extended =
-            world.executorRegistry
-                .resolver(user)
-                .extendedFragment(arguments)
-        val bridgeSelection = extended.subselections.single()
+        val resolver = world.executorRegistry.resolver(user)
+        val representativeBridge = resolver.extendedFragment.subselections.single()
+        val extended = resolver.extendedFragment(arguments)
+        val bridgeSelection =
+            extended.subselections.single { selection ->
+                selection.key.field == bridge
+            }
 
+        assertEquals(bridge, representativeBridge.key.field)
+        assertEquals(
+            Value.Error,
+            representativeBridge.key.arguments.fieldValues.getValue("id"),
+        )
         assertEquals(bridge, bridgeSelection.key.field)
         assertEquals(
             Value.ID.of("42"),
             bridgeSelection.key.arguments.fieldValues.getValue("id"),
+        )
+        assertTrue(
+            extended.subselections.single { selection ->
+                selection.key.field.fieldName == "seed"
+            }.subselections.isEmpty(),
         )
     }
 

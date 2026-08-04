@@ -762,6 +762,7 @@ private class TestExecutorRegistry(
     ) {
         selections.forEach { selection ->
             if (objectType !in selection.possibleTypes) return@forEach
+            if (selection.key.arguments.containsErrorValue()) return@forEach
 
             val field = objectType.fields.getValue(selection.key.field.fieldName)
             extendedResolvers[field]
@@ -804,6 +805,18 @@ private class TestExecutorRegistry(
 
 private fun Value.Arguments.variables(): Set<Value.Variable> =
     fieldValues.values.flatMapTo(linkedSetOf()) { it.variables() }
+
+private fun Value.Arguments.containsErrorValue(): Boolean =
+    fieldValues.values.any { value -> value.containsErrorValue() }
+
+private fun Value.Input?.containsErrorValue(): Boolean =
+    when (this) {
+        Value.Error -> true
+        is Value.InputList -> values.any { value -> value.containsErrorValue() }
+        is Value.InputObject ->
+            fieldValues.values.any { value -> value.containsErrorValue() }
+        else -> false
+    }
 
 private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
     Value.Arguments.of(field, fieldValues)

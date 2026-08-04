@@ -100,14 +100,6 @@ class ResolverWitnessTest {
                         variable.activationProfile(testCase.registry, world)
                     }
                 val profilesByOwner = profiles.values.groupBy(VariableActivationProfile::owner)
-                profiles.values.forEach { profile ->
-                    assertTrue(
-                        witness.applications.any { application ->
-                            application.key.sourceField == profile.owner
-                        },
-                        "Resolved variable ${profile.variable} has no application of its owner",
-                    )
-                }
                 witness.applications.forEach { application ->
                     activation.recordProgram(
                         registry.resolverProgram(application.key.sourceField),

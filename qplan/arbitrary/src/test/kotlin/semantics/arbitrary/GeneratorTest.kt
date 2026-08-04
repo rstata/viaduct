@@ -3,6 +3,8 @@ package semantics.arbitrary
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
+import model.Schema
+import model.Value
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -127,6 +129,71 @@ class GeneratorTest {
         }
 
         assertTrue(sawArgumentDemand)
+    }
+
+    @Test
+    fun `resolver argument errors do not import skipped resolver requirements`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 1) +
+                (ResolverArgumentErrorWeight to 1.0)
+        val random = RandomSource.seeded(64203L)
+        var generatedErrorArguments = 0
+        var checkedSkippedResolvers = 0
+
+        repeat(200) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val world = registry.world(schema).assumptions
+            generatedErrorArguments += registry.features.resolverErrorArgumentCount
+
+            registry.fieldResolverSites.forEach { coordinate ->
+                val field =
+                    world.schema.field(
+                        coordinate.typeName,
+                        coordinate.fieldName,
+                    )
+                val resolver = world.executorRegistry.resolver(field)
+                if (resolver.objectFragment.subselections.size != 1) return@forEach
+
+                val selection = resolver.objectFragment.subselections.single()
+                if (
+                    !selection.key.arguments.containsErrorValue() ||
+                    !selection.subselections.isEmpty()
+                ) {
+                    return@forEach
+                }
+                val selectedField =
+                    selection.possibleTypes
+                        .asSequence()
+                        .mapNotNull { possibleType ->
+                            possibleType.fields[selection.key.field.fieldName]
+                        }.firstOrNull { possibleField ->
+                            possibleField in world.executorRegistry &&
+                                !world.executorRegistry
+                                    .resolver(possibleField)
+                                    .objectFragment
+                                    .subselections
+                                    .isEmpty()
+                        } ?: return@forEach
+                require(selectedField is Schema.ObjectField)
+
+                checkedSkippedResolvers += 1
+                assertEquals(
+                    resolver.objectFragment.subselections.size,
+                    resolver.extendedFragment.subselections.size,
+                    "An error-bearing resolver occurrence imported transitive requirements",
+                )
+            }
+        }
+
+        assertTrue(generatedErrorArguments > 0)
+        assertTrue(checkedSkippedResolvers > 0)
     }
 
     @Test
@@ -259,6 +326,7 @@ class GeneratorTest {
                 (DuplicateSelectionWeight to 0.8) +
                 (ResolverFragmentWeight to 1.0) +
                 (ResolverFragmentDepth to 4) +
+                (ResolverArgumentErrorWeight to 0.3) +
                 (ResolverVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
                 (ResolverVariableCount to 2..3)
@@ -293,6 +361,7 @@ class GeneratorTest {
                 if (inputAndArgumentSensitiveResolvers > 0) {
                     reached += "input-and-argument-sensitive resolvers"
                 }
+                if (resolverErrorArgumentCount > 0) reached += "resolver argument errors"
                 if (maximumVariablesPerOwner > 1) reached += "multiple variables per owner"
                 if (hasNestedInputVariable) reached += "nested input variables"
                 if (hasListVariable) reached += "list variables"
@@ -329,6 +398,7 @@ class GeneratorTest {
                 "input-sensitive resolvers",
                 "argument-sensitive resolvers",
                 "input-and-argument-sensitive resolvers",
+                "resolver argument errors",
                 "multiple variables per owner",
                 "nested input variables",
                 "list variables",
@@ -356,3 +426,15 @@ private data class ArgumentInvocation(
     val fieldName: String,
     val argument: String,
 )
+
+private fun Value.Arguments.containsErrorValue(): Boolean =
+    fieldValues.values.any { value -> value.containsErrorValue() }
+
+private fun Value.Input?.containsErrorValue(): Boolean =
+    when (this) {
+        Value.Error -> true
+        is Value.InputList -> values.any { value -> value.containsErrorValue() }
+        is Value.InputObject ->
+            fieldValues.values.any { value -> value.containsErrorValue() }
+        else -> false
+    }

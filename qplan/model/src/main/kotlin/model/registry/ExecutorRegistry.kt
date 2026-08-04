@@ -7,6 +7,7 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.VariableCoordinate
+import model.selectionForestOf
 
 sealed interface Executor
 
@@ -32,6 +33,12 @@ sealed interface Resolver : Executor {
      * [objectFragment] is the representative direct requirement. [extendedFragment] starts with
      * that requirement and additionally roots the transitive requirements of resolver occurrences
      * reached within it. The argument-taking forms preserve exact argument-dependent coordinates.
+     *
+     * ### Invariant: resolver-fixed-object-fragment-shape
+     *
+         * [objectFragment] and every `objectFragment(arguments)` have the same nominal type,
+         * field-coordinate occurrences, type guards, nesting, and occurrence multiplicity. Exact
+         * fragments may differ only in the values occupying those fixed argument positions.
      */
     class Field private constructor(
         val objectFragment: Fragment,
@@ -40,6 +47,7 @@ sealed interface Resolver : Executor {
         private val extendedFragmentFunction: (Value.Arguments) -> Fragment,
         private val function: FieldResolverFunction,
         private val projectionDemand: (SelectionForest) -> SelectionForest,
+        private val validateObjectFragment: (Fragment) -> Unit,
     ) : Resolver {
         /**
          * Returns the object fragment required for this exact argument tuple.
@@ -50,11 +58,15 @@ sealed interface Resolver : Executor {
          * representative [objectFragment] is exact.
          */
         fun objectFragment(arguments: Value.Arguments): Fragment =
-            objectFragmentFunction(arguments)
+            objectFragmentFunction(arguments).also { exact ->
+                validateObjectFragment(exact)
+            }
 
         /** Returns the transitive extension of the object fragment for this exact argument tuple. */
-        fun extendedFragment(arguments: Value.Arguments): Fragment =
-            extendedFragmentFunction(arguments)
+        fun extendedFragment(arguments: Value.Arguments): Fragment {
+            objectFragment(arguments)
+            return extendedFragmentFunction(arguments)
+        }
 
         /**
          * Applies this field resolver and projects its selection-independent result to
@@ -122,6 +134,7 @@ sealed interface Resolver : Executor {
                 extendedFragmentFunction = extendedFragmentFunction,
                 function = { input, arguments -> transform(function(input, arguments)) },
                 projectionDemand = projectionDemand,
+                validateObjectFragment = validateObjectFragment,
             )
 
         /**
@@ -138,6 +151,7 @@ sealed interface Resolver : Executor {
                 extendedFragmentFunction = extendedFragmentFunction,
                 function = function,
                 projectionDemand = { demand -> transform(projectionDemand(demand)) },
+                validateObjectFragment = validateObjectFragment,
             )
 
         /**
@@ -150,6 +164,7 @@ sealed interface Resolver : Executor {
         fun withExtendedFragment(
             extendedFragment: Fragment,
             extendedFragmentFunction: (Value.Arguments) -> Fragment,
+            validateObjectFragment: (Fragment) -> Unit = {},
         ): Field {
             require(extendedFragment.nominalType == objectFragment.nominalType) {
                 "Extended fragment type must match object fragment type"
@@ -161,6 +176,10 @@ sealed interface Resolver : Executor {
                 extendedFragmentFunction = extendedFragmentFunction,
                 function = function,
                 projectionDemand = projectionDemand,
+                validateObjectFragment = { fragment ->
+                    this.validateObjectFragment(fragment)
+                    validateObjectFragment(fragment)
+                },
             )
         }
 
@@ -176,31 +195,68 @@ sealed interface Resolver : Executor {
                     extendedFragmentFunction = { objectFragment },
                     function = function,
                     projectionDemand = { it },
+                    validateObjectFragment = {},
                 )
 
             /**
-             * Constructs a resolver whose exact object fragment depends on its arguments.
+             * Constructs a resolver whose fixed object fragment retargets selection arguments.
              *
-             * [objectFragment] is a representative fragment used only by pre-reasoning registry
-             * analysis. Registry assembly must account separately for dependencies omitted from
-             * that representative, while semantic operations use [objectFragmentFunction].
+             * [retargetArguments] is applied recursively to every selection key in [objectFragment].
+             * All fragment and selection structure is preserved by construction.
              */
-            fun ofArgumentDependent(
+            fun ofArgumentRetargeting(
                 objectFragment: Fragment,
-                objectFragmentFunction: (Value.Arguments) -> Fragment,
+                retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
                 function: FieldResolverFunction,
-            ): Field =
-                Field(
+            ): Field {
+                val objectFragmentFunction = { arguments: Value.Arguments ->
+                    objectFragment.retargetArguments(arguments, retargetArguments)
+                }
+                return Field(
                     objectFragment = objectFragment,
                     extendedFragment = objectFragment,
                     objectFragmentFunction = objectFragmentFunction,
                     extendedFragmentFunction = objectFragmentFunction,
                     function = function,
                     projectionDemand = { it },
+                    validateObjectFragment = {},
                 )
+            }
         }
     }
 }
+
+private fun Fragment.retargetArguments(
+    resolverArguments: Value.Arguments,
+    retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
+): Fragment =
+    Fragment.of(
+        nominalType = nominalType,
+        subselections = subselections.retargetArguments(resolverArguments, retargetArguments),
+    )
+
+private fun SelectionForest.retargetArguments(
+    resolverArguments: Value.Arguments,
+    retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
+): SelectionForest =
+    flatMap { selection ->
+        selectionForestOf(
+            Selection.of(
+                key =
+                    Value.Key.of(
+                        selection.key.field,
+                        retargetArguments(selection.key, resolverArguments),
+                    ),
+                nominalType = selection.nominalType,
+                possibleTypes = selection.possibleTypes,
+                subselections =
+                    selection.subselections.retargetArguments(
+                        resolverArguments,
+                        retargetArguments,
+                    ),
+            ),
+        )
+    }
 
 /**
  * The externally supplied field resolvers and field-relative variable providers fixed for one
@@ -210,12 +266,12 @@ sealed interface Resolver : Executor {
  * registry satisfies canonical schema ownership, special-field exclusions, query coverage,
  * globally unique variable names, exact transpose, and acyclicity across output fields and
  * [VariableCoordinate] values. Every variable provider is one path selection relative to its
- * coordinate's containing object, and variables referenced by a field resolver's object fragment
- * or one of its providers belong to that same field. An argument-dependent fragment may
- * transparently forward a caller's variables through its argument tuple without redefining them.
- * A provider path must terminate at an input-compatible value, but compatibility between that
- * value's precise type and every argument position consuming the variable is externally stipulated
- * rather than validated by this registry.
+ * coordinate's containing object and is structurally contained by the defining field resolver's
+ * fixed [Resolver.Field.objectFragment] envelope. Variables referenced by a field resolver's
+ * object fragment or one of its providers belong to that same field. A provider path must terminate
+ * at an input-compatible value, but compatibility between that value's precise type and every
+ * argument position consuming the variable is externally stipulated rather than validated by this
+ * registry.
  */
 interface ExecutorRegistry {
     operator fun contains(field: Schema.OutputField): Boolean

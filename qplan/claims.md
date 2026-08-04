@@ -6,6 +6,8 @@
 
 **[resolver03-one-shot-construction]** Within Resolver03's variable-free acyclic domain, every resolver-bearing OER occurrence is constructed by one field-resolver application after all guarded transitive demand for that occurrence has been aggregated.
 
+**[resolver-provider-containment-construction]** Every canonical Kotlin registry constructed by `TestWorld` contains each field-relative variable provider path in its defining resolver's representative and exact fixed-shape object fragments.
+
 **[resolver-local-construction-proof]** Under the finite exact-key world assumptions in `tla/ResolverCore.tla`, TLAPS proves that least demand closure followed by a valid dependency-first fold terminates, supplies every exact direct resolver input first, and gives each activated resolver key one unique application position per concrete OER occurrence.
 
 **[dependency-order-worklist-proof]** Under the finite acyclic dependency assumption in `tla/DependencyOrder.tla`, TLAPS proves that the shared dependency-order worklist terminates, resolves every key only after its dependencies, and never reapplies a resolved key.

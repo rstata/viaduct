@@ -4,7 +4,7 @@
 
 This handoff describes the proposed basis for `semantics.resolver05`: preserve the demand-collection work established by Resolver03 and Resolver04, but replace their recursive depth-first execution order with a worklist of resolution obligations over a write-once OER store.
 
-The proposal responds to one specific discovery. Variables can transport a value from a provider path to resolver arguments elsewhere in the defining fragment. A subtree may therefore contain structurally known demand whose exact `Value.Key` cannot be formed until work in another subtree finishes. Resolver04 handles this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells. Resolver05 should model the underlying process directly.
+The proposal responds to one specific discovery. Variables can transport a value from a provider path already contained in the defining resolver's fixed-shape object fragment to resolver arguments elsewhere in that fragment. A subtree may therefore contain structurally known demand whose exact `Value.Key` cannot be formed until work in another subtree finishes. Resolver04 handles this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells. Resolver05 should model the underlying process directly.
 
 ## Demand Collection Is Not Being Reopened
 

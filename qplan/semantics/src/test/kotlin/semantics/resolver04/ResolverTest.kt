@@ -61,6 +61,7 @@ class ResolverTest {
                                     """
                                     fragment ignored on Query {
                                       y(b: ${'$'}b)
+                                      z
                                     }
                                     """.trimIndent(),
                                 ),
@@ -155,6 +156,7 @@ class ResolverTest {
                                     """
                                     fragment ignored on User {
                                       y(b: ${'$'}b)
+                                      z
                                     }
                                     """.trimIndent(),
                                 ),
@@ -256,6 +258,9 @@ class ResolverTest {
                                     fragment ignored on User {
                                       derived
                                       use(value: ${'$'}value)
+                                      producer {
+                                        narrow
+                                      }
                                     }
                                     """.trimIndent(),
                                 ),
@@ -360,7 +365,14 @@ class ResolverTest {
                         schema.field("User", "result") to
                             model.testing.fieldResolverOf(
                                 schema.fragmentFrom(
-                                    "fragment ignored on User { middle(value: ${'$'}value) }",
+                                    """
+                                    fragment ignored on User {
+                                      middle(value: ${'$'}value)
+                                      producer {
+                                        narrow
+                                      }
+                                    }
+                                    """.trimIndent(),
                                 ),
                             ) { input, _ ->
                                 input.fieldValues.getValue(middleKey)
@@ -466,7 +478,14 @@ class ResolverTest {
                         schema.field("User", "result") to
                             model.testing.fieldResolverOf(
                                 schema.fragmentFrom(
-                                    "fragment ignored on User { use(value: ${'$'}value) }",
+                                    """
+                                    fragment ignored on User {
+                                      use(value: ${'$'}value)
+                                      secondary {
+                                        narrow
+                                      }
+                                    }
+                                    """.trimIndent(),
                                 ),
                             ) { input, _ ->
                                 input.fieldValues.getValue(useKey)
@@ -564,7 +583,13 @@ class ResolverTest {
                         schema.field("Query", "x") to
                             model.testing.fieldResolverOf(
                                 schema.fragmentFrom(
-                                    "fragment ignored on Query { y(b: ${'$'}b) }",
+                                    """
+                                    fragment ignored on Query {
+                                      y(b: ${'$'}b)
+                                      z(c: ${'$'}c)
+                                      raw
+                                    }
+                                    """.trimIndent(),
                                 ),
                             ) { input, _ ->
                                 val key = Value.Key.of(schema.field("Query", "y"), mapOf("b" to 6))
@@ -631,6 +656,7 @@ class ResolverTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val yKey = Value.Key.of(schema.field("Query", "y"), mapOf("value" to 2))
+                    val rawKey = Value.Key.of(schema.field("Query", "raw"), emptyMap())
                     mapOf(
                         schema.field("Query", "x") to
                             model.testing.fieldResolverOf(
@@ -639,11 +665,12 @@ class ResolverTest {
                                     fragment ignored on Query {
                                       y(value: ${'$'}first)
                                       y(value: ${'$'}second)
+                                      raw
                                     }
                                     """.trimIndent(),
                                 ),
                             ) { input, _ ->
-                                require(input.fieldValues.keys == setOf(yKey))
+                                require(input.fieldValues.keys == setOf(yKey, rawKey))
                                 input.fieldValues.getValue(yKey)
                             },
                         schema.field("Query", "y") to
@@ -727,6 +754,7 @@ class ResolverTest {
                                       source(value: ${'$'}late) {
                                         broad
                                       }
+                                      middle
                                     }
                                     """.trimIndent(),
                                 ),
@@ -742,6 +770,7 @@ class ResolverTest {
                                       source(value: ${'$'}early) {
                                         narrow
                                       }
+                                      raw
                                     }
                                     """.trimIndent(),
                                 ),
@@ -841,6 +870,10 @@ class ResolverTest {
                                       source {
                                         broad
                                         computed(value: ${'$'}later)
+                                      }
+                                      helper(value: ${'$'}early)
+                                      source {
+                                        narrow
                                       }
                                     }
                                     """.trimIndent(),
@@ -944,6 +977,9 @@ class ResolverTest {
                                       source(k: ${'$'}k) {
                                         broad
                                       }
+                                      source(k: 1) {
+                                        narrow
+                                      }
                                     }
                                     """.trimIndent(),
                                 ),
@@ -1041,6 +1077,7 @@ class ResolverTest {
                                       child {
                                         y(b: ${'$'}b)
                                       }
+                                      z
                                     }
                                     """.trimIndent(),
                                 ),
@@ -1116,7 +1153,12 @@ class ResolverTest {
                         schema.field("Query", "x") to
                             model.testing.fieldResolverOf(
                                 schema.fragmentFrom(
-                                    "fragment ignored on Query { y(values: ${'$'}values) }",
+                                    """
+                                    fragment ignored on Query {
+                                      y(values: ${'$'}values)
+                                      numbers
+                                    }
+                                    """.trimIndent(),
                                 ),
                             ) { input, _ ->
                                 val key =
@@ -1202,7 +1244,14 @@ class ResolverTest {
                         schema.field("Query", "x") to
                             model.testing.fieldResolverOf(
                                 schema.fragmentFrom(
-                                    "fragment ignored on Query { y(value: ${'$'}value) }",
+                                    """
+                                    fragment ignored on Query {
+                                      y(value: ${'$'}value)
+                                      box {
+                                        value
+                                      }
+                                    }
+                                    """.trimIndent(),
                                 ),
                             ) { input, _ ->
                                 val key =

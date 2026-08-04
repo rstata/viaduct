@@ -75,6 +75,7 @@ class ResolverGeneratedRegressionTest {
                                       container {
                                         child {
                                           computed(arg: ${'$'}value)
+                                          __typename
                                         }
                                       }
                                     }

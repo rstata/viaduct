@@ -73,6 +73,13 @@ class ResolverPropertyTest {
                                             }
                                           )
                                           consumeList(values: ${'$'}values)
+                                          source {
+                                            common
+                                          }
+                                          numbers
+                                          nullableBox {
+                                            value
+                                          }
                                         }
                                         """.trimIndent(),
                                     ),

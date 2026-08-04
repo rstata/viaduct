@@ -327,6 +327,8 @@ These cases should not be assumed equivalent to ordinary current-object RSSes. A
 
 A selective field's argument or condition can depend on a `fromField` variable provider, whose own RSS obtains the variable value from a path in an object or Query OER. The variable-resolution target may differ from the child plan's selection type.
 
+In the canonical Kotlin model, every field-relative provider path is already selected by its defining resolver's object fragment. Argument-dependent exact fragments preserve the representative fragment's argument-erased field coordinates, guards, nesting, and occurrence multiplicity, so binding a variable changes exact argument values without revealing a new structural branch. Providers remain value-flow dependencies and participate in ordering, but they are not independent sources of structural demand.
+
 If the value needed to decide the target OER key or its demand depends on that same occurrence's output, exact pre-dispatch merging may be cyclic. The shape cannot remain in the one-shot scope unless conservative demand or isolated execution breaks that cycle; otherwise it must be rejected or excluded.
 
 ### Lazy concrete-type plans

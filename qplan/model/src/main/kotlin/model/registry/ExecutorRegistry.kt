@@ -268,13 +268,18 @@ private fun SelectionForest.retargetArguments(
  * An output field is an actual resolver coordinate exactly when [contains] returns true. The
  * registry satisfies canonical schema ownership, special-field exclusions, query coverage,
  * globally unique variable names, exact transpose, and acyclicity across output fields and
- * [VariableCoordinate] values. Every variable provider is one path selection relative to its
- * coordinate's containing object and is structurally contained by the defining field resolver's
- * fixed [Resolver.Field.objectFragment] envelope. Variables referenced by a field resolver's
- * object fragment or one of its providers belong to that same field. A provider path must terminate
- * at an input-compatible value, but compatibility between that value's precise type and every
- * argument position consuming the variable is externally stipulated rather than validated by this
- * registry.
+ * [VariableCoordinate] values. Acyclicity is intentionally checked over a conservative
+ * coordinate-level possibility relation derived from representative fragment shapes. The relation
+ * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
+ * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
+ * would be acyclic.
+ *
+ * Every variable provider is one path selection relative to its coordinate's containing object and
+ * is structurally contained by the defining field resolver's fixed
+ * [Resolver.Field.objectFragment] envelope. Variables referenced by a field resolver's object
+ * fragment or one of its providers belong to that same field. A provider path must terminate at an
+ * input-compatible value, but compatibility between that value's precise type and every argument
+ * position consuming the variable is externally stipulated rather than validated by this registry.
  */
 interface ExecutorRegistry {
     operator fun contains(field: Schema.OutputField): Boolean
@@ -288,7 +293,12 @@ interface ExecutorRegistry {
     /** The unique resolver-relative coordinate of the globally registered [variable]. */
     fun variableCoordinate(variable: Value.Variable): VariableCoordinate
 
-    /** The resolver sites directly demanded by [site]. */
+    /**
+     * The resolver sites that may be directly demanded by [site].
+     *
+     * This conservative coordinate relation is not specialized to one exact argument tuple or
+     * runtime type assignment.
+     */
     fun mayDemandFrom(site: Schema.ResolverSite): Set<Schema.ResolverSite>
 
     /** The resolver sites that may directly demand [site]. */

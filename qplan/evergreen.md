@@ -103,6 +103,7 @@ Using stable terms helps separate findings from one proposal's class names.
 
 - **Producer:** A resolver or engine mechanism that supplies one or more OER values.  
 - **Consumer:** A resolver, checker, completion step, or other operation that reads those values.  
+- **Passive field:** A canonical field on a concrete object type for which `behavioral(field)` is false: it is neither the engine-supplied `__typename` field nor backed by a registered field resolver. Its value is supplied within its owning producer's raw output and retained by projection when demanded.
 - **Occurrence:** One appearance of a field or dependency in a client selection or child plan.  
 - **One-shot producer identity:** One resolver-bearing field cell at one concrete OER object occurrence, determined by the parent occurrence and concrete `Value.Key`. Multiple demand occurrences may converge on it, but a field cell elsewhere in the result tree is a different identity even when node IDs, resolver coordinates, arguments, or values match.
 - **Demand:** The fields and paths consumers may need from a producer.  

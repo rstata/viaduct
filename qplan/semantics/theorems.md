@@ -6,7 +6,7 @@ This file records informal mathematical theorem statements and supporting argume
 
 ### Claim
 
-Fix an ordinary, variable-free reasoning world whose schema, values, selections, and executor registry satisfy their documented invariants, including an acyclic resolver-demand graph and `noTransitiveDemand == false`. Assume the registry has no variable providers and resolver object fragments contain no variable references. For every Query-rooted fragment in the domain of `semantics.resolver02`, applying `Value.Object.resolve` to the empty Query value and the fragment's selection forest yields an `EngineResult.Object` that satisfies `isClosedUnderResolverDemand()`.
+Fix an ordinary, variable-free reasoning world whose schema, values, selections, and executor registry satisfy their documented invariants, including an acyclic resolver-demand graph. Assume the registry has no variable providers and resolver object fragments contain no variable references. For every Query-rooted fragment in the domain of `semantics.resolver02`, applying `Value.Object.resolve` to the empty Query value and the fragment's selection forest yields an `EngineResult.Object` that satisfies `isClosedUnderResolverDemand()`.
 
 The theorem concerns the mathematical result of [`resolver02/Resolver.kt`](src/main/kotlin/semantics/resolver02/Resolver.kt), whose private demand-relative output-selection expansion deliberately models non-selective resolvers through the public selective resolver API. It does not establish the genuinely selective one-shot algorithm and does not assert an execution order, invocation schedule, or complexity bound.
 

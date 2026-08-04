@@ -28,11 +28,14 @@ sealed interface Resolver : Executor {
     )
 
     /**
-     * A field resolver and its object-valued input requirements.
+     * A field resolver and the guarded closure of its resolver dependencies.
      *
-     * [objectFragment] is the representative direct requirement. [extendedFragment] starts with
-     * that requirement and additionally roots the transitive requirements of resolver occurrences
-     * reached within it. The argument-taking forms preserve exact argument-dependent coordinates.
+     * [objectFragment] is the representative direct object-valued input requirement. For an exact
+     * resolver occurrence, its extended fragment is the guarded, path-rooted transitive closure of
+     * its exact object fragment under resolver-dependency expansion. The extension can therefore
+     * supply the current resolver's complete input prerequisites or extend a producer's output
+     * demand with the prerequisites of successor resolver occurrences. The argument-taking forms
+     * preserve exact argument-dependent coordinates.
      *
      * ### Invariant: resolver-fixed-object-fragment-shape
      *
@@ -62,7 +65,7 @@ sealed interface Resolver : Executor {
                 validateObjectFragment(exact)
             }
 
-        /** Returns the transitive extension of the object fragment for this exact argument tuple. */
+        /** Returns the guarded, path-rooted dependency closure for this exact argument tuple. */
         fun extendedFragment(arguments: Value.Arguments): Fragment {
             objectFragment(arguments)
             return extendedFragmentFunction(arguments)
@@ -158,8 +161,8 @@ sealed interface Resolver : Executor {
          * Returns this resolver with the precomputed transitive extension of [objectFragment].
          *
          * Registry assembly applies this pre-reasoning operation after resolver lowering and
-         * dependency analysis. The extension is rooted at the same object type and contains the
-         * requirements of resolver fields reached within [objectFragment].
+         * dependency analysis. The extension is rooted at the same object type and is the guarded,
+         * path-rooted transitive closure of [objectFragment] under resolver-dependency expansion.
          */
         fun withExtendedFragment(
             extendedFragment: Fragment,

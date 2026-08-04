@@ -2,6 +2,7 @@ package semantics.resolver04
 
 import model.Assumptions
 import model.EngineResult
+import model.Fragment
 import model.Selection
 import model.SelectionForest
 import model.Value
@@ -38,17 +39,70 @@ internal fun Value.Object.resolve(
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
 
-    val closedDemand =
-        closeResolverDemand(
-            selections = selections,
+    val applicableSelections =
+        selections.filter { selection -> type in selection.possibleTypes }
+    val resolverInputFragments =
+        applicableSelections
+            .groupBy { selection -> selection.concreteObjectKey(type) }
+            .keys
+            .mapNotNull { key ->
+                if (
+                    key.arguments.argumentsContainErrorValue() ||
+                    key.field !in world.executorRegistry
+                ) {
+                    null
+                } else {
+                    val resolver = world.executorRegistry.resolver(key.field)
+                    resolver.extendedFragment(key.arguments)
+                }
+            }
+    val symbolicInputDemand =
+        resolverInputFragments.fold(selectionForestOf()) { demand, fragment ->
+            demand + fragment.subselections
+        }
+    val symbolicSelections = applicableSelections + symbolicInputDemand
+    // Substitute variables defined on this concrete object type across every rooted path.
+    val currentVariables =
+        symbolicSelections
+            .variables()
+            .filterTo(linkedSetOf()) { variable ->
+                world.executorRegistry
+                    .variableCoordinate(variable)
+                    .field
+                    .containingType == type
+            }
+    val resolvedVariables =
+        resolveVariables(
+            variables = currentVariables,
             resolved = resolved,
-            envelope = envelope,
+            envelope =
+                envelope +
+                    applicableSelections.withExtendedResolverDemand() +
+                    symbolicInputDemand,
         )
+    // Identity bindings retain descendant variables while current-occurrence variables are replaced.
+    val currentBindings =
+        symbolicSelections
+            .variables()
+            .associateWith { variable -> variable } +
+            resolvedVariables.variableValues
+    val concreteSelections =
+        Fragment.of(type, applicableSelections)
+            .instantiateVariables(currentBindings)
+            .subselections
+    val concreteInputDemand =
+        resolverInputFragments.fold(selectionForestOf()) { demand, fragment ->
+            demand +
+                fragment
+                    .instantiateVariables(currentBindings)
+                    .subselections
+        }
     val selectionsByKey =
-        closedDemand.selections.groupBy { selection -> selection.concreteObjectKey(type) }
-    val keysToWiden = selectionsByKey.keys intersect closedDemand.resolved.keys
+        (concreteSelections + concreteInputDemand)
+            .groupBy { selection -> selection.concreteObjectKey(type) }
+    val keysToWiden = selectionsByKey.keys intersect resolvedVariables.keys
     val widened =
-        keysToWiden.fold(closedDemand.resolved) { result, key ->
+        keysToWiden.fold(resolvedVariables) { result, key ->
             sources.union(
                 result,
                 result.resolveExistingKey(
@@ -71,72 +125,6 @@ internal fun Value.Object.resolve(
         )
     }.also { result -> sources.remember(result, this) }
 }
-
-/**
- * Returns the applicable demand, including all transitive resolver demand on this concrete object.
- */
-context(world: Assumptions, sources: ResolutionSources)
-private fun Value.Object.closeResolverDemand(
-    selections: SelectionForest,
-    resolved: EngineResult.Object,
-    expanded: Set<Value.Key> = emptySet(),
-    envelope: SelectionForest,
-): DemandClosure {
-    val applicableSelections =
-        selections.filter { selection -> type in selection.possibleTypes }
-    val groupedSelections =
-        applicableSelections.groupBy { selection -> selection.concreteObjectKey(type) }
-    if (world.noTransitiveDemand && expanded.isNotEmpty()) {
-        return DemandClosure(applicableSelections, resolved)
-    }
-    val unexpandedResolverKeys =
-        groupedSelections.keys.filter { key ->
-            key !in expanded &&
-                !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.executorRegistry
-        }.toSet()
-
-    if (unexpandedResolverKeys.isEmpty()) return DemandClosure(applicableSelections, resolved)
-
-    val fragments =
-        unexpandedResolverKeys.map { key ->
-            world.executorRegistry
-                .resolver(key.field)
-                .objectFragment(key.arguments)
-        }
-    // The fixed fragment envelope contains every provider path and transitive requirement.
-    val fragmentEnvelope =
-        fragments.fold(selectionForestOf()) { demand, fragment ->
-            demand + fragment.subselections
-        }.withExtendedResolverDemand()
-    val resolvedVariables =
-        resolveVariables(
-            variables = fragments.flatMapTo(linkedSetOf()) { it.variables() },
-            resolved = resolved,
-            envelope =
-                envelope +
-                    applicableSelections.withExtendedResolverDemand() +
-                    fragmentEnvelope,
-        )
-    val resolverDemand =
-        fragments.fold(selectionForestOf()) { demand, fragment ->
-            demand +
-                fragment
-                    .instantiateVariables(resolvedVariables.variableValues)
-                    .subselections
-        }
-    return closeResolverDemand(
-        selections = applicableSelections + resolverDemand,
-        resolved = resolvedVariables,
-        expanded = expanded + unexpandedResolverKeys,
-        envelope = envelope,
-    )
-}
-
-private data class DemandClosure(
-    val selections: SelectionForest,
-    val resolved: EngineResult.Object,
-)
 
 context(world: Assumptions, sources: ResolutionSources)
 private fun Value.Object.resolveVariables(
@@ -264,7 +252,7 @@ private fun Value.Object.resolveKey(
                             resolver
                                 .objectFragment(key.arguments)
                                 .instantiateVariables(resolved.variableValues)
-                        // Closure and dependency order put the complete input in this prefix.
+                        // The extended fragment and dependency order put the complete input here.
                         val input = resolved.materialize(objectFragment)
                         resolver.resolveWithSource(
                             input = input,
@@ -343,10 +331,10 @@ private fun Value.Output?.resolveValue(
     }
 
 /**
- * Adds the precomputed input requirements of every resolver occurrence in this demand.
+ * Extends output demand with every encountered resolver occurrence's prerequisites.
  *
  * Each resolver's extended fragment is rooted at its occurrence's containing object. Recursing
- * through subselections retains the path and type guards that locate nested occurrences.
+ * through subselections retains the path and type guards that locate successor occurrences.
  */
 context(world: Assumptions)
 private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
@@ -369,12 +357,7 @@ private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
                     demand
                 } else {
                     val resolver = world.executorRegistry.resolver(key.field)
-                    val fragment =
-                        if (world.noTransitiveDemand) {
-                            resolver.objectFragment(key.arguments)
-                        } else {
-                            resolver.extendedFragment(key.arguments)
-                        }
+                    val fragment = resolver.extendedFragment(key.arguments)
                     demand + fragment.subselections
                 }
             }

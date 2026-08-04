@@ -36,7 +36,3 @@ The configuration includes independent switches for arguments, query fragments, 
 Kotest reports a replay seed for a failing batch. Every individual semantic failure also includes the exact SDL, resolver sites with inferred output paths and object-fragment text, and Query fragment.
 
 Resolver04's gated deep stress property runs with `RESOLVER04_STRESS_CASES=10000 RESOLVER04_STRESS_SEED=<long> ./gradlew :semantics:resolver04Stress`. The case count must be an integer and a positive multiple of 100, and the seed must be a `Long`; malformed values fail, while the ordinary repository validation excludes this dedicated stress task. The property counts a variable case only when the resulting OER contains at least one resolved variable binding.
-
-## Mutation Control
-
-`Assumptions.noTransitiveDemand` is an explicit fault-injection flag that defaults to `false`. When enabled, resolver02 stops demand closure after one expansion. The evergreen `generated property detects missing transitive demand closure` test runs one fixed generated corpus against both ordinary and mutated resolver02: every case must pass normally, while the mutant must produce a mixture of passing and failing cases.

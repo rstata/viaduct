@@ -2,7 +2,6 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
@@ -35,55 +34,31 @@ private fun Value.Object.resolve(
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
 
-    val closedDemand = closeResolverDemand(selections)
+    val applicableSelections =
+        selections.filter { selection -> type in selection.possibleTypes }
+    val resolverInputDemand =
+        applicableSelections
+            .groupBy { selection -> selection.concreteObjectKey(type) }
+            .keys
+            .fold(selectionForestOf()) { demand, key ->
+                if (
+                    key.arguments.argumentsContainErrorValue() ||
+                    key.field !in world.executorRegistry
+                ) {
+                    demand
+                } else {
+                    val resolver = world.executorRegistry.resolver(key.field)
+                    val fragment = resolver.extendedFragment(key.arguments)
+                    demand + fragment.subselections
+                }
+            }
     val selectionsByKey =
-        closedDemand.groupBy { selection -> selection.concreteObjectKey(type) }
+        (applicableSelections + resolverInputDemand)
+            .groupBy { selection -> selection.concreteObjectKey(type) }
     val orderedKeys = dependencyOrder(selectionsByKey.keys - resolved.keys)
     return orderedKeys.fold(resolved) { result, key ->
         result.union(resolveKey(key, selectionsByKey.getValue(key), result))
     }
-}
-
-/**
- * Returns the applicable demand, including all transitive resolver demand on this concrete object.
- */
-context(world: Assumptions)
-private fun Value.Object.closeResolverDemand(
-    selections: SelectionForest,
-): SelectionForest =
-    type.closeResolverDemand(selections)
-
-context(world: Assumptions)
-private fun Schema.ObjectType.closeResolverDemand(
-    selections: SelectionForest,
-    expanded: Set<Value.Key> = emptySet(),
-): SelectionForest {
-    val applicableSelections =
-        selections.filter { selection -> this in selection.possibleTypes }
-    val groupedSelections =
-        applicableSelections.groupBy { selection -> selection.concreteObjectKey(this) }
-    if (world.noTransitiveDemand && expanded.isNotEmpty()) return applicableSelections
-    val unexpandedResolverKeys =
-        groupedSelections.keys.filter { key ->
-            key !in expanded &&
-                !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.executorRegistry
-        }.toSet()
-
-    if (unexpandedResolverKeys.isEmpty()) return applicableSelections
-
-    val resolverDemand =
-        unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
-            demand +
-                world.executorRegistry
-                    .resolver(key.field)
-                    .objectFragment(key.arguments)
-                    .subselections
-        }
-    return closeResolverDemand(
-        selections = applicableSelections + resolverDemand,
-        expanded = expanded + unexpandedResolverKeys,
-    )
 }
 
 /**
@@ -154,7 +129,7 @@ private fun Value.Object.resolveKey(
                     key.field in world.executorRegistry -> {
                         val resolver = world.executorRegistry.resolver(key.field)
                         val objectFragment = resolver.objectFragment(key.arguments)
-                        // Closure and dependency order put the complete input in this prefix.
+                        // The extended fragment and dependency order put the complete input here.
                         val input = resolved.materialize(objectFragment)
                         resolver.resolve(
                             input = input,
@@ -201,10 +176,10 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
     }
 
 /**
- * Adds the precomputed input requirements of every resolver occurrence in this demand.
+ * Extends output demand with every encountered resolver occurrence's prerequisites.
  *
  * Each resolver's extended fragment is rooted at its occurrence's containing object. Recursing
- * through subselections retains the path and type guards that locate nested occurrences.
+ * through subselections retains the path and type guards that locate successor occurrences.
  */
 context(world: Assumptions)
 private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
@@ -227,12 +202,7 @@ private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
                     demand
                 } else {
                     val resolver = world.executorRegistry.resolver(key.field)
-                    val fragment =
-                        if (world.noTransitiveDemand) {
-                            resolver.objectFragment(key.arguments)
-                        } else {
-                            resolver.extendedFragment(key.arguments)
-                        }
+                    val fragment = resolver.extendedFragment(key.arguments)
                     demand + fragment.subselections
                 }
             }

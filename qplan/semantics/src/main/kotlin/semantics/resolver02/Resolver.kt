@@ -63,7 +63,6 @@ private fun Schema.ObjectType.closeResolverDemand(
         selections.filter { selection -> this in selection.possibleTypes }
     val groupedSelections =
         applicableSelections.groupBy { selection -> selection.concreteObjectKey(this) }
-    if (world.noTransitiveDemand && expanded.isNotEmpty()) return applicableSelections
     val unexpandedResolverKeys =
         groupedSelections.keys.filter { key ->
             key !in expanded &&

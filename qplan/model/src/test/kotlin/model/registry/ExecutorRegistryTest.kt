@@ -113,7 +113,7 @@ class ExecutorRegistryTest {
     }
 
     @Test
-    fun `extended fragments preserve exact arguments on lowered node bridges`() {
+    fun `predecessor demands preserve exact arguments on lowered node bridges`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -159,10 +159,10 @@ class ExecutorRegistryTest {
         val bridge = schema.field("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
         val resolver = world.executorRegistry.resolver(user)
-        val representativeBridge = resolver.extendedFragment.subselections.single()
-        val extended = resolver.extendedFragment(arguments)
+        val representativeBridge = resolver.predecessorDemand.subselections.single()
+        val predecessorDemand = resolver.predecessorDemand(arguments)
         val bridgeSelection =
-            extended.subselections.single { selection ->
+            predecessorDemand.subselections.single { selection ->
                 selection.key.field == bridge
             }
 
@@ -177,7 +177,7 @@ class ExecutorRegistryTest {
             bridgeSelection.key.arguments.fieldValues.getValue("id"),
         )
         assertTrue(
-            extended.subselections.single { selection ->
+            predecessorDemand.subselections.single { selection ->
                 selection.key.field.fieldName == "seed"
             }.subselections.isEmpty(),
         )

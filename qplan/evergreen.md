@@ -107,6 +107,8 @@ Using stable terms helps separate findings from one proposal's class names.
 - **Occurrence:** One appearance of a field or dependency in a client selection or child plan.  
 - **One-shot producer identity:** One resolver-bearing field cell at one concrete OER object occurrence, determined by the parent occurrence and concrete `Value.Key`. Multiple demand occurrences may converge on it, but a field cell elsewhere in the result tree is a different identity even when node IDs, resolver coordinates, arguments, or values match.
 - **Demand:** The fields and paths consumers may need from a producer.  
+- **Predecessor demand:** For one resolver occurrence, its direct object-fragment input requirement closed transitively through the resolver occurrences needed to construct that input.
+- **Successor demand:** Dynamic output demand extended with the predecessor demand of every successor resolver occurrence reached within it, preserving occurrence paths and concrete-type guards.
 - **Ownership:** The fields and paths a producer is responsible for supplying, represented by its OSS.  
 - **Coverage:** The fields and paths a particular materialization actually supplied.  
 - **Dependency:** A requirement that one producer or phase complete enough work before a consumer can proceed.  

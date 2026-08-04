@@ -31,11 +31,11 @@ sealed interface Resolver : Executor {
      * A field resolver and the guarded closure of its resolver dependencies.
      *
      * [objectFragment] is the representative direct object-valued input requirement. For an exact
-     * resolver occurrence, its extended fragment is the guarded, path-rooted transitive closure of
-     * its exact object fragment under resolver-dependency expansion. The extension can therefore
-     * supply the current resolver's complete input prerequisites or extend a producer's output
-     * demand with the prerequisites of successor resolver occurrences. The argument-taking forms
-     * preserve exact argument-dependent coordinates.
+     * resolver occurrence, its predecessor demand is the guarded, path-rooted transitive closure of
+     * its exact object fragment under resolver-dependency expansion. It therefore supplies the
+     * current resolver's complete input prerequisites. [successorDemand] separately uses these
+     * closures to extend a producer's output demand. The argument-taking forms preserve exact
+     * argument-dependent coordinates.
      *
      * ### Invariant: resolver-fixed-object-fragment-shape
      *
@@ -45,9 +45,9 @@ sealed interface Resolver : Executor {
      */
     class Field private constructor(
         val objectFragment: Fragment,
-        val extendedFragment: Fragment,
+        val predecessorDemand: Fragment,
         private val objectFragmentFunction: (Value.Arguments) -> Fragment,
-        private val extendedFragmentFunction: (Value.Arguments) -> Fragment,
+        private val predecessorDemandFunction: (Value.Arguments) -> Fragment,
         private val function: FieldResolverFunction,
         private val projectionDemand: (SelectionForest) -> SelectionForest,
         private val validateObjectFragment: (Fragment) -> Unit,
@@ -65,10 +65,10 @@ sealed interface Resolver : Executor {
                 validateObjectFragment(exact)
             }
 
-        /** Returns the guarded, path-rooted dependency closure for this exact argument tuple. */
-        fun extendedFragment(arguments: Value.Arguments): Fragment {
+        /** Returns the guarded, path-rooted predecessor demand for this exact argument tuple. */
+        fun predecessorDemand(arguments: Value.Arguments): Fragment {
             objectFragment(arguments)
-            return extendedFragmentFunction(arguments)
+            return predecessorDemandFunction(arguments)
         }
 
         /**
@@ -132,9 +132,9 @@ sealed interface Resolver : Executor {
         fun mapOutput(transform: (Value.Output?) -> Value.Output?): Field =
             Field(
                 objectFragment = objectFragment,
-                extendedFragment = extendedFragment,
+                predecessorDemand = predecessorDemand,
                 objectFragmentFunction = objectFragmentFunction,
-                extendedFragmentFunction = extendedFragmentFunction,
+                predecessorDemandFunction = predecessorDemandFunction,
                 function = { input, arguments -> transform(function(input, arguments)) },
                 projectionDemand = projectionDemand,
                 validateObjectFragment = validateObjectFragment,
@@ -149,34 +149,34 @@ sealed interface Resolver : Executor {
         fun mapDemand(transform: (SelectionForest) -> SelectionForest): Field =
             Field(
                 objectFragment = objectFragment,
-                extendedFragment = extendedFragment,
+                predecessorDemand = predecessorDemand,
                 objectFragmentFunction = objectFragmentFunction,
-                extendedFragmentFunction = extendedFragmentFunction,
+                predecessorDemandFunction = predecessorDemandFunction,
                 function = function,
                 projectionDemand = { demand -> transform(projectionDemand(demand)) },
                 validateObjectFragment = validateObjectFragment,
             )
 
         /**
-         * Returns this resolver with the precomputed transitive extension of [objectFragment].
+         * Returns this resolver with the precomputed predecessor demand of [objectFragment].
          *
          * Registry assembly applies this pre-reasoning operation after resolver lowering and
-         * dependency analysis. The extension is rooted at the same object type and is the guarded,
+         * dependency analysis. The demand is rooted at the same object type and is the guarded,
          * path-rooted transitive closure of [objectFragment] under resolver-dependency expansion.
          */
-        fun withExtendedFragment(
-            extendedFragment: Fragment,
-            extendedFragmentFunction: (Value.Arguments) -> Fragment,
+        fun withPredecessorDemand(
+            predecessorDemand: Fragment,
+            predecessorDemandFunction: (Value.Arguments) -> Fragment,
             validateObjectFragment: (Fragment) -> Unit = {},
         ): Field {
-            require(extendedFragment.nominalType == objectFragment.nominalType) {
-                "Extended fragment type must match object fragment type"
+            require(predecessorDemand.nominalType == objectFragment.nominalType) {
+                "Predecessor demand type must match object fragment type"
             }
             return Field(
                 objectFragment = objectFragment,
-                extendedFragment = extendedFragment,
+                predecessorDemand = predecessorDemand,
                 objectFragmentFunction = objectFragmentFunction,
-                extendedFragmentFunction = extendedFragmentFunction,
+                predecessorDemandFunction = predecessorDemandFunction,
                 function = function,
                 projectionDemand = projectionDemand,
                 validateObjectFragment = { fragment ->
@@ -193,9 +193,9 @@ sealed interface Resolver : Executor {
             ): Field =
                 Field(
                     objectFragment = objectFragment,
-                    extendedFragment = objectFragment,
+                    predecessorDemand = objectFragment,
                     objectFragmentFunction = { objectFragment },
-                    extendedFragmentFunction = { objectFragment },
+                    predecessorDemandFunction = { objectFragment },
                     function = function,
                     projectionDemand = { it },
                     validateObjectFragment = {},
@@ -217,9 +217,9 @@ sealed interface Resolver : Executor {
                 }
                 return Field(
                     objectFragment = objectFragment,
-                    extendedFragment = objectFragment,
+                    predecessorDemand = objectFragment,
                     objectFragmentFunction = objectFragmentFunction,
-                    extendedFragmentFunction = objectFragmentFunction,
+                    predecessorDemandFunction = objectFragmentFunction,
                     function = function,
                     projectionDemand = { it },
                     validateObjectFragment = {},

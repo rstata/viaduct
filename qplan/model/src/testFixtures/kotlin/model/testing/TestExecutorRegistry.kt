@@ -552,22 +552,22 @@ private class TestExecutorRegistry(
                     )
                 }
             }
-        val extendedResolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
+        val predecessorResolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
                 is Schema.ObjectField -> {
                     val resolver = fieldResolvers.getValue(site)
-                    extendedResolvers[site] =
-                        resolver.withExtendedFragment(
-                            extendedFragment =
-                                extendFragment(
+                    predecessorResolvers[site] =
+                        resolver.withPredecessorDemand(
+                            predecessorDemand =
+                                closePredecessorDemand(
                                     fragment = resolver.objectFragment,
-                                    extendedResolvers = extendedResolvers,
+                                    predecessorResolvers = predecessorResolvers,
                                 ),
-                            extendedFragmentFunction = { arguments ->
-                                extendFragment(
+                            predecessorDemandFunction = { arguments ->
+                                closePredecessorDemand(
                                     fragment = resolver.objectFragment(arguments),
-                                    extendedResolvers = extendedResolvers,
+                                    predecessorResolvers = predecessorResolvers,
                                 )
                             },
                             validateObjectFragment = { fragment ->
@@ -578,7 +578,7 @@ private class TestExecutorRegistry(
                 is VariableCoordinate -> Unit
             }
         }
-        this.fieldResolvers = extendedResolvers
+        this.fieldResolvers = predecessorResolvers
         incoming =
             outgoing.keys.associateWith { site ->
                 outgoing
@@ -733,17 +733,17 @@ private class TestExecutorRegistry(
         )
     }
 
-    private fun extendFragment(
+    private fun closePredecessorDemand(
         fragment: Fragment,
-        extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
+        predecessorResolvers: Map<Schema.OutputField, Resolver.Field>,
     ): Fragment {
         val additions = mutableListOf<Selection>()
         fragment.nominalType.possibleTypes.forEach { possibleType ->
-            collectExtensions(
+            collectPredecessorDemand(
                 selections = fragment.subselections,
                 objectType = possibleType,
                 path = emptyList(),
-                extendedResolvers = extendedResolvers,
+                predecessorResolvers = predecessorResolvers,
                 additions = additions,
             )
         }
@@ -753,11 +753,11 @@ private class TestExecutorRegistry(
         )
     }
 
-    private fun collectExtensions(
+    private fun collectPredecessorDemand(
         selections: model.SelectionForest,
         objectType: Schema.ObjectType,
         path: List<Selection>,
-        extendedResolvers: Map<Schema.OutputField, Resolver.Field>,
+        predecessorResolvers: Map<Schema.OutputField, Resolver.Field>,
         additions: MutableList<Selection>,
     ) {
         selections.forEach { selection ->
@@ -765,8 +765,8 @@ private class TestExecutorRegistry(
             if (selection.key.arguments.containsErrorValue()) return@forEach
 
             val field = objectType.fields.getValue(selection.key.field.fieldName)
-            extendedResolvers[field]
-                ?.extendedFragment(selection.key.arguments.retarget(field))
+            predecessorResolvers[field]
+                ?.predecessorDemand(selection.key.arguments.retarget(field))
                 ?.subselections
                 ?.let { requirements ->
                     rootAt(path, requirements).forEach(additions::add)
@@ -775,11 +775,11 @@ private class TestExecutorRegistry(
             val outputType = field.typeExpr.baseType as? Schema.CompositeType
                 ?: return@forEach
             outputType.possibleTypes.forEach { possibleType ->
-                collectExtensions(
+                collectPredecessorDemand(
                     selections = selection.subselections,
                     objectType = possibleType,
                     path = path + selection,
-                    extendedResolvers = extendedResolvers,
+                    predecessorResolvers = predecessorResolvers,
                     additions = additions,
                 )
             }

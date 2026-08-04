@@ -27,6 +27,8 @@ The proof is intentionally factored at the same boundaries as the Kotlin model:
 
 Requirement tokens in Resolver03 and demand tokens in Resolver04 are opaque on purpose. Their identity includes the containing-object path, concrete-type guard, exact key, and argument tuple, so a proof cannot satisfy coverage by silently erasing a guard or merging unequal arguments.
 
+The TLA+ modules retain established operator names such as `ExtendedByOccurrence`; in the Kotlin-facing vocabulary, those operators represent predecessor demand lifted into successor demand.
+
 ## Machine-Checked Results
 
 TLAPS proves the following under each module's explicit world assumptions:
@@ -35,7 +37,7 @@ TLAPS proves the following under each module's explicit world assumptions:
 2. Every demanded key appears exactly once in a valid dependency-first construction order.
 3. Every resolver input dependency precedes its application.
 4. The finite fold terminates and applies each activated resolver key at one unique sequence position per OER occurrence.
-5. Resolver03's supplied producer demand contains every guarded requirement represented by each activated nested occurrence's exact extended fragment.
+5. Resolver03's supplied producer demand contains every guarded requirement represented by each activated nested occurrence's exact predecessor demand.
 6. Resolver04's unified site order gives provider recursion a finite decreasing rank, binds every fragment variable before its field, stores the provider value, and seals every modeled converging ambient contribution into the exact field's demand.
 7. The least root-reachable finite result-tree carrier turns recursive local judgments into the modeled whole-tree `correctResolution` conjunction.
 8. Completed occurrence-indexed Resolver01 and Resolver02 folds establish whole-tree fragment and resolver-demand conformance.
@@ -43,7 +45,7 @@ TLAPS proves the following under each module's explicit world assumptions:
 10. Under explicit observation alignment and projection coverage, Resolver01 and Resolver02 value construction plus their completed folds imply all six modeled `correctResolution` conjuncts.
 11. Every finite reachable object-occurrence fold can run in one interleaved product machine whose terminal built keys equal that occurrence's least closed demand.
 12. Dependency-first prefix materialization and final-result materialization select the same exact input cells, so a deterministic resolver function yields the same raw output at construction time and in the final correctness judgment.
-13. Resolver03's direct and guarded extended demand derives the projection-coverage premise, and its occurrence product fold terminates in a result satisfying every modeled `correctResolution` conjunct.
+13. Resolver03's direct predecessor demand and guarded successor demand derive the projection-coverage premise, and its occurrence product fold terminates in a result satisfying every modeled `correctResolution` conjunct.
 14. Every validated Resolver04 provider path has an exact finite object-traversal trace; null and error values absorb the remaining suffix, terminal simple values are preserved, and terminal nested lists convert positionally to input lists along a decreasing finite rank.
 15. Resolver04's provider root precedes its defining field, its actual provider read equals that structural path result, prefix and final provider reads agree, direct, guarded, and ambient demand derives projection coverage, and its occurrence product fold terminates in a result satisfying every modeled `correctResolution` conjunct, including variables.
 

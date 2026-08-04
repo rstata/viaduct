@@ -123,7 +123,7 @@ It is valid only if the complete transitive production closure of `common` never
 
 ## Registry Validation
 
-This should be a world-construction invariant, not a runtime check. The executor registry already computes a dependency-first transitive extension of resolver and variable sites. Validation needs a richer product of that traversal which retains rooted occurrence paths instead of reducing everything to `Schema.ResolverSite` coordinates.
+This should be a world-construction invariant, not a runtime check. The executor registry already computes dependency-first transitive predecessor demand across resolver and variable sites. Validation needs a richer product of that traversal which retains rooted occurrence paths instead of reducing everything to `Schema.ResolverSite` coordinates.
 
 For each variable coordinate, registry construction would:
 

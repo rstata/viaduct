@@ -2,10 +2,10 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
-import model.Selection
 import model.SelectionForest
 import model.Value
 import model.registry.demandsFromSibling
+import model.registry.successorDemand
 import model.selectionForestOf
 import model.union
 import semantics.correctresolution.argumentsContainErrorValue
@@ -48,7 +48,7 @@ private fun Value.Object.resolve(
                     demand
                 } else {
                     val resolver = world.executorRegistry.resolver(key.field)
-                    val fragment = resolver.extendedFragment(key.arguments)
+                    val fragment = resolver.predecessorDemand(key.arguments)
                     demand + fragment.subselections
                 }
             }
@@ -129,12 +129,12 @@ private fun Value.Object.resolveKey(
                     key.field in world.executorRegistry -> {
                         val resolver = world.executorRegistry.resolver(key.field)
                         val objectFragment = resolver.objectFragment(key.arguments)
-                        // The extended fragment and dependency order put the complete input here.
+                        // The predecessor demand and dependency order put the complete input here.
                         val input = resolved.materialize(objectFragment)
                         resolver.resolve(
                             input = input,
                             arguments = key.arguments,
-                            transitiveDemand = subselections.withExtendedResolverDemand(),
+                            transitiveDemand = subselections.successorDemand(),
                         )
                     }
 
@@ -173,38 +173,4 @@ private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResul
                         )
                     },
             )
-    }
-
-/**
- * Extends output demand with every encountered resolver occurrence's prerequisites.
- *
- * Each resolver's extended fragment is rooted at its occurrence's containing object. Recursing
- * through subselections retains the path and type guards that locate successor occurrences.
- */
-context(world: Assumptions)
-private fun SelectionForest.withExtendedResolverDemand(): SelectionForest =
-    flatMap { selection ->
-        val nestedDemand = selection.subselections.withExtendedResolverDemand()
-        val rootedSelection =
-            Selection.of(
-                key = selection.key,
-                nominalType = selection.nominalType,
-                possibleTypes = selection.possibleTypes,
-                subselections = nestedDemand,
-            )
-        val resolverDemand =
-            selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-                val key = selection.concreteObjectKey(possibleType)
-                if (
-                    key.arguments.argumentsContainErrorValue() ||
-                    key.field !in world.executorRegistry
-                ) {
-                    demand
-                } else {
-                    val resolver = world.executorRegistry.resolver(key.field)
-                    val fragment = resolver.extendedFragment(key.arguments)
-                    demand + fragment.subselections
-                }
-            }
-        selectionForestOf(rootedSelection) + resolverDemand
     }

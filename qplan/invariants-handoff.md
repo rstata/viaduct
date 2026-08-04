@@ -6,7 +6,7 @@ This handoff records a possible simplification of the execution-variable model. 
 
 ## Outcome
 
-The compiling Kotlin model now enforces provider containment for representative and observed exact fragments, constructs every argument-dependent fragment by retargeting one fixed template, gives generated node loaders a real bridge-shaped representative, inserts generated provider paths into their defining fragments, and removes `extendedVariables` plus independent extended-provider reinjection in Resolver04. Provider sites remain in the acyclic graph for value ordering. Resolver04 now uses registry-computed extended fragments as its input closure together with one symbolic envelope, raw output provenance, and widening because the contained-provider regression still requires an already-produced child OER to accept a newly concrete descendant without reapplying its producer. No TLA+ module or proof was changed.
+The compiling Kotlin model now enforces provider containment for representative and observed exact fragments, constructs every argument-dependent fragment by retargeting one fixed template, gives generated node loaders a real bridge-shaped representative, inserts generated provider paths into their defining fragments, and removes `extendedVariables` plus independent extended-provider reinjection in Resolver04. Provider sites remain in the acyclic graph for value ordering. Resolver04 now uses registry-computed predecessor demands as its input closure together with one symbolic envelope, raw output provenance, and widening because the contained-provider regression still requires an already-produced child OER to accept a newly concrete descendant without reapplying its producer. No TLA+ module or proof was changed.
 
 The goal is not merely to document additional preconditions. The goal is to make the smallest Resolver04 that faithfully models the intended domain.
 
@@ -53,7 +53,7 @@ The new invariants must also become part of the repository's consistent written 
 
 ## Why This Should Simplify Registry Assembly
 
-`TestExecutorRegistry` now constructs only `extendedResolvers`, rooting transitive field-resolver requirements at each occurrence in a resolver fragment. The former `extendedVariables` extension was redundant: ordinary traversal of the defining fragment already encounters every contained provider path and adds the transitive object fragments of resolver fields on that path. Variables still participate in dependency ordering because their values must be bound before exact argument keys can be formed, but their providers are not inserted as an independent demand forest.
+`TestExecutorRegistry` now constructs only `predecessorResolvers`, rooting transitive field-resolver requirements at each occurrence in a resolver fragment. The former `extendedVariables` extension was redundant: ordinary traversal of the defining fragment already encounters every contained provider path and adds the transitive object fragments of resolver fields on that path. Variables still participate in dependency ordering because their values must be bound before exact argument keys can be formed, but their providers are not inserted as an independent demand forest.
 
 Fixed shape means that this traversal can be performed once over the representative structural envelope. Exact argument tuples change key values within that structure but cannot introduce new provider locations, field paths, guards, or transitive-demand sites.
 
@@ -73,7 +73,7 @@ This suggests that Resolver04 should be expressible in terms of two artifacts:
 - A symbolic envelope used to preserve all structurally possible producer-owned demand before bindings are known.
 - Concrete demand obtained by substituting bindings and grouping exact `Value.Key` values.
 
-The revised implementation makes that distinction explicit. Registry-computed extended fragments supply the guarded input closure, concrete selections drive work, and one symbolic `envelope` supplies optional producer coverage before bindings are known. This removed `ambientSelections`, `includeAmbientRoots`, `matchingAmbientDemand`, `passiveDemand`, and the repeated required/speculative selection bookkeeping. Raw output provenance and recursive widening remain isolated in `Widening.kt`.
+The revised implementation makes that distinction explicit. Registry-computed predecessor demands supply the guarded input closure, concrete selections drive work, and one symbolic `envelope` supplies optional producer coverage before bindings are known. This removed `ambientSelections`, `includeAmbientRoots`, `matchingAmbientDemand`, `passiveDemand`, and the repeated required/speculative selection bookkeeping. Raw output provenance and recursive widening remain isolated in `Widening.kt`.
 
 ## Provider Containment Does Not Restore Depth-First Execution
 

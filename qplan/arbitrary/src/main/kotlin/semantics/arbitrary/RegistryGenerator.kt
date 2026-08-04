@@ -15,6 +15,7 @@ import model.Value
 import model.VariableCoordinate
 import model.fragmentFrom
 import model.objectOf
+import model.toSelectionForest
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
@@ -38,6 +39,7 @@ data class RegistryFeatures(
     val inputSensitiveResolvers: Int,
     val argumentSensitiveResolvers: Int,
     val inputAndArgumentSensitiveResolvers: Int,
+    val resolverErrorArgumentCount: Int,
     val variableCount: Int,
     val maximumVariablesPerOwner: Int,
     val hasNestedInputVariable: Boolean,
@@ -343,6 +345,8 @@ private class RegistryGenerator(
                         resolverPrograms.count {
                             it.value == ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE
                         },
+                    resolverErrorArgumentCount =
+                        objectFragments.values.sumOf(FragmentPlan::errorArgumentCount),
                     variableCount = variableProviders.size,
                     maximumVariablesPerOwner =
                         variableProviders
@@ -456,7 +460,13 @@ private class RegistryGenerator(
                     fieldName = field.name,
                     arguments =
                         field.arguments.associate { argument ->
-                            argument.name to inputLiteral(argument.type)
+                            val literal = inputLiteral(argument.type)
+                            argument.name to
+                                if (chance(config[ResolverArgumentErrorWeight])) {
+                                    ErrorInputPlan(literal)
+                                } else {
+                                    literal
+                                }
                         },
                     subselections =
                         field.type.namedType
@@ -862,8 +872,15 @@ internal data class FragmentPlan(
                 subselections = model.selectionForestOf(),
             )
         } else {
-            schema.fragmentFrom(source())
+            val parsed = schema.fragmentFrom(source())
+            Fragment.of(
+                nominalType = parsed.nominalType,
+                subselections = selections.materialize(schema, parsed.subselections),
+            )
         }
+
+    fun errorArgumentCount(): Int =
+        selections.sumOf(FragmentSelectionPlan::errorArgumentCount)
 
     fun source(): String =
         if (selections.isEmpty()) {
@@ -918,6 +935,40 @@ internal data class FragmentSelectionPlan(
             .materialize(schema)
             .subselections
             .single()
+
+    fun errorArgumentCount(): Int =
+        arguments.values.count { value -> value is ErrorInputPlan } +
+            subselections.sumOf(FragmentSelectionPlan::errorArgumentCount)
+}
+
+private fun List<FragmentSelectionPlan>.materialize(
+    schema: Schema,
+    parsedSelections: model.SelectionForest,
+): model.SelectionForest {
+    val parsed =
+        buildList {
+            parsedSelections.forEach(::add)
+        }
+    require(size == parsed.size) {
+        "Parsed resolver fragment did not preserve planned selection occurrences"
+    }
+    return zip(parsed)
+        .map { (plan, selection) ->
+            val arguments =
+                selection.key.arguments.fieldValues.mapValues { (name, value) ->
+                    if (plan.arguments[name] is ErrorInputPlan) Value.Error else value
+                }
+            Selection.of(
+                key =
+                    Value.Key.of(
+                        selection.key.field,
+                        Value.Arguments.of(selection.key.field, arguments),
+                    ),
+                nominalType = selection.nominalType,
+                possibleTypes = selection.possibleTypes,
+                subselections = plan.subselections.materialize(schema, selection.subselections),
+            )
+        }.toSelectionForest()
 }
 
 internal sealed interface InputValuePlan {
@@ -983,6 +1034,14 @@ internal data class VariableInputPlan(
     val variableName: String,
 ) : InputValuePlan {
     override fun source(): String = "\$$variableName"
+
+    override fun variableTarget(): VariableTarget? = null
+}
+
+internal data class ErrorInputPlan(
+    val placeholder: InputValuePlan,
+) : InputValuePlan {
+    override fun source(): String = placeholder.source()
 
     override fun variableTarget(): VariableTarget? = null
 }
@@ -1117,6 +1176,7 @@ private fun InputValuePlan.variableOccurrences(
                     field.variableOccurrences(path + InputValueStep.Field(name))
                 }
             is InputLiteralPlan,
+            is ErrorInputPlan,
             is NullInputPlan,
             is VariableInputPlan,
             -> emptyList()
@@ -1128,6 +1188,7 @@ private fun InputValuePlan.containsVariable(): Boolean =
         is ListInputPlan -> elements.any(InputValuePlan::containsVariable)
         is ObjectInputPlan -> fields.values.any(InputValuePlan::containsVariable)
         is InputLiteralPlan,
+        is ErrorInputPlan,
         is NullInputPlan,
         -> false
     }

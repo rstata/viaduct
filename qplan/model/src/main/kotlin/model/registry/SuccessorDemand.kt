@@ -20,7 +20,6 @@ fun SelectionForest.successorDemand(): SelectionForest =
         val rootedSelection =
             Selection.of(
                 key = selection.key,
-                nominalType = selection.nominalType,
                 possibleTypes = selection.possibleTypes,
                 subselections = nestedDemand,
             )

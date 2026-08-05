@@ -17,7 +17,9 @@ import semantics.readVariable
 import semantics.variables
 
 /**
- * Returns the result for [selections] and all transitive resolver demand on this concrete object.
+ * First attempt at resolving [selections] when resolvers use variables, now abandoned. Its
+ * restrictions on variable definitions and uses were very loose, and we concluded that one-shot
+ * resolution is not possible under those restrictions.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =

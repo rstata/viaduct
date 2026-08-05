@@ -248,7 +248,7 @@ class ResolverWitnessTest {
 
     private fun Selection.hasAbstractPath(): Boolean {
         val outputType = key.field.typeExpr.baseType
-        return nominalType.possibleTypes.size > 1 ||
+        return key.field.containingType.possibleTypes.size > 1 ||
             (outputType is Schema.CompositeType && outputType.possibleTypes.size > 1) ||
             subselections.anySelection { selection -> selection.hasAbstractPath() }
     }

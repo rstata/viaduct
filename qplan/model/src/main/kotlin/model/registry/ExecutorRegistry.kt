@@ -84,6 +84,14 @@ sealed interface Resolver : Executor {
             function(input, arguments).snipToDemand(projectionDemand(selections))
 
         /**
+         * Applies this field resolver and returns its complete finite selection-independent output.
+         */
+        fun tenantResolve(
+            input: Value.Object,
+            arguments: Value.Arguments,
+        ): Value.Output? = function(input, arguments)
+
+        /**
          * Applies this field resolver once, strictly projects [selections], and additionally
          * projects the recursively available portion of [speculativeDemand].
          */
@@ -250,7 +258,6 @@ private fun SelectionForest.retargetArguments(
                         selection.key.field,
                         retargetArguments(selection.key, resolverArguments),
                     ),
-                nominalType = selection.nominalType,
                 possibleTypes = selection.possibleTypes,
                 subselections =
                     selection.subselections.retargetArguments(

@@ -990,7 +990,6 @@ private fun List<FragmentSelectionPlan>.materialize(
                         selection.key.field,
                         Value.Arguments.of(selection.key.field, arguments),
                     ),
-                nominalType = selection.nominalType,
                 possibleTypes = selection.possibleTypes,
                 subselections = plan.subselections.materialize(schema, selection.subselections),
             )

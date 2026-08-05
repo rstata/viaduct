@@ -205,7 +205,6 @@ private class NodeResolverLowering(
                                             Value.Error
                                         },
                                 ),
-                            nominalType = owner,
                             possibleTypes = setOf(owner),
                             subselections = selectionForestOf(),
                         ),
@@ -231,7 +230,6 @@ private class NodeResolverLowering(
             val original =
                 Selection.of(
                     key = selection.key,
-                    nominalType = selection.nominalType,
                     possibleTypes = selection.possibleTypes,
                     subselections = loweredSubselections,
                 )
@@ -240,7 +238,7 @@ private class NodeResolverLowering(
                     possibleType.fields[selection.key.field.fieldName] in loweredFields
                 }
             val bridgeField =
-                selection.nominalType.fields[
+                selection.key.field.containingType.fields[
                     selection.key.field.fieldName + NODE_ID_BRIDGE_SUFFIX
                 ]
             if (bridgeField == null || bridgePossibleTypes.isEmpty()) {
@@ -254,7 +252,6 @@ private class NodeResolverLowering(
                                 bridgeField,
                                 selection.key.arguments.retarget(bridgeField),
                             ),
-                        nominalType = selection.nominalType,
                         possibleTypes = bridgePossibleTypes,
                         subselections = selectionForestOf(),
                     ),
@@ -506,7 +503,7 @@ private class TestExecutorRegistry(
             require(coordinate.field in fieldResolvers) {
                 "Variable ${coordinate.variable.variableName} belongs to an unregistered resolver"
             }
-            require(selection.nominalType == coordinate.field.containingType) {
+            require(selection.key.field.containingType == coordinate.field.containingType) {
                 "Variable ${coordinate.variable.variableName} selection is not relative to " +
                     "${coordinate.field.containingType.typeName}/${coordinate.field.fieldName}"
             }
@@ -798,7 +795,6 @@ private class TestExecutorRegistry(
             selectionForestOf(
                 Selection.of(
                     key = selection.key,
-                    nominalType = selection.nominalType,
                     possibleTypes = selection.possibleTypes,
                     subselections = rooted,
                 ),

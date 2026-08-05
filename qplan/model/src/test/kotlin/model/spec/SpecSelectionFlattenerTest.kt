@@ -23,7 +23,6 @@ class SpecSelectionFlattenerTest {
         assertEquals(fixture.schema.field("Query", "version"), version.key.field)
         assertEquals(Schema.NoArguments, version.key.arguments.type)
         assertEquals(emptyMap(), version.key.arguments.fieldValues)
-        assertEquals(fixture.query, version.nominalType)
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertTrue(version.isLeaf)
         assertTrue(version.subselections.isEmpty())
@@ -121,10 +120,8 @@ class SpecSelectionFlattenerTest {
             pet.subselections.single { it.key.field.fieldName == "barkVolume" }
 
         assertEquals(fixture.pet, name.key.field.containingType)
-        assertEquals(fixture.pet, name.nominalType)
         assertEquals(setOf(fixture.dog), name.possibleTypes)
         assertEquals(fixture.dog, barkVolume.key.field.containingType)
-        assertEquals(fixture.dog, barkVolume.nominalType)
         assertEquals(setOf(fixture.dog), barkVolume.possibleTypes)
     }
 
@@ -155,9 +152,9 @@ class SpecSelectionFlattenerTest {
         val friend = result.single()
         val name = friend.subselections.single()
 
-        assertEquals(fixture.dog, friend.nominalType)
+        assertEquals(fixture.dog, friend.key.field.containingType)
         assertEquals(setOf(fixture.dog), friend.possibleTypes)
-        assertEquals(fixture.pet, name.nominalType)
+        assertEquals(fixture.pet, name.key.field.containingType)
         assertEquals(setOf(fixture.dog, fixture.cat), name.possibleTypes)
     }
 
@@ -185,7 +182,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val x = result.single()
-        assertEquals(fixture.i3, x.nominalType)
+        assertEquals(fixture.i3, x.key.field.containingType)
         assertTrue(x.possibleTypes.isEmpty())
     }
 

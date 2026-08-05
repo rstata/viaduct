@@ -243,6 +243,45 @@ class GeneratorTest {
     }
 
     @Test
+    fun `complex resolver outputs can vary with input or arguments`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 3..3) +
+                (MinimumSelectionDepth to 1) +
+                (MaxSelectionDepth to 3) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentWeight to 1.0)
+        val random = RandomSource.seeded(4815162342L)
+        var complexResolvers = 0
+        var sensitiveComplexResolvers = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            registry.fieldResolverSites.forEach { coordinate ->
+                val field =
+                    schema
+                        .objectNamed(coordinate.typeName)
+                        .fields
+                        .single { candidate -> candidate.name == coordinate.fieldName }
+                if (field.type.list || schema.isComposite(field.type.namedType)) {
+                    complexResolvers += 1
+                    if (registry.resolverProgram(coordinate) != ResolverProgramKind.CONSTANT) {
+                        sensitiveComplexResolvers += 1
+                    }
+                }
+            }
+        }
+
+        assertTrue(complexResolvers > 0)
+        assertTrue(
+            sensitiveComplexResolvers > 0,
+            "Generated no input- or argument-sensitive object/list resolver",
+        )
+    }
+
+    @Test
     fun `resolver variables generate provider-backed fragment arguments`() {
         val config =
             Config.default +

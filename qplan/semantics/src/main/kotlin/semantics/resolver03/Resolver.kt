@@ -2,23 +2,23 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
+import model.Selection
 import model.SelectionForest
 import model.Value
+import model.merge
 import model.registry.demandsFromSibling
 import model.registry.successorDemand
 import model.selectionForestOf
 import model.union
 import semantics.correctresolution.argumentsContainErrorValue
-import semantics.correctresolution.concreteObjectKey
 import semantics.materialize
 import semantics.resolvePaths
 import semantics.resolveValue
 
 /**
- * Returns the result for [selections] and all transitive resolver demand on this concrete object.
- *
- * Every supplied or resolver-introduced selection applicable at an object visited by this
- * operation must contain no [Value.Variable] in its key arguments.
+ * Resolves [selections] when resolver object fragments may be nonempty but contain no variables.
+ * Results are selective relative to Resolver02; whether they contain only the necessary OER nodes
+ * has not been proved.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
@@ -36,12 +36,10 @@ private fun Value.Object.resolve(
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
 
-    val applicableSelections =
-        selections.filter { selection -> type in selection.possibleTypes }
+    val applicableSelections = selections.merge(type)
     val resolverInputDemand =
         applicableSelections
-            .groupBy { selection -> selection.concreteObjectKey(type) }
-            .keys
+            .keys()
             .fold(selectionForestOf()) { demand, key ->
                 if (
                     key.arguments.argumentsContainErrorValue() ||
@@ -54,12 +52,13 @@ private fun Value.Object.resolve(
                     demand + fragment.subselections
                 }
             }
-    val selectionsByKey =
+    val mergedSelections =
         (applicableSelections + resolverInputDemand)
-            .groupBy { selection -> selection.concreteObjectKey(type) }
-    val orderedKeys = dependencyOrder(selectionsByKey.keys - resolved.keys)
+            .merge(type)
+    val orderedKeys = dependencyOrder(mergedSelections.keys() - resolved.keys)
     return orderedKeys.fold(resolved) { result, key ->
-        result.union(resolveKey(key, selectionsByKey.getValue(key), result))
+        val selection = mergedSelections.single { selection -> selection.key == key }
+        result.union(resolveKey(selection, result))
     }
 }
 
@@ -109,20 +108,19 @@ private fun Value.Object.dependenciesOf(
 }
 
 /**
- * Returns a one-cell object result for [key] and its merged [fieldSelections].
+ * Returns a one-cell object result for the merged [fieldSelection].
  */
 context(world: Assumptions)
 private fun Value.Object.resolveKey(
-    key: Value.Key,
-    fieldSelections: SelectionForest,
+    fieldSelection: Selection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
+    val key = fieldSelection.key
     val cell =
         if (key.arguments.argumentsContainErrorValue()) {
             EngineResult.Cell.Error
         } else {
-            val subselections =
-                fieldSelections.flatMap { selection -> selection.subselections }
+            val subselections = fieldSelection.subselections
             val resolutionSelections =
                 if (key.field in world.executorRegistry) {
                     subselections.successorDemand()

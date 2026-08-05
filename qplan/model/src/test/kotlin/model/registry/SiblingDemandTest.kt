@@ -89,7 +89,6 @@ class SiblingDemandTest {
                                 selectionForestOf(
                                     Selection.of(
                                         key = schema.key(query, "other"),
-                                        nominalType = query,
                                         possibleTypes = emptySet(),
                                         subselections = selectionForestOf(),
                                     ),

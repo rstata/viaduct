@@ -10,8 +10,9 @@ package model
  *
  * ### Equality And Mutability
  *
- * Selection and forest equality are undefined. This interface therefore exposes only operations
- * that preserve occurrences without comparing payloads or observing an order.
+ * Selection and forest equality are undefined. Except for the explicit [merge] normalization
+ * boundary, this interface exposes only operations that preserve occurrences without comparing
+ * payloads or observing an order.
  */
 sealed interface SelectionForest {
     val size: Int
@@ -26,6 +27,9 @@ sealed interface SelectionForest {
 
     /** The union of the sets produced independently from each occurrence. */
     fun <T> flatMapToSet(transform: (Selection) -> Set<T>): Set<T>
+
+    /** The structural keys contributed independently by all occurrences. */
+    fun keys(): Set<Value.Key>
 
     fun <K> groupBy(keySelector: (Selection) -> K): Map<K, SelectionForest>
 
@@ -47,17 +51,56 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
     SelectionForestImpl(toList())
 
 /**
+ * Returns the demand applicable to concrete parent [type], normalized by structural key.
+ *
+ * Applicability is tested before specialization, so an inapplicable occurrence contributes neither
+ * its key nor its descendants. Each applicable key is reconstructed against the canonical field on
+ * [type], including concrete argument defaults, and occurrences with equal reconstructed keys are
+ * replaced by one selection whose subselections are their concatenated subselections.
+ *
+ * The result has exactly one top-level selection for each reconstructed key. Every result key's
+ * field belongs to [type], and every result selection has `possibleTypes == setOf(type)`.
+ * Subselections are not recursively merged because their concrete runtime parent type is not yet
+ * known.
+ *
+ * A reconstructed key may still contain [Value.Variable] values. Such a key is a symbolic
+ * concrete-field coordinate and cannot inhabit a [Value.Object] or [EngineResult.Object] until its
+ * variables are instantiated. Merging uses ordinary structural key equality and must be repeated
+ * after substitution can make formerly distinct argument tuples equal.
+ */
+context(world: Assumptions)
+fun SelectionForest.merge(type: Schema.ObjectType): SelectionForest =
+    filter { selection -> type in selection.possibleTypes }
+        .groupBy { selection ->
+            Value.Key.of(
+                field = world.schema.field(type.typeName, selection.key.field.fieldName),
+                arguments = selection.key.arguments.fieldValues,
+            )
+        }.entries
+        .fold(selectionForestOf()) { result, (key, selections) ->
+            result +
+                selectionForestOf(
+                    Selection.of(
+                        key = key,
+                        possibleTypes = setOf(type),
+                        subselections =
+                            selections.flatMap { selection -> selection.subselections },
+                    ),
+                )
+        }
+
+/**
  * A post-validation field-selection occurrence used for Viaduct field resolution.
  *
  * This is not a GraphQL AST selection or a description of field completion. Aliases, response
  * keys, source order, named fragments, inline-fragment nodes, and directives are absent. Inline
- * fragments have already been flattened into [nominalType] and [possibleTypes].
+ * fragments have already been flattened into the field coordinate in [key] and the applicability
+ * guard in [possibleTypes].
  *
  * ### Invariant: selection-local-coherence
  *
  * Selections constructed by this model use [of], which ensures:
- * - [key]'s field belongs to [nominalType].
- * - [possibleTypes] is a subset of the object types contained by [nominalType].
+ * - [possibleTypes] is a subset of the object types contained by [key]'s field owner.
  * - When [isLeaf] is true, [subselections] is empty. The converse does not hold: a composite
  *   selection may also have no subselections.
  *
@@ -84,29 +127,17 @@ sealed interface Selection {
      * ### Representation
      *
      * [Value.Key.field] is the canonical schema field intended by this selection, and
-     * its containing type is [nominalType]. Non-variable argument values are in their coerced
-     * semantic form. An argument may contain a [Value.Variable]. Variables compare by name. Because
-     * a selection key is outside an OER or [Value.Object], its field may belong to an abstract
-     * [Schema.InterfaceType] or [Schema.UnionType], and its arguments may contain variables. Before
-     * a key is present in either value, its field must belong to the applicable concrete
-     * [Schema.ObjectType] and its variables must be instantiated.
+     * its containing type records the immediate field-lookup context. Non-variable argument values
+     * are in their coerced semantic form. An argument may contain a [Value.Variable]. Variables
+     * compare by name. Because a selection key is outside an OER or [Value.Object], its field may
+     * belong to an abstract [Schema.InterfaceType] or [Schema.UnionType], and its arguments may
+     * contain variables. Before a key is present in either value, its field must belong to the
+     * applicable concrete [Schema.ObjectType] and its variables must be instantiated.
      *
      * Compared to GraphQL selections, field-resolver selections use the object key rather than
      * response keys.
      */
     val key: Value.Key
-
-    /**
-     * The immediate type context of [key].
-     *
-     * It is [possibleTypes], not the nominal type, that controls which concrete types this selection
-     * actually applies to. This object must be contained in [Assumptions.schema].
-     *
-     * Compared to GraphQL selections, this is the type-condition of the immediately-enclosing
-     * spread, or the nominal type inherited from an enclosing selection or document if there
-     * haven't been any spreads applied.
-     */
-    val nominalType: Schema.CompositeType
 
     /**
      * The concrete runtime parent-object types for which this selection applies: if during resolution
@@ -127,17 +158,17 @@ sealed interface Selection {
      * This is empty when [isLeaf] is true. It may also be empty when this selection selects a
      * composite type but no fields within that value.
      *
-     * Because of GraphQL's validation rules for type conditions, the relationship
-     * between the [nominalType] of a subselection and [key]'s field result type is complicated.
-     * Nested type conditions nested spreads need only overlap pairwise:
+     * Because of GraphQL's validation rules for type conditions, the relationship between the
+     * field owner of a subselection and [key]'s field result type is complicated. Nested type
+     * conditions need only overlap pairwise:
      * ```
      *    I1 = {A, B}
      *    I2 = {B, C}
      *    I3 = {C, D}
      * ```
      * Under an I1 field, ... on I2 { ... on I3 { x } } is valid, but I3 does not overlap I1.
-     * So while we might someday need an invariant for the [nominalType] of subselections,
-     * right now we decline to state one.
+     * So while we might someday need an invariant for the field owners of subselections, right now
+     * we decline to state one.
      *
      * One might imagine an invariant that looks at the _actual_ object types that [key] could be applied
      * to (according to the local [possibleTypes]) and constrain those sub-[possibleTypes] to
@@ -164,25 +195,21 @@ sealed interface Selection {
          */
         fun of(
             key: Value.Key,
-            nominalType: Schema.CompositeType,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
         ): Selection {
-            require(key.field.containingType == nominalType) {
-                "Selection field ${key.field.fieldName} does not belong to ${nominalType.typeName}"
-            }
-            require(possibleTypes.all { it in nominalType.possibleTypes }) {
-                "Selection possible types must be contained by ${nominalType.typeName}"
+            val fieldOwner = key.field.containingType
+            require(possibleTypes.all { it in fieldOwner.possibleTypes }) {
+                "Selection possible types must be contained by ${fieldOwner.typeName}"
             }
             require(
                 key.field.typeExpr.baseType is Schema.CompositeType || subselections.isEmpty(),
             ) {
-                "Leaf selection ${nominalType.typeName}.${key.field.fieldName} has subselections"
+                "Leaf selection ${fieldOwner.typeName}.${key.field.fieldName} has subselections"
             }
 
             return SelectionImpl(
                 key = key,
-                nominalType = nominalType,
                 possibleTypes = possibleTypes,
                 subselections = subselections,
             )
@@ -192,7 +219,6 @@ sealed interface Selection {
 
 private class SelectionImpl(
     override val key: Value.Key,
-    override val nominalType: Schema.CompositeType,
     override val possibleTypes: Set<Schema.ObjectType>,
     override val subselections: SelectionForest,
 ) : Selection
@@ -224,6 +250,9 @@ private class SelectionForestImpl(
 
     override fun <T> flatMapToSet(transform: (Selection) -> Set<T>): Set<T> =
         occurrences.fold(emptySet()) { result, selection -> result + transform(selection) }
+
+    override fun keys(): Set<Value.Key> =
+        occurrences.fold(emptySet()) { result, selection -> result + selection.key }
 
     override fun forEach(action: (Selection) -> Unit) {
         occurrences.forEach(action)

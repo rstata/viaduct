@@ -3,25 +3,22 @@ package semantics.resolver01
 import model.Assumptions
 import model.EngineResult
 import model.Schema
+import model.Selection
 import model.SelectionForest
 import model.Value
+import model.merge
 import model.registry.demandsFromSibling
 import model.selectionForestOf
 import model.union
 import semantics.correctresolution.argumentsContainErrorValue
-import semantics.correctresolution.concreteObjectKey
 import semantics.materialize
 import semantics.resolvePaths
 import semantics.resolveValue
 
 /**
- * Resolves [selections] against an already-produced object value.
- *
- * Resolver01 closes and orders exact local field-resolver input demand. Its ordinary test domain
- * still gives source field resolvers empty object fragments; fixture-generated node loaders use
- * synthetic sibling ID bridge fields and therefore require this generic local field dependency.
- * Every supplied or resolver-introduced selection applicable at an object visited by this
- * operation must contain no [Value.Variable] in its key arguments.
+ * Resolves [selections] when resolver object fragments are empty, except for generated Node-loader
+ * fragments that select synthetic `foo$id` bridge fields. Results are non-selective and may contain
+ * more OER nodes than are strictly necessary to resolve the query.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
@@ -36,11 +33,11 @@ private fun Value.Object.resolve(
     resolved: EngineResult.Object,
 ): EngineResult.Object {
     val closedDemand = type.closeResolverDemand(selections)
-    val selectionsByKey =
-        closedDemand.groupBy { selection -> selection.concreteObjectKey(type) }
-    val orderedKeys = dependencyOrder(selectionsByKey.keys - resolved.keys)
+    val mergedSelections = closedDemand.merge(type)
+    val orderedKeys = dependencyOrder(mergedSelections.keys() - resolved.keys)
     return orderedKeys.fold(resolved) { result, key ->
-        result.union(resolveKey(key, selectionsByKey.getValue(key), result))
+        val selection = mergedSelections.single { selection -> selection.key == key }
+        result.union(resolveKey(selection, result))
     }
 }
 
@@ -49,12 +46,9 @@ private fun Schema.ObjectType.closeResolverDemand(
     selections: SelectionForest,
     expanded: Set<Value.Key> = emptySet(),
 ): SelectionForest {
-    val applicableSelections =
-        selections.filter { selection -> this in selection.possibleTypes }
-    val groupedSelections =
-        applicableSelections.groupBy { selection -> selection.concreteObjectKey(this) }
+    val applicableSelections = selections.merge(this)
     val unexpandedResolverKeys =
-        groupedSelections.keys.filter { key ->
+        applicableSelections.keys().filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
                 key.field in world.executorRegistry
@@ -117,16 +111,15 @@ private fun Value.Object.dependenciesOf(
 
 context(world: Assumptions)
 private fun Value.Object.resolveKey(
-    key: Value.Key,
-    fieldSelections: SelectionForest,
+    fieldSelection: Selection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
+    val key = fieldSelection.key
     val cell =
         if (key.arguments.argumentsContainErrorValue()) {
             EngineResult.Cell.Error
         } else {
-            val subselections =
-                fieldSelections.flatMap { selection -> selection.subselections }
+            val subselections = fieldSelection.subselections
             val fieldValue =
                 when {
                     key.field.fieldName == "__typename" ->
@@ -138,7 +131,6 @@ private fun Value.Object.resolveKey(
                         resolver.tenantResolve(
                             input = resolved.materialize(objectFragment),
                             arguments = key.arguments,
-                            selections = subselections,
                         )
                     }
 
@@ -146,11 +138,15 @@ private fun Value.Object.resolveKey(
                 }
             EngineResult.Cell.of(
                 value =
-                    fieldValue.resolveValue(subselections).let { resolvedValue ->
-                        fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
-                            value.resolve(selections, resolved)
-                        }
-                    },
+                    fieldValue
+                        .resolveValue(
+                            resolverDemand = subselections,
+                            selections = null,
+                        ).let { resolvedValue ->
+                            fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
+                                value.resolve(selections, resolved)
+                            }
+                        },
             )
         }
 

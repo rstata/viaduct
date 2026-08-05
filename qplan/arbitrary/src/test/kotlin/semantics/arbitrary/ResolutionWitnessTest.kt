@@ -304,6 +304,47 @@ class ResolutionWitnessTest {
         )
     }
 
+    @Test
+    fun `application count oracle distinguishes equal keys at separate list occurrences`() {
+        val world = traversalWorld()
+        val schema = world.schema
+        val computedField = schema.field("Payload", "computed")
+        val computedKey =
+            ResolverApplicationKey(
+                FieldCoordinate("Payload", "computed"),
+                Value.Arguments.of(computedField, mapOf("scale" to 1)),
+            )
+
+        fun payload(value: Int): EngineResult.Object =
+            schema.engineResultOf("Payload") {
+                field("computed", "scale" to 1) resolvesTo value
+                "base" resolvesTo value
+            }
+
+        val result =
+            schema.engineResultOf("Query") {
+                "items" resolvesTo listOf(payload(10), payload(20))
+            }
+        val expected =
+            result
+                .registeredResolverCellCounts(world.executorRegistry)
+                .filterKeys { key -> key == computedKey }
+
+        val malformedLog = ResolutionApplicationLog()
+        val firstInput =
+            schema.objectOf("Payload") {
+                "base" setTo 10
+            }
+        malformedLog.record(computedKey.sourceField, computedKey.arguments, firstInput)
+        malformedLog.record(computedKey.sourceField, computedKey.arguments, firstInput)
+
+        assertNotEquals(
+            expected,
+            malformedLog.snapshot().applicationCounts(),
+            "Duplicating one list occurrence and omitting another must fail the one-shot oracle",
+        )
+    }
+
     private fun fingerprintWorld(): TestWorld =
         TestWorld.fromSDL(
             """

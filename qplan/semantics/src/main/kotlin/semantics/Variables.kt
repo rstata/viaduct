@@ -61,7 +61,6 @@ internal fun Selection.instantiateVariables(
                         value.instantiateVariables(bindings)
                     },
             ),
-        nominalType = nominalType,
         possibleTypes = possibleTypes,
         subselections = subselections.instantiateVariables(bindings),
     )

@@ -77,7 +77,6 @@ private fun EngineResult?.observedDemand(): SelectionForest =
                     selectionForestOf(
                         Selection.of(
                             key = key,
-                            nominalType = type,
                             possibleTypes = setOf(type),
                             subselections = fetch(key).value.observedDemand(),
                         ),

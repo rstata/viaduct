@@ -12,6 +12,9 @@ sealed interface Assumptions {
     val schema: Schema
     val executorRegistry: ExecutorRegistry
 
+    /** Whether selective output traversal rejects fields outside its supplied selections. */
+    val selectiveResolvers: Boolean
+
     /**
      * Whether resolution of [field] crosses a resolver behavior boundary.
      *
@@ -25,10 +28,12 @@ sealed interface Assumptions {
         fun of(
             schema: Schema,
             executorRegistry: ExecutorRegistry,
+            selectiveResolvers: Boolean = true,
         ): Assumptions =
             AssumptionsImpl(
                 schema,
                 executorRegistry,
+                selectiveResolvers,
             )
     }
 }
@@ -36,6 +41,7 @@ sealed interface Assumptions {
 private class AssumptionsImpl(
     override val schema: Schema,
     override val executorRegistry: ExecutorRegistry,
+    override val selectiveResolvers: Boolean,
 ) : Assumptions {
     override fun behavioral(field: Schema.OutputField): Boolean {
         val containingType = field.containingType

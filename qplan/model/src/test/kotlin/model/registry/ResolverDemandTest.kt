@@ -616,7 +616,6 @@ class ResolverDemandTest {
                                         parsedSecond.key.field,
                                         mapOf("arg" to Value.Error),
                                     ),
-                                nominalType = parsedSecond.nominalType,
                                 possibleTypes = parsedSecond.possibleTypes,
                                 subselections = parsedSecond.subselections,
                             )

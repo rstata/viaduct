@@ -1,6 +1,7 @@
 package semantics.resolver01
 
 import kotlinx.coroutines.runBlocking
+import model.EngineResult
 import model.Schema
 import model.Value
 import model.emptyFragmentOf
@@ -82,6 +83,58 @@ class ResolverTest {
     }
 
     @Test
+    fun `retains unselected passive fields from a non-selective resolver`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      requested: String!
+                      extra: String!
+                    }
+
+                    type Query {
+                      user: User!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "user") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ ->
+                                schema.objectOf("User") {
+                                    "requested" setTo "requested"
+                                    "extra" setTo "extra"
+                                }
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val fragment =
+            world.fragmentFrom(
+                "fragment ignored on Query { user { requested } }",
+            )
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        val user =
+            assertIs<EngineResult.Object>(
+                result.fetch(schema.key(schema.query, "user")).value,
+            )
+        assertEquals(
+            setOf("requested", "extra"),
+            user.keys.map { key -> key.field.fieldName }.toSet(),
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
     fun `resolves an empty Query through field and node resolvers`() {
         val testWorld =
             TestWorld.fromSDL(
@@ -152,6 +205,121 @@ class ResolverTest {
                 result.correctResolution(fragment)
             },
         )
+    }
+
+    @Test
+    fun `resolves a nested passive node through its synthetic bridge`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
+
+                    type Profile implements Node {
+                      id: ID!
+                      name: String!
+                    }
+
+                    type Card {
+                      profile: Profile!
+                    }
+
+                    type Viewer {
+                      card: Card!
+                    }
+
+                    type Query {
+                      viewer: Viewer!
+                    }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val profile = schema.type("Profile") as Schema.ObjectType
+                    mapOf(
+                        profile to
+                            model.testing.nodeResolverOf { id ->
+                                schema.objectOf("Profile") {
+                                    "id" setTo id
+                                    "name" setTo "Ada"
+                                }
+                            },
+                    )
+                },
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "viewer") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ ->
+                                schema.objectOf("Viewer") {
+                                    "card" setTo
+                                        objectOf("Card") {
+                                            "profile" setTo
+                                                objectOf("Profile") {
+                                                    "id" setTo "profile-1"
+                                                }
+                                        }
+                                }
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val fragment =
+            world.fragmentFrom(
+                """
+                fragment ignored on Query {
+                  viewer {
+                    card {
+                      profile {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+                """.trimIndent(),
+            )
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        val viewer =
+            assertIs<EngineResult.Object>(
+                result.fetch(schema.key(schema.query, "viewer")).value,
+            )
+        val card =
+            assertIs<EngineResult.Object>(
+                viewer.fetch(schema.key(viewer.type, "card")).value,
+            )
+        val profileField = schema.field("Card", "profile")
+        val bridgeField = schema.field("Card", "profile\$id")
+        val profileKey = Value.Key.of(profileField, emptyMap())
+        val bridgeKey = Value.Key.of(bridgeField, emptyMap())
+        assertEquals(setOf(profileKey, bridgeKey), card.keys)
+        assertEquals(
+            "\$node:7:Profileprofile-1",
+            assertIs<Value.ID>(card.fetch(bridgeKey).value).idValue,
+        )
+
+        val profile = assertIs<EngineResult.Object>(card.fetch(profileKey).value)
+        assertEquals(
+            "profile-1",
+            assertIs<Value.ID>(
+                profile.fetch(schema.key(profile.type, "id")).value,
+            ).idValue,
+        )
+        assertEquals(
+            "Ada",
+            assertIs<Value.String>(
+                profile.fetch(schema.key(profile.type, "name")).value,
+            ).stringValue,
+        )
+        assertTrue(context(world) { result.correctResolution(fragment) })
     }
 
     private companion object {

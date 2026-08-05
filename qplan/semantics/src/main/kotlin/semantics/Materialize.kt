@@ -5,7 +5,7 @@ import model.EngineResult
 import model.Fragment
 import model.SelectionForest
 import model.Value
-import semantics.correctresolution.concreteObjectKey
+import model.merge
 
 /**
  * Materializes the object value selected by [fragment] from this result.
@@ -24,12 +24,12 @@ private fun EngineResult.Object.materializeSelectedObjectValue(
 ): Value.Object {
     val selectedFields =
         selections
-            .filter { selection -> type in selection.possibleTypes }
-            .groupBy { selection -> selection.concreteObjectKey(type) }
-            .mapValues { (key, fieldSelections) ->
-                val subselections =
-                    fieldSelections.flatMap { selection -> selection.subselections }
-                fetch(key).value.materializeEngineResultValue(subselections)
+            .merge(type)
+            .groupBy { selection -> selection.key }
+            .mapValues { (key, mergedSelections) ->
+                fetch(key).value.materializeEngineResultValue(
+                    mergedSelections.single().subselections,
+                )
             }
 
     return Value.Object.of(type, selectedFields)

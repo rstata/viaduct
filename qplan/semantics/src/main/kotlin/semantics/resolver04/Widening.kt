@@ -36,7 +36,6 @@ private fun Selection.coverageFor(key: Value.Key): SelectionForest {
                     field = this.key.field,
                     arguments = key.arguments.fieldValues,
                 ),
-            nominalType = nominalType,
             possibleTypes = possibleTypes,
             subselections = subselections.withoutVariableKeys(),
         ),
@@ -46,7 +45,6 @@ private fun Selection.coverageFor(key: Value.Key): SelectionForest {
 private fun Selection.withoutVariableSubselections(): Selection =
     Selection.of(
         key = key,
-        nominalType = nominalType,
         possibleTypes = possibleTypes,
         subselections = subselections.withoutVariableKeys(),
     )
@@ -62,7 +60,6 @@ private fun SelectionForest.withoutVariableKeys(): SelectionForest =
             selectionForestOf(
                 Selection.of(
                     key = selection.key,
-                    nominalType = selection.nominalType,
                     possibleTypes = selection.possibleTypes,
                     subselections = selection.subselections.withoutVariableKeys(),
                 ),

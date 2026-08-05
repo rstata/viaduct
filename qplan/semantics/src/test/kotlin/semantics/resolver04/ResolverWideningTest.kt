@@ -1,6 +1,5 @@
 package semantics.resolver04
 
-import model.EngineResult
 import model.Schema
 import model.Value
 import model.VariableCoordinate
@@ -8,23 +7,21 @@ import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Resumable widening after variable binding reveals demand below an already-resolved cell.
- *
- * Keep tests here focused on widening existing values without reapplying their producers.
+ * Former widening worlds that the depth-first variable stratification invariant now rejects.
  */
 class ResolverWideningTest {
     @Test
-    fun `widens a node loaded for a variable provider without reapplying it`() {
+    fun `rejects a node branch shared by a variable provider and use`() {
         var nodeApplications = 0
-        val testWorld =
-            TestWorld.fromSDL(
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
                 schemaSDL =
                     """
                     interface Node {
@@ -113,28 +110,23 @@ class ResolverWideningTest {
                                 """.trimIndent(),
                             ).subselections.single(),
                     )
-                },
-            )
-        val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
-
-        val result =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                    },
+                )
             }
 
-        assertEquals(1, nodeApplications)
-        assertTrue(context(world) { result.correctResolution(fragment) })
+        assertTrue(failure.message!!.contains("container -> container"))
+        assertEquals(0, nodeApplications)
     }
 
     @Test
-    fun `broadens an already resolved nested object after binding a variable`() {
+    fun `rejects transitive provider work that enters the variable use branch`() {
         val applications = linkedMapOf<String, Int>()
         fun applied(name: String) {
             applications[name] = applications.getOrDefault(name, 0) + 1
         }
-        val testWorld =
-            TestWorld.fromSDL(
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
                 schemaSDL =
                     """
                     type Object1 {
@@ -217,45 +209,16 @@ class ResolverWideningTest {
                                 "fragment ignored on Object1 { common }",
                             ).subselections.single(),
                     )
-                },
-            )
-        val world = testWorld.assumptions
-        val fragment =
-            world.fragmentFrom(
-                "fragment ignored on Query { source { variableConsumer } }",
-            )
-
-        val result =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                    },
+                )
             }
-        val source =
-            assertIs<EngineResult.Object>(
-                result.fetch(
-                    Value.Key.of(world.schema.field("Query", "source"), emptyMap()),
-                ).value,
-            )
 
+        assertTrue(failure.message!!.contains("child -> child"))
+        assertTrue(failure.message!!.contains("production path child -> common"))
         assertEquals(
-            Value.String.of("bound"),
-            source.variableValues.getValue(Value.Variable.of("value")),
-        )
-        assertEquals(
-            Value.Int.of(1),
-            source.fetch(
-                Value.Key.of(world.schema.field("Object1", "variableConsumer"), emptyMap()),
-            ).value,
-        )
-        assertEquals(
-            mapOf(
-                "source" to 1,
-                "child" to 1,
-                "field2" to 2,
-                "common" to 1,
-                "variableConsumer" to 1,
-            ),
+            emptyMap(),
             applications,
+            "Registry rejection must precede every resolver application",
         )
-        assertTrue(context(world) { result.correctResolution(fragment) })
     }
 }

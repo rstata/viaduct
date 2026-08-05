@@ -280,6 +280,17 @@ private fun SelectionForest.retargetArguments(
  * fragment or one of its providers belong to that same field. A provider path must terminate at an
  * input-compatible value, but compatibility between that value's precise type and every argument
  * position consuming the variable is externally stipulated rather than validated by this registry.
+ *
+ * ### Invariant: executor-registry-depth-first-variable-stratification
+ *
+ * For every concrete object type, form one graph whose vertices are its canonical output fields,
+ * interpreted as argument-insensitive structural branches. The graph contains each ordinary
+ * resolver-input edge from a required sibling branch to its consuming resolver branch. For each
+ * variable, its production branches are the provider's root branch and every transitive branch
+ * prerequisite of that root; every production branch has an edge to each branch of the defining
+ * resolver's fixed object-fragment envelope whose subtree contains a use of that variable. The
+ * least graph closed under these variable edges is acyclic. Consequently, one topological branch
+ * order binds every variable used in a branch before resolution enters that branch.
  */
 interface ExecutorRegistry {
     operator fun contains(field: Schema.OutputField): Boolean

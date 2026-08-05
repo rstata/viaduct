@@ -69,6 +69,8 @@ The proof fixes a finite canonical world and assumes:
 
 The modules exclude directives, `@parent`, checkers, lazy values, cyclic resolver demand, mutations and execution epochs, and cross-tree coalescing.
 
+The Kotlin registry's depth-first structural branch-order invariant is newer than this proof baseline and is not represented by these modules. Resolver04's machine-checked assumptions instead model its broader unified site order and complete ambient-contribution domain; no current theorem proves the Kotlin branch extractor, its least fixed point, or the sufficiency of branch stratification for a future variable-aware Resolver03 construction.
+
 ## Proof Boundary
 
 This is a machine-checked proof of the resolver construction calculus and a finite extensional model of every `correctResolution` conjunct, but not yet a complete refinement proof from the structural Kotlin carriers. Result-tree recursion, occurrence-indexed demand closure, simultaneous product-fold completion, projection coherence, prefix/final materialization equality, guarded and ambient projection coverage, finite provider-path traversal and terminal list conversion, immutable provider reads, typename, empty Resolver01/02 variable maps, and Resolver04 final variable conformance are represented and proved. Structural extraction of schemas, selection forests, objects, lists, materialized resolver inputs, provider-path traces, variable substitution, observed demand, object/list union, and resolver-value comparison into those atoms remains explicit, as does alignment between terminal product-fold built keys and returned Kotlin OER cells. The composed Resolver01 through Resolver04 theorems therefore must not be quoted as unconditional proofs of the Kotlin functions.

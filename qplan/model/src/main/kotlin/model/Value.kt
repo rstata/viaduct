@@ -351,7 +351,15 @@ sealed interface Value {
         }
     }
 
-    /** A finite map from exact output-field coordinates to values. */
+    /**
+     * A finite map from exact output-field coordinates to values.
+     *
+     * ### Invariant: object-field-values-owner
+     *
+     * [containingType] is the concrete object type whose fields these values inhabit. Every present
+     * [Key] carries a [Schema.ObjectField] owned by [containingType] and arguments containing no
+     * unresolved [Variable].
+     */
     sealed interface ObjectFields : Map<Key, Output?> {
         val containingType: Schema.ObjectType
 

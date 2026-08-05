@@ -11,6 +11,8 @@ import model.union
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.correctresolution.concreteObjectKey
 import semantics.materialize
+import semantics.resolvePaths
+import semantics.resolveValue
 
 /**
  * Resolves [selections] against an already-produced object value.
@@ -143,28 +145,14 @@ private fun Value.Object.resolveKey(
                     else -> fieldValues.getValue(key)
                 }
             EngineResult.Cell.of(
-                value = fieldValue.resolveValue(subselections),
+                value =
+                    fieldValue.resolveValue(subselections).let { resolvedValue ->
+                        fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
+                            value.resolve(selections, resolved)
+                        }
+                    },
             )
         }
 
     return EngineResult.Object.of(type, mapOf(key to cell))
 }
-
-context(world: Assumptions)
-private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResult? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is Value.Object -> resolve(selections)
-        is Value.OutputList ->
-            EngineResult.List.of(
-                typeExpr = typeExpr,
-                cells =
-                    values.map { value ->
-                        EngineResult.Cell.of(
-                            value = value.resolveValue(selections),
-                        )
-                    },
-            )
-    }

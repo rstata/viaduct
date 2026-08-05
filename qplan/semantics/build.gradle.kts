@@ -23,7 +23,43 @@ tasks.test {
     useJUnitPlatform()
     maxHeapSize = "2g"
     filter {
+        excludeTestsMatching("semantics.resolver03.ResolverStressTest")
         excludeTestsMatching("semantics.resolver04.ResolverStressTest")
+    }
+}
+
+val resolver03StressCases =
+    providers.environmentVariable("RESOLVER03_STRESS_CASES").orElse("10000")
+val resolver03StressSeed =
+    providers
+        .gradleProperty("resolver03StressSeed")
+        .orElse(providers.systemProperty("resolver03.stress.seed"))
+        .orElse(providers.environmentVariable("RESOLVER03_STRESS_SEED"))
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver03Stress") {
+    group = "verification"
+    description = "Runs the seeded Resolver03 deep stress property."
+    maxHeapSize = "2g"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver03.ResolverStressTest")
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val seed =
+            resolver03StressSeed.orNull
+                ?: throw GradleException(
+                    "Set -Presolver03StressSeed=<long>, -Dresolver03.stress.seed=<long>, " +
+                        "or RESOLVER03_STRESS_SEED=<long>",
+                )
+        systemProperty("resolver03.stress.cases", resolver03StressCases.get())
+        systemProperty("resolver03.stress.seed", seed)
     }
 }
 

@@ -133,10 +133,10 @@ private fun Value.Object.resolveKey(
                     key.field in world.executorRegistry -> {
                         val resolver = world.executorRegistry.resolver(key.field)
                         val objectFragment = resolver.objectFragment(key.arguments)
-                        resolver.resolve(
+                        resolver.tenantResolve(
                             input = resolved.materialize(objectFragment),
                             arguments = key.arguments,
-                            transitiveDemand = subselections,
+                            selections = subselections,
                         )
                     }
 

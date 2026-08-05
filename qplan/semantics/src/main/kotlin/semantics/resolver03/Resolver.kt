@@ -131,10 +131,10 @@ private fun Value.Object.resolveKey(
                         val objectFragment = resolver.objectFragment(key.arguments)
                         // The predecessor demand and dependency order put the complete input here.
                         val input = resolved.materialize(objectFragment)
-                        resolver.resolve(
+                        resolver.tenantResolve(
                             input = input,
                             arguments = key.arguments,
-                            transitiveDemand = subselections.successorDemand(),
+                            selections = subselections.successorDemand(),
                         )
                     }
 

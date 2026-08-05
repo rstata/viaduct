@@ -257,7 +257,7 @@ private fun Value.Object.resolveKey(
                         resolver.resolveWithSource(
                             input = input,
                             arguments = key.arguments,
-                            transitiveDemand = subselections.successorDemand(),
+                            selections = subselections.successorDemand(),
                             speculativeDemand = availableCoverage,
                         )
                     }

@@ -22,21 +22,21 @@ class SiblingDemandTest {
 
         assertTrue(
             context(world) {
-                schema.field("Query", "consumer").demandsFromSibling(
+                schema.key(schema.query, "consumer").demandsFromSibling(
                     schema.key(schema.query, "sibling", mapOf("input" to 1)),
                 )
             },
         )
         assertFalse(
             context(world) {
-                schema.field("Query", "consumer").demandsFromSibling(
+                schema.key(schema.query, "consumer").demandsFromSibling(
                     schema.key(schema.query, "other"),
                 )
             },
         )
         assertFalse(
             context(world) {
-                schema.field("Query", "consumer").demandsFromSibling(
+                schema.key(schema.query, "consumer").demandsFromSibling(
                     schema.key(schema.query, "sibling", mapOf("input" to 2)),
                 )
             },
@@ -50,7 +50,7 @@ class SiblingDemandTest {
 
         assertFalse(
             context(world) {
-                schema.field("Query", "consumer").demandsFromSibling(
+                schema.key(schema.query, "consumer").demandsFromSibling(
                     schema.key(schema.query, "other"),
                 )
             },
@@ -64,7 +64,7 @@ class SiblingDemandTest {
 
         assertFailsWith<IllegalArgumentException> {
             context(world) {
-                schema.field("Query", "consumer").demandsFromSibling(
+                schema.key(schema.query, "consumer").demandsFromSibling(
                     schema.key(
                         schema.type("Payload") as Schema.ObjectType,
                         "nested",

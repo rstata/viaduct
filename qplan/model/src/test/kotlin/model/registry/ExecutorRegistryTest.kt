@@ -75,10 +75,10 @@ class ExecutorRegistryTest {
             context(assumptions) {
                 registry
                     .resolver(userIdField)
-                    .resolve(
+                    .tenantResolve(
                         input = query,
                         arguments = Value.Arguments.of(userIdField, emptyMap()),
-                        transitiveDemand = selectionForestOf(),
+                        selections = selectionForestOf(),
                     )
             }
         assertIs<Value.ID>(bridgeValue)
@@ -90,7 +90,7 @@ class ExecutorRegistryTest {
         assertEquals(
             user,
             context(assumptions) {
-                fieldResolver.resolve(
+                fieldResolver.tenantResolve(
                     input =
                         Value.Object.of(
                             schema.query,
@@ -99,7 +99,7 @@ class ExecutorRegistryTest {
                             ),
                         ),
                     arguments = arguments,
-                    transitiveDemand =
+                    selections =
                         schema.fragmentFrom(
                             """
                             fragment ignored on User {
@@ -227,10 +227,10 @@ class ExecutorRegistryTest {
                 context(world.assumptions) {
                     world.executorRegistry
                         .resolver(field)
-                        .resolve(
+                        .tenantResolve(
                             input = parent,
                             arguments = Value.Arguments.of(field, emptyMap()),
-                            transitiveDemand = selectionForestOf(),
+                            selections = selectionForestOf(),
                         )
                 }
             }

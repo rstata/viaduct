@@ -34,23 +34,6 @@ fun Value.Key.demandsFromSibling(
     )
 }
 
-/**
- * Whether this registered field resolver's representative object fragment directly demands
- * [siblingKey].
- *
- * This schema-coordinate relation is used for pre-reasoning registry analysis. Semantic resolution
- * uses the [Value.Key] overload so an argument-dependent fragment can preserve the consumer's exact
- * argument tuple.
- */
-context(world: Assumptions)
-fun Schema.OutputField.demandsFromSibling(
-    siblingKey: Value.Key,
-): Boolean =
-    demandsFromSibling(
-        siblingKey = siblingKey,
-        selections = world.executorRegistry.resolver(this).objectFragment.subselections,
-    )
-
 context(world: Assumptions)
 private fun Schema.OutputField.demandsFromSibling(
     siblingKey: Value.Key,

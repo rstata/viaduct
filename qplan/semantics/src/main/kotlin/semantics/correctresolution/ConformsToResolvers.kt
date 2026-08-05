@@ -45,10 +45,10 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
                             .instantiateVariables(variableValues),
                     )
                 val resolverValue =
-                    resolver.resolve(
+                    resolver.tenantResolve(
                         input = input,
                         arguments = key.arguments,
-                        transitiveDemand = value.observedDemand(),
+                        selections = value.observedDemand(),
                     )
                 value.engineResultConformsToResolverValue(resolverValue)
             }

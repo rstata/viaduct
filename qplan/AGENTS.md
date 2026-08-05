@@ -8,7 +8,7 @@ Keep the Kotlin model suitable as a blueprint for a possible future translation 
 
 ## This Is Math, Not Programming
 
-Semantic Kotlin declarations denote mathematical sets, values, functions, and relations. `resolver.resolve(input, arguments, demand)` denotes application of a stipulated resolver function followed by projection to demand; it is not an event and implies no execution, invocation, effects, timing, ordering, allocation, caching, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
+Semantic Kotlin declarations denote mathematical sets, values, functions, and relations. `resolver.tenantResolve(input, arguments, selections)` denotes application of a stipulated resolver function followed by projection to selections; it is not an event and implies no execution, invocation, effects, timing, ordering, allocation, caching, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
 
 Function-valued model properties denote deterministic mathematical maps on their documented domains. Determinism means that equal inputs yield equal outputs; it does not define Kotlin equality for the function values themselves.
 

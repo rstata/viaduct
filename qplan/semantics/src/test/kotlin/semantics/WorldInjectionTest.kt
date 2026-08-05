@@ -67,10 +67,10 @@ class WorldInjectionTest {
             context(world) {
                 registry
                     .resolver(userIdField)
-                    .resolve(
+                    .tenantResolve(
                         input = world.objectOf("Query"),
                         arguments = Value.Arguments.of(userIdField, emptyMap()),
-                        transitiveDemand = selectionForestOf(),
+                        selections = selectionForestOf(),
                     )
             }
         assertIs<Value.ID>(bridge)
@@ -90,7 +90,7 @@ class WorldInjectionTest {
                 context(world) {
                     registry
                         .resolver(userField)
-                        .resolve(
+                        .tenantResolve(
                             input =
                                 Value.Object.of(
                                     schema.query,
@@ -99,7 +99,7 @@ class WorldInjectionTest {
                                     ),
                                 ),
                             arguments = Value.Arguments.of(userField, emptyMap()),
-                            transitiveDemand = selections.single().subselections,
+                            selections = selections.single().subselections,
                         )
                 },
             )

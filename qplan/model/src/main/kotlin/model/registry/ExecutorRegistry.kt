@@ -73,31 +73,31 @@ sealed interface Resolver : Executor {
 
         /**
          * Applies this field resolver and projects its selection-independent result to
-         * [transitiveDemand].
+         * [selections].
          */
         context(world: Assumptions)
-        fun resolve(
+        fun tenantResolve(
             input: Value.Object,
             arguments: Value.Arguments,
-            transitiveDemand: SelectionForest,
+            selections: SelectionForest,
         ): Value.Output? =
-            function(input, arguments).snipToDemand(projectionDemand(transitiveDemand))
+            function(input, arguments).snipToDemand(projectionDemand(selections))
 
         /**
-         * Applies this field resolver once, strictly projects [transitiveDemand], and additionally
+         * Applies this field resolver once, strictly projects [selections], and additionally
          * projects the recursively available portion of [speculativeDemand].
          */
         context(world: Assumptions)
-        fun resolve(
+        fun tenantResolve(
             input: Value.Object,
             arguments: Value.Arguments,
-            transitiveDemand: SelectionForest,
+            selections: SelectionForest,
             speculativeDemand: SelectionForest,
         ): Value.Output? =
             resolveWithSource(
                 input,
                 arguments,
-                transitiveDemand,
+                selections,
                 speculativeDemand,
             ).projected
 
@@ -108,11 +108,11 @@ sealed interface Resolver : Executor {
         fun resolveWithSource(
             input: Value.Object,
             arguments: Value.Arguments,
-            transitiveDemand: SelectionForest,
+            selections: SelectionForest,
             speculativeDemand: SelectionForest,
         ): OutputProjection {
             val output = function(input, arguments)
-            val required = projectionDemand(transitiveDemand)
+            val required = projectionDemand(selections)
             val speculative =
                 output.availableDemand(projectionDemand(speculativeDemand))
             return OutputProjection(

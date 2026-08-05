@@ -332,6 +332,8 @@ A selective field's argument or condition can depend on a `fromField` variable p
 
 In the canonical Kotlin model, every field-relative provider path is already selected by its defining resolver's object fragment. Argument-dependent exact fragments preserve the representative fragment's argument-erased field coordinates, guards, nesting, and occurrence multiplicity, so binding a variable changes exact argument values without revealing a new structural branch. Providers remain value-flow dependencies and participate in ordering, but they are not independent sources of structural demand.
 
+The canonical registry further restricts execution variables to a depth-first branch-stratified domain. At each concrete OER type, argument-distinct occurrences of one immediate field are one structural branch; ordinary resolver-input edges and every transitive provider-production-before-use edge must form one acyclic graph. This deliberately rejects provider/use overlap and cross-variable ordering contradictions even when runtime values, arguments, guards, nulls, errors, or list contents would make a particular execution harmless.
+
 If the value needed to decide the target OER key or its demand depends on that same occurrence's output, exact pre-dispatch merging may be cyclic. The shape cannot remain in the one-shot scope unless conservative demand or isolated execution breaks that cycle; otherwise it must be rejected or excluded.
 
 ### Lazy concrete-type plans

@@ -1,14 +1,124 @@
-# Variable Provider Separation Handoff
+# Depth-First Variable Stratification Handoff
 
 ## Purpose
 
-This handoff records a possible restriction on field-relative variable providers. We previously set the restriction aside because Resolver04 can resume an already visited subtree, and the proposed Resolver05 worklist can populate a write-once child OER incrementally. We are reconsidering it because variable binding can make a symbolic occurrence converge with a field cell that had to execute in order to produce the variable itself. If those occurrences contribute different output demand, one-shot execution requires conservative demand that may be difficult to derive, explain, and implement.
+This handoff defines the intended direction for execution variables in the query-planning model. The target is a variable-aware extension of Resolver03 that retains Resolver03's depth-first construction and topological sibling ordering. Resolver04's symbolic coverage, speculative projection, raw-output provenance, and widening of already-visited OER subtrees are not the basis for the new design.
 
-This is an investigation, not yet an accepted invariant. It should be evaluated separately from the provider-containment simplifications in [`invariants-handoff.md`](./invariants-handoff.md) and the demand-availability scheduler in [`execution-handoff.md`](./execution-handoff.md).
+The central design choice is to restrict field-relative variable providers and uses statically. Registry construction should reject worlds whose variable data flow cannot be ordered as a depth-first traversal of complete OER subtrees. In every accepted world, each subtree is entered only after every execution variable used by field arguments anywhere in that subtree has been bound to a concrete input value.
 
-## The Late-Convergence Problem
+## Current Baseline
 
-Consider the established example:
+Resolver03 accepts variable-free selections. At each concrete `Value.Object`, it gathers applicable selections, adds each activated resolver's exact registry-computed `predecessorDemand`, groups all occurrences by concrete `Value.Key`, topologically orders sibling keys by resolver demand, and resolves each key completely. Object and list outputs are traversed recursively before resolution returns to the containing OER.
+
+This gives Resolver03 its useful depth-first property: once resolution returns from a field cell's output subtree, all demand for that subtree has already been concrete, aggregated, and resolved. No later operation resumes that subtree or reapplies its producer.
+
+The current registry and carrier model already establish several prerequisites for extending this construction:
+
+- Every execution variable has one globally unique `Value.Variable` and one `VariableCoordinate` whose concrete object field is its defining resolver.
+- Every variable provider is one field-cell path rooted at the defining resolver's containing OER.
+- Every provider path is structurally contained in the defining resolver's representative object fragment and in every exact fragment observed by semantic reasoning.
+- Provider paths cannot traverse lists, cannot continue below simple values, and cannot terminate at objects.
+- Every argument-dependent object fragment is produced by retargeting argument values in one fixed selection shape.
+- Field resolvers and variables participate in one conservative acyclic `Schema.ResolverSite` demand graph.
+- Registry-computed `predecessorDemand` supplies the guarded, path-rooted transitive field-resolver requirements of an exact object fragment.
+
+Resolver04 supports a broader variable domain. It may resolve a provider by entering an OER subtree that also contains a symbolic use of that variable, return from that subtree, bind the variable, and then widen the existing subtree with newly concrete demand. It preserves raw resolver output and speculative symbolic coverage so that widening does not reapply a producer or lose output demand when symbolic and concrete keys converge.
+
+The new direction deliberately excludes worlds that need those mechanisms. Resolver04 remains useful evidence about the broader domain, but its widening behavior is not a requirement for the replacement design.
+
+## Goal
+
+The desired construction has this property:
+
+> Before resolution enters a field-cell subtree, every execution variable occurring in any field argument in that subtree is already bound on its defining containing OER.
+
+After those bindings exist, the construction substitutes them throughout the subtree's selections and predecessor demand, groups occurrences by fully concrete `Value.Key`, merges demand for equal argument tuples, and resolves the subtree exactly as Resolver03 does.
+
+This is stronger than merely requiring a variable's provider to precede the exact field whose argument uses it. The provider must precede entry into the entire OER subtree containing that use. Otherwise resolution could enter the subtree for provider-related work, encounter an unresolved symbolic key within it, return to bind the variable, and need to enter the same subtree again.
+
+The static restriction must account for all variables together. Two variable definitions that are individually provider/use-separated can still impose contradictory subtree orders. The accepted domain therefore needs one unified, conservative ordering relation rather than one independent prefix check per variable.
+
+## Structural Branches
+
+Fix one possible concrete OER object type `T`. A structural branch is the complete subtree rooted at one immediate field-cell coordinate of an OER of type `T`.
+
+For initial validation, branch identity is deliberately conservative:
+
+- The branch uses the canonical concrete output-field coordinate on `T`.
+- Response aliases do not distinguish branches.
+- Argument values do not distinguish branches. Two selections of the same concrete field under different concrete, symbolic, or retargeted argument tuples belong to the same structural branch.
+- Two guarded occurrences can belong to the same branch whenever their possible concrete parent types overlap at `T`.
+- A branch rooted at a list-valued field contains every possible list position and every object occurrence below those positions.
+- Runtime nulls, errors, empty lists, resolver return values, and concrete type choices do not make a statically possible branch disappear.
+
+Ignoring argument values is stricter than OER cell identity, which includes fully coerced arguments. This is intentional. The registry currently represents argument retargeting with an opaque Kotlin callback, so argument-sensitive non-aliasing cannot be established uniformly at world construction. A future declarative argument-pattern model may accept additional provably disjoint branches without changing the invariant's structure.
+
+## Provider Production
+
+For a registered variable `v`, `productionBranches(v)` is the set of structural branches at its defining containing OER that may be entered while producing its binding.
+
+The set is the conservative transitive closure of:
+
+1. The branches traversed by `provider(v)`.
+2. Every branch required by a field resolver encountered while traversing that provider, using the resolver's fixed structural object-fragment envelope and transitive predecessor demand.
+3. Every branch required to produce another variable referenced by the provider path or by resolver requirements needed during that production.
+4. Every traversed prefix branch, whether the provider ultimately succeeds, yields null, or yields an error.
+
+Variable-provider dependencies remain permitted when they can be stratified. If producing `v` uses `w`, the branches producing `w` are part of the work that must precede any use of `v`.
+
+## Variable Uses
+
+For a registered variable `v`, `useBranches(v)` is the set of structural branches at its defining containing OER whose subtree contains a selection occurrence with `v` anywhere in its argument values.
+
+Uses inside nested input objects and input lists count. A use is assigned to the immediate root branch containing it, not merely to the terminal field whose key contains the variable. Thus a use at:
+
+```graphql
+other {
+  nested {
+    field(arg: $value)
+  }
+}
+```
+
+belongs to the `other` branch of the defining containing OER.
+
+Fixed-shape object fragments make these use locations structurally finite even though binding changes their exact argument values.
+
+## Unified Branch-Order Invariant
+
+For each possible concrete OER object type `T`, registry construction forms one directed graph whose vertices are the structural branches on `T`.
+
+The graph contains:
+
+- Every ordinary resolver-demand edge required by Resolver03, directed from a sibling branch that supplies resolver input to the consuming resolver branch.
+- For every variable `v`, an edge `p -> u` for every `p` in `productionBranches(v)` and every `u` in `useBranches(v)`.
+
+The registry accepts the world only when:
+
+> For every possible concrete OER object type, the conservative unified branch-order graph is acyclic.
+
+This one condition includes two important cases:
+
+- A provider-production branch that is also a use branch creates a self-edge and is rejected.
+- Cross-variable ordering contradictions create a longer cycle and are rejected.
+
+The graph is conservative in the same spirit as the existing resolver-site demand graph. An edge remains when guards may overlap or symbolic and concrete argument tuples might never coincide at runtime. A valid execution must not be used to justify a registry that would be unsafe for another valid execution in the same world.
+
+## Why This Is Sufficient
+
+An acyclic branch graph has a topological order. Resolve the branches of each concrete OER in any such order.
+
+Consider a branch `b` when it is reached. If a selection anywhere in `b` uses variable `v`, every branch that may be needed to produce `v` has an edge to `b` and therefore occurs earlier in the order. Those production branches have been resolved completely, so the provider path is readable and `v` has a stored binding. The same argument applies simultaneously to every variable used in `b`, including variables with transitively dependent providers.
+
+The construction can therefore instantiate every variable in `b` before forming any OER key in that branch. Occurrences that instantiate to the same fully coerced argument tuple are grouped into one `Value.Key` before resolver application. Registry-computed predecessor demand and successor-demand lifting then provide the same complete input and output demand used by Resolver03.
+
+After key formation, the branch is variable-free and can be resolved recursively with Resolver03's existing construction. Because every symbolic use in the branch was instantiated before entry and fixed-shape fragments cannot reveal another structural location later, no later binding can add work beneath the completed branch.
+
+The proof shape is induction over the topological branch order, nested inside induction over the finite OER tree. The branch-order induction establishes binding availability before key formation. Resolver03's existing depth-first argument then establishes complete resolution before returning from each branch.
+
+## Rejected Shapes
+
+The established widening example is rejected:
 
 ```graphql
 child {
@@ -17,7 +127,7 @@ child {
 common
 ```
 
-The provider reads `$value` from `common`, while resolving `common` requires:
+If producing `$value` from `common` requires:
 
 ```graphql
 child {
@@ -25,92 +135,24 @@ child {
 }
 ```
 
-Suppose `common` returns `"literal"`. The symbolic occurrence then instantiates to the same exact key that was required to produce the variable:
+then `child` belongs to both `productionBranches(value)` and `useBranches(value)`. The variable edge is `child -> child`, so registry construction rejects the world before resolution.
+
+The rejection does not depend on whether `$value` becomes `"literal"`, `"bound"`, null, or an error. It also does not depend on whether the two terminal `field2` occurrences would become the same exact OER key. Entering the shared `child` branch before the binding exists is itself outside the depth-first domain.
+
+Cross-variable cycles are also rejected. For example:
 
 ```text
-field2(arg: $value)
-    becomes
-field2(arg: "literal")
+producing v enters branch B; v is used in branch A
+producing w enters branch A; w is used in branch B
 ```
 
-One terminology distinction matters. A registered field resolver is a deterministic function of its materialized input and exact arguments. If both occurrences become the same `Value.Key`, `resolver.objectFragment(arguments)` is the same exact fragment for both. What may differ is the demanded output contributed by the two selection occurrences. The provider-side occurrence may force the resolver to run before the variable-side occurrence can be grouped with it.
+The graph contains `B -> A` and `A -> B`, so neither branch can be entered first with all of its argument variables bound.
 
-If the first application did not receive the second occurrence's demanded output, the engine cannot apply that exact resolver-bearing OER cell again without violating one-shot execution. Resolver04's ambient and speculative machinery attempts to cover this case conservatively by supplying variable-free output demand from a symbolic occurrence to a concrete occurrence that may later match it. The proposed restriction would instead make this kind of convergence invalid at registry construction.
+Selections of `child(id: 1)` and `child(id: 2)` are conservatively treated as the same structural branch. A provider/use overlap between them is rejected even when their current concrete arguments differ.
 
-## Proposed Invariant
+## Accepted Shapes
 
-The proposed rule is:
-
-> For a variable `v`, no field-cell path required to produce `v` may possibly be a prefix of a path to a selection whose arguments use `v`.
-
-This rule is paired with a second registry invariant:
-
-> Every argument-dependent object fragment is produced by retargeting one fixed selection shape.
-
-The compiling Kotlin model now enforces this restriction by construction. `Resolver.Field.ofArgumentRetargeting` recursively preserves the representative fragment's nominal type, field-coordinate occurrences, type guards, nesting, and occurrence multiplicity. Its callback may substitute or forward values into argument positions already present in that shape, but cannot add, remove, or choose different structural occurrences.
-
-This is stronger than the existing cycle check. The cycle check rejects a variable used directly or transitively as an input to its own production. The new rule also rejects a use that is outside the production closure but lies in an OER subtree entered by that production.
-
-The defining resolver's containing OER is not itself a field-cell path. Provider and use branches may share that root. They must diverge before production enters a field cell that contains, or may become, the variable use.
-
-## Structural Definition
-
-For each registered variable `v`, define:
-
-```text
-productionPaths(v)
-    Every field-cell occurrence path visited while evaluating provider(v),
-    including every path introduced through transitive field-resolver
-    objectFragments and variable-provider dependencies.
-
-usePaths(v)
-    Every occurrence path to a field selection in the defining resolver's
-    objectFragment whose argument values contain v.
-```
-
-`productionPaths(v)` includes every traversed prefix. If producing `v` requires `child { nested { value } }`, the set includes paths for `child`, `child.nested`, and `child.nested.value`, with their guards and arguments.
-
-The registry accepts `v` only when:
-
-```text
-for every p in productionPaths(v), u in usePaths(v):
-    p does not possibly identify a prefix of u
-```
-
-Path comparison must preserve the identity distinctions used by the OER:
-
-- Canonical concrete field coordinates.
-- Fully coerced argument tuples.
-- Symbolic argument values that may later equal concrete values.
-- Concrete-type guards and possible-type overlap.
-- Every object and list occurrence segment represented by the structural path.
-- Alias-free identity, because response aliases do not distinguish OER cells.
-
-The check is conservative. If a symbolic argument could become equal to a concrete argument, the corresponding segments may match. Runtime values, nulls, errors, and concrete-type choices must not be used to justify a registry that is unsafe for another valid execution.
-
-## How The Example Is Rejected
-
-For the running example, the production closure contains:
-
-```text
-common
-child
-child.field2(arg: "literal")
-```
-
-The use path is:
-
-```text
-child.field2(arg: $value)
-```
-
-`child` is a production path and a prefix of the use path, so the registry rejects the variable definition. The terminal `field2` segments may also converge when `$value == "literal"`, but the earlier `child` overlap is already sufficient.
-
-This rejection is independent of the value that `common` returns. Even when `$value` becomes `"bound"` and the two `field2` keys remain distinct, producing the variable still enters the `child` subtree that contains the use. The invariant chooses a simple structural guarantee rather than accepting some runtime values and rejecting others.
-
-## A Valid Shape
-
-This shape can remain valid:
+This shape is accepted when producing `$value` never enters `other`:
 
 ```graphql
 common
@@ -119,60 +161,90 @@ other {
 }
 ```
 
-It is valid only if the complete transitive production closure of `common` never enters `other`. Execution can finish the provider branch, bind `$value`, and then enter the disjoint `other` branch with a concrete argument. Variable dependency edges order sibling subtrees without carrying new exact demand into a subtree already used for production.
+The branch graph contains `common -> other`. Resolution completes `common`, reads and stores `$value`, substitutes it throughout `other`, and then enters `other` once with concrete demand.
+
+Acyclic chains of variable dependencies can also be accepted:
+
+```text
+branch A produces w
+branch B uses w and produces v
+branch C uses v
+```
+
+The graph contains `A -> B -> C`. Each branch is variable-free by the time resolution enters it.
+
+Independent provider and use branches remain parallel in the partial order. The semantic construction may choose any topological order; an implementation may execute unrelated ready branches concurrently without changing the depth-first completeness requirement within each branch.
+
+## Construction Sketch
+
+A variable-aware Resolver03 extension should operate as follows at each concrete `Value.Object`:
+
+1. Gather the applicable fixed-shape symbolic selection envelope and registry-computed structural predecessor demand without requiring symbolic keys to become OER keys.
+2. Specialize structural branches and their conservative ordering relation to the concrete object type.
+3. Choose a ready branch from the topological order.
+4. Read and store every variable whose complete provider path is available in the resolved prefix.
+5. Require every variable used anywhere in the chosen branch to have a stored binding.
+6. Substitute those bindings throughout the branch selections and exact predecessor demand.
+7. Group the resulting occurrences by concrete `Value.Key`, merging equal argument tuples.
+8. Resolve the branch completely using Resolver03's materialization, sibling ordering, resolver application, successor-demand lifting, and recursive value traversal.
+9. Add the completed branch to the resolved prefix and continue.
+
+The resolved prefix may contain variable bindings in addition to cells, but it does not need raw resolver-output provenance, speculative demand, or a way to reopen an existing cell. A completed branch is never selected again.
 
 ## Registry Validation
 
-This should be a world-construction invariant, not a runtime check. The executor registry already computes dependency-first transitive predecessor demand across resolver and variable sites. Validation needs a richer product of that traversal which retains rooted occurrence paths instead of reducing everything to `Schema.ResolverSite` coordinates.
+This is a world-construction invariant. The principal implementation boundary is `TestExecutorRegistry`, which already validates providers, builds the resolver-site dependency graph, and computes predecessor demand in dependency-first order.
 
-For each variable coordinate, registry construction would:
+Registry construction needs a finite structural analysis that preserves more information than `Schema.ResolverSite` reachability:
 
-1. Start with the registered provider selection rooted at the defining field's containing object.
-2. Follow every field resolver encountered on that path and root its exact or structural-envelope object fragment at the encounter path.
-3. Follow variables used by those fragments in dependency order and include the paths required to produce them.
-4. Record every traversed field-cell prefix, with arguments and possible-type guards.
-5. Traverse every exact defining object fragment and record paths to selections whose nested argument values contain the variable.
-6. Reject when a production path may be a prefix of a use path.
+1. Specialize each representative fixed-shape fragment over every possible concrete parent type.
+2. Extract each variable's root use branches.
+3. Walk each provider path and all transitive production requirements to extract production branches.
+4. Collapse argument-distinct occurrences of one canonical concrete field into one conservative structural branch.
+5. Add ordinary resolver-demand and provider-before-use edges.
+6. Reject a self-edge or cycle.
 
-The validation should produce a diagnostic naming the variable, its defining resolver, the provider path, the overlapping production prefix, and the use path. A generic demand-cycle message would hide the distinct reason for rejection.
+The diagnostic should identify the concrete object type, variable or resolver dependency that introduced each relevant edge, provider path, production branch, use path, and resulting self-edge or cycle. A generic resolver-demand-cycle message is not sufficient for explaining this domain restriction.
 
-## Fixed-Shape Argument-Dependent Fragments
+The invariant belongs on the canonical `ExecutorRegistry` contract even though the current compiling construction is provided by test-fixture registry assembly. The KDoc should state the accepted mathematical world independently of the assembly implementation.
 
-The representative fragment is the structural envelope for every exact fragment, while the constructor callback is limited to substituting or forwarding argument values within that envelope.
+## Validation Strategy
 
-Registry construction should enforce or externally establish:
+Focused registry tests should cover:
 
-```text
-shape(objectFragment(arguments)) == shape(representativeObjectFragment)
-```
+- A direct provider/use self-edge.
+- A shared passive prefix.
+- A shared prefix introduced only by transitive resolver predecessor demand.
+- A cross-variable two-branch cycle.
+- An accepted linear variable dependency chain.
+- Independent provider/use pairs with more than one valid topological order.
+- Polymorphic guards that overlap on one concrete type.
+- Polymorphic guards that are disjoint for every concrete type.
+- Argument-distinct occurrences that are conservatively collapsed.
+- Nested input-object and input-list variable uses.
+- Provider null and error outcomes, which do not relax the static order.
+- Fixture-lowered node branches and their synthetic bridge requirements.
 
-for every valid resolver argument tuple. Here `shape` preserves selection coordinates, guards, and tree structure while abstracting argument values. The canonical registry API now represents this operation as a fixed fragment template plus per-key argument retargeting, so Resolver05 cannot discover a different fragment shape after execution begins.
+Resolver tests should establish that every accepted variable-bearing example agrees with the intended `correctResolution`, each exact resolver-bearing OER cell has one application, and no completed branch is revisited. Variable-free generated worlds should continue to agree with Resolver03.
 
-## Consequences
+The arbitrary registry generator must construct branch-order-acyclic variable programs rather than generate unrestricted providers and rely on rejection. Its witness data should record provider-production edges, use branches, and at least one valid topological order so generated coverage can distinguish trivial disjoint cases from dependency chains.
 
-If adopted, this restriction would:
+Existing Resolver04 widening and demand-sealing tests should be classified rather than ported wholesale. Tests whose worlds violate branch stratification become negative registry tests. Tests that remain inside the restricted domain become behavior tests for the variable-aware Resolver03 extension.
 
-- Eliminate provider/use re-entry and provider-induced late exact-key convergence.
-- Restore a depth-first order between each provider branch and every branch using its value.
-- Remove the need to conservatively apply symbolic use demand to a concrete cell encountered during production of that same variable.
-- Make the representative object fragment a complete static structural envelope for every argument tuple.
-- Simplify Resolver04 to one symbolic envelope and Resolver05's obligation-merging rules.
-- Reject the current `common` and `child.field2($value)` regression as outside the supported variable domain.
+## Documentation And Claims
 
-It would not eliminate all variable scheduling. Providers may depend acyclically on other variables, and uses still cannot become exact obligations until their bindings exist. It would make those dependencies order disjoint branches rather than reopen or converge with the provider's production subtree.
+Once implemented, update `ExecutorRegistry` KDoc, `model/AGENTS.md`, `semantics/AGENTS.md`, `handoff.md`, `evergreen.md`, `examples.md`, relevant claims and arguments, generator documentation, and the TLA+ boundary notes to describe the restricted variable domain consistently.
 
-The restriction is deliberately conservative. It may reject executions that Resolver04 can handle correctly through speculative demand and widening. The decision is therefore a product-model decision as well as an algorithm simplification: we must establish whether production variable providers permit the rejected overlap before treating the rule as canonical.
+The resulting claim should be scoped explicitly: within the finite, fixed-shape, conservatively branch-stratified variable domain, every resolver-bearing OER occurrence is constructed by one field-resolver application after all applicable demand has been made concrete and aggregated.
 
-## Follow-Up
+Do not claim that provider/use overlap is impossible in Viaduct generally. It is intentionally excluded from this model so that execution variables can be added without abandoning Resolver03's depth-first construction.
 
-The separate investigation should:
+## Work Sequence
 
-1. Confirm the intended production semantics of field-relative variable providers and whether provider/use overlap is legal.
-2. Inventory current Resolver04 tests and generated worlds rejected by the proposed prefix rule.
-3. Build minimal examples for direct exact-key convergence, shared passive prefixes, nested resolver prefixes, polymorphic guards, and argument tuples that are provably disjoint.
-4. Evaluate the fixed-template argument-retargeting API against production lowering needs.
-5. Prototype occurrence-path extraction in registry assembly without changing Resolver04.
-6. Compare the complexity removed from Resolver04 and Resolver05 with the valid production shapes lost.
-7. If the invariants are adopted, update [`evergreen.md`](./evergreen.md), all relevant KDoc and guidance, generators, claims, arguments, and handoff documents to describe the restricted domain consistently.
-
-Until that follow-up reaches a decision, Resolver04's existing speculative coverage and widening tests remain evidence for the broader domain and should not be deleted.
+1. Add the structural branch and edge extraction used only by registry validation.
+2. Add focused positive and negative tests for the unified branch-order invariant.
+3. Update the arbitrary generator to construct valid stratified variable worlds.
+4. Implement the variable-aware Resolver03 extension without modifying Resolver04.
+5. Compare variable-free behavior with Resolver03 and accepted variable behavior with `correctResolution`.
+6. Reclassify Resolver04 tests into accepted behavior tests, rejected-world tests, or broader-domain evidence.
+7. Retire Resolver04 widening machinery only after the restricted construction and its one-shot evidence are complete.

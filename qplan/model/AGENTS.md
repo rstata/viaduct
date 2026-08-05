@@ -20,6 +20,8 @@ Nesting declarations under `Schema` provides namespacing only. A nested schema d
 
 Every field-relative variable provider is one structurally contained path in its defining resolver's object fragment. Argument-dependent exact fragments are constructed by retargeting arguments in one fixed selection template, and registry assembly validates provider containment in the representative fragment and each exact fragment observed by semantic reasoning.
 
+Every canonical registry is also depth-first variable-stratified. For each concrete object type, registry assembly conservatively collapses argument-distinct occurrences of one field into one structural branch, combines ordinary sibling resolver dependencies with provider-production-before-use edges, closes variable production transitively, and rejects a self-edge or longer branch cycle.
+
 Input-object fields and output-field arguments share `InputLikeField`. Input-object values and output-field argument tuples share `InputLikeValue`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `ArgumentsValue` instances remain ordinary structural values rather than singletons.
 
 Kotlin inheritance and generic variance classify carrier values but do not define GraphQL interface implementation, output subtyping, input coercion, or type variance. Use canonical schema relations and documented carrier invariants for those facts.

@@ -14,7 +14,9 @@ Source field-resolver sites are chosen before output selection sets and values a
 
 Generated non-`Node` interfaces and unions contain only non-`Node` objects. This keeps their possible-type sets disjoint from fixture-lowered node outputs because the current lowering rejects abstract outputs that mix node-resolved and inline objects.
 
-Generated object fragments are acyclic by construction and are still checked by the ordinary registry assembly invariant. Resolver dependencies target only lower-ranked coordinates, so arbitrary properties do not exercise worlds conservatively rejected by the coordinate-level cycle check, including syntactic cycles whose exact active occurrences would be acyclic because one edge has error-valued arguments. Every generated variable provider path is inserted into its defining resolver's object fragment before the variable use is emitted. Queries and registries are generated independently from their common schema.
+Generated object fragments are acyclic by construction and are still checked by the ordinary registry assembly invariant. Resolver dependencies target only lower-ranked coordinates, so arbitrary properties do not exercise worlds conservatively rejected by the coordinate-level cycle check, including syntactic cycles whose exact active occurrences would be acyclic because one edge has error-valued arguments. Passive structural branches precede registered branches, registered branches retain their resolver-coordinate rank, and a generated variable provider branch must have a strictly lower rank than its use branch; ordinary and variable branch edges therefore share one acyclic order. Every generated variable provider path is inserted into its defining resolver's object fragment before the variable use is emitted. Queries and registries are generated independently from their common schema.
+
+Generated query sources and their permutation-equivalent forms are character-bounded below GraphQL Java's parser token limit. An oversized candidate is discarded inside query generation and does not become a resolver test case.
 
 ## Validation
 

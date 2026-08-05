@@ -500,6 +500,14 @@ private class RegistryGenerator(
                 fragment.argumentOccurrences()
                 .shuffled(random)
                 .firstNotNullOfOrNull { occurrence ->
+                    val useBranch =
+                        fragment.selections[occurrence.selectionPath.first()]
+                    val useRank =
+                        structuralBranchRank(
+                            ownerName = ownerName,
+                            selection = useBranch,
+                            ranks = ranks,
+                        )
                     occurrence.target
                         ?.let { target ->
                             variableProviderPaths(
@@ -510,7 +518,9 @@ private class RegistryGenerator(
                             )
                         }.orEmpty()
                         .shuffled(random)
-                        .firstOrNull()
+                        .firstOrNull { provider ->
+                            structuralBranchRank(ownerName, provider, ranks) < useRank
+                        }
                         ?.let { provider -> occurrence to provider }
                 } ?: return@fold fragment
             val variableName = "resolverVar${ranks.getValue(consumer)}_$variableIndex"
@@ -534,6 +544,22 @@ private class RegistryGenerator(
                     ),
             )
         }
+    }
+
+    /**
+     * Passive branches precede every resolver branch. Registered branches use the same rank that
+     * makes ordinary generated resolver demand acyclic.
+     */
+    private fun structuralBranchRank(
+        ownerName: String,
+        selection: FragmentSelectionPlan,
+        ranks: Map<FieldCoordinate, Int>,
+    ): Int {
+        val field =
+            schema
+                .fieldsOn(ownerName)
+                .single { candidate -> candidate.name == selection.fieldName }
+        return ranks[field.coordinate] ?: -1
     }
 
     private fun FragmentPlan.argumentOccurrences(): List<ArgumentOccurrence> =

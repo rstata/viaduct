@@ -31,6 +31,7 @@ import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -563,10 +564,11 @@ class ResolverDemandSealingTest {
     }
 
     @Test
-    fun `merges symbolic demand when variables from different resolvers converge`() {
+    fun `rejects contradictory provider and resolver branch orders`() {
         var sourceApplications = 0
-        val testWorld =
-            TestWorld.fromSDL(
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
                 schemaSDL =
                     """
                     type Payload {
@@ -653,36 +655,20 @@ class ResolverDemandSealingTest {
                                 "fragment ignored on Query { raw }",
                             ).subselections.single(),
                     )
-                },
-            )
-        val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
-
-        val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                    },
+                )
             }
 
-        assertEquals(1, sourceApplications)
-        assertEquals(
-            mapOf(
-                Value.Variable.of("early") to Value.Int.of(1),
-                Value.Variable.of("late") to Value.Int.of(1),
-            ),
-            resolved.variableValues,
-        )
-        assertEquals(
-            Value.Int.of(3),
-            resolved.fetch(Value.Key.of(world.schema.field("Query", "result"), emptyMap())).value,
-        )
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(failure.message!!.contains("middle -> source -> middle"))
+        assertEquals(0, sourceApplications)
     }
 
     @Test
-    fun `merges variable-bearing demand before sealing a shared producer`() {
+    fun `rejects a cross-variable branch cycle around a shared producer`() {
         var sourceApplications = 0
-        val testWorld =
-            TestWorld.fromSDL(
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
                 schemaSDL =
                     """
                     type Payload {
@@ -763,36 +749,20 @@ class ResolverDemandSealingTest {
                                 "fragment ignored on Query { source { narrow } }",
                             ).subselections.single(),
                     )
-                },
-            )
-        val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
-
-        val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                    },
+                )
             }
 
-        assertEquals(1, sourceApplications)
-        assertEquals(
-            mapOf(
-                Value.Variable.of("early") to Value.Int.of(1),
-                Value.Variable.of("later") to Value.Int.of(2),
-            ),
-            resolved.variableValues,
-        )
-        assertEquals(
-            Value.Int.of(5),
-            resolved.fetch(Value.Key.of(world.schema.field("Query", "result"), emptyMap())).value,
-        )
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(failure.message!!.contains("helper -> source -> helper"))
+        assertEquals(0, sourceApplications)
     }
 
     @Test
-    fun `keeps symbolic demand on the exact argument occurrence selected after binding`() {
+    fun `rejects argument-distinct provider and use occurrences on one branch`() {
         var sourceApplications = 0
-        val testWorld =
-            TestWorld.fromSDL(
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
                 schemaSDL =
                     """
                     type Payload {
@@ -858,23 +828,12 @@ class ResolverDemandSealingTest {
                                 "fragment ignored on Query { source(k: 1) { narrow } }",
                             ).subselections.single(),
                     )
-                },
-            )
-        val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
-
-        val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                    },
+                )
             }
 
-        assertEquals(2, sourceApplications)
-        assertEquals(Value.Int.of(2), resolved.variableValues.getValue(Value.Variable.of("k")))
-        assertEquals(
-            Value.Int.of(7),
-            resolved.fetch(Value.Key.of(world.schema.field("Query", "result"), emptyMap())).value,
-        )
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(failure.message!!.contains("source -> source"))
+        assertEquals(0, sourceApplications)
     }
 
 }

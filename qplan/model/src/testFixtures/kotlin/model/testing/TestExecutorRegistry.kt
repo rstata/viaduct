@@ -585,6 +585,10 @@ private class TestExecutorRegistry(
                     .filterValues { site in it }
                     .keys
             }
+        BranchOrderValidator(
+            fieldResolvers = predecessorResolvers,
+            variableProviders = variableProviders,
+        ).validate()
     }
 
     override fun contains(field: Schema.OutputField): Boolean {

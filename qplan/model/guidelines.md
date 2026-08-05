@@ -56,7 +56,7 @@ Undefined equality means that Kotlin `==`, `equals`, hashing, membership in equa
 
 Semantic logic must not apply equality-dependent operations to undefined-equality values. For example, key a resolver-demand graph by canonical `Schema.OutputField` elements rather than resolver objects, and represent selections with an equality-free occurrence family rather than a `Multiset<Selection>`.
 
-`SelectionForest` supports occurrence count, emptiness, permutation-invariant traversal, filtering, transformation, and concatenation. It does not expose membership, deduplication, equality-based counting, hashing, forest equality, or observable ordering.
+`SelectionForest` supports occurrence count, emptiness, permutation-invariant traversal, filtering, transformation, concatenation, and structural key observation through `keys()`. Ordinary operations preserve occurrences. The explicit `merge(type)` normalization boundary is the sole exception: it specializes applicable occurrences to one concrete parent type and deduplicates their top-level structural keys while concatenating their subselections. The forest does not expose selection membership, equality-based selection counting, hashing, forest equality, or observable ordering.
 
 Prefer a private data-class implementation when its generated structural equality exactly matches the category's equality contract. `IntValueImpl`, `ObjectKeyImpl`, and `CellImpl` are representative examples. Use a private regular implementation for an undefined-equality category such as `SelectionImpl`, or whenever generated componentwise equality is otherwise not the category's modeled equality.
 

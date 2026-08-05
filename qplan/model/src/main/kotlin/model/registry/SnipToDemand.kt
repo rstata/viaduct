@@ -5,6 +5,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.merge
 import model.selectionForestOf
 
 /**
@@ -108,7 +109,6 @@ private fun availableSelection(
         }
     return Selection.of(
         key = selection.key,
-        nominalType = selection.nominalType,
         possibleTypes = selection.possibleTypes,
         subselections = availableSubselections,
     )
@@ -118,25 +118,23 @@ context(world: Assumptions)
 private fun Value.Object.snipObjectToDemand(
     demand: SelectionForest,
 ): Value.Object {
-    val applicableDemand = demand.filter { type in it.possibleTypes }
     val passiveDemand =
-        applicableDemand.filter { selection ->
-            val concreteField = type.fields.getValue(selection.key.field.fieldName)
-            !world.behavioral(concreteField)
+        demand.merge(type).filter { selection ->
+            !world.behavioral(selection.key.field)
         }
 
     val selectedFields =
         passiveDemand
-            .groupBy { it.concreteObjectKey(type) }
-            .mapNotNull { (key, fieldSelections) ->
+            .groupBy { selection -> selection.key }
+            .mapNotNull { (key, mergedSelections) ->
+                val selection = mergedSelections.single()
                 val concreteField = key.field
                 val value = fieldValues.getValue(key)
                 val selectedValue =
                     if (concreteField.typeExpr.baseType is Schema.SimpleType) {
                         value
                     } else {
-                        val subselections = fieldSelections.flatMap { it.subselections }
-                        value.snipToDemand(subselections)
+                        value.snipToDemand(selection.subselections)
                     }
                 key to selectedValue
             }

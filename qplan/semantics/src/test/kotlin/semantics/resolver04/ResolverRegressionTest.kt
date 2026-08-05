@@ -39,7 +39,6 @@ class ResolverRegressionTest {
                                     parsedDependency.key.field,
                                     mapOf("arg" to Value.Error),
                                 ),
-                            nominalType = parsedDependency.nominalType,
                             possibleTypes = parsedDependency.possibleTypes,
                             subselections = parsedDependency.subselections,
                         )

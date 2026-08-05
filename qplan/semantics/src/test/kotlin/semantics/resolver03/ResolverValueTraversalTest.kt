@@ -22,6 +22,99 @@ import kotlin.test.assertTrue
  */
 class ResolverValueTraversalTest {
     @Test
+    fun `heterogeneous list elements specialize their shared continuation independently`() {
+        val applications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Item {
+                      computed: Int!
+                    }
+
+                    type A implements Item {
+                      computed(factor: Int = 2): Int!
+                    }
+
+                    type B implements Item {
+                      computed: Int!
+                    }
+
+                    type Query {
+                      items: [Item!]!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val items = schema.field("Query", "items")
+                    val elementType =
+                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
+                    mapOf(
+                        items to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ ->
+                                Value.OutputList.of(
+                                    elementType,
+                                    listOf(
+                                        schema.objectOf("A"),
+                                        schema.objectOf("B"),
+                                    ),
+                                )
+                            },
+                        schema.field("A", "computed") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("A"),
+                            ) { _, arguments ->
+                                applications += "A"
+                                arguments.fieldValues.getValue("factor") as Value.Int
+                            },
+                        schema.field("B", "computed") to
+                            model.testing.fieldResolverOf(
+                                schema.emptyFragmentOf("B"),
+                            ) { _, _ ->
+                                applications += "B"
+                                Value.Int.of(3)
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val fragment =
+            world.fragmentFrom(
+                "fragment ignored on Query { items { computed } }",
+            )
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve(fragment.subselections)
+            }
+
+        val items =
+            assertIs<EngineResult.List>(
+                result.fetch(
+                    Value.Key.of(world.schema.field("Query", "items"), emptyMap()),
+                ).value,
+            )
+        val a = assertIs<EngineResult.Object>(items[0].value)
+        val b = assertIs<EngineResult.Object>(items[1].value)
+        assertEquals(
+            Value.Int.of(2),
+            a.fetch(
+                Value.Key.of(
+                    world.schema.field("A", "computed"),
+                    mapOf("factor" to 2),
+                ),
+            ).value,
+        )
+        assertEquals(
+            Value.Int.of(3),
+            b.fetch(Value.Key.of(world.schema.field("B", "computed"), emptyMap())).value,
+        )
+        assertEquals(listOf("A", "B"), applications)
+        assertTrue(context(world) { result.correctResolution(fragment) })
+    }
+
+    @Test
     fun `list null and error elements preserve position and skip descendant resolvers`() {
         var itemsApplications = 0
         var computedApplications = 0

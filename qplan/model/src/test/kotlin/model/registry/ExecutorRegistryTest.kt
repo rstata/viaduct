@@ -706,7 +706,6 @@ class ExecutorRegistryTest {
         assertFailsWith<IllegalArgumentException> {
             Selection.of(
                 key = leaf.key,
-                nominalType = leaf.nominalType,
                 possibleTypes = leaf.possibleTypes,
                 subselections = selectionForestOf(emptyComposite),
             )
@@ -780,14 +779,12 @@ class ExecutorRegistryTest {
             possibleTypes: Set<Schema.ObjectType> =
                 (schema.type(typeName) as Schema.CompositeType).possibleTypes,
         ): model.Selection {
-            val nominalType = schema.type(typeName) as Schema.CompositeType
             return Selection.of(
                 key =
                     Value.Key.of(
                         field = schema.field(typeName, fieldName),
                         arguments = emptyMap(),
                     ),
-                nominalType = nominalType,
                 possibleTypes = possibleTypes,
                 subselections = selectionForestOf(),
             )

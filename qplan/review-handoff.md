@@ -2,6 +2,8 @@
 
 ## Purpose
 
+> **Superseded selection policy:** Resolver01 and Resolver02 now consume complete finite resolver outputs and call `resolveValue` with null passive selections. Resolver02 revisits existing passive keys when incoming closure introduces deeper demand and no longer uses `outputSelectionForest` or `successorDemand()`. Resolver03 remains selective and uses `successorDemand()` for both projection and passive construction. The remainder of this document describes the earlier reviewed change.
+
 This change restructures value traversal in Resolver01, Resolver02, and Resolver03. The old
 resolver-local `resolveValue` functions recursively called the ordinary object `resolve` operation
 whenever they encountered an object. Passive field projection and active field resolution were

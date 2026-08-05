@@ -51,6 +51,7 @@ class TestWorld private constructor(
                 ((Schema) -> Map<Schema.OutputField, Resolver.Field>)? = null,
             variableProviders:
                 (Schema) -> Map<VariableCoordinate, model.Selection> = { emptyMap() },
+            selectiveResolvers: Boolean = true,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -59,6 +60,7 @@ class TestWorld private constructor(
                         nodeResolvers = nodeResolvers,
                         fieldResolvers = fieldResolvers,
                         variableProviders = variableProviders,
+                        selectiveResolvers = selectiveResolvers,
                     ),
                 )
             return try {
@@ -78,6 +80,7 @@ private class TestWorldModule(
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
     private val variableProviders: (Schema) -> Map<VariableCoordinate, model.Selection>,
+    private val selectiveResolvers: Boolean,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -130,6 +133,7 @@ private class TestWorldModule(
         Assumptions.of(
             schema = schema,
             executorRegistry = executorRegistry,
+            selectiveResolvers = selectiveResolvers,
         )
 
     private fun defaultQueryResolvers(

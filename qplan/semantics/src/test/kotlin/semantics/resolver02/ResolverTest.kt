@@ -276,7 +276,7 @@ class ResolverTest {
     }
 
     @Test
-    fun `bounds recursive output selection forests by demand`() {
+    fun `unpacks a finite recursive resolver output from its returned value`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL = RECURSIVE_SCHEMA_SDL,
@@ -350,7 +350,11 @@ class ResolverTest {
             assertIs<EngineResult.Object>(
                 chain.fetch(schema.key(schema.objectType("Chain"), "next")).value,
             )
-        assertEquals(setOf("label"), next.keys.map { it.field.fieldName }.toSet())
+        assertEquals(setOf("label", "next"), next.keys.map { it.field.fieldName }.toSet())
+        assertEquals(
+            null,
+            next.fetch(schema.key(schema.objectType("Chain"), "next")).value,
+        )
         assertEquals(
             "second",
             assertIs<Value.String>(

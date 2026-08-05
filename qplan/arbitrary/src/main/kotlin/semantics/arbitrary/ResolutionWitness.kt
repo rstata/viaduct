@@ -382,7 +382,7 @@ private class FingerprintBudget(
         node(
             "selection(" +
                 canonicalKey(selection.key) +
-                ";nominal=" + atom(selection.nominalType.typeName) +
+                ";nominal=" + atom(selection.key.field.containingType.typeName) +
                 ";possible=" +
                 selection.possibleTypes
                     .map { type -> atom(type.typeName) }

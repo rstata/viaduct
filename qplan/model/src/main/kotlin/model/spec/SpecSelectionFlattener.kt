@@ -93,7 +93,6 @@ private fun SpecSelection.Field.flattenField(
                 field = field,
                 arguments = arguments,
             ),
-        nominalType = context.nominalType,
         possibleTypes = context.possibleTypes,
         subselections = flattenedSubselections,
     )

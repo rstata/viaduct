@@ -96,6 +96,8 @@ One question remains: `firstName` originated in the raw output of `Query.user`, 
 
 ## Output Projection
 
+This section applies to Resolver03's selective producers. Resolver01 and Resolver02 instead consume each resolver's complete finite returned value, so their passive OER construction is bounded by that value rather than by `successorDemand()`.
+
 For a producer `P`:
 
 - `P.predecessorDemand` closes `P.objectFragment`, so it constructs `P`'s input, including the requirements of each **predecessor** resolver needed to provide that input.
@@ -441,6 +443,6 @@ Producing `$value` first requires the exact cell `field2(arg: "literal")` with o
 
 If `field2(arg: "literal")` was already applied and projected only to `{ forProvider }`, widening cannot manufacture `forConsumer` from that projected value. Applying the resolver again would violate one-shot execution. Once an application has occurred with incomplete demand, one-shot execution is impossible to recover for that strategy.
 
-This is not an impossibility theorem for every demand collector. Resolver04's symbolic envelope and speculative projection attempt to supply `{ forConsumer }` to any earlier concrete occurrence that may later equal `field2(arg: $value)`. A planner that conservatively merges that possible demand before the first application can still apply the resolver once. The canonical model now chooses the other available boundary: registry construction rejects provider/use shapes that permit this late convergence by requiring an acyclic argument-insensitive structural branch order.
+This makes one-shot resolution impossible under Resolver04's loose restrictions on variable definitions and uses. Before `$value` is bound, resolution cannot know whether the symbolic occurrence will converge with `field2(arg: "literal")`. Applying the concrete occurrence with only `{ forProvider }` may require a second application after late convergence, while speculatively adding `{ forConsumer }` over-selects whenever the occurrences do not converge. The canonical model therefore rejects provider/use shapes that permit this late convergence by requiring an acyclic argument-insensitive structural branch order.
 
 The exact lesson is that widening solves late discovery of a distinct descendant key such as `"bound"`, but it cannot repair an under-projected resolver cell after late equality. Preserving one-shot under `"literal"` requires the potentially convergent output demand to be accounted for before the first resolver application.

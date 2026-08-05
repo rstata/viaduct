@@ -8,11 +8,14 @@ import model.SelectionForest
 import model.Value
 import model.registry.Resolver
 import model.registry.demandsFromSibling
+import model.registry.successorDemand
 import model.selectionForestOf
 import model.union
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.correctresolution.concreteObjectKey
 import semantics.materialize
+import semantics.resolvePaths
+import semantics.resolveValue
 
 /**
  * Returns the result for [selections] and all transitive resolver demand on this concrete object.
@@ -156,11 +159,12 @@ private fun Value.Object.resolveKey(
                         val objectFragment = resolver.objectFragment(key.arguments)
                         // Closure and dependency order put the complete input in this prefix.
                         val input = resolved.materialize(objectFragment)
+                        val outputSelections =
+                            subselections + resolver.outputSelectionForest(subselections)
                         resolver.tenantResolve(
                             input = input,
                             arguments = key.arguments,
-                            selections =
-                                subselections + resolver.outputSelectionForest(subselections),
+                            selections = outputSelections,
                         )
                     }
 
@@ -169,37 +173,24 @@ private fun Value.Object.resolveKey(
                         fieldValues.getValue(key)
                     }
                 }
+            val resolutionSelections =
+                if (key.field in world.executorRegistry) {
+                    subselections.successorDemand()
+                } else {
+                    subselections
+                }
             EngineResult.Cell.of(
-                value = fieldValue.resolveValue(subselections),
+                value =
+                    fieldValue.resolveValue(resolutionSelections).let { resolvedValue ->
+                        fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
+                            value.resolve(selections, resolved)
+                        }
+                    },
             )
         }
 
     return EngineResult.Object.of(type, mapOf(key to cell))
 }
-
-/**
- * Returns this nullable resolver output resolved for [selections] throughout its value tree.
- */
-context(world: Assumptions)
-private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResult? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-
-        is Value.Object -> resolve(selections)
-
-        is Value.OutputList ->
-            EngineResult.List.of(
-                typeExpr = typeExpr,
-                cells =
-                    values.map { value ->
-                        EngineResult.Cell.of(
-                            value = value.resolveValue(selections),
-                        )
-                    },
-            )
-    }
 
 /**
  * Returns this field resolver's finite output selection forest relative to [demand].

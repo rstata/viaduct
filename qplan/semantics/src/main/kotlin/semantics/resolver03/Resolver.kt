@@ -11,6 +11,8 @@ import model.union
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.correctresolution.concreteObjectKey
 import semantics.materialize
+import semantics.resolvePaths
+import semantics.resolveValue
 
 /**
  * Returns the result for [selections] and all transitive resolver demand on this concrete object.
@@ -121,6 +123,12 @@ private fun Value.Object.resolveKey(
         } else {
             val subselections =
                 fieldSelections.flatMap { selection -> selection.subselections }
+            val resolutionSelections =
+                if (key.field in world.executorRegistry) {
+                    subselections.successorDemand()
+                } else {
+                    subselections
+                }
             val fieldValue =
                 when {
                     key.field.fieldName == "__typename" ->
@@ -134,7 +142,7 @@ private fun Value.Object.resolveKey(
                         resolver.tenantResolve(
                             input = input,
                             arguments = key.arguments,
-                            selections = subselections.successorDemand(),
+                            selections = resolutionSelections,
                         )
                     }
 
@@ -144,33 +152,14 @@ private fun Value.Object.resolveKey(
                     }
                 }
             EngineResult.Cell.of(
-                value = fieldValue.resolveValue(subselections),
+                value =
+                    fieldValue.resolveValue(resolutionSelections).let { resolvedValue ->
+                        fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
+                            value.resolve(selections, resolved)
+                        }
+                    },
             )
         }
 
     return EngineResult.Object.of(type, mapOf(key to cell))
 }
-
-/**
- * Returns this nullable resolver output resolved for [selections] throughout its value tree.
- */
-context(world: Assumptions)
-private fun Value.Output?.resolveValue(selections: SelectionForest): EngineResult? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-
-        is Value.Object -> resolve(selections)
-
-        is Value.OutputList ->
-            EngineResult.List.of(
-                typeExpr = typeExpr,
-                cells =
-                    values.map { value ->
-                        EngineResult.Cell.of(
-                            value = value.resolveValue(selections),
-                        )
-                    },
-            )
-    }

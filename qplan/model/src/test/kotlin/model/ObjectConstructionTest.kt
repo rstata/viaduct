@@ -127,6 +127,21 @@ class ObjectConstructionTest {
     }
 
     @Test
+    fun `object fields reject keys owned by another concrete object type`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val userType = schema.type("User") as Schema.ObjectType
+        val user = schema.objectOf("User")
+        val viewerKey = Value.Key.of(schema.field("Query", "viewer"), emptyMap())
+
+        assertFailsWith<IllegalArgumentException> {
+            Value.Object.of(
+                type = userType,
+                fields = mapOf(viewerKey to user),
+            )
+        }
+    }
+
+    @Test
     fun `completed object scopes cannot mutate constructed values`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         lateinit var scope: ObjectValueScope

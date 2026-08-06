@@ -17,8 +17,8 @@ import semantics.resolveValue
 
 /**
  * Resolves [selections] when resolver object fragments are empty, except for generated Node-loader
- * fragments that select synthetic `foo$id` bridge fields. Results are non-selective and may contain
- * more OER nodes than are strictly necessary to resolve the query.
+ * fragments that select synthetic `foo$id` or `foo$ids` bridge fields. Results are non-selective
+ * and may contain more OER nodes than are strictly necessary to resolve the query.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =

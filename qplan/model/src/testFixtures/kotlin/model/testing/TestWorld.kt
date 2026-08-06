@@ -39,9 +39,9 @@ class TestWorld private constructor(
          * Composes ordinary GraphQL and raw resolver inputs into one canonical reasoning world.
          *
          * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] are lowered
-         * with node-valued source field resolvers into synthetic `$id` bridge fields and generated
-         * field resolvers before [Assumptions] is constructed, so semantic code observes only
-         * field resolver coordinates.
+         * with node-valued source field resolvers into synthetic `$id`/`$ids` bridge fields and
+         * generated field resolvers before [Assumptions] is constructed, so semantic code observes
+         * only field resolver coordinates.
          */
         fun fromSDL(
             schemaSDL: String,
@@ -52,6 +52,7 @@ class TestWorld private constructor(
             variableProviders:
                 (Schema) -> Map<VariableCoordinate, model.Selection> = { emptyMap() },
             selectiveResolvers: Boolean = true,
+            applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -61,6 +62,7 @@ class TestWorld private constructor(
                         fieldResolvers = fieldResolvers,
                         variableProviders = variableProviders,
                         selectiveResolvers = selectiveResolvers,
+                        applicationObserver = applicationObserver,
                     ),
                 )
             return try {
@@ -81,6 +83,7 @@ private class TestWorldModule(
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
     private val variableProviders: (Schema) -> Map<VariableCoordinate, model.Selection>,
     private val selectiveResolvers: Boolean,
+    private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -122,6 +125,7 @@ private class TestWorldModule(
             nodeResolvers = nodeResolvers,
             fieldResolvers = fieldResolvers,
             variableProviders = variableProviders,
+            applicationObserver = applicationObserver,
         )
 
     @Provides
@@ -143,7 +147,7 @@ private class TestWorldModule(
         return schema.query.fields.values
             .filter {
                 it.fieldName != "__typename" &&
-                    !it.fieldName.endsWith(NODE_ID_BRIDGE_SUFFIX)
+                    !isNodeIdBridgeName(it.fieldName)
             }
             .associateWith {
                 fieldResolverOf(

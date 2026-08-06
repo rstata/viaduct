@@ -1,18 +1,22 @@
 package model
 
 /**
- * A free commutative collection of opaque [Selection] occurrences.
+ * A free commutative collection of opaque [Selection] members.
  *
- * ### Invariant: selection-forest-occurrences
+ * ### Member Count
  *
- * Each flattened GraphQL field occurrence contributes one member, and [size] observes the total
- * number of occurrences.
+ * [size] observes the number of current members. A forest returned directly by
+ * [model.spec.flatten] has one member for each flattened GraphQL field occurrence, but that is a
+ * postcondition of flattening rather than an invariant of every forest. In particular, [merge]
+ * replaces members with equal concrete structural keys by one normalized member, which may
+ * represent several source occurrences.
  *
- * ### Equality And Mutability
+ * ### Equality And Observation
  *
- * Selection and forest equality are undefined. Except for the explicit [merge] normalization
- * boundary, this interface exposes only operations that preserve occurrences without comparing
- * payloads or observing an order.
+ * Selection and forest equality are undefined, and no operation internally compares whole
+ * [Selection] values or exposes member order. [flatMapToSet], [keys], and [groupBy] may compare and
+ * deduplicate explicitly projected values without changing the forest's members. [merge] is the
+ * explicit normalization boundary that compares structural keys and coalesces forest members.
  */
 sealed interface SelectionForest {
     val size: Int

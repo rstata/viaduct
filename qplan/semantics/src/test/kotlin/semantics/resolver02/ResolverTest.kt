@@ -443,7 +443,7 @@ class ResolverTest {
             }
 
         val nodesField = schema.field("Query", "nodes")
-        val bridgeField = schema.field("Query", "nodes\$id")
+        val bridgeField = schema.field("Query", "nodes\$ids")
         val firstKey = Value.Key.of(nodesField, mapOf("group" to "first"))
         val secondKey = Value.Key.of(nodesField, mapOf("group" to "second"))
         val firstBridge = Value.Key.of(bridgeField, mapOf("group" to "first"))

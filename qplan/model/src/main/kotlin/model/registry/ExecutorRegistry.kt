@@ -15,6 +15,10 @@ sealed interface Executor
 typealias FieldResolverFunction =
     (Value.Object, Value.Arguments) -> Value.Output?
 
+/** Observes one complete (null demand) or selective field-resolver application boundary. */
+typealias FieldResolverApplicationObserver =
+    (Value.Object, Value.Arguments, SelectionForest?) -> Unit
+
 /**
  * A resolver supplied by the reasoning world's external executor registry.
  *
@@ -51,6 +55,7 @@ sealed interface Resolver : Executor {
         private val function: FieldResolverFunction,
         private val projectionDemand: (SelectionForest) -> SelectionForest,
         private val validateObjectFragment: (Fragment) -> Unit,
+        private val applicationObserver: FieldResolverApplicationObserver,
     ) : Resolver {
         /**
          * Returns the object fragment required for this exact argument tuple.
@@ -80,8 +85,10 @@ sealed interface Resolver : Executor {
             input: Value.Object,
             arguments: Value.Arguments,
             selections: SelectionForest,
-        ): Value.Output? =
-            function(input, arguments).snipToDemand(projectionDemand(selections))
+        ): Value.Output? {
+            applicationObserver(input, arguments, selections)
+            return function(input, arguments).snipToDemand(projectionDemand(selections))
+        }
 
         /**
          * Applies this field resolver and returns its complete finite selection-independent output.
@@ -89,7 +96,10 @@ sealed interface Resolver : Executor {
         fun tenantResolve(
             input: Value.Object,
             arguments: Value.Arguments,
-        ): Value.Output? = function(input, arguments)
+        ): Value.Output? {
+            applicationObserver(input, arguments, null)
+            return function(input, arguments)
+        }
 
         /**
          * Applies this field resolver once, strictly projects [selections], and additionally
@@ -119,6 +129,7 @@ sealed interface Resolver : Executor {
             selections: SelectionForest,
             speculativeDemand: SelectionForest,
         ): OutputProjection {
+            applicationObserver(input, arguments, selections)
             val output = function(input, arguments)
             val required = projectionDemand(selections)
             val speculative =
@@ -146,6 +157,7 @@ sealed interface Resolver : Executor {
                 function = { input, arguments -> transform(function(input, arguments)) },
                 projectionDemand = projectionDemand,
                 validateObjectFragment = validateObjectFragment,
+                applicationObserver = applicationObserver,
             )
 
         /**
@@ -163,6 +175,28 @@ sealed interface Resolver : Executor {
                 function = function,
                 projectionDemand = { demand -> transform(projectionDemand(demand)) },
                 validateObjectFragment = validateObjectFragment,
+                applicationObserver = applicationObserver,
+            )
+
+        /**
+         * Returns this resolver with an observer invoked once at each application boundary.
+         *
+         * Complete applications report null demand. Selective applications report the exact
+         * supplied demand before any lowering-specific projection transform.
+         */
+        fun observeApplications(observer: FieldResolverApplicationObserver): Field =
+            Field(
+                objectFragment = objectFragment,
+                predecessorDemand = predecessorDemand,
+                objectFragmentFunction = objectFragmentFunction,
+                predecessorDemandFunction = predecessorDemandFunction,
+                function = function,
+                projectionDemand = projectionDemand,
+                validateObjectFragment = validateObjectFragment,
+                applicationObserver = { input, arguments, selections ->
+                    applicationObserver(input, arguments, selections)
+                    observer(input, arguments, selections)
+                },
             )
 
         /**
@@ -191,6 +225,7 @@ sealed interface Resolver : Executor {
                     this.validateObjectFragment(fragment)
                     validateObjectFragment(fragment)
                 },
+                applicationObserver = applicationObserver,
             )
         }
 
@@ -207,6 +242,7 @@ sealed interface Resolver : Executor {
                     function = function,
                     projectionDemand = { it },
                     validateObjectFragment = {},
+                    applicationObserver = { _, _, _ -> },
                 )
 
             /**
@@ -231,6 +267,7 @@ sealed interface Resolver : Executor {
                     function = function,
                     projectionDemand = { it },
                     validateObjectFragment = {},
+                    applicationObserver = { _, _, _ -> },
                 )
             }
         }

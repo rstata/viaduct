@@ -71,6 +71,7 @@ fun Arb.Companion.resolverTestBatch(
 suspend fun checkResolverTestCases(
     counts: TestCaseCount,
     config: Config = Config.default,
+    captureSuppliedDemand: Boolean = false,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ) {
     checkAll(
@@ -78,7 +79,11 @@ suspend fun checkResolverTestCases(
         Arb.resolverTestBatch(counts, config),
     ) { batch ->
         batch.registries.forEach { registry ->
-            val world = registry.world(batch.schema)
+            val world =
+                registry.world(
+                    schema = batch.schema,
+                    captureSuppliedDemand = captureSuppliedDemand,
+                )
             batch.queries.forEach { query ->
                 val testCase = ResolverTestCase(batch.schema, registry, query)
                 try {

@@ -107,9 +107,9 @@ class ResolverWitnessTest {
                 val profilesByOwner = profiles.values.groupBy(VariableActivationProfile::owner)
                 witness.applications.forEach { application ->
                     activation.recordProgram(
-                        registry.resolverProgram(application.key.sourceField),
+                        registry.resolverProgram(application.key.field),
                     )
-                    profilesByOwner[application.key.sourceField]
+                    profilesByOwner[application.key.field]
                         ?.let(activation::recordVariableApplication)
                 }
 

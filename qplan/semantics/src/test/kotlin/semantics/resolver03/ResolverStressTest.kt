@@ -22,7 +22,6 @@ import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
-import semantics.arbitrary.registeredResolverCellCounts
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -89,8 +88,10 @@ class ResolverStressTest {
                         }
                     val witness = testCase.registry.resolutionWitness()
                     assertEquals(
-                        result.registeredResolverCellCounts(world.executorRegistry),
-                        witness.applicationCounts(),
+                        context(world) {
+                            result.registeredResolverApplicationIdentityCounts()
+                        },
+                        witness.applicationIdentityCounts(),
                     )
                     assertTrue(context(world) { result.correctResolution(fragment) })
                     resolverApplications += witness.applications.size

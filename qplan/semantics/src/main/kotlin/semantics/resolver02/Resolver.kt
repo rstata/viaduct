@@ -2,13 +2,11 @@ package semantics.resolver02
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectSelection
 import model.Schema
-import model.Selection
 import model.SelectionForest
 import model.Value
 import model.merge
-import model.objectKey
-import model.objectKeys
 import model.registry.demandsFromSibling
 import model.selectionForestOf
 import model.union
@@ -42,7 +40,7 @@ private fun Value.Object.resolve(
     val mergedSelections = closedDemand.merge(type)
     val unresolvedKeys =
         mergedSelections
-            .objectKeys(type)
+            .keys()
             .filter { key ->
                 key !in resolved.keys ||
                     (
@@ -52,7 +50,7 @@ private fun Value.Object.resolve(
             }.toSet()
     val orderedKeys = dependencyOrder(unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
-        val selection = mergedSelections.single(key)
+        val selection = mergedSelections[key]
         result.union(resolveKey(selection, result))
     }
 }
@@ -73,7 +71,7 @@ private fun Schema.ObjectType.closeResolverDemand(
 ): SelectionForest {
     val applicableSelections = selections.merge(this)
     val unexpandedResolverKeys =
-        applicableSelections.objectKeys(this).filter { key ->
+        applicableSelections.keys().filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
                 key.field in world.resolverRegistry
@@ -145,10 +143,10 @@ private fun Value.Object.dependenciesOf(
  */
 context(world: Assumptions)
 private fun Value.Object.resolveKey(
-    fieldSelection: Selection,
+    fieldSelection: ObjectSelection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
-    val key = fieldSelection.objectKey(type)
+    val key = fieldSelection.key
     val cell =
         if (key.arguments.argumentsContainErrorValue()) {
             EngineResult.Cell.Error

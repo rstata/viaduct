@@ -3,9 +3,28 @@ package model
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class SelectionMergeTest {
+    @Test
+    fun `object keys classify selections precisely`() {
+        val fixture = Fixture()
+        val concrete = fixture.selection("Query", "item")
+        val abstract =
+            fixture.selection(
+                typeName = "Item",
+                fieldName = "computed",
+                possibleTypes = setOf(fixture.item),
+            )
+
+        assertIs<ObjectSelection>(concrete)
+        assertFalse(abstract is ObjectSelection)
+    }
+
     @Test
     fun `duplicate leaves merge while distinct argument tuples remain separate`() {
         val fixture = Fixture()
@@ -14,13 +33,56 @@ class SelectionMergeTest {
         val forest = selectionForestOf(one, one, two)
 
         val merged = context(fixture.world) { forest.merge(fixture.query) }
+        val oneKey =
+            Value.ObjectKey.of(
+                fixture.schema.objectField("Query", "scalar"),
+                mapOf("arg" to 1),
+            )
+        val missingKey =
+            Value.ObjectKey.of(
+                fixture.schema.objectField("Query", "scalar"),
+                mapOf("arg" to 3),
+            )
 
+        assertEquals(fixture.query, merged.type)
         assertEquals(2, merged.size)
         assertEquals(setOf(one.key, two.key), merged.keys())
+        assertEquals(merged.keys(), merged.byKey().keys)
+        assertSame(merged.byKey().getValue(oneKey), merged[oneKey])
+        assertFailsWith<NoSuchElementException> { merged[missingKey] }
+        val filtered: ObjectSelectionForest =
+            merged.filter { selection -> selection.key == oneKey }
+        assertEquals(setOf(oneKey), filtered.keys())
         merged.forEach { selection ->
+            assertIs<ObjectSelection>(selection)
             assertEquals(fixture.query, selection.key.field.containingType)
             assertEquals(setOf(fixture.query), selection.possibleTypes)
             assertTrue(selection.subselections.isEmpty())
+        }
+    }
+
+    @Test
+    fun `object selection forest validates parent type exclusive applicability and unique keys`() {
+        val fixture = Fixture()
+        val querySelection =
+            assertIs<ObjectSelection>(fixture.selection("Query", "item"))
+        val itemSelection =
+            assertIs<ObjectSelection>(fixture.selection("ConcreteItem", "a"))
+        val inapplicableQuerySelection =
+            ObjectSelection.of(
+                key = querySelection.key,
+                possibleTypes = emptySet(),
+                subselections = querySelection.subselections,
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            ObjectSelectionForest.of(fixture.query, listOf(itemSelection))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ObjectSelectionForest.of(fixture.query, listOf(inapplicableQuerySelection))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ObjectSelectionForest.of(fixture.query, listOf(querySelection, querySelection))
         }
     }
 

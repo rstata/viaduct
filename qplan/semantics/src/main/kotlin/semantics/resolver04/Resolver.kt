@@ -6,8 +6,6 @@ import model.Fragment
 import model.SelectionForest
 import model.Value
 import model.objectKey
-import model.registry.FieldResolver
-import model.registry.availableDemand
 import model.registry.successorDemand
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
@@ -233,6 +231,7 @@ private fun Value.Object.dependenciesOf(
  * Returns a one-cell object result for [key] and its merged [fieldSelections].
  */
 context(world: Assumptions, sources: ResolutionSources)
+@Suppress("DEPRECATION")
 private fun Value.Object.resolveKey(
     key: Value.ObjectKey,
     fieldSelections: SelectionForest,
@@ -249,11 +248,11 @@ private fun Value.Object.resolveKey(
                 envelope
                     .coverageFor(key)
                     .flatMap { selection -> selection.subselections }
-            val fieldOutput =
+            val (source, projected) =
                 when {
                     key.field.fieldName == "__typename" ->
                         Value.String.of(type.typeName).let { value ->
-                            FieldResolver.OutputProjection(value, value)
+                            value to value
                         }
 
                     key.field in world.resolverRegistry -> {
@@ -268,25 +267,27 @@ private fun Value.Object.resolveKey(
                             input = input,
                             arguments = key.arguments,
                             selections = subselections.successorDemand(),
-                            speculativeDemand = availableCoverage,
+                            additionalProjectionDemand = { projectDemand ->
+                                availableDemand(projectDemand(availableCoverage))
+                            },
                         )
                     }
 
                     else -> {
                         // The producing resolver supplies demanded output-selection fields.
                         fieldValues.getValue(key).let { value ->
-                            FieldResolver.OutputProjection(value, value)
+                            value to value
                         }
                     }
                 }
             val availableSubselections =
-                fieldOutput.projected.availableDemand(availableCoverage)
+                projected.availableDemand(availableCoverage)
             EngineResult.Cell.of(
                 value =
-                    fieldOutput.projected.resolveValue(
+                    projected.resolveValue(
                         selections = subselections,
                         envelope = availableSubselections,
-                        source = fieldOutput.source,
+                        source = source,
                     ),
             )
         }

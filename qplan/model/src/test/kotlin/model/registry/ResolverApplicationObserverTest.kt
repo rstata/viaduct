@@ -15,6 +15,7 @@ import kotlin.test.assertSame
 
 class ResolverApplicationObserverTest {
     @Test
+    @Suppress("DEPRECATION")
     fun `application observer preserves complete and selective boundaries through composition`() {
         val observed = mutableListOf<SelectionForest?>()
         val testWorld =
@@ -52,7 +53,9 @@ class ResolverApplicationObserverTest {
                 input = input,
                 arguments = arguments,
                 selections = suppliedDemand,
-                speculativeDemand = selectionForestOf(),
+                additionalProjectionDemand = { projectDemand ->
+                    projectDemand(suppliedDemand)
+                },
             )
         }
 

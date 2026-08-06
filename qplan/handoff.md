@@ -32,6 +32,16 @@ One-shot does not require cross-tree coalescing. Distinct OER occurrences remain
 
 The current model is building a plan-independent correctness judgment over `EngineResult.Object`. That judgment should characterize valid field-resolution results without mentioning planner nodes, readiness, dependency counts, or execution order, so the eventual one-shot plan and executor can be judged against it. OER coordinates are `Value.ObjectKey` values carrying canonical concrete-object fields and fully coerced arguments; response aliases, response keys, response ordering, and external response assembly belong to field completion and remain outside the model. [Query Plan Research](./evergreen.md) records the production motivation, one-shot proof obligations, and hard cases.
 
+## TODO
+
+### Investigate resolver03 stress flakiness
+
+The unseeded `ResolverWitnessTest.generated construction witness is exact minimal and permutation invariant` property failed twice during otherwise unrelated full `./gradlew check` runs with `ResolutionWitnessBoundExceededException`. In both instances the exact test passed immediately when rerun alone, and a subsequent full check passed; the first observed failing generated case contained no variables, so neither occurrence currently points to the registry or Resolver04 changes being tested. This is the generated witness property configured for 12 schemas, two registries per schema, and four queries per schema, not the explicitly seeded 10,000-case Resolver03 stress test.
+
+The leading suspicion is that the random generator occasionally produces a valid but combinatorially large demand, result, or fingerprint structure that exceeds one of the diagnostic witness safety bounds, rather than exposing nondeterministic Resolver03 semantics. The current unseeded failure is difficult to classify because the exception identifies the exceeded bound but the test does not preserve a readily replayable generated seed and case corpus in the normal failure workflow.
+
+A possible solution is first to make every failure reproducible by reporting and accepting an explicit seed and by retaining the generated schema, registry, and query together with the exact exceeded bound and relevant size counters. Once a failing case is replayable, determine whether it reveals unintended growth or merely lies outside the witness test's intended resource envelope; fix the former, while handling the latter by constraining generation or discarding and regenerating bounded cases with a capped discard count. Raising witness limits alone should be deferred until the failing shape and growth mechanism are understood, and a minimized fixed regression should be added if the investigation finds a real semantic or complexity defect.
+
 ## Most Recent Step
 
 Resolver01-03 share [`ResolveValue.kt`](./semantics/src/main/kotlin/semantics/ResolveValue.kt) for resolving a produced output value. The helper separates resolver-continuation demand from passive output clipping. With null passive selections it recursively copies every field actually supplied by the finite output value, stopping at registered resolver boundaries; with non-null passive selections it copies only those selections. It emits selected `__typename` cells directly and records each list-transparent object-key continuation path containing a demanded registered resolver field.

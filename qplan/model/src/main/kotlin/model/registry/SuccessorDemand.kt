@@ -37,7 +37,6 @@ fun SelectionForest.successorDemand(): SelectionForest =
                         world.resolverRegistry
                             .resolver(key.field)
                             .predecessorDemand(key.arguments)
-                            .subselections
                 }
             }
         selectionForestOf(rootedSelection) + predecessorDemand

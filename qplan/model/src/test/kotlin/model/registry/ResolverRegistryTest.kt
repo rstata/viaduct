@@ -89,8 +89,8 @@ class ResolverRegistryTest {
         val fieldResolver = registry.resolver(userField)
         val arguments = Value.Arguments.of(userField, emptyMap())
         val objectFragment = fieldResolver.objectFragment(arguments)
-        assertEquals(schema.query, objectFragment.nominalType)
-        assertEquals(1, objectFragment.subselections.size)
+        assertEquals(schema.query, objectFragment.type)
+        assertEquals(1, objectFragment.size)
         assertEquals(
             user,
             context(assumptions) {
@@ -201,10 +201,10 @@ class ResolverRegistryTest {
         val bridge = schema.objectField("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
         val resolver = world.resolverRegistry.resolver(user)
-        val representativeBridge = resolver.predecessorDemand.subselections.single()
+        val representativeBridge = resolver.predecessorDemand.single()
         val predecessorDemand = resolver.predecessorDemand(arguments)
         val bridgeSelection =
-            predecessorDemand.subselections.single { selection ->
+            predecessorDemand.single { selection ->
                 selection.key.field == bridge
             }
 
@@ -219,7 +219,7 @@ class ResolverRegistryTest {
             bridgeSelection.key.arguments.fieldValues.getValue("id"),
         )
         assertTrue(
-            predecessorDemand.subselections.single { selection ->
+            predecessorDemand.single { selection ->
                 selection.key.field.fieldName == "seed"
             }.subselections.isEmpty(),
         )

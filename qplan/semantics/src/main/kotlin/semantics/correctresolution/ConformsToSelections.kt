@@ -2,7 +2,7 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
-import model.Fragment
+import model.ObjectSelectionForest
 import model.Schema
 import model.Selection
 import model.SelectionForest
@@ -10,23 +10,27 @@ import model.Value
 import model.objectKey
 
 /**
- * Whether this result contains every cell required by [fragment].
+ * Whether this result contains every cell required by [selections].
  *
  * Each selection is first guarded by the runtime concrete object type. Applicable selection keys
  * are then specialized to that concrete type before lookup. Null and error values stop recursive
- * requirements. Cells not required by [fragment] are permitted.
+ * requirements. Cells not required by [selections] are permitted.
  *
- * This predicate trusts the fragment's post-validation schema compatibility and the engine-result
+ * This predicate trusts the selections' post-validation schema compatibility and the engine-result
  * carrier invariants established by its factories. It observes values, but not check components.
  *
  * This operation is defined only when applicable selection keys contain no variables.
  */
 context(world: Assumptions)
-fun EngineResult.Object.conformsToFragment(fragment: Fragment): Boolean =
-    objectConformsToFragment(fragment.subselections)
+fun EngineResult.Object.conformsToSelections(selections: SelectionForest): Boolean =
+    objectConformsToSelections(selections)
 
 context(world: Assumptions)
-private fun EngineResult.Object.objectConformsToFragment(
+fun EngineResult.Object.conformsToSelections(selections: ObjectSelectionForest): Boolean =
+    type == selections.type && objectConformsToSelections(selections)
+
+context(world: Assumptions)
+private fun EngineResult.Object.objectConformsToSelections(
     selections: SelectionForest,
 ): Boolean =
     selections.all { selection ->
@@ -35,12 +39,12 @@ private fun EngineResult.Object.objectConformsToFragment(
         } else {
             val key = selection.objectKey(type)
             key in keys &&
-                fetch(key).value.engineResultConformsToFragment(selection.subselections)
+                fetch(key).value.engineResultConformsToSelections(selection.subselections)
         }
     }
 
 context(world: Assumptions)
-private fun EngineResult?.engineResultConformsToFragment(
+private fun EngineResult?.engineResultConformsToSelections(
     selections: SelectionForest,
 ): Boolean =
     when (this) {
@@ -49,7 +53,7 @@ private fun EngineResult?.engineResultConformsToFragment(
         is Value.Simple,
         -> true
 
-        is EngineResult.Object -> objectConformsToFragment(selections)
+        is EngineResult.Object -> objectConformsToSelections(selections)
         is EngineResult.List ->
-            all { cell -> cell.value.engineResultConformsToFragment(selections) }
+            all { cell -> cell.value.engineResultConformsToSelections(selections) }
     }

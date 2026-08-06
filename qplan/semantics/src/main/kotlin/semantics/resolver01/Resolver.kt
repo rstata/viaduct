@@ -62,7 +62,6 @@ private fun Schema.ObjectType.closeResolverDemand(
                 world.resolverRegistry
                     .resolver(key.field)
                     .objectFragment(key.arguments)
-                    .subselections
         }
     return closeResolverDemand(
         selections = applicableSelections + resolverDemand,

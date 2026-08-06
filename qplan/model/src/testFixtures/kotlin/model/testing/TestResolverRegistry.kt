@@ -641,6 +641,7 @@ private class TestResolverRegistry(
                             validateObjectFragment = { fragment ->
                                 validateProviderContainment(site.field, fragment)
                             },
+                            objectType = site.field.containingType,
                         )
                 }
                 is DependencyVertex.Variable -> Unit
@@ -895,7 +896,6 @@ private class TestResolverRegistry(
             val field = objectType.fields.getValue(selection.key.field.fieldName)
             predecessorResolvers[field]
                 ?.predecessorDemand(selection.key.arguments.retarget(field))
-                ?.subselections
                 ?.let { requirements ->
                     rootAt(path, requirements).forEach(additions::add)
                 }

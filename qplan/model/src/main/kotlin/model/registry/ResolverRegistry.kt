@@ -1,7 +1,7 @@
 package model.registry
 
 import model.Assumptions
-import model.Fragment
+import model.ObjectSelectionForest
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -30,19 +30,18 @@ typealias FieldResolverApplicationObserver =
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
- * [objectFragment] and every `objectFragment(arguments)` have the same nominal type,
- * field-coordinate occurrences, type guards, nesting, and occurrence multiplicity. Exact
- * fragments may differ only in the values occupying those fixed argument positions.
+ * [objectFragment] and every `objectFragment(arguments)` have the same concrete parent type and
+ * normalized field-coordinate shape. Exact fragments may differ only in the values occupying
+ * fixed argument positions.
  */
 class FieldResolver private constructor(
-    val objectFragment: Fragment,
-    val predecessorDemand: Fragment,
+    val objectFragment: ObjectSelectionForest,
+    val predecessorDemand: ObjectSelectionForest,
     val variables: Map<Value.Variable, List<Value.Key>>,
-    private val objectFragmentFunction: (Value.Arguments) -> Fragment,
-    private val predecessorDemandFunction: (Fragment) -> Fragment,
+    private val objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
+    private val predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
-    private val validateObjectFragment: (Fragment) -> Unit,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
     /**
@@ -53,14 +52,12 @@ class FieldResolver private constructor(
      * resolved field. Semantic operations use this function rather than assuming the
      * representative [objectFragment] is exact.
      */
-    fun objectFragment(arguments: Value.Arguments): Fragment =
-        objectFragmentFunction(arguments).also { exact ->
-            validateObjectFragment(exact)
-        }
+    fun objectFragment(arguments: Value.Arguments): ObjectSelectionForest =
+        objectFragmentFunction(arguments)
 
     /** Returns the guarded, path-rooted predecessor demand for this exact argument tuple. */
-    fun predecessorDemand(arguments: Value.Arguments): Fragment =
-        predecessorDemandFunction(objectFragment(arguments))
+    fun predecessorDemand(arguments: Value.Arguments): ObjectSelectionForest =
+        predecessorDemandFunction(arguments)
 
     /**
      * Applies this field resolver and projects its selection-independent result to
@@ -125,17 +122,16 @@ class FieldResolver private constructor(
          * observers, and computing predecessor demand before calling this factory.
          */
         fun of(
-            objectFragment: Fragment,
+            objectFragment: ObjectSelectionForest,
             variables: Map<Value.Variable, List<Value.Key>>,
-            predecessorDemand: Fragment,
-            objectFragmentFunction: (Value.Arguments) -> Fragment,
-            predecessorDemandFunction: (Fragment) -> Fragment,
+            predecessorDemand: ObjectSelectionForest,
+            objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
+            predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            validateObjectFragment: (Fragment) -> Unit = {},
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
         ): FieldResolver {
-            require(predecessorDemand.nominalType == objectFragment.nominalType) {
+            require(predecessorDemand.type == objectFragment.type) {
                 "Predecessor demand type must match object fragment type"
             }
             return FieldResolver(
@@ -146,7 +142,6 @@ class FieldResolver private constructor(
                 predecessorDemandFunction = predecessorDemandFunction,
                 function = function,
                 projectionDemand = projectionDemand,
-                validateObjectFragment = validateObjectFragment,
                 applicationObserver = applicationObserver,
             )
         }

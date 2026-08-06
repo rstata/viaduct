@@ -121,7 +121,6 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
  * variables are instantiated. Merging uses ordinary structural key equality and must be repeated
  * after substitution can make formerly distinct argument tuples equal.
  */
-context(world: Assumptions)
 fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
     val selections =
         filter { selection -> type in selection.possibleTypes }

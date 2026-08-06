@@ -2,9 +2,7 @@ package model.registry
 
 import model.Assumptions
 import model.Schema
-import model.SelectionForest
 import model.Value
-import model.objectKey
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
@@ -25,22 +23,6 @@ fun Value.ObjectKey.demandsFromSibling(
     siblingKey: Value.ObjectKey,
 ): Boolean {
     val field = this.field
-    return field.demandsFromSibling(
-        siblingKey = siblingKey,
-        selections =
-            world.resolverRegistry
-                .resolver(field)
-                .objectFragment(arguments)
-                .subselections,
-    )
-}
-
-context(world: Assumptions)
-private fun Schema.ObjectField.demandsFromSibling(
-    siblingKey: Value.ObjectKey,
-    selections: SelectionForest,
-): Boolean {
-    val field = this
     val objectType = field.containingType
     val sibling = siblingKey.field
     require(sibling.containingType == objectType) {
@@ -49,8 +31,9 @@ private fun Schema.ObjectField.demandsFromSibling(
     require(world.schema.field(objectType.typeName, sibling.fieldName) == sibling) {
         "${objectType.typeName}/${sibling.fieldName} is not canonical in this world"
     }
-    return !selections.all { selection ->
-        objectType !in selection.possibleTypes ||
-            selection.objectKey(objectType) != siblingKey
-    }
+    return siblingKey in
+        world.resolverRegistry
+            .resolver(field)
+            .objectFragment(arguments)
+            .keys()
 }

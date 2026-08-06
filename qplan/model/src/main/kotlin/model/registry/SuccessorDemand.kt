@@ -12,7 +12,7 @@ import model.selectionForestOf
  * Extends this output demand with every encountered successor resolver's predecessor demand.
  *
  * Each predecessor demand is rooted at its successor occurrence's containing object. Recursing
- * through subselections preserves the occurrence path and concrete-type guards.
+ * through subselections preserves the selection-occurrence nesting path and concrete-type guards.
  */
 context(world: Assumptions)
 fun SelectionForest.successorDemand(): SelectionForest =

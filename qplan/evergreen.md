@@ -346,7 +346,7 @@ Broad interfaces and unions may make conservative expansion expensive even when 
 
 A production field-resolver OSS is rooted on the parent type and includes the resolver field wrapper, while a production node-resolver OSS is already rooted on the node type. Recursive same-type fields make type equality useless as a discriminator in that source representation.
 
-The canonical model normalizes that distinction before reasoning. For source `foo(args): NodeType`, the containing producer supplies the synthetic `foo$id(args)` coordinate, and a generated field resolver at `foo(args)` requires that exact bridge and performs typed-ID dispatch. The loaded object's fields are then handled by ordinary field-resolver ownership, so projection has one root rule and stops only at canonical behavioral fields. Correctness closure, resolver conformance, and the registry demand graph consequently need no object-type resolver site or node-specific bridge exception.
+The canonical model normalizes that distinction before reasoning. For source `foo(args): NodeType`, the containing producer supplies the synthetic `foo$id(args)` coordinate, and a generated field resolver at `foo(args)` requires that exact bridge and performs typed-ID dispatch. The loaded object's fields are then handled by ordinary field-resolver ownership, so projection has one root rule and stops only at canonical behavioral fields. Correctness closure, resolver conformance, and the registry demand graph consequently need no object-type activation rule or node-specific bridge exception.
 
 ### Abstract and covariant recursion
 
@@ -404,7 +404,7 @@ At minimum, retain these tests:
 6. **Abstract concrete cycle:** a concrete covariant `@cycle` must find its concrete ancestor mask.  
 7. **List independence:** separate items must activate and fail independently without a global path barrier.  
 8. **Raw checker dependency:** checker RSSes must observe raw values without waiting on the selected field's checker.  
-9. **Alias, argument, and concrete-field identity:** aliases never distinguish OER cells; selections with the same `Value.Key` merge, while distinct output-field definitions or unequal fully coerced arguments remain separate. Every key materialized in an OER or `Value.Object` is a `Value.ObjectKey` whose field is owned by that value's concrete object type, never an interface or union field definition.
+9. **Alias, argument, and concrete-field identity:** aliases never distinguish OER cells; selections that specialize to the same `Value.ObjectKey` merge, while distinct output-field definitions or unequal fully coerced arguments remain separate. Every key materialized in an OER or `Value.Object` is a `Value.ObjectKey` whose field is owned by that value's concrete object type, never an interface or union field definition.
 10. **Failure liveness:** every failed producer/checker path must release dependents with an error rather than hang.
 
 ### Differential execution

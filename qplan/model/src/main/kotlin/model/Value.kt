@@ -290,7 +290,7 @@ sealed interface Value {
     /**
      * One alias-free output-field coordinate consisting of a canonical field and its arguments.
      *
-     * ### Invariant: object-key-argument-definition
+     * ### Invariant: key-argument-definition
      *
      * `arguments.type == field.arguments`.
      *
@@ -434,7 +434,7 @@ sealed interface Value {
     }
 
     /**
-     * A finite map from exact output-field coordinates to values.
+     * A finite map from exact object-field coordinates to values.
      *
      * ### Invariant: object-field-values-owner
      *

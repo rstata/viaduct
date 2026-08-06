@@ -150,7 +150,9 @@ data class ResolutionWitness(
 
 /**
  * One registered resolver-bearing cell found by traversing a returned result independently of the
- * resolver constructors and correctness predicates.
+ * resolver constructors and correctness predicates. [occurrencePath] is the exact root-to-cell OER
+ * path: [Value.ObjectKey] components select object fields and [Value.ListIndex] components select
+ * list elements, distinguishing equal fields at different list positions.
  */
 data class RegisteredResolverCell(
     val applicationKey: ResolverApplicationKey,

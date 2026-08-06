@@ -84,7 +84,7 @@ class ObjectValueScope internal constructor(
     }
 }
 
-/** One exact output-field coordinate selected in an [ObjectValueScope]. */
+/** One exact object-field coordinate selected in an [ObjectValueScope]. */
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
     internal val key: Value.ObjectKey,

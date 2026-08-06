@@ -136,7 +136,7 @@ fun SelectionForest.objectKeys(type: Schema.ObjectType): Set<Value.ObjectKey> =
  */
 sealed interface Selection {
     /**
-     * Exact object-field coordinate being selected.
+     * Exact alias-free output-field coordinate being selected.
      *
      * ### Invariant: selection-argument-coercion
      *
@@ -154,8 +154,8 @@ sealed interface Selection {
      * contain variables. Before a key is present in either value, its field must belong to the
      * applicable concrete [Schema.ObjectType] and its variables must be instantiated.
      *
-     * Compared to GraphQL selections, field-resolver selections use the object key rather than
-     * response keys.
+     * Compared to GraphQL selections, model selections use an alias-free schema field coordinate
+     * rather than a GraphQL response key.
      */
     val key: Value.Key
 

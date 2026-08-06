@@ -22,7 +22,7 @@ typealias FieldResolverApplicationObserver =
 /**
  * A resolver supplied by the reasoning world's external executor registry.
  *
- * Resolver equality is undefined. Resolver-demand identity is expressed with canonical output
+ * Resolver equality is undefined. Resolver-demand identity is expressed with canonical object
  * fields instead.
  */
 sealed interface Resolver : Executor {
@@ -309,9 +309,9 @@ private fun SelectionForest.retargetArguments(
  * The externally supplied field resolvers and field-relative variable providers fixed for one
  * reasoning world.
  *
- * An output field is an actual resolver coordinate exactly when [contains] returns true. The
+ * A canonical object field is an actual resolver coordinate exactly when [contains] returns true. The
  * registry satisfies canonical schema ownership, special-field exclusions, query coverage,
- * globally unique variable names, exact transpose, and acyclicity across output fields and
+ * globally unique variable names, exact transpose, and acyclicity across object fields and
  * [VariableCoordinate] values. Acyclicity is intentionally checked over a conservative
  * coordinate-level possibility relation derived from representative fragment shapes. The relation
  * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
@@ -327,7 +327,7 @@ private fun SelectionForest.retargetArguments(
  *
  * ### Invariant: executor-registry-depth-first-variable-stratification
  *
- * For every concrete object type, form one graph whose vertices are its canonical output fields,
+ * For every concrete object type, form one graph whose vertices are its canonical object fields,
  * interpreted as argument-insensitive structural branches. The graph contains each ordinary
  * resolver-input edge from a required sibling branch to its consuming resolver branch. For each
  * variable, its production branches are the provider's root branch and every transitive branch

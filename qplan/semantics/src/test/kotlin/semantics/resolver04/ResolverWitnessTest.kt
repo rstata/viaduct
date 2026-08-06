@@ -180,7 +180,11 @@ class ResolverWitnessTest {
         require(occurrences.isNotEmpty()) {
             "Active variable $this does not occur in its owner's source fragment"
         }
-        val provider = world.resolverRegistry.variable(this)
+        val provider =
+            world.resolverRegistry
+                .resolver(field)
+                .variables
+                .getValue(this)
         return VariableActivationProfile(
             variable = this,
             owner = owner,

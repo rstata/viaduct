@@ -12,7 +12,9 @@ fun EngineResult.Object.conformsToVariables(): Boolean =
     variableValues.all { (variable, value) ->
         val provider =
             world.resolverRegistry
-                .variable(variable)
+                .resolver(variable.field)
+                .variables
+                .getValue(variable)
                 .instantiateVariables(variableValues)
         readVariable(provider) == value
     } &&

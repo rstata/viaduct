@@ -27,7 +27,8 @@ typealias FieldResolverApplicationObserver =
  * its exact object fragment under resolver-dependency expansion. It therefore supplies the current
  * resolver's complete input prerequisites. [successorDemand] separately uses these closures to
  * extend a producer's output demand. The argument-taking forms preserve exact argument-dependent
- * coordinates.
+ * coordinates. In a canonical registry entry, [variables] maps every variable defined by this
+ * resolver to its nonempty alias-free provider path.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
@@ -38,6 +39,7 @@ typealias FieldResolverApplicationObserver =
 class FieldResolver private constructor(
     val objectFragment: Fragment,
     val predecessorDemand: Fragment,
+    val variables: Map<Value.Variable, List<Value.Key>>,
     private val objectFragmentFunction: (Value.Arguments) -> Fragment,
     private val predecessorDemandFunction: (Value.Arguments) -> Fragment,
     private val function: FieldResolverFunction,
@@ -125,6 +127,7 @@ class FieldResolver private constructor(
         FieldResolver(
             objectFragment = objectFragment,
             predecessorDemand = predecessorDemand,
+            variables = variables,
             objectFragmentFunction = objectFragmentFunction,
             predecessorDemandFunction = predecessorDemandFunction,
             function = { input, arguments -> transform(function(input, arguments)) },
@@ -143,6 +146,7 @@ class FieldResolver private constructor(
         FieldResolver(
             objectFragment = objectFragment,
             predecessorDemand = predecessorDemand,
+            variables = variables,
             objectFragmentFunction = objectFragmentFunction,
             predecessorDemandFunction = predecessorDemandFunction,
             function = function,
@@ -162,6 +166,7 @@ class FieldResolver private constructor(
         FieldResolver(
             objectFragment = transform(objectFragment),
             predecessorDemand = transform(predecessorDemand),
+            variables = variables,
             objectFragmentFunction = { arguments ->
                 transform(this.objectFragment(arguments))
             },
@@ -184,6 +189,7 @@ class FieldResolver private constructor(
         FieldResolver(
             objectFragment = objectFragment,
             predecessorDemand = predecessorDemand,
+            variables = variables,
             objectFragmentFunction = objectFragmentFunction,
             predecessorDemandFunction = predecessorDemandFunction,
             function = function,
@@ -213,6 +219,7 @@ class FieldResolver private constructor(
         return FieldResolver(
             objectFragment = objectFragment,
             predecessorDemand = predecessorDemand,
+            variables = variables,
             objectFragmentFunction = objectFragmentFunction,
             predecessorDemandFunction = predecessorDemandFunction,
             function = function,
@@ -225,6 +232,22 @@ class FieldResolver private constructor(
         )
     }
 
+    /** Returns this resolver with its field-relative variables and provider paths. */
+    fun withVariables(
+        variables: Map<Value.Variable, List<Value.Key>>,
+    ): FieldResolver =
+        FieldResolver(
+            objectFragment = objectFragment,
+            predecessorDemand = predecessorDemand,
+            variables = variables,
+            objectFragmentFunction = objectFragmentFunction,
+            predecessorDemandFunction = predecessorDemandFunction,
+            function = function,
+            projectionDemand = projectionDemand,
+            validateObjectFragment = validateObjectFragment,
+            applicationObserver = applicationObserver,
+        )
+
     companion object {
         fun of(
             objectFragment: Fragment,
@@ -233,6 +256,7 @@ class FieldResolver private constructor(
             FieldResolver(
                 objectFragment = objectFragment,
                 predecessorDemand = objectFragment,
+                variables = emptyMap(),
                 objectFragmentFunction = { objectFragment },
                 predecessorDemandFunction = { objectFragment },
                 function = function,
@@ -258,6 +282,7 @@ class FieldResolver private constructor(
             return FieldResolver(
                 objectFragment = objectFragment,
                 predecessorDemand = objectFragment,
+                variables = emptyMap(),
                 objectFragmentFunction = objectFragmentFunction,
                 predecessorDemandFunction = objectFragmentFunction,
                 function = function,
@@ -304,9 +329,9 @@ private fun SelectionForest.retargetArguments(
  * The externally supplied field resolvers and field-relative variable providers fixed for one
  * reasoning world.
  *
- * A canonical object field is an actual resolver coordinate exactly when [contains] returns true. The
- * registry satisfies canonical schema ownership, special-field exclusions, query coverage,
- * globally unique variable names, and acyclicity across object fields and [Value.Variable] values.
+ * A canonical object field is an actual resolver coordinate exactly when [contains] returns true.
+ * The registry satisfies canonical schema ownership, special-field exclusions, query coverage,
+ * resolver-local variable names, and acyclicity across object fields and [Value.Variable] values.
  * Acyclicity is intentionally checked over a conservative coordinate-level possibility relation
  * derived from representative fragment shapes. The relation may therefore contain an edge whose
  * exact occurrence is inactive because of a runtime type guard or [Value.Error] argument, and the
@@ -335,9 +360,6 @@ interface ResolverRegistry {
 
     /** Defined only when [field] is registered. */
     fun resolver(field: Schema.ObjectField): FieldResolver
-
-    /** The nonempty alias-free provider path for the globally registered [variable]. */
-    fun variable(variable: Value.Variable): List<Value.Key>
 
     /**
      * The registered fields that may be directly demanded by [field].

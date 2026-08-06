@@ -40,9 +40,19 @@ internal fun resolverRegistryOf(
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
-    val variablesByName = variableProviders.keys.associateBy(Value.Variable::variableName)
+    val variablesByField =
+        variableProviders.keys
+            .groupBy(Value.Variable::field)
+            .mapValues { (_, variables) ->
+                variables.associateBy(Value.Variable::variableName)
+            }
     val registryResolvers =
-        lowering.fieldResolvers.mapValues { (_, resolver) ->
+        lowering.fieldResolvers.mapValues { (field, resolver) ->
+            val variablesByName =
+                lowering
+                    .variableOwner(field)
+                    ?.let { owner -> variablesByField[owner] }
+                    .orEmpty()
             resolver.mapObjectFragment { fragment ->
                 fragment.mapVariables { variable ->
                     variablesByName[variable.variableName] ?: variable
@@ -50,16 +60,25 @@ internal fun resolverRegistryOf(
             }
         }
     val registryVariableProviders =
-        variableProviders.mapValues { (_, declaration) ->
+        variableProviders.mapValues { (variable, declaration) ->
+            val variablesByName = variablesByField.getValue(variable.field)
             declaration.mapVariables { variable ->
                 variablesByName[variable.variableName] ?: variable
             }
         }
+    val resolversWithVariables =
+        registryResolvers.mapValues { (field, resolver) ->
+            resolver.withVariables(
+                registryVariableProviders
+                    .filterKeys { variable -> variable.field == field }
+                    .mapValues { (_, declaration) -> declaration.keyPath },
+            )
+        }
     val canonicalResolvers =
         if (applicationObserver == null) {
-            registryResolvers
+            resolversWithVariables
         } else {
-            registryResolvers.mapValues { (field, resolver) ->
+            resolversWithVariables.mapValues { (field, resolver) ->
                 resolver.observeApplications { input, arguments, demand ->
                     applicationObserver(field, input, arguments, demand)
                 }
@@ -99,6 +118,12 @@ private class NodeResolverLowering(
 
     val fieldResolvers: Map<Schema.OutputField, FieldResolver>
     val additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>
+
+    fun variableOwner(field: Schema.OutputField): Schema.ObjectField? =
+        loweredByField.entries
+            .singleOrNull { (_, bridge) -> bridge == field }
+            ?.key
+            ?: field as? Schema.ObjectField
 
     init {
         validateRawFieldResolvers(rawFieldResolvers)
@@ -518,7 +543,9 @@ private class TestResolverRegistry(
     private val sourceFieldResolvers = fieldResolvers
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
     private val variableProviders =
-        variableDeclarations.mapValues { (_, declaration) -> declaration.keyPath }
+        fieldResolvers.values
+            .flatMap { resolver -> resolver.variables.entries }
+            .associate { (variable, provider) -> variable to provider }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
 
     init {
@@ -557,6 +584,13 @@ private class TestResolverRegistry(
             require(variable.field in fieldResolvers) {
                 "Variable ${variable.variableName} belongs to an unregistered resolver"
             }
+            require(
+                fieldResolvers
+                    .getValue(variable.field)
+                    .variables[variable] == declaration.keyPath,
+            ) {
+                "Variable ${variable.variableName} provider is not attached to its field resolver"
+            }
             require(variable.path == null) {
                 "Registered variable ${variable.variableName} must have a null occurrence path"
             }
@@ -573,10 +607,6 @@ private class TestResolverRegistry(
                 declaration = declaration,
                 fragment = fieldResolvers.getValue(variable.field).objectFragment,
             )
-        }
-        val variablesByName = variableProviders.keys.groupBy(Value.Variable::variableName)
-        require(variablesByName.values.all { it.size == 1 }) {
-            "Variable names must be globally unique across field resolvers"
         }
 
         val objectFieldResolvers =
@@ -636,7 +666,6 @@ private class TestResolverRegistry(
         this.fieldResolvers = predecessorResolvers
         BranchOrderValidator(
             fieldResolvers = predecessorResolvers,
-            variableProviders = variableProviders,
         ).validate()
     }
 
@@ -650,10 +679,6 @@ private class TestResolverRegistry(
         return fieldResolvers[field]
             ?: throw MissingResolverException(field.containingType.typeName, field.fieldName)
     }
-
-    override fun variable(variable: Value.Variable): List<Value.Key> =
-        variableProviders[variable]
-            ?: throw NoSuchElementException("Missing variable provider: \$${variable.variableName}")
 
     override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> {
         require(field in this) { "Resolver field is not registered" }

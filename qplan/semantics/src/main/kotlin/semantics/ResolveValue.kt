@@ -5,7 +5,6 @@ import model.EngineResult
 import model.SelectionForest
 import model.Value
 import model.merge
-import model.objectKey
 import model.selectionForestOf
 
 /**
@@ -85,15 +84,11 @@ private fun Value.Object.resolveObjectValue(
     path: List<Value.ObjectKey>,
 ): ResolvedValue {
     val mergedResolverDemand = resolverDemand.merge(type)
-    val resolverDemandByKey =
-        mergedResolverDemand
-            .groupBy { selection -> selection.objectKey(type) }
-            .mapValues { (_, selections) -> selections.single() }
+    val resolverDemandByKey = mergedResolverDemand.byKey()
     val selectionsByKey =
         selections
             ?.merge(type)
-            ?.groupBy { selection -> selection.objectKey(type) }
-            ?.mapValues { (_, selections) -> selections.single() }
+            ?.byKey()
     if (world.selectiveResolvers && selectionsByKey != null) {
         val unselectedKeys = fieldValues.keys - selectionsByKey.keys
         require(unselectedKeys.isEmpty()) {

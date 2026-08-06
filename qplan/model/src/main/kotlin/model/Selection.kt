@@ -43,11 +43,56 @@ sealed interface SelectionForest {
 
     fun single(predicate: (Selection) -> Boolean): Selection
 
-    /** Returns the single selection whose concrete object coordinate is [key]. */
-    fun single(key: Value.ObjectKey): Selection =
-        single { selection -> selection.objectKey(key.field.containingType) == key }
-
     operator fun plus(other: SelectionForest): SelectionForest
+}
+
+/**
+ * A normalized selection forest specialized to one concrete parent object type.
+ *
+ * ### Invariant: object-selection-forest-normalization
+ *
+ * Every selection is an [ObjectSelection] whose key field belongs to [type], whose
+ * `possibleTypes == setOf(type)`, and whose key occurs exactly once.
+ */
+sealed interface ObjectSelectionForest : SelectionForest {
+    val type: Schema.ObjectType
+
+    override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest
+
+    override fun keys(): Set<Value.ObjectKey>
+
+    /** Returns the unique selection for each key. */
+    fun byKey(): Map<Value.ObjectKey, ObjectSelection>
+
+    /**
+     * Returns the selection for [key].
+     *
+     * @throws NoSuchElementException when [key] is absent
+     */
+    operator fun get(key: Value.ObjectKey): ObjectSelection
+
+    companion object {
+        /** Constructs a normalized forest satisfying [ObjectSelectionForest]'s invariant. */
+        fun of(
+            type: Schema.ObjectType,
+            selections: Iterable<ObjectSelection>,
+        ): ObjectSelectionForest {
+            val occurrences = selections.toList()
+            require(
+                occurrences.all { selection ->
+                    selection.key.field.containingType == type &&
+                        selection.possibleTypes == setOf(type)
+                },
+            ) {
+                "Object selections must belong exclusively to ${type.typeName}"
+            }
+            val byKey = occurrences.associateBy(ObjectSelection::key)
+            require(byKey.size == occurrences.size) {
+                "Object selection keys must be unique"
+            }
+            return ObjectSelectionForestImpl(type, byKey)
+        }
+    }
 }
 
 /** Constructs a [SelectionForest] containing the supplied occurrences. */
@@ -77,21 +122,21 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
  * after substitution can make formerly distinct argument tuples equal.
  */
 context(world: Assumptions)
-fun SelectionForest.merge(type: Schema.ObjectType): SelectionForest =
-    filter { selection -> type in selection.possibleTypes }
+fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
+    val selections =
+        filter { selection -> type in selection.possibleTypes }
         .groupBy { selection -> selection.objectKey(type) }
         .entries
-        .fold(selectionForestOf()) { result, (key, selections) ->
-            result +
-                selectionForestOf(
-                    Selection.of(
-                        key = key,
-                        possibleTypes = setOf(type),
-                        subselections =
-                            selections.flatMap { selection -> selection.subselections },
-                    ),
-                )
+        .map { (key, selections) ->
+            ObjectSelection.of(
+                key = key,
+                possibleTypes = setOf(type),
+                subselections =
+                    selections.flatMap { selection -> selection.subselections },
+            )
         }
+    return ObjectSelectionForest.of(type, selections)
+}
 
 /**
  * Specializes this selection's field coordinate to concrete parent [type].
@@ -104,10 +149,6 @@ fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey =
         field = type.fields.getValue(key.field.fieldName),
         arguments = key.arguments.fieldValues,
     )
-
-/** Returns the concrete object keys contributed independently by these selection occurrences. */
-fun SelectionForest.objectKeys(type: Schema.ObjectType): Set<Value.ObjectKey> =
-    flatMapToSet { selection -> setOf(selection.objectKey(type)) }
 
 /**
  * A post-validation field-selection occurrence used for Viaduct field resolution.
@@ -123,6 +164,7 @@ fun SelectionForest.objectKeys(type: Schema.ObjectType): Set<Value.ObjectKey> =
  * - [possibleTypes] is a subset of the object types contained by [key]'s field owner.
  * - When [isLeaf] is true, [subselections] is empty. The converse does not hold: a composite
  *   selection may also have no subselections.
+ * - A selection's [key] is a [Value.ObjectKey] exactly when it is an [ObjectSelection].
  *
  * ### Invariant: selection-well-foundedness
  *
@@ -218,22 +260,61 @@ sealed interface Selection {
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
         ): Selection {
-            val fieldOwner = key.field.containingType
-            require(possibleTypes.all { it in fieldOwner.possibleTypes }) {
-                "Selection possible types must be contained by ${fieldOwner.typeName}"
+            validateSelection(key, possibleTypes, subselections)
+            return when (key) {
+                is Value.ObjectKey ->
+                    ObjectSelectionImpl(
+                        key = key,
+                        possibleTypes = possibleTypes,
+                        subselections = subselections,
+                    )
+                else ->
+                    SelectionImpl(
+                        key = key,
+                        possibleTypes = possibleTypes,
+                        subselections = subselections,
+                    )
             }
-            require(
-                key.field.typeExpr.baseType is Schema.CompositeType || subselections.isEmpty(),
-            ) {
-                "Leaf selection ${fieldOwner.typeName}.${key.field.fieldName} has subselections"
-            }
-
-            return SelectionImpl(
-                key = key,
-                possibleTypes = possibleTypes,
-                subselections = subselections,
-            )
         }
+
+        /** Constructs the precise selection category for a concrete-object field key. */
+        fun of(
+            key: Value.ObjectKey,
+            possibleTypes: Set<Schema.ObjectType>,
+            subselections: SelectionForest,
+        ): ObjectSelection = ObjectSelection.of(key, possibleTypes, subselections)
+    }
+}
+
+/** A selection whose field coordinate belongs to a concrete object type. */
+sealed interface ObjectSelection : Selection {
+    override val key: Value.ObjectKey
+
+    companion object {
+        fun of(
+            key: Value.ObjectKey,
+            possibleTypes: Set<Schema.ObjectType>,
+            subselections: SelectionForest,
+        ): ObjectSelection {
+            validateSelection(key, possibleTypes, subselections)
+            return ObjectSelectionImpl(key, possibleTypes, subselections)
+        }
+    }
+}
+
+private fun validateSelection(
+    key: Value.Key,
+    possibleTypes: Set<Schema.ObjectType>,
+    subselections: SelectionForest,
+) {
+    val fieldOwner = key.field.containingType
+    require(possibleTypes.all { it in fieldOwner.possibleTypes }) {
+        "Selection possible types must be contained by ${fieldOwner.typeName}"
+    }
+    require(
+        key.field.typeExpr.baseType is Schema.CompositeType || subselections.isEmpty(),
+    ) {
+        "Leaf selection ${fieldOwner.typeName}.${key.field.fieldName} has subselections"
     }
 }
 
@@ -243,8 +324,14 @@ private class SelectionImpl(
     override val subselections: SelectionForest,
 ) : Selection
 
-private class SelectionForestImpl(
-    private val occurrences: List<Selection>,
+private class ObjectSelectionImpl(
+    override val key: Value.ObjectKey,
+    override val possibleTypes: Set<Schema.ObjectType>,
+    override val subselections: SelectionForest,
+) : ObjectSelection
+
+private abstract class AbstractSelectionForest(
+    val occurrences: List<Selection>,
 ) : SelectionForest {
     override val size: Int
         get() = occurrences.size
@@ -259,7 +346,7 @@ private class SelectionForestImpl(
     override fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest =
         SelectionForestImpl(
             occurrences.flatMap { selection ->
-                (transform(selection) as SelectionForestImpl).occurrences
+                transform(selection).occurrences()
             },
         )
 
@@ -284,5 +371,30 @@ private class SelectionForestImpl(
         occurrences.single(predicate)
 
     override fun plus(other: SelectionForest): SelectionForest =
-        SelectionForestImpl(occurrences + (other as SelectionForestImpl).occurrences)
+        SelectionForestImpl(occurrences + other.occurrences())
 }
+
+private class SelectionForestImpl(
+    occurrences: List<Selection>,
+) : AbstractSelectionForest(occurrences)
+
+private class ObjectSelectionForestImpl(
+    override val type: Schema.ObjectType,
+    private val selectionsByKey: Map<Value.ObjectKey, ObjectSelection>,
+) : AbstractSelectionForest(selectionsByKey.values.toList()),
+    ObjectSelectionForest {
+    override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest =
+        ObjectSelectionForestImpl(
+            type,
+            selectionsByKey.filterValues(predicate),
+        )
+
+    override fun keys(): Set<Value.ObjectKey> = selectionsByKey.keys
+
+    override fun byKey(): Map<Value.ObjectKey, ObjectSelection> = selectionsByKey
+
+    override fun get(key: Value.ObjectKey): ObjectSelection = selectionsByKey.getValue(key)
+}
+
+private fun SelectionForest.occurrences(): List<Selection> =
+    (this as AbstractSelectionForest).occurrences

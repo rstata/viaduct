@@ -3,13 +3,13 @@ package model.testing
 import model.Fragment
 import model.Schema
 import model.Selection
+import model.SelectionForest
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
-import model.registry.ResolverRegistry
-import model.registry.FieldResolverFunction
-import model.registry.MissingResolverException
 import model.registry.FieldResolver
+import model.registry.MissingResolverException
+import model.registry.ResolverRegistry
 import model.selectionForestOf
 import model.toSelectionForest
 
@@ -25,17 +25,12 @@ typealias NodeResolverFunction = (Value.ID) -> Value.Object
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
 
 typealias CanonicalFieldResolverApplicationObserver =
-    (Schema.OutputField, Value.Object, Value.Arguments, model.SelectionForest?) -> Unit
-
-fun fieldResolverOf(
-    objectFragment: Fragment,
-    function: FieldResolverFunction,
-): FieldResolver = FieldResolver.of(objectFragment, function)
+    (Schema.OutputField, Value.Object, Value.Arguments, SelectionForest?) -> Unit
 
 internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-    fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+    fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
     variableProviders: Map<Value.Variable, FromObjectField>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
@@ -66,19 +61,11 @@ internal fun resolverRegistryOf(
                 variablesByName[variable.variableName] ?: variable
             }
         }
-    val resolversWithVariables =
-        registryResolvers.mapValues { (field, resolver) ->
-            resolver.withVariables(
-                registryVariableProviders
-                    .filterKeys { variable -> variable.field == field }
-                    .mapValues { (_, declaration) -> declaration.keyPath },
-            )
-        }
-    val canonicalResolvers =
+    val observedResolvers =
         if (applicationObserver == null) {
-            resolversWithVariables
+            registryResolvers
         } else {
-            resolversWithVariables.mapValues { (field, resolver) ->
+            registryResolvers.mapValues { (field, resolver) ->
                 resolver.observeApplications { input, arguments, demand ->
                     applicationObserver(field, input, arguments, demand)
                 }
@@ -86,7 +73,7 @@ internal fun resolverRegistryOf(
         }
     return TestResolverRegistry(
         schema = schema,
-        fieldResolvers = canonicalResolvers,
+        fieldResolverDefinitions = observedResolvers,
         additionalDemand = lowering.additionalDemand,
         variableDeclarations = registryVariableProviders,
     )
@@ -109,14 +96,14 @@ internal fun resolverRegistryOf(
 private class NodeResolverLowering(
     private val schema: GJSchema,
     private val nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-    rawFieldResolvers: Map<Schema.OutputField, FieldResolver>,
+    rawFieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
 ) {
     private val nodeType: Schema.InterfaceType? = canonicalNodeType()
     private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
     private val loweredByField: Map<Schema.ObjectField, Schema.ObjectField> =
         loweredFields.associateWith(::bridgeField)
 
-    val fieldResolvers: Map<Schema.OutputField, FieldResolver>
+    val fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>
     val additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>
 
     fun variableOwner(field: Schema.OutputField): Schema.ObjectField? =
@@ -227,7 +214,7 @@ private class NodeResolverLowering(
     }
 
     private fun validateRawFieldResolvers(
-        fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+        fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
     ) {
         val nodeIdFields = nodeResolvers.keys.mapTo(linkedSetOf(), ::validateNodeIdField)
         fieldResolvers.forEach { (field, resolver) ->
@@ -256,7 +243,7 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun loaderResolver(field: Schema.ObjectField): FieldResolver {
+    private fun loaderResolver(field: Schema.ObjectField): FieldResolverDefinition {
         val owner = field.containingType
         val bridge = bridgeField(field)
         val representativeFragment =
@@ -278,7 +265,7 @@ private class NodeResolverLowering(
                         ),
                     ),
             )
-        return FieldResolver.ofArgumentRetargeting(
+        return FieldResolverDefinition.ofArgumentRetargeting(
             objectFragment = representativeFragment,
             retargetArguments = { _, arguments -> arguments.retarget(bridge) },
             function = { input, arguments ->
@@ -536,20 +523,18 @@ private sealed interface DependencyVertex {
 
 private class TestResolverRegistry(
     private val schema: Schema,
-    fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+    fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
     variableDeclarations: Map<Value.Variable, FromObjectField>,
 ) : ResolverRegistry {
-    private val sourceFieldResolvers = fieldResolvers
+    private val sourceFieldResolvers = fieldResolverDefinitions
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
     private val variableProviders =
-        fieldResolvers.values
-            .flatMap { resolver -> resolver.variables.entries }
-            .associate { (variable, provider) -> variable to provider }
+        variableDeclarations.mapValues { (_, declaration) -> declaration.keyPath }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
 
     init {
-        fieldResolvers.forEach { (field, resolver) ->
+        fieldResolverDefinitions.forEach { (field, resolver) ->
             validateCanonicalField(field, "field-resolver field")
             val typeName = field.containingType.typeName
             require(field.containingType is Schema.ObjectType) {
@@ -572,7 +557,7 @@ private class TestResolverRegistry(
                 .filter {
                     it.fieldName != "__typename" &&
                         !isNodeIdBridgeName(it.fieldName) &&
-                        it !in fieldResolvers
+                        it !in fieldResolverDefinitions
                 }
         require(missingQueryFields.isEmpty()) {
             "Query fields without field resolvers: " +
@@ -581,15 +566,8 @@ private class TestResolverRegistry(
 
         variableDeclarations.forEach { (variable, declaration) ->
             validateCanonicalField(variable.field, "variable-defining field")
-            require(variable.field in fieldResolvers) {
+            require(variable.field in fieldResolverDefinitions) {
                 "Variable ${variable.variableName} belongs to an unregistered resolver"
-            }
-            require(
-                fieldResolvers
-                    .getValue(variable.field)
-                    .variables[variable] == declaration.keyPath,
-            ) {
-                "Variable ${variable.variableName} provider is not attached to its field resolver"
             }
             require(variable.path == null) {
                 "Registered variable ${variable.variableName} must have a null occurrence path"
@@ -600,17 +578,17 @@ private class TestResolverRegistry(
             }
             validateProviderContainment(
                 variable.field,
-                fieldResolvers.getValue(variable.field).objectFragment,
+                fieldResolverDefinitions.getValue(variable.field).objectFragment,
             )
             validateVariableUses(
                 variable = variable,
                 declaration = declaration,
-                fragment = fieldResolvers.getValue(variable.field).objectFragment,
+                fragment = fieldResolverDefinitions.getValue(variable.field).objectFragment,
             )
         }
 
         val objectFieldResolvers =
-            fieldResolvers.mapKeys { (field, _) -> field as Schema.ObjectField }
+            fieldResolverDefinitions.mapKeys { (field, _) -> field as Schema.ObjectField }
         outgoing =
             buildMap {
                 objectFieldResolvers.forEach { (field, resolver) ->
@@ -637,21 +615,26 @@ private class TestResolverRegistry(
                     )
                 }
             }
-        val predecessorResolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
+        val assembledResolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
                 is DependencyVertex.Field -> {
-                    val resolver = fieldResolvers.getValue(site.field)
-                    predecessorResolvers[site.field] =
-                        resolver.withPredecessorDemand(
+                    val definition = fieldResolverDefinitions.getValue(site.field)
+                    val predecessorResolvers = assembledResolvers.toMap()
+                    assembledResolvers[site.field] =
+                        definition.assemble(
+                            variables =
+                                variableProviders.filterKeys { variable ->
+                                    variable.field == site.field
+                                },
                             predecessorDemand =
                                 closePredecessorDemand(
-                                    fragment = resolver.objectFragment,
+                                    fragment = definition.objectFragment,
                                     predecessorResolvers = predecessorResolvers,
                                 ),
-                            predecessorDemandFunction = { arguments ->
+                            predecessorDemandFunction = { exactObjectFragment ->
                                 closePredecessorDemand(
-                                    fragment = resolver.objectFragment(arguments),
+                                    fragment = exactObjectFragment,
                                     predecessorResolvers = predecessorResolvers,
                                 )
                             },
@@ -663,9 +646,9 @@ private class TestResolverRegistry(
                 is DependencyVertex.Variable -> Unit
             }
         }
-        this.fieldResolvers = predecessorResolvers
+        this.fieldResolvers = assembledResolvers
         BranchOrderValidator(
-            fieldResolvers = predecessorResolvers,
+            fieldResolvers = assembledResolvers,
         ).validate()
     }
 

@@ -9,6 +9,7 @@ import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.selectionForestOf
+import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,7 +43,7 @@ class ResolverRegistryTest {
                 fieldResolvers = { schema ->
                     val userField = schema.field("Query", "user")
                     val queryFragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, FieldResolver>(
+                    mapOf<Schema.OutputField, FieldResolverDefinition>(
                         userField to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
@@ -239,7 +240,7 @@ class ResolverRegistryTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val fragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, FieldResolver>(
+                    mapOf<Schema.OutputField, FieldResolverDefinition>(
                         schema.field("Query", "scalar") to
                             model.testing.fieldResolverOf(fragment) { _, _ -> Value.String.of("value") },
                         schema.field("Query", "list") to

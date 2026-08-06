@@ -12,7 +12,6 @@ import model.SelectionForest
 import model.Value
 import model.emptyFragmentOf
 import model.registry.ResolverRegistry
-import model.registry.FieldResolver
 import model.selectionsFrom
 
 /**
@@ -47,7 +46,7 @@ class TestWorld private constructor(
             nodeResolvers:
                 (Schema) -> Map<Schema.ObjectType, NodeResolverFunction> = { emptyMap() },
             fieldResolvers:
-                ((Schema) -> Map<Schema.OutputField, FieldResolver>)? = null,
+                ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)? = null,
             variableProviders:
                 (Schema) -> Map<Value.Variable, FromObjectField> = { emptyMap() },
             selectiveResolvers: Boolean = true,
@@ -79,7 +78,7 @@ class TestWorld private constructor(
 private class TestWorldModule(
     private val schemaSDL: String,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
-    private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolver>)?,
+    private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)?,
     private val variableProviders: (Schema) -> Map<Value.Variable, FromObjectField>,
     private val selectiveResolvers: Boolean,
     private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
@@ -103,7 +102,7 @@ private class TestWorldModule(
 
     @Provides
     @FieldResolvers
-    fun fieldResolvers(schema: GJSchema): Map<Schema.OutputField, FieldResolver> =
+    fun fieldResolvers(schema: GJSchema): Map<Schema.OutputField, FieldResolverDefinition> =
         fieldResolvers?.invoke(schema) ?: defaultQueryResolvers(schema)
 
     @Provides
@@ -116,7 +115,7 @@ private class TestWorldModule(
     fun resolverRegistry(
         schema: GJSchema,
         @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-        @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+        @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
         @VariableProviders variableProviders: Map<Value.Variable, FromObjectField>,
     ): ResolverRegistry =
         resolverRegistryOf(
@@ -141,7 +140,7 @@ private class TestWorldModule(
 
     private fun defaultQueryResolvers(
         schema: GJSchema,
-    ): Map<Schema.OutputField, FieldResolver> {
+    ): Map<Schema.OutputField, FieldResolverDefinition> {
         val queryFragment = schema.emptyFragmentOf("Query")
         return schema.query.fields.values
             .filter {

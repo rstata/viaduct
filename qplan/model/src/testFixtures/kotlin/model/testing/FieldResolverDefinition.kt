@@ -1,12 +1,15 @@
 package model.testing
 
 import model.Fragment
+import model.ObjectSelectionForest
+import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
 import model.registry.FieldResolver
 import model.registry.FieldResolverApplicationObserver
 import model.registry.FieldResolverFunction
+import model.merge
 import model.selectionForestOf
 
 /**
@@ -71,22 +74,43 @@ class FieldResolverDefinition private constructor(
         )
 
     internal fun assemble(
+        objectType: Schema.ObjectType,
         variables: Map<Value.Variable, List<Value.Key>>,
         predecessorDemand: Fragment,
         predecessorDemandFunction: (Fragment) -> Fragment,
         validateObjectFragment: (Fragment) -> Unit,
-    ): FieldResolver =
-        FieldResolver.of(
-            objectFragment = objectFragment,
+    ): FieldResolver {
+        fun normalize(
+            fragment: Fragment,
+            role: String,
+        ): ObjectSelectionForest {
+            require(fragment.nominalType == objectType) {
+                "$role type ${fragment.nominalType.typeName} does not match ${objectType.typeName}"
+            }
+            return fragment.subselections.merge(objectType)
+        }
+
+        fun exactObjectFragment(arguments: Value.Arguments): Fragment =
+            objectFragment(arguments).also(validateObjectFragment)
+
+        return FieldResolver.of(
+            objectFragment = normalize(objectFragment, "Object fragment"),
             variables = variables,
-            predecessorDemand = predecessorDemand,
-            objectFragmentFunction = objectFragmentFunction,
-            predecessorDemandFunction = predecessorDemandFunction,
+            predecessorDemand = normalize(predecessorDemand, "Predecessor demand"),
+            objectFragmentFunction = { arguments ->
+                normalize(exactObjectFragment(arguments), "Exact object fragment")
+            },
+            predecessorDemandFunction = { arguments ->
+                normalize(
+                    predecessorDemandFunction(exactObjectFragment(arguments)),
+                    "Exact predecessor demand",
+                )
+            },
             function = function,
             projectionDemand = projectionDemand,
-            validateObjectFragment = validateObjectFragment,
             applicationObserver = applicationObserver,
         )
+    }
 
     companion object {
         fun of(

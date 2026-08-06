@@ -11,7 +11,7 @@ import semantics.instantiateVariables
  * A present field cell activates its registered field resolver unless its arguments contain an
  * error. The containing object must then conform to that resolver's object fragment. Recursing
  * through every present value makes these requirements transitive while preserving the type guards
- * interpreted by [conformsToFragment].
+ * interpreted by [conformsToSelections].
  *
  * This predicate observes cell presence and values, but never cell check components.
  */
@@ -27,7 +27,7 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
         val fieldResolverDemandIsClosed =
             key.arguments.argumentsContainErrorValue() ||
                 key.field !in registry ||
-                conformsToFragment(
+                conformsToSelections(
                     registry
                         .resolver(key.field)
                         .objectFragment(key.arguments)

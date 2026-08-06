@@ -57,7 +57,7 @@ internal class BranchOrderValidator(
         fieldResolvers.forEach { (outputField, resolver) ->
             val consumer = outputField as Schema.ObjectField
             val graph = graphs.getValue(consumer.containingType)
-            resolver.objectFragment.subselections.forEach { selection ->
+            resolver.objectFragment.forEach { selection ->
                 selection.branchOn(consumer.containingType)?.let { prerequisite ->
                     graph.add(
                         Edge(prerequisite, consumer),
@@ -82,7 +82,7 @@ internal class BranchOrderValidator(
                     val renderedProviderPath =
                         providerPath.joinToString("/") { key -> key.field.fieldName }
                     val uses =
-                        resolver.objectFragment.subselections.variableUsePaths(variable, type)
+                        resolver.objectFragment.variableUsePaths(variable, type)
 
                     productionPaths.forEach { (production, productionPath) ->
                         uses.forEach { (useBranch, usePaths) ->

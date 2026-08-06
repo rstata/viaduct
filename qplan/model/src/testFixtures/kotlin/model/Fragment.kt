@@ -1,7 +1,7 @@
 package model
 
 /**
- * A nominal type and nested selections required as one object-valued resolver input.
+ * A nominal type and unnormalized nested selections interpreted as one selection requirement.
  *
  * ### Invariant: fragment-selection-context
  *
@@ -13,10 +13,9 @@ package model
  * A fragment and its [subselections] form a finite, well-founded value. The subselections may be
  * empty.
  *
- * ### Interpretation
- *
- * Resolving this fragment produces the selection-independent object supplied to a
- * [model.registry.FieldResolverFunction].
+ * Test-fixture field-resolver definitions use fragments while fixture preparation preserves source
+ * guards and occurrence shape. Canonical registry assembly specializes the root to its concrete
+ * resolver owner and exposes the result as an [ObjectSelectionForest].
  */
 sealed interface Fragment {
     /** The nominal type carried by this fragment. */

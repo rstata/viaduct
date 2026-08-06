@@ -2,7 +2,6 @@ package semantics.resolver04
 
 import model.Assumptions
 import model.EngineResult
-import model.Fragment
 import model.SelectionForest
 import model.Value
 import model.objectKey
@@ -62,7 +61,7 @@ internal fun Value.Object.resolve(
             }
     val symbolicInputDemand =
         resolverInputFragments.fold(selectionForestOf()) { demand, fragment ->
-            demand + fragment.subselections
+            demand + fragment
         }
     val symbolicSelections = applicableSelections + symbolicInputDemand
     // Substitute variables defined on this concrete object type across every rooted path.
@@ -87,16 +86,12 @@ internal fun Value.Object.resolve(
             .variables()
             .associateWith { variable -> variable } +
             resolvedVariables.variableValues
-    val concreteSelections =
-        Fragment.of(type, applicableSelections)
-            .instantiateVariables(currentBindings)
-            .subselections
+    val concreteSelections = applicableSelections.instantiateVariables(currentBindings)
     val concreteInputDemand =
         resolverInputFragments.fold(selectionForestOf()) { demand, fragment ->
             demand +
                 fragment
                     .instantiateVariables(currentBindings)
-                    .subselections
         }
     val selectionsByKey =
         (concreteSelections + concreteInputDemand)
@@ -216,7 +211,6 @@ private fun Value.Object.dependenciesOf(
             .resolver(consumer.field)
             .objectFragment(consumer.arguments)
             .instantiateVariables(resolved.variableValues)
-            .subselections
     return unresolved
         .filter { sibling ->
             sibling != consumer &&

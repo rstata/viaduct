@@ -557,11 +557,11 @@ class ResolverDemandTest {
             world.resolverRegistry
                 .resolver(schema.objectField("Query", "consumer"))
                 .predecessorDemand
-        val selections = predecessorDemand.subselections.allSelections()
+        val selections = predecessorDemand.allSelections()
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
 
-        assertEquals(schema.query, predecessorDemand.nominalType)
+        assertEquals(schema.query, predecessorDemand.type)
         assertEquals(
             setOf("computed", "display", "rawUser", "rawAdmin"),
             selections.map { it.key.field.fieldName }.toSet() -
@@ -576,12 +576,12 @@ class ResolverDemandTest {
             selections.single { it.key.field.fieldName == "rawAdmin" }.possibleTypes,
         )
         assertTrue(
-            predecessorDemand.subselections.all { selection ->
+            predecessorDemand.all { selection ->
                 selection.key.field.fieldName == "container"
             },
         )
         assertTrue(
-            predecessorDemand.subselections.all { container ->
+            predecessorDemand.all { container ->
                 container.subselections.all { selection ->
                     selection.key.field.fieldName == "subject"
                 }

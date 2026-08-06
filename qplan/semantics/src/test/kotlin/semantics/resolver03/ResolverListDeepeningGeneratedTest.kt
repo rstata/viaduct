@@ -112,8 +112,6 @@ private fun countListPassiveDeepening(
         world.resolverRegistry
             .resolver(field)
             .predecessorDemand(selectedResolver.key.arguments)
-            .subselections
-            .merge(type)
             .forEach { requiredPassive ->
                 val passiveField = requiredPassive.objectKey(type).field
                 val passiveType = passiveField.typeExpr.baseType as? Schema.CompositeType

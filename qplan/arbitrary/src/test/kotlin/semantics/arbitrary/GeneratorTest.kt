@@ -193,9 +193,9 @@ class GeneratorTest {
                         coordinate.fieldName,
                     )
                 val resolver = world.resolverRegistry.resolver(field)
-                if (resolver.objectFragment.subselections.size != 1) return@forEach
+                if (resolver.objectFragment.size != 1) return@forEach
 
-                val selection = resolver.objectFragment.subselections.single()
+                val selection = resolver.objectFragment.single()
                 if (
                     !selection.key.arguments.containsErrorValue() ||
                     !selection.subselections.isEmpty()
@@ -212,13 +212,12 @@ class GeneratorTest {
                                 !world.resolverRegistry
                                     .resolver(possibleField)
                                     .objectFragment
-                                    .subselections
                                     .isEmpty()
                         } ?: return@forEach
                 checkedSkippedResolvers += 1
                 assertEquals(
-                    resolver.objectFragment.subselections.size,
-                    resolver.predecessorDemand.subselections.size,
+                    resolver.objectFragment.size,
+                    resolver.predecessorDemand.size,
                     "An error-bearing resolver occurrence imported transitive requirements",
                 )
             }

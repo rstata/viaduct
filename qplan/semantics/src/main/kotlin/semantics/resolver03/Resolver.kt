@@ -48,8 +48,7 @@ private fun Value.Object.resolve(
                     demand
                 } else {
                     val resolver = world.resolverRegistry.resolver(key.field)
-                    val fragment = resolver.predecessorDemand(key.arguments)
-                    demand + fragment.subselections
+                    demand + resolver.predecessorDemand(key.arguments)
                 }
             }
     val mergedSelections =

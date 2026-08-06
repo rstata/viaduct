@@ -2,17 +2,15 @@ package semantics
 
 import model.Assumptions
 import model.EngineResult
-import model.Fragment
+import model.ObjectSelectionForest
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.merge
 import model.objectKey
 import model.selectionForestOf
-
-internal fun Fragment.variables(): Set<Value.Variable> =
-    subselections.variables()
 
 internal fun Selection.variables(): Set<Value.Variable> =
     key.arguments.variables() + subselections.variables()
@@ -37,15 +35,16 @@ private fun Value.Input?.variables(): Set<Value.Variable> =
         else -> emptySet()
     }
 
-internal fun Fragment.instantiateVariables(
+internal fun ObjectSelectionForest.instantiateVariables(
     bindings: Map<Value.Variable, Value.Input?>,
-): Fragment =
-    Fragment.of(
-        nominalType,
-        subselections.instantiateVariables(bindings),
-    )
+): ObjectSelectionForest =
+    instantiateSelections(bindings).merge(type)
 
-private fun SelectionForest.instantiateVariables(
+internal fun SelectionForest.instantiateVariables(
+    bindings: Map<Value.Variable, Value.Input?>,
+): SelectionForest = instantiateSelections(bindings)
+
+private fun SelectionForest.instantiateSelections(
     bindings: Map<Value.Variable, Value.Input?>,
 ): SelectionForest =
     flatMap { selection ->

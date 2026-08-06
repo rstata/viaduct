@@ -19,7 +19,7 @@ The current registry and carrier model already establish several prerequisites f
 - Every provider path is structurally contained in the defining resolver's representative object fragment and in every exact fragment observed by semantic reasoning.
 - Provider paths cannot traverse lists, cannot continue below simple values, and cannot terminate at objects.
 - Every argument-dependent object fragment is produced by retargeting argument values in one fixed selection shape.
-- Field resolvers and variables participate in one conservative acyclic `Schema.ResolverSite` demand graph.
+- Field resolvers and variables participate in one conservative private dependency graph during registry assembly.
 - Registry-computed `predecessorDemand` supplies the guarded, path-rooted transitive field-resolver requirements of an exact object fragment.
 
 Resolver04 supports a broader variable domain. It may resolve a provider by entering an OER subtree that also contains a symbolic use of that variable, return from that subtree, bind the variable, and then widen the existing subtree with newly concrete demand. It preserves raw resolver output and speculative symbolic coverage so that widening does not reapply a producer or lose output demand when symbolic and concrete keys converge.
@@ -102,7 +102,7 @@ This one condition includes two important cases:
 - A provider-production branch that is also a use branch creates a self-edge and is rejected.
 - Cross-variable ordering contradictions create a longer cycle and are rejected.
 
-The graph is conservative in the same spirit as the existing resolver-site demand graph. An edge remains when guards may overlap or symbolic and concrete argument tuples might never coincide at runtime. A valid execution must not be used to justify a registry that would be unsafe for another valid execution in the same world.
+The graph is conservative in the same spirit as the existing resolver-demand graph. An edge remains when guards may overlap or symbolic and concrete argument tuples might never coincide at runtime. A valid execution must not be used to justify a registry that would be unsafe for another valid execution in the same world.
 
 ## Why This Is Sufficient
 
@@ -193,9 +193,9 @@ The resolved prefix may contain variable bindings in addition to cells, but it d
 
 ## Registry Validation
 
-This is a world-construction invariant. The principal implementation boundary is `TestExecutorRegistry`, which already validates providers, builds the resolver-site dependency graph, and computes predecessor demand in dependency-first order.
+This is a world-construction invariant. The principal implementation boundary is `TestExecutorRegistry`, which already validates providers, builds the private dependency graph, and computes predecessor demand in dependency-first order.
 
-Registry construction needs a finite structural analysis that preserves more information than `Schema.ResolverSite` reachability:
+Registry construction needs a finite structural analysis that preserves more information than field-resolver reachability:
 
 1. Specialize each representative fixed-shape fragment over every possible concrete parent type.
 2. Extract each variable's root use branches.

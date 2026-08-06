@@ -34,7 +34,7 @@ import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
-import semantics.arbitrary.allowedResolverSiteClosure
+import semantics.arbitrary.allowedResolverClosure
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.registeredResolverCellCounts
 import semantics.correctresolution.correctResolution
@@ -94,7 +94,7 @@ class ResolverWitnessTest {
                 )
                 assertTrue(
                     witness.unrelatedApplications(
-                        fragment.subselections.allowedResolverSiteClosure(world.executorRegistry),
+                        fragment.subselections.allowedResolverClosure(world.executorRegistry),
                     ).isEmpty(),
                     "Resolver applied outside operation/registry demand closure",
                 )
@@ -130,7 +130,7 @@ class ResolverWitnessTest {
                 )
                 assertTrue(
                     permutedWitness.unrelatedApplications(
-                        permuted.subselections.allowedResolverSiteClosure(world.executorRegistry),
+                        permuted.subselections.allowedResolverClosure(world.executorRegistry),
                     ).isEmpty(),
                     "Permuted resolver applied outside operation/registry demand closure",
                 )

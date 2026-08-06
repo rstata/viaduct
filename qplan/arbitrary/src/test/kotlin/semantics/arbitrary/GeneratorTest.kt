@@ -3,7 +3,6 @@ package semantics.arbitrary
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
-import model.Schema
 import model.Value
 import model.objectOf
 import kotlin.test.Test
@@ -154,9 +153,9 @@ class GeneratorTest {
             val world = registry.world(schema).assumptions
             generatedErrorArguments += registry.features.resolverErrorArgumentCount
 
-            registry.fieldResolverSites.forEach { coordinate ->
+            registry.fieldResolverCoordinates.forEach { coordinate ->
                 val field =
-                    world.schema.field(
+                    world.schema.objectField(
                         coordinate.typeName,
                         coordinate.fieldName,
                     )
@@ -183,8 +182,6 @@ class GeneratorTest {
                                     .subselections
                                     .isEmpty()
                         } ?: return@forEach
-                require(selectedField is Schema.ObjectField)
-
                 checkedSkippedResolvers += 1
                 assertEquals(
                     resolver.objectFragment.subselections.size,
@@ -261,7 +258,7 @@ class GeneratorTest {
         repeat(100) {
             val schema = Arb.schema(config).next(random)
             val registry = schema.registry(config).next(random)
-            registry.fieldResolverSites.forEach { coordinate ->
+            registry.fieldResolverCoordinates.forEach { coordinate ->
                 val field =
                     schema
                         .objectNamed(coordinate.typeName)
@@ -302,7 +299,7 @@ class GeneratorTest {
             val schema = Arb.schema(config).next(random)
             val registry = schema.registry(config).next(random)
             val world = registry.world(schema).assumptions
-            registry.fieldResolverSites.forEach { coordinate ->
+            registry.fieldResolverCoordinates.forEach { coordinate ->
                 val fieldSpec =
                     schema
                         .objectNamed(coordinate.typeName)

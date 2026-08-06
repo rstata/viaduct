@@ -39,12 +39,6 @@ package model
  */
 interface Schema {
     /**
-     * A field or field-relative variable coordinate at which resolver demand may originate or
-     * terminate.
-     */
-    interface ResolverSite
-
-    /**
      * The canonical query root.
      *
      * ### Invariant: schema-query-root
@@ -76,6 +70,24 @@ interface Schema {
         typeName: String,
         fieldName: String,
     ): OutputField
+
+    /**
+     * Returns the canonical object field at [typeName]/[fieldName].
+     *
+     * @throws MissingSchemaElementException when the coordinate does not identify a field on a
+     * concrete object type
+     */
+    fun objectField(
+        typeName: String,
+        fieldName: String,
+    ): ObjectField {
+        val containingType = type(typeName)
+        if (containingType !is ObjectType) {
+            throw MissingSchemaElementException(typeName, fieldName)
+        }
+        return containingType.fields[fieldName]
+            ?: throw MissingSchemaElementException(typeName, fieldName)
+    }
 
     /**
      * Returns exactly the composite types that may be used as type conditions in the selection
@@ -254,7 +266,9 @@ interface Schema {
      * extensions and inherited interface fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
      */
-    interface ObjectType : CompositeType
+    interface ObjectType : CompositeType {
+        override val fields: Map<String, ObjectField>
+    }
 
     /**
      * An interface type.
@@ -331,7 +345,7 @@ interface Schema {
      * `containingType.fields[fieldName] == this`, and [typeExpr]'s base type is canonical in the same
      * schema. [arguments] is the input-object-like definition of the complete argument tuple.
      */
-    interface OutputField : ResolverSite {
+    interface OutputField {
         val fieldName: String
         val containingType: CompositeType
         val typeExpr: TypeExpr<OutputType>

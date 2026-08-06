@@ -13,7 +13,7 @@ import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverProgramKind
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
-import semantics.arbitrary.allowedResolverSiteClosure
+import semantics.arbitrary.allowedResolverClosure
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
 import org.junit.jupiter.api.Disabled
@@ -73,7 +73,7 @@ class ResolverWitnessTest {
                 )
                 assertTrue(
                     witness.unrelatedApplications(
-                        fragment.subselections.allowedResolverSiteClosure(world.executorRegistry),
+                        fragment.subselections.allowedResolverClosure(world.executorRegistry),
                     ).isEmpty(),
                     "Resolver applied outside operation/registry demand closure",
                 )

@@ -141,9 +141,7 @@ data class ResolutionWitness(
     fun duplicateApplications(): Map<ResolverApplicationKey, Int> =
         applicationCounts().filterValues { count -> count > 1 }
 
-    fun unrelatedApplications(
-        allowed: AllowedResolverSiteClosure,
-    ): List<ResolverApplicationRecord> =
+    fun unrelatedApplications(allowed: AllowedResolverClosure): List<ResolverApplicationRecord> =
         applications.filter { application ->
             application.key.field !in allowed.canonicalFields
         }
@@ -258,23 +256,16 @@ private fun Value.Input?.containsErrorValue(): Boolean =
         else -> false
     }
 
-/**
- * Resolver sites conservatively reachable from fields directly selected by an operation.
- *
- * All possible concrete types are considered. The closure retains variable sites internally, while
- * [canonicalFields] contains only field sites because application records represent field
- * resolvers.
- */
-data class AllowedResolverSiteClosure(
-    val directlySelectedSites: Set<Schema.ObjectField>,
-    val sites: Set<Schema.ResolverSite>,
+/** Resolver fields conservatively reachable from fields directly selected by an operation. */
+data class AllowedResolverClosure(
+    val directlySelectedFields: Set<Schema.ObjectField>,
     val canonicalFields: Set<FieldCoordinate>,
 )
 
-fun SelectionForest.allowedResolverSiteClosure(
+fun SelectionForest.allowedResolverClosure(
     registry: ExecutorRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
-): AllowedResolverSiteClosure {
+): AllowedResolverClosure {
     val directlySelected = linkedSetOf<Schema.ObjectField>()
     var visitedSelections = 0
 
@@ -298,8 +289,8 @@ fun SelectionForest.allowedResolverSiteClosure(
     }
 
     collect(this)
-    val closure = linkedSetOf<Schema.ResolverSite>()
-    val pending = ArrayDeque<Schema.ResolverSite>()
+    val closure = linkedSetOf<Schema.ObjectField>()
+    val pending = ArrayDeque<Schema.ObjectField>()
     directlySelected.forEach { site ->
         closure += site
         pending += site
@@ -325,11 +316,9 @@ fun SelectionForest.allowedResolverSiteClosure(
         }
     }
 
-    val fields = closure.filterIsInstance<Schema.ObjectField>()
-    return AllowedResolverSiteClosure(
-        directlySelectedSites = directlySelected,
-        sites = closure,
-        canonicalFields = fields.mapTo(linkedSetOf(), Schema.OutputField::fieldCoordinate),
+    return AllowedResolverClosure(
+        directlySelectedFields = directlySelected,
+        canonicalFields = closure.mapTo(linkedSetOf(), Schema.OutputField::fieldCoordinate),
     )
 }
 

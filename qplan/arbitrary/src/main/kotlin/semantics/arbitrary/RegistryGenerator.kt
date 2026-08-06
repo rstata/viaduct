@@ -55,8 +55,8 @@ data class RegistryFeatures(
  * decoded schema.
  */
 class ArbitraryRegistry internal constructor(
-    val fieldResolverSites: Set<FieldCoordinate>,
-    val nodeResolverSites: Set<String>,
+    val fieldResolverCoordinates: Set<FieldCoordinate>,
+    val nodeResolverTypes: Set<String>,
     val outputSelectionSets: Map<String, Set<String>>,
     val objectFragmentSources: Map<FieldCoordinate, String>,
     val variableProviderSources: Map<String, String>,
@@ -223,7 +223,7 @@ class ArbitraryRegistry internal constructor(
                         schema.isComposite(sourceField.type.namedType) &&
                             schema
                                 .possibleObjects(sourceField.type.namedType)
-                                .all { possibleType -> possibleType.name in nodeResolverSites }
+                                .all { possibleType -> possibleType.name in nodeResolverTypes }
                     val canonicalFieldName =
                         if (loweredToNodeBridge) {
                             provider.owner.fieldName +
@@ -253,7 +253,7 @@ class ArbitraryRegistry internal constructor(
     override fun toString(): String =
         buildString {
             appendLine("field resolvers:")
-            fieldResolverSites.sortedBy(FieldCoordinate::toString).forEach { site ->
+            fieldResolverCoordinates.sortedBy(FieldCoordinate::toString).forEach { site ->
                 appendLine("  $site OSS=${outputSelectionSets[site.toString()].orEmpty().sorted()}")
                 val fragment = objectFragmentSources.getValue(site)
                 if (fragment.isNotEmpty()) appendLine(fragment.prependIndent("    "))
@@ -266,7 +266,7 @@ class ArbitraryRegistry internal constructor(
                 appendLine(provider.source().prependIndent("    "))
             }
             appendLine("node resolvers:")
-            nodeResolverSites.sorted().forEach { site ->
+            nodeResolverTypes.sorted().forEach { site ->
                 appendLine("  $site OSS=${outputSelectionSets[site].orEmpty().sorted()}")
             }
         }.trimEnd()
@@ -362,8 +362,8 @@ private class RegistryGenerator(
                 }
             }
         return ArbitraryRegistry(
-            fieldResolverSites = fieldSites,
-            nodeResolverSites = nodeSites,
+            fieldResolverCoordinates = fieldSites,
+            nodeResolverTypes = nodeSites,
             outputSelectionSets = oss,
             objectFragmentSources =
                 objectFragments.mapValues { (_, fragment) -> fragment.source() },

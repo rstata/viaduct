@@ -20,6 +20,9 @@ internal fun Selection.variables(): Set<Value.Variable> =
 internal fun SelectionForest.variables(): Set<Value.Variable> =
     flatMapToSet { it.variables() }
 
+internal fun List<Value.Key>.variables(): Set<Value.Variable> =
+    fold(emptySet()) { result, key -> result + key.arguments.variables() }
+
 internal fun Value.Arguments.variables(): Set<Value.Variable> =
     fieldValues.values.fold(emptySet()) { result, value -> result + value.variables() }
 
@@ -65,6 +68,19 @@ internal fun Selection.instantiateVariables(
         subselections = subselections.instantiateVariables(bindings),
     )
 
+internal fun List<Value.Key>.instantiateVariables(
+    bindings: Map<Value.Variable, Value.Input?>,
+): List<Value.Key> =
+    map { key ->
+        Value.Key.of(
+            field = key.field,
+            arguments =
+                key.arguments.fieldValues.mapValues { (_, value) ->
+                    value.instantiateVariables(bindings)
+                },
+        )
+    }
+
 private fun Value.Input?.instantiateVariables(
     bindings: Map<Value.Variable, Value.Input?>,
 ): Value.Input? =
@@ -84,21 +100,43 @@ private fun Value.Input?.instantiateVariables(
         else -> this
     }
 
+internal fun List<Value.Key>.providerSelection(
+    rootType: Schema.ObjectType,
+): Selection = providerSelection(setOf(rootType))
+
+private fun List<Value.Key>.providerSelection(
+    possibleTypes: Set<Schema.ObjectType>,
+): Selection {
+    val key = first()
+    val remaining = drop(1)
+    val outputType = key.field.typeExpr.baseType
+    return Selection.of(
+        key = key,
+        possibleTypes = possibleTypes,
+        subselections =
+            if (remaining.isEmpty()) {
+                selectionForestOf()
+            } else {
+                require(outputType is Schema.CompositeType)
+                selectionForestOf(remaining.providerSelection(outputType.possibleTypes))
+            },
+    )
+}
+
 context(world: Assumptions)
-internal fun EngineResult.Object.readVariable(selection: Selection): Value.Input? {
-    require(type in selection.possibleTypes) {
-        "Variable provider selection does not apply to ${type.typeName}"
-    }
-    val value = fetch(selection.objectKey(type)).value
-    if (selection.subselections.isEmpty()) return value.toVariableInput()
+internal fun EngineResult.Object.readVariable(path: List<Value.Key>): Value.Input? {
+    val sourceKey = path.first()
+    val key =
+        Value.ObjectKey.of(
+            field = world.schema.objectField(type.typeName, sourceKey.field.fieldName),
+            arguments = sourceKey.arguments.fieldValues,
+        )
+    val value = fetch(key).value
+    if (path.size == 1) return value.toVariableInput()
     return when (value) {
         null -> null
         Value.Error -> Value.Error
-        is EngineResult.Object -> {
-            val applicable =
-                selection.subselections.filter { value.type in it.possibleTypes }
-            value.readVariable(applicable.single())
-        }
+        is EngineResult.Object -> value.readVariable(path.drop(1))
         is EngineResult.List ->
             throw IllegalArgumentException("Variable provider paths cannot traverse lists")
         is Value.Simple ->

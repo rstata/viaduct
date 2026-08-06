@@ -30,6 +30,12 @@ internal class GJSelectionParser(
     private val variableValues: Map<String, Value.Input?>,
 ) {
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
+        val parsed = specSelectionsFrom(fragment)
+        val selections = flatten(schema, parsed.nominalType, parsed.selections)
+        return parsed.nominalType to selections
+    }
+
+    fun specSelectionsFrom(fragment: String): ParsedSpecFragment {
         val document = Parser.parse(fragment)
         val definition =
             document.definitions.singleOrNull() as? FragmentDefinition
@@ -45,8 +51,7 @@ internal class GJSelectionParser(
             schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
         val specSelections =
             decodeSelectionSet(definition.selectionSet, graphQLTypeCondition)
-        val selections = flatten(schema, typeCondition, specSelections)
-        return typeCondition to selections
+        return ParsedSpecFragment(typeCondition, specSelections)
     }
 
     private fun validateFragment(document: Document) {
@@ -162,3 +167,8 @@ internal class GJSelectionParser(
             )
     }
 }
+
+internal data class ParsedSpecFragment(
+    val nominalType: Schema.CompositeType,
+    val selections: List<SpecSelection>,
+)

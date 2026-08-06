@@ -1,0 +1,318 @@
+package model.testing
+
+import model.Schema
+import model.Value
+import model.VariableCoordinate
+import model.emptyFragmentOf
+import model.fragmentFrom
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+class FromObjectFieldTest {
+    @Test
+    fun `compiles aliases to canonical field keys`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Profile {
+                  commonName(style: Int!): String!
+                }
+
+                type Query {
+                  profile: Profile!
+                }
+                """.trimIndent(),
+            ).schema
+
+        val provider =
+            schema.fromObjectField(
+                objectFragmentSource =
+                    """
+                    fragment Provider on Query {
+                      person: profile {
+                        displayName: commonName(style: 2)
+                      }
+                    }
+                    """.trimIndent(),
+                responsePath = listOf("person", "displayName"),
+            )
+
+        assertEquals(
+            listOf(
+                Value.Key.of(schema.field("Query", "profile"), emptyMap()),
+                Value.Key.of(
+                    schema.field("Profile", "commonName"),
+                    mapOf("style" to 2),
+                ),
+            ),
+            provider.keyPath,
+        )
+    }
+
+    @Test
+    fun `aliases distinguish argument-distinct source occurrences`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  z(w: Int!): Int!
+                }
+                """.trimIndent(),
+            ).schema
+        val source =
+            """
+            fragment Provider on Query {
+              z1: z(w: 1)
+              z2: z(w: 2)
+            }
+            """.trimIndent()
+
+        val provider =
+            schema.fromObjectField(
+                objectFragmentSource = source,
+                responsePath = listOf("z2"),
+            )
+
+        assertEquals(
+            listOf(Value.Key.of(schema.field("Query", "z"), mapOf("w" to 2))),
+            provider.keyPath,
+        )
+    }
+
+    @Test
+    fun `rejects narrowing branches even when every concrete type supplies the response key`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                interface Foo {
+                  id: ID!
+                }
+
+                type EU implements Foo {
+                  id: ID!
+                  commonName: String
+                }
+
+                type US implements Foo {
+                  id: ID!
+                  firstName: String
+                }
+
+                type Query {
+                  foo: Foo
+                }
+                """.trimIndent(),
+            ).schema
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                schema.fromObjectField(
+                    objectFragmentSource =
+                        """
+                        fragment Provider on Foo {
+                          ... on EU {
+                            firstName: commonName
+                          }
+                          ... on US {
+                            firstName
+                          }
+                        }
+                        """.trimIndent(),
+                    responsePath = listOf("firstName"),
+                )
+            }
+
+        assertTrue(failure.message!!.contains("lossy type condition Foo to EU"))
+    }
+
+    @Test
+    fun `allows a broadening type condition`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                interface Named {
+                  name: String!
+                }
+
+                type User implements Named {
+                  name: String!
+                }
+
+                type Query {
+                  user: User!
+                }
+                """.trimIndent(),
+            ).schema
+
+        val provider =
+            schema.fromObjectField(
+                objectFragmentSource =
+                    """
+                    fragment Provider on User {
+                      ... on Named {
+                        displayName: name
+                      }
+                    }
+                    """.trimIndent(),
+                responsePath = listOf("displayName"),
+            )
+
+        assertEquals(
+            listOf(Value.Key.of(schema.field("Named", "name"), emptyMap())),
+            provider.keyPath,
+        )
+    }
+
+    @Test
+    fun `rejects list traversal and object terminals`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Profile {
+                  name: String!
+                }
+
+                type Query {
+                  profiles: [Profile!]!
+                  profile: Profile!
+                }
+                """.trimIndent(),
+            ).schema
+        val source =
+            """
+            fragment Provider on Query {
+              profiles {
+                name
+              }
+              profile {
+                name
+              }
+            }
+            """.trimIndent()
+
+        assertFailsWith<IllegalArgumentException> {
+            schema.fromObjectField(source, listOf("profiles", "name"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            schema.fromObjectField(source, listOf("profile"))
+        }
+    }
+
+    @Test
+    fun `rejects an incompatible source type`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                variableWorld(
+                    schemaSDL =
+                        """
+                        type Query {
+                          result: Int!
+                          source: String!
+                          consume(value: Int!): Int!
+                        }
+                        """.trimIndent(),
+                    objectFragment =
+                        """
+                        fragment Provider on Query {
+                          source
+                          consume(value: ${'$'}value)
+                        }
+                        """.trimIndent(),
+                    responsePath = listOf("source"),
+                )
+            }
+
+        assertTrue(failure.message!!.contains("incompatible"))
+    }
+
+    @Test
+    fun `nullable traversal requires a nullable or defaulted use location`() {
+        val schemaSDL =
+            """
+            type Box {
+              value: Int!
+            }
+
+            type Query {
+              result: Int!
+              box: Box
+              consume(value: Int!): Int!
+            }
+            """.trimIndent()
+        val fragment =
+            """
+            fragment Provider on Query {
+              box {
+                value
+              }
+              consume(value: ${'$'}value)
+            }
+            """.trimIndent()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                variableWorld(schemaSDL, fragment, listOf("box", "value"))
+            }
+
+        assertTrue(failure.message!!.contains("incompatible"))
+
+        variableWorld(
+            schemaSDL = schemaSDL.replace("value: Int!):", "value: Int! = 1):"),
+            objectFragment = fragment,
+            responsePath = listOf("box", "value"),
+        )
+    }
+
+    @Test
+    fun `allows singleton coercion into nested input lists`() {
+        variableWorld(
+            schemaSDL =
+                """
+                type Query {
+                  result: Int!
+                  source: Int!
+                  consume(value: [[Int!]!]!): Int!
+                }
+                """.trimIndent(),
+            objectFragment =
+                """
+                fragment Provider on Query {
+                  source
+                  consume(value: ${'$'}value)
+                }
+                """.trimIndent(),
+            responsePath = listOf("source"),
+        )
+    }
+
+    private fun variableWorld(
+        schemaSDL: String,
+        objectFragment: String,
+        responsePath: List<String>,
+    ): TestWorld =
+        TestWorld.fromSDL(
+            schemaSDL = schemaSDL,
+            fieldResolvers = { schema ->
+                schema.query.fields.values
+                    .filter { field -> field.fieldName != "__typename" }
+                    .associateWith {
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> Value.Error }
+                    } +
+                    mapOf(
+                        schema.field("Query", "result") to
+                            fieldResolverOf(schema.fragmentFrom(objectFragment)) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                    )
+            },
+            variableProviders = { schema ->
+                val owner = schema.field("Query", "result") as Schema.ObjectField
+                mapOf(
+                    VariableCoordinate.of(owner, Value.Variable.of("value")) to
+                        schema.fromObjectField(objectFragment, responsePath),
+                )
+            },
+        )
+}

@@ -90,13 +90,14 @@ class ResolverVariableBindingTest {
                             schema.field("Query", "x") as Schema.ObjectField,
                             variable,
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 """
                                 fragment ignored on Query {
                                   z
                                 }
                                 """.trimIndent(),
-                            ).subselections.single(),
+                                "z",
+                            ),
                     )
                 },
             )
@@ -173,13 +174,15 @@ class ResolverVariableBindingTest {
                     val owner = schema.field("Query", "x") as Schema.ObjectField
                     mapOf(
                         VariableCoordinate.of(owner, Value.Variable.of("b")) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { z(c: ${'$'}c) }",
-                            ).subselections.single(),
+                                "z",
+                            ),
                         VariableCoordinate.of(owner, Value.Variable.of("c")) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { raw }",
-                            ).subselections.single(),
+                                "raw",
+                            ),
                     )
                 },
             )
@@ -264,9 +267,10 @@ class ResolverVariableBindingTest {
                             schema.field("User", "x") as Schema.ObjectField,
                             Value.Variable.of("b"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on User { z }",
-                            ).subselections.single(),
+                                "z",
+                            ),
                     )
                 },
             )
@@ -362,9 +366,10 @@ class ResolverVariableBindingTest {
                             schema.field("Query", "x") as Schema.ObjectField,
                             Value.Variable.of("values"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { numbers }",
-                            ).subselections.single(),
+                                "numbers",
+                            ),
                     )
                 },
             )
@@ -440,9 +445,11 @@ class ResolverVariableBindingTest {
                             schema.field("Query", "x") as Schema.ObjectField,
                             Value.Variable.of("value"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { box { value } }",
-                            ).subselections.single(),
+                                "box",
+                                "value",
+                            ),
                     )
                 },
             )

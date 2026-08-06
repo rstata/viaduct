@@ -165,17 +165,22 @@ class ResolverPropertyTest {
                         val owner = schema.field("Query", "result") as Schema.ObjectField
                         mapOf(
                             VariableCoordinate.of(owner, Value.Variable.of("n")) to
-                                schema.fragmentFrom(
+                                schema.provider(
                                     "fragment ignored on Query { source { common } }",
-                                ).subselections.single(),
+                                    "source",
+                                    "common",
+                                ),
                             VariableCoordinate.of(owner, Value.Variable.of("values")) to
-                                schema.fragmentFrom(
+                                schema.provider(
                                     "fragment ignored on Query { numbers }",
-                                ).subselections.single(),
+                                    "numbers",
+                                ),
                             VariableCoordinate.of(owner, Value.Variable.of("optional")) to
-                                schema.fragmentFrom(
+                                schema.provider(
                                     "fragment ignored on Query { nullableBox { value } }",
-                                ).subselections.single(),
+                                    "nullableBox",
+                                    "value",
+                                ),
                         )
                     },
                 )

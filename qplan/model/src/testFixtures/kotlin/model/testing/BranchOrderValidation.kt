@@ -12,7 +12,7 @@ import model.registry.Resolver
  */
 internal class BranchOrderValidator(
     private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
-    private val variableProviders: Map<VariableCoordinate, Selection>,
+    private val variableProviders: Map<VariableCoordinate, List<Value.Key>>,
 ) {
     private data class Edge(
         val prerequisite: Schema.ObjectField,
@@ -74,16 +74,14 @@ internal class BranchOrderValidator(
         var changed: Boolean
         do {
             val additions = mutableListOf<Pair<Edge, EdgeReason.VariableProduction>>()
-            variableProviders.forEach { (coordinate, provider) ->
+            variableProviders.forEach { (coordinate, providerPath) ->
                 val type = coordinate.field.containingType
                 val graph = graphs.getValue(type)
                 val providerBranch =
-                    requireNotNull(provider.branchOn(type)) {
-                        "Variable \$${coordinate.variable.variableName} provider does not have " +
-                            "a branch on ${type.typeName}"
-                    }
+                    type.fields.getValue(providerPath.first().field.fieldName)
                 val productionPaths = graph.prerequisitePathsTo(providerBranch)
-                val providerPath = provider.path()
+                val renderedProviderPath =
+                    providerPath.joinToString("/") { key -> key.field.fieldName }
                 val uses =
                     fieldResolvers
                         .getValue(coordinate.field)
@@ -98,7 +96,7 @@ internal class BranchOrderValidator(
                                 Edge(production, useBranch) to
                                     EdgeReason.VariableProduction(
                                         coordinate = coordinate,
-                                        providerPath = providerPath,
+                                        providerPath = renderedProviderPath,
                                         productionPath =
                                             productionPath.joinToString(" -> ") { it.fieldName },
                                         usePath = usePath,
@@ -241,16 +239,6 @@ private fun Selection.pathsContaining(
     }
     return result
 }
-
-private fun Selection.path(): String =
-    buildList {
-        var selection = this@path
-        while (true) {
-            add(selection.key.field.fieldName)
-            if (selection.subselections.isEmpty()) break
-            selection = selection.subselections.single()
-        }
-    }.joinToString("/")
 
 private fun Schema.ObjectField.coordinate(): String =
     "${containingType.typeName}/$fieldName"

@@ -6,7 +6,9 @@ import model.Value
 import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.testing.FromObjectField
 import model.testing.TestWorld
+import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -24,6 +26,7 @@ class BranchOrderInvariantTest {
                             schema = schema,
                             name = "value",
                             provider = "fragment ignored on Query { shared { value } }",
+                            responsePath = listOf("shared", "value"),
                         )
                     },
                 )
@@ -80,9 +83,10 @@ class BranchOrderInvariantTest {
                         val owner = schema.field("Parent", "result") as Schema.ObjectField
                         mapOf(
                             VariableCoordinate.of(owner, Value.Variable.of("value")) to
-                                schema.fragmentFrom(
+                                schema.fromObjectField(
                                     "fragment ignored on Parent { shared { value } }",
-                                ).subselections.single(),
+                                    listOf("shared", "value"),
+                                ),
                         )
                     },
                 )
@@ -140,6 +144,7 @@ class BranchOrderInvariantTest {
                             schema = schema,
                             name = "value",
                             provider = "fragment ignored on Query { common }",
+                            responsePath = listOf("common"),
                         )
                     },
                 )
@@ -181,11 +186,13 @@ class BranchOrderInvariantTest {
                             schema,
                             name = "v",
                             provider = "fragment ignored on Query { b { value } }",
+                            responsePath = listOf("b", "value"),
                         ) +
                             variable(
                                 schema,
                                 name = "w",
                                 provider = "fragment ignored on Query { a { value } }",
+                                responsePath = listOf("a", "value"),
                             )
                     },
                 )
@@ -249,16 +256,19 @@ class BranchOrderInvariantTest {
                     schema,
                     name = "w",
                     provider = "fragment ignored on Query { a { value } }",
+                    responsePath = listOf("a", "value"),
                 ) +
                     variable(
                         schema,
                         name = "v",
                         provider = "fragment ignored on Query { b { value } }",
+                        responsePath = listOf("b", "value"),
                     ) +
                     variable(
                         schema,
                         name = "independent",
                         provider = "fragment ignored on Query { a { value } }",
+                        responsePath = listOf("a", "value"),
                     )
             },
         )
@@ -305,6 +315,7 @@ class BranchOrderInvariantTest {
                             schema = schema,
                             name = "value",
                             provider = "fragment ignored on Query { child(id: 1) { value } }",
+                            responsePath = listOf("child", "value"),
                         )
                     },
                 )
@@ -352,6 +363,7 @@ class BranchOrderInvariantTest {
                     schema = schema,
                     name = "value",
                     provider = "fragment ignored on Query { source }",
+                    responsePath = listOf("source"),
                 )
             },
         )
@@ -404,6 +416,7 @@ class BranchOrderInvariantTest {
                     schema = schema,
                     name = "id",
                     provider = "fragment ignored on Query { user { id } }",
+                    responsePath = listOf("user", "id"),
                 )
             },
         )
@@ -474,11 +487,12 @@ class BranchOrderInvariantTest {
             schema: Schema,
             name: String,
             provider: String,
-        ): Map<VariableCoordinate, model.Selection> {
+            responsePath: List<String>,
+        ): Map<VariableCoordinate, FromObjectField> {
             val owner = schema.field("Query", "result") as Schema.ObjectField
             return mapOf(
                 VariableCoordinate.of(owner, Value.Variable.of(name)) to
-                    schema.fragmentFrom(provider).subselections.single(),
+                    schema.fromObjectField(provider, responsePath),
             )
         }
 

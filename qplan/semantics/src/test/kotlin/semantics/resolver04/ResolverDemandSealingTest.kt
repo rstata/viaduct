@@ -98,13 +98,14 @@ class ResolverDemandSealingTest {
                             schema.field("User", "x") as Schema.ObjectField,
                             Value.Variable.of("b"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 """
                                 fragment ignored on User {
                                   z
                                 }
                                 """.trimIndent(),
-                            ).subselections.single(),
+                                "z",
+                            ),
                     )
                 },
             )
@@ -222,9 +223,11 @@ class ResolverDemandSealingTest {
                             schema.field("User", "result") as Schema.ObjectField,
                             Value.Variable.of("value"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on User { producer { narrow } }",
-                            ).subselections.single(),
+                                "producer",
+                                "narrow",
+                            ),
                     )
                 },
             )
@@ -335,9 +338,11 @@ class ResolverDemandSealingTest {
                             schema.field("User", "result") as Schema.ObjectField,
                             Value.Variable.of("value"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on User { producer { narrow } }",
-                            ).subselections.single(),
+                                "producer",
+                                "narrow",
+                            ),
                     )
                 },
             )
@@ -446,9 +451,11 @@ class ResolverDemandSealingTest {
                             schema.field("User", "result") as Schema.ObjectField,
                             Value.Variable.of("value"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on User { secondary { narrow } }",
-                            ).subselections.single(),
+                                "secondary",
+                                "narrow",
+                            ),
                     )
                 },
             )
@@ -531,9 +538,10 @@ class ResolverDemandSealingTest {
                 variableProviders = { schema ->
                     val owner = schema.field("Query", "x") as Schema.ObjectField
                     val provider =
-                        schema.fragmentFrom(
+                        schema.provider(
                             "fragment ignored on Query { raw }",
-                        ).subselections.single()
+                            "raw",
+                        )
                     mapOf(
                         VariableCoordinate.of(owner, Value.Variable.of("first")) to provider,
                         VariableCoordinate.of(owner, Value.Variable.of("second")) to provider,
@@ -644,16 +652,18 @@ class ResolverDemandSealingTest {
                             schema.field("Query", "result") as Schema.ObjectField,
                             Value.Variable.of("late"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { middle }",
-                            ).subselections.single(),
+                                "middle",
+                            ),
                         VariableCoordinate.of(
                             schema.field("Query", "middle") as Schema.ObjectField,
                             Value.Variable.of("early"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { raw }",
-                            ).subselections.single(),
+                                "raw",
+                            ),
                     )
                     },
                 )
@@ -741,13 +751,16 @@ class ResolverDemandSealingTest {
                     val owner = schema.field("Query", "result") as Schema.ObjectField
                     mapOf(
                         VariableCoordinate.of(owner, Value.Variable.of("later")) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { helper(value: ${'$'}early) }",
-                            ).subselections.single(),
+                                "helper",
+                            ),
                         VariableCoordinate.of(owner, Value.Variable.of("early")) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { source { narrow } }",
-                            ).subselections.single(),
+                                "source",
+                                "narrow",
+                            ),
                     )
                     },
                 )
@@ -824,9 +837,11 @@ class ResolverDemandSealingTest {
                             schema.field("Query", "result") as Schema.ObjectField,
                             Value.Variable.of("k"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Query { source(k: 1) { narrow } }",
-                            ).subselections.single(),
+                                "source",
+                                "narrow",
+                            ),
                     )
                     },
                 )

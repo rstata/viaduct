@@ -10,6 +10,7 @@ import model.emptyFragmentOf
 import model.fragmentFrom
 import model.selectionForestOf
 import model.testing.TestWorld
+import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -52,21 +53,23 @@ class ResolverDemandTest {
                     val owner = schema.objectField("Query", "x")
                     mapOf(
                         VariableCoordinate.of(owner, Value.Variable.of("b")) to
-                            schema.fragmentFrom(
+                            schema.fromObjectField(
                                 """
                                 fragment ignored on Query {
                                   z(c: ${'$'}c)
                                 }
                                 """.trimIndent(),
-                            ).subselections.single(),
+                                listOf("z"),
+                            ),
                         VariableCoordinate.of(owner, Value.Variable.of("c")) to
-                            schema.fragmentFrom(
+                            schema.fromObjectField(
                                 """
                                 fragment ignored on Query {
                                   raw
                                 }
                                 """.trimIndent(),
-                            ).subselections.single(),
+                                listOf("raw"),
+                            ),
                     )
                 },
             )
@@ -124,16 +127,18 @@ class ResolverDemandTest {
                                 schema.objectField("Query", "x"),
                                 Value.Variable.of("same"),
                             ) to
-                                schema.fragmentFrom(
+                                schema.fromObjectField(
                                     "fragment ignored on Query { y }",
-                                ).subselections.single(),
+                                    listOf("y"),
+                                ),
                             VariableCoordinate.of(
                                 schema.objectField("Query", "y"),
                                 Value.Variable.of("same"),
                             ) to
-                                schema.fragmentFrom(
+                                schema.fromObjectField(
                                     "fragment ignored on Query { x }",
-                                ).subselections.single(),
+                                    listOf("x"),
+                                ),
                         )
                     },
                 )
@@ -168,13 +173,15 @@ class ResolverDemandTest {
                         val owner = schema.objectField("Query", "x")
                         mapOf(
                             VariableCoordinate.of(owner, Value.Variable.of("a")) to
-                                schema.fragmentFrom(
+                                schema.fromObjectField(
                                     "fragment ignored on Query { z(a: 0, b: ${'$'}b) }",
-                                ).subselections.single(),
+                                    listOf("z"),
+                                ),
                             VariableCoordinate.of(owner, Value.Variable.of("b")) to
-                                schema.fragmentFrom(
+                                schema.fromObjectField(
                                     "fragment ignored on Query { z(a: ${'$'}a, b: 0) }",
-                                ).subselections.single(),
+                                    listOf("z"),
+                                ),
                         )
                     },
                 )
@@ -194,6 +201,7 @@ class ResolverDemandTest {
                         }
                         """.trimIndent(),
                     providerFragment = "fragment ignored on Query { source(id: 1) }",
+                    providerResponsePath = listOf("source"),
                 )
             }
         assertTrue(absent.message!!.contains("not contained"))
@@ -209,6 +217,7 @@ class ResolverDemandTest {
                         }
                         """.trimIndent(),
                     providerFragment = "fragment ignored on Payload { value }",
+                    providerResponsePath = listOf("value"),
                 )
             }
         assertTrue(wrongRoot.message!!.contains("not relative"))
@@ -224,13 +233,14 @@ class ResolverDemandTest {
                         }
                         """.trimIndent(),
                     providerFragment = "fragment ignored on Query { source(id: 2) }",
+                    providerResponsePath = listOf("source"),
                 )
             }
         assertTrue(argumentDistinct.message!!.contains("not contained"))
     }
 
     @Test
-    fun `rejects a provider path with a guard absent from its defining fragment`() {
+    fun `rejects a provider path behind a narrowing guard`() {
         val failure =
             assertFailsWith<IllegalArgumentException> {
                 TestWorld.fromSDL(
@@ -281,7 +291,7 @@ class ResolverDemandTest {
                         val owner = schema.field("Query", "result") as Schema.ObjectField
                         mapOf(
                             VariableCoordinate.of(owner, Value.Variable.of("value")) to
-                                schema.fragmentFrom(
+                                schema.fromObjectField(
                                     """
                                     fragment ignored on Query {
                                       subject {
@@ -291,13 +301,14 @@ class ResolverDemandTest {
                                       }
                                     }
                                     """.trimIndent(),
-                                ).subselections.single(),
+                                    listOf("subject", "value"),
+                                ),
                         )
                     },
                 )
             }
 
-        assertTrue(failure.message!!.contains("not contained"))
+        assertTrue(failure.message!!.contains("lossy type condition Subject to Second"))
     }
 
     @Test
@@ -346,9 +357,10 @@ class ResolverDemandTest {
                     val owner = schema.objectField("Query", "result")
                     mapOf(
                         VariableCoordinate.of(owner, Value.Variable.of("value")) to
-                            schema.fragmentFrom(
+                            schema.fromObjectField(
                                 "fragment ignored on Query { source(id: 1) }",
-                            ).subselections.single(),
+                                listOf("source"),
+                            ),
                     )
                 },
             )
@@ -718,6 +730,7 @@ class ResolverDemandTest {
         fun providerContainmentWorld(
             ownerFragment: String,
             providerFragment: String,
+            providerResponsePath: List<String>,
         ): TestWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -749,7 +762,10 @@ class ResolverDemandTest {
                     val owner = schema.field("Query", "result") as Schema.ObjectField
                     mapOf(
                         VariableCoordinate.of(owner, Value.Variable.of("value")) to
-                            schema.fragmentFrom(providerFragment).subselections.single(),
+                            schema.fromObjectField(
+                                providerFragment,
+                                providerResponsePath,
+                            ),
                     )
                 },
             )

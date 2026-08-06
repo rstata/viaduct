@@ -6,7 +6,7 @@ import model.Fragment
 import model.SelectionForest
 import model.Value
 import model.objectKey
-import model.registry.Resolver
+import model.registry.FieldResolver
 import model.registry.availableDemand
 import model.registry.successorDemand
 import model.selectionForestOf
@@ -18,9 +18,12 @@ import semantics.readVariable
 import semantics.variables
 
 /**
- * First attempt at resolving [selections] when resolvers use variables, now abandoned. Its
- * restrictions on variable definitions and uses were very loose, and we concluded that one-shot
- * resolution is not possible under those restrictions.
+ * A retained dead-end design for resolving [selections] when field resolvers use variables.
+ *
+ * Resolver04 predates the depth-first variable-stratification invariant. Its widening construction
+ * remains executable documentation of why the earlier, looser variable domain does not lead to a
+ * one-shot depth-first design. Resolver05 will instead extend Resolver03 under the stricter
+ * invariant; it will not evolve from this construction.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
@@ -51,11 +54,11 @@ internal fun Value.Object.resolve(
             .mapNotNull { key ->
                 if (
                     key.arguments.argumentsContainErrorValue() ||
-                    key.field !in world.executorRegistry
+                    key.field !in world.resolverRegistry
                 ) {
                     null
                 } else {
-                    val resolver = world.executorRegistry.resolver(key.field)
+                    val resolver = world.resolverRegistry.resolver(key.field)
                     resolver.predecessorDemand(key.arguments)
                 }
             }
@@ -136,7 +139,7 @@ private fun Value.Object.resolveVariables(
         if (variable in result.variableValues) {
             result
         } else {
-            val provider = world.executorRegistry.variable(variable)
+            val provider = world.resolverRegistry.variable(variable)
             val withDependencies =
                 resolveVariables(
                     variables = provider.variables(),
@@ -201,13 +204,13 @@ private fun Value.Object.dependenciesOf(
 ): Set<Value.ObjectKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
-        consumer.field !in world.executorRegistry
+        consumer.field !in world.resolverRegistry
     ) {
         return emptySet()
     }
 
     val selections =
-        world.executorRegistry
+        world.resolverRegistry
             .resolver(consumer.field)
             .objectFragment(consumer.arguments)
             .instantiateVariables(resolved.variableValues)
@@ -246,11 +249,11 @@ private fun Value.Object.resolveKey(
                 when {
                     key.field.fieldName == "__typename" ->
                         Value.String.of(type.typeName).let { value ->
-                            Resolver.OutputProjection(value, value)
+                            FieldResolver.OutputProjection(value, value)
                         }
 
-                    key.field in world.executorRegistry -> {
-                        val resolver = world.executorRegistry.resolver(key.field)
+                    key.field in world.resolverRegistry -> {
+                        val resolver = world.resolverRegistry.resolver(key.field)
                         val objectFragment =
                             resolver
                                 .objectFragment(key.arguments)
@@ -268,7 +271,7 @@ private fun Value.Object.resolveKey(
                     else -> {
                         // The producing resolver supplies demanded output-selection fields.
                         fieldValues.getValue(key).let { value ->
-                            Resolver.OutputProjection(value, value)
+                            FieldResolver.OutputProjection(value, value)
                         }
                     }
                 }

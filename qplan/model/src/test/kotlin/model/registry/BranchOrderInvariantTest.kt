@@ -449,7 +449,7 @@ class BranchOrderInvariantTest {
             }
             """.trimIndent()
 
-        fun branchResolvers(schema: Schema): Map<Schema.OutputField, Resolver.Field> =
+        fun branchResolvers(schema: Schema): Map<Schema.OutputField, FieldResolver> =
             mapOf(
                 schema.field("Query", "result") to
                     resolver(
@@ -472,7 +472,7 @@ class BranchOrderInvariantTest {
         fun twoBranchResolvers(
             schema: Schema,
             resultFragment: String,
-        ): Map<Schema.OutputField, Resolver.Field> =
+        ): Map<Schema.OutputField, FieldResolver> =
             mapOf(
                 schema.field("Query", "result") to
                     resolver(schema.fragmentFrom(resultFragment)),
@@ -495,7 +495,7 @@ class BranchOrderInvariantTest {
             )
         }
 
-        fun resolver(fragment: Fragment): Resolver.Field =
+        fun resolver(fragment: Fragment): FieldResolver =
             model.testing.fieldResolverOf(fragment) { _, _ -> error("Not invoked") }
     }
 }

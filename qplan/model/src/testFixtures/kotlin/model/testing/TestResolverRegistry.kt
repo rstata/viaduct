@@ -6,18 +6,18 @@ import model.Selection
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
-import model.registry.ExecutorRegistry
+import model.registry.ResolverRegistry
 import model.registry.FieldResolverFunction
-import model.registry.MissingExecutorException
-import model.registry.Resolver
+import model.registry.MissingResolverException
+import model.registry.FieldResolver
 import model.selectionForestOf
 import model.toSelectionForest
 
 /**
  * A raw external node lookup accepted only by test-fixture composition.
  *
- * This alias is not part of the canonical resolver algebra. [executorRegistryOf] consumes these
- * functions and exposes a field-only [ExecutorRegistry].
+ * This alias is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
+ * functions and exposes a field-only [ResolverRegistry].
  */
 typealias NodeResolverFunction = (Value.ID) -> Value.Object
 
@@ -30,15 +30,15 @@ typealias CanonicalFieldResolverApplicationObserver =
 fun fieldResolverOf(
     objectFragment: Fragment,
     function: FieldResolverFunction,
-): Resolver.Field = Resolver.Field.of(objectFragment, function)
+): FieldResolver = FieldResolver.of(objectFragment, function)
 
-internal fun executorRegistryOf(
+internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-    fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+    fieldResolvers: Map<Schema.OutputField, FieldResolver>,
     variableProviders: Map<Value.Variable, FromObjectField>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
-): ExecutorRegistry {
+): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
     val variablesByName = variableProviders.keys.associateBy(Value.Variable::variableName)
     val registryResolvers =
@@ -65,7 +65,7 @@ internal fun executorRegistryOf(
                 }
             }
         }
-    return TestExecutorRegistry(
+    return TestResolverRegistry(
         schema = schema,
         fieldResolvers = canonicalResolvers,
         additionalDemand = lowering.additionalDemand,
@@ -90,14 +90,14 @@ internal fun executorRegistryOf(
 private class NodeResolverLowering(
     private val schema: GJSchema,
     private val nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-    rawFieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+    rawFieldResolvers: Map<Schema.OutputField, FieldResolver>,
 ) {
     private val nodeType: Schema.InterfaceType? = canonicalNodeType()
     private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
     private val loweredByField: Map<Schema.ObjectField, Schema.ObjectField> =
         loweredFields.associateWith(::bridgeField)
 
-    val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
+    val fieldResolvers: Map<Schema.OutputField, FieldResolver>
     val additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>
 
     init {
@@ -202,7 +202,7 @@ private class NodeResolverLowering(
     }
 
     private fun validateRawFieldResolvers(
-        fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+        fieldResolvers: Map<Schema.OutputField, FieldResolver>,
     ) {
         val nodeIdFields = nodeResolvers.keys.mapTo(linkedSetOf(), ::validateNodeIdField)
         fieldResolvers.forEach { (field, resolver) ->
@@ -231,7 +231,7 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun loaderResolver(field: Schema.ObjectField): Resolver.Field {
+    private fun loaderResolver(field: Schema.ObjectField): FieldResolver {
         val owner = field.containingType
         val bridge = bridgeField(field)
         val representativeFragment =
@@ -253,7 +253,7 @@ private class NodeResolverLowering(
                         ),
                     ),
             )
-        return Resolver.Field.ofArgumentRetargeting(
+        return FieldResolver.ofArgumentRetargeting(
             objectFragment = representativeFragment,
             retargetArguments = { _, arguments -> arguments.retarget(bridge) },
             function = { input, arguments ->
@@ -509,19 +509,17 @@ private sealed interface DependencyVertex {
     ) : DependencyVertex
 }
 
-private class TestExecutorRegistry(
+private class TestResolverRegistry(
     private val schema: Schema,
-    fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+    fieldResolvers: Map<Schema.OutputField, FieldResolver>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
     variableDeclarations: Map<Value.Variable, FromObjectField>,
-) : ExecutorRegistry {
+) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolvers
-    private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
-    private val variableDeclarations = variableDeclarations
+    private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
     private val variableProviders =
         variableDeclarations.mapValues { (_, declaration) -> declaration.keyPath }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
-    private val incoming: Map<DependencyVertex, Set<DependencyVertex>>
 
     init {
         fieldResolvers.forEach { (field, resolver) ->
@@ -609,7 +607,7 @@ private class TestExecutorRegistry(
                     )
                 }
             }
-        val predecessorResolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
+        val predecessorResolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
                 is DependencyVertex.Field -> {
@@ -636,12 +634,6 @@ private class TestExecutorRegistry(
             }
         }
         this.fieldResolvers = predecessorResolvers
-        incoming =
-            outgoing.keys.associateWith { site ->
-                outgoing
-                    .filterValues { site in it }
-                    .keys
-            }
         BranchOrderValidator(
             fieldResolvers = predecessorResolvers,
             variableProviders = variableProviders,
@@ -653,10 +645,10 @@ private class TestExecutorRegistry(
         return field in fieldResolvers
     }
 
-    override fun resolver(field: Schema.ObjectField): Resolver.Field {
+    override fun resolver(field: Schema.ObjectField): FieldResolver {
         validateCanonicalField(field)
         return fieldResolvers[field]
-            ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)
+            ?: throw MissingResolverException(field.containingType.typeName, field.fieldName)
     }
 
     override fun variable(variable: Value.Variable): List<Value.Key> =
@@ -666,15 +658,6 @@ private class TestExecutorRegistry(
     override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> {
         require(field in this) { "Resolver field is not registered" }
         return outgoing
-            .getValue(DependencyVertex.Field(field))
-            .mapNotNullTo(linkedSetOf()) { vertex ->
-                (vertex as? DependencyVertex.Field)?.field
-            }
-    }
-
-    override fun mayBeDemandedBy(field: Schema.ObjectField): Set<Schema.ObjectField> {
-        require(field in this) { "Resolver field is not registered" }
-        return incoming
             .getValue(DependencyVertex.Field(field))
             .mapNotNullTo(linkedSetOf()) { vertex ->
                 (vertex as? DependencyVertex.Field)?.field
@@ -872,7 +855,7 @@ private class TestExecutorRegistry(
 
     private fun closePredecessorDemand(
         fragment: Fragment,
-        predecessorResolvers: Map<Schema.OutputField, Resolver.Field>,
+        predecessorResolvers: Map<Schema.OutputField, FieldResolver>,
     ): Fragment {
         val additions = mutableListOf<Selection>()
         fragment.nominalType.possibleTypes.forEach { possibleType ->
@@ -894,7 +877,7 @@ private class TestExecutorRegistry(
         selections: model.SelectionForest,
         objectType: Schema.ObjectType,
         path: List<Selection>,
-        predecessorResolvers: Map<Schema.OutputField, Resolver.Field>,
+        predecessorResolvers: Map<Schema.OutputField, FieldResolver>,
         additions: MutableList<Selection>,
     ) {
         selections.forEach { selection ->

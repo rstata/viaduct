@@ -8,7 +8,7 @@ Keep the Kotlin model suitable as a blueprint for a possible future translation 
 
 ## This Is Math, Not Programming
 
-Semantic Kotlin declarations denote mathematical sets, values, functions, and relations. `resolver.tenantResolve(input, arguments, selections)` denotes application of a stipulated resolver function followed by projection to selections; it is not an event and implies no execution, invocation, effects, timing, ordering, allocation, caching, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
+Semantic Kotlin declarations denote mathematical sets, values, functions, and relations. `resolver(input, arguments, selections)` denotes application of a stipulated resolver function followed by projection to selections; it is not an event and implies no execution, invocation, effects, timing, ordering, allocation, caching, or scheduling. Use “function application,” “yields,” and “is related to” when discussing semantics.
 
 Function-valued model properties denote deterministic mathematical maps on their documented domains. Determinism means that equal inputs yield equal outputs; it does not define Kotlin equality for the function values themselves.
 
@@ -38,7 +38,7 @@ Semantic logic uses immutable collection types and purely functional transformat
 
 Every context function in semantic logic uses `context(world: Assumptions)`, even when it currently needs only one part of the world such as `world.schema`. Do not introduce narrower `Schema` contexts or make `Assumptions` a subtype of `Schema`.
 
-Context parameters compose implicitly but are not implicit receivers. Access members as `world.schema` and `world.executorRegistry`. Prefer explicit `world` qualification when only a few members are used; when a body benefits from a receiver, use `world.run { ... }`, declare the return type explicitly, and do not use `world.apply { ... }` to produce a modeled result.
+Context parameters compose implicitly but are not implicit receivers. Access members as `world.schema` and `world.resolverRegistry`. Prefer explicit `world` qualification when only a few members are used; when a body benefits from a receiver, use `world.run { ... }`, declare the return type explicitly, and do not use `world.apply { ... }` to produce a modeled result.
 
 See [Context Parameters and the `Assumptions` World](./context-params.md) for rationale, examples, and testing guidance.
 

@@ -21,7 +21,7 @@ fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
 
 context(world: Assumptions)
 private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
-    val registry = world.executorRegistry
+    val registry = world.resolverRegistry
 
     return keys.all { key ->
         val fieldResolverDemandIsClosed =

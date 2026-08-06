@@ -170,7 +170,7 @@ class AssumptionsTest {
     }
 
     @Test
-    fun `constructs assumptions from a schema and executor registry`() {
+    fun `constructs assumptions from a schema and resolver registry`() {
         val world = TestWorld.fromSDL(schemaSDL = SCHEMA_SDL)
         val assumptions = world.assumptions
 

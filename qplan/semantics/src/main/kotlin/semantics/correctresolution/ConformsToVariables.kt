@@ -11,7 +11,7 @@ context(world: Assumptions)
 fun EngineResult.Object.conformsToVariables(): Boolean =
     variableValues.all { (variable, value) ->
         val provider =
-            world.executorRegistry
+            world.resolverRegistry
                 .variable(variable)
                 .instantiateVariables(variableValues)
         readVariable(provider) == value

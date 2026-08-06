@@ -45,11 +45,11 @@ private fun Value.Object.resolve(
             .fold(selectionForestOf()) { demand, key ->
                 if (
                     key.arguments.argumentsContainErrorValue() ||
-                    key.field !in world.executorRegistry
+                    key.field !in world.resolverRegistry
                 ) {
                     demand
                 } else {
-                    val resolver = world.executorRegistry.resolver(key.field)
+                    val resolver = world.resolverRegistry.resolver(key.field)
                     val fragment = resolver.predecessorDemand(key.arguments)
                     demand + fragment.subselections
                 }
@@ -97,7 +97,7 @@ private fun Value.Object.dependenciesOf(
 ): Set<Value.ObjectKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
-        consumer.field !in world.executorRegistry
+        consumer.field !in world.resolverRegistry
     ) {
         return emptySet()
     }
@@ -124,7 +124,7 @@ private fun Value.Object.resolveKey(
         } else {
             val subselections = fieldSelection.subselections
             val resolutionSelections =
-                if (key.field in world.executorRegistry) {
+                if (key.field in world.resolverRegistry) {
                     subselections.successorDemand()
                 } else {
                     subselections
@@ -134,12 +134,12 @@ private fun Value.Object.resolveKey(
                     key.field.fieldName == "__typename" ->
                         Value.String.of(type.typeName)
 
-                    key.field in world.executorRegistry -> {
-                        val resolver = world.executorRegistry.resolver(key.field)
+                    key.field in world.resolverRegistry -> {
+                        val resolver = world.resolverRegistry.resolver(key.field)
                         val objectFragment = resolver.objectFragment(key.arguments)
                         // The predecessor demand and dependency order put the complete input here.
                         val input = resolved.materialize(objectFragment)
-                        resolver.tenantResolve(
+                        resolver(
                             input = input,
                             arguments = key.arguments,
                             selections = resolutionSelections,

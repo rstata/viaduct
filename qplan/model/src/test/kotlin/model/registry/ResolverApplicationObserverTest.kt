@@ -42,9 +42,9 @@ class ResolverApplicationObserverTest {
         val input = world.schema.objectOf("Query")
         val arguments = Value.Arguments.of(field, emptyMap())
 
-        resolver.tenantResolve(input, arguments)
+        resolver(input, arguments)
         context(world) {
-            resolver.tenantResolve(input, arguments, suppliedDemand)
+            resolver(input, arguments, suppliedDemand)
             resolver.resolveWithSource(
                 input = input,
                 arguments = arguments,

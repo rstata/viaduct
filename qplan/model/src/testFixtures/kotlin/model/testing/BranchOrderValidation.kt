@@ -4,13 +4,13 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.registry.Resolver
+import model.registry.FieldResolver
 
 /**
  * Validates the argument-insensitive structural branch order before semantic reasoning begins.
  */
 internal class BranchOrderValidator(
-    private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
+    private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
     private val variableProviders: Map<Value.Variable, List<Value.Key>>,
 ) {
     private data class Edge(

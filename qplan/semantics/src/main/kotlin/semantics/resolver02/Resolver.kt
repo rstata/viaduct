@@ -46,7 +46,7 @@ private fun Value.Object.resolve(
             .filter { key ->
                 key !in resolved.keys ||
                     (
-                        key.field !in world.executorRegistry &&
+                        key.field !in world.resolverRegistry &&
                             key.field.fieldName != "__typename"
                     )
             }.toSet()
@@ -76,7 +76,7 @@ private fun Schema.ObjectType.closeResolverDemand(
         applicableSelections.objectKeys(this).filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.executorRegistry
+                key.field in world.resolverRegistry
         }.toSet()
 
     if (unexpandedResolverKeys.isEmpty()) return applicableSelections
@@ -84,7 +84,7 @@ private fun Schema.ObjectType.closeResolverDemand(
     val resolverDemand =
         unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
             demand +
-                world.executorRegistry
+                world.resolverRegistry
                     .resolver(key.field)
                     .objectFragment(key.arguments)
                     .subselections
@@ -128,7 +128,7 @@ private fun Value.Object.dependenciesOf(
 ): Set<Value.ObjectKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
-        consumer.field !in world.executorRegistry
+        consumer.field !in world.resolverRegistry
     ) {
         return emptySet()
     }
@@ -159,12 +159,12 @@ private fun Value.Object.resolveKey(
                     key.field.fieldName == "__typename" ->
                         Value.String.of(type.typeName)
 
-                    key.field in world.executorRegistry -> {
-                        val resolver = world.executorRegistry.resolver(key.field)
+                    key.field in world.resolverRegistry -> {
+                        val resolver = world.resolverRegistry.resolver(key.field)
                         val objectFragment = resolver.objectFragment(key.arguments)
                         // Closure and dependency order put the complete input in this prefix.
                         val input = resolved.materialize(objectFragment)
-                        resolver.tenantResolve(
+                        resolver(
                             input = input,
                             arguments = key.arguments,
                         )

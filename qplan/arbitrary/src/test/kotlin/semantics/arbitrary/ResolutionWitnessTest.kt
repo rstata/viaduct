@@ -247,9 +247,9 @@ class ResolutionWitnessTest {
                 computedTwoKey to 1,
                 baseKey to 3,
             ),
-            result.registeredResolverCellCounts(world.executorRegistry),
+            result.registeredResolverCellCounts(world.resolverRegistry),
         )
-        val cells = result.registeredResolverCells(world.executorRegistry)
+        val cells = result.registeredResolverCells(world.resolverRegistry)
         assertTrue(
             cells
                 .single { cell -> cell.applicationKey == computedTwoKey }
@@ -268,7 +268,7 @@ class ResolutionWitnessTest {
                 """.trimIndent(),
             )
         val allowed =
-            operation.subselections.allowedResolverClosure(world.executorRegistry)
+            operation.subselections.allowedResolverClosure(world.resolverRegistry)
         assertEquals(
             setOf(
                 FieldCoordinate("Query", "item"),
@@ -329,7 +329,7 @@ class ResolutionWitnessTest {
         assertEquals(
             mapOf(computedKey to 2),
             result
-                .registeredResolverCellCounts(world.executorRegistry)
+                .registeredResolverCellCounts(world.resolverRegistry)
                 .filterKeys { key -> key == computedKey },
         )
         val firstInput =

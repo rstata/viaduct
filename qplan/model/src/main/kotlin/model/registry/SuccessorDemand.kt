@@ -29,12 +29,12 @@ fun SelectionForest.successorDemand(): SelectionForest =
                 val key = selection.objectKey(possibleType)
                 if (
                     key.arguments.containsErrorValue() ||
-                    key.field !in world.executorRegistry
+                    key.field !in world.resolverRegistry
                 ) {
                     demand
                 } else {
                     demand +
-                        world.executorRegistry
+                        world.resolverRegistry
                             .resolver(key.field)
                             .predecessorDemand(key.arguments)
                             .subselections

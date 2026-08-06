@@ -6,9 +6,9 @@ import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
-import model.registry.ExecutorRegistry
-import model.registry.MissingExecutorException
-import model.registry.Resolver
+import model.registry.ResolverRegistry
+import model.registry.MissingResolverException
+import model.registry.FieldResolver
 import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -37,7 +37,7 @@ class WorldInjectionTest {
                 fieldResolvers = { schema ->
                     val userField = schema.field("Query", "user")
                     val queryFragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, Resolver.Field>(
+                    mapOf<Schema.OutputField, FieldResolver>(
                         userField to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
@@ -52,12 +52,12 @@ class WorldInjectionTest {
             )
 
         val schema = testWorld.schema
-        val registry = testWorld.executorRegistry
+        val registry = testWorld.resolverRegistry
         val world = testWorld.assumptions
 
         assertEquals(schema, world.schema)
-        assertEquals(registry, world.executorRegistry)
-        assertEquals(registry, testWorld.instance(ExecutorRegistry::class.java))
+        assertEquals(registry, world.resolverRegistry)
+        assertEquals(registry, testWorld.instance(ResolverRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
 
         val userField = schema.objectField("Query", "user")
@@ -66,8 +66,7 @@ class WorldInjectionTest {
         val bridge =
             context(world) {
                 registry
-                    .resolver(userIdField)
-                    .tenantResolve(
+                    .resolver(userIdField)(
                         input = world.objectOf("Query"),
                         arguments = Value.Arguments.of(userIdField, emptyMap()),
                         selections = selectionForestOf(),
@@ -89,8 +88,7 @@ class WorldInjectionTest {
             assertIs<Value.Object>(
                 context(world) {
                     registry
-                        .resolver(userField)
-                        .tenantResolve(
+                        .resolver(userField)(
                             input =
                                 Value.Object.of(
                                     schema.query,
@@ -121,8 +119,8 @@ class WorldInjectionTest {
     fun `guice supplies required query resolvers when resolver inputs are omitted`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
-        assertFalse(world.schema.objectField("User", "id") in world.executorRegistry)
-        world.executorRegistry.resolver(
+        assertFalse(world.schema.objectField("User", "id") in world.resolverRegistry)
+        world.resolverRegistry.resolver(
             world.schema.objectField("Query", "user"),
         )
     }

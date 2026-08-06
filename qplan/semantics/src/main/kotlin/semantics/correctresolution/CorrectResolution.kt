@@ -11,7 +11,7 @@ import model.Fragment
  * this judgment is purposefully permissive: as long as the [EngineResult.Object] conforms
  * to our world assumptions (e.g., regarding schema conformance and resolver conformance),
  * this predicate allows the [EngineResult.Object] to contain more cells than the input
- * [fragment] and implicated [model.registry.Resolver.Field.objectFragment]s require. Other predicates
+ * [fragment] and implicated [model.registry.FieldResolver.objectFragment]s require. Other predicates
  * define various degrees of minimality.
  *
  * This is math, not programming: the Kotlin application syntax here expresses the

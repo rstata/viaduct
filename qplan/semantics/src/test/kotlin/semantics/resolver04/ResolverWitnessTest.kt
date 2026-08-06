@@ -89,12 +89,12 @@ class ResolverWitnessTest {
                     }
                 val witness = registry.resolutionWitness()
                 assertEquals(
-                    result.registeredResolverCellCounts(world.executorRegistry),
+                    result.registeredResolverCellCounts(world.resolverRegistry),
                     witness.applicationCounts(),
                 )
                 assertTrue(
                     witness.unrelatedApplications(
-                        fragment.subselections.allowedResolverClosure(world.executorRegistry),
+                        fragment.subselections.allowedResolverClosure(world.resolverRegistry),
                     ).isEmpty(),
                     "Resolver applied outside operation/registry demand closure",
                 )
@@ -125,12 +125,12 @@ class ResolverWitnessTest {
                     }
                 val permutedWitness = registry.resolutionWitness()
                 assertEquals(
-                    permutedResult.registeredResolverCellCounts(world.executorRegistry),
+                    permutedResult.registeredResolverCellCounts(world.resolverRegistry),
                     permutedWitness.applicationCounts(),
                 )
                 assertTrue(
                     permutedWitness.unrelatedApplications(
-                        permuted.subselections.allowedResolverClosure(world.executorRegistry),
+                        permuted.subselections.allowedResolverClosure(world.resolverRegistry),
                     ).isEmpty(),
                     "Permuted resolver applied outside operation/registry demand closure",
                 )
@@ -180,7 +180,7 @@ class ResolverWitnessTest {
         require(occurrences.isNotEmpty()) {
             "Active variable $this does not occur in its owner's source fragment"
         }
-        val provider = world.executorRegistry.variable(this)
+        val provider = world.resolverRegistry.variable(this)
         return VariableActivationProfile(
             variable = this,
             owner = owner,

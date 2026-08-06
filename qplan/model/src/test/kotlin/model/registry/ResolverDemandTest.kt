@@ -73,16 +73,13 @@ class ResolverDemandTest {
                 },
             )
         val schema = world.schema
-        val registry = world.executorRegistry
+        val registry = world.resolverRegistry
         val x = schema.objectField("Query", "x")
         val y = schema.objectField("Query", "y")
         val z = schema.objectField("Query", "z")
         val raw = schema.objectField("Query", "raw")
 
         assertEquals(setOf(y, z, raw), registry.mayDemandFrom(x))
-        assertEquals(setOf(x), registry.mayBeDemandedBy(y))
-        assertEquals(setOf(x), registry.mayBeDemandedBy(z))
-        assertEquals(setOf(x), registry.mayBeDemandedBy(raw))
     }
 
     @Test
@@ -100,7 +97,7 @@ class ResolverDemandTest {
                 TestWorld.fromSDL(
                     schemaSDL = schemaSDL,
                     fieldResolvers = { schema ->
-                        val resolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
+                        val resolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
                         schema.query.fields.values
                             .filter { it.fieldName != "__typename" }
                             .forEach { field ->
@@ -151,7 +148,7 @@ class ResolverDemandTest {
                 TestWorld.fromSDL(
                     schemaSDL = schemaSDL,
                     fieldResolvers = { schema ->
-                        val resolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
+                        val resolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
                         schema.query.fields.values
                             .filter { it.fieldName != "__typename" }
                             .forEach { field ->
@@ -337,7 +334,7 @@ class ResolverDemandTest {
                     val source = schema.field("Query", "source")
                     mapOf(
                         schema.field("Query", "result") to
-                            Resolver.Field.ofArgumentRetargeting(
+                            FieldResolver.ofArgumentRetargeting(
                                 objectFragment = representative,
                                 retargetArguments = { key, _ ->
                                     if (key.field == source) {
@@ -369,7 +366,7 @@ class ResolverDemandTest {
 
         val failure =
             assertFailsWith<IllegalArgumentException> {
-                world.executorRegistry
+                world.resolverRegistry
                     .resolver(result)
                     .objectFragment(
                         Value.Arguments.of(result, mapOf("selector" to 2)),
@@ -428,7 +425,7 @@ class ResolverDemandTest {
                 },
             )
         val schema = world.schema
-        val registry = world.executorRegistry
+        val registry = world.resolverRegistry
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
         val queryNode = schema.objectField("Query", "node")
@@ -448,12 +445,6 @@ class ResolverDemandTest {
         assertTrue(registry.mayDemandFrom(userResolved).isEmpty())
         assertTrue(registry.mayDemandFrom(adminResolved).isEmpty())
 
-        assertEquals(setOf(outer), registry.mayBeDemandedBy(consumer))
-        assertEquals(setOf(consumer), registry.mayBeDemandedBy(queryNode))
-        assertEquals(setOf(queryNode), registry.mayBeDemandedBy(queryNodeId))
-        assertEquals(setOf(consumer), registry.mayBeDemandedBy(userResolved))
-        assertEquals(setOf(consumer), registry.mayBeDemandedBy(adminResolved))
-        assertTrue(registry.mayBeDemandedBy(outer).isEmpty())
     }
 
     @Test
@@ -462,7 +453,7 @@ class ResolverDemandTest {
             TestWorld.fromSDL(
                 schemaSDL = EXTENDED_FRAGMENT_SCHEMA,
                 fieldResolvers = { schema ->
-                    fun resolver(fragment: Fragment): Resolver.Field =
+                    fun resolver(fragment: Fragment): FieldResolver =
                         model.testing.fieldResolverOf(fragment) { _, _ -> error("Not invoked") }
 
                     mapOf(
@@ -527,7 +518,7 @@ class ResolverDemandTest {
             )
         val schema = world.schema
         val predecessorDemand =
-            world.executorRegistry
+            world.resolverRegistry
                 .resolver(schema.objectField("Query", "consumer"))
                 .predecessorDemand
         val selections = predecessorDemand.subselections.allSelections()
@@ -722,7 +713,7 @@ class ResolverDemandTest {
             }
             """.trimIndent()
 
-        fun resolver(fragment: Fragment): Resolver.Field =
+        fun resolver(fragment: Fragment): FieldResolver =
             model.testing.fieldResolverOf(
                 objectFragment = fragment,
                 function = { _, _ -> error("Not invoked") },

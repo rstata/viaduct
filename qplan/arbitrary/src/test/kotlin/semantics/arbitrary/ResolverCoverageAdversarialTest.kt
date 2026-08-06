@@ -62,21 +62,18 @@ class ResolverCoverageAdversarialTest {
                 world.schema.objectField(sourceField.typeName, sourceField.fieldName + suffix)
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
-                world.executorRegistry
-                    .resolver(bridgeField)
-                    .tenantResolve(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
+                world.resolverRegistry
+                    .resolver(bridgeField)(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
             val loaderInput =
                 world.schema.objectOf(sourceField.typeName) {
                     field(bridgeField.fieldName) setTo bridgeValue
                 }
 
             registry.clearResolutionWitness()
-            world.executorRegistry
-                .resolver(bridgeField)
-                .tenantResolve(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
-            world.executorRegistry
-                .resolver(loaderField)
-                .tenantResolve(loaderInput, Value.Arguments.of(loaderField, emptyMap()))
+            world.resolverRegistry
+                .resolver(bridgeField)(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
+            world.resolverRegistry
+                .resolver(loaderField)(loaderInput, Value.Arguments.of(loaderField, emptyMap()))
 
             assertEquals(
                 listOf(

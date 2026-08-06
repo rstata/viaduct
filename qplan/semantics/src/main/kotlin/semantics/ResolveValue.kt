@@ -102,7 +102,7 @@ private fun Value.Object.resolveObjectValue(
         }
     }
     val hasLocalResolverSelection =
-        resolverDemandByKey.keys.any { key -> key.field in world.executorRegistry }
+        resolverDemandByKey.keys.any { key -> key.field in world.resolverRegistry }
     val localPaths =
         if (hasLocalResolverSelection) {
             mapOf(path to resolverDemand)
@@ -117,7 +117,7 @@ private fun Value.Object.resolveObjectValue(
                 }
         } else {
             selectionsByKey.keys
-                .filter { key -> key.field !in world.executorRegistry }
+                .filter { key -> key.field !in world.resolverRegistry }
                 .toSet()
         }
     val resolved =

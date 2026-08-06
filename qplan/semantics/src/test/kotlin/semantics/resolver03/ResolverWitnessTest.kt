@@ -73,7 +73,7 @@ class ResolverWitnessTest {
                 )
                 assertTrue(
                     witness.unrelatedApplications(
-                        fragment.subselections.allowedResolverClosure(world.executorRegistry),
+                        fragment.subselections.allowedResolverClosure(world.resolverRegistry),
                     ).isEmpty(),
                     "Resolver applied outside operation/registry demand closure",
                 )

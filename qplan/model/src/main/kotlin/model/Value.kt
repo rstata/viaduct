@@ -19,7 +19,7 @@ sealed interface PathComponent {
  * A GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
- * by the interface. [Variable] equality is exact name equality.
+ * by the interface. [Variable] equality is structural over its name, defining field, and path.
  *
  * ### Invariant: schema-value-canonicality
  *
@@ -476,18 +476,28 @@ sealed interface Value {
     /**
      * A symbolic reference to an execution variable.
      *
-     * Two variables are equal exactly when they have the same name.
+     * Two variables are equal exactly when they have the same [variableName], [field], and [path].
+     * A null path denotes the resolver-level variable before future occurrence-specific
+     * alpha-renaming.
      */
     sealed interface Variable : Input {
         val variableName: kotlin.String
+        val field: Schema.ObjectField
+        val path: kotlin.collections.List<PathComponent>?
 
         companion object {
             /**
              * ### Invariant: variable-value-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * [field] is the canonical field of the resolver defining this variable, every
+             * [PathComponent] in [path] belongs to the same reasoning world, and every result
+             * satisfies `result.conformsToSchema()` in that world.
              */
-            fun of(variableName: kotlin.String): Variable = VariableValueImpl(variableName)
+            fun of(
+                variableName: kotlin.String,
+                field: Schema.ObjectField,
+                path: kotlin.collections.List<PathComponent>?,
+            ): Variable = VariableValueImpl(variableName, field, path)
         }
     }
 
@@ -531,6 +541,12 @@ sealed interface Value {
             get() = unsupported()
 
         override val variableName: kotlin.String
+            get() = unsupported()
+
+        override val field: Nothing
+            get() = unsupported()
+
+        override val path: Nothing
             get() = unsupported()
 
         private fun unsupported(): Nothing =
@@ -613,7 +629,29 @@ private data class ArgumentsValueImpl(
 
 private data class VariableValueImpl(
     override val variableName: String,
-) : Value.Variable
+    override val field: Schema.ObjectField,
+    override val path: List<PathComponent>?,
+) : Value.Variable {
+    override fun toString(): String =
+        "Variable(" +
+            "name=$variableName, " +
+            "field=${field.containingType.typeName}/${field.fieldName}, " +
+            "path=${path.renderVariablePath()}" +
+            ")"
+}
+
+private fun List<PathComponent>?.renderVariablePath(): String =
+    this?.joinToString(prefix = "[", postfix = "]") { component ->
+        when (component) {
+            is Value.ObjectKey ->
+                "${component.field.containingType.typeName}/${component.field.fieldName}" +
+                    component.arguments.fieldValues
+                        .takeIf { arguments -> arguments.isNotEmpty() }
+                        ?.let { arguments -> "($arguments)" }
+                        .orEmpty()
+            is Value.ListIndex -> "index=${component.index}"
+        }
+    } ?: "null"
 
 private data class KeyImpl(
     override val field: Schema.OutputField,

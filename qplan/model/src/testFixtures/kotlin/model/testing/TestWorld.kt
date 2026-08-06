@@ -10,7 +10,6 @@ import model.Assumptions
 import model.Schema
 import model.SelectionForest
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.registry.ExecutorRegistry
 import model.registry.Resolver
@@ -50,7 +49,7 @@ class TestWorld private constructor(
             fieldResolvers:
                 ((Schema) -> Map<Schema.OutputField, Resolver.Field>)? = null,
             variableProviders:
-                (Schema) -> Map<VariableCoordinate, FromObjectField> = { emptyMap() },
+                (Schema) -> Map<Value.Variable, FromObjectField> = { emptyMap() },
             selectiveResolvers: Boolean = true,
             applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld {
@@ -81,7 +80,7 @@ private class TestWorldModule(
     private val schemaSDL: String,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, Resolver.Field>)?,
-    private val variableProviders: (Schema) -> Map<VariableCoordinate, FromObjectField>,
+    private val variableProviders: (Schema) -> Map<Value.Variable, FromObjectField>,
     private val selectiveResolvers: Boolean,
     private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ) : AbstractModule() {
@@ -109,7 +108,7 @@ private class TestWorldModule(
 
     @Provides
     @VariableProviders
-    fun variableProviders(schema: GJSchema): Map<VariableCoordinate, FromObjectField> =
+    fun variableProviders(schema: GJSchema): Map<Value.Variable, FromObjectField> =
         variableProviders.invoke(schema)
 
     @Provides
@@ -118,7 +117,7 @@ private class TestWorldModule(
         schema: GJSchema,
         @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
         @FieldResolvers fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
-        @VariableProviders variableProviders: Map<VariableCoordinate, FromObjectField>,
+        @VariableProviders variableProviders: Map<Value.Variable, FromObjectField>,
     ): ExecutorRegistry =
         executorRegistryOf(
             schema = schema,

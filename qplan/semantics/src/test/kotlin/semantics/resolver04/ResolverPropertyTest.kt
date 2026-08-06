@@ -3,7 +3,6 @@ package semantics.resolver04
 import model.Schema
 import model.TypeExpr
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -164,18 +163,18 @@ class ResolverPropertyTest {
                     variableProviders = { schema ->
                         val owner = schema.field("Query", "result") as Schema.ObjectField
                         mapOf(
-                            VariableCoordinate.of(owner, Value.Variable.of("n")) to
+                            Value.Variable.of("n", owner, path = null) to
                                 schema.provider(
                                     "fragment ignored on Query { source { common } }",
                                     "source",
                                     "common",
                                 ),
-                            VariableCoordinate.of(owner, Value.Variable.of("values")) to
+                            Value.Variable.of("values", owner, path = null) to
                                 schema.provider(
                                     "fragment ignored on Query { numbers }",
                                     "numbers",
                                 ),
-                            VariableCoordinate.of(owner, Value.Variable.of("optional")) to
+                            Value.Variable.of("optional", owner, path = null) to
                                 schema.provider(
                                     "fragment ignored on Query { nullableBox { value } }",
                                     "nullableBox",
@@ -200,13 +199,25 @@ class ResolverPropertyTest {
             )
             assertEquals(
                 mapOf(
-                    Value.Variable.of("n") to Value.Int.of(n),
-                    Value.Variable.of("values") to
+                    Value.Variable.of(
+                        "n",
+                        world.schema.objectField("Query", "result"),
+                        path = null,
+                    ) to Value.Int.of(n),
+                    Value.Variable.of(
+                        "values",
+                        world.schema.objectField("Query", "result"),
+                        path = null,
+                    ) to
                         Value.InputList.of(
                             TypeExpr.Named.of(Schema.IntType, isNullable = false),
                             numbers.map(Value.Int::of),
                         ),
-                    Value.Variable.of("optional") to optional?.let(Value.Int::of),
+                    Value.Variable.of(
+                        "optional",
+                        world.schema.objectField("Query", "result"),
+                        path = null,
+                    ) to optional?.let(Value.Int::of),
                 ),
                 result.variableValues,
             )

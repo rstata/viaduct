@@ -42,6 +42,39 @@ class GeneratorTest {
     }
 
     @Test
+    fun `count-only application capture does not retain resolution witnesses`() {
+        val config =
+            TEST_CONFIG +
+                (ArgumentsEnabled to false) +
+                (NodeResolversEnabled to false)
+        val random = RandomSource.seeded(8642L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val coordinate =
+            registry.fieldResolverCoordinates.first { field ->
+                field.typeName == "Query"
+            }
+        val countWorld =
+            registry.world(
+                schema = schema,
+                captureResolutionWitness = false,
+            ).assumptions
+        val field =
+            countWorld.schema.objectField(
+                coordinate.typeName,
+                coordinate.fieldName,
+            )
+        val input = countWorld.schema.objectOf("Query")
+        val arguments = Value.Arguments.of(field, emptyMap())
+
+        registry.clearResolutionApplicationCounts()
+        countWorld.executorRegistry.resolver(field).tenantResolve(input, arguments)
+
+        assertEquals(mapOf(coordinate to 1L), registry.resolutionApplicationCounts())
+        assertTrue(registry.resolutionWitness().applications.isEmpty())
+    }
+
+    @Test
     fun `feature switches remove their schema and query features`() {
         val config =
             Config.default +

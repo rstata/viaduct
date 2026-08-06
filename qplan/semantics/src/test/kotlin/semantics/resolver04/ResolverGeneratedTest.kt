@@ -5,7 +5,6 @@ import model.EngineResult
 import model.Schema
 import model.TypeExpr
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf

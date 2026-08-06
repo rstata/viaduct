@@ -21,6 +21,17 @@ class FromObjectField private constructor(
     internal val terminalType: TypeExpr<Schema.OutputType>,
     private val nullableTraversal: Boolean,
 ) {
+    internal fun mapVariables(
+        transform: (Value.Variable) -> Value.Variable,
+    ): FromObjectField =
+        FromObjectField(
+            responsePath = responsePath,
+            objectFragment = objectFragment.mapVariables(transform),
+            keyPath = keyPath.mapVariables(transform),
+            terminalType = terminalType,
+            nullableTraversal = nullableTraversal,
+        )
+
     internal fun isCompatibleWith(
         locationType: TypeExpr<Schema.InputType>,
         locationHasDefault: Boolean,
@@ -37,6 +48,7 @@ class FromObjectField private constructor(
             schema: GJSchema,
             objectFragmentSource: String,
             responsePath: List<String>,
+            variableField: Schema.ObjectField?,
         ): FromObjectField {
             require(responsePath.isNotEmpty()) {
                 "fromObjectField path must contain at least one response key"
@@ -49,6 +61,7 @@ class FromObjectField private constructor(
                 GJSelectionParser(
                     schema = schema,
                     variableValues = emptyMap(),
+                    variableField = variableField,
                 ).specSelectionsFrom(objectFragmentSource)
             val compiled =
                 schema.compilePath(
@@ -75,11 +88,13 @@ class FromObjectField private constructor(
 fun Schema.fromObjectField(
     objectFragmentSource: String,
     responsePath: List<String>,
+    variableField: Schema.ObjectField? = null,
 ): FromObjectField =
     FromObjectField.compile(
         schema = this as GJSchema,
         objectFragmentSource = objectFragmentSource,
         responsePath = responsePath,
+        variableField = variableField,
     )
 
 private data class CompiledPath(

@@ -2,7 +2,6 @@ package model.testing
 
 import model.Schema
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import kotlin.test.Test
@@ -310,7 +309,7 @@ class FromObjectFieldTest {
             variableProviders = { schema ->
                 val owner = schema.field("Query", "result") as Schema.ObjectField
                 mapOf(
-                    VariableCoordinate.of(owner, Value.Variable.of("value")) to
+                    Value.Variable.of("value", owner, path = null) to
                         schema.fromObjectField(objectFragment, responsePath),
                 )
             },

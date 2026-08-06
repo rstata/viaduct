@@ -168,7 +168,7 @@ Then prove:
 
 ### Phase 5: Integrate Variables And Provider Paths
 
-Require a total, unique owned binding for every variable appearing in each activated resolver fragment. Connect each binding to its `VariableCoordinate`, owner field, structural provider selection, provider-root work item, exact path trace, dependency bindings, evaluated input value, and stored OER binding.
+Require a total, unique owned binding for every variable appearing in each activated resolver fragment. Connect each binding to its structural variable identity, owner field, structural provider selection, provider-root work item, exact path trace, dependency bindings, evaluated input value, and stored OER binding.
 
 Derive rather than assume:
 

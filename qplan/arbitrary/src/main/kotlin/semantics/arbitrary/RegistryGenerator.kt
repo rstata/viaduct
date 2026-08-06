@@ -10,9 +10,9 @@ import io.kotest.property.arbitrary.next
 import model.Fragment
 import model.Schema
 import model.Selection
+import model.SelectionForest
 import model.TypeExpr
 import model.Value
-import model.VariableCoordinate
 import model.fragmentFrom
 import model.objectOf
 import model.toSelectionForest
@@ -69,6 +69,7 @@ class ArbitraryRegistry internal constructor(
     val features: RegistryFeatures,
 ) {
     private val applicationLog = ResolutionApplicationLog()
+    private val applicationCounts = mutableMapOf<FieldCoordinate, Long>()
 
     fun clearResolutionWitness() {
         applicationLog.clear()
@@ -76,17 +77,89 @@ class ArbitraryRegistry internal constructor(
 
     fun resolutionWitness(): ResolutionWitness = applicationLog.snapshot()
 
+    fun clearResolutionApplicationCounts() {
+        applicationCounts.clear()
+    }
+
+    fun resolutionApplicationCounts(): Map<FieldCoordinate, Long> =
+        applicationCounts.toMap()
+
     fun resolverProgram(sourceField: FieldCoordinate): ResolverProgramKind =
         resolverPrograms.getValue(sourceField)
+
+    fun applicationProgram(
+        schema: ArbitrarySchema,
+        canonicalField: FieldCoordinate,
+    ): ResolverProgramKind =
+        if (canonicalField.isNodeLoader(schema)) {
+            ResolverProgramKind.INPUT_SENSITIVE
+        } else {
+            resolverProgram(sourceField(canonicalField))
+        }
+
+    fun applicationHasDependencies(
+        schema: ArbitrarySchema,
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        canonicalField.isNodeLoader(schema) ||
+            objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
+
+    private fun sourceField(canonicalField: FieldCoordinate): FieldCoordinate {
+        if (canonicalField in resolverPrograms) return canonicalField
+        return listOf("\$ids", "\$id")
+            .firstNotNullOfOrNull { suffix ->
+                canonicalField.fieldName
+                    .removeSuffix(suffix)
+                    .takeIf { fieldName -> fieldName != canonicalField.fieldName }
+                    ?.let { fieldName ->
+                        FieldCoordinate(canonicalField.typeName, fieldName)
+                    }?.takeIf { sourceField -> sourceField in resolverPrograms }
+            } ?: canonicalField
+    }
+
+    private fun FieldCoordinate.isNodeLoader(schema: ArbitrarySchema): Boolean {
+        val sourceField =
+            schema
+                .objectNamed(typeName)
+                .fields
+                .singleOrNull { field -> field.name == fieldName }
+                ?: return false
+        return schema.isComposite(sourceField.type.namedType) &&
+            schema
+                .possibleObjects(sourceField.type.namedType)
+                .all { possibleType -> possibleType.name in nodeResolverTypes }
+    }
 
     fun world(
         schema: ArbitrarySchema,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
         captureSuppliedDemand: Boolean = false,
+        captureResolutionWitness: Boolean = true,
     ): TestWorld {
+        require(captureResolutionWitness || !captureSuppliedDemand) {
+            "Supplied demand can only be retained in a resolution witness"
+        }
         val firstInputs = mutableMapOf<FieldCoordinate, Value.Object>()
         val firstArguments = mutableMapOf<FieldCoordinate, Value.Arguments>()
         val applicationOrdinals = mutableMapOf<FieldCoordinate, Int>()
+        fun recordApplication(
+            coordinate: FieldCoordinate,
+            arguments: Value.Arguments,
+            input: Value.Object,
+            suppliedDemand: SelectionForest?,
+        ) {
+            if (captureResolutionWitness) {
+                applicationLog.record(
+                    field = coordinate,
+                    arguments = arguments,
+                    input = input,
+                    suppliedDemand = suppliedDemand.takeIf { captureSuppliedDemand },
+                )
+            } else {
+                applicationCounts[coordinate] =
+                    Math.addExact(applicationCounts.getOrDefault(coordinate, 0L), 1L)
+            }
+        }
         val world =
             TestWorld.fromSDL(
             schemaSDL = schema.sdl,
@@ -110,22 +183,12 @@ class ArbitraryRegistry internal constructor(
                         field.containingType.typeName,
                         field.fieldName,
                     )
-                applicationLog.record(
-                    field = coordinate,
-                    arguments = arguments,
-                    input = input,
-                    suppliedDemand = suppliedDemand.takeIf { captureSuppliedDemand },
-                )
+                recordApplication(coordinate, arguments, input, suppliedDemand)
                 if (
                     resolverProgramMutation ==
                     ResolverProgramMutation.DUPLICATE_APPLICATION
                 ) {
-                    applicationLog.record(
-                        field = coordinate,
-                        arguments = arguments,
-                        input = input,
-                        suppliedDemand = suppliedDemand.takeIf { captureSuppliedDemand },
-                    )
+                    recordApplication(coordinate, arguments, input, suppliedDemand)
                 }
             },
             fieldResolvers = { canonicalSchema ->
@@ -140,7 +203,13 @@ class ArbitraryRegistry internal constructor(
                     val program = resolverPrograms.getValue(coordinate)
                     field to
                         fieldResolverOf(
-                            objectFragment = objectFragments.getValue(coordinate).materialize(canonicalSchema),
+                            objectFragment =
+                                objectFragments
+                                    .getValue(coordinate)
+                                    .materialize(
+                                        canonicalSchema,
+                                        field as Schema.ObjectField,
+                                    ),
                             function = { input, arguments ->
                                 field.arguments.fields.values
                                     .filter { argument ->
@@ -237,14 +306,16 @@ class ArbitraryRegistry internal constructor(
                             provider.owner.typeName,
                             canonicalFieldName,
                         ) as Schema.ObjectField
-                    VariableCoordinate.of(
+                    Value.Variable.of(
+                        provider.variableName,
                         field,
-                        Value.Variable.of(provider.variableName),
+                        path = null,
                     ) to
                         canonicalSchema.fromObjectField(
                             objectFragmentSource =
                                 objectFragmentSources.getValue(provider.owner),
                             responsePath = provider.responsePath(),
+                            variableField = field,
                         )
                 }
             },
@@ -951,14 +1022,17 @@ internal data class FragmentPlan(
     val ownerName: String,
     val selections: List<FragmentSelectionPlan>,
 ) {
-    fun materialize(schema: Schema): Fragment =
+    fun materialize(
+        schema: Schema,
+        variableField: Schema.ObjectField,
+    ): Fragment =
         if (selections.isEmpty()) {
             Fragment.of(
                 nominalType = schema.type(ownerName) as Schema.ObjectType,
                 subselections = model.selectionForestOf(),
             )
         } else {
-            val parsed = schema.fragmentFrom(source())
+            val parsed = schema.fragmentFrom(source(), variableField = variableField)
             Fragment.of(
                 nominalType = parsed.nominalType,
                 subselections = selections.materialize(schema, parsed.subselections),
@@ -1018,9 +1092,10 @@ internal data class FragmentSelectionPlan(
     fun materialize(
         schema: Schema,
         owner: Schema.ObjectType,
+        variableField: Schema.ObjectField,
     ): Selection =
         FragmentPlan(owner.typeName, listOf(this))
-            .materialize(schema)
+            .materialize(schema, variableField)
             .subselections
             .single()
 

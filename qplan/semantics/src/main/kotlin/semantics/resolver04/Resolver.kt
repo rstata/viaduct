@@ -69,10 +69,7 @@ internal fun Value.Object.resolve(
         symbolicSelections
             .variables()
             .filterTo(linkedSetOf()) { variable ->
-                world.executorRegistry
-                    .variableCoordinate(variable)
-                    .field
-                    .containingType == type
+                variable.field.containingType == type
             }
     val resolvedVariables =
         resolveVariables(

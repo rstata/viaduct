@@ -28,7 +28,10 @@ import model.spec.flatten
 internal class GJSelectionParser(
     private val schema: GJSchema,
     private val variableValues: Map<String, Value.Input?>,
+    private val variableField: Schema.ObjectField? = null,
 ) {
+    private var effectiveVariableField = variableField
+
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
         val parsed = specSelectionsFrom(fragment)
         val selections = flatten(schema, parsed.nominalType, parsed.selections)
@@ -47,6 +50,14 @@ internal class GJSelectionParser(
 
         val typeConditionName = definition.typeCondition.name!!
         val typeCondition = schema.type(typeConditionName) as Schema.CompositeType
+        if (effectiveVariableField == null) {
+            effectiveVariableField =
+                typeCondition.possibleTypes
+                    .first()
+                    .fields
+                    .values
+                    .first()
+        }
         val graphQLTypeCondition =
             schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
         val specSelections =
@@ -109,6 +120,7 @@ internal class GJSelectionParser(
                                     value = suppliedArgument.value,
                                     variableValues = variableValues,
                                     schema = schema,
+                                    variableField = effectiveVariableField,
                                 )
                         argumentDefinition.hasSetDefaultValue() ->
                             argumentDefinition.name to
@@ -117,6 +129,7 @@ internal class GJSelectionParser(
                                     argumentDefinition.argumentDefaultValue,
                                     variableValues,
                                     schema,
+                                    effectiveVariableField,
                                 )
                         else -> null
                     }

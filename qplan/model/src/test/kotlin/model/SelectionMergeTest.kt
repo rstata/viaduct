@@ -139,25 +139,38 @@ class SelectionMergeTest {
     @Test
     fun `nested variables merge only under structural argument equality`() {
         val fixture = Fixture()
+        val variableField = fixture.schema.objectField("Query", "search")
         val sameX =
             fixture.searchSelection(
                 Value.InputObject.of(
                     type = fixture.filter,
-                    fields = mapOf("values" to listOf(Value.Variable.of("x"))),
+                    fields =
+                        mapOf(
+                            "values" to
+                                listOf(Value.Variable.of("x", variableField, path = null)),
+                        ),
                 ),
             )
         val anotherX =
             fixture.searchSelection(
                 Value.InputObject.of(
                     type = fixture.filter,
-                    fields = mapOf("values" to listOf(Value.Variable.of("x"))),
+                    fields =
+                        mapOf(
+                            "values" to
+                                listOf(Value.Variable.of("x", variableField, path = null)),
+                        ),
                 ),
             )
         val y =
             fixture.searchSelection(
                 Value.InputObject.of(
                     type = fixture.filter,
-                    fields = mapOf("values" to listOf(Value.Variable.of("y"))),
+                    fields =
+                        mapOf(
+                            "values" to
+                                listOf(Value.Variable.of("y", variableField, path = null)),
+                        ),
                 ),
             )
         val literal =

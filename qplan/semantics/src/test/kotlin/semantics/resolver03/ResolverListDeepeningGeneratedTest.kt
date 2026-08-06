@@ -7,6 +7,7 @@ import model.Assumptions
 import model.Schema
 import model.SelectionForest
 import model.TypeExpr
+import model.objectKey
 import model.fragmentFrom
 import model.merge
 import model.objectOf
@@ -100,12 +101,12 @@ private fun countListPassiveDeepening(
     val incoming = selections.merge(type)
     val incomingByKey =
         incoming
-            .groupBy { selection -> selection.key }
+            .groupBy { selection -> selection.objectKey(type) }
             .mapValues { (_, occurrences) -> occurrences.single() }
     var count = 0
 
     incoming.forEach { selectedResolver ->
-        val field = selectedResolver.key.field
+        val field = selectedResolver.objectKey(type).field
         if (field !in world.executorRegistry) return@forEach
 
         world.executorRegistry
@@ -114,7 +115,7 @@ private fun countListPassiveDeepening(
             .subselections
             .merge(type)
             .forEach { requiredPassive ->
-                val passiveField = requiredPassive.key.field
+                val passiveField = requiredPassive.objectKey(type).field
                 val passiveType = passiveField.typeExpr.baseType as? Schema.CompositeType
                     ?: return@forEach
                 if (
@@ -123,7 +124,8 @@ private fun countListPassiveDeepening(
                 ) {
                     return@forEach
                 }
-                val selectedPassive = incomingByKey[requiredPassive.key] ?: return@forEach
+                val selectedPassive =
+                    incomingByKey[requiredPassive.objectKey(type)] ?: return@forEach
                 if (
                     hasMissingDemand(
                         requiredPassive.subselections,

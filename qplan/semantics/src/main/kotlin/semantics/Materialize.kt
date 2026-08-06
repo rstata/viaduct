@@ -6,6 +6,7 @@ import model.Fragment
 import model.SelectionForest
 import model.Value
 import model.merge
+import model.objectKey
 
 /**
  * Materializes the object value selected by [fragment] from this result.
@@ -25,7 +26,7 @@ private fun EngineResult.Object.materializeSelectedObjectValue(
     val selectedFields =
         selections
             .merge(type)
-            .groupBy { selection -> selection.key }
+            .groupBy { selection -> selection.objectKey(type) }
             .mapValues { (key, mergedSelections) ->
                 fetch(key).value.materializeEngineResultValue(
                     mergedSelections.single().subselections,

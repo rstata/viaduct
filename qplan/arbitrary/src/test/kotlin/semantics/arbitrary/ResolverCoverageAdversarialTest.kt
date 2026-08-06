@@ -56,9 +56,10 @@ class ResolverCoverageAdversarialTest {
             val (schema, registry, sourceField) = generated
             val world = registry.world(schema).assumptions
             val suffix = if (listOutput) "\$ids" else "\$id"
-            val loaderField = world.schema.field(sourceField.typeName, sourceField.fieldName)
+            val loaderField =
+                world.schema.objectField(sourceField.typeName, sourceField.fieldName)
             val bridgeField =
-                world.schema.field(sourceField.typeName, sourceField.fieldName + suffix)
+                world.schema.objectField(sourceField.typeName, sourceField.fieldName + suffix)
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
                 world.executorRegistry

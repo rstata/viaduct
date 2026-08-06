@@ -6,6 +6,8 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.merge
+import model.objectKey
+import model.objectKeys
 import model.registry.demandsFromSibling
 import model.registry.successorDemand
 import model.selectionForestOf
@@ -39,7 +41,7 @@ private fun Value.Object.resolve(
     val applicableSelections = selections.merge(type)
     val resolverInputDemand =
         applicableSelections
-            .keys()
+            .objectKeys(type)
             .fold(selectionForestOf()) { demand, key ->
                 if (
                     key.arguments.argumentsContainErrorValue() ||
@@ -55,9 +57,9 @@ private fun Value.Object.resolve(
     val mergedSelections =
         (applicableSelections + resolverInputDemand)
             .merge(type)
-    val orderedKeys = dependencyOrder(mergedSelections.keys() - resolved.keys)
+    val orderedKeys = dependencyOrder(mergedSelections.objectKeys(type) - resolved.keys)
     return orderedKeys.fold(resolved) { result, key ->
-        val selection = mergedSelections.single { selection -> selection.key == key }
+        val selection = mergedSelections.single(key)
         result.union(resolveKey(selection, result))
     }
 }
@@ -67,9 +69,9 @@ private fun Value.Object.resolve(
  */
 context(world: Assumptions)
 private fun Value.Object.dependencyOrder(
-    keys: Set<Value.Key>,
-    ordered: List<Value.Key> = emptyList(),
-): List<Value.Key> {
+    keys: Set<Value.ObjectKey>,
+    ordered: List<Value.ObjectKey> = emptyList(),
+): List<Value.ObjectKey> {
     if (keys.isEmpty()) return ordered
 
     val ready =
@@ -90,9 +92,9 @@ private fun Value.Object.dependencyOrder(
  */
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
-    consumer: Value.Key,
-    unresolved: Set<Value.Key>,
-): Set<Value.Key> {
+    consumer: Value.ObjectKey,
+    unresolved: Set<Value.ObjectKey>,
+): Set<Value.ObjectKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
         consumer.field !in world.executorRegistry
@@ -115,7 +117,7 @@ private fun Value.Object.resolveKey(
     fieldSelection: Selection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
-    val key = fieldSelection.key
+    val key = fieldSelection.objectKey(type)
     val cell =
         if (key.arguments.argumentsContainErrorValue()) {
             EngineResult.Cell.Error

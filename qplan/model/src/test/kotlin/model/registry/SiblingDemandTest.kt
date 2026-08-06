@@ -130,9 +130,9 @@ class SiblingDemandTest {
         type: Schema.ObjectType,
         fieldName: String,
         arguments: Map<String, Any?> = emptyMap(),
-    ): Value.Key =
-        Value.Key.of(
-            field = field(type.typeName, fieldName),
+    ): Value.ObjectKey =
+        Value.ObjectKey.of(
+            field = objectField(type.typeName, fieldName),
             arguments = arguments,
         )
 

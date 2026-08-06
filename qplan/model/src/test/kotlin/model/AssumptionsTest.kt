@@ -305,9 +305,9 @@ class AssumptionsTest {
     fun `object values use concrete argument-sensitive keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val user = schema.type("User") as Schema.ObjectType
-        val friend = schema.field("User", "friend")
-        val firstKey = Value.Key.of(friend, mapOf("limit" to 1))
-        val secondKey = Value.Key.of(friend, mapOf("limit" to 2))
+        val friend = schema.objectField("User", "friend")
+        val firstKey = Value.ObjectKey.of(friend, mapOf("limit" to 1))
+        val secondKey = Value.ObjectKey.of(friend, mapOf("limit" to 2))
         val friendValue = schema.objectOf("User")
 
         val value =
@@ -325,17 +325,7 @@ class AssumptionsTest {
                 type = user,
                 fields =
                     mapOf(
-                        Value.Key.of(schema.field("Node", "id"), emptyMap()) to
-                            Value.ID.of("abstract"),
-                    ),
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            Value.Object.of(
-                type = user,
-                fields =
-                    mapOf(
-                        Value.Key.of(
+                        Value.ObjectKey.of(
                             friend,
                             mapOf("limit" to Value.Variable.of("limit")),
                         ) to friendValue,

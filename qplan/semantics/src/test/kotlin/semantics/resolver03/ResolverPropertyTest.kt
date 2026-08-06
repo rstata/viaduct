@@ -41,7 +41,7 @@ class ResolverPropertyTest {
                 TestWorld.fromSDL(
                     schemaSDL = SCHEMA,
                     fieldResolvers = { schema ->
-                        val seedKey = Value.Key.of(schema.field("Item", "seed"), emptyMap())
+                        val seedKey = Value.ObjectKey.of(schema.objectField("Item", "seed"), emptyMap())
                         val itemsField = schema.field("Query", "items")
                         val itemsType = itemsField.typeExpr as TypeExpr.List<Schema.OutputType>
 
@@ -108,8 +108,8 @@ class ResolverPropertyTest {
                                     evenMetricApplications += 1
                                     val common =
                                         input.fieldValues.getValue(
-                                            Value.Key.of(
-                                                schema.field("EvenMetric", "common"),
+                                            Value.ObjectKey.of(
+                                                schema.objectField("EvenMetric", "common"),
                                                 emptyMap(),
                                             ),
                                         ) as Value.Int
@@ -124,8 +124,8 @@ class ResolverPropertyTest {
                                     oddMetricApplications += 1
                                     val common =
                                         input.fieldValues.getValue(
-                                            Value.Key.of(
-                                                schema.field("OddMetric", "common"),
+                                            Value.ObjectKey.of(
+                                                schema.objectField("OddMetric", "common"),
                                                 emptyMap(),
                                             ),
                                         ) as Value.Int
@@ -171,14 +171,14 @@ class ResolverPropertyTest {
             val item =
                 assertIs<EngineResult.Object>(
                     result.fetch(
-                        Value.Key.of(world.schema.field("Query", "item"), mapOf("seed" to seed)),
+                        Value.ObjectKey.of(world.schema.objectField("Query", "item"), mapOf("seed" to seed)),
                     ).value,
                 )
             assertEquals(
                 Value.Int.of(seed * firstFactor),
                 item.fetch(
-                    Value.Key.of(
-                        world.schema.field("Item", "computed"),
+                    Value.ObjectKey.of(
+                        world.schema.objectField("Item", "computed"),
                         mapOf("factor" to firstFactor),
                     ),
                 ).value,
@@ -186,8 +186,8 @@ class ResolverPropertyTest {
             assertEquals(
                 Value.Int.of(seed * secondFactor),
                 item.fetch(
-                    Value.Key.of(
-                        world.schema.field("Item", "computed"),
+                    Value.ObjectKey.of(
+                        world.schema.objectField("Item", "computed"),
                         mapOf("factor" to secondFactor),
                     ),
                 ).value,
@@ -195,14 +195,14 @@ class ResolverPropertyTest {
             val child =
                 assertIs<EngineResult.Object>(
                     item.fetch(
-                        Value.Key.of(world.schema.field("Item", "child"), emptyMap()),
+                        Value.ObjectKey.of(world.schema.objectField("Item", "child"), emptyMap()),
                     ).value,
                 )
             assertEquals(
                 Value.Int.of((seed + 1) * firstFactor),
                 child.fetch(
-                    Value.Key.of(
-                        world.schema.field("Item", "computed"),
+                    Value.ObjectKey.of(
+                        world.schema.objectField("Item", "computed"),
                         mapOf("factor" to firstFactor),
                     ),
                 ).value,
@@ -210,13 +210,13 @@ class ResolverPropertyTest {
             val metric =
                 assertIs<EngineResult.Object>(
                     item.fetch(
-                        Value.Key.of(world.schema.field("Item", "metric"), emptyMap()),
+                        Value.ObjectKey.of(world.schema.objectField("Item", "metric"), emptyMap()),
                     ).value,
                 )
             assertEquals(
                 Value.Int.of(seed),
                 metric.fetch(
-                    Value.Key.of(world.schema.field(metric.type.typeName, "common"), emptyMap()),
+                    Value.ObjectKey.of(world.schema.objectField(metric.type.typeName, "common"), emptyMap()),
                 ).value,
             )
             val concreteMetricField = if (seed % 2 == 0) "even" else "odd"
@@ -225,8 +225,8 @@ class ResolverPropertyTest {
             assertEquals(
                 Value.Int.of(concreteMetricValue),
                 metric.fetch(
-                    Value.Key.of(
-                        world.schema.field(metric.type.typeName, concreteMetricField),
+                    Value.ObjectKey.of(
+                        world.schema.objectField(metric.type.typeName, concreteMetricField),
                         emptyMap(),
                     ),
                 ).value,
@@ -235,8 +235,8 @@ class ResolverPropertyTest {
             val items =
                 assertIs<EngineResult.List>(
                     result.fetch(
-                        Value.Key.of(
-                            world.schema.field("Query", "items"),
+                        Value.ObjectKey.of(
+                            world.schema.objectField("Query", "items"),
                             mapOf("seed" to seed),
                         ),
                     ).value,
@@ -247,8 +247,8 @@ class ResolverPropertyTest {
                 assertEquals(
                     Value.Int.of(itemSeed * firstFactor),
                     listItem.fetch(
-                        Value.Key.of(
-                            world.schema.field("Item", "computed"),
+                        Value.ObjectKey.of(
+                            world.schema.objectField("Item", "computed"),
                             mapOf("factor" to firstFactor),
                         ),
                     ).value,

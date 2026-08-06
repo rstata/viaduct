@@ -8,8 +8,8 @@ import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.objectKey
 import model.selectionForestOf
-import semantics.correctresolution.concreteObjectKey
 
 internal fun Fragment.variables(): Set<Value.Variable> =
     subselections.variables()
@@ -89,7 +89,7 @@ internal fun EngineResult.Object.readVariable(selection: Selection): Value.Input
     require(type in selection.possibleTypes) {
         "Variable provider selection does not apply to ${type.typeName}"
     }
-    val value = fetch(selection.concreteObjectKey(type)).value
+    val value = fetch(selection.objectKey(type)).value
     if (selection.subselections.isEmpty()) return value.toVariableInput()
     return when (value) {
         null -> null

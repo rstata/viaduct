@@ -29,7 +29,7 @@ class ObjectValueScope internal constructor(
     private val schema: Schema,
     private val type: Schema.ObjectType,
 ) {
-    private val fields = linkedMapOf<Value.Key, Value.Output?>()
+    private val fields = linkedMapOf<Value.ObjectKey, Value.Output?>()
     private var isBuilt = false
 
     /** Selects a field coordinate on this scope's object type. */
@@ -43,8 +43,8 @@ class ObjectValueScope internal constructor(
         return ObjectFieldReference(
             scope = this,
             key =
-                Value.Key.of(
-                    field = schema.field(type.typeName, fieldName),
+                Value.ObjectKey.of(
+                    field = schema.objectField(type.typeName, fieldName),
                     arguments = arguments.toMap(),
                 ),
         )
@@ -87,7 +87,7 @@ class ObjectValueScope internal constructor(
 /** One exact output-field coordinate selected in an [ObjectValueScope]. */
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
-    internal val key: Value.Key,
+    internal val key: Value.ObjectKey,
 )
 
 private fun coerceOutputValue(

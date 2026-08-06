@@ -3,6 +3,19 @@ package model
 import model.invariants.conformsToSchemaType
 
 /**
+ * One step in an exact path through an engine-result tree.
+ *
+ * An [Value.ObjectKey] selects an object cell, while a [Value.ListIndex] selects a list cell.
+ * Calling the projection for the other variant is outside that projection's domain.
+ * Equality is structural within each variant.
+ */
+sealed interface PathComponent {
+    fun asKey(): Value.ObjectKey
+
+    fun asIndex(): Int
+}
+
+/**
  * A GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
@@ -281,6 +294,10 @@ sealed interface Value {
      *
      * `arguments.type == field.arguments`.
      *
+     * ### Invariant: object-key-field-classification
+     *
+     * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
+     *
      * Equality is structural over [field] and [arguments], using canonical schema equality.
      */
     sealed interface Key {
@@ -298,6 +315,12 @@ sealed interface Value {
                 arguments: Map<kotlin.String, Any?>,
             ): Key = of(field, Arguments.of(field, arguments))
 
+            /** Constructs the precise key category for a field on a concrete object type. */
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Map<kotlin.String, Any?>,
+            ): ObjectKey = ObjectKey.of(field, arguments)
+
             /**
              * ### Invariant: arguments-key-factory-schema-conformance
              *
@@ -310,7 +333,66 @@ sealed interface Value {
                 require(arguments.type == field.arguments) {
                     "Key arguments do not belong to its output field"
                 }
+                return when (field) {
+                    is Schema.ObjectField -> ObjectKeyImpl(field, arguments)
+                    else -> KeyImpl(field, arguments)
+                }
+            }
+
+            /** Constructs the precise key category for a field on a concrete object type. */
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Arguments,
+            ): ObjectKey = ObjectKey.of(field, arguments)
+        }
+    }
+
+    /**
+     * A key whose field belongs to a concrete object type.
+     *
+     * Every [Key] whose field is a [Schema.ObjectField] is constructed as an [ObjectKey], and every
+     * [ObjectKey] carries a [Schema.ObjectField]. Equality remains the structural [Key] equality
+     * over [field] and [arguments].
+     */
+    sealed interface ObjectKey : Key, PathComponent {
+        override val field: Schema.ObjectField
+
+        override fun asKey(): ObjectKey = this
+
+        override fun asIndex(): kotlin.Int =
+            throw IllegalArgumentException("An object key is not a list index")
+
+        companion object {
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Map<kotlin.String, Any?>,
+            ): ObjectKey = of(field, Arguments.of(field, arguments))
+
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Arguments,
+            ): ObjectKey {
+                require(arguments.type == field.arguments) {
+                    "Key arguments do not belong to its output field"
+                }
                 return ObjectKeyImpl(field, arguments)
+            }
+        }
+    }
+
+    /** A non-negative position selecting one cell of an engine-result list. */
+    sealed interface ListIndex : PathComponent {
+        val index: kotlin.Int
+
+        override fun asKey(): ObjectKey =
+            throw IllegalArgumentException("A list index is not an object key")
+
+        override fun asIndex(): kotlin.Int = index
+
+        companion object {
+            fun of(index: kotlin.Int): ListIndex {
+                require(index >= 0) { "List index must be non-negative" }
+                return ListIndexImpl(index)
             }
         }
     }
@@ -320,8 +402,8 @@ sealed interface Value {
      *
      * ### Invariant: object-value-owner
      *
-     * `fieldValues.containingType == type`. Every present [Key] carries a field owned by [type] and
-     * arguments containing no unresolved [Variable].
+     * `fieldValues.containingType == type`. Every present [ObjectKey] carries a field owned by [type]
+     * and arguments containing no unresolved [Variable].
      */
     sealed interface Object : Output, Typed {
         override val type: Schema.ObjectType
@@ -335,7 +417,7 @@ sealed interface Value {
              */
             fun of(
                 type: Schema.ObjectType,
-                fields: Map<Key, Output?> = emptyMap(),
+                fields: Map<ObjectKey, Output?> = emptyMap(),
             ): Object {
                 fields.forEach { (key, value) ->
                     require(value.conformsToSchemaType(key.field.typeExpr)) {
@@ -357,17 +439,17 @@ sealed interface Value {
      * ### Invariant: object-field-values-owner
      *
      * [containingType] is the concrete object type whose fields these values inhabit. Every present
-     * [Key] carries a [Schema.ObjectField] owned by [containingType] and arguments containing no
-     * unresolved [Variable].
+     * [ObjectKey] carries a field owned by [containingType] and arguments containing no unresolved
+     * [Variable].
      */
-    sealed interface ObjectFields : Map<Key, Output?> {
+    sealed interface ObjectFields : Map<ObjectKey, Output?> {
         val containingType: Schema.ObjectType
 
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: Key): Output?
+        override operator fun get(key: ObjectKey): Output?
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: Key): Output?
+        fun getValue(key: ObjectKey): Output?
     }
 
     /**
@@ -533,10 +615,19 @@ private data class VariableValueImpl(
     override val variableName: String,
 ) : Value.Variable
 
-private data class ObjectKeyImpl(
+private data class KeyImpl(
     override val field: Schema.OutputField,
     override val arguments: Value.Arguments,
 ) : Value.Key
+
+private data class ObjectKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: Value.Arguments,
+) : Value.ObjectKey
+
+private data class ListIndexImpl(
+    override val index: Int,
+) : Value.ListIndex
 
 private data class PresentDefaultValueImpl(
     override val value: Value.Input?,
@@ -544,9 +635,9 @@ private data class PresentDefaultValueImpl(
 
 private class ObjectFieldValuesImpl(
     override val containingType: Schema.ObjectType,
-    private val backingMap: Map<Value.Key, Value.Output?>,
+    private val backingMap: Map<Value.ObjectKey, Value.Output?>,
 ) : Value.ObjectFields,
-    Map<Value.Key, Value.Output?> by backingMap {
+    Map<Value.ObjectKey, Value.Output?> by backingMap {
     init {
         require(backingMap.keys.all { it.field.containingType == containingType }) {
             val foreignFields =
@@ -565,9 +656,9 @@ private class ObjectFieldValuesImpl(
         }
     }
 
-    override operator fun get(key: Value.Key): Value.Output? = getValue(key)
+    override operator fun get(key: Value.ObjectKey): Value.Output? = getValue(key)
 
-    override fun getValue(key: Value.Key): Value.Output? {
+    override fun getValue(key: Value.ObjectKey): Value.Output? {
         if (!backingMap.containsKey(key)) {
             throw MissingFieldException(containingType.typeName, key.field.fieldName)
         }

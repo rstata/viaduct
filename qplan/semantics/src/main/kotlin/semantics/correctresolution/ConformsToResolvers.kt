@@ -93,7 +93,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 context(world: Assumptions)
 private fun EngineResult.Object.objectFieldsConformToResolverValue(
     resolverValue: Value.Object,
-    fieldBelongsToResolver: (Schema.OutputField) -> Boolean,
+    fieldBelongsToResolver: (Schema.ObjectField) -> Boolean,
 ): Boolean {
     if (type != resolverValue.type) return false
 

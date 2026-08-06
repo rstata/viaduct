@@ -54,7 +54,7 @@ class ResolverVariableBindingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val query = schema.query
-                    val yKey = Value.Key.of(schema.field("Query", "y"), mapOf("b" to 2))
+                    val yKey = Value.ObjectKey.of(schema.objectField("Query", "y"), mapOf("b" to 2))
                     mapOf(
                         schema.field("Query", "x") to
                             model.testing.fieldResolverOf(
@@ -117,7 +117,7 @@ class ResolverVariableBindingTest {
 
         assertEquals(
             Value.Int.of(30),
-            result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
+            result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
         assertEquals(Value.Int.of(2), result.variableValues.getValue(Value.Variable.of("b")))
         assertTrue(context(world) { result.correctResolution(fragment) })
@@ -151,7 +151,7 @@ class ResolverVariableBindingTest {
                                     """.trimIndent(),
                                 ),
                             ) { input, _ ->
-                                val key = Value.Key.of(schema.field("Query", "y"), mapOf("b" to 6))
+                                val key = Value.ObjectKey.of(schema.objectField("Query", "y"), mapOf("b" to 6))
                                 val y = input.fieldValues.getValue(key) as Value.Int
                                 Value.Int.of(y.intValue * 7)
                             },
@@ -195,7 +195,7 @@ class ResolverVariableBindingTest {
         assertEquals(Value.Int.of(2), result.variableValues.getValue(Value.Variable.of("c")))
         assertEquals(
             Value.Int.of(210),
-            result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
+            result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -221,8 +221,8 @@ class ResolverVariableBindingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val childKey = Value.Key.of(schema.field("User", "child"), emptyMap())
-                    val yKey = Value.Key.of(schema.field("Child", "y"), mapOf("b" to 2))
+                    val childKey = Value.ObjectKey.of(schema.objectField("User", "child"), emptyMap())
+                    val yKey = Value.ObjectKey.of(schema.objectField("Child", "y"), mapOf("b" to 2))
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
@@ -288,12 +288,12 @@ class ResolverVariableBindingTest {
             }
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "viewer"), emptyMap())).value,
             )
 
         assertEquals(
             Value.Int.of(10),
-            viewer.fetch(Value.Key.of(world.schema.field("User", "x"), emptyMap())).value,
+            viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "x"), emptyMap())).value,
         )
         assertEquals(Value.Int.of(2), viewer.variableValues.getValue(Value.Variable.of("b")))
         assertTrue(context(world) { result.correctResolution(fragment) })
@@ -326,8 +326,8 @@ class ResolverVariableBindingTest {
                                 ),
                             ) { input, _ ->
                                 val key =
-                                    Value.Key.of(
-                                        schema.field("Query", "y"),
+                                    Value.ObjectKey.of(
+                                        schema.objectField("Query", "y"),
                                         mapOf("values" to listOf(2, 3, 5)),
                                     )
                                 input.fieldValues.getValue(key)
@@ -378,7 +378,7 @@ class ResolverVariableBindingTest {
 
         assertEquals(
             Value.Int.of(30),
-            result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
+            result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
         assertIs<Value.InputList>(
             result.variableValues.getValue(Value.Variable.of("values")),
@@ -419,8 +419,8 @@ class ResolverVariableBindingTest {
                                 ),
                             ) { input, _ ->
                                 val key =
-                                    Value.Key.of(
-                                        schema.field("Query", "y"),
+                                    Value.ObjectKey.of(
+                                        schema.objectField("Query", "y"),
                                         mapOf("value" to null),
                                     )
                                 input.fieldValues.getValue(key)
@@ -458,7 +458,7 @@ class ResolverVariableBindingTest {
         assertEquals(null, result.variableValues.getValue(Value.Variable.of("value")))
         assertEquals(
             Value.Int.of(-1),
-            result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
+            result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }

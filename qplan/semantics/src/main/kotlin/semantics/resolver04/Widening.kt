@@ -6,22 +6,22 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.objectKey
 import model.registry.availableDemand
 import model.selectionForestOf
 import model.union
-import semantics.correctresolution.concreteObjectKey
 import semantics.variables
 import java.util.IdentityHashMap
 
 context(world: Assumptions)
-internal fun SelectionForest.coverageFor(key: Value.Key): SelectionForest =
+internal fun SelectionForest.coverageFor(key: Value.ObjectKey): SelectionForest =
     flatMap { selection -> selection.coverageFor(key) }
 
 context(world: Assumptions)
-private fun Selection.coverageFor(key: Value.Key): SelectionForest {
-    val objectType = key.field.containingType as Schema.ObjectType
+private fun Selection.coverageFor(key: Value.ObjectKey): SelectionForest {
+    val objectType = key.field.containingType
     if (objectType !in possibleTypes) return selectionForestOf()
-    val concreteKey = concreteObjectKey(objectType)
+    val concreteKey = objectKey(objectType)
     if (concreteKey.field != key.field) return selectionForestOf()
     if (concreteKey.arguments == key.arguments) {
         return selectionForestOf(withoutVariableSubselections())
@@ -70,7 +70,7 @@ private fun SelectionForest.withoutVariableKeys(): SelectionForest =
 /** Returns [key] with newly required descendants added without reapplying its producer. */
 context(world: Assumptions, sources: ResolutionSources)
 internal fun EngineResult.Object.resolveExistingKey(
-    key: Value.Key,
+    key: Value.ObjectKey,
     fieldSelections: SelectionForest,
     coverage: SelectionForest,
 ): EngineResult.Object {

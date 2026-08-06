@@ -38,7 +38,7 @@ Several other conclusions are durable:
 
 ## Semantic boundary
 
-Viaduct decomposes GraphQL field execution into field resolution followed by field completion. This project models field resolution: which resolver-produced values and OER cells exist for requested fields. At this boundary, modeled field identity is an alias-free `Value.Key` consisting of a canonical schema field and fully coerced arguments. Response aliases, response keys, response ordering, and assembly of the external GraphQL response are observations of field completion, not field resolution.
+Viaduct decomposes GraphQL field execution into field resolution followed by field completion. This project models field resolution: which resolver-produced values and OER cells exist for requested fields. At this boundary, modeled field identity is an alias-free `Value.Key` consisting of a canonical schema field and fully coerced arguments; keys materialized as OER cells are the concrete-field subtype `Value.ObjectKey`. Response aliases, response keys, response ordering, and assembly of the external GraphQL response are observations of field completion, not field resolution.
 
 This model emphatically assumes that every argument-bearing output field has an explicit field resolver. Consequently, a field without a resolver is argumentless, and projection can stop at resolver boundaries without grouping passive values by argument-sensitive keys. Production namespace exceptions to the resolver requirement are outside the current model.
 
@@ -50,7 +50,7 @@ The fixture-supported lowering domain requires a node-valued source field to be 
 
 The modeled input is a post-validation selection set. Named fragment spreads are assumed to have been inlined before this boundary; inline fragments remain because their type conditions affect field applicability. Directive-controlled applicability, including `@skip` and `@include`, belongs to field resolution and is therefore in the project's eventual scope even when a modeling phase explicitly defers it.
 
-For this project, a one-shot identity is one resolver-bearing field cell at one concrete OER object occurrence, identified by its parent OER occurrence and concrete `Value.Key`. Demand reaching that cell through multiple client selections or dependency paths must be combined before its sole resolver application. A field with the same key under another object or list occurrence is a different one-shot identity.
+For this project, a one-shot identity is one resolver-bearing field cell at one concrete OER object occurrence, identified by its parent OER occurrence and `Value.ObjectKey`. Demand reaching that cell through multiple client selections or dependency paths must be combined before its sole resolver application. A field with the same key under another object or list occurrence is a different one-shot identity.
 
 This definition intentionally does not identify OER occurrences by node ID. Two result-tree positions containing the same global ID are separate occurrences and may independently apply the same node resolver. Any cache or batch layer that recognizes their common ID is an optimization beneath the semantic one-shot boundary, not an obligation of query planning.
 
@@ -105,7 +105,7 @@ Using stable terms helps separate findings from one proposal's class names.
 - **Consumer:** A resolver, checker, completion step, or other operation that reads those values.  
 - **Passive field:** A canonical field on a concrete object type for which `behavioral(field)` is false: it is neither the engine-supplied `__typename` field nor backed by a registered field resolver. Its value is supplied within its owning producer's raw output and retained by projection when demanded.
 - **Occurrence:** One appearance of a field or dependency in a client selection or child plan.  
-- **One-shot producer identity:** One resolver-bearing field cell at one concrete OER object occurrence, determined by the parent occurrence and concrete `Value.Key`. Multiple demand occurrences may converge on it, but a field cell elsewhere in the result tree is a different identity even when node IDs, resolver coordinates, arguments, or values match.
+- **One-shot producer identity:** One resolver-bearing field cell at one concrete OER object occurrence, determined by the parent occurrence and `Value.ObjectKey`. Multiple demand occurrences may converge on it, but a field cell elsewhere in the result tree is a different identity even when node IDs, resolver coordinates, arguments, or values match.
 - **Demand:** The fields and paths consumers may need from a producer.  
 - **Predecessor demand:** For one resolver occurrence, its direct object-fragment input requirement closed transitively through the resolver occurrences needed to construct that input.
 - **Successor demand:** Dynamic output demand extended with the predecessor demand of every successor resolver occurrence reached within it, preserving occurrence paths and concrete-type guards.
@@ -404,7 +404,7 @@ At minimum, retain these tests:
 6. **Abstract concrete cycle:** a concrete covariant `@cycle` must find its concrete ancestor mask.  
 7. **List independence:** separate items must activate and fail independently without a global path barrier.  
 8. **Raw checker dependency:** checker RSSes must observe raw values without waiting on the selected field's checker.  
-9. **Alias, argument, and concrete-field identity:** aliases never distinguish OER cells; selections with the same `Value.Key` merge, while distinct output-field definitions or unequal fully coerced arguments remain separate. Every `Value.Key` materialized in an OER or `Value.Object` uses a field owned by that value's concrete object type, never an interface or union field definition.
+9. **Alias, argument, and concrete-field identity:** aliases never distinguish OER cells; selections with the same `Value.Key` merge, while distinct output-field definitions or unequal fully coerced arguments remain separate. Every key materialized in an OER or `Value.Object` is a `Value.ObjectKey` whose field is owned by that value's concrete object type, never an interface or union field definition.
 10. **Failure liveness:** every failed producer/checker path must release dependents with an error rather than hang.
 
 ### Differential execution

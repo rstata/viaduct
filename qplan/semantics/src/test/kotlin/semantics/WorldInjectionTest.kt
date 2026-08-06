@@ -60,8 +60,8 @@ class WorldInjectionTest {
         assertEquals(registry, testWorld.instance(ExecutorRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
 
-        val userField = schema.field("Query", "user")
-        val userIdField = schema.field("Query", "user\$id")
+        val userField = schema.objectField("Query", "user")
+        val userIdField = schema.objectField("Query", "user\$id")
         val user = schema.type("User") as Schema.ObjectType
         val bridge =
             context(world) {
@@ -95,7 +95,7 @@ class WorldInjectionTest {
                                 Value.Object.of(
                                     schema.query,
                                     mapOf(
-                                        Value.Key.of(userIdField, emptyMap()) to bridge,
+                                        Value.ObjectKey.of(userIdField, emptyMap()) to bridge,
                                     ),
                                 ),
                             arguments = Value.Arguments.of(userField, emptyMap()),
@@ -121,9 +121,9 @@ class WorldInjectionTest {
     fun `guice supplies required query resolvers when resolver inputs are omitted`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
-        assertFalse(world.schema.field("User", "id") in world.executorRegistry)
+        assertFalse(world.schema.objectField("User", "id") in world.executorRegistry)
         world.executorRegistry.resolver(
-            world.schema.field("Query", "user"),
+            world.schema.objectField("Query", "user"),
         )
     }
 
@@ -148,8 +148,8 @@ class WorldInjectionTest {
 private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
-): Value.Key =
-    Value.Key.of(
-        field = field(type.typeName, fieldName),
+): Value.ObjectKey =
+    Value.ObjectKey.of(
+        field = objectField(type.typeName, fieldName),
         arguments = emptyMap(),
     )

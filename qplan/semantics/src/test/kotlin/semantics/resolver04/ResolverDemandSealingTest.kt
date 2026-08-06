@@ -59,7 +59,7 @@ class ResolverDemandSealingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    val yKey = Value.Key.of(schema.field("User", "y"), mapOf("b" to 2))
+                    val yKey = Value.ObjectKey.of(schema.objectField("User", "y"), mapOf("b" to 2))
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
@@ -126,13 +126,13 @@ class ResolverDemandSealingTest {
             }
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "viewer"), emptyMap())).value,
             )
 
         assertEquals(Value.Int.of(2), viewer.variableValues.getValue(Value.Variable.of("b")))
         assertEquals(
             Value.Int.of(30),
-            viewer.fetch(Value.Key.of(world.schema.field("User", "x"), emptyMap())).value,
+            viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "x"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -161,10 +161,10 @@ class ResolverDemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val derivedKey = Value.Key.of(schema.field("User", "derived"), emptyMap())
-                    val useKey = Value.Key.of(schema.field("User", "use"), mapOf("value" to 2))
-                    val producerKey = Value.Key.of(schema.field("User", "producer"), emptyMap())
-                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    val derivedKey = Value.ObjectKey.of(schema.objectField("User", "derived"), emptyMap())
+                    val useKey = Value.ObjectKey.of(schema.objectField("User", "use"), mapOf("value" to 2))
+                    val producerKey = Value.ObjectKey.of(schema.objectField("User", "producer"), emptyMap())
+                    val broadKey = Value.ObjectKey.of(schema.objectField("Payload", "broad"), emptyMap())
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
@@ -237,13 +237,13 @@ class ResolverDemandSealingTest {
             }
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "viewer"), emptyMap())).value,
             )
 
         assertEquals(1, producerApplications)
         assertEquals(
             Value.Int.of(5),
-            viewer.fetch(Value.Key.of(world.schema.field("User", "result"), emptyMap())).value,
+            viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "result"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -272,10 +272,10 @@ class ResolverDemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val middleKey = Value.Key.of(schema.field("User", "middle"), mapOf("value" to 2))
-                    val finalKey = Value.Key.of(schema.field("User", "final"), emptyMap())
-                    val producerKey = Value.Key.of(schema.field("User", "producer"), emptyMap())
-                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    val middleKey = Value.ObjectKey.of(schema.objectField("User", "middle"), mapOf("value" to 2))
+                    val finalKey = Value.ObjectKey.of(schema.objectField("User", "final"), emptyMap())
+                    val producerKey = Value.ObjectKey.of(schema.objectField("User", "producer"), emptyMap())
+                    val broadKey = Value.ObjectKey.of(schema.objectField("Payload", "broad"), emptyMap())
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
@@ -350,13 +350,13 @@ class ResolverDemandSealingTest {
             }
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "viewer"), emptyMap())).value,
             )
 
         assertEquals(1, producerApplications)
         assertEquals(
             Value.Int.of(5),
-            viewer.fetch(Value.Key.of(world.schema.field("User", "result"), emptyMap())).value,
+            viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "result"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -386,9 +386,9 @@ class ResolverDemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val useKey = Value.Key.of(schema.field("User", "use"), mapOf("value" to 1))
-                    val primaryKey = Value.Key.of(schema.field("User", "primary"), emptyMap())
-                    val shallowKey = Value.Key.of(schema.field("Payload", "shallow"), emptyMap())
+                    val useKey = Value.ObjectKey.of(schema.objectField("User", "use"), mapOf("value" to 1))
+                    val primaryKey = Value.ObjectKey.of(schema.objectField("User", "primary"), emptyMap())
+                    val shallowKey = Value.ObjectKey.of(schema.objectField("Payload", "shallow"), emptyMap())
                     mapOf(
                         schema.field("Query", "viewer") to
                             model.testing.fieldResolverOf(
@@ -464,21 +464,21 @@ class ResolverDemandSealingTest {
             }
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "viewer"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "viewer"), emptyMap())).value,
             )
         val primary =
             assertIs<EngineResult.Object>(
-                viewer.fetch(Value.Key.of(world.schema.field("User", "primary"), emptyMap())).value,
+                viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "primary"), emptyMap())).value,
             )
 
         assertEquals(1, primaryApplications)
         assertEquals(
             Value.Int.of(3),
-            primary.fetch(Value.Key.of(world.schema.field("Payload", "deep"), emptyMap())).value,
+            primary.fetch(Value.ObjectKey.of(world.schema.objectField("Payload", "deep"), emptyMap())).value,
         )
         assertEquals(
             Value.Int.of(1),
-            viewer.fetch(Value.Key.of(world.schema.field("User", "result"), emptyMap())).value,
+            viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "result"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -497,8 +497,8 @@ class ResolverDemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val yKey = Value.Key.of(schema.field("Query", "y"), mapOf("value" to 2))
-                    val rawKey = Value.Key.of(schema.field("Query", "raw"), emptyMap())
+                    val yKey = Value.ObjectKey.of(schema.objectField("Query", "y"), mapOf("value" to 2))
+                    val rawKey = Value.ObjectKey.of(schema.objectField("Query", "raw"), emptyMap())
                     mapOf(
                         schema.field("Query", "x") to
                             model.testing.fieldResolverOf(
@@ -558,7 +558,7 @@ class ResolverDemandSealingTest {
         )
         assertEquals(
             Value.Int.of(2),
-            result.fetch(Value.Key.of(world.schema.field("Query", "x"), emptyMap())).value,
+            result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -585,9 +585,9 @@ class ResolverDemandSealingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val sourceKey =
-                        Value.Key.of(schema.field("Query", "source"), mapOf("value" to 1))
-                    val narrowKey = Value.Key.of(schema.field("Payload", "narrow"), emptyMap())
-                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                        Value.ObjectKey.of(schema.objectField("Query", "source"), mapOf("value" to 1))
+                    val narrowKey = Value.ObjectKey.of(schema.objectField("Payload", "narrow"), emptyMap())
+                    val broadKey = Value.ObjectKey.of(schema.objectField("Payload", "broad"), emptyMap())
                     mapOf(
                         schema.field("Query", "result") to
                             model.testing.fieldResolverOf(
@@ -684,10 +684,10 @@ class ResolverDemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val sourceKey = Value.Key.of(schema.field("Query", "source"), emptyMap())
-                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                    val sourceKey = Value.ObjectKey.of(schema.objectField("Query", "source"), emptyMap())
+                    val broadKey = Value.ObjectKey.of(schema.objectField("Payload", "broad"), emptyMap())
                     val computedKey =
-                        Value.Key.of(schema.field("Payload", "computed"), mapOf("value" to 2))
+                        Value.ObjectKey.of(schema.objectField("Payload", "computed"), mapOf("value" to 2))
                     mapOf(
                         schema.field("Query", "result") to
                             model.testing.fieldResolverOf(
@@ -777,8 +777,8 @@ class ResolverDemandSealingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val sourceKey =
-                        Value.Key.of(schema.field("Query", "source"), mapOf("k" to 2))
-                    val broadKey = Value.Key.of(schema.field("Payload", "broad"), emptyMap())
+                        Value.ObjectKey.of(schema.objectField("Query", "source"), mapOf("k" to 2))
+                    val broadKey = Value.ObjectKey.of(schema.objectField("Payload", "broad"), emptyMap())
                     mapOf(
                         schema.field("Query", "result") to
                             model.testing.fieldResolverOf(

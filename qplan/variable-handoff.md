@@ -8,7 +8,7 @@ The central design choice is to restrict field-relative variable providers and u
 
 ## Current Baseline
 
-Resolver03 accepts variable-free selections. At each concrete `Value.Object`, it gathers applicable selections, adds each activated resolver's exact registry-computed `predecessorDemand`, groups all occurrences by concrete `Value.Key`, topologically orders sibling keys by resolver demand, and resolves each key completely. Object and list outputs are traversed recursively before resolution returns to the containing OER.
+Resolver03 accepts variable-free selections. At each concrete `Value.Object`, it gathers applicable selections, adds each activated resolver's exact registry-computed `predecessorDemand`, groups all occurrences by `Value.ObjectKey`, topologically orders sibling keys by resolver demand, and resolves each key completely. Object and list outputs are traversed recursively before resolution returns to the containing OER.
 
 This gives Resolver03 its useful depth-first property: once resolution returns from a field cell's output subtree, all demand for that subtree has already been concrete, aggregated, and resolved. No later operation resumes that subtree or reapplies its producer.
 
@@ -110,7 +110,7 @@ An acyclic branch graph has a topological order. Resolve the branches of each co
 
 Consider a branch `b` when it is reached. If a selection anywhere in `b` uses variable `v`, every branch that may be needed to produce `v` has an edge to `b` and therefore occurs earlier in the order. Those production branches have been resolved completely, so the provider path is readable and `v` has a stored binding. The same argument applies simultaneously to every variable used in `b`, including variables with transitively dependent providers.
 
-The construction can therefore instantiate every variable in `b` before forming any OER key in that branch. Occurrences that instantiate to the same fully coerced argument tuple are grouped into one `Value.Key` before resolver application. Registry-computed predecessor demand and successor-demand lifting then provide the same complete input and output demand used by Resolver03.
+The construction can therefore instantiate every variable in `b` before forming any OER key in that branch. Occurrences that instantiate to the same fully coerced argument tuple are grouped into one `Value.ObjectKey` before resolver application. Registry-computed predecessor demand and successor-demand lifting then provide the same complete input and output demand used by Resolver03.
 
 After key formation, the branch is variable-free and can be resolved recursively with Resolver03's existing construction. Because every symbolic use in the branch was instantiated before entry and fixed-shape fragments cannot reveal another structural location later, no later binding can add work beneath the completed branch.
 

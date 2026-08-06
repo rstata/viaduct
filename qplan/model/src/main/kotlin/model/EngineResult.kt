@@ -43,14 +43,14 @@ sealed interface EngineResult {
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
-        val cells: Map<Value.Key, Cell>
+        val cells: Map<Value.ObjectKey, Cell>
         val variableValues: Map<Value.Variable, Value.Input?>
 
-        val keys: Set<Value.Key>
+        val keys: Set<Value.ObjectKey>
             get() = cells.keys
 
         /** @throws MissingFieldException when [key] is absent */
-        fun fetch(key: Value.Key): Cell =
+        fun fetch(key: Value.ObjectKey): Cell =
             cells[key]
                 ?: throw MissingFieldException(type.typeName, key.field.fieldName)
 
@@ -64,7 +64,7 @@ sealed interface EngineResult {
              */
             fun of(
                 type: Schema.ObjectType,
-                cells: Map<Value.Key, Cell>,
+                cells: Map<Value.ObjectKey, Cell>,
                 variableValues: Map<Value.Variable, Value.Input?> = emptyMap(),
             ): Object {
                 require(cells.keys.all { it.field.containingType == type }) {
@@ -232,7 +232,7 @@ private data class CellImpl(
 
 private data class ObjectResultImpl(
     override val type: Schema.ObjectType,
-    override val cells: Map<Value.Key, EngineResult.Cell>,
+    override val cells: Map<Value.ObjectKey, EngineResult.Cell>,
     override val variableValues: Map<Value.Variable, Value.Input?>,
 ) : EngineResult.Object
 

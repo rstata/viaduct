@@ -25,12 +25,12 @@ The initial sketch is:
 ```kotlin
 data class ResolutionObligation(
     val containingObject: ObjectId,
-    val key: Value.Key,
+    val key: Value.ObjectKey,
     val demandedOutput: SelectionForest,
 )
 ```
 
-The identity must include the concrete `Value.Key`, not only `Schema.OutputField`, because unequal fully coerced argument tuples are distinct OER cells. `ObjectId` identifies one concrete OER occurrence; equal object values, node IDs, or resolver coordinates at different occurrences remain separate one-shot identities.
+The identity must include the concrete `Value.ObjectKey`, not only `Schema.ObjectField`, because unequal fully coerced argument tuples are distinct OER cells. `ObjectId` identifies one concrete OER occurrence; equal object values, node IDs, or resolver coordinates at different occurrences remain separate one-shot identities.
 
 An obligation is ready when:
 
@@ -41,7 +41,7 @@ An obligation is ready when:
 
 Argument errors follow the current carrier rule: they write the required error cell without applying the resolver.
 
-The worklist need not be a FIFO queue. It is better understood as a finite set or map of obligations plus a choice of any currently ready member. Obligations should be indexed by `(ObjectId, Value.Key)` so duplicate demand cannot cause duplicate resolver application.
+The worklist need not be a FIFO queue. It is better understood as a finite set or map of obligations plus a choice of any currently ready member. Obligations should be indexed by `(ObjectId, Value.ObjectKey)` so duplicate demand cannot cause duplicate resolver application.
 
 ## Symbolic Demand And Variable Binding
 
@@ -54,7 +54,7 @@ data class PendingSelection(
 )
 ```
 
-The exact shape may differ, but the semantic distinction matters. A `Selection` may contain variables; a `Value.Key` stored in an OER may not.
+The exact shape may differ, but the semantic distinction matters. A `Selection` may contain a broad key with variables; a `Value.ObjectKey` stored in an OER may not contain variables.
 
 Variable bindings are also write-once facts on the containing OER. A binding becomes available when its provider path can be read from the current store. Binding the variable instantiates affected pending selections. Each resulting concrete key is then inserted into, or matched with, the obligation map.
 
@@ -104,7 +104,7 @@ data class ExecutionState(
 
 data class PartialObject(
     val type: Schema.ObjectType,
-    val cells: Map<Value.Key, PartialCell>,
+    val cells: Map<Value.ObjectKey, PartialCell>,
     val variableValues: Map<Value.Variable, Value.Input?>,
 )
 ```
@@ -122,7 +122,7 @@ Resolver04's `ResolutionSources` side table should not be copied automatically. 
 Resolver05 should make these properties explicit:
 
 - Every `ObjectId` denotes one concrete OER occurrence with one concrete object type.
-- Every OER cell is identified by `(ObjectId, Value.Key)`.
+- Every OER cell is identified by `(ObjectId, Value.ObjectKey)`.
 - A cell changes only from absent to written.
 - A variable changes only from unbound to one stored nullable input value.
 - Every concrete obligation has one complete demanded-output envelope.

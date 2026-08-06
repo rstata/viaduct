@@ -4,6 +4,7 @@ import model.Assumptions
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.objectKey
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
@@ -20,8 +21,8 @@ import model.Value
  * @throws MissingExecutorException when this field has no registered field resolver
  */
 context(world: Assumptions)
-fun Value.Key.demandsFromSibling(
-    siblingKey: Value.Key,
+fun Value.ObjectKey.demandsFromSibling(
+    siblingKey: Value.ObjectKey,
 ): Boolean {
     val field = this.field
     return field.demandsFromSibling(
@@ -35,14 +36,14 @@ fun Value.Key.demandsFromSibling(
 }
 
 context(world: Assumptions)
-private fun Schema.OutputField.demandsFromSibling(
-    siblingKey: Value.Key,
+private fun Schema.ObjectField.demandsFromSibling(
+    siblingKey: Value.ObjectKey,
     selections: SelectionForest,
 ): Boolean {
     val field = this
     val objectType = field.containingType
     val sibling = siblingKey.field
-    require(objectType is Schema.ObjectType && sibling.containingType == objectType) {
+    require(sibling.containingType == objectType) {
         "Sibling demand is defined only for fields on the same concrete object type"
     }
     require(world.schema.field(objectType.typeName, sibling.fieldName) == sibling) {
@@ -50,13 +51,6 @@ private fun Schema.OutputField.demandsFromSibling(
     }
     return !selections.all { selection ->
         objectType !in selection.possibleTypes ||
-            selection.concreteObjectKey(objectType) != siblingKey
+            selection.objectKey(objectType) != siblingKey
     }
 }
-
-context(world: Assumptions)
-private fun model.Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
-    Value.Key.of(
-        field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments = key.arguments.fieldValues,
-    )

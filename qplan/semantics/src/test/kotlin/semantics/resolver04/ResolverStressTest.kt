@@ -34,7 +34,7 @@ import semantics.correctresolution.conformsToFragment
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToTypename
 import semantics.correctresolution.conformsToVariables
-import semantics.correctresolution.concreteObjectKey
+import model.objectKey
 import semantics.correctresolution.correctResolution
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
@@ -353,7 +353,7 @@ class ResolverStressTest {
         val missing = mutableListOf<String>()
         selections.forEach { selection ->
             if (type !in selection.possibleTypes) return@forEach
-            val key = selection.concreteObjectKey(type)
+            val key = selection.objectKey(type)
             val fieldPath = "$path.${key.field.fieldName}(${key.arguments})"
             if (key !in keys) {
                 missing += fieldPath

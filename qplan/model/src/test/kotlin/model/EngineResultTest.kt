@@ -93,9 +93,10 @@ class EngineResultTest {
     @Test
     fun `object result retains structurally equal variable values including null and error`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val numbers = Value.Variable.of("numbers")
-        val optional = Value.Variable.of("optional")
-        val failed = Value.Variable.of("failed")
+        val variableField = schema.objectField("Query", "value")
+        val numbers = Value.Variable.of("numbers", variableField, path = null)
+        val optional = Value.Variable.of("optional", variableField, path = null)
+        val failed = Value.Variable.of("failed", variableField, path = null)
         val numberList =
             Value.InputList.of(
                 typeExpr = TypeExpr.Named.of(Schema.IntType),
@@ -124,9 +125,9 @@ class EngineResultTest {
                 cells = emptyMap(),
                 variableValues =
                     mapOf(
-                        Value.Variable.of("numbers") to numberList,
-                        Value.Variable.of("optional") to null,
-                        Value.Variable.of("failed") to Value.Error,
+                        Value.Variable.of("numbers", variableField, path = null) to numberList,
+                        Value.Variable.of("optional", variableField, path = null) to null,
+                        Value.Variable.of("failed", variableField, path = null) to Value.Error,
                     ),
             ),
         )
@@ -135,6 +136,7 @@ class EngineResultTest {
     @Test
     fun `object result rejects error keys and unresolved variable values`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val variableField = schema.objectField("Query", "value")
 
         assertFailsWith<IllegalArgumentException> {
             EngineResult.Object.of(
@@ -149,7 +151,8 @@ class EngineResultTest {
                 cells = emptyMap(),
                 variableValues =
                     mapOf(
-                        Value.Variable.of("outer") to Value.Variable.of("inner"),
+                        Value.Variable.of("outer", variableField, path = null) to
+                            Value.Variable.of("inner", variableField, path = null),
                     ),
             )
         }
@@ -298,9 +301,10 @@ class EngineResultTest {
     @Test
     fun `object engine results union disjoint and equal variable values`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val shared = Value.Variable.of("shared")
-        val leftOnly = Value.Variable.of("left")
-        val rightOnly = Value.Variable.of("right")
+        val variableField = schema.objectField("Query", "value")
+        val shared = Value.Variable.of("shared", variableField, path = null)
+        val leftOnly = Value.Variable.of("left", variableField, path = null)
+        val rightOnly = Value.Variable.of("right", variableField, path = null)
         val left =
             EngineResult.Object.of(
                 type = schema.query,
@@ -317,7 +321,7 @@ class EngineResultTest {
                 cells = emptyMap(),
                 variableValues =
                     mapOf(
-                        Value.Variable.of("shared") to null,
+                        Value.Variable.of("shared", variableField, path = null) to null,
                         rightOnly to Value.Int.of(2),
                     ),
             )
@@ -335,7 +339,12 @@ class EngineResultTest {
     @Test
     fun `object engine results with unequal shared variable values have no union`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val variable = Value.Variable.of("value")
+        val variable =
+            Value.Variable.of(
+                "value",
+                schema.objectField("Query", "value"),
+                path = null,
+            )
         val left =
             EngineResult.Object.of(
                 schema.query,

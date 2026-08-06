@@ -11,10 +11,12 @@ fun Assumptions.selectionsFrom(fragment: String): Pair<Schema.CompositeType, Sel
 fun Schema.fragmentFrom(
     source: String,
     bindings: Map<String, Value?> = emptyMap(),
+    variableField: Schema.ObjectField? = null,
 ): Fragment =
     GJSelectionParser(
         schema = this as GJSchema,
         variableValues = bindings.validatedVariableValues(),
+        variableField = variableField,
     ).fragmentFrom(source)
 
 /** Parses one post-validation GraphQL fragment without operation-variable bindings. */

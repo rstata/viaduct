@@ -429,9 +429,16 @@ internal fun decodeInputValue(
     value: InputValueWithState,
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
+    variableField: Schema.ObjectField? = null,
 ): Value.Input? =
     if (value.isLiteral) {
-        decodeLiteral(type, value.value as GraphQLValue<*>, variableValues, schema)
+        decodeLiteral(
+            type,
+            value.value as GraphQLValue<*>,
+            variableValues,
+            schema,
+            variableField,
+        )
     } else {
         decodeExternal(type, value.value, variableValues, schema)
     }
@@ -441,12 +448,16 @@ internal fun decodeLiteral(
     value: GraphQLValue<*>,
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
+    variableField: Schema.ObjectField? = null,
 ): Value.Input? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
             variableValues.getValue(value.name)
         } else {
-            Value.Variable.of(value.name)
+            requireNotNull(variableField) {
+                "Unbound operation variable \$${value.name}"
+            }
+            Value.Variable.of(value.name, variableField, path = null)
         }
     }
     if (value is NullValue) {
@@ -460,6 +471,7 @@ internal fun decodeLiteral(
                 value,
                 variableValues,
                 schema,
+                variableField,
             )
 
         is GraphQLList -> {
@@ -472,6 +484,7 @@ internal fun decodeLiteral(
                         it,
                         variableValues,
                         schema,
+                        variableField,
                     )
                 },
             )
@@ -495,6 +508,7 @@ internal fun decodeLiteral(
                 value as ObjectValue,
                 variableValues,
                 schema,
+                variableField,
             )
 
         else -> error("Unexpected input type: $type")
@@ -568,13 +582,20 @@ private fun decodeObjectLiteral(
     value: ObjectValue,
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
+    variableField: Schema.ObjectField?,
 ): Value.Input {
     val suppliedFields = value.objectFields.associateBy { it.name }
     return decodeInputObjectFields(
         type = type,
         isFieldSupplied = { suppliedFields.containsKey(it) },
         decodeSupplied = { fieldType, fieldName ->
-            decodeLiteral(fieldType, suppliedFields.getValue(fieldName).value, variableValues, schema)
+            decodeLiteral(
+                fieldType,
+                suppliedFields.getValue(fieldName).value,
+                variableValues,
+                schema,
+                variableField,
+            )
         },
         variableValues = variableValues,
         schema = schema,

@@ -5,7 +5,6 @@ import model.EngineResult
 import model.Schema
 import model.TypeExpr
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -94,10 +93,7 @@ class ResolverDemandSealingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("User", "x") as Schema.ObjectField,
-                            Value.Variable.of("b"),
-                        ) to
+                        Value.Variable.of("b", schema.field("User", "x") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 """
                                 fragment ignored on User {
@@ -130,7 +126,12 @@ class ResolverDemandSealingTest {
                 result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "viewer"), emptyMap())).value,
             )
 
-        assertEquals(Value.Int.of(2), viewer.variableValues.getValue(Value.Variable.of("b")))
+        assertEquals(
+            Value.Int.of(2),
+            viewer.variableValues.getValue(
+                Value.Variable.of("b", world.schema.objectField("User", "x"), path = null),
+            ),
+        )
         assertEquals(
             Value.Int.of(30),
             viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "x"), emptyMap())).value,
@@ -219,10 +220,7 @@ class ResolverDemandSealingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("User", "result") as Schema.ObjectField,
-                            Value.Variable.of("value"),
-                        ) to
+                        Value.Variable.of("value", schema.field("User", "result") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on User { producer { narrow } }",
                                 "producer",
@@ -334,10 +332,7 @@ class ResolverDemandSealingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("User", "result") as Schema.ObjectField,
-                            Value.Variable.of("value"),
-                        ) to
+                        Value.Variable.of("value", schema.field("User", "result") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on User { producer { narrow } }",
                                 "producer",
@@ -447,10 +442,7 @@ class ResolverDemandSealingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("User", "result") as Schema.ObjectField,
-                            Value.Variable.of("value"),
-                        ) to
+                        Value.Variable.of("value", schema.field("User", "result") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on User { secondary { narrow } }",
                                 "secondary",
@@ -543,8 +535,8 @@ class ResolverDemandSealingTest {
                             "raw",
                         )
                     mapOf(
-                        VariableCoordinate.of(owner, Value.Variable.of("first")) to provider,
-                        VariableCoordinate.of(owner, Value.Variable.of("second")) to provider,
+                        Value.Variable.of("first", owner, path = null) to provider,
+                        Value.Variable.of("second", owner, path = null) to provider,
                     )
                 },
             )
@@ -559,8 +551,16 @@ class ResolverDemandSealingTest {
         assertEquals(1, yApplications)
         assertEquals(
             mapOf(
-                Value.Variable.of("first") to Value.Int.of(2),
-                Value.Variable.of("second") to Value.Int.of(2),
+                Value.Variable.of(
+                    "first",
+                    world.schema.objectField("Query", "x"),
+                    path = null,
+                ) to Value.Int.of(2),
+                Value.Variable.of(
+                    "second",
+                    world.schema.objectField("Query", "x"),
+                    path = null,
+                ) to Value.Int.of(2),
             ),
             result.variableValues,
         )
@@ -648,18 +648,12 @@ class ResolverDemandSealingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Query", "result") as Schema.ObjectField,
-                            Value.Variable.of("late"),
-                        ) to
+                        Value.Variable.of("late", schema.field("Query", "result") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { middle }",
                                 "middle",
                             ),
-                        VariableCoordinate.of(
-                            schema.field("Query", "middle") as Schema.ObjectField,
-                            Value.Variable.of("early"),
-                        ) to
+                        Value.Variable.of("early", schema.field("Query", "middle") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { raw }",
                                 "raw",
@@ -750,12 +744,12 @@ class ResolverDemandSealingTest {
                 variableProviders = { schema ->
                     val owner = schema.field("Query", "result") as Schema.ObjectField
                     mapOf(
-                        VariableCoordinate.of(owner, Value.Variable.of("later")) to
+                        Value.Variable.of("later", owner, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { helper(value: ${'$'}early) }",
                                 "helper",
                             ),
-                        VariableCoordinate.of(owner, Value.Variable.of("early")) to
+                        Value.Variable.of("early", owner, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { source { narrow } }",
                                 "source",
@@ -833,10 +827,7 @@ class ResolverDemandSealingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Query", "result") as Schema.ObjectField,
-                            Value.Variable.of("k"),
-                        ) to
+                        Value.Variable.of("k", schema.field("Query", "result") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { source(k: 1) { narrow } }",
                                 "source",

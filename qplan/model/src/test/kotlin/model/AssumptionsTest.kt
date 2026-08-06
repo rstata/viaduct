@@ -12,27 +12,30 @@ import kotlin.test.assertTrue
 
 class AssumptionsTest {
     @Test
-    fun `preserves an unbound fragment variable as a variable value`() {
+    fun `constructs a resolver fragment variable with its defining field`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val variableField = assumptions.schema.objectField("Query", "node")
 
         val fragment =
-            assumptions.fragmentFrom(
-                """
+            assumptions.schema.fragmentFrom(
+                source =
+                    """
                 fragment ignored on Query {
                   node(filter: ${'$'}filter) {
                     id
                   }
                 }
-                """.trimIndent(),
+                    """.trimIndent(),
+                variableField = variableField,
             )
 
         val node = fragment.subselections.single()
         assertEquals(
-            Value.Variable.of("filter"),
+            Value.Variable.of("filter", variableField, path = null),
             node.key.arguments.fieldValues.getValue("filter"),
         )
         assertNotEquals(
-            Value.Variable.of("other"),
+            Value.Variable.of("other", variableField, path = null),
             node.key.arguments.fieldValues.getValue("filter"),
         )
     }
@@ -128,10 +131,14 @@ class AssumptionsTest {
     fun `rejects operation bindings containing unresolved variables`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
+        val variableField = schema.objectField("Query", "node")
         val filter =
             Value.InputObject.of(
                 type = filterType,
-                fields = mapOf("limit" to Value.Variable.of("nested")),
+                fields =
+                    mapOf(
+                        "limit" to Value.Variable.of("nested", variableField, path = null),
+                    ),
             )
 
         assertFailsWith<IllegalArgumentException> {
@@ -327,7 +334,14 @@ class AssumptionsTest {
                     mapOf(
                         Value.ObjectKey.of(
                             friend,
-                            mapOf("limit" to Value.Variable.of("limit")),
+                            mapOf(
+                                "limit" to
+                                    Value.Variable.of(
+                                        "limit",
+                                        schema.objectField("Query", "node"),
+                                        path = null,
+                                    ),
+                            ),
                         ) to friendValue,
                     ),
             )

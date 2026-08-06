@@ -2,7 +2,6 @@ package semantics.resolver04
 
 import model.Schema
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -94,10 +93,7 @@ class ResolverWideningTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Query", "result") as Schema.ObjectField,
-                            Value.Variable.of("value"),
-                        ) to
+                        Value.Variable.of("value", schema.field("Query", "result") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 """
                                 fragment ignored on Query {
@@ -204,10 +200,7 @@ class ResolverWideningTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Object1", "variableConsumer") as Schema.ObjectField,
-                            Value.Variable.of("value"),
-                        ) to
+                        Value.Variable.of("value", schema.field("Object1", "variableConsumer") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on Object1 { common }",
                                 "common",

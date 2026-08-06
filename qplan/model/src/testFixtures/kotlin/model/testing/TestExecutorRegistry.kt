@@ -5,7 +5,6 @@ import model.Schema
 import model.Selection
 import model.TypeExpr
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.registry.ExecutorRegistry
 import model.registry.FieldResolverFunction
@@ -37,15 +36,30 @@ internal fun executorRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
-    variableProviders: Map<VariableCoordinate, FromObjectField>,
+    variableProviders: Map<Value.Variable, FromObjectField>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ExecutorRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
+    val variablesByName = variableProviders.keys.associateBy(Value.Variable::variableName)
+    val registryResolvers =
+        lowering.fieldResolvers.mapValues { (_, resolver) ->
+            resolver.mapObjectFragment { fragment ->
+                fragment.mapVariables { variable ->
+                    variablesByName[variable.variableName] ?: variable
+                }
+            }
+        }
+    val registryVariableProviders =
+        variableProviders.mapValues { (_, declaration) ->
+            declaration.mapVariables { variable ->
+                variablesByName[variable.variableName] ?: variable
+            }
+        }
     val canonicalResolvers =
         if (applicationObserver == null) {
-            lowering.fieldResolvers
+            registryResolvers
         } else {
-            lowering.fieldResolvers.mapValues { (field, resolver) ->
+            registryResolvers.mapValues { (field, resolver) ->
                 resolver.observeApplications { input, arguments, demand ->
                     applicationObserver(field, input, arguments, demand)
                 }
@@ -55,7 +69,7 @@ internal fun executorRegistryOf(
         schema = schema,
         fieldResolvers = canonicalResolvers,
         additionalDemand = lowering.additionalDemand,
-        variableDeclarations = variableProviders,
+        variableDeclarations = registryVariableProviders,
     )
 }
 
@@ -100,12 +114,26 @@ private class NodeResolverLowering(
         val bridgeResolvers =
             loweredFields.mapNotNull { field ->
                 rawFieldResolvers[field]?.let { resolver ->
-                    bridgeField(field) to
-                        resolver.mapOutput { output ->
+                    val bridge = bridgeField(field)
+                    bridge to
+                        resolver
+                            .mapObjectFragment { fragment ->
+                                fragment.mapVariables { variable ->
+                                    if (variable.field == field) {
+                                        Value.Variable.of(
+                                            variable.variableName,
+                                            bridge,
+                                            variable.path,
+                                        )
+                                    } else {
+                                        variable
+                                    }
+                                }
+                            }.mapOutput { output ->
                             extractNodeIds(
                                 output = output,
                                 nodeTypeExpr = field.typeExpr,
-                                idTypeExpr = bridgeField(field).typeExpr,
+                                idTypeExpr = bridge.typeExpr,
                             )
                         }
                 }
@@ -477,7 +505,7 @@ private sealed interface DependencyVertex {
     ) : DependencyVertex
 
     data class Variable(
-        val coordinate: VariableCoordinate,
+        val variable: Value.Variable,
     ) : DependencyVertex
 }
 
@@ -485,14 +513,13 @@ private class TestExecutorRegistry(
     private val schema: Schema,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
-    variableDeclarations: Map<VariableCoordinate, FromObjectField>,
+    variableDeclarations: Map<Value.Variable, FromObjectField>,
 ) : ExecutorRegistry {
     private val sourceFieldResolvers = fieldResolvers
     private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
     private val variableDeclarations = variableDeclarations
     private val variableProviders =
         variableDeclarations.mapValues { (_, declaration) -> declaration.keyPath }
-    private val coordinatesByVariable: Map<Value.Variable, VariableCoordinate>
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
     private val incoming: Map<DependencyVertex, Set<DependencyVertex>>
 
@@ -527,31 +554,32 @@ private class TestExecutorRegistry(
                 missingQueryFields.map { it.fieldName }.sorted().joinToString()
         }
 
-        variableDeclarations.forEach { (coordinate, declaration) ->
-            validateCanonicalField(coordinate.field, "variable-defining field")
-            require(coordinate.field in fieldResolvers) {
-                "Variable ${coordinate.variable.variableName} belongs to an unregistered resolver"
+        variableDeclarations.forEach { (variable, declaration) ->
+            validateCanonicalField(variable.field, "variable-defining field")
+            require(variable.field in fieldResolvers) {
+                "Variable ${variable.variableName} belongs to an unregistered resolver"
             }
-            require(declaration.objectFragment.nominalType == coordinate.field.containingType) {
-                "Variable ${coordinate.variable.variableName} declaration is not relative to " +
-                    "${coordinate.field.containingType.typeName}/${coordinate.field.fieldName}"
+            require(variable.path == null) {
+                "Registered variable ${variable.variableName} must have a null occurrence path"
+            }
+            require(declaration.objectFragment.nominalType == variable.field.containingType) {
+                "Variable ${variable.variableName} declaration is not relative to " +
+                    "${variable.field.containingType.typeName}/${variable.field.fieldName}"
             }
             validateProviderContainment(
-                coordinate.field,
-                fieldResolvers.getValue(coordinate.field).objectFragment,
+                variable.field,
+                fieldResolvers.getValue(variable.field).objectFragment,
             )
             validateVariableUses(
-                coordinate = coordinate,
+                variable = variable,
                 declaration = declaration,
-                fragment = fieldResolvers.getValue(coordinate.field).objectFragment,
+                fragment = fieldResolvers.getValue(variable.field).objectFragment,
             )
         }
-        val coordinatesByName = variableProviders.keys.groupBy { it.variable.variableName }
-        require(coordinatesByName.values.all { it.size == 1 }) {
+        val variablesByName = variableProviders.keys.groupBy(Value.Variable::variableName)
+        require(variablesByName.values.all { it.size == 1 }) {
             "Variable names must be globally unique across field resolvers"
         }
-        coordinatesByVariable =
-            variableProviders.keys.associateBy(VariableCoordinate::variable)
 
         val objectFieldResolvers =
             fieldResolvers.mapKeys { (field, _) -> field as Schema.ObjectField }
@@ -566,17 +594,17 @@ private class TestExecutorRegistry(
                             },
                     )
                 }
-                variableProviders.forEach { (coordinate, path) ->
+                variableProviders.forEach { (variable, path) ->
                     put(
-                        DependencyVertex.Variable(coordinate),
+                        DependencyVertex.Variable(variable),
                         implicatedVertices(
                             Fragment.of(
-                                coordinate.field.containingType,
+                                variable.field.containingType,
                                 selectionForestOf(
-                                    path.toSelection(setOf(coordinate.field.containingType)),
+                                    path.toSelection(setOf(variable.field.containingType)),
                                 ),
                             ),
-                            coordinate.field,
+                            variable.field,
                         ),
                     )
                 }
@@ -632,10 +660,7 @@ private class TestExecutorRegistry(
     }
 
     override fun variable(variable: Value.Variable): List<Value.Key> =
-        variableProviders.getValue(variableCoordinate(variable))
-
-    override fun variableCoordinate(variable: Value.Variable): VariableCoordinate =
-        coordinatesByVariable[variable]
+        variableProviders[variable]
             ?: throw NoSuchElementException("Missing variable provider: \$${variable.variableName}")
 
     override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> {
@@ -660,22 +685,22 @@ private class TestExecutorRegistry(
         field: Schema.ObjectField,
         fragment: Fragment,
     ) {
-        variableProviders.forEach { (coordinate, providerPath) ->
-            if (coordinate.field != field) return@forEach
+        variableProviders.forEach { (variable, providerPath) ->
+            if (variable.field != field) return@forEach
             require(fragment.subselections.containsProviderPath(providerPath)) {
-                "Variable ${coordinate.variable.variableName} provider path is not contained by " +
+                "Variable ${variable.variableName} provider path is not contained by " +
                     "${field.containingType.typeName}/${field.fieldName} object fragment"
             }
         }
     }
 
     private fun validateVariableUses(
-        coordinate: VariableCoordinate,
+        variable: Value.Variable,
         declaration: FromObjectField,
         fragment: Fragment,
     ) {
         fragment.subselections
-            .variableUses(coordinate.variable)
+            .variableUses(variable)
             .forEach { use ->
                 require(
                     declaration.isCompatibleWith(
@@ -683,7 +708,7 @@ private class TestExecutorRegistry(
                         locationHasDefault = use.hasDefault,
                     ),
                 ) {
-                    "Variable ${coordinate.variable.variableName} provider path " +
+                    "Variable ${variable.variableName} provider path " +
                         declaration.responsePath.joinToString(".") +
                         " is incompatible with one of its argument locations"
                 }
@@ -810,12 +835,14 @@ private class TestExecutorRegistry(
                 ?.let { add(DependencyVertex.Field(it as Schema.ObjectField)) }
         }
         selection.key.arguments.variables().forEach { variable ->
-            val coordinate = variableCoordinate(variable)
-            require(coordinate.field == ownerField) {
+            require(variable in variableProviders) {
+                "Missing variable provider: \$${variable.variableName}"
+            }
+            require(variable.field == ownerField) {
                 "Variable \$${variable.variableName} is not defined by " +
                     "${ownerField.containingType.typeName}/${ownerField.fieldName}"
             }
-            add(DependencyVertex.Variable(coordinate))
+            add(DependencyVertex.Variable(variable))
         }
         selection.subselections.forEach { subselection ->
             addImplicatedBy(subselection, ownerField)

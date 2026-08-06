@@ -13,13 +13,13 @@ import semantics.arbitrary.Config
 import semantics.arbitrary.ErrorValueWeight
 import semantics.arbitrary.ExplicitFieldResolverWeight
 import semantics.arbitrary.FieldArgumentWeight
+import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.MinimumSelectionDepth
 import semantics.arbitrary.NullValueWeight
 import semantics.arbitrary.NullableTypeWeight
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.QueryFieldCount
-import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
@@ -109,7 +109,11 @@ class ResolverStressTest {
             PropertyTesting.defaultSeed = seed
 
             try {
-                checkResolverTestCases(counts, config) { testWorld, testCase ->
+                checkResolverTestCases(
+                    counts,
+                    config,
+                    captureResolutionWitness = false,
+                ) { testWorld, testCase ->
                     attemptedCases += 1
                     assertTrue(
                         testCase.query.selectionDepth >= 4,
@@ -172,15 +176,17 @@ class ResolverStressTest {
     ): GeneratedResolution {
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom(testCase.query.source)
-        testCase.registry.clearResolutionWitness()
+        testCase.registry.clearResolutionApplicationCounts()
         val result =
             context(world) {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
-        val witness = testCase.registry.resolutionWitness()
         return GeneratedResolution(
             result = result,
-            applications = witness.applicationMetrics(testCase),
+            applications =
+                testCase.registry
+                    .resolutionApplicationCounts()
+                    .applicationMetrics(testCase),
         )
     }
 
@@ -280,53 +286,53 @@ class ResolverStressTest {
             listOf(
                 CoverageRequirement(
                     "cases with a non-error binding",
-                    coverage.bindingCases.successful,
-                    requestedCases / 10,
+                    coverage.bindingCases.successful.toLong(),
+                    (requestedCases / 10).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with a simple binding",
-                    coverage.bindingCases.simple,
-                    requestedCases / 50,
+                    coverage.bindingCases.simple.toLong(),
+                    (requestedCases / 50).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with a null binding",
-                    coverage.bindingCases.nulls,
-                    requestedCases / 1_000,
+                    coverage.bindingCases.nulls.toLong(),
+                    (requestedCases / 1_000).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with an error binding",
-                    coverage.bindingCases.errors,
-                    requestedCases / 2_000,
+                    coverage.bindingCases.errors.toLong(),
+                    (requestedCases / 2_000).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with a list binding",
-                    coverage.bindingCases.lists,
-                    requestedCases / 400,
+                    coverage.bindingCases.lists.toLong(),
+                    (requestedCases / 400).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with an activated dependency-bearing resolver",
-                    coverage.applicationCases.dependencies,
-                    requestedCases / 20,
+                    coverage.applicationCases.dependencies.toLong(),
+                    (requestedCases / 20).toLong(),
                 ),
                 CoverageRequirement(
                     "activated dependency-bearing resolver applications",
                     coverage.applications.dependencies,
-                    requestedCases / 10,
+                    (requestedCases / 10).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with an input-sensitive resolver application",
-                    coverage.applicationCases.inputSensitive,
-                    requestedCases / 100,
+                    coverage.applicationCases.inputSensitive.toLong(),
+                    (requestedCases / 100).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with an argument-sensitive resolver application",
-                    coverage.applicationCases.argumentSensitive,
-                    requestedCases / 100,
+                    coverage.applicationCases.argumentSensitive.toLong(),
+                    (requestedCases / 100).toLong(),
                 ),
                 CoverageRequirement(
                     "cases with a jointly input-and-argument-sensitive resolver application",
-                    coverage.applicationCases.inputAndArgumentSensitive,
-                    requestedCases / 1_000,
+                    coverage.applicationCases.inputAndArgumentSensitive.toLong(),
+                    (requestedCases / 1_000).toLong(),
                 ),
             )
         val unmet = requirements.filterNot(CoverageRequirement::met)
@@ -485,17 +491,17 @@ private data class ResolverApplicationCases(
 }
 
 private data class ResolverApplicationMetrics(
-    val total: Int = 0,
-    val dependencies: Int = 0,
-    val constant: Int = 0,
-    val inputOnly: Int = 0,
-    val argumentOnly: Int = 0,
-    val inputAndArgument: Int = 0,
+    val total: Long = 0,
+    val dependencies: Long = 0,
+    val constant: Long = 0,
+    val inputOnly: Long = 0,
+    val argumentOnly: Long = 0,
+    val inputAndArgument: Long = 0,
 ) {
-    val inputSensitive: Int
+    val inputSensitive: Long
         get() = inputOnly + inputAndArgument
 
-    val argumentSensitive: Int
+    val argumentSensitive: Long
         get() = argumentOnly + inputAndArgument
 
     operator fun plus(other: ResolverApplicationMetrics): ResolverApplicationMetrics =
@@ -511,32 +517,44 @@ private data class ResolverApplicationMetrics(
 
 private data class CoverageRequirement(
     val label: String,
-    val actual: Int,
-    val minimum: Int,
+    val actual: Long,
+    val minimum: Long,
 ) {
     fun met(): Boolean = actual >= minimum
 }
 
-private fun ResolutionWitness.applicationMetrics(
+private fun Map<FieldCoordinate, Long>.applicationMetrics(
     testCase: ResolverTestCase,
 ): ResolverApplicationMetrics =
-    applications.fold(ResolverApplicationMetrics()) { metrics, application ->
-        val sourceField = application.key.field
+    entries.fold(ResolverApplicationMetrics()) { metrics, (field, count) ->
         val dependency =
-            testCase.registry.objectFragmentSources.getValue(sourceField).isNotEmpty()
-        val program = testCase.registry.resolverProgram(sourceField)
+            testCase.registry.applicationHasDependencies(
+                testCase.schema,
+                field,
+            )
+        val program =
+            testCase.registry.applicationProgram(
+                testCase.schema,
+                field,
+            )
         metrics +
             ResolverApplicationMetrics(
-                total = 1,
-                dependencies = dependency.present(),
-                constant = (program == ResolverProgramKind.CONSTANT).present(),
-                inputOnly = (program == ResolverProgramKind.INPUT_SENSITIVE).present(),
-                argumentOnly = (program == ResolverProgramKind.ARGUMENT_SENSITIVE).present(),
+                total = count,
+                dependencies = count.takeIf { dependency } ?: 0,
+                constant = count.takeIf { program == ResolverProgramKind.CONSTANT } ?: 0,
+                inputOnly =
+                    count.takeIf { program == ResolverProgramKind.INPUT_SENSITIVE } ?: 0,
+                argumentOnly =
+                    count.takeIf { program == ResolverProgramKind.ARGUMENT_SENSITIVE } ?: 0,
                 inputAndArgument =
-                    (program == ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE).present(),
+                    count.takeIf {
+                        program == ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE
+                    } ?: 0,
             )
     }
 
 private fun Boolean.present(): Int = if (this) 1 else 0
 
 private fun Int.present(): Int = (this > 0).present()
+
+private fun Long.present(): Int = (this > 0).present()

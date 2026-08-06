@@ -5,7 +5,6 @@ import model.EngineResult
 import model.Schema
 import model.TypeExpr
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -84,12 +83,10 @@ class ResolverVariableBindingTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val variable = Value.Variable.of("b")
+                    val owner = schema.objectField("Query", "x")
+                    val variable = Value.Variable.of("b", owner, path = null)
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Query", "x") as Schema.ObjectField,
-                            variable,
-                        ) to
+                        variable to
                             schema.provider(
                                 """
                                 fragment ignored on Query {
@@ -120,7 +117,12 @@ class ResolverVariableBindingTest {
             Value.Int.of(30),
             result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
-        assertEquals(Value.Int.of(2), result.variableValues.getValue(Value.Variable.of("b")))
+        assertEquals(
+            Value.Int.of(2),
+            result.variableValues.getValue(
+                Value.Variable.of("b", world.schema.objectField("Query", "x"), path = null),
+            ),
+        )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
 
@@ -173,12 +175,12 @@ class ResolverVariableBindingTest {
                 variableProviders = { schema ->
                     val owner = schema.field("Query", "x") as Schema.ObjectField
                     mapOf(
-                        VariableCoordinate.of(owner, Value.Variable.of("b")) to
+                        Value.Variable.of("b", owner, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { z(c: ${'$'}c) }",
                                 "z",
                             ),
-                        VariableCoordinate.of(owner, Value.Variable.of("c")) to
+                        Value.Variable.of("c", owner, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { raw }",
                                 "raw",
@@ -194,8 +196,15 @@ class ResolverVariableBindingTest {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
 
-        assertEquals(Value.Int.of(6), result.variableValues.getValue(Value.Variable.of("b")))
-        assertEquals(Value.Int.of(2), result.variableValues.getValue(Value.Variable.of("c")))
+        val owner = world.schema.objectField("Query", "x")
+        assertEquals(
+            Value.Int.of(6),
+            result.variableValues.getValue(Value.Variable.of("b", owner, path = null)),
+        )
+        assertEquals(
+            Value.Int.of(2),
+            result.variableValues.getValue(Value.Variable.of("c", owner, path = null)),
+        )
         assertEquals(
             Value.Int.of(210),
             result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
@@ -263,9 +272,10 @@ class ResolverVariableBindingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("User", "x") as Schema.ObjectField,
-                            Value.Variable.of("b"),
+                        Value.Variable.of(
+                            "b",
+                            schema.objectField("User", "x"),
+                            path = null,
                         ) to
                             schema.provider(
                                 "fragment ignored on User { z }",
@@ -299,7 +309,12 @@ class ResolverVariableBindingTest {
             Value.Int.of(10),
             viewer.fetch(Value.ObjectKey.of(world.schema.objectField("User", "x"), emptyMap())).value,
         )
-        assertEquals(Value.Int.of(2), viewer.variableValues.getValue(Value.Variable.of("b")))
+        assertEquals(
+            Value.Int.of(2),
+            viewer.variableValues.getValue(
+                Value.Variable.of("b", world.schema.objectField("User", "x"), path = null),
+            ),
+        )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
 
@@ -362,10 +377,7 @@ class ResolverVariableBindingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Query", "x") as Schema.ObjectField,
-                            Value.Variable.of("values"),
-                        ) to
+                        Value.Variable.of("values", schema.field("Query", "x") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { numbers }",
                                 "numbers",
@@ -386,7 +398,13 @@ class ResolverVariableBindingTest {
             result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,
         )
         assertIs<Value.InputList>(
-            result.variableValues.getValue(Value.Variable.of("values")),
+            result.variableValues.getValue(
+                Value.Variable.of(
+                    "values",
+                    world.schema.objectField("Query", "x"),
+                    path = null,
+                ),
+            ),
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }
@@ -441,10 +459,7 @@ class ResolverVariableBindingTest {
                 },
                 variableProviders = { schema ->
                     mapOf(
-                        VariableCoordinate.of(
-                            schema.field("Query", "x") as Schema.ObjectField,
-                            Value.Variable.of("value"),
-                        ) to
+                        Value.Variable.of("value", schema.field("Query", "x") as Schema.ObjectField, path = null) to
                             schema.provider(
                                 "fragment ignored on Query { box { value } }",
                                 "box",
@@ -461,8 +476,14 @@ class ResolverVariableBindingTest {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
 
-        assertTrue(Value.Variable.of("value") in result.variableValues)
-        assertEquals(null, result.variableValues.getValue(Value.Variable.of("value")))
+        val variable =
+            Value.Variable.of(
+                "value",
+                world.schema.objectField("Query", "x"),
+                path = null,
+            )
+        assertTrue(variable in result.variableValues)
+        assertEquals(null, result.variableValues.getValue(variable))
         assertEquals(
             Value.Int.of(-1),
             result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "x"), emptyMap())).value,

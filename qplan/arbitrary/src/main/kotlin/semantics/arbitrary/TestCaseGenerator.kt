@@ -72,6 +72,7 @@ suspend fun checkResolverTestCases(
     counts: TestCaseCount,
     config: Config = Config.default,
     captureSuppliedDemand: Boolean = false,
+    captureResolutionWitness: Boolean = true,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ) {
     checkAll(
@@ -83,6 +84,7 @@ suspend fun checkResolverTestCases(
                 registry.world(
                     schema = batch.schema,
                     captureSuppliedDemand = captureSuppliedDemand,
+                    captureResolutionWitness = captureResolutionWitness,
                 )
             batch.queries.forEach { query ->
                 val testCase = ResolverTestCase(batch.schema, registry, query)

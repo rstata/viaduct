@@ -4,7 +4,6 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.VariableCoordinate
 import model.registry.Resolver
 
 /**
@@ -12,7 +11,7 @@ import model.registry.Resolver
  */
 internal class BranchOrderValidator(
     private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
-    private val variableProviders: Map<VariableCoordinate, List<Value.Key>>,
+    private val variableProviders: Map<Value.Variable, List<Value.Key>>,
 ) {
     private data class Edge(
         val prerequisite: Schema.ObjectField,
@@ -30,14 +29,14 @@ internal class BranchOrderValidator(
         }
 
         data class VariableProduction(
-            val coordinate: VariableCoordinate,
+            val variable: Value.Variable,
             val providerPath: String,
             val productionPath: String,
             val usePath: String,
         ) : EdgeReason {
             override fun describe(): String =
-                "variable \$${coordinate.variable.variableName} defined by " +
-                    "${coordinate.field.coordinate()} has provider path $providerPath " +
+                "variable \$${variable.variableName} defined by " +
+                    "${variable.field.coordinate()} has provider path $providerPath " +
                     "with production path $productionPath " +
                     "and use path $usePath"
         }
@@ -74,8 +73,8 @@ internal class BranchOrderValidator(
         var changed: Boolean
         do {
             val additions = mutableListOf<Pair<Edge, EdgeReason.VariableProduction>>()
-            variableProviders.forEach { (coordinate, providerPath) ->
-                val type = coordinate.field.containingType
+            variableProviders.forEach { (variable, providerPath) ->
+                val type = variable.field.containingType
                 val graph = graphs.getValue(type)
                 val providerBranch =
                     type.fields.getValue(providerPath.first().field.fieldName)
@@ -84,10 +83,10 @@ internal class BranchOrderValidator(
                     providerPath.joinToString("/") { key -> key.field.fieldName }
                 val uses =
                     fieldResolvers
-                        .getValue(coordinate.field)
+                        .getValue(variable.field)
                         .objectFragment
                         .subselections
-                        .variableUsePaths(coordinate.variable, type)
+                        .variableUsePaths(variable, type)
 
                 productionPaths.forEach { (production, productionPath) ->
                     uses.forEach { (useBranch, usePaths) ->
@@ -95,7 +94,7 @@ internal class BranchOrderValidator(
                             additions +=
                                 Edge(production, useBranch) to
                                     EdgeReason.VariableProduction(
-                                        coordinate = coordinate,
+                                        variable = variable,
                                         providerPath = renderedProviderPath,
                                         productionPath =
                                             productionPath.joinToString(" -> ") { it.fieldName },

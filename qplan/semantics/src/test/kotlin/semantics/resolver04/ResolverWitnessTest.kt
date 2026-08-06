@@ -166,16 +166,15 @@ class ResolverWitnessTest {
         registry: semantics.arbitrary.ArbitraryRegistry,
         world: model.Assumptions,
     ): VariableActivationProfile {
-        val coordinate = world.executorRegistry.variableCoordinate(this)
         val owner =
             FieldCoordinate(
-                coordinate.field.containingType.typeName,
-                coordinate.field.fieldName,
+                field.containingType.typeName,
+                field.fieldName,
             )
         val source = registry.objectFragmentSources.getValue(owner)
         val occurrences =
-            world
-                .fragmentFrom(source)
+            world.schema
+                .fragmentFrom(source, variableField = field)
                 .subselections
                 .variableOccurrences(this)
         require(occurrences.isNotEmpty()) {

@@ -6,7 +6,6 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.VariableCoordinate
 import model.selectionForestOf
 
 sealed interface Executor
@@ -179,6 +178,29 @@ sealed interface Resolver : Executor {
             )
 
         /**
+         * Returns a resolver whose object-fragment values are transformed before canonical registry
+         * assembly.
+         *
+         * This pre-reasoning composition operation is used when lowering changes coordinates
+         * carried by symbolic input values.
+         */
+        fun mapObjectFragment(transform: (Fragment) -> Fragment): Field =
+            Field(
+                objectFragment = transform(objectFragment),
+                predecessorDemand = transform(predecessorDemand),
+                objectFragmentFunction = { arguments ->
+                    transform(this.objectFragment(arguments))
+                },
+                predecessorDemandFunction = { arguments ->
+                    transform(this.predecessorDemand(arguments))
+                },
+                function = function,
+                projectionDemand = projectionDemand,
+                validateObjectFragment = {},
+                applicationObserver = applicationObserver,
+            )
+
+        /**
          * Returns this resolver with an observer invoked once at each application boundary.
          *
          * Complete applications report null demand. Selective applications report the exact
@@ -312,11 +334,11 @@ private fun SelectionForest.retargetArguments(
  * A canonical object field is an actual resolver coordinate exactly when [contains] returns true. The
  * registry satisfies canonical schema ownership, special-field exclusions, query coverage,
  * globally unique variable names, exact transpose, and acyclicity across object fields and
- * [VariableCoordinate] values. Acyclicity is intentionally checked over a conservative
- * coordinate-level possibility relation derived from representative fragment shapes. The relation
- * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
- * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
- * would be acyclic.
+ * [Value.Variable] values. Acyclicity is intentionally checked over a conservative coordinate-level
+ * possibility relation derived from representative fragment shapes. The relation may therefore
+ * contain an edge whose exact occurrence is inactive because of a runtime type guard or
+ * [Value.Error] argument, and the registry may reject a world whose exact active occurrences would
+ * be acyclic.
  *
  * Every variable provider is one nonempty canonical [Value.Key] path relative to its coordinate's
  * containing object and is structurally contained by the defining field resolver's fixed
@@ -344,9 +366,6 @@ interface ExecutorRegistry {
 
     /** The nonempty alias-free provider path for the globally registered [variable]. */
     fun variable(variable: Value.Variable): List<Value.Key>
-
-    /** The unique resolver-relative coordinate of the globally registered [variable]. */
-    fun variableCoordinate(variable: Value.Variable): VariableCoordinate
 
     /**
      * The registered fields that may be directly demanded by [field].

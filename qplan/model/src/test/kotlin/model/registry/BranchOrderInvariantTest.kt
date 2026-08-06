@@ -3,7 +3,6 @@ package model.registry
 import model.Fragment
 import model.Schema
 import model.Value
-import model.VariableCoordinate
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.FromObjectField
@@ -82,7 +81,7 @@ class BranchOrderInvariantTest {
                     variableProviders = { schema ->
                         val owner = schema.field("Parent", "result") as Schema.ObjectField
                         mapOf(
-                            VariableCoordinate.of(owner, Value.Variable.of("value")) to
+                            Value.Variable.of("value", owner, path = null) to
                                 schema.fromObjectField(
                                     "fragment ignored on Parent { shared { value } }",
                                     listOf("shared", "value"),
@@ -488,10 +487,10 @@ class BranchOrderInvariantTest {
             name: String,
             provider: String,
             responsePath: List<String>,
-        ): Map<VariableCoordinate, FromObjectField> {
+        ): Map<Value.Variable, FromObjectField> {
             val owner = schema.field("Query", "result") as Schema.ObjectField
             return mapOf(
-                VariableCoordinate.of(owner, Value.Variable.of(name)) to
+                Value.Variable.of(name, owner, path = null) to
                     schema.fromObjectField(provider, responsePath),
             )
         }

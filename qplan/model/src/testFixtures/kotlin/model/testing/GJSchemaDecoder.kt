@@ -28,17 +28,30 @@ import model.Schema
 import model.TypeExpr
 import model.Value
 
-/** Suffix reserved for fixture-generated canonical node-ID bridge fields. */
+/** Suffixes reserved for fixture-generated canonical node-ID bridge fields. */
 internal const val NODE_ID_BRIDGE_SUFFIX = "\$id"
+internal const val NODE_IDS_BRIDGE_SUFFIX = "\$ids"
+
+internal fun nodeIdBridgeName(field: Schema.OutputField): String =
+    field.fieldName +
+        if (field.typeExpr is TypeExpr.List) {
+            NODE_IDS_BRIDGE_SUFFIX
+        } else {
+            NODE_ID_BRIDGE_SUFFIX
+        }
+
+internal fun isNodeIdBridgeName(fieldName: String): Boolean =
+    fieldName.endsWith(NODE_ID_BRIDGE_SUFFIX) ||
+        fieldName.endsWith(NODE_IDS_BRIDGE_SUFFIX)
 
 /**
  * Decodes external GraphQL SDL into the canonical fixture schema.
  *
  * In addition to GraphQL-visible fields, the decoded schema contains a synthetic `foo$id` field
- * for every GraphQL field `foo` whose declared base output type is `Node` or implements `Node`.
- * Each bridge repeats `foo`'s arguments and replaces its named node type with `ID` while preserving
- * every list and nullability layer. These fields belong only to the lowered reasoning world and are
- * never parsed from GraphQL text.
+ * for every singular node-valued field and `foo$ids` for every list-shaped node-valued field. Each
+ * bridge repeats `foo`'s arguments and replaces its named node type with `ID` while preserving every
+ * list and nullability layer. These fields belong only to the lowered reasoning world and are never
+ * parsed from GraphQL text.
  */
 internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
@@ -256,7 +269,7 @@ internal class GJSchemaDecoder(
                             Schema.TypeRelation.WIDER_THAN,
                         )
                 }.forEach { nodeField ->
-                    val bridgeName = nodeField.fieldName + NODE_ID_BRIDGE_SUFFIX
+                    val bridgeName = nodeIdBridgeName(nodeField)
                     require(bridgeName !in fields) {
                         "Synthetic node-ID bridge collides with $bridgeName"
                     }

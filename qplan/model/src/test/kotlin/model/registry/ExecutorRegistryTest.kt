@@ -20,9 +20,13 @@ import kotlin.test.assertTrue
 class ExecutorRegistryTest {
     @Test
     fun `lowers node and field resolvers to field coordinates`() {
+        val observedFields = mutableListOf<String>()
         val world =
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
+                applicationObserver = { field, _, _, _ ->
+                    observedFields += field.fieldName
+                },
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf(
@@ -110,6 +114,44 @@ class ExecutorRegistryTest {
                 )
             },
         )
+        assertEquals(listOf("user\$id", "user"), observedFields)
+    }
+
+    @Test
+    fun `pluralizes every list-shaped node bridge once`() {
+        val schema =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
+
+                    type User implements Node {
+                      id: ID!
+                    }
+
+                    type Query {
+                      user: User!
+                      users: [User!]!
+                      matrix: [[User!]!]!
+                    }
+                    """.trimIndent(),
+            ).schema
+
+        assertTrue("user\$id" in schema.query.fields)
+        assertTrue("users\$ids" in schema.query.fields)
+        assertTrue("matrix\$ids" in schema.query.fields)
+        assertFalse("users\$id" in schema.query.fields)
+        assertFalse("matrix\$idss" in schema.query.fields)
+
+        val matrixBridge = schema.field("Query", "matrix\$ids")
+        val outer = assertIs<TypeExpr.List<Schema.OutputType>>(matrixBridge.typeExpr)
+        val inner = assertIs<TypeExpr.List<Schema.OutputType>>(outer.elementType)
+        assertEquals(Schema.IDType, inner.elementType.baseType)
+        assertFalse(outer.isNullable)
+        assertFalse(inner.isNullable)
+        assertFalse(inner.elementType.isNullable)
     }
 
     @Test

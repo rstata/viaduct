@@ -50,8 +50,9 @@ data class RegistryFeatures(
 )
 
 /**
- * A registry recipe whose resolver coordinates, output selection sets, and values are independent
- * of any generated query. Calling [world] materializes it against one canonical decoded schema.
+ * A registry recipe whose resolver coordinates, potential output paths, and value plans are
+ * independent of any generated query. Calling [world] materializes it against one canonical
+ * decoded schema.
  */
 class ArbitraryRegistry internal constructor(
     val fieldResolverSites: Set<FieldCoordinate>,
@@ -80,6 +81,7 @@ class ArbitraryRegistry internal constructor(
     fun world(
         schema: ArbitrarySchema,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
+        captureSuppliedDemand: Boolean = false,
     ): TestWorld {
         val firstInputs = mutableMapOf<FieldCoordinate, Value.Object>()
         val firstArguments = mutableMapOf<FieldCoordinate, Value.Arguments>()
@@ -92,9 +94,38 @@ class ArbitraryRegistry internal constructor(
                     val type = canonicalSchema.type(typeName) as Schema.ObjectType
                     type to
                         nodeResolverOf { id ->
-                            plan.materializeObject(canonicalSchema, id)
+                            plan.materializeObject(
+                                schema = canonicalSchema,
+                                inputId = id,
+                                generatedHashSeed =
+                                    stableGeneratedHash(typeName, id.idValue),
+                            )
                         }
                 }.toMap()
+            },
+            applicationObserver = { field, input, arguments, suppliedDemand ->
+                val coordinate =
+                    FieldCoordinate(
+                        field.containingType.typeName,
+                        field.fieldName,
+                    )
+                applicationLog.record(
+                    field = coordinate,
+                    arguments = arguments,
+                    input = input,
+                    suppliedDemand = suppliedDemand.takeIf { captureSuppliedDemand },
+                )
+                if (
+                    resolverProgramMutation ==
+                    ResolverProgramMutation.DUPLICATE_APPLICATION
+                ) {
+                    applicationLog.record(
+                        field = coordinate,
+                        arguments = arguments,
+                        input = input,
+                        suppliedDemand = suppliedDemand.takeIf { captureSuppliedDemand },
+                    )
+                }
             },
             fieldResolvers = { canonicalSchema ->
                 fieldValues.map { (coordinate, plan) ->
@@ -120,13 +151,6 @@ class ArbitraryRegistry internal constructor(
                                                 "was not applied"
                                         }
                                     }
-                                applicationLog.record(coordinate, arguments, input)
-                                if (
-                                    resolverProgramMutation ==
-                                    ResolverProgramMutation.DUPLICATE_APPLICATION
-                                ) {
-                                    applicationLog.record(coordinate, arguments, input)
-                                }
                                 val effectiveInput =
                                     if (
                                         resolverProgramMutation ==
@@ -149,27 +173,40 @@ class ArbitraryRegistry internal constructor(
                                     applicationOrdinals.getOrDefault(coordinate, 0).also {
                                         applicationOrdinals[coordinate] = it + 1
                                     }
+                                val generatedHashSeed =
+                                    stableGeneratedHash(
+                                        effectiveInput.resolutionFingerprint().value,
+                                        effectiveArguments.resolutionFingerprint().value,
+                                    )
                                 when (program) {
                                     ResolverProgramKind.CONSTANT -> constant
-                                    ResolverProgramKind.INPUT_SENSITIVE,
-                                    ResolverProgramKind.ARGUMENT_SENSITIVE,
-                                    ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE,
-                                    ->
-                                        sensitiveScalar(
-                                            scalar =
-                                                ScalarKind.entries.single {
-                                                    it.graphQLName ==
-                                                        field.typeExpr.baseType.typeName
-                                                },
-                                            input = effectiveInput,
-                                            arguments = effectiveArguments,
-                                            applicationOrdinal =
-                                                ordinal.takeIf {
-                                                    resolverProgramMutation ==
-                                                        ResolverProgramMutation
-                                                            .APPLICATION_ORDINAL_CONTAMINATION
-                                                },
-                                        )
+                                    else ->
+                                        if (
+                                            field.typeExpr !is TypeExpr.List &&
+                                            field.typeExpr.baseType is Schema.SimpleType
+                                        ) {
+                                            sensitiveScalar(
+                                                scalar =
+                                                    ScalarKind.entries.single {
+                                                        it.graphQLName ==
+                                                            field.typeExpr.baseType.typeName
+                                                    },
+                                                input = effectiveInput,
+                                                arguments = effectiveArguments,
+                                                applicationOrdinal =
+                                                    ordinal.takeIf {
+                                                        resolverProgramMutation ==
+                                                            ResolverProgramMutation
+                                                                .APPLICATION_ORDINAL_CONTAMINATION
+                                                    },
+                                            )
+                                        } else {
+                                            plan.materialize(
+                                                schema = canonicalSchema,
+                                                typeExpr = field.typeExpr,
+                                                generatedHashSeed = generatedHashSeed,
+                                            )
+                                    }
                                 }
                             },
                         )
@@ -189,7 +226,8 @@ class ArbitraryRegistry internal constructor(
                                 .all { possibleType -> possibleType.name in nodeResolverSites }
                     val canonicalFieldName =
                         if (loweredToNodeBridge) {
-                            provider.owner.fieldName + "\$id"
+                            provider.owner.fieldName +
+                                if (sourceField.type.list) "\$ids" else "\$id"
                         } else {
                             provider.owner.fieldName
                         }
@@ -262,9 +300,13 @@ private class RegistryGenerator(
             schema.allObjects
                 .flatMap(ObjectDefinition::fields)
                 .filter { field ->
-                    field.ownerName == "Query" ||
-                        field.arguments.isNotEmpty() ||
-                        chance(config[ExplicitFieldResolverWeight])
+                    field.ownerName != GENERATED_HASH_TYPE &&
+                        !field.isGeneratedHashField() &&
+                        (
+                            field.ownerName == "Query" ||
+                                field.arguments.isNotEmpty() ||
+                                chance(config[ExplicitFieldResolverWeight])
+                        )
                 }.map(FieldDefinitionSpec::coordinate)
                 .shuffled(random)
                 .toCollection(linkedSetOf())
@@ -291,12 +333,17 @@ private class RegistryGenerator(
         val resolverPrograms =
             fieldSites.associateWith { site ->
                 val field = field(site)
+                val valuePlan = fieldValues.getValue(site)
                 val scalarOutput =
                     !field.type.list &&
                         ScalarKind.entries.any { it.graphQLName == field.type.namedType }
+                val structuredOutput = valuePlan.containsGeneratedHash()
+                val supportsSensitiveOutput = scalarOutput || structuredOutput
                 val inputSensitive =
-                    scalarOutput && objectFragments.getValue(site).selections.isNotEmpty()
-                val argumentSensitive = scalarOutput && field.arguments.isNotEmpty()
+                    supportsSensitiveOutput &&
+                        objectFragments.getValue(site).selections.isNotEmpty()
+                val argumentSensitive =
+                    supportsSensitiveOutput && field.arguments.isNotEmpty()
                 when {
                     inputSensitive && argumentSensitive ->
                         ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE
@@ -437,6 +484,7 @@ private class RegistryGenerator(
         }
         val candidates =
             directFields.filter { field ->
+                !field.isGeneratedHashField() &&
                     (
                         field.coordinate !in fieldSites ||
                             ranks.getValue(field.coordinate) < consumerRank
@@ -621,7 +669,8 @@ private class RegistryGenerator(
         schema
             .fieldsOn(ownerName)
             .filter { field ->
-                field.arguments.isEmpty() &&
+                !field.isGeneratedHashField() &&
+                    field.arguments.isEmpty() &&
                     (!field.type.nullable || target.nullable) &&
                     (
                         field.coordinate !in fieldSites ||
@@ -763,6 +812,9 @@ private class RegistryGenerator(
         allowNullOrError: Boolean = true,
         objectPath: Set<String> = emptySet(),
     ): ValuePlan {
+        if (type.namedType == GENERATED_HASH_TYPE) {
+            return GeneratedHashPlan(path.hashCode())
+        }
         val closesRecursivePath =
             schema.isComposite(type.namedType) &&
                 schema.possibleObjects(type.namedType).any { it.name in objectPath }
@@ -1252,13 +1304,20 @@ private fun InputValuePlan.replace(
 }
 
 internal sealed interface ValuePlan {
+    /**
+     * Materializes this plan. [generatedHashSeed] may affect only synthetic [GENERATED_HASH_TYPE]
+     * subtrees; equal seeds and other arguments produce equal values.
+     */
     fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID? = null,
+        generatedHashSeed: Int = 0,
     ): Value.Output?
 
     fun selectedPaths(prefix: String = ""): Set<String>
+
+    fun containsGeneratedHash(): Boolean = false
 }
 
 internal data object NullPlan : ValuePlan {
@@ -1266,6 +1325,7 @@ internal data object NullPlan : ValuePlan {
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID?,
+        generatedHashSeed: Int,
     ): Value.Output? = null
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
@@ -1276,6 +1336,7 @@ internal data object ErrorPlan : ValuePlan {
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID?,
+        generatedHashSeed: Int,
     ): Value.Output = Value.Error
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
@@ -1286,6 +1347,7 @@ internal data object InputIdPlan : ValuePlan {
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID?,
+        generatedHashSeed: Int,
     ): Value.Output = requireNotNull(inputId)
 
     override fun selectedPaths(prefix: String): Set<String> = setOf(prefix)
@@ -1299,6 +1361,7 @@ internal data class ScalarPlan(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID?,
+        generatedHashSeed: Int,
     ): Value.Simple =
         when (scalar) {
             ScalarKind.BOOLEAN -> Value.Boolean.of(value as Boolean)
@@ -1318,11 +1381,15 @@ internal data class ListPlan(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID?,
+        generatedHashSeed: Int,
     ): Value.OutputList {
         require(typeExpr is TypeExpr.List)
         return Value.OutputList.of(
             typeExpr = typeExpr.elementType,
-            values = elements.map { it.materialize(schema, typeExpr.elementType, inputId) },
+            values =
+                elements.map {
+                    it.materialize(schema, typeExpr.elementType, inputId, generatedHashSeed)
+                },
         )
     }
 
@@ -1330,6 +1397,9 @@ internal data class ListPlan(
         elements.flatMapIndexed { index, element ->
             element.selectedPaths("$prefix[$index]")
         }.toSet()
+
+    override fun containsGeneratedHash(): Boolean =
+        elements.any(ValuePlan::containsGeneratedHash)
 }
 
 internal data class ObjectPlan(
@@ -1340,19 +1410,26 @@ internal data class ObjectPlan(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: Value.ID?,
+        generatedHashSeed: Int,
     ): Value.Object =
-        materializeObject(schema, inputId)
+        materializeObject(schema, inputId, generatedHashSeed)
 
     fun materializeObject(
         schema: Schema,
         inputId: Value.ID?,
+        generatedHashSeed: Int = 0,
     ): Value.Object =
         schema.objectOf(typeName) {
             fields.forEach { (coordinate, plan) ->
                 require(coordinate.typeName == typeName)
                 val outputField = schema.field(typeName, coordinate.fieldName)
                 field(coordinate.fieldName) setTo
-                    plan.materialize(schema, outputField.typeExpr, inputId)
+                    plan.materialize(
+                        schema,
+                        outputField.typeExpr,
+                        inputId,
+                        generatedHashSeed,
+                    )
             }
         }
 
@@ -1362,4 +1439,82 @@ internal data class ObjectPlan(
                 if (prefix.isEmpty()) coordinate.fieldName else "$prefix.${coordinate.fieldName}"
             setOf(path) + plan.selectedPaths(path)
         }.toSet()
+
+    override fun containsGeneratedHash(): Boolean =
+        fields.values.any(ValuePlan::containsGeneratedHash)
 }
+
+/**
+ * A bounded synthetic object subtree used to make structured resolver outputs value-sensitive.
+ *
+ * The invocation seed is mixed with this plan's fixed [salt], so list positions and nested object
+ * plans can have distinct shapes without consulting application order or mutable state. The
+ * terminal object omits its nullable `nested` field.
+ */
+internal data class GeneratedHashPlan(
+    val salt: Int,
+) : ValuePlan {
+    override fun materialize(
+        schema: Schema,
+        typeExpr: TypeExpr<Schema.OutputType>,
+        inputId: Value.ID?,
+        generatedHashSeed: Int,
+    ): Value.Object {
+        require(typeExpr.baseType.typeName == GENERATED_HASH_TYPE)
+        val rootHash = mixGeneratedHash(generatedHashSeed, salt)
+        return generatedHashObject(
+            schema = schema,
+            hash = rootHash,
+            remainingDepth = depth(generatedHashSeed),
+        )
+    }
+
+    internal fun depth(generatedHashSeed: Int = 0): Int =
+        Math.floorMod(
+            mixGeneratedHash(generatedHashSeed, salt),
+            MAX_GENERATED_HASH_DEPTH + 1,
+        )
+
+    override fun selectedPaths(prefix: String): Set<String> =
+        (0..MAX_GENERATED_HASH_DEPTH).flatMapTo(linkedSetOf()) { depth ->
+            val nestedPrefix =
+                (0 until depth).fold(prefix) { path, _ ->
+                    "$path.$GENERATED_HASH_NESTED_FIELD"
+                }
+            listOf(nestedPrefix, "$nestedPrefix.$GENERATED_HASH_FIELD")
+        }
+
+    override fun containsGeneratedHash(): Boolean = true
+}
+
+private const val MAX_GENERATED_HASH_DEPTH = 4
+private const val GENERATED_HASH_NESTED_SALT = -1640531527
+
+private fun generatedHashObject(
+    schema: Schema,
+    hash: Int,
+    remainingDepth: Int,
+): Value.Object =
+    schema.objectOf(GENERATED_HASH_TYPE) {
+        GENERATED_HASH_FIELD setTo hash
+        if (remainingDepth > 0) {
+            GENERATED_HASH_NESTED_FIELD setTo
+                generatedHashObject(
+                    schema = schema,
+                    hash = mixGeneratedHash(hash, GENERATED_HASH_NESTED_SALT),
+                    remainingDepth = remainingDepth - 1,
+                )
+        }
+    }
+
+private fun mixGeneratedHash(
+    hash: Int,
+    value: Int,
+): Int = hash * 31 + value
+
+private fun stableGeneratedHash(vararg components: String): Int =
+    components.fold(1) { result, component ->
+        component.fold(result * 31 + component.length) { hash, character ->
+            mixGeneratedHash(hash, character.code)
+        }
+    }

@@ -16,7 +16,6 @@ import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverProgramMutation
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
-import semantics.arbitrary.registeredResolverCellCounts
 import semantics.arbitrary.resolverTestBatch
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
@@ -93,10 +92,11 @@ class ResolverMutationTest {
                                 onSuccess = { result ->
                                     when (mutation) {
                                         ResolverProgramMutation.DUPLICATE_APPLICATION ->
-                                            witness.applicationCounts() !=
-                                                result.registeredResolverCellCounts(
-                                                    mutantWorld.assumptions.executorRegistry,
-                                                )
+                                            witness.applicationIdentityCounts() !=
+                                                context(mutantWorld.assumptions) {
+                                                    result
+                                                        .registeredResolverApplicationIdentityCounts()
+                                                }
                                         else -> result != ordinary
                                     }
                                 },

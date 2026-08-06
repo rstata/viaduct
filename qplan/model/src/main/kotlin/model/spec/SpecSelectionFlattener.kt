@@ -11,9 +11,11 @@ import model.selectionForestOf
  * Flattens a spec selection set interpreted with [typeInScope].
  *
  * Fields become [Selection] values, while inline fragments are removed after contributing their
- * type conditions to the fields they contain. Each source field occurrence contributes one member
- * to the returned [SelectionForest], which erases source order while preserving occurrences and
- * does not define semantic equality for [Selection].
+ * type conditions to the fields they contain. At each selection-set level, every source field
+ * occurrence contributes one member to the corresponding [SelectionForest], which erases source
+ * order while preserving occurrences and does not define semantic equality for [Selection]. This
+ * one-to-one correspondence is a postcondition of this translation; later normalization with
+ * [model.merge] may combine members that have equal concrete structural keys.
  */
 context(world: Assumptions)
 fun flatten(

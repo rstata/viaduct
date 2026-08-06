@@ -3,10 +3,7 @@ package semantics.correctresolution
 import model.Assumptions
 import model.EngineResult
 import model.Schema
-import model.Selection
-import model.SelectionForest
 import model.Value
-import model.selectionForestOf
 import semantics.instantiateVariables
 import semantics.materialize
 
@@ -14,9 +11,10 @@ import semantics.materialize
  * Whether every activated resolver agrees with the values attributed to it in this result tree.
  *
  * Field resolvers receive the containing object materialized according to their object fragment.
- * Returned values are compared recursively with the OER, stopping before coordinates supplied by
- * another resolver or by the engine. The complete OER tree is still traversed, so those
- * coordinates are checked by their own resolvers.
+ * Each OER value is compared as a positional subset of the resolver's complete finite output.
+ * Comparison preserves list positions and stops before coordinates supplied by another resolver or
+ * by the engine. The complete OER tree is still traversed, so those coordinates are checked by
+ * their own resolvers.
  *
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
  * cell is present. It observes cell values but never cell check components.
@@ -44,50 +42,13 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
                             .objectFragment(key.arguments)
                             .instantiateVariables(variableValues),
                     )
-                val resolverValue =
-                    resolver.tenantResolve(
-                        input = input,
-                        arguments = key.arguments,
-                        selections = value.observedDemand(),
-                    )
+                val resolverValue = resolver.tenantResolve(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }
 
         fieldResolverConforms && value.engineResultConformsToResolvers()
     }
 }
-
-/**
- * Returns the concrete demand whose coordinates are present in this result subtree.
- *
- * This is an observational device for stating extensional resolver agreement, not a demand-planning
- * operation. [conformsToFragment] and [isClosedUnderResolverDemand] separately establish that every
- * externally and internally required coordinate is present.
- */
-private fun EngineResult?.observedDemand(): SelectionForest =
-    when (this) {
-        null,
-        Value.Error,
-        is Value.Simple,
-        -> selectionForestOf()
-
-        is EngineResult.Object ->
-            keys.fold(selectionForestOf()) { demand, key ->
-                demand +
-                    selectionForestOf(
-                        Selection.of(
-                            key = key,
-                            possibleTypes = setOf(type),
-                            subselections = fetch(key).value.observedDemand(),
-                        ),
-                    )
-            }
-
-        is EngineResult.List ->
-            fold(selectionForestOf()) { demand, cell ->
-                demand + cell.value.observedDemand()
-            }
-    }
 
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolvers(): Boolean =

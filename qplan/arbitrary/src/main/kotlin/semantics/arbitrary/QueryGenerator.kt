@@ -100,15 +100,21 @@ private class QueryGenerator(
         typeName: String,
         depth: Int,
     ): SelectionSet {
-        val objectType = schema.allObjects.singleOrNull { it.name == typeName }
-        val candidates =
-            schema.fieldsOn(typeName) +
-                syntheticFields(typeName, objectType?.implementsNode == true)
         if (depth >= config[MaxSelectionDepth] - 1) {
             return SelectionSet.newSelectionSet()
                 .selection(Field.newField("__typename").build())
                 .build()
         }
+        if (typeName == GENERATED_HASH_TYPE) {
+            return SelectionSet
+                .newSelectionSet()
+                .selection(Field.newField(GENERATED_HASH_FIELD).build())
+                .build()
+        }
+        val objectType = schema.allObjects.singleOrNull { it.name == typeName }
+        val candidates =
+            schema.fieldsOn(typeName).filterNot(FieldDefinitionSpec::isGeneratedHashField) +
+                syntheticFields(typeName, objectType?.implementsNode == true)
 
         val count = Arb.int(1..minOf(3, candidates.size)).next(random)
         val requiredField =
@@ -153,6 +159,7 @@ private class QueryGenerator(
                         }
                         if (
                             schema.isComposite(field.type.namedType) &&
+                            field.type.namedType != GENERATED_HASH_TYPE &&
                             (
                                 schema.fieldsOn(field.type.namedType).isNotEmpty() ||
                                     config[QueryFragmentsEnabled]
@@ -198,9 +205,23 @@ private class QueryGenerator(
             } else {
                 emptyList()
             }
+        val generatedHashSelection =
+            objectType
+                ?.fields
+                ?.singleOrNull(FieldDefinitionSpec::isGeneratedHashField)
+                ?.let {
+                    Field
+                        .newField(GENERATED_HASH_FIELD)
+                        .selectionSet(
+                            SelectionSet
+                                .newSelectionSet()
+                                .selection(Field.newField(GENERATED_HASH_FIELD).build())
+                                .build(),
+                        ).build()
+                }
         return SelectionSet
             .newSelectionSet()
-            .selections(directSelections + fragmentSelections)
+            .selections(directSelections + fragmentSelections + listOfNotNull(generatedHashSelection))
             .build()
     }
 
@@ -324,6 +345,7 @@ private class QueryGenerator(
         val directDemand =
             schema
                 .fieldsOn(field.type.namedType)
+                .filterNot(FieldDefinitionSpec::isGeneratedHashField)
                 .shuffled(random)
                 .firstOrNull()
                 ?.let { demandedField ->
@@ -342,7 +364,12 @@ private class QueryGenerator(
                             .possibleObjects(field.type.namedType)
                             .shuffled(random)
                             .first()
-                    val demandedField = schema.fieldsOn(concrete.name).shuffled(random).first()
+                    val demandedField =
+                        schema
+                            .fieldsOn(concrete.name)
+                            .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+                            .shuffled(random)
+                            .first()
                     InlineFragment
                         .newInlineFragment()
                         .typeCondition(TypeName(concrete.name))

@@ -521,7 +521,7 @@ private fun ResolutionWitness.applicationMetrics(
     testCase: ResolverTestCase,
 ): ResolverApplicationMetrics =
     applications.fold(ResolverApplicationMetrics()) { metrics, application ->
-        val sourceField = application.key.sourceField
+        val sourceField = application.key.field
         val dependency =
             testCase.registry.objectFragmentSources.getValue(sourceField).isNotEmpty()
         val program = testCase.registry.resolverProgram(sourceField)

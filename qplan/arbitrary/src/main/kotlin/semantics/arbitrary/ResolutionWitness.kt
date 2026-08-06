@@ -7,6 +7,7 @@ import model.SelectionForest
 import model.TypeExpr
 import model.Value
 import model.registry.ExecutorRegistry
+import java.security.MessageDigest
 
 /**
  * Resource limits for diagnostic resolution witnesses.
@@ -43,15 +44,26 @@ value class ResolutionFingerprint(
     val value: String,
 )
 
-/**
- * The source-world identity of one field-resolver application.
- *
- * Fixture-lowered `foo$id` fields are normalized to the source coordinate `foo`. Their
- * [Value.Arguments] still retain their canonical argument-definition owner.
- */
+/** The canonical field identity of one field-resolver application after fixture lowering. */
 data class ResolverApplicationKey(
-    val sourceField: FieldCoordinate,
+    val field: FieldCoordinate,
     val arguments: Value.Arguments,
+)
+
+/**
+ * The observable identity of one deterministic field-resolver application.
+ *
+ * Separate result occurrences with equal field coordinates and arguments remain distinguishable
+ * when their materialized resolver inputs differ.
+ */
+data class ResolverApplicationIdentity(
+    val key: ResolverApplicationKey,
+    val inputFingerprint: ResolutionFingerprint,
+)
+
+data class ResolverApplicationObservation(
+    val identity: ResolverApplicationIdentity,
+    val suppliedDemandFingerprint: ResolutionFingerprint?,
 )
 
 data class ResolverApplicationRecord(
@@ -59,18 +71,24 @@ data class ResolverApplicationRecord(
     val inputFingerprint: ResolutionFingerprint,
     val suppliedDemandFingerprint: ResolutionFingerprint?,
 ) {
+    val identity: ResolverApplicationIdentity
+        get() = ResolverApplicationIdentity(key, inputFingerprint)
+
+    val observation: ResolverApplicationObservation
+        get() = ResolverApplicationObservation(identity, suppliedDemandFingerprint)
+
     companion object {
         fun capture(
-            sourceField: FieldCoordinate,
+            field: FieldCoordinate,
             arguments: Value.Arguments,
             input: Value.Object,
             suppliedDemand: SelectionForest? = null,
             bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
         ): ResolverApplicationRecord =
             ResolverApplicationRecord(
-                key = ResolverApplicationKey(sourceField, arguments),
+                key = ResolverApplicationKey(field, arguments),
                 inputFingerprint = input.resolutionFingerprint(bounds),
-                suppliedDemandFingerprint = suppliedDemand?.resolutionFingerprint(bounds),
+                suppliedDemandFingerprint = suppliedDemand?.resolutionDigest(bounds),
             )
     }
 }
@@ -82,7 +100,7 @@ class ResolutionApplicationLog(
     private val records = mutableListOf<ResolverApplicationRecord>()
 
     fun record(
-        sourceField: FieldCoordinate,
+        field: FieldCoordinate,
         arguments: Value.Arguments,
         input: Value.Object,
         suppliedDemand: SelectionForest? = null,
@@ -94,7 +112,7 @@ class ResolutionApplicationLog(
             )
         }
         return ResolverApplicationRecord
-            .capture(sourceField, arguments, input, suppliedDemand, bounds)
+            .capture(field, arguments, input, suppliedDemand, bounds)
             .also(records::add)
     }
 
@@ -108,8 +126,17 @@ class ResolutionApplicationLog(
 data class ResolutionWitness(
     val applications: List<ResolverApplicationRecord>,
 ) {
+    /** Coarse counts that deliberately combine applications with different inputs. */
     fun applicationCounts(): Map<ResolverApplicationKey, Int> =
         applications.groupingBy(ResolverApplicationRecord::key).eachCount()
+
+    /** Exact observable counts for deterministic field-resolver applications. */
+    fun applicationIdentityCounts(): Map<ResolverApplicationIdentity, Int> =
+        applications.groupingBy(ResolverApplicationRecord::identity).eachCount()
+
+    /** Exact application counts including the demand supplied at each application boundary. */
+    fun applicationObservationCounts(): Map<ResolverApplicationObservation, Int> =
+        applications.groupingBy(ResolverApplicationRecord::observation).eachCount()
 
     fun duplicateApplications(): Map<ResolverApplicationKey, Int> =
         applicationCounts().filterValues { count -> count > 1 }
@@ -118,7 +145,7 @@ data class ResolutionWitness(
         allowed: AllowedResolverSiteClosure,
     ): List<ResolverApplicationRecord> =
         applications.filter { application ->
-            application.key.sourceField !in allowed.sourceFields
+            application.key.field !in allowed.canonicalFields
         }
 }
 
@@ -141,6 +168,7 @@ data class RegisteredResolverCell(
     val applicationKey: ResolverApplicationKey,
     val canonicalField: FieldCoordinate,
     val occurrencePath: List<ResultOccurrenceStep>,
+    val containingObject: EngineResult.Object,
 )
 
 fun EngineResult?.registeredResolverCells(
@@ -180,11 +208,12 @@ fun EngineResult?.registeredResolverCells(
                                 RegisteredResolverCell(
                                     applicationKey =
                                         ResolverApplicationKey(
-                                            sourceField = key.field.sourceFieldCoordinate(),
+                                            field = key.field.fieldCoordinate(),
                                             arguments = key.arguments,
                                         ),
                                     canonicalField = canonicalField,
                                     occurrencePath = fieldPath,
+                                    containingObject = value,
                                 )
                         }
                         visit(value.fetch(key).value, fieldPath)
@@ -232,14 +261,14 @@ private fun Value.Input?.containsErrorValue(): Boolean =
 /**
  * Resolver sites conservatively reachable from fields directly selected by an operation.
  *
- * All possible concrete types are considered. The closure retains variable sites internally, but
- * [sourceFields] contains only field sites because application records represent field resolvers.
+ * All possible concrete types are considered. The closure retains variable sites internally, while
+ * [canonicalFields] contains only field sites because application records represent field
+ * resolvers.
  */
 data class AllowedResolverSiteClosure(
     val directlySelectedSites: Set<Schema.ObjectField>,
     val sites: Set<Schema.ResolverSite>,
     val canonicalFields: Set<FieldCoordinate>,
-    val sourceFields: Set<FieldCoordinate>,
 )
 
 fun SelectionForest.allowedResolverSiteClosure(
@@ -301,7 +330,6 @@ fun SelectionForest.allowedResolverSiteClosure(
         directlySelectedSites = directlySelected,
         sites = closure,
         canonicalFields = fields.mapTo(linkedSetOf(), Schema.OutputField::fieldCoordinate),
-        sourceFields = fields.mapTo(linkedSetOf(), Schema.OutputField::sourceFieldCoordinate),
     )
 }
 
@@ -325,6 +353,19 @@ fun SelectionForest.resolutionFingerprint(
     ResolutionFingerprint(
         FingerprintBudget(bounds).forest(this),
     )
+
+/**
+ * A compact deterministic structural digest for potentially large occurrence-preserving demand.
+ */
+fun SelectionForest.resolutionDigest(
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): ResolutionFingerprint {
+    val canonical = resolutionFingerprint(bounds).value.toByteArray(Charsets.UTF_8)
+    val digest = MessageDigest.getInstance("SHA-256").digest(canonical)
+    return ResolutionFingerprint(
+        "sha256:" + digest.joinToString("") { byte -> "%02x".format(byte) },
+    )
+}
 
 private class FingerprintBudget(
     private val bounds: ResolutionWitnessBounds,
@@ -471,11 +512,3 @@ private fun Value.Key.canonicalFingerprint(
 
 private fun Schema.OutputField.fieldCoordinate(): FieldCoordinate =
     FieldCoordinate(containingType.typeName, fieldName)
-
-private fun Schema.OutputField.sourceFieldCoordinate(): FieldCoordinate =
-    FieldCoordinate(
-        containingType.typeName,
-        fieldName.removeSuffix(NODE_ID_BRIDGE_SUFFIX),
-    )
-
-private const val NODE_ID_BRIDGE_SUFFIX = "\$id"

@@ -5,9 +5,11 @@ import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.Schema
 import model.Value
+import model.objectOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class GeneratorTest {
@@ -279,6 +281,91 @@ class GeneratorTest {
             sensitiveComplexResolvers > 0,
             "Generated no input- or argument-sensitive object/list resolver",
         )
+    }
+
+    @Test
+    fun `complex resolver functions are deterministic for equal inputs and arguments`() {
+        val config =
+            Config.default +
+                (ArgumentsEnabled to false) +
+                (SchemaObjectCount to 3..3) +
+                (MinimumSelectionDepth to 1) +
+                (MaxSelectionDepth to 3) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFragmentWeight to 1.0) +
+                (NodeResolversEnabled to false)
+        val random = RandomSource.seeded(4815162343L)
+        var checkedResolvers = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val world = registry.world(schema).assumptions
+            registry.fieldResolverSites.forEach { coordinate ->
+                val fieldSpec =
+                    schema
+                        .objectNamed(coordinate.typeName)
+                        .fields
+                        .single { field -> field.name == coordinate.fieldName }
+                if (
+                    !schema.isComposite(fieldSpec.type.namedType) ||
+                    registry.resolverProgram(coordinate) == ResolverProgramKind.CONSTANT
+                ) {
+                    return@forEach
+                }
+
+                val field = world.schema.field(coordinate.typeName, coordinate.fieldName)
+                val input = world.schema.objectOf(coordinate.typeName)
+                val arguments = Value.Arguments.of(field, emptyMap())
+                val resolver = world.executorRegistry.resolver(field)
+
+                assertEquals(
+                    resolver.tenantResolve(input, arguments),
+                    resolver.tenantResolve(input, arguments),
+                )
+                checkedResolvers += 1
+            }
+        }
+
+        assertTrue(checkedResolvers > 0)
+    }
+
+    @Test
+    fun `generated hash values are deterministic and seed and salt sensitive`() {
+        val schema = Arb.schema().next(RandomSource.seeded(4815162344L))
+        val world = schema.registry().next(RandomSource.seeded(4815162345L)).world(schema).assumptions
+        val hashField = world.schema.field("Object0", GENERATED_HASH_FIELD)
+        val plan = GeneratedHashPlan(salt = 17)
+
+        val first =
+            plan.materialize(
+                schema = world.schema,
+                typeExpr = hashField.typeExpr,
+                generatedHashSeed = 23,
+            )
+        val repeated =
+            plan.materialize(
+                schema = world.schema,
+                typeExpr = hashField.typeExpr,
+                generatedHashSeed = 23,
+            )
+        val different =
+            plan.materialize(
+                schema = world.schema,
+                typeExpr = hashField.typeExpr,
+                generatedHashSeed = 24,
+            )
+        val differentSalt =
+            GeneratedHashPlan(salt = 18).materialize(
+                schema = world.schema,
+                typeExpr = hashField.typeExpr,
+                generatedHashSeed = 23,
+            )
+
+        assertEquals(first, repeated)
+        assertNotEquals(first, different)
+        assertNotEquals(first, differentSalt)
     }
 
     @Test

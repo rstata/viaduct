@@ -25,6 +25,9 @@ typealias NodeResolverFunction = (Value.ID) -> Value.Object
 /** Marks a raw external node lookup for fixture composition. */
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
 
+typealias CanonicalFieldResolverApplicationObserver =
+    (Schema.OutputField, Value.Object, Value.Arguments, model.SelectionForest?) -> Unit
+
 fun fieldResolverOf(
     objectFragment: Fragment,
     function: FieldResolverFunction,
@@ -35,11 +38,22 @@ internal fun executorRegistryOf(
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     variableProviders: Map<VariableCoordinate, Selection>,
+    applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ExecutorRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
+    val canonicalResolvers =
+        if (applicationObserver == null) {
+            lowering.fieldResolvers
+        } else {
+            lowering.fieldResolvers.mapValues { (field, resolver) ->
+                resolver.observeApplications { input, arguments, demand ->
+                    applicationObserver(field, input, arguments, demand)
+                }
+            }
+        }
     return TestExecutorRegistry(
         schema = schema,
-        fieldResolvers = lowering.fieldResolvers,
+        fieldResolvers = canonicalResolvers,
         additionalDemand = lowering.additionalDemand,
         variableProviders = variableProviders,
     )
@@ -49,10 +63,11 @@ internal fun executorRegistryOf(
  * Lowers source-world node references and node lookups into the canonical field-only world.
  *
  * For each eligible source field `foo(args)` with a raw field resolver, that producer is moved to
- * `foo$id(args)` and adapted to emit typed IDs. A generated resolver at every eligible `foo(args)`
- * demands that exact bridge key and dispatches the typed ID to the raw node lookup. Bridge type
- * expressions preserve the source field's list and nullability shape. Outputs of containing
- * resolvers are rewritten recursively so passive nested node references also become bridge values.
+ * singular `foo$id(args)` or list-shaped `foo$ids(args)` bridge and adapted to emit typed IDs. A
+ * generated resolver at every eligible `foo(args)` demands that exact bridge key and dispatches the
+ * typed ID values to the raw node lookup. Bridge type expressions preserve the source field's list
+ * and nullability shape. Outputs of containing resolvers are rewritten recursively so passive
+ * nested node references also become bridge values.
  *
  * A lowered field must be declared as `Node` or a subtype whose every possible concrete type has a
  * raw node lookup. Mixed node-resolved and inline possible types are rejected at this composition
@@ -133,7 +148,7 @@ private class NodeResolverLowering(
 
         return schema.objectTypes
             .flatMap { it.fields.values }
-            .filterNot { it.fieldName.endsWith(NODE_ID_BRIDGE_SUFFIX) }
+            .filterNot { isNodeIdBridgeName(it.fieldName) }
             .mapNotNullTo(linkedSetOf()) { field ->
                 val outputType = field.typeExpr.baseType as? Schema.CompositeType
                     ?: return@mapNotNullTo null
@@ -168,7 +183,7 @@ private class NodeResolverLowering(
             require(field.containingType is Schema.ObjectType) {
                 "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
             }
-            require(!field.fieldName.endsWith(NODE_ID_BRIDGE_SUFFIX)) {
+            require(!isNodeIdBridgeName(field.fieldName)) {
                 "Synthetic field $typeName/${field.fieldName} cannot be supplied directly"
             }
             require(field !in nodeIdFields) {
@@ -239,7 +254,7 @@ private class NodeResolverLowering(
                 }
             val bridgeField =
                 selection.key.field.containingType.fields[
-                    selection.key.field.fieldName + NODE_ID_BRIDGE_SUFFIX
+                    nodeIdBridgeName(selection.key.field)
                 ]
             if (bridgeField == null || bridgePossibleTypes.isEmpty()) {
                 selectionForestOf(original)
@@ -389,7 +404,7 @@ private class NodeResolverLowering(
     private fun bridgeField(field: Schema.OutputField): Schema.OutputField =
         schema.field(
             field.containingType.typeName,
-            field.fieldName + NODE_ID_BRIDGE_SUFFIX,
+            nodeIdBridgeName(field),
         )
 
     private fun typedId(
@@ -490,7 +505,7 @@ private class TestExecutorRegistry(
             schema.query.fields.values
                 .filter {
                     it.fieldName != "__typename" &&
-                        !it.fieldName.endsWith(NODE_ID_BRIDGE_SUFFIX) &&
+                        !isNodeIdBridgeName(it.fieldName) &&
                         it !in fieldResolvers
                 }
         require(missingQueryFields.isEmpty()) {

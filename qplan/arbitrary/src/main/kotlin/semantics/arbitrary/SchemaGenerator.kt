@@ -22,10 +22,15 @@ import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
 import java.math.BigInteger
 
+internal const val GENERATED_HASH_TYPE = "Hash"
+internal const val GENERATED_HASH_FIELD = "hash"
+internal const val GENERATED_HASH_NESTED_FIELD = "nested"
+
 class ArbitrarySchema internal constructor(
     val sdl: String,
     internal val objects: List<ObjectDefinition>,
     internal val query: ObjectDefinition,
+    internal val hashType: ObjectDefinition,
     internal val interfaces: List<InterfaceDefinitionSpec>,
     internal val unions: List<UnionDefinitionSpec>,
     internal val inputObjects: List<InputObjectDefinitionSpec>,
@@ -33,7 +38,7 @@ class ArbitrarySchema internal constructor(
     val features: SchemaFeatures,
 ) {
     internal val allObjects: List<ObjectDefinition>
-        get() = listOf(query) + objects
+        get() = listOf(query) + objects + hashType
 
     internal fun objectNamed(name: String): ObjectDefinition =
         allObjects.single { it.name == name }
@@ -116,6 +121,9 @@ internal data class ArgumentDefinitionSpec(
     val type: InputTypeSpec,
     val defaultValue: graphql.language.Value<*>? = null,
 )
+
+internal fun FieldDefinitionSpec.isGeneratedHashField(): Boolean =
+    name == GENERATED_HASH_FIELD && type.namedType == GENERATED_HASH_TYPE
 
 internal data class InputObjectDefinitionSpec(
     val name: String,
@@ -250,7 +258,7 @@ private class SchemaGenerator(
             } else {
                 null
             }
-        val objects =
+        val domainObjects =
             baseObjects.map { objectType ->
                 if (objectType.name !in generatedInterface?.members.orEmpty()) {
                     objectType
@@ -270,6 +278,43 @@ private class SchemaGenerator(
                     )
                 }
             }
+        val objects =
+            domainObjects.map { objectType ->
+                objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
+            }
+        val hashType =
+            ObjectDefinition(
+                name = GENERATED_HASH_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        FieldDefinitionSpec(
+                            ownerName = GENERATED_HASH_TYPE,
+                            name = GENERATED_HASH_NESTED_FIELD,
+                            type =
+                                OutputTypeSpec(
+                                    namedType = GENERATED_HASH_TYPE,
+                                    nullable = true,
+                                    list = false,
+                                    elementNullable = false,
+                                ),
+                            arguments = emptyList(),
+                        ),
+                        FieldDefinitionSpec(
+                            ownerName = GENERATED_HASH_TYPE,
+                            name = GENERATED_HASH_FIELD,
+                            type =
+                                OutputTypeSpec(
+                                    namedType = "Int",
+                                    nullable = false,
+                                    list = false,
+                                    elementNullable = false,
+                                ),
+                            arguments = emptyList(),
+                        ),
+                    ),
+            )
         val generatedUnion =
             if (config[UnionsEnabled] && nonNodeObjectNames.isNotEmpty()) {
                 UnionDefinitionSpec(
@@ -340,6 +385,7 @@ private class SchemaGenerator(
             buildList {
                 addAll(inputObjects.map(::inputObjectType))
                 addAll(interfaces.map(::interfaceType))
+                add(objectType(hashType))
                 addAll(objects.map(::objectType))
                 addAll(unions.map(::unionType))
                 add(objectType(query))
@@ -367,6 +413,7 @@ private class SchemaGenerator(
             sdl = sdl,
             objects = objects,
             query = query,
+            hashType = hashType,
             interfaces = interfaces,
             unions = unions,
             inputObjects = inputObjects,
@@ -374,6 +421,20 @@ private class SchemaGenerator(
             features = features,
         )
     }
+
+    private fun generatedHashField(ownerName: String): FieldDefinitionSpec =
+        FieldDefinitionSpec(
+            ownerName = ownerName,
+            name = GENERATED_HASH_FIELD,
+            type =
+                OutputTypeSpec(
+                    namedType = GENERATED_HASH_TYPE,
+                    nullable = false,
+                    list = false,
+                    elementNullable = false,
+                ),
+            arguments = emptyList(),
+        )
 
     private fun deepField(
         ownerName: String,

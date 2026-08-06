@@ -37,7 +37,7 @@ class ResolverCoverageAdversarialTest {
                     val schema = Arb.schema(config).next(random)
                     val registry = schema.registry(config).next(random)
                     val sourceField =
-                        registry.fieldResolverSites.firstOrNull { coordinate ->
+                        registry.fieldResolverCoordinates.firstOrNull { coordinate ->
                             val field =
                                 schema
                                     .objectNamed(coordinate.typeName)
@@ -47,7 +47,7 @@ class ResolverCoverageAdversarialTest {
                                 schema.isComposite(field.type.namedType) &&
                                 schema.possibleObjects(field.type.namedType)
                                     .all { possible ->
-                                        possible.name in registry.nodeResolverSites
+                                        possible.name in registry.nodeResolverTypes
                                     }
                         }
                     sourceField?.let { Triple(schema, registry, it) }

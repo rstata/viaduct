@@ -66,8 +66,8 @@ class ExecutorRegistryTest {
             schema.objectOf("User") {
                 "id" setTo "42"
             }
-        val userField = schema.field("Query", "user")
-        val userIdField = schema.field("Query", "user\$id")
+        val userField = schema.objectField("Query", "user")
+        val userIdField = schema.objectField("Query", "user\$id")
         val registry = world.executorRegistry
         val assumptions = world.assumptions
 

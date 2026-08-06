@@ -42,7 +42,7 @@ The current model already establishes several useful restrictions:
 - Every use of a registered variable belongs to that defining field resolver.
 - A provider path is rooted at the defining resolver's containing OER.
 - Provider paths cannot traverse lists, cannot continue below simple values, and cannot terminate at objects.
-- Provider and field-resolver dependencies share one acyclic `Schema.ResolverSite` graph.
+- Provider and field-resolver dependencies share one private acyclic registry-construction graph.
 - A variable used directly or transitively while producing itself creates a cycle and is rejected.
 - Variables occur in input values carried by field arguments. The current scope has no `@skip` or `@include`, so variables do not control whether a structural selection exists.
 - The semantic scope stipulates that every argument-bearing output field has a field resolver. Variable substitution therefore occurs at a behavioral boundary where output projection can stop before materializing the exact key.

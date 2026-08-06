@@ -349,15 +349,15 @@ interface ExecutorRegistry {
     fun variableCoordinate(variable: Value.Variable): VariableCoordinate
 
     /**
-     * The resolver sites that may be directly demanded by [site].
+     * The registered fields that may be directly demanded by [field].
      *
      * This conservative coordinate relation is not specialized to one exact argument tuple or
      * runtime type assignment.
      */
-    fun mayDemandFrom(site: Schema.ResolverSite): Set<Schema.ResolverSite>
+    fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField>
 
-    /** The resolver sites that may directly demand [site]. */
-    fun mayBeDemandedBy(site: Schema.ResolverSite): Set<Schema.ResolverSite>
+    /** The registered fields that may directly demand [field]. */
+    fun mayBeDemandedBy(field: Schema.ObjectField): Set<Schema.ObjectField>
 }
 
 /** Indicates that no executor is defined at a valid schema coordinate. */

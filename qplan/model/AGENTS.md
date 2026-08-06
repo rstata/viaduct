@@ -16,7 +16,7 @@ Schema definitions form reciprocal graphs: type definitions contain fields, whil
 
 Nesting declarations under `Schema` provides namespacing only. A nested schema definition does not retain an enclosing `Schema` instance; canonical ownership follows from the one-world assumption and the definitions carried by values.
 
-`Schema.ResolverSite` is the common demand-graph domain for output fields and `VariableCoordinate` values. A variable coordinate pairs one globally named `Value.Variable` with the concrete object field whose resolver defines it; registry assembly establishes canonical ownership and global name uniqueness.
+The executor registry exposes demand between concrete `Schema.ObjectField` coordinates. During registry assembly, a private dependency graph also contains `VariableCoordinate` vertices so providers can be ordered before variable uses and cycles through variables can be rejected. A variable coordinate pairs one globally named `Value.Variable` with the concrete object field whose resolver defines it; registry assembly establishes canonical ownership and global name uniqueness.
 
 Every field-relative variable provider is one structurally contained path in its defining resolver's object fragment. Argument-dependent exact fragments are constructed by retargeting arguments in one fixed selection template, and registry assembly validates provider containment in the representative fragment and each exact fragment observed by semantic reasoning.
 

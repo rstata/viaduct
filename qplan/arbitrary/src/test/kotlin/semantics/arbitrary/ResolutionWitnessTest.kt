@@ -268,14 +268,14 @@ class ResolutionWitnessTest {
                 """.trimIndent(),
             )
         val allowed =
-            operation.subselections.allowedResolverSiteClosure(world.executorRegistry)
+            operation.subselections.allowedResolverClosure(world.executorRegistry)
         assertEquals(
             setOf(
                 FieldCoordinate("Query", "item"),
                 FieldCoordinate("Query", "items"),
                 FieldCoordinate("Payload", "computed"),
             ),
-            allowed.directlySelectedSites.mapTo(linkedSetOf(), ::coordinate),
+            allowed.directlySelectedFields.mapTo(linkedSetOf(), ::coordinate),
         )
         assertEquals(
             setOf(

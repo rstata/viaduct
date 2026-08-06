@@ -250,7 +250,9 @@ private class NodeResolverLowering(
                 )
             val bridgePossibleTypes =
                 selection.possibleTypes.filterTo(linkedSetOf()) { possibleType ->
-                    possibleType.fields[selection.key.field.fieldName] in loweredFields
+                    possibleType.fields[selection.key.field.fieldName]
+                        ?.let { field -> field in loweredFields }
+                        ?: false
                 }
             val bridgeField =
                 selection.key.field.containingType.fields[
@@ -469,6 +471,16 @@ private class NodeResolverLowering(
     }
 }
 
+private sealed interface DependencyVertex {
+    data class Field(
+        val field: Schema.ObjectField,
+    ) : DependencyVertex
+
+    data class Variable(
+        val coordinate: VariableCoordinate,
+    ) : DependencyVertex
+}
+
 private class TestExecutorRegistry(
     private val schema: Schema,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
@@ -479,8 +491,8 @@ private class TestExecutorRegistry(
     private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
     private val variableProviders: Map<VariableCoordinate, Selection> = variableProviders
     private val coordinatesByVariable: Map<Value.Variable, VariableCoordinate>
-    private val outgoing: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>
-    private val incoming: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>
+    private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
+    private val incoming: Map<DependencyVertex, Set<DependencyVertex>>
 
     init {
         fieldResolvers.forEach { (field, resolver) ->
@@ -544,17 +556,17 @@ private class TestExecutorRegistry(
             buildMap {
                 objectFieldResolvers.forEach { (field, resolver) ->
                     put(
-                        field,
-                        implicatedSites(resolver.objectFragment, field) +
+                        DependencyVertex.Field(field),
+                        implicatedVertices(resolver.objectFragment, field) +
                             additionalDemand[field].orEmpty().map {
-                                it as Schema.ObjectField
+                                DependencyVertex.Field(it as Schema.ObjectField)
                             },
                     )
                 }
                 variableProviders.forEach { (coordinate, selection) ->
                     put(
-                        coordinate,
-                        implicatedSites(
+                        DependencyVertex.Variable(coordinate),
+                        implicatedVertices(
                             Fragment.of(
                                 coordinate.field.containingType,
                                 selectionForestOf(selection),
@@ -567,9 +579,9 @@ private class TestExecutorRegistry(
         val predecessorResolvers = mutableMapOf<Schema.OutputField, Resolver.Field>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
-                is Schema.ObjectField -> {
-                    val resolver = fieldResolvers.getValue(site)
-                    predecessorResolvers[site] =
+                is DependencyVertex.Field -> {
+                    val resolver = fieldResolvers.getValue(site.field)
+                    predecessorResolvers[site.field] =
                         resolver.withPredecessorDemand(
                             predecessorDemand =
                                 closePredecessorDemand(
@@ -583,11 +595,11 @@ private class TestExecutorRegistry(
                                 )
                             },
                             validateObjectFragment = { fragment ->
-                                validateProviderContainment(site, fragment)
+                                validateProviderContainment(site.field, fragment)
                             },
                         )
                 }
-                is VariableCoordinate -> Unit
+                is DependencyVertex.Variable -> Unit
             }
         }
         this.fieldResolvers = predecessorResolvers
@@ -621,24 +633,22 @@ private class TestExecutorRegistry(
         coordinatesByVariable[variable]
             ?: throw NoSuchElementException("Missing variable provider: \$${variable.variableName}")
 
-    override fun mayDemandFrom(site: Schema.ResolverSite): Set<Schema.ResolverSite> {
-        validateResolverSite(site)
-        return outgoing.getValue(site)
+    override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> {
+        require(field in this) { "Resolver field is not registered" }
+        return outgoing
+            .getValue(DependencyVertex.Field(field))
+            .mapNotNullTo(linkedSetOf()) { vertex ->
+                (vertex as? DependencyVertex.Field)?.field
+            }
     }
 
-    override fun mayBeDemandedBy(site: Schema.ResolverSite): Set<Schema.ResolverSite> {
-        validateResolverSite(site)
-        return incoming.getValue(site)
-    }
-
-    private fun validateResolverSite(site: Schema.ResolverSite) {
-        when (site) {
-            is Schema.ObjectField -> require(site in this) { "Resolver field is not registered" }
-            is VariableCoordinate ->
-                require(variableProviders.keys.any { it == site }) {
-                    "Variable coordinate is not registered"
-                }
-        }
+    override fun mayBeDemandedBy(field: Schema.ObjectField): Set<Schema.ObjectField> {
+        require(field in this) { "Resolver field is not registered" }
+        return incoming
+            .getValue(DependencyVertex.Field(field))
+            .mapNotNullTo(linkedSetOf()) { vertex ->
+                (vertex as? DependencyVertex.Field)?.field
+            }
     }
 
     private fun validateVariablePath(selection: Selection) {
@@ -695,25 +705,25 @@ private class TestExecutorRegistry(
         }
     }
 
-    private fun implicatedSites(
+    private fun implicatedVertices(
         fragment: Fragment,
         ownerField: Schema.ObjectField,
-    ): Set<Schema.ResolverSite> {
-        val result = mutableSetOf<Schema.ResolverSite>()
+    ): Set<DependencyVertex> {
+        val result = mutableSetOf<DependencyVertex>()
         fragment.subselections.forEach { selection ->
             result.addImplicatedBy(selection, ownerField)
         }
         return result
     }
 
-    private fun MutableSet<Schema.ResolverSite>.addImplicatedBy(
+    private fun MutableSet<DependencyVertex>.addImplicatedBy(
         selection: Selection,
         ownerField: Schema.ObjectField,
     ) {
         selection.possibleTypes.forEach { possibleType ->
             possibleType.fields[selection.key.field.fieldName]
                 ?.takeIf { it in sourceFieldResolvers }
-                ?.let { add(it as Schema.ObjectField) }
+                ?.let { add(DependencyVertex.Field(it as Schema.ObjectField)) }
         }
         selection.key.arguments.variables().forEach { variable ->
             val coordinate = variableCoordinate(variable)
@@ -721,7 +731,7 @@ private class TestExecutorRegistry(
                 "Variable \$${variable.variableName} is not defined by " +
                     "${ownerField.containingType.typeName}/${ownerField.fieldName}"
             }
-            add(coordinate)
+            add(DependencyVertex.Variable(coordinate))
         }
         selection.subselections.forEach { subselection ->
             addImplicatedBy(subselection, ownerField)
@@ -729,10 +739,10 @@ private class TestExecutorRegistry(
     }
 
     private fun dependencyOrder(
-        outgoing: Map<Schema.ResolverSite, Set<Schema.ResolverSite>>,
-        remaining: Set<Schema.ResolverSite> = outgoing.keys,
-        ordered: List<Schema.ResolverSite> = emptyList(),
-    ): List<Schema.ResolverSite> {
+        outgoing: Map<DependencyVertex, Set<DependencyVertex>>,
+        remaining: Set<DependencyVertex> = outgoing.keys,
+        ordered: List<DependencyVertex> = emptyList(),
+    ): List<DependencyVertex> {
         if (remaining.isEmpty()) return ordered
 
         val ready =

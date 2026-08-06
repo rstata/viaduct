@@ -57,8 +57,10 @@ internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
 ) {
     private val types = linkedMapOf<String, Schema.Type>()
-    private val compositeFields =
+    private val abstractCompositeFields =
         linkedMapOf<Schema.CompositeType, MutableMap<String, Schema.OutputField>>()
+    private val objectFields =
+        linkedMapOf<Schema.ObjectType, MutableMap<String, Schema.ObjectField>>()
     private val inputFields =
         linkedMapOf<Schema.InputObjectType, MutableMap<String, Schema.InputField>>()
     private val possibleTypeSets =
@@ -128,18 +130,26 @@ internal class GJSchemaDecoder(
                         inputFields[type] = fields
                     }
 
-                    is GraphQLObjectType, is GraphQLInterfaceType, is GraphQLUnionType -> {
+                    is GraphQLObjectType -> {
+                        val fields = linkedMapOf<String, Schema.ObjectField>()
+                        val possibleTypes = linkedSetOf<Schema.ObjectType>()
+                        val type = ObjectTypeImpl(graphQLType.name, fields, possibleTypes)
+                        possibleTypes += type
+                        types[type.typeName] = type
+                        objectFields[type] = fields
+                        possibleTypeSets[type] = possibleTypes
+                    }
+
+                    is GraphQLInterfaceType, is GraphQLUnionType -> {
                         val fields = linkedMapOf<String, Schema.OutputField>()
                         val possibleTypes = linkedSetOf<Schema.ObjectType>()
-                        val type: Schema.CompositeType = when (graphQLType) {
-                            is GraphQLObjectType ->
-                                ObjectTypeImpl(graphQLType.name, fields, possibleTypes)
+                        val type: Schema.CompositeType =
+                            when (graphQLType) {
                             is GraphQLInterfaceType ->
                                 InterfaceTypeImpl(graphQLType.name, fields, possibleTypes)
                             else ->
                                 UnionTypeImpl((graphQLType as GraphQLUnionType).name, fields, possibleTypes)
-                        }
-                        if (type is Schema.ObjectType) possibleTypes += type
+                            }
                         registerComposite(type, fields, possibleTypes)
                     }
 
@@ -154,7 +164,7 @@ internal class GJSchemaDecoder(
         possibleTypes: MutableSet<Schema.ObjectType>,
     ) {
         types[type.typeName] = type
-        compositeFields[type] = fields
+        abstractCompositeFields[type] = fields
         possibleTypeSets[type] = possibleTypes
     }
 
@@ -214,7 +224,6 @@ internal class GJSchemaDecoder(
             .filterNot { it.name.startsWith("__") }
             .forEach { graphQLType ->
                 val modelType = types.getValue(graphQLType.name) as Schema.CompositeType
-                val modelFields = compositeFields.getValue(modelType)
                 graphQLType.fieldDefinitions.forEach { graphQLField ->
                     val arguments =
                         fieldArgumentsOf(
@@ -239,7 +248,7 @@ internal class GJSchemaDecoder(
                             typeExpr = decodeOutputType(graphQLField.type),
                             arguments = arguments,
                         )
-                    modelFields[modelField.fieldName] = modelField
+                    addCompositeField(modelType, modelField)
                 }
             }
     }
@@ -252,13 +261,16 @@ internal class GJSchemaDecoder(
                 typeExpr = TypeExpr.Named.of(Schema.StringType, isNullable = false),
                 arguments = Schema.NoArguments,
             )
-        compositeFields.getValue(type)[field.fieldName] = field
+        addCompositeField(type, field)
     }
 
     private fun populateNodeIdBridgeFields() {
         val nodeType = types["Node"] as? Schema.InterfaceType ?: return
-        compositeFields.forEach { (containingType, fields) ->
-            fields.values
+        types.values
+            .filterIsInstance<Schema.CompositeType>()
+            .forEach { containingType ->
+                compositeFields(containingType)
+                    .values
                 .toList()
                 .filter { field ->
                     val baseType = field.typeExpr.baseType
@@ -270,7 +282,7 @@ internal class GJSchemaDecoder(
                         )
                 }.forEach { nodeField ->
                     val bridgeName = nodeIdBridgeName(nodeField)
-                    require(bridgeName !in fields) {
+                    require(bridgeName !in compositeFields(containingType)) {
                         "Synthetic node-ID bridge collides with $bridgeName"
                     }
                     val arguments =
@@ -287,14 +299,34 @@ internal class GJSchemaDecoder(
                                 defaultValue = argument.defaultValue,
                             )
                         }
-                    fields[bridgeName] =
+                    addCompositeField(
+                        containingType,
                         outputFieldOf(
                             fieldName = bridgeName,
                             containingType = containingType,
                             typeExpr = nodeIdTypeExpr(nodeField.typeExpr),
                             arguments = arguments,
-                        )
+                        ),
+                    )
                 }
+            }
+    }
+
+    private fun compositeFields(
+        type: Schema.CompositeType,
+    ): Map<String, Schema.OutputField> =
+        when (type) {
+            is Schema.ObjectType -> objectFields.getValue(type)
+            else -> abstractCompositeFields.getValue(type)
+        }
+
+    private fun addCompositeField(
+        type: Schema.CompositeType,
+        field: Schema.OutputField,
+    ) {
+        when (type) {
+            is Schema.ObjectType -> objectFields.getValue(type)[field.fieldName] = field as Schema.ObjectField
+            else -> abstractCompositeFields.getValue(type)[field.fieldName] = field
         }
     }
 
@@ -674,7 +706,7 @@ private class EnumTypeImpl(
 
 private class ObjectTypeImpl(
     override val typeName: String,
-    override val fields: Map<String, Schema.OutputField>,
+    override val fields: Map<String, Schema.ObjectField>,
     override val possibleTypes: Set<Schema.ObjectType>,
 ) : Schema.ObjectType
 

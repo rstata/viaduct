@@ -5,7 +5,7 @@ package model
  *
  * Equality is structural over the canonical object field and variable name.
  */
-sealed interface VariableCoordinate : Schema.ResolverSite {
+sealed interface VariableCoordinate {
     val field: Schema.ObjectField
     val variable: Value.Variable
 

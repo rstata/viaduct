@@ -137,7 +137,7 @@ Required properties include:
 - unequal exact keys remain unequal after extraction;
 - unequal OER and list-element occurrences remain unequal;
 - path and concrete-type guards are preserved;
-- resolver sites come exactly from registry membership;
+- resolver coordinates come exactly from registry membership;
 - typename, argument-error, and behavioral classifications agree with Kotlin definitions;
 - operation and resolver demand are extracted from the corresponding fragments.
 

@@ -83,7 +83,92 @@ class ResolverDemandTest {
     }
 
     @Test
-    fun `rejects repeated global variable names and variable cycles`() {
+    fun `variable names are local to their defining field resolver`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      x: Int
+                      y: Int
+                      xSource: Int
+                      ySource: Int
+                      consume(value: Int): Int
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val empty = schema.emptyFragmentOf("Query")
+                    mapOf(
+                        schema.field("Query", "x") to
+                            resolver(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      xSource
+                                      consume(value: ${'$'}same)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ),
+                        schema.field("Query", "y") to
+                            resolver(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      ySource
+                                      consume(value: ${'$'}same)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ),
+                        schema.field("Query", "xSource") to resolver(empty),
+                        schema.field("Query", "ySource") to resolver(empty),
+                        schema.field("Query", "consume") to resolver(empty),
+                    )
+                },
+                variableProviders = { schema ->
+                    val x = schema.objectField("Query", "x")
+                    val y = schema.objectField("Query", "y")
+                    mapOf(
+                        Value.Variable.of("same", x, path = null) to
+                            schema.fromObjectField(
+                                "fragment ignored on Query { xSource }",
+                                listOf("xSource"),
+                            ),
+                        Value.Variable.of("same", y, path = null) to
+                            schema.fromObjectField(
+                                "fragment ignored on Query { ySource }",
+                                listOf("ySource"),
+                            ),
+                    )
+                },
+            )
+        val schema = world.schema
+        val x = schema.objectField("Query", "x")
+        val y = schema.objectField("Query", "y")
+        val xVariable = Value.Variable.of("same", x, path = null)
+        val yVariable = Value.Variable.of("same", y, path = null)
+
+        assertEquals(
+            setOf(xVariable),
+            world.resolverRegistry.resolver(x).variables.keys,
+        )
+        assertEquals(
+            setOf(yVariable),
+            world.resolverRegistry.resolver(y).variables.keys,
+        )
+        assertEquals(
+            schema.objectField("Query", "xSource"),
+            world.resolverRegistry.resolver(x).variables.getValue(xVariable).single().field,
+        )
+        assertEquals(
+            schema.objectField("Query", "ySource"),
+            world.resolverRegistry.resolver(y).variables.getValue(yVariable).single().field,
+        )
+    }
+
+    @Test
+    fun `rejects variable cycles`() {
         val schemaSDL =
             """
             type Query {
@@ -92,57 +177,6 @@ class ResolverDemandTest {
               z(a: Int, b: Int): Int
             }
             """.trimIndent()
-        val duplicate =
-            assertFailsWith<IllegalArgumentException> {
-                TestWorld.fromSDL(
-                    schemaSDL = schemaSDL,
-                    fieldResolvers = { schema ->
-                        val resolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
-                        schema.query.fields.values
-                            .filter { it.fieldName != "__typename" }
-                            .forEach { field ->
-                                resolvers[field] = resolver(schema.emptyFragmentOf("Query"))
-                            }
-                        resolvers[schema.field("Query", "x")] =
-                            resolver(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Query { y }",
-                                ),
-                            )
-                        resolvers[schema.field("Query", "y")] =
-                            resolver(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Query { x }",
-                                ),
-                            )
-                        resolvers
-                    },
-                    variableProviders = { schema ->
-                        mapOf(
-                            Value.Variable.of(
-                                "same",
-                                schema.objectField("Query", "x"),
-                                path = null,
-                            ) to
-                                schema.fromObjectField(
-                                    "fragment ignored on Query { y }",
-                                    listOf("y"),
-                                ),
-                            Value.Variable.of(
-                                "same",
-                                schema.objectField("Query", "y"),
-                                path = null,
-                            ) to
-                                schema.fromObjectField(
-                                    "fragment ignored on Query { x }",
-                                    listOf("x"),
-                                ),
-                        )
-                    },
-                )
-            }
-        assertTrue(duplicate.message!!.contains("globally unique"))
-
         val cycle =
             assertFailsWith<IllegalArgumentException> {
                 TestWorld.fromSDL(

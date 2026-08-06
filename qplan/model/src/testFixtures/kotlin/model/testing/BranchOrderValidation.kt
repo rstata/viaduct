@@ -11,7 +11,6 @@ import model.registry.FieldResolver
  */
 internal class BranchOrderValidator(
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
-    private val variableProviders: Map<Value.Variable, List<Value.Key>>,
 ) {
     private data class Edge(
         val prerequisite: Schema.ObjectField,
@@ -73,33 +72,31 @@ internal class BranchOrderValidator(
         var changed: Boolean
         do {
             val additions = mutableListOf<Pair<Edge, EdgeReason.VariableProduction>>()
-            variableProviders.forEach { (variable, providerPath) ->
-                val type = variable.field.containingType
-                val graph = graphs.getValue(type)
-                val providerBranch =
-                    type.fields.getValue(providerPath.first().field.fieldName)
-                val productionPaths = graph.prerequisitePathsTo(providerBranch)
-                val renderedProviderPath =
-                    providerPath.joinToString("/") { key -> key.field.fieldName }
-                val uses =
-                    fieldResolvers
-                        .getValue(variable.field)
-                        .objectFragment
-                        .subselections
-                        .variableUsePaths(variable, type)
+            fieldResolvers.values.forEach { resolver ->
+                resolver.variables.forEach { (variable, providerPath) ->
+                    val type = variable.field.containingType
+                    val graph = graphs.getValue(type)
+                    val providerBranch =
+                        type.fields.getValue(providerPath.first().field.fieldName)
+                    val productionPaths = graph.prerequisitePathsTo(providerBranch)
+                    val renderedProviderPath =
+                        providerPath.joinToString("/") { key -> key.field.fieldName }
+                    val uses =
+                        resolver.objectFragment.subselections.variableUsePaths(variable, type)
 
-                productionPaths.forEach { (production, productionPath) ->
-                    uses.forEach { (useBranch, usePaths) ->
-                        usePaths.forEach { usePath ->
-                            additions +=
-                                Edge(production, useBranch) to
-                                    EdgeReason.VariableProduction(
-                                        variable = variable,
-                                        providerPath = renderedProviderPath,
-                                        productionPath =
-                                            productionPath.joinToString(" -> ") { it.fieldName },
-                                        usePath = usePath,
-                                    )
+                    productionPaths.forEach { (production, productionPath) ->
+                        uses.forEach { (useBranch, usePaths) ->
+                            usePaths.forEach { usePath ->
+                                additions +=
+                                    Edge(production, useBranch) to
+                                        EdgeReason.VariableProduction(
+                                            variable = variable,
+                                            providerPath = renderedProviderPath,
+                                            productionPath =
+                                                productionPath.joinToString(" -> ") { it.fieldName },
+                                            usePath = usePath,
+                                        )
+                            }
                         }
                     }
                 }

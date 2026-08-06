@@ -139,7 +139,11 @@ private fun Value.Object.resolveVariables(
         if (variable in result.variableValues) {
             result
         } else {
-            val provider = world.resolverRegistry.variable(variable)
+            val provider =
+                world.resolverRegistry
+                    .resolver(variable.field)
+                    .variables
+                    .getValue(variable)
             val withDependencies =
                 resolveVariables(
                     variables = provider.variables(),

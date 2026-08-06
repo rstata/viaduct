@@ -318,12 +318,12 @@ private fun SelectionForest.retargetArguments(
  * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
  * would be acyclic.
  *
- * Every variable provider is one path selection relative to its coordinate's containing object and
- * is structurally contained by the defining field resolver's fixed
+ * Every variable provider is one nonempty canonical [Value.Key] path relative to its coordinate's
+ * containing object and is structurally contained by the defining field resolver's fixed
  * [Resolver.Field.objectFragment] envelope. Variables referenced by a field resolver's object
  * fragment or one of its providers belong to that same field. A provider path must terminate at an
- * input-compatible value, but compatibility between that value's precise type and every argument
- * position consuming the variable is externally stipulated rather than validated by this registry.
+ * input-compatible value whose effective nullability and list shape can be coerced at every
+ * argument position consuming the variable.
  *
  * ### Invariant: executor-registry-depth-first-variable-stratification
  *
@@ -342,8 +342,8 @@ interface ExecutorRegistry {
     /** Defined only when [field] is registered. */
     fun resolver(field: Schema.ObjectField): Resolver.Field
 
-    /** The provider selection for the globally registered [variable]. */
-    fun variable(variable: Value.Variable): Selection
+    /** The nonempty alias-free provider path for the globally registered [variable]. */
+    fun variable(variable: Value.Variable): List<Value.Key>
 
     /** The unique resolver-relative coordinate of the globally registered [variable]. */
     fun variableCoordinate(variable: Value.Variable): VariableCoordinate

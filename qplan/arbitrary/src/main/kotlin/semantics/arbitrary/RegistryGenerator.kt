@@ -18,6 +18,7 @@ import model.objectOf
 import model.toSelectionForest
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import model.testing.fromObjectField
 import model.testing.nodeResolverOf
 
 enum class ResolverProgramKind {
@@ -239,7 +240,12 @@ class ArbitraryRegistry internal constructor(
                     VariableCoordinate.of(
                         field,
                         Value.Variable.of(provider.variableName),
-                    ) to provider.selection.materialize(canonicalSchema, field.containingType)
+                    ) to
+                        canonicalSchema.fromObjectField(
+                            objectFragmentSource =
+                                objectFragmentSources.getValue(provider.owner),
+                            responsePath = provider.responsePath(),
+                        )
                 }
             },
         )
@@ -572,11 +578,13 @@ private class RegistryGenerator(
                         ?.let { provider -> occurrence to provider }
                 } ?: return@fold fragment
             val variableName = "resolverVar${ranks.getValue(consumer)}_$variableIndex"
+            val providerSelection =
+                candidate.second.withResponseAliases(variableName)
             variableProviders +=
                 VariableProviderPlan(
                     owner = consumer,
                     variableName = variableName,
-                    selection = candidate.second,
+                    selection = providerSelection,
                     nestedInput = candidate.first.valuePath.isNotEmpty(),
                     listValue = candidate.first.target is ListVariableTarget,
                     nullable = candidate.first.target?.nullable == true,
@@ -584,7 +592,7 @@ private class RegistryGenerator(
                 )
             fragment.copy(
                 selections =
-                    (fragment.selections + candidate.second).replaceArgument(
+                    (fragment.selections + providerSelection).replaceArgument(
                         selectionPath = candidate.first.selectionPath,
                         argumentName = candidate.first.argument.name,
                         valuePath = candidate.first.valuePath,
@@ -977,6 +985,7 @@ internal data class FragmentSelectionPlan(
     val arguments: Map<String, InputValuePlan>,
     val subselections: List<FragmentSelectionPlan>,
     val typeCondition: String? = null,
+    val alias: String? = null,
 ) {
     fun source(indent: String): String =
         buildString {
@@ -985,6 +994,7 @@ internal data class FragmentSelectionPlan(
             }
             val fieldIndent = if (typeCondition == null) indent else "$indent  "
             append(fieldIndent)
+            if (alias != null) append("$alias: ")
             append(fieldName)
             if (arguments.isNotEmpty()) {
                 append(
@@ -1159,7 +1169,29 @@ internal data class VariableProviderPlan(
 ) {
     fun source(): String =
         FragmentPlan(owner.typeName, listOf(selection)).source()
+
+    fun responsePath(): List<String> =
+        buildList {
+            var current = selection
+            while (true) {
+                add(current.alias ?: current.fieldName)
+                if (current.subselections.isEmpty()) break
+                current = current.subselections.single()
+            }
+        }
 }
+
+private fun FragmentSelectionPlan.withResponseAliases(
+    variableName: String,
+    depth: Int = 0,
+): FragmentSelectionPlan =
+    copy(
+        alias = "${variableName}Source$depth",
+        subselections =
+            subselections.map { selection ->
+                selection.withResponseAliases(variableName, depth + 1)
+            },
+    )
 
 private fun sensitiveScalar(
     scalar: ScalarKind,

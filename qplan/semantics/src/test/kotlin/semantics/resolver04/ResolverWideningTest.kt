@@ -98,7 +98,7 @@ class ResolverWideningTest {
                             schema.field("Query", "result") as Schema.ObjectField,
                             Value.Variable.of("value"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 """
                                 fragment ignored on Query {
                                   container {
@@ -108,7 +108,10 @@ class ResolverWideningTest {
                                   }
                                 }
                                 """.trimIndent(),
-                            ).subselections.single(),
+                                "container",
+                                "child",
+                                "__typename",
+                            ),
                     )
                     },
                 )
@@ -205,9 +208,10 @@ class ResolverWideningTest {
                             schema.field("Object1", "variableConsumer") as Schema.ObjectField,
                             Value.Variable.of("value"),
                         ) to
-                            schema.fragmentFrom(
+                            schema.provider(
                                 "fragment ignored on Object1 { common }",
-                            ).subselections.single(),
+                                "common",
+                            ),
                     )
                     },
                 )

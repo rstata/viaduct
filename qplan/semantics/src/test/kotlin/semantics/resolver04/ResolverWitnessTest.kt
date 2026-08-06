@@ -188,8 +188,17 @@ class ResolverWitnessTest {
             nestedInput = occurrences.any { occurrence -> occurrence.depth > 0 },
             listValue = occurrences.any { occurrence -> occurrence.type is TypeExpr.List },
             nullableValue = occurrences.any { occurrence -> occurrence.type.isNullable },
-            nullableProvider = provider.terminalType().isNullable,
-            abstractProviderPath = provider.hasAbstractPath(),
+            nullableProvider = provider.any { key -> key.field.typeExpr.isNullable },
+            abstractProviderPath =
+                provider.any { key ->
+                    key.field.containingType.possibleTypes.size > 1 ||
+                        (
+                            key.field.typeExpr.baseType is Schema.CompositeType &&
+                                (
+                                    key.field.typeExpr.baseType as Schema.CompositeType
+                                ).possibleTypes.size > 1
+                        )
+                },
         )
     }
 
@@ -238,28 +247,6 @@ class ResolverWitnessTest {
             is Value.Variable,
             -> emptyList()
         }
-
-    private fun Selection.terminalType(): TypeExpr<Schema.OutputType> =
-        if (subselections.isEmpty()) {
-            key.field.typeExpr
-        } else {
-            subselections.single().terminalType()
-        }
-
-    private fun Selection.hasAbstractPath(): Boolean {
-        val outputType = key.field.typeExpr.baseType
-        return key.field.containingType.possibleTypes.size > 1 ||
-            (outputType is Schema.CompositeType && outputType.possibleTypes.size > 1) ||
-            subselections.anySelection { selection -> selection.hasAbstractPath() }
-    }
-
-    private fun SelectionForest.anySelection(predicate: (Selection) -> Boolean): Boolean {
-        var matched = false
-        forEach { selection ->
-            if (predicate(selection)) matched = true
-        }
-        return matched
-    }
 
     private fun EngineResult?.activeVariables(): Set<Value.Variable> =
         when (this) {

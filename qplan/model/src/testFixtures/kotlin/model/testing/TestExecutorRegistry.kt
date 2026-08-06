@@ -37,7 +37,7 @@ internal fun executorRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
-    variableProviders: Map<VariableCoordinate, Selection>,
+    variableProviders: Map<VariableCoordinate, FromObjectField>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ExecutorRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
@@ -55,7 +55,7 @@ internal fun executorRegistryOf(
         schema = schema,
         fieldResolvers = canonicalResolvers,
         additionalDemand = lowering.additionalDemand,
-        variableProviders = variableProviders,
+        variableDeclarations = variableProviders,
     )
 }
 
@@ -485,11 +485,13 @@ private class TestExecutorRegistry(
     private val schema: Schema,
     fieldResolvers: Map<Schema.OutputField, Resolver.Field>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
-    variableProviders: Map<VariableCoordinate, Selection>,
+    variableDeclarations: Map<VariableCoordinate, FromObjectField>,
 ) : ExecutorRegistry {
     private val sourceFieldResolvers = fieldResolvers
     private val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
-    private val variableProviders: Map<VariableCoordinate, Selection> = variableProviders
+    private val variableDeclarations = variableDeclarations
+    private val variableProviders =
+        variableDeclarations.mapValues { (_, declaration) -> declaration.keyPath }
     private val coordinatesByVariable: Map<Value.Variable, VariableCoordinate>
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
     private val incoming: Map<DependencyVertex, Set<DependencyVertex>>
@@ -525,22 +527,23 @@ private class TestExecutorRegistry(
                 missingQueryFields.map { it.fieldName }.sorted().joinToString()
         }
 
-        variableProviders.forEach { (coordinate, selection) ->
+        variableDeclarations.forEach { (coordinate, declaration) ->
             validateCanonicalField(coordinate.field, "variable-defining field")
             require(coordinate.field in fieldResolvers) {
                 "Variable ${coordinate.variable.variableName} belongs to an unregistered resolver"
             }
-            require(selection.key.field.containingType == coordinate.field.containingType) {
-                "Variable ${coordinate.variable.variableName} selection is not relative to " +
+            require(declaration.objectFragment.nominalType == coordinate.field.containingType) {
+                "Variable ${coordinate.variable.variableName} declaration is not relative to " +
                     "${coordinate.field.containingType.typeName}/${coordinate.field.fieldName}"
             }
-            require(coordinate.field.containingType in selection.possibleTypes) {
-                "Variable ${coordinate.variable.variableName} selection does not apply to its object"
-            }
-            validateVariablePath(selection)
             validateProviderContainment(
                 coordinate.field,
                 fieldResolvers.getValue(coordinate.field).objectFragment,
+            )
+            validateVariableUses(
+                coordinate = coordinate,
+                declaration = declaration,
+                fragment = fieldResolvers.getValue(coordinate.field).objectFragment,
             )
         }
         val coordinatesByName = variableProviders.keys.groupBy { it.variable.variableName }
@@ -563,13 +566,15 @@ private class TestExecutorRegistry(
                             },
                     )
                 }
-                variableProviders.forEach { (coordinate, selection) ->
+                variableProviders.forEach { (coordinate, path) ->
                     put(
                         DependencyVertex.Variable(coordinate),
                         implicatedVertices(
                             Fragment.of(
                                 coordinate.field.containingType,
-                                selectionForestOf(selection),
+                                selectionForestOf(
+                                    path.toSelection(setOf(coordinate.field.containingType)),
+                                ),
                             ),
                             coordinate.field,
                         ),
@@ -626,7 +631,7 @@ private class TestExecutorRegistry(
             ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)
     }
 
-    override fun variable(variable: Value.Variable): Selection =
+    override fun variable(variable: Value.Variable): List<Value.Key> =
         variableProviders.getValue(variableCoordinate(variable))
 
     override fun variableCoordinate(variable: Value.Variable): VariableCoordinate =
@@ -651,48 +656,108 @@ private class TestExecutorRegistry(
             }
     }
 
-    private fun validateVariablePath(selection: Selection) {
-        val outputType = selection.key.field.typeExpr
-        if (selection.subselections.isEmpty()) {
-            require(outputType.baseType is Schema.InputType) {
-                "Variable provider paths must terminate at input-compatible values"
-            }
-        } else {
-            require(outputType is TypeExpr.Named && outputType.baseType is Schema.CompositeType) {
-                "Variable provider paths cannot traverse lists or simple values"
-            }
-            validateVariablePath(selection.subselections.single())
-        }
-    }
-
     private fun validateProviderContainment(
         field: Schema.ObjectField,
         fragment: Fragment,
     ) {
-        variableProviders.forEach { (coordinate, provider) ->
+        variableProviders.forEach { (coordinate, providerPath) ->
             if (coordinate.field != field) return@forEach
-            require(fragment.subselections.containsProviderPath(provider)) {
+            require(fragment.subselections.containsProviderPath(providerPath)) {
                 "Variable ${coordinate.variable.variableName} provider path is not contained by " +
                     "${field.containingType.typeName}/${field.fieldName} object fragment"
             }
         }
     }
 
-    private fun model.SelectionForest.containsProviderPath(provider: Selection): Boolean =
-        toSelectionList().any { selection ->
-            selection.key == provider.key &&
-                provider.possibleTypes.all { it in selection.possibleTypes } &&
+    private fun validateVariableUses(
+        coordinate: VariableCoordinate,
+        declaration: FromObjectField,
+        fragment: Fragment,
+    ) {
+        fragment.subselections
+            .variableUses(coordinate.variable)
+            .forEach { use ->
+                require(
+                    declaration.isCompatibleWith(
+                        locationType = use.typeExpr,
+                        locationHasDefault = use.hasDefault,
+                    ),
+                ) {
+                    "Variable ${coordinate.variable.variableName} provider path " +
+                        declaration.responsePath.joinToString(".") +
+                        " is incompatible with one of its argument locations"
+                }
+            }
+    }
+
+    private fun model.SelectionForest.containsProviderPath(providerPath: List<Value.Key>): Boolean {
+        val provider = providerPath.first()
+        val remaining = providerPath.drop(1)
+        return toSelectionList().any { selection ->
+            selection.key == provider &&
                 (
-                    provider.subselections.isEmpty() ||
-                        selection.subselections.containsProviderPath(
-                            provider.subselections.single(),
-                        )
+                    remaining.isEmpty() ||
+                        selection.subselections.containsProviderPath(remaining)
                 )
         }
+    }
 
     private fun model.SelectionForest.toSelectionList(): List<Selection> =
         buildList {
             this@toSelectionList.forEach(::add)
+        }
+
+    private data class VariableUse(
+        val typeExpr: TypeExpr<Schema.InputType>,
+        val hasDefault: Boolean,
+    )
+
+    private fun model.SelectionForest.variableUses(
+        variable: Value.Variable,
+    ): List<VariableUse> =
+        buildList {
+            this@variableUses.forEach { selection ->
+                selection.key.arguments.fieldValues.forEach { (name, value) ->
+                    val argument = selection.key.arguments.type.fields.getValue(name)
+                    addAll(
+                        value.variableUses(
+                            variable = variable,
+                            typeExpr = argument.typeExpr,
+                            hasDefault = argument.defaultValue is Value.Default.Present,
+                        ),
+                    )
+                }
+                addAll(selection.subselections.variableUses(variable))
+            }
+        }
+
+    private fun Value.Input?.variableUses(
+        variable: Value.Variable,
+        typeExpr: TypeExpr<Schema.InputType>,
+        hasDefault: Boolean,
+    ): List<VariableUse> =
+        when {
+            this == null || this == Value.Error -> emptyList()
+            this == variable -> listOf(VariableUse(typeExpr, hasDefault))
+            this is Value.InputList && typeExpr is TypeExpr.List ->
+                values.flatMap { value ->
+                    value.variableUses(
+                        variable = variable,
+                        typeExpr = typeExpr.elementType,
+                        hasDefault = false,
+                    )
+                }
+            this is Value.InputObject -> {
+                fieldValues.flatMap { (name, value) ->
+                    val field = type.fields.getValue(name)
+                    value.variableUses(
+                        variable = variable,
+                        typeExpr = field.typeExpr,
+                        hasDefault = field.defaultValue is Value.Default.Present,
+                    )
+                }
+            }
+            else -> emptyList()
         }
 
     private fun validateCanonicalField(
@@ -703,6 +768,25 @@ private class TestExecutorRegistry(
         require(schema.field(typeName, field.fieldName) == field) {
             "$typeName/${field.fieldName} is not the canonical $role in this registry's schema"
         }
+    }
+
+    private fun List<Value.Key>.toSelection(
+        possibleTypes: Set<Schema.ObjectType>,
+    ): Selection {
+        val key = first()
+        val remaining = drop(1)
+        val outputType = key.field.typeExpr.baseType
+        return Selection.of(
+            key = key,
+            possibleTypes = possibleTypes,
+            subselections =
+                if (remaining.isEmpty()) {
+                    selectionForestOf()
+                } else {
+                    require(outputType is Schema.CompositeType)
+                    selectionForestOf(remaining.toSelection(outputType.possibleTypes))
+                },
+        )
     }
 
     private fun implicatedVertices(

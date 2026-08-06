@@ -13,6 +13,7 @@ import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.instantiateVariables
 import semantics.materialize
+import semantics.providerSelection
 import semantics.readVariable
 import semantics.variables
 
@@ -148,7 +149,10 @@ private fun Value.Object.resolveVariables(
             val instantiated = provider.instantiateVariables(withDependencies.variableValues)
             val withProvider =
                 resolve(
-                    selections = selectionForestOf(instantiated),
+                    selections =
+                        selectionForestOf(
+                            instantiated.providerSelection(type),
+                        ),
                     resolved = withDependencies,
                     envelope = envelope,
                 )

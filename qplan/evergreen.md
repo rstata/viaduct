@@ -330,6 +330,47 @@ These cases should not be assumed equivalent to ordinary current-object RSSes. A
 
 A selective field's argument or condition can depend on a `fromField` variable provider, whose own RSS obtains the variable value from a path in an object or Query OER. The variable-resolution target may differ from the child plan's selection type.
 
+The tenant API declares `fromObjectField` as one dot-separated string path into the resolver's `objectValueFragment`. The public contract requires the path to be selected by that fragment, terminate at a scalar, enum, or possibly nested list of those leaf types, never traverse a list-valued field, and produce a type compatible with every variable use; nullable traversal, conditional directives, and narrowing fragments can therefore invalidate an otherwise syntactically present path ([`Variable.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/tenant/api/src/main/kotlin/viaduct/api/resolver/Variable.kt#L5-L31)).
+
+Production interprets each path segment as a GraphQL response key rather than as a schema field name. A field selected as `nickname: commonName` has response key `nickname`; an unaliased field has its field name as its response key. Registry construction splits the declaration on `.`, filters the fully expanded parsed selection set to the path, recursively constructs variable resolvers for variables referenced by that filtered view, and retains both the `List<String>` path and the filtered view as the variable resolver's required selection set ([`VariablesResolver.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/engine/api/src/main/kotlin/viaduct/engine/api/VariablesResolver.kt#L132-L175)). At runtime `EngineDataReader` walks those same response-key strings through the resolved `EngineObjectData.Sync`, returning null when an intermediate value is null and rejecting traversal through a non-object value ([`EngineDataReader.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/engine/api/src/main/kotlin/viaduct/engine/api/EngineDataReader.kt#L3-L41)).
+
+More precisely, a path is selected when recursively filtering the expanded fragment by its response-key segments yields a nonempty selection set. Fields consume matching segments; inline fragments and named fragment spreads consume no segment, preserve their conditions and directives, and retain every matching branch rather than choosing one syntactic occurrence ([`ParsedSelections.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/shared/graphql/src/main/kotlin/viaduct/graphql/utils/ParsedSelections.kt#L121-L199)). Aliases therefore distinguish argument-distinct source selections such as `z1: z(w: 1)` and `z2: z(w: 2)`, and a declaration naming `z2` selects the latter occurrence ([`FromFieldVariablesHaveValidPathsTest.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/tenantloading/FromFieldVariablesHaveValidPathsTest.kt#L71-L108)).
+
+Full registry validation requires exactly one RSS to supply the response path, rejects a terminal object or list of objects, rejects traversal through a list, checks source-to-use type compatibility including effective nullability, and rejects every narrowing or coparent type condition on the path as lossy; coparent conditions overlap without either type containing the other ([`FromFieldVariablesHaveValidPaths.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/tenantloading/FromFieldVariablesHaveValidPaths.kt#L45-L71), [`FromFieldVariablesHaveValidPaths.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/tenantloading/FromFieldVariablesHaveValidPaths.kt#L120-L213)). The lossy-condition prohibition applies even when the variable use is nullable ([`FromFieldVariablesHaveValidPathsTest.kt`](https://github.com/airbnb/viaduct/blob/e4c7e9ee0f262c5ff723dd84245e7eef4f43ce84/core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/tenantloading/FromFieldVariablesHaveValidPathsTest.kt#L368-L407)).
+
+For example, this valid GraphQL fragment gives two different schema fields the same `firstName` response key on disjoint concrete types:
+
+```graphql
+interface Foo {
+  id: ID!
+}
+
+type EU implements Foo {
+  id: ID!
+  commonName: String
+}
+
+type US implements Foo {
+  id: ID!
+  firstName: String
+}
+
+fragment Provider on Foo {
+  ... on EU {
+    firstName: commonName
+  }
+  ... on US {
+    firstName
+  }
+}
+```
+
+A `fromObjectField = "firstName"` declaration is found by syntactic path filtering because both field occurrences have that response key. Production nevertheless rejects it: reaching either occurrence traverses a narrowing type condition from `Foo` to one implementation, and Viaduct does not treat the two branches as collectively exhaustive.
+
+For an accepted provider, GraphQL field-merging validity requires field occurrences with one response key that can apply to the same runtime object to select the same schema field with equal arguments. Viaduct's additional rejection of narrowing and coparent provider paths removes the disjoint-type exception illustrated above. The accepted response-key path can therefore be represented after validation by one canonical field and argument tuple at each step, even when several mergeable occurrences contribute subselections.
+
+The model therefore distinguishes the external declaration from its canonical semantic form. Pre-reasoning composition resolves a `List<String>` response-key path against the unflattened alias-preserving object fragment, enforces the production restrictions above, and emits one alias-free `List<Value.Key>` whose keys retain canonical fields and coerced arguments; aliases are used to select occurrences and then discarded. Canonical registry construction rejects a path whose surviving occurrences do not yield one such key at every step, and arbitrary generation constructs an alias-preserving fragment and valid response path before invoking the same compilation boundary rather than generating provider `Selection` paths directly.
+
 In the canonical Kotlin model, every field-relative provider path is already selected by its defining resolver's object fragment. Argument-dependent exact fragments preserve the representative fragment's argument-erased field coordinates, guards, nesting, and occurrence multiplicity, so binding a variable changes exact argument values without revealing a new structural branch. Providers remain value-flow dependencies and participate in ordering, but they are not independent sources of structural demand.
 
 The canonical registry further restricts execution variables to a depth-first branch-stratified domain. At each concrete OER type, argument-distinct occurrences of one immediate field are one structural branch; ordinary resolver-input edges and every transitive provider-production-before-use edge must form one acyclic graph. This deliberately rejects provider/use overlap and cross-variable ordering contradictions even when runtime values, arguments, guards, nulls, errors, or list contents would make a particular execution harmless.

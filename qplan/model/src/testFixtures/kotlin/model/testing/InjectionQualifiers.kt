@@ -44,7 +44,7 @@ annotation class NodeResolvers
 )
 annotation class FieldResolvers
 
-/** Resolver-relative variable provider selections supplied before registry assembly. */
+/** Alias-preserving variable-provider declarations supplied before registry assembly. */
 @Qualifier
 @MustBeDocumented
 @Retention(AnnotationRetention.RUNTIME)

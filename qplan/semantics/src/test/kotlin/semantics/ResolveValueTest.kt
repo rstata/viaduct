@@ -56,10 +56,10 @@ class ResolveValueTest {
         val schema = world.schema
         val userType = schema.type("User") as Schema.ObjectType
         val profileType = schema.type("Profile") as Schema.ObjectType
-        val typeNameKey = Value.Key.of(schema.field("User", "__typename"), emptyMap())
-        val computedKey = Value.Key.of(schema.field("User", "computed"), emptyMap())
-        val profileKey = Value.Key.of(schema.field("User", "profile"), emptyMap())
-        val rawKey = Value.Key.of(schema.field("Profile", "raw"), emptyMap())
+        val typeNameKey = Value.ObjectKey.of(schema.objectField("User", "__typename"), emptyMap())
+        val computedKey = Value.ObjectKey.of(schema.objectField("User", "computed"), emptyMap())
+        val profileKey = Value.ObjectKey.of(schema.objectField("User", "profile"), emptyMap())
+        val rawKey = Value.ObjectKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "name" setTo "Ada"
@@ -148,9 +148,9 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val nameKey = Value.Key.of(schema.field("User", "name"), emptyMap())
-        val profileKey = Value.Key.of(schema.field("User", "profile"), emptyMap())
-        val rawKey = Value.Key.of(schema.field("Profile", "raw"), emptyMap())
+        val nameKey = Value.ObjectKey.of(schema.objectField("User", "name"), emptyMap())
+        val profileKey = Value.ObjectKey.of(schema.objectField("User", "profile"), emptyMap())
+        val rawKey = Value.ObjectKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "name" setTo "Ada"
@@ -231,7 +231,7 @@ class ResolveValueTest {
                 selectiveResolvers = false,
             )
         val world = testWorld.assumptions
-        val selectedKey = Value.Key.of(world.schema.field("User", "selected"), emptyMap())
+        val selectedKey = Value.ObjectKey.of(world.schema.objectField("User", "selected"), emptyMap())
         val value =
             world.schema.objectOf("User") {
                 "selected" setTo "kept"

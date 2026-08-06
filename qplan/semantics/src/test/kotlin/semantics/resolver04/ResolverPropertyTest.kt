@@ -38,8 +38,8 @@ class ResolverPropertyTest {
                     schemaSDL = SCHEMA,
                     fieldResolvers = { schema ->
                         val consumeKey =
-                            Value.Key.of(
-                                schema.field("Query", "consume"),
+                            Value.ObjectKey.of(
+                                schema.objectField("Query", "consume"),
                                 mapOf(
                                     "config" to
                                         mapOf(
@@ -53,8 +53,8 @@ class ResolverPropertyTest {
                                 ),
                             )
                         val consumeListKey =
-                            Value.Key.of(
-                                schema.field("Query", "consumeList"),
+                            Value.ObjectKey.of(
+                                schema.objectField("Query", "consumeList"),
                                 mapOf("values" to numbers),
                             )
                         val numbersType =
@@ -190,7 +190,7 @@ class ResolverPropertyTest {
             assertEquals(
                 Value.Int.of(expected),
                 result.fetch(
-                    Value.Key.of(world.schema.field("Query", "result"), emptyMap()),
+                    Value.ObjectKey.of(world.schema.objectField("Query", "result"), emptyMap()),
                 ).value,
             )
             assertEquals(

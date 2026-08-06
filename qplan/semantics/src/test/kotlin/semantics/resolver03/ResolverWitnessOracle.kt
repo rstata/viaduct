@@ -17,7 +17,7 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
     registeredResolverCells(world.executorRegistry)
         .map { cell ->
             val field =
-                world.schema.field(
+                world.schema.objectField(
                     cell.canonicalField.typeName,
                     cell.canonicalField.fieldName,
                 )

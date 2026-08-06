@@ -6,6 +6,7 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.merge
+import model.objectKey
 import model.selectionForestOf
 
 /**
@@ -97,7 +98,7 @@ private fun availableSelection(
         }
     val passiveValues =
         passiveObjects.map { value ->
-            val key = selection.concreteObjectKey(value.type)
+            val key = selection.objectKey(value.type)
             if (key !in value.fieldValues) return null
             value.fieldValues.getValue(key)
         }
@@ -120,12 +121,12 @@ private fun Value.Object.snipObjectToDemand(
 ): Value.Object {
     val passiveDemand =
         demand.merge(type).filter { selection ->
-            !world.behavioral(selection.key.field)
+            !world.behavioral(selection.objectKey(type).field)
         }
 
     val selectedFields =
         passiveDemand
-            .groupBy { selection -> selection.key }
+            .groupBy { selection -> selection.objectKey(type) }
             .mapNotNull { (key, mergedSelections) ->
                 val selection = mergedSelections.single()
                 val concreteField = key.field
@@ -141,10 +142,3 @@ private fun Value.Object.snipObjectToDemand(
             .toMap()
     return Value.Object.of(type, selectedFields)
 }
-
-context(world: Assumptions)
-private fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
-    Value.Key.of(
-        field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments = key.arguments.fieldValues,
-    )

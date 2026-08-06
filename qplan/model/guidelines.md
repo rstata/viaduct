@@ -58,7 +58,7 @@ Semantic logic must not apply equality-dependent operations to undefined-equalit
 
 `SelectionForest` supports current-member count, emptiness, permutation-invariant traversal, filtering, transformation, concatenation, and structural key observation through `keys()`. The one-member-per-source-field property belongs specifically to the corresponding forests returned by GraphQL selection flattening; it is not a carrier invariant. No operation internally compares whole `Selection` values. Forest-returning operations other than `merge(type)` process members independently without coalescing them; observation and grouping operations may compare and deduplicate explicitly projected values. The explicit `merge(type)` normalization boundary specializes applicable members to one concrete parent type and replaces equal top-level structural keys with one representative while concatenating their subselections. The forest does not expose selection membership, equality-based selection counting, hashing, forest equality, or observable ordering.
 
-Prefer a private data-class implementation when its generated structural equality exactly matches the category's equality contract. `IntValueImpl`, `ObjectKeyImpl`, and `CellImpl` are representative examples. Use a private regular implementation for an undefined-equality category such as `SelectionImpl`, or whenever generated componentwise equality is otherwise not the category's modeled equality.
+Prefer a private data-class implementation when its generated structural equality exactly matches the category's equality contract. `IntValueImpl`, `KeyImpl`, `ObjectKeyImpl`, and `CellImpl` are representative examples. Use a private regular implementation for an undefined-equality category such as `SelectionImpl`, or whenever generated componentwise equality is otherwise not the category's modeled equality.
 
 ## Construction
 
@@ -66,7 +66,7 @@ Distinguish logic-constructible types from externally supplied types. OERs, sche
 
 Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `EngineResult.Cell`, `Value.Int`, and `Resolver.Field` have factories. Abstract categories such as `EngineResult`, `Value`, and `Resolver` need no factory when their concrete variants provide the construction operations.
 
-Logic-constructible types use private `FooImpl` classes by preference, such as `ObjectKeyImpl` implementing `Value.Key`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
+Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `Value.Key` and `ObjectKeyImpl` implementing `Value.ObjectKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
 Externally supplied types have no model construction factory or main-source implementation. For example, test-fixture code privately implements `Schema.ObjectType` and `ExecutorRegistry` while semantic code sees only their public interfaces.
 

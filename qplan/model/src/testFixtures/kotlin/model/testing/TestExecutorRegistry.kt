@@ -79,8 +79,8 @@ private class NodeResolverLowering(
     rawFieldResolvers: Map<Schema.OutputField, Resolver.Field>,
 ) {
     private val nodeType: Schema.InterfaceType? = canonicalNodeType()
-    private val loweredFields: Set<Schema.OutputField> = loweredNodeFields()
-    private val loweredByField: Map<Schema.OutputField, Schema.OutputField> =
+    private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
+    private val loweredByField: Map<Schema.ObjectField, Schema.ObjectField> =
         loweredFields.associateWith(::bridgeField)
 
     val fieldResolvers: Map<Schema.OutputField, Resolver.Field>
@@ -137,7 +137,7 @@ private class NodeResolverLowering(
             )
     }
 
-    private fun loweredNodeFields(): Set<Schema.OutputField> {
+    private fun loweredNodeFields(): Set<Schema.ObjectField> {
         nodeResolvers.forEach { (type, _) ->
             validateCanonicalType(type)
             require(schema.relation(nodeType!!, type) == Schema.TypeRelation.WIDER_THAN) {
@@ -203,8 +203,8 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun loaderResolver(field: Schema.OutputField): Resolver.Field {
-        val owner = field.containingType as Schema.ObjectType
+    private fun loaderResolver(field: Schema.ObjectField): Resolver.Field {
+        val owner = field.containingType
         val bridge = bridgeField(field)
         val representativeFragment =
             Fragment.of(
@@ -229,7 +229,7 @@ private class NodeResolverLowering(
             objectFragment = representativeFragment,
             retargetArguments = { _, arguments -> arguments.retarget(bridge) },
             function = { input, arguments ->
-                val bridgeKey = Value.Key.of(bridge, arguments.retarget(bridge))
+                val bridgeKey = Value.ObjectKey.of(bridge, arguments.retarget(bridge))
                 loadNodes(
                     ids = input.fieldValues.getValue(bridgeKey),
                     nodeTypeExpr = field.typeExpr,
@@ -304,7 +304,7 @@ private class NodeResolverLowering(
                     "Node field resolver did not return a node reference"
                 }
                 val idField = validateNodeIdField(output.type)
-                val id = output.fieldValues.getValue(Value.Key.of(idField, emptyMap()))
+                val id = output.fieldValues.getValue(Value.ObjectKey.of(idField, emptyMap()))
                 require(id != Value.Error && id is Value.ID) {
                     "Node reference ${output.type.typeName}/id must contain a non-error ID"
                 }
@@ -354,7 +354,7 @@ private class NodeResolverLowering(
                 }
                 val returnedId =
                     result.fieldValues.getValue(
-                        Value.Key.of(validateNodeIdField(type), emptyMap()),
+                        Value.ObjectKey.of(validateNodeIdField(type), emptyMap()),
                     )
                 require(returnedId == id) {
                     "Node resolver for ${type.typeName} did not repeat its input ID"
@@ -393,7 +393,7 @@ private class NodeResolverLowering(
                     if (bridge == null) {
                         key to lowerNestedOutput(value, key.field.typeExpr)
                     } else {
-                        Value.Key.of(bridge, key.arguments.retarget(bridge)) to
+                        Value.ObjectKey.of(bridge, key.arguments.retarget(bridge)) to
                             extractNodeIds(
                                 output = value,
                                 nodeTypeExpr = key.field.typeExpr,
@@ -403,8 +403,8 @@ private class NodeResolverLowering(
                 }.toMap(),
         )
 
-    private fun bridgeField(field: Schema.OutputField): Schema.OutputField =
-        schema.field(
+    private fun bridgeField(field: Schema.OutputField): Schema.ObjectField =
+        schema.objectField(
             field.containingType.typeName,
             nodeIdBridgeName(field),
         )
@@ -432,7 +432,7 @@ private class NodeResolverLowering(
         return type to Value.ID.of(encoded.substring(typeNameEnd))
     }
 
-    private fun validateNodeIdField(type: Schema.ObjectType): Schema.OutputField {
+    private fun validateNodeIdField(type: Schema.ObjectType): Schema.ObjectField {
         val idField =
             type.fields["id"]
                 ?: throw IllegalArgumentException(
@@ -615,12 +615,12 @@ private class TestExecutorRegistry(
         ).validate()
     }
 
-    override fun contains(field: Schema.OutputField): Boolean {
+    override fun contains(field: Schema.ObjectField): Boolean {
         validateCanonicalField(field)
         return field in fieldResolvers
     }
 
-    override fun resolver(field: Schema.OutputField): Resolver.Field {
+    override fun resolver(field: Schema.ObjectField): Resolver.Field {
         validateCanonicalField(field)
         return fieldResolvers[field]
             ?: throw MissingExecutorException(field.containingType.typeName, field.fieldName)

@@ -7,6 +7,8 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.merge
+import model.objectKey
+import model.objectKeys
 import model.registry.demandsFromSibling
 import model.selectionForestOf
 import model.union
@@ -40,7 +42,7 @@ private fun Value.Object.resolve(
     val mergedSelections = closedDemand.merge(type)
     val unresolvedKeys =
         mergedSelections
-            .keys()
+            .objectKeys(type)
             .filter { key ->
                 key !in resolved.keys ||
                     (
@@ -50,7 +52,7 @@ private fun Value.Object.resolve(
             }.toSet()
     val orderedKeys = dependencyOrder(unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
-        val selection = mergedSelections.single { selection -> selection.key == key }
+        val selection = mergedSelections.single(key)
         result.union(resolveKey(selection, result))
     }
 }
@@ -67,11 +69,11 @@ private fun Value.Object.closeResolverDemand(
 context(world: Assumptions)
 private fun Schema.ObjectType.closeResolverDemand(
     selections: SelectionForest,
-    expanded: Set<Value.Key> = emptySet(),
+    expanded: Set<Value.ObjectKey> = emptySet(),
 ): SelectionForest {
     val applicableSelections = selections.merge(this)
     val unexpandedResolverKeys =
-        applicableSelections.keys().filter { key ->
+        applicableSelections.objectKeys(this).filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
                 key.field in world.executorRegistry
@@ -98,9 +100,9 @@ private fun Schema.ObjectType.closeResolverDemand(
  */
 context(world: Assumptions)
 private fun Value.Object.dependencyOrder(
-    keys: Set<Value.Key>,
-    ordered: List<Value.Key> = emptyList(),
-): List<Value.Key> {
+    keys: Set<Value.ObjectKey>,
+    ordered: List<Value.ObjectKey> = emptyList(),
+): List<Value.ObjectKey> {
     if (keys.isEmpty()) return ordered
 
     val ready =
@@ -121,9 +123,9 @@ private fun Value.Object.dependencyOrder(
  */
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
-    consumer: Value.Key,
-    unresolved: Set<Value.Key>,
-): Set<Value.Key> {
+    consumer: Value.ObjectKey,
+    unresolved: Set<Value.ObjectKey>,
+): Set<Value.ObjectKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
         consumer.field !in world.executorRegistry
@@ -146,7 +148,7 @@ private fun Value.Object.resolveKey(
     fieldSelection: Selection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
-    val key = fieldSelection.key
+    val key = fieldSelection.objectKey(type)
     val cell =
         if (key.arguments.argumentsContainErrorValue()) {
             EngineResult.Cell.Error

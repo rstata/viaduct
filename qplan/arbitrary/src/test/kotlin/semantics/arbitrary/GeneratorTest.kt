@@ -312,7 +312,7 @@ class GeneratorTest {
                     return@forEach
                 }
 
-                val field = world.schema.field(coordinate.typeName, coordinate.fieldName)
+                val field = world.schema.objectField(coordinate.typeName, coordinate.fieldName)
                 val input = world.schema.objectOf(coordinate.typeName)
                 val arguments = Value.Arguments.of(field, emptyMap())
                 val resolver = world.executorRegistry.resolver(field)

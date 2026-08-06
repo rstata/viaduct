@@ -58,14 +58,14 @@ class ResolverImplementationArgumentDefaultTest {
             }
         val item =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "item"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "item"), emptyMap())).value,
             )
 
         assertEquals(
             Value.Int.of(7),
             item.fetch(
-                Value.Key.of(
-                    world.schema.field("ConcreteItem", "computed"),
+                Value.ObjectKey.of(
+                    world.schema.objectField("ConcreteItem", "computed"),
                     mapOf("factor" to 7),
                 ),
             ).value,
@@ -111,11 +111,11 @@ class ResolverImplementationArgumentDefaultTest {
             }
         val item =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "item"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "item"), emptyMap())).value,
             )
         val concreteDefaultKey =
-            Value.Key.of(
-                world.schema.field("ConcreteItem", "computed"),
+            Value.ObjectKey.of(
+                world.schema.objectField("ConcreteItem", "computed"),
                 mapOf("factor" to 7),
             )
 
@@ -133,10 +133,10 @@ class ResolverImplementationArgumentDefaultTest {
                 schemaSDL = TRANSITIVE_SCHEMA,
                 fieldResolvers = { schema ->
                     val itemKey =
-                        Value.Key.of(schema.field("Holder", "item"), emptyMap())
+                        Value.ObjectKey.of(schema.objectField("Holder", "item"), emptyMap())
                     val computedKey =
-                        Value.Key.of(
-                            schema.field("ConcreteItem", "computed"),
+                        Value.ObjectKey.of(
+                            schema.objectField("ConcreteItem", "computed"),
                             mapOf("factor" to 7),
                         )
                     mapOf(
@@ -185,13 +185,13 @@ class ResolverImplementationArgumentDefaultTest {
             }
         val holder =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.Key.of(world.schema.field("Query", "holder"), emptyMap())).value,
+                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "holder"), emptyMap())).value,
             )
 
         assertEquals(
             Value.Int.of(7),
             holder.fetch(
-                Value.Key.of(world.schema.field("Holder", "result"), emptyMap()),
+                Value.ObjectKey.of(world.schema.objectField("Holder", "result"), emptyMap()),
             ).value,
         )
     }

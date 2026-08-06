@@ -5,6 +5,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.objectKey
 import model.selectionForestOf
 
 /**
@@ -25,7 +26,7 @@ fun SelectionForest.successorDemand(): SelectionForest =
             )
         val predecessorDemand =
             selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-                val key = selection.concreteObjectKey(possibleType)
+                val key = selection.objectKey(possibleType)
                 if (
                     key.arguments.containsErrorValue() ||
                     key.field !in world.executorRegistry
@@ -41,13 +42,6 @@ fun SelectionForest.successorDemand(): SelectionForest =
             }
         selectionForestOf(rootedSelection) + predecessorDemand
     }
-
-context(world: Assumptions)
-private fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
-    Value.Key.of(
-        field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments = key.arguments.fieldValues,
-    )
 
 private fun Value.Arguments.containsErrorValue(): Boolean =
     fieldValues.values.any { value -> value.containsErrorValue() }

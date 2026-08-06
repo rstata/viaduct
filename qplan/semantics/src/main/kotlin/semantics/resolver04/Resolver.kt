@@ -5,12 +5,12 @@ import model.EngineResult
 import model.Fragment
 import model.SelectionForest
 import model.Value
+import model.objectKey
 import model.registry.Resolver
 import model.registry.availableDemand
 import model.registry.successorDemand
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
-import semantics.correctresolution.concreteObjectKey
 import semantics.instantiateVariables
 import semantics.materialize
 import semantics.readVariable
@@ -45,7 +45,7 @@ internal fun Value.Object.resolve(
         selections.filter { selection -> type in selection.possibleTypes }
     val resolverInputFragments =
         applicableSelections
-            .groupBy { selection -> selection.concreteObjectKey(type) }
+            .groupBy { selection -> selection.objectKey(type) }
             .keys
             .mapNotNull { key ->
                 if (
@@ -101,7 +101,7 @@ internal fun Value.Object.resolve(
         }
     val selectionsByKey =
         (concreteSelections + concreteInputDemand)
-            .groupBy { selection -> selection.concreteObjectKey(type) }
+            .groupBy { selection -> selection.objectKey(type) }
     val keysToWiden = selectionsByKey.keys intersect resolvedVariables.keys
     val widened =
         keysToWiden.fold(resolvedVariables) { result, key ->
@@ -169,10 +169,10 @@ private fun Value.Object.resolveVariables(
  */
 context(world: Assumptions)
 private fun Value.Object.dependencyOrder(
-    keys: Set<Value.Key>,
+    keys: Set<Value.ObjectKey>,
     resolved: EngineResult.Object,
-    ordered: List<Value.Key> = emptyList(),
-): List<Value.Key> {
+    ordered: List<Value.ObjectKey> = emptyList(),
+): List<Value.ObjectKey> {
     if (keys.isEmpty()) return ordered
 
     val ready =
@@ -194,10 +194,10 @@ private fun Value.Object.dependencyOrder(
  */
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
-    consumer: Value.Key,
-    unresolved: Set<Value.Key>,
+    consumer: Value.ObjectKey,
+    unresolved: Set<Value.ObjectKey>,
     resolved: EngineResult.Object,
-): Set<Value.Key> {
+): Set<Value.ObjectKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
         consumer.field !in world.executorRegistry
@@ -216,7 +216,7 @@ private fun Value.Object.dependenciesOf(
             sibling != consumer &&
                 !selections.all { selection ->
                     type !in selection.possibleTypes ||
-                        selection.concreteObjectKey(type) != sibling
+                        selection.objectKey(type) != sibling
                 }
         }.toSet()
 }
@@ -226,7 +226,7 @@ private fun Value.Object.dependenciesOf(
  */
 context(world: Assumptions, sources: ResolutionSources)
 private fun Value.Object.resolveKey(
-    key: Value.Key,
+    key: Value.ObjectKey,
     fieldSelections: SelectionForest,
     resolved: EngineResult.Object,
     envelope: SelectionForest,

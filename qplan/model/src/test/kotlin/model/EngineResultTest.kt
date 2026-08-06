@@ -79,8 +79,8 @@ class EngineResultTest {
     fun `object result factory rejects values that violate field typing`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val key =
-            Value.Key.of(
-                schema.field("Query", "required"),
+            Value.ObjectKey.of(
+                schema.objectField("Query", "required"),
                 emptyMap(),
             )
         val cell = EngineResult.Cell.of(null, Value.Boolean.of(true))
@@ -389,7 +389,8 @@ class EngineResultTest {
         typeName: String,
         fieldName: String,
         vararg arguments: Pair<String, Any?>,
-    ): Value.Key = Value.Key.of(field(typeName, fieldName), arguments.toMap())
+    ): Value.ObjectKey =
+        Value.ObjectKey.of(objectField(typeName, fieldName), arguments.toMap())
 
     private companion object {
         const val SCHEMA_SDL =

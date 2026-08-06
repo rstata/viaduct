@@ -254,7 +254,7 @@ class ResolutionWitnessTest {
             cells
                 .single { cell -> cell.applicationKey == computedTwoKey }
                 .occurrencePath
-                .contains(ResultOccurrenceStep.ListElement(1)),
+                .contains(Value.ListIndex.of(1)),
             "The second list element must retain its occurrence index",
         )
 

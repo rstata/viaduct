@@ -7,6 +7,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.objectKey
 
 /**
  * Whether this result contains every cell required by [fragment].
@@ -32,7 +33,7 @@ private fun EngineResult.Object.objectConformsToFragment(
         if (type !in selection.possibleTypes) {
             true
         } else {
-            val key = selection.concreteObjectKey(type)
+            val key = selection.objectKey(type)
             key in keys &&
                 fetch(key).value.engineResultConformsToFragment(selection.subselections)
         }
@@ -52,10 +53,3 @@ private fun EngineResult?.engineResultConformsToFragment(
         is EngineResult.List ->
             all { cell -> cell.value.engineResultConformsToFragment(selections) }
     }
-
-context(world: Assumptions)
-internal fun Selection.concreteObjectKey(type: Schema.ObjectType): Value.Key =
-    Value.Key.of(
-        field = world.schema.field(type.typeName, key.field.fieldName),
-        arguments = key.arguments.fieldValues,
-    )

@@ -34,7 +34,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 `Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 
-`Value.Object` fields and OER cells are keyed by exact `Value.Key` coordinates, preserving distinct coerced argument tuples for one field.
+`Value.Object` fields and OER cells are keyed by exact `Value.ObjectKey` coordinates, preserving distinct coerced argument tuples for one field. `Value.Key` remains the broader selection-key category and may carry an abstract-type field.
 
 The `Value` model is incomplete: lazy values and similar engine-specific intermediate values are not represented. Raw node references exist only as external test-fixture inputs and are lowered to synthetic ID bridge values before semantic reasoning; the canonical value algebra has no distinct node-reference variant.
 
@@ -43,3 +43,5 @@ The `Value` model is incomplete: lazy values and similar engine-specific interme
 `Value.Key` does not include a response alias. Canonical output fields and fully coerced arguments determine field-resolution identity; aliases and response ordering belong to external field completion.
 
 Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and contains no unresolved variables. Keys used by selections may instead carry abstract fields or unresolved variables and must be specialized and instantiated before entering either value.
+
+`PathComponent` is the exact OER-tree path category. Its variants are `Value.ObjectKey` for an object-cell step and `Value.ListIndex` for a list-element step.

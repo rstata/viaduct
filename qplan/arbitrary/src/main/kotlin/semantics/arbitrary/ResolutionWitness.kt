@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
@@ -147,17 +148,6 @@ data class ResolutionWitness(
         }
 }
 
-sealed interface ResultOccurrenceStep {
-    data class Field(
-        val canonicalField: FieldCoordinate,
-        val argumentsFingerprint: ResolutionFingerprint,
-    ) : ResultOccurrenceStep
-
-    data class ListElement(
-        val index: Int,
-    ) : ResultOccurrenceStep
-}
-
 /**
  * One registered resolver-bearing cell found by traversing a returned result independently of the
  * resolver constructors and correctness predicates.
@@ -165,7 +155,7 @@ sealed interface ResultOccurrenceStep {
 data class RegisteredResolverCell(
     val applicationKey: ResolverApplicationKey,
     val canonicalField: FieldCoordinate,
-    val occurrencePath: List<ResultOccurrenceStep>,
+    val occurrencePath: List<PathComponent>,
     val containingObject: EngineResult.Object,
 )
 
@@ -178,7 +168,7 @@ fun EngineResult?.registeredResolverCells(
 
     fun visit(
         value: EngineResult?,
-        path: List<ResultOccurrenceStep>,
+        path: List<PathComponent>,
     ) {
         visitedNodes += 1
         if (visitedNodes > bounds.maxResultNodes) {
@@ -195,12 +185,7 @@ fun EngineResult?.registeredResolverCells(
                     .sortedBy { key -> key.canonicalFingerprint(bounds).value }
                     .forEach { key ->
                         val canonicalField = key.field.fieldCoordinate()
-                        val fieldStep =
-                            ResultOccurrenceStep.Field(
-                                canonicalField = canonicalField,
-                                argumentsFingerprint = key.arguments.resolutionFingerprint(bounds),
-                            )
-                        val fieldPath = path + fieldStep
+                        val fieldPath = path + key
                         if (key.field in registry && !key.arguments.containsErrorValue()) {
                             result +=
                                 RegisteredResolverCell(
@@ -222,7 +207,7 @@ fun EngineResult?.registeredResolverCells(
                 value.forEachIndexed { index, cell ->
                     visit(
                         cell.value,
-                        path + ResultOccurrenceStep.ListElement(index),
+                        path + Value.ListIndex.of(index),
                     )
                 }
 

@@ -296,10 +296,10 @@ class ResolverTest {
             assertIs<EngineResult.Object>(
                 viewer.fetch(schema.key(viewer.type, "card")).value,
             )
-        val profileField = schema.field("Card", "profile")
-        val bridgeField = schema.field("Card", "profile\$id")
-        val profileKey = Value.Key.of(profileField, emptyMap())
-        val bridgeKey = Value.Key.of(bridgeField, emptyMap())
+        val profileField = schema.objectField("Card", "profile")
+        val bridgeField = schema.objectField("Card", "profile\$id")
+        val profileKey = Value.ObjectKey.of(profileField, emptyMap())
+        val bridgeKey = Value.ObjectKey.of(bridgeField, emptyMap())
         assertEquals(setOf(profileKey, bridgeKey), card.keys)
         assertEquals(
             "\$node:7:Profileprofile-1",
@@ -345,8 +345,8 @@ class ResolverTest {
 private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
-): Value.Key =
-    Value.Key.of(
-        field = field(type.typeName, fieldName),
+): Value.ObjectKey =
+    Value.ObjectKey.of(
+        field = objectField(type.typeName, fieldName),
         arguments = emptyMap(),
     )

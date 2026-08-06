@@ -5,6 +5,7 @@ import model.EngineResult
 import model.SelectionForest
 import model.Value
 import model.merge
+import model.objectKey
 import model.selectionForestOf
 
 /**
@@ -17,7 +18,7 @@ import model.selectionForestOf
  */
 class ResolvedValue(
     val engineResult: EngineResult?,
-    val pathsNeedingResolution: Map<List<Value.Key>, SelectionForest>,
+    val pathsNeedingResolution: Map<List<Value.ObjectKey>, SelectionForest>,
 )
 
 /**
@@ -39,7 +40,7 @@ context(world: Assumptions)
 internal fun Value.Output?.resolveValue(
     resolverDemand: SelectionForest,
     selections: SelectionForest? = resolverDemand,
-    path: List<Value.Key> = emptyList(),
+    path: List<Value.ObjectKey> = emptyList(),
 ): ResolvedValue =
     when (this) {
         null -> ResolvedValue(null, emptyMap())
@@ -80,17 +81,17 @@ context(world: Assumptions)
 private fun Value.Object.resolveObjectValue(
     resolverDemand: SelectionForest,
     selections: SelectionForest?,
-    path: List<Value.Key>,
+    path: List<Value.ObjectKey>,
 ): ResolvedValue {
     val mergedResolverDemand = resolverDemand.merge(type)
     val resolverDemandByKey =
         mergedResolverDemand
-            .groupBy { selection -> selection.key }
+            .groupBy { selection -> selection.objectKey(type) }
             .mapValues { (_, selections) -> selections.single() }
     val selectionsByKey =
         selections
             ?.merge(type)
-            ?.groupBy { selection -> selection.key }
+            ?.groupBy { selection -> selection.objectKey(type) }
             ?.mapValues { (_, selections) -> selections.single() }
     if (world.selectiveResolvers && selectionsByKey != null) {
         val unselectedKeys = fieldValues.keys - selectionsByKey.keys
@@ -194,7 +195,7 @@ internal fun Value.Output?.resolvePaths(
 
 private fun Value.Output?.resolvePath(
     resolved: EngineResult?,
-    path: List<Value.Key>,
+    path: List<Value.ObjectKey>,
     selections: SelectionForest,
     resolveObject:
         (
@@ -276,10 +277,10 @@ private fun Value.Output?.resolvePath(
 
 private class ResolvedList(
     val cells: List<EngineResult.Cell>,
-    val pathsNeedingResolution: Map<List<Value.Key>, SelectionForest>,
+    val pathsNeedingResolution: Map<List<Value.ObjectKey>, SelectionForest>,
 )
 
 private class ResolvedObject(
-    val cells: Map<Value.Key, EngineResult.Cell>,
-    val pathsNeedingResolution: Map<List<Value.Key>, SelectionForest>,
+    val cells: Map<Value.ObjectKey, EngineResult.Cell>,
+    val pathsNeedingResolution: Map<List<Value.ObjectKey>, SelectionForest>,
 )

@@ -337,10 +337,10 @@ private fun SelectionForest.retargetArguments(
  * order binds every variable used in a branch before resolution enters that branch.
  */
 interface ExecutorRegistry {
-    operator fun contains(field: Schema.OutputField): Boolean
+    operator fun contains(field: Schema.ObjectField): Boolean
 
     /** Defined only when [field] is registered. */
-    fun resolver(field: Schema.OutputField): Resolver.Field
+    fun resolver(field: Schema.ObjectField): Resolver.Field
 
     /** The provider selection for the globally registered [variable]. */
     fun variable(variable: Value.Variable): Selection

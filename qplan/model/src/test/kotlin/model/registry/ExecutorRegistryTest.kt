@@ -197,8 +197,8 @@ class ExecutorRegistryTest {
                 },
             )
         val schema = world.schema
-        val user = schema.field("Query", "user")
-        val bridge = schema.field("Query", "user\$id")
+        val user = schema.objectField("Query", "user")
+        val bridge = schema.objectField("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
         val resolver = world.executorRegistry.resolver(user)
         val representativeBridge = resolver.predecessorDemand.subselections.single()
@@ -265,7 +265,7 @@ class ExecutorRegistryTest {
         val parent = schema.objectOf("Query")
         val outputs =
             listOf("scalar", "list", "nullable", "failed").associateWith { fieldName ->
-                val field = schema.field("Query", fieldName)
+                val field = schema.objectField("Query", fieldName)
                 context(world.assumptions) {
                     world.executorRegistry
                         .resolver(field)
@@ -306,9 +306,7 @@ class ExecutorRegistryTest {
         val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
         val registry = world.executorRegistry
-        val userField = schema.field("User", "name")
-
-        assertFalse(schema.field("Node", "name") in registry)
+        val userField = schema.objectField("User", "name")
 
         val missingField =
             assertFailsWith<MissingExecutorException> {
@@ -319,7 +317,7 @@ class ExecutorRegistryTest {
 
         val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
         assertFailsWith<IllegalArgumentException> {
-            registry.resolver(foreignSchema.field("User", "name"))
+            registry.resolver(foreignSchema.objectField("User", "name"))
         }
     }
 
@@ -676,33 +674,30 @@ class ExecutorRegistryTest {
         val fieldFixture = Fixture()
         val nodeFixture = Fixture(withNodeResolver = true)
 
-        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.field("User", "id")))
-        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.field("User", "name")))
-        assertTrue(fieldFixture.assumptions.behavioral(fieldFixture.schema.field("User", "search")))
+        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "id")))
+        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "name")))
+        assertTrue(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "search")))
         assertTrue(
             fieldFixture.assumptions.behavioral(
-                fieldFixture.schema.field("User", "__typename"),
+                fieldFixture.schema.objectField("User", "__typename"),
             ),
         )
         assertFalse(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "id")),
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "id")),
         )
         assertTrue(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "__typename")),
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "__typename")),
         )
         assertFalse(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "name")),
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "name")),
         )
         assertTrue(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("User", "search")),
+            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "search")),
         )
 
         assertFailsWith<IllegalArgumentException> {
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.field("Node", "name"))
-        }
-        assertFailsWith<IllegalArgumentException> {
             nodeFixture.assumptions.behavioral(
-                fieldFixture.schema.field("User", "name"),
+                fieldFixture.schema.objectField("User", "name"),
             )
         }
     }

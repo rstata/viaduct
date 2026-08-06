@@ -442,12 +442,12 @@ class ResolverTest {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
 
-        val nodesField = schema.field("Query", "nodes")
-        val bridgeField = schema.field("Query", "nodes\$ids")
-        val firstKey = Value.Key.of(nodesField, mapOf("group" to "first"))
-        val secondKey = Value.Key.of(nodesField, mapOf("group" to "second"))
-        val firstBridge = Value.Key.of(bridgeField, mapOf("group" to "first"))
-        val secondBridge = Value.Key.of(bridgeField, mapOf("group" to "second"))
+        val nodesField = schema.objectField("Query", "nodes")
+        val bridgeField = schema.objectField("Query", "nodes\$ids")
+        val firstKey = Value.ObjectKey.of(nodesField, mapOf("group" to "first"))
+        val secondKey = Value.ObjectKey.of(nodesField, mapOf("group" to "second"))
+        val firstBridge = Value.ObjectKey.of(bridgeField, mapOf("group" to "first"))
+        val secondBridge = Value.ObjectKey.of(bridgeField, mapOf("group" to "second"))
         assertEquals(
             setOf(firstKey, secondKey, firstBridge, secondBridge),
             result.keys,
@@ -555,8 +555,8 @@ private fun Schema.objectType(typeName: String): Schema.ObjectType =
 private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
-): Value.Key =
-    Value.Key.of(
-        field = field(type.typeName, fieldName),
+): Value.ObjectKey =
+    Value.ObjectKey.of(
+        field = objectField(type.typeName, fieldName),
         arguments = emptyMap(),
     )

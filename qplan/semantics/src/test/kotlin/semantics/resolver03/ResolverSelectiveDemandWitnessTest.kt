@@ -53,8 +53,8 @@ class ResolverSelectiveDemandWitnessTest {
                             ) { input, _ ->
                                 val base =
                                     input.fieldValues.getValue(
-                                        Value.Key.of(
-                                            schema.field("Item", "base"),
+                                        Value.ObjectKey.of(
+                                            schema.objectField("Item", "base"),
                                             emptyMap(),
                                         ),
                                     ) as Value.String

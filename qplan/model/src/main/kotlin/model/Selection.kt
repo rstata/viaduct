@@ -43,6 +43,10 @@ sealed interface SelectionForest {
 
     fun single(predicate: (Selection) -> Boolean): Selection
 
+    /** Returns the single selection whose concrete object coordinate is [key]. */
+    fun single(key: Value.ObjectKey): Selection =
+        single { selection -> selection.objectKey(key.field.containingType) == key }
+
     operator fun plus(other: SelectionForest): SelectionForest
 }
 
@@ -75,12 +79,8 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
 context(world: Assumptions)
 fun SelectionForest.merge(type: Schema.ObjectType): SelectionForest =
     filter { selection -> type in selection.possibleTypes }
-        .groupBy { selection ->
-            Value.Key.of(
-                field = world.schema.field(type.typeName, selection.key.field.fieldName),
-                arguments = selection.key.arguments.fieldValues,
-            )
-        }.entries
+        .groupBy { selection -> selection.objectKey(type) }
+        .entries
         .fold(selectionForestOf()) { result, (key, selections) ->
             result +
                 selectionForestOf(
@@ -92,6 +92,22 @@ fun SelectionForest.merge(type: Schema.ObjectType): SelectionForest =
                     ),
                 )
         }
+
+/**
+ * Specializes this selection's field coordinate to concrete parent [type].
+ *
+ * This operation preserves arguments while applying the argument definition, including defaults,
+ * of the corresponding canonical object field.
+ */
+fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey =
+    Value.ObjectKey.of(
+        field = type.fields.getValue(key.field.fieldName),
+        arguments = key.arguments.fieldValues,
+    )
+
+/** Returns the concrete object keys contributed independently by these selection occurrences. */
+fun SelectionForest.objectKeys(type: Schema.ObjectType): Set<Value.ObjectKey> =
+    flatMapToSet { selection -> setOf(selection.objectKey(type)) }
 
 /**
  * A post-validation field-selection occurrence used for Viaduct field resolution.

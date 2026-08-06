@@ -22,7 +22,7 @@ sealed interface Assumptions {
      * exactly for engine-supplied `__typename` or a registered field resolver. Synthetic fixture
      * bridges have no implicit special status.
      */
-    fun behavioral(field: Schema.OutputField): Boolean
+    fun behavioral(field: Schema.ObjectField): Boolean
 
     companion object {
         fun of(
@@ -43,11 +43,8 @@ private class AssumptionsImpl(
     override val executorRegistry: ExecutorRegistry,
     override val selectiveResolvers: Boolean,
 ) : Assumptions {
-    override fun behavioral(field: Schema.OutputField): Boolean {
+    override fun behavioral(field: Schema.ObjectField): Boolean {
         val containingType = field.containingType
-        require(containingType is Schema.ObjectType) {
-            "Behavioral is defined only for fields on concrete object types"
-        }
         require(schema.field(containingType.typeName, field.fieldName) == field) {
             "${containingType.typeName}/${field.fieldName} is not canonical in this world"
         }

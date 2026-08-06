@@ -103,7 +103,7 @@ class EngineResultScope internal constructor(
         EngineResult.Object.of(type, cells.toMap())
 }
 
-/** One exact output-field coordinate selected in an [EngineResultScope]. */
+/** One exact object-field coordinate selected in an [EngineResultScope]. */
 class EngineResultFieldReference internal constructor(
     internal val key: Value.ObjectKey,
 )

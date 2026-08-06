@@ -1,22 +1,22 @@
-# Demand-Availability Execution Handoff
+# Future Demand-Availability Worklist Executor
 
 ## Purpose
 
-This handoff describes the proposed basis for `semantics.resolver05`: preserve the demand-collection work established by Resolver03 and Resolver04, but replace their recursive depth-first execution order with a worklist of resolution obligations over a write-once OER store.
+This document describes a possible future executor that preserves the demand-collection work established by Resolver03 and Resolver04 while replacing their recursive depth-first execution order with a worklist of resolution obligations over a write-once OER store.
 
-The proposal responds to one specific discovery. Variables can transport a value from a provider path already contained in the defining resolver's fixed-shape object fragment to resolver arguments elsewhere in that fragment. A subtree may therefore contain structurally known demand whose exact `Value.Key` cannot be formed until work in another subtree finishes. Resolver04 handles this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells. Resolver05 should model the underlying process directly.
+The proposal responds to one specific discovery. Variables can transport a value from a provider path already contained in the defining resolver's fixed-shape object fragment to resolver arguments elsewhere in that fragment. A subtree may therefore contain structurally known demand whose exact `Value.ObjectKey` cannot be formed until work in another subtree finishes. Resolver04 handles this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells. A worklist executor would model the underlying process directly.
 
 ## Demand Collection Is Not Being Reopened
 
-Resolver05 should not rediscover demand incrementally as execution proceeds. Resolver03 and Resolver04 already establish the relevant demand-collection shape:
+A worklist executor should not rediscover demand incrementally as execution proceeds. Resolver03 and Resolver04 already establish the relevant demand-collection shape:
 
 - Resolver fragments contribute transitive demand before a selective producer is applied.
-- Demand is rooted at the actual occurrence path and guarded by possible concrete types.
+- Demand is rooted at the exact OER occurrence path and guarded by possible concrete types.
 - Multiple contributors targeting one producer occurrence are combined.
 - Symbolic variable arguments may remain at behavioral boundaries where projection stops before materializing the exact key.
 - Resolver04 conservatively covers symbolic and concrete occurrences that may later converge on one exact key.
 
-ResolverObligations will still be created in the same depth-first order that allows resolver03/04 to collect demand obligations.  What changes is the mechanism for enforcing the topological ordering of field execution (using "demand-availability" rather than a topological sort), plus a mechanism for integrating into that execution ordering the execution of resolvers whose arguments depend on variables, which are not determined strictly by the depth-first ordering.
+Resolution obligations would still be discovered through the same depth-first traversal that lets Resolver03 and Resolver04 collect demand. What changes is the mechanism for enforcing field-execution order: readiness follows demand availability rather than one recursive topological fold, and resolvers whose arguments depend on variables join that same readiness relation even when their order is not determined by tree depth.
 
 ## Resolution Obligations
 
@@ -37,7 +37,7 @@ An obligation is ready when:
 1. Its exact key contains no unresolved variable.
 2. Every field required to materialize its exact object fragment is written in the containing OER.
 3. Every variable referenced by that fragment is bound on the containing OER.
-4. Its destination cell is still unwritten
+4. Its destination cell is still unwritten.
 
 Argument errors follow the current carrier rule: they write the required error cell without applying the resolver.
 
@@ -45,7 +45,7 @@ The worklist need not be a FIFO queue. It is better understood as a finite set o
 
 ## Symbolic Demand And Variable Binding
 
-A selection containing `$value` cannot become a concrete resolution obligation until `$value` is bound. Resolver05 therefore needs a pending representation, separate from OER cells:
+A selection containing `$value` cannot become a concrete resolution obligation until `$value` is bound. The scheduler therefore needs a pending representation, separate from OER cells:
 
 ```kotlin
 data class PendingSelection(
@@ -58,7 +58,7 @@ The exact shape may differ, but the semantic distinction matters. A `Selection` 
 
 Variable bindings are also write-once facts on the containing OER. A binding becomes available when its provider path can be read from the current store. Binding the variable instantiates affected pending selections. Each resulting concrete key is then inserted into, or matched with, the obligation map.
 
-Late equality needs special care. A concrete occurrence such as `field(arg: "literal")` and a pending occurrence `field(arg: $value)` may become the same key. Resolver04 already treats this as a demand-coverage problem: the earlier application must have received the variable-free output demand of a symbolic occurrence that may converge with it. Resolver05 must consume the same complete symbolic envelope. It must not execute the currently concrete obligation with only its local subselections and then discover additional output demand when the variable binds.
+Late equality needs special care. A concrete occurrence such as `field(arg: "literal")` and a pending occurrence `field(arg: $value)` may become the same key. Resolver04 already treats this as a demand-coverage problem: the earlier application must have received the variable-free output demand of a symbolic occurrence that may converge with it. A worklist executor must consume the same complete symbolic envelope. It must not execute the currently concrete obligation with only its local subselections and then discover additional output demand when the variable binds.
 
 This is the principal contract between demand collection and obligation scheduling:
 
@@ -93,7 +93,7 @@ No field is rewritten. The `Object2` OER simply acquires two distinct field cell
 
 ## A Write-Once OER Store
 
-`EngineResult.Object` should remain the immutable, finite result-tree carrier used by `correctResolution`. Resolver05 should introduce a separate intermediate execution-state domain with explicit object identity:
+`EngineResult.Object` should remain the immutable, finite result-tree carrier used by `correctResolution`. A future worklist executor should introduce a separate intermediate execution-state domain with explicit object identity:
 
 ```kotlin
 data class ExecutionState(
@@ -115,11 +115,11 @@ Although this state models semi-mutable OERs, semantic Kotlin should remain pure
 
 When no work remains, a `freeze` operation recursively replaces object references with immutable `EngineResult.Object` values. The final value is then checked by the existing `correctResolution` judgment. Cyclic object references remain outside the model; the allocated occurrence graph must be a finite tree of object and list positions.
 
-Resolver04's `ResolutionSources` side table should not be copied automatically. If demand collection is complete, all producer-owned passive fields needed later are projected and written when the producer runs. Resolver05 should retain an immutable raw resolver source only if a focused counterexample proves it necessary, and any later projection must remain covered by the demand originally supplied to that application.
+Resolver04's `ResolutionSources` side table should not be copied automatically. If demand collection is complete, all producer-owned passive fields needed later are projected and written when the producer runs. The worklist design should retain an immutable raw resolver source only if a focused counterexample proves it necessary, and any later projection must remain covered by the demand originally supplied to that application.
 
 ## State Invariants
 
-Resolver05 should make these properties explicit:
+The worklist executor should make these properties explicit:
 
 - Every `ObjectId` denotes one concrete OER occurrence with one concrete object type.
 - Every OER cell is identified by `(ObjectId, Value.ObjectKey)`.
@@ -153,9 +153,9 @@ The semantic model need not execute transitions literally in parallel. It can ch
 
 Parallelism also clarifies why write-once cells matter. Concurrent workers may race to discover the same exact obligation, but they must converge before application. Claiming a cell is an implementation concern; semantically, there is still one obligation, one application, and one write.
 
-## Relationship To Resolver03 And Resolver04
+## Relationship To Current Resolvers
 
-Resolver05 should reuse rather than replace:
+The worklist design should reuse rather than replace:
 
 - Resolver03's guarded predecessor closure and successor-demand lifting.
 - Resolver04's variable ownership, provider evaluation, substitution, and conservative symbolic-demand coverage.
@@ -163,23 +163,23 @@ Resolver05 should reuse rather than replace:
 - `snipToDemand` as selective projection to complete supplied demand.
 - `correctResolution` as the final extensional oracle.
 
-Resolver05 replaces:
+The worklist design would replace:
 
 - Recursive post-order function application.
 - Immutable prefix union as an execution mechanism.
 - `widened` reconstruction of an already-returned subtree.
 - Identity-based recovery of raw sources when the write-once store can carry the necessary state explicitly.
 
-Variable-free worlds should make Resolver05 observationally agree with Resolver03. Variable worlds should make it agree with Resolver04 and satisfy the same correctness predicates, while exposing a simpler execution history.
+On variable-free worlds, the worklist executor should observationally agree with Resolver03. On variable-bearing worlds, it should agree with Resolver04 and satisfy the same correctness predicates while exposing a simpler execution history.
 
 ## Proposed Work Sequence
 
 1. Define `ObjectId`, object references, partial cells, variable slots, obligations, pending selections, and immutable `ExecutionState` transitions without changing Resolver04.
 2. Implement freezing and test that hand-constructed completed stores produce the expected `EngineResult.Object`.
-3. Port the `common` and `child.field2($value)` regression as the first Resolver05 execution trace.
+3. Port the `common` and `child.field2($value)` regression as the first worklist execution trace.
 4. Add direct, nested, list, null, error, recursive, abstract-type, and equal-valued convergence traces.
 5. Connect the existing demand collector to obligation creation, preserving symbolic envelopes at behavioral boundaries.
-6. Compare Resolver05 with Resolver03 on variable-free generated worlds and with Resolver04 on variable-bearing generated worlds.
+6. Compare the worklist executor with Resolver03 on variable-free generated worlds and with Resolver04 on variable-bearing generated worlds.
 7. Run randomized ready-obligation schedules and assert identical frozen results and one application per exact resolver-bearing OER cell.
 8. Extend the stress corpus before translating the state machine into TLA+ or using it as an implementation blueprint.
 

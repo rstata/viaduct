@@ -14,7 +14,8 @@ import model.selectionForestOf
  * Each key in [pathsNeedingResolution] is a path of concrete object-field coordinates relative to
  * [engineResult]. Lists are transparent to paths: one path denotes the corresponding object
  * occurrence in every list position where that path exists. Each map value is the selection forest
- * already collapsed to the object at that path.
+ * already collapsed to the object at that path. These are resolver-reconstruction paths, not exact
+ * OER occurrence paths; they intentionally omit [Value.ListIndex].
  */
 class ResolvedValue(
     val engineResult: EngineResult?,

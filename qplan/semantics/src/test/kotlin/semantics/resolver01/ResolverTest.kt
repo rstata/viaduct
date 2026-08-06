@@ -7,7 +7,7 @@ import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
-import model.registry.Resolver
+import model.registry.FieldResolver
 import model.testing.TestWorld
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverFragmentsEnabled
@@ -155,7 +155,7 @@ class ResolverTest {
                     val user = schema.type("User") as Schema.ObjectType
                     val viewer = schema.field("Query", "viewer")
                     val greeting = schema.field("User", "greeting")
-                    mapOf<Schema.OutputField, Resolver.Field>(
+                    mapOf<Schema.OutputField, FieldResolver>(
                         viewer to
                             model.testing.fieldResolverOf(
                             objectFragment = schema.emptyFragmentOf("Query"),

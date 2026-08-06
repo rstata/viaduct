@@ -107,9 +107,9 @@ private fun countListPassiveDeepening(
 
     incoming.forEach { selectedResolver ->
         val field = selectedResolver.objectKey(type).field
-        if (field !in world.executorRegistry) return@forEach
+        if (field !in world.resolverRegistry) return@forEach
 
-        world.executorRegistry
+        world.resolverRegistry
             .resolver(field)
             .predecessorDemand(selectedResolver.key.arguments)
             .subselections
@@ -119,7 +119,7 @@ private fun countListPassiveDeepening(
                 val passiveType = passiveField.typeExpr.baseType as? Schema.CompositeType
                     ?: return@forEach
                 if (
-                    passiveField in world.executorRegistry ||
+                    passiveField in world.resolverRegistry ||
                     passiveField.typeExpr !is TypeExpr.List
                 ) {
                     return@forEach

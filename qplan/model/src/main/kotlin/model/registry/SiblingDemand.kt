@@ -18,7 +18,7 @@ import model.objectKey
  *
  * @throws IllegalArgumentException when the fields do not belong to the same concrete object type
  * or [siblingKey] is not canonical in this world
- * @throws MissingExecutorException when this field has no registered field resolver
+ * @throws MissingResolverException when this field has no registered field resolver
  */
 context(world: Assumptions)
 fun Value.ObjectKey.demandsFromSibling(
@@ -28,7 +28,7 @@ fun Value.ObjectKey.demandsFromSibling(
     return field.demandsFromSibling(
         siblingKey = siblingKey,
         selections =
-            world.executorRegistry
+            world.resolverRegistry
                 .resolver(field)
                 .objectFragment(arguments)
                 .subselections,

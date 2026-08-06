@@ -25,7 +25,7 @@ fun EngineResult.Object.conformsToResolvers(): Boolean =
 
 context(world: Assumptions)
 private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
-    val registry = world.executorRegistry
+    val registry = world.resolverRegistry
     return keys.all { key ->
         val value = fetch(key).value
         val fieldResolverConforms =
@@ -42,7 +42,7 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
                             .objectFragment(key.arguments)
                             .instantiateVariables(variableValues),
                     )
-                val resolverValue = resolver.tenantResolve(input, key.arguments)
+                val resolverValue = resolver(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }
 

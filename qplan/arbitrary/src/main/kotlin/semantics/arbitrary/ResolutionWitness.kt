@@ -7,7 +7,7 @@ import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
-import model.registry.ExecutorRegistry
+import model.registry.ResolverRegistry
 import java.security.MessageDigest
 
 /**
@@ -162,7 +162,7 @@ data class RegisteredResolverCell(
 )
 
 fun EngineResult?.registeredResolverCells(
-    registry: ExecutorRegistry,
+    registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): List<RegisteredResolverCell> {
     val result = mutableListOf<RegisteredResolverCell>()
@@ -224,7 +224,7 @@ fun EngineResult?.registeredResolverCells(
 }
 
 fun EngineResult?.registeredResolverCellCounts(
-    registry: ExecutorRegistry,
+    registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): Map<ResolverApplicationKey, Int> =
     registeredResolverCells(registry, bounds)
@@ -250,7 +250,7 @@ data class AllowedResolverClosure(
 )
 
 fun SelectionForest.allowedResolverClosure(
-    registry: ExecutorRegistry,
+    registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): AllowedResolverClosure {
     val directlySelected = linkedSetOf<Schema.ObjectField>()

@@ -17,7 +17,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class ExecutorRegistryTest {
+class ResolverRegistryTest {
     @Test
     fun `lowers node and field resolvers to field coordinates`() {
         val observedFields = mutableListOf<String>()
@@ -42,7 +42,7 @@ class ExecutorRegistryTest {
                 fieldResolvers = { schema ->
                     val userField = schema.field("Query", "user")
                     val queryFragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, Resolver.Field>(
+                    mapOf<Schema.OutputField, FieldResolver>(
                         userField to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
@@ -68,18 +68,17 @@ class ExecutorRegistryTest {
             }
         val userField = schema.objectField("Query", "user")
         val userIdField = schema.objectField("Query", "user\$id")
-        val registry = world.executorRegistry
+        val registry = world.resolverRegistry
         val assumptions = world.assumptions
 
-        assertEquals(registry, assumptions.executorRegistry)
+        assertEquals(registry, assumptions.resolverRegistry)
         assertTrue(userField in registry)
         assertTrue(userIdField in registry)
         assertEquals(setOf(userIdField), registry.mayDemandFrom(userField))
         val bridgeValue =
             context(assumptions) {
                 registry
-                    .resolver(userIdField)
-                    .tenantResolve(
+                    .resolver(userIdField)(
                         input = query,
                         arguments = Value.Arguments.of(userIdField, emptyMap()),
                         selections = selectionForestOf(),
@@ -94,7 +93,7 @@ class ExecutorRegistryTest {
         assertEquals(
             user,
             context(assumptions) {
-                fieldResolver.tenantResolve(
+                fieldResolver(
                     input =
                         Value.Object.of(
                             schema.query,
@@ -200,7 +199,7 @@ class ExecutorRegistryTest {
         val user = schema.objectField("Query", "user")
         val bridge = schema.objectField("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
-        val resolver = world.executorRegistry.resolver(user)
+        val resolver = world.resolverRegistry.resolver(user)
         val representativeBridge = resolver.predecessorDemand.subselections.single()
         val predecessorDemand = resolver.predecessorDemand(arguments)
         val bridgeSelection =
@@ -240,7 +239,7 @@ class ExecutorRegistryTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val fragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, Resolver.Field>(
+                    mapOf<Schema.OutputField, FieldResolver>(
                         schema.field("Query", "scalar") to
                             model.testing.fieldResolverOf(fragment) { _, _ -> Value.String.of("value") },
                         schema.field("Query", "list") to
@@ -267,9 +266,8 @@ class ExecutorRegistryTest {
             listOf("scalar", "list", "nullable", "failed").associateWith { fieldName ->
                 val field = schema.objectField("Query", fieldName)
                 context(world.assumptions) {
-                    world.executorRegistry
-                        .resolver(field)
-                        .tenantResolve(
+                    world.resolverRegistry
+                        .resolver(field)(
                             input = parent,
                             arguments = Value.Arguments.of(field, emptyMap()),
                             selections = selectionForestOf(),
@@ -305,11 +303,11 @@ class ExecutorRegistryTest {
     fun `distinguishes missing executors from foreign schema definitions`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL)
         val schema = world.schema
-        val registry = world.executorRegistry
+        val registry = world.resolverRegistry
         val userField = schema.objectField("User", "name")
 
         val missingField =
-            assertFailsWith<MissingExecutorException> {
+            assertFailsWith<MissingResolverException> {
                 registry.resolver(userField)
             }
         assertEquals("User", missingField.typeName)

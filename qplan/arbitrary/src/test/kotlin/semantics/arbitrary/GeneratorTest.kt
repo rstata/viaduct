@@ -68,7 +68,7 @@ class GeneratorTest {
         val arguments = Value.Arguments.of(field, emptyMap())
 
         registry.clearResolutionApplicationCounts()
-        countWorld.executorRegistry.resolver(field).tenantResolve(input, arguments)
+        countWorld.resolverRegistry.resolver(field)(input, arguments)
 
         assertEquals(mapOf(coordinate to 1L), registry.resolutionApplicationCounts())
         assertTrue(registry.resolutionWitness().applications.isEmpty())
@@ -192,7 +192,7 @@ class GeneratorTest {
                         coordinate.typeName,
                         coordinate.fieldName,
                     )
-                val resolver = world.executorRegistry.resolver(field)
+                val resolver = world.resolverRegistry.resolver(field)
                 if (resolver.objectFragment.subselections.size != 1) return@forEach
 
                 val selection = resolver.objectFragment.subselections.single()
@@ -208,8 +208,8 @@ class GeneratorTest {
                         .mapNotNull { possibleType ->
                             possibleType.fields[selection.key.field.fieldName]
                         }.firstOrNull { possibleField ->
-                            possibleField in world.executorRegistry &&
-                                !world.executorRegistry
+                            possibleField in world.resolverRegistry &&
+                                !world.resolverRegistry
                                     .resolver(possibleField)
                                     .objectFragment
                                     .subselections
@@ -348,11 +348,11 @@ class GeneratorTest {
                 val field = world.schema.objectField(coordinate.typeName, coordinate.fieldName)
                 val input = world.schema.objectOf(coordinate.typeName)
                 val arguments = Value.Arguments.of(field, emptyMap())
-                val resolver = world.executorRegistry.resolver(field)
+                val resolver = world.resolverRegistry.resolver(field)
 
                 assertEquals(
-                    resolver.tenantResolve(input, arguments),
-                    resolver.tenantResolve(input, arguments),
+                    resolver(input, arguments),
+                    resolver(input, arguments),
                 )
                 checkedResolvers += 1
             }

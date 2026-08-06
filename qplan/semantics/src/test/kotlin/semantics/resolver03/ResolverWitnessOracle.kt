@@ -14,14 +14,14 @@ import semantics.materialize
 context(world: Assumptions)
 internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> =
-    registeredResolverCells(world.executorRegistry)
+    registeredResolverCells(world.resolverRegistry)
         .map { cell ->
             val field =
                 world.schema.objectField(
                     cell.canonicalField.typeName,
                     cell.canonicalField.fieldName,
                 )
-            val resolver = world.executorRegistry.resolver(field)
+            val resolver = world.resolverRegistry.resolver(field)
             val fragment =
                 resolver
                     .objectFragment(cell.applicationKey.arguments)

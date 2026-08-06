@@ -1,6 +1,6 @@
 package model
 
-import model.registry.Resolver
+import model.registry.FieldResolver
 import model.registry.snipToDemand
 import model.testing.TestWorld
 import kotlin.test.Test

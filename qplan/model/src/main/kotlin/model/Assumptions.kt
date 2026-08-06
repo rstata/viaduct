@@ -1,16 +1,16 @@
 package model
 
-import model.registry.ExecutorRegistry
+import model.registry.ResolverRegistry
 
 /**
- * The fixed schema and executors under which model values and operations are interpreted.
+ * The fixed schema and field resolvers under which model values and operations are interpreted.
  *
  * Equality is undefined for assumptions. Exactly one value is fixed for a reasoning exercise, and
  * every schema definition referenced by its model values belongs to [schema].
  */
 sealed interface Assumptions {
     val schema: Schema
-    val executorRegistry: ExecutorRegistry
+    val resolverRegistry: ResolverRegistry
 
     /** Whether selective output traversal rejects fields outside its supplied selections. */
     val selectiveResolvers: Boolean
@@ -27,12 +27,12 @@ sealed interface Assumptions {
     companion object {
         fun of(
             schema: Schema,
-            executorRegistry: ExecutorRegistry,
+            resolverRegistry: ResolverRegistry,
             selectiveResolvers: Boolean = true,
         ): Assumptions =
             AssumptionsImpl(
                 schema,
-                executorRegistry,
+                resolverRegistry,
                 selectiveResolvers,
             )
     }
@@ -40,7 +40,7 @@ sealed interface Assumptions {
 
 private class AssumptionsImpl(
     override val schema: Schema,
-    override val executorRegistry: ExecutorRegistry,
+    override val resolverRegistry: ResolverRegistry,
     override val selectiveResolvers: Boolean,
 ) : Assumptions {
     override fun behavioral(field: Schema.ObjectField): Boolean {
@@ -49,6 +49,6 @@ private class AssumptionsImpl(
             "${containingType.typeName}/${field.fieldName} is not canonical in this world"
         }
         return field.fieldName == "__typename" ||
-            field in executorRegistry
+            field in resolverRegistry
     }
 }

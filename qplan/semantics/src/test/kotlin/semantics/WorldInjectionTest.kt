@@ -8,7 +8,7 @@ import model.fragmentFrom
 import model.objectOf
 import model.registry.ResolverRegistry
 import model.registry.MissingResolverException
-import model.registry.FieldResolver
+import model.testing.FieldResolverDefinition
 import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -37,7 +37,7 @@ class WorldInjectionTest {
                 fieldResolvers = { schema ->
                     val userField = schema.field("Query", "user")
                     val queryFragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, FieldResolver>(
+                    mapOf<Schema.OutputField, FieldResolverDefinition>(
                         userField to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,

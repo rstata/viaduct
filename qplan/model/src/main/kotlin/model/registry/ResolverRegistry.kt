@@ -3,10 +3,8 @@ package model.registry
 import model.Assumptions
 import model.Fragment
 import model.Schema
-import model.Selection
 import model.SelectionForest
 import model.Value
-import model.selectionForestOf
 
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
@@ -41,7 +39,7 @@ class FieldResolver private constructor(
     val predecessorDemand: Fragment,
     val variables: Map<Value.Variable, List<Value.Key>>,
     private val objectFragmentFunction: (Value.Arguments) -> Fragment,
-    private val predecessorDemandFunction: (Value.Arguments) -> Fragment,
+    private val predecessorDemandFunction: (Fragment) -> Fragment,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val validateObjectFragment: (Fragment) -> Unit,
@@ -66,10 +64,8 @@ class FieldResolver private constructor(
         }
 
     /** Returns the guarded, path-rooted predecessor demand for this exact argument tuple. */
-    fun predecessorDemand(arguments: Value.Arguments): Fragment {
-        objectFragment(arguments)
-        return predecessorDemandFunction(arguments)
-    }
+    fun predecessorDemand(arguments: Value.Arguments): Fragment =
+        predecessorDemandFunction(objectFragment(arguments))
 
     /**
      * Applies this field resolver and projects its selection-independent result to
@@ -117,213 +113,41 @@ class FieldResolver private constructor(
         )
     }
 
-    /**
-     * Returns a resolver with the same input requirement and a transformed raw output.
-     *
-     * This is a pre-reasoning composition operation used to adapt externally supplied
-     * functions before the canonical registry is exposed to semantic reasoning.
-     */
-    fun mapOutput(transform: (Value.Output?) -> Value.Output?): FieldResolver =
-        FieldResolver(
-            objectFragment = objectFragment,
-            predecessorDemand = predecessorDemand,
-            variables = variables,
-            objectFragmentFunction = objectFragmentFunction,
-            predecessorDemandFunction = predecessorDemandFunction,
-            function = { input, arguments -> transform(function(input, arguments)) },
-            projectionDemand = projectionDemand,
-            validateObjectFragment = validateObjectFragment,
-            applicationObserver = applicationObserver,
-        )
-
-    /**
-     * Returns a resolver that translates external demand before projecting its raw output.
-     *
-     * This is a pre-reasoning composition operation used when external output coordinates are
-     * lowered to different canonical coordinates.
-     */
-    fun mapDemand(transform: (SelectionForest) -> SelectionForest): FieldResolver =
-        FieldResolver(
-            objectFragment = objectFragment,
-            predecessorDemand = predecessorDemand,
-            variables = variables,
-            objectFragmentFunction = objectFragmentFunction,
-            predecessorDemandFunction = predecessorDemandFunction,
-            function = function,
-            projectionDemand = { demand -> transform(projectionDemand(demand)) },
-            validateObjectFragment = validateObjectFragment,
-            applicationObserver = applicationObserver,
-        )
-
-    /**
-     * Returns a resolver whose object-fragment values are transformed before canonical registry
-     * assembly.
-     *
-     * This pre-reasoning composition operation is used when lowering changes coordinates
-     * carried by symbolic input values.
-     */
-    fun mapObjectFragment(transform: (Fragment) -> Fragment): FieldResolver =
-        FieldResolver(
-            objectFragment = transform(objectFragment),
-            predecessorDemand = transform(predecessorDemand),
-            variables = variables,
-            objectFragmentFunction = { arguments ->
-                transform(this.objectFragment(arguments))
-            },
-            predecessorDemandFunction = { arguments ->
-                transform(this.predecessorDemand(arguments))
-            },
-            function = function,
-            projectionDemand = projectionDemand,
-            validateObjectFragment = {},
-            applicationObserver = applicationObserver,
-        )
-
-    /**
-     * Returns this resolver with an observer invoked once at each application boundary.
-     *
-     * Complete applications report null demand. Selective applications report the exact
-     * supplied demand before any lowering-specific projection transform.
-     */
-    fun observeApplications(observer: FieldResolverApplicationObserver): FieldResolver =
-        FieldResolver(
-            objectFragment = objectFragment,
-            predecessorDemand = predecessorDemand,
-            variables = variables,
-            objectFragmentFunction = objectFragmentFunction,
-            predecessorDemandFunction = predecessorDemandFunction,
-            function = function,
-            projectionDemand = projectionDemand,
-            validateObjectFragment = validateObjectFragment,
-            applicationObserver = { input, arguments, selections ->
-                applicationObserver(input, arguments, selections)
-                observer(input, arguments, selections)
-            },
-        )
-
-    /**
-     * Returns this resolver with the precomputed predecessor demand of [objectFragment].
-     *
-     * Registry assembly applies this pre-reasoning operation after resolver lowering and
-     * dependency analysis. The demand is rooted at the same object type and is the guarded,
-     * path-rooted transitive closure of [objectFragment] under resolver-dependency expansion.
-     */
-    fun withPredecessorDemand(
-        predecessorDemand: Fragment,
-        predecessorDemandFunction: (Value.Arguments) -> Fragment,
-        validateObjectFragment: (Fragment) -> Unit = {},
-    ): FieldResolver {
-        require(predecessorDemand.nominalType == objectFragment.nominalType) {
-            "Predecessor demand type must match object fragment type"
-        }
-        return FieldResolver(
-            objectFragment = objectFragment,
-            predecessorDemand = predecessorDemand,
-            variables = variables,
-            objectFragmentFunction = objectFragmentFunction,
-            predecessorDemandFunction = predecessorDemandFunction,
-            function = function,
-            projectionDemand = projectionDemand,
-            validateObjectFragment = { fragment ->
-                this.validateObjectFragment(fragment)
-                validateObjectFragment(fragment)
-            },
-            applicationObserver = applicationObserver,
-        )
-    }
-
-    /** Returns this resolver with its field-relative variables and provider paths. */
-    fun withVariables(
-        variables: Map<Value.Variable, List<Value.Key>>,
-    ): FieldResolver =
-        FieldResolver(
-            objectFragment = objectFragment,
-            predecessorDemand = predecessorDemand,
-            variables = variables,
-            objectFragmentFunction = objectFragmentFunction,
-            predecessorDemandFunction = predecessorDemandFunction,
-            function = function,
-            projectionDemand = projectionDemand,
-            validateObjectFragment = validateObjectFragment,
-            applicationObserver = applicationObserver,
-        )
-
     companion object {
+        /**
+         * Constructs one fully assembled canonical registry entry.
+         *
+         * External composition is responsible for lowering coordinates, attaching variables and
+         * observers, and computing predecessor demand before calling this factory.
+         */
         fun of(
             objectFragment: Fragment,
+            variables: Map<Value.Variable, List<Value.Key>>,
+            predecessorDemand: Fragment,
+            objectFragmentFunction: (Value.Arguments) -> Fragment,
+            predecessorDemandFunction: (Fragment) -> Fragment,
             function: FieldResolverFunction,
-        ): FieldResolver =
-            FieldResolver(
-                objectFragment = objectFragment,
-                predecessorDemand = objectFragment,
-                variables = emptyMap(),
-                objectFragmentFunction = { objectFragment },
-                predecessorDemandFunction = { objectFragment },
-                function = function,
-                projectionDemand = { it },
-                validateObjectFragment = {},
-                applicationObserver = { _, _, _ -> },
-            )
-
-        /**
-         * Constructs a resolver whose fixed object fragment retargets selection arguments.
-         *
-         * [retargetArguments] is applied recursively to every selection key in [objectFragment].
-         * All fragment and selection structure is preserved by construction.
-         */
-        fun ofArgumentRetargeting(
-            objectFragment: Fragment,
-            retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
-            function: FieldResolverFunction,
+            projectionDemand: (SelectionForest) -> SelectionForest = { it },
+            validateObjectFragment: (Fragment) -> Unit = {},
+            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
         ): FieldResolver {
-            val objectFragmentFunction = { arguments: Value.Arguments ->
-                objectFragment.retargetArguments(arguments, retargetArguments)
+            require(predecessorDemand.nominalType == objectFragment.nominalType) {
+                "Predecessor demand type must match object fragment type"
             }
             return FieldResolver(
                 objectFragment = objectFragment,
-                predecessorDemand = objectFragment,
-                variables = emptyMap(),
+                predecessorDemand = predecessorDemand,
+                variables = variables,
                 objectFragmentFunction = objectFragmentFunction,
-                predecessorDemandFunction = objectFragmentFunction,
+                predecessorDemandFunction = predecessorDemandFunction,
                 function = function,
-                projectionDemand = { it },
-                validateObjectFragment = {},
-                applicationObserver = { _, _, _ -> },
+                projectionDemand = projectionDemand,
+                validateObjectFragment = validateObjectFragment,
+                applicationObserver = applicationObserver,
             )
         }
     }
 }
-
-private fun Fragment.retargetArguments(
-    resolverArguments: Value.Arguments,
-    retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
-): Fragment =
-    Fragment.of(
-        nominalType = nominalType,
-        subselections = subselections.retargetArguments(resolverArguments, retargetArguments),
-    )
-
-private fun SelectionForest.retargetArguments(
-    resolverArguments: Value.Arguments,
-    retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
-): SelectionForest =
-    flatMap { selection ->
-        selectionForestOf(
-            Selection.of(
-                key =
-                    Value.Key.of(
-                        selection.key.field,
-                        retargetArguments(selection.key, resolverArguments),
-                    ),
-                possibleTypes = selection.possibleTypes,
-                subselections =
-                    selection.subselections.retargetArguments(
-                        resolverArguments,
-                        retargetArguments,
-                    ),
-            ),
-        )
-    }
 
 /**
  * The externally supplied field resolvers and field-relative variable providers fixed for one

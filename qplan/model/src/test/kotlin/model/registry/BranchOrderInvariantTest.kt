@@ -6,6 +6,7 @@ import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.FromObjectField
+import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import model.testing.fromObjectField
 import kotlin.test.Test
@@ -449,7 +450,7 @@ class BranchOrderInvariantTest {
             }
             """.trimIndent()
 
-        fun branchResolvers(schema: Schema): Map<Schema.OutputField, FieldResolver> =
+        fun branchResolvers(schema: Schema): Map<Schema.OutputField, FieldResolverDefinition> =
             mapOf(
                 schema.field("Query", "result") to
                     resolver(
@@ -472,7 +473,7 @@ class BranchOrderInvariantTest {
         fun twoBranchResolvers(
             schema: Schema,
             resultFragment: String,
-        ): Map<Schema.OutputField, FieldResolver> =
+        ): Map<Schema.OutputField, FieldResolverDefinition> =
             mapOf(
                 schema.field("Query", "result") to
                     resolver(schema.fragmentFrom(resultFragment)),
@@ -495,7 +496,7 @@ class BranchOrderInvariantTest {
             )
         }
 
-        fun resolver(fragment: Fragment): FieldResolver =
+        fun resolver(fragment: Fragment): FieldResolverDefinition =
             model.testing.fieldResolverOf(fragment) { _, _ -> error("Not invoked") }
     }
 }

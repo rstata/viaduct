@@ -8,6 +8,7 @@ import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.selectionForestOf
+import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import model.testing.fromObjectField
 import kotlin.test.Test
@@ -182,7 +183,8 @@ class ResolverDemandTest {
                 TestWorld.fromSDL(
                     schemaSDL = schemaSDL,
                     fieldResolvers = { schema ->
-                        val resolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
+                        val resolvers =
+                            mutableMapOf<Schema.OutputField, FieldResolverDefinition>()
                         schema.query.fields.values
                             .filter { it.fieldName != "__typename" }
                             .forEach { field ->
@@ -368,7 +370,7 @@ class ResolverDemandTest {
                     val source = schema.field("Query", "source")
                     mapOf(
                         schema.field("Query", "result") to
-                            FieldResolver.ofArgumentRetargeting(
+                            FieldResolverDefinition.ofArgumentRetargeting(
                                 objectFragment = representative,
                                 retargetArguments = { key, _ ->
                                     if (key.field == source) {
@@ -487,7 +489,7 @@ class ResolverDemandTest {
             TestWorld.fromSDL(
                 schemaSDL = EXTENDED_FRAGMENT_SCHEMA,
                 fieldResolvers = { schema ->
-                    fun resolver(fragment: Fragment): FieldResolver =
+                    fun resolver(fragment: Fragment): FieldResolverDefinition =
                         model.testing.fieldResolverOf(fragment) { _, _ -> error("Not invoked") }
 
                     mapOf(
@@ -747,7 +749,7 @@ class ResolverDemandTest {
             }
             """.trimIndent()
 
-        fun resolver(fragment: Fragment): FieldResolver =
+        fun resolver(fragment: Fragment): FieldResolverDefinition =
             model.testing.fieldResolverOf(
                 objectFragment = fragment,
                 function = { _, _ -> error("Not invoked") },

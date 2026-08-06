@@ -7,7 +7,6 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.objectKey
-import model.registry.availableDemand
 import model.selectionForestOf
 import model.union
 import semantics.variables

@@ -45,11 +45,6 @@ class FieldResolver private constructor(
     private val validateObjectFragment: (Fragment) -> Unit,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
-    data class OutputProjection(
-        val source: Value.Output?,
-        val projected: Value.Output?,
-    )
-
     /**
      * Returns the object fragment required for this exact argument tuple.
      *
@@ -93,24 +88,33 @@ class FieldResolver private constructor(
     }
 
     /**
-     * Applies this resolver once and returns both its raw output and selective projection.
+     * Applies this resolver once and returns its raw output paired with its selective projection.
+     *
+     * [additionalProjectionDemand] is evaluated with the raw output as its receiver and receives a
+     * function that translates canonical demand into this resolver's projection coordinates. It
+     * returns any additional projection-coordinate demand to retain alongside [selections].
      */
+    @Deprecated(
+        message = "Retained only for Resolver04, which is a dead-end design",
+    )
     context(world: Assumptions)
     fun resolveWithSource(
         input: Value.Object,
         arguments: Value.Arguments,
         selections: SelectionForest,
-        speculativeDemand: SelectionForest,
-    ): OutputProjection {
+        additionalProjectionDemand:
+            Value.Output?.(
+                projectDemand: (SelectionForest) -> SelectionForest,
+            ) -> SelectionForest,
+    ): Pair<Value.Output?, Value.Output?> {
         applicationObserver(input, arguments, selections)
         val output = function(input, arguments)
         val required = projectionDemand(selections)
-        val speculative =
-            output.availableDemand(projectionDemand(speculativeDemand))
-        return OutputProjection(
-            source = output,
-            projected = output.snipToDemand(required + speculative),
-        )
+        val additional =
+            output.additionalProjectionDemand { demand ->
+                projectionDemand(demand)
+            }
+        return output to output.snipToDemand(required + additional)
     }
 
     companion object {

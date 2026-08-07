@@ -7,9 +7,10 @@ import model.SelectionForest
 import model.Value
 import model.objectKey
 import model.selectionForestOf
+import model.substituteBindings
 
 /**
- * Extends this output demand with every encountered successor resolver's predecessor demand.
+ * Extends this output demand with every encountered successor resolver's transitive input demand.
  *
  * Each predecessor demand is rooted at its successor occurrence's containing object. Recursing
  * through subselections preserves the selection-occurrence nesting path and concrete-type guards.
@@ -24,9 +25,9 @@ fun SelectionForest.successorDemand(): SelectionForest =
                 possibleTypes = selection.possibleTypes,
                 subselections = nestedDemand,
             )
-        val predecessorDemand =
+        val resolverInputDemand =
             selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-                val key = selection.objectKey(possibleType)
+                val key = selection.objectKey(possibleType).substituteBindings()
                 if (
                     key.arguments.containsErrorValue() ||
                     key.field !in world.resolverRegistry
@@ -36,10 +37,83 @@ fun SelectionForest.successorDemand(): SelectionForest =
                     demand +
                         world.resolverRegistry
                             .resolver(key.field)
-                            .predecessorDemand(key.arguments)
+                            .objectFragmentWithFromArguments(key.arguments)
+                            .successorDemand()
                 }
             }
-        selectionForestOf(rootedSelection) + predecessorDemand
+        selectionForestOf(rootedSelection) + resolverInputDemand
+    }
+
+private fun FieldResolver.objectFragmentWithFromArguments(
+    arguments: Value.Arguments,
+): SelectionForest {
+    val bindings =
+        variables.mapNotNull { (variable, definition) ->
+            (definition as? VariableDefinition.FromArgument)?.let {
+                variable to
+                    arguments.fieldValues.getValue(
+                        definition.argument.argumentName,
+                    )
+            }
+        }.toMap()
+    return objectFragment(arguments).substitute(bindings)
+}
+
+private fun SelectionForest.substitute(
+    bindings: Map<Value.Variable.Template, Value.Input?>,
+): SelectionForest =
+    flatMap { selection ->
+        selectionForestOf(
+            Selection.of(
+                key =
+                    Value.Key.of(
+                        field = selection.key.field,
+                        arguments =
+                            selection.key.arguments.substitute(
+                                field = selection.key.field,
+                                bindings = bindings,
+                            ),
+                    ),
+                possibleTypes = selection.possibleTypes,
+                subselections = selection.subselections.substitute(bindings),
+            ),
+        )
+    }
+
+private fun Value.Arguments.substitute(
+    field: Schema.OutputField,
+    bindings: Map<Value.Variable.Template, Value.Input?>,
+): Value.Arguments =
+    Value.Arguments.of(
+        field = field,
+        fields =
+            fieldValues.mapValues { (_, value) ->
+                value.substitute(bindings)
+            },
+    )
+
+private fun Value.Input?.substitute(
+    bindings: Map<Value.Variable.Template, Value.Input?>,
+): Value.Input? =
+    when (this) {
+        null -> null
+        Value.Error -> Value.Error
+        is Value.Variable.Template ->
+            if (this in bindings) bindings[this] else this
+        is Value.InputList ->
+            Value.InputList.of(
+                typeExpr = typeExpr,
+                values = values.map { value -> value.substitute(bindings) },
+            )
+        is Value.InputObject ->
+            Value.InputObject.of(
+                type = type,
+                fields =
+                    fieldValues.mapValues { (_, value) ->
+                        value.substitute(bindings)
+                    },
+            )
+        else -> this
     }
 
 private fun Value.Arguments.containsErrorValue(): Boolean =

@@ -18,6 +18,7 @@ import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
@@ -68,6 +69,7 @@ class ResolverStressTest {
                     (ResolverFragmentWeight to 0.85) +
                     (ResolverFragmentDepth to 3) +
                     (NodeResolversEnabled to false) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
                     (ResolverVariablesEnabled to false)
             var attemptedCases = 0
             var verifiedCases = 0

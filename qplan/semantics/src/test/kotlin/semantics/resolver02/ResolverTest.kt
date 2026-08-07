@@ -10,7 +10,12 @@ import model.objectOf
 import model.TypeExpr
 import model.testing.TestWorld
 import semantics.arbitrary.Config
+import semantics.arbitrary.ExplicitFieldResolverWeight
+import semantics.arbitrary.FieldArgumentWeight
+import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
@@ -23,6 +28,7 @@ class ResolverTest {
     @Test
     fun `arbitrary valid worlds resolve correctly`(): Unit =
         runBlocking {
+            var generatedFromArgumentVariables = 0
             val counts =
                 TestCaseCount(
                     schemas = 20,
@@ -31,9 +37,16 @@ class ResolverTest {
                 )
             val config =
                 Config.default +
-                    (ResolverFragmentsEnabled to true)
+                    (FieldArgumentWeight to 1.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
+                    (ResolverVariableWeight to 1.0)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
+                generatedFromArgumentVariables +=
+                    testCase.registry.features.fromArgumentVariableCount
                 val result = generatedResolution(testWorld, testCase.query.source)
                 val permuted =
                     generatedResolution(
@@ -42,6 +55,7 @@ class ResolverTest {
                     )
                 assertEquals(result, permuted)
             }
+            assertTrue(generatedFromArgumentVariables > 0)
         }
 
     @Test

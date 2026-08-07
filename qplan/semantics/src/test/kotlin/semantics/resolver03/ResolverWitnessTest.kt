@@ -10,12 +10,19 @@ import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.NodeResolversEnabled
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverProgramKind
+import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.allowedResolverClosure
 import semantics.arbitrary.checkResolverTestCases
+import semantics.correctresolution.conformsToResolvers
+import semantics.correctresolution.conformsToSelections
+import semantics.correctresolution.conformsToTypename
 import semantics.correctresolution.correctResolution
+import semantics.correctresolution.isClosedUnderResolverDemand
+import semantics.correctresolution.rootedAndWellTyped
 import org.junit.jupiter.api.Disabled
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,18 +46,23 @@ class ResolverWitnessTest {
                     (ExplicitFieldResolverWeight to 0.8) +
                     (DuplicateSelectionWeight to 0.8) +
                     (ResolverFragmentsEnabled to true) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
+                    (ResolverVariableWeight to 1.0) +
                     (NodeResolversEnabled to false)
             var inputSensitiveApplications = 0
             var argumentSensitiveApplications = 0
             var exactAliasCases = 0
             var activatedExactAliasCases = 0
             var activatedDistinctArgumentCases = 0
+            var generatedFromArgumentVariables = 0
 
             checkResolverTestCases(
                 counts,
                 config,
                 captureSuppliedDemand = true,
             ) { testWorld, testCase ->
+                generatedFromArgumentVariables +=
+                    testCase.registry.features.fromArgumentVariableCount
                 val world = testWorld.assumptions
                 val registry = testCase.registry
                 val fragment = world.fragmentFrom(testCase.query.source)
@@ -71,13 +83,30 @@ class ResolverWitnessTest {
                     },
                     "Every Resolver03 application must capture its supplied demand",
                 )
-                assertTrue(
+                val unrelatedApplications =
                     witness.unrelatedApplications(
                         fragment.subselections.allowedResolverClosure(world.resolverRegistry),
-                    ).isEmpty(),
-                    "Resolver applied outside operation/registry demand closure",
+                    )
+                assertTrue(
+                    unrelatedApplications.isEmpty(),
+                    "Resolver applied outside operation/registry demand closure: " +
+                        unrelatedApplications.map { application -> application.key.field },
                 )
-                assertTrue(context(world) { result.correctResolution(fragment) })
+                assertTrue(
+                    context(world) {
+                        result.correctResolution(fragment)
+                    },
+                    context(world) {
+                        "rooted=${result.rootedAndWellTyped()}, " +
+                            "selections=${result.conformsToSelections(fragment.subselections)}, " +
+                            "closed=${result.isClosedUnderResolverDemand()}, " +
+                            "resolvers=${result.conformsToResolvers()}, " +
+                            "typename=${result.conformsToTypename()}, " +
+                            "unclosed=${result.unclosedRegisteredResolverCells().map { cell ->
+                                cell.applicationKey to cell.occurrencePath
+                            }}"
+                    },
+                )
 
                 witness.applications.forEach { application ->
                     when (registry.resolverProgram(application.key.field)) {
@@ -148,6 +177,7 @@ class ResolverWitnessTest {
             assertTrue(exactAliasCases >= 10)
             assertTrue(activatedExactAliasCases >= 10)
             assertTrue(activatedDistinctArgumentCases >= 10)
+            assertTrue(generatedFromArgumentVariables > 0)
         }
 
     @Disabled("not currently worth the effort")

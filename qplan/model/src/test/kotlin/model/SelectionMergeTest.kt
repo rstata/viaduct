@@ -284,6 +284,36 @@ class SelectionMergeTest {
         assertEquals(concrete.objectKey(fixture.query), merged.single().key)
     }
 
+    @Test
+    fun `repeated merge preserves a key containing substituted list bindings`() {
+        val fixture = Fixture()
+        val source = fixture.schema.objectField("Query", "source")
+        val variable = Value.Variable.of(source, "values").stamp(emptyList())
+        val binding =
+            Value.Arguments
+                .of(source, mapOf("values" to listOf(1, 2)))
+                .fieldValues
+                .getValue("values")
+        val symbolic =
+            fixture.selection(
+                typeName = "Query",
+                fieldName = "nested",
+                arguments = mapOf("values" to listOf(variable, variable)),
+            )
+        fixture.world.bind(variable, binding)
+
+        val once =
+            context(fixture.world) {
+                selectionForestOf(symbolic).merge(fixture.query)
+            }
+        val twice =
+            context(fixture.world) {
+                once.merge(fixture.query)
+            }
+
+        assertSame(once.single().key, twice.single().key)
+    }
+
     private class Fixture {
         val testWorld = TestWorld.fromSDL(SCHEMA)
         val world = testWorld.assumptions
@@ -335,6 +365,8 @@ class SelectionMergeTest {
               scalar(arg: Int!): Int!
               item: ConcreteItem!
               search(filter: Filter!): Int!
+              source(values: [Int!]!): Int!
+              nested(values: [[Int]]): Int!
             }
             """.trimIndent()
     }

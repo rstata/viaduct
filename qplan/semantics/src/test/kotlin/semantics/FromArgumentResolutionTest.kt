@@ -11,11 +11,9 @@ import model.testing.TestWorld
 import model.testing.fromArgument
 import semantics.resolver02.resolve as resolve02
 import semantics.resolver03.resolve as resolve03
-import org.junit.jupiter.api.Disabled
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-@Disabled("Variable support is under active development")
 class FromArgumentResolutionTest {
     @Test
     fun `resolver02 resolves input selected with a fromArgument variable`() {
@@ -36,15 +34,39 @@ class FromArgumentResolutionTest {
     }
 
     @Test
+    fun `resolver02 resolves a transitive chain of fromArgument variables`() {
+        assertTransitiveFromArgumentResolution { world, root, selections ->
+            context(world) {
+                root.resolve02(selections)
+            }
+        }
+    }
+
+    @Test
     fun `resolver03 resolves a transitive chain of fromArgument variables`() {
+        assertTransitiveFromArgumentResolution { world, root, selections ->
+            context(world) {
+                root.resolve03(selections)
+            }
+        }
+    }
+
+    private fun assertTransitiveFromArgumentResolution(
+        resolve:
+            (
+                Assumptions,
+                Value.Object,
+                SelectionForest,
+            ) -> EngineResult.Object,
+    ) {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
                     """
                     type Query {
-                      one(seed: Int!): Int!
-                      two(value: Int!): Int!
-                      three(value: Int!): Int!
+                      one(seed: Int!): Int!     # { two (${'$'}seed) } return it.two
+                      two(value: Int!): Int!    # { three(${'$'}value) } return it.three
+                      three(value: Int!): Int!  # { } return ${'$'}value+1
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
@@ -108,9 +130,11 @@ class FromArgumentResolutionTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve03(fragment.subselections)
-            }
+            resolve(
+                world,
+                world.objectOf("Query"),
+                fragment.subselections,
+            )
 
         assertEquals(Value.Int.of(8), resolved.fetch(oneKey).value)
     }

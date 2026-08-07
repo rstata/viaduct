@@ -12,12 +12,10 @@ import model.testing.fromArgument
 import semantics.resolver01.resolve as resolve01
 import semantics.resolver02.resolve as resolve02
 import semantics.resolver03.resolve as resolve03
-import org.junit.jupiter.api.Disabled
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
-@Disabled("Variable support is under active development")
 class FromArgumentBindingTest {
     @Test
     fun `resolver01 binds argument variables by exact resolver occurrence`() {

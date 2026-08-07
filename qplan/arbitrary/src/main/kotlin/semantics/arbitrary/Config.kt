@@ -77,6 +77,7 @@ object ResolverFragmentWeight : ConfigKey<Double>(0.65, ::weight)
 object ResolverFragmentDepth : ConfigKey<Int>(2, ::nonNegative)
 object ResolverArgumentErrorWeight : ConfigKey<Double>(0.05, ::weight)
 object ResolverVariablesEnabled : ConfigKey<Boolean>(false, { null })
+object ResolverFromArgumentVariablesEnabled : ConfigKey<Boolean>(false, { null })
 object ResolverVariableWeight : ConfigKey<Double>(0.5, ::weight)
 object ResolverVariableCount : ConfigKey<IntRange>(1..3, ::range)
 

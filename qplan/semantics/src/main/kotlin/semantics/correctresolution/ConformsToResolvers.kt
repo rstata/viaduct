@@ -2,8 +2,10 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
+import model.PathComponent
 import model.Schema
 import model.Value
+import model.merge
 import semantics.materialize
 
 /**
@@ -20,10 +22,12 @@ import semantics.materialize
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToResolvers(): Boolean =
-    objectConformsToResolvers()
+    objectConformsToResolvers(emptyList())
 
 context(world: Assumptions)
-private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
+private fun EngineResult.Object.objectConformsToResolvers(
+    path: List<PathComponent>,
+): Boolean {
     val registry = world.resolverRegistry
     return keys.all { key ->
         val value = fetch(key).value
@@ -36,25 +40,36 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
             } else {
                 val resolver = registry.resolver(key.field)
                 val input =
-                    materialize(resolver.objectFragment(key.arguments))
+                    materialize(
+                        resolver
+                            .stampedObjectFragment(key.arguments, path + key)
+                            .merge(type),
+                    )
                 val resolverValue = resolver(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }
 
-        fieldResolverConforms && value.engineResultConformsToResolvers()
+        fieldResolverConforms && value.engineResultConformsToResolvers(path + key)
     }
 }
 
 context(world: Assumptions)
-private fun EngineResult?.engineResultConformsToResolvers(): Boolean =
+private fun EngineResult?.engineResultConformsToResolvers(
+    path: List<PathComponent>,
+): Boolean =
     when (this) {
         null,
         Value.Error,
         is Value.Simple,
         -> true
 
-        is EngineResult.Object -> objectConformsToResolvers()
-        is EngineResult.List -> all { cell -> cell.value.engineResultConformsToResolvers() }
+        is EngineResult.Object -> objectConformsToResolvers(path)
+        is EngineResult.List ->
+            withIndex().all { (index, cell) ->
+                cell.value.engineResultConformsToResolvers(
+                    path + Value.ListIndex.of(index),
+                )
+            }
     }
 
 context(world: Assumptions)

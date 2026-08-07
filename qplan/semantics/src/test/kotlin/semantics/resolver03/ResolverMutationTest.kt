@@ -13,7 +13,9 @@ import semantics.arbitrary.NodeResolversEnabled
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverProgramMutation
+import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.resolverTestBatch
@@ -39,14 +41,18 @@ class ResolverMutationTest {
                 (DuplicateSelectionWeight to 1.0) +
                 (ResolverFragmentsEnabled to true) +
                 (ResolverFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
                 (NodeResolversEnabled to false)
         val random = RandomSource.seeded(303_303L)
         val killed = ResolverProgramMutation.entries.associateWith { 0 }.toMutableMap()
         val exercised = ResolverProgramMutation.entries.associateWith { 0 }.toMutableMap()
+        var generatedFromArgumentVariables = 0
 
         repeat(counts.schemas) {
             val batch = Arb.resolverTestBatch(counts, config).next(random)
             batch.registries.forEach { registry ->
+                generatedFromArgumentVariables += registry.features.fromArgumentVariableCount
                 val ordinaryWorld = registry.world(batch.schema)
 
                 batch.queries.forEach { query ->
@@ -122,5 +128,6 @@ class ResolverMutationTest {
                     "$mutation survived too often: killed=${killed.getValue(mutation)}",
                 )
             }
+        assertTrue(generatedFromArgumentVariables > 0)
     }
 }

@@ -150,11 +150,15 @@ private fun Value.Object.resolveKey(
                 }
             EngineResult.Cell.of(
                 value =
-                    fieldValue.resolveValue(resolutionSelections).let { resolvedValue ->
-                        fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
-                            value.resolve(selections, resolved)
-                        }
-                    },
+                    fieldValue
+                        .resolveValue(
+                            resolverDemand = resolutionSelections,
+                            beSelective = true,
+                        ).let { resolvedValue ->
+                            fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
+                                value.resolve(selections, resolved)
+                            }
+                        },
             )
         }
 

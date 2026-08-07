@@ -140,7 +140,7 @@ private fun Value.Object.resolveKey(
                     fieldValue
                         .resolveValue(
                             resolverDemand = subselections,
-                            selections = null,
+                            beSelective = false,
                         ).let { resolvedValue ->
                             fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
                                 value.resolve(selections, resolved)

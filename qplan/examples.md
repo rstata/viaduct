@@ -1,6 +1,6 @@
 # Resolution Algorithms By Example
 
-These examples describe three distinct jobs performed by the resolution algorithms. Demand closure determines everything needed to construct resolver inputs. Output projection determines everything a producer must retain in its output so that client demand and downstream resolver inputs can be satisfied. Widening handles demand that becomes concrete only after an execution variable is bound.
+These examples describe two current Resolver03 jobs and one historical experiment. Demand closure determines everything needed to construct resolver inputs. Output projection determines everything a producer must retain in its output so that client demand and downstream resolver inputs can be satisfied. The final example records how the removed Resolver04 attempted to widen demand after an execution variable was bound and why that strategy was abandoned.
 
 An `objectFragment` is the resolver's declared input requirement at its containing object. A `predecessorDemand` is the same requirement closed transitively under the requirements of every resolver occurrence reachable through it, with occurrence paths and concrete-type guards preserved.
 
@@ -282,7 +282,7 @@ fragment on Subject {
 
 For `user: true`, projection examines the returned raw `User` value. The `User` condition applies, so `firstName` is retained; the `Organization` condition does not apply, so `legalName` is ignored. For `user: false`, the opposite condition applies. Lifting preserves possible successor demand, while the retained type conditions prevent that demand from becoming unconditional.
 
-## Widening for Variables
+## Historical Resolver04 Widening Example
 
 Execution variables add value flow that does not follow the selection tree. A provider reads a value from one OER path, while uses of the variable insert that value into resolver arguments at another path.
 
@@ -368,7 +368,7 @@ fragment on Object1 {
 
 Both the provider-side demand and the newly concrete variable-side demand pass through the same argumentless `Object1.child` cell. A strict post-order traversal has already returned from that child subtree. Applying the `child` resolver again would recover the subtree but would violate the requirement that each exact resolver-bearing OER cell have one resolver application.
 
-Resolver04 instead widens the existing child result. It retains the selection-independent source associated with the first `child` application, re-enters the already-present `child` cell, and resolves the newly concrete descendant against that source. The child OER grows from:
+Resolver04 instead widened the existing child result. It retained the selection-independent source associated with the first `child` application, re-entered the already-present `child` cell, and resolved the newly concrete descendant against that source. The child OER grew from:
 
 ```graphql
 fragment on Object2 {
@@ -385,11 +385,11 @@ fragment on Object2 {
 }
 ```
 
-The `child` resolver is still applied once. The two `field2` cells have different exact argument tuples, so each has its own one-shot resolver application. After both descendants and `common` are present, the complete exact input to `variableConsumer` can be materialized and its resolver can be applied.
+The `child` resolver was still applied once. The two `field2` cells had different exact argument tuples, so each had its own one-shot resolver application. After both descendants and `common` were present, the complete exact input to `variableConsumer` could be materialized and its resolver could be applied.
 
-Widening therefore does not discover a new structural path. The symbolic path was already present in the fixed envelope. It resumes an existing OER subtree after a variable binding turns that symbolic path into a new exact key.
+Widening therefore did not discover a new structural path. The symbolic path was already present in the fixed envelope. It resumed an existing OER subtree after a variable binding turned that symbolic path into a new exact key.
 
-### Why One Shot Is Impossible
+### Why Widening Cannot Recover One-Shot After Late Equality
 
 There is an important precision point in the proposed `"literal"` variation. In the schema above, `field2` returns a scalar. If `common` returned `"literal"` instead of `"bound"`, the two occurrences would converge on the same exact key, but they would also make the same complete scalar demand. Equality alone would not force a second application.
 
@@ -443,6 +443,6 @@ Producing `$value` first requires the exact cell `field2(arg: "literal")` with o
 
 If `field2(arg: "literal")` was already applied and projected only to `{ forProvider }`, widening cannot manufacture `forConsumer` from that projected value. Applying the resolver again would violate one-shot execution. Once an application has occurred with incomplete demand, one-shot execution is impossible to recover for that strategy.
 
-This makes one-shot resolution impossible under Resolver04's loose restrictions on variable definitions and uses. Before `$value` is bound, resolution cannot know whether the symbolic occurrence will converge with `field2(arg: "literal")`. Applying the concrete occurrence with only `{ forProvider }` may require a second application after late convergence, while speculatively adding `{ forConsumer }` over-selects whenever the occurrences do not converge. The canonical model therefore rejects provider/use shapes that permit this late convergence by requiring an acyclic argument-insensitive structural branch order.
+This made one-shot resolution impossible for Resolver04's strategy under its loose restrictions on variable definitions and uses. Before `$value` was bound, the algorithm could not know whether the symbolic occurrence would converge with `field2(arg: "literal")`. Applying the concrete occurrence with only `{ forProvider }` could require a second application after late convergence, while speculatively adding `{ forConsumer }` over-selected whenever the occurrences did not converge. The canonical model now rejects provider/use shapes that permit this late convergence by requiring an acyclic argument-insensitive structural branch order.
 
-The exact lesson is that widening solves late discovery of a distinct descendant key such as `"bound"`, but it cannot repair an under-projected resolver cell after late equality. Preserving one-shot under `"literal"` requires the potentially convergent output demand to be accounted for before the first resolver application.
+The exact lesson is that widening solved late discovery of a distinct descendant key such as `"bound"`, but it could not repair an under-projected resolver cell after late equality. Preserving one-shot under `"literal"` requires the potentially convergent output demand to be accounted for before the first resolver application. The broader history and surviving design constraints are recorded in the [Resolver04 retrospective](./evergreen.md#appendix-resolver04-retrospective).

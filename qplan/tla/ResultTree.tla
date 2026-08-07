@@ -16,15 +16,12 @@ observations stop at behavioral field boundaries.
 *)
 
 CONSTANTS
-    Objects, Cells, Keys, Types, Values, Variables, Observations,
-    VariableBindings,
+    Objects, Cells, Keys, Types, Values, Observations,
     Root, QueryType, FragmentRootType,
     PresentCells, CellObject, CellKey, CellChildren, ObjectType,
     OperationDemand, ResolverCells, ErrorCells, ResolverDemand,
     ObservationResolver, ActualObservation, ExpectedObservation,
-    TypenameCells, ActualCellValue, TypeNameValue,
-    StoredVariableNames, BindingObject, BindingVariable,
-    StoredBindingValue, ExpectedBindingValue
+    TypenameCells, ActualCellValue, TypeNameValue
 
 ObjectClosedSets ==
     {objects \in SUBSET Objects :
@@ -49,20 +46,11 @@ ObservationsOf(cell) ==
     {observation \in Observations :
         ObservationResolver[observation] = cell}
 
-BindingsAt(object) ==
-    {binding \in VariableBindings :
-        BindingObject[binding] = object}
-
-BindingNamesAt(object) ==
-    {BindingVariable[binding] :
-        binding \in BindingsAt(object)}
-
 WorldCarriers ==
     /\ IsFiniteSet(Objects)
     /\ IsFiniteSet(Cells)
     /\ IsFiniteSet(Keys)
     /\ IsFiniteSet(Observations)
-    /\ IsFiniteSet(VariableBindings)
     /\ Root \in Objects
     /\ QueryType \in Types
     /\ FragmentRootType \in Types
@@ -83,11 +71,6 @@ WorldFunctions ==
     /\ ExpectedObservation \in [Observations -> Values]
     /\ ActualCellValue \in [Cells -> Values]
     /\ TypeNameValue \in [Objects -> Values]
-    /\ StoredVariableNames \in [Objects -> SUBSET Variables]
-    /\ BindingObject \in [VariableBindings -> Objects]
-    /\ BindingVariable \in [VariableBindings -> Variables]
-    /\ StoredBindingValue \in [VariableBindings -> Values]
-    /\ ExpectedBindingValue \in [VariableBindings -> Values]
 
 WorldChildren ==
     \A cell \in Cells : CellChildren[cell] \subseteq Objects
@@ -113,20 +96,11 @@ WorldObservations ==
     /\ \A cell \in ActiveResolverCells :
            ObservationsOf(cell) # {}
 
-WorldBindings ==
-    /\ \A binding \in VariableBindings :
-           BindingObject[binding] \in ReachableObjects
-    /\ \A first, second \in VariableBindings :
-           (/\ BindingObject[first] = BindingObject[second]
-            /\ BindingVariable[first] = BindingVariable[second])
-               => first = second
-
 World ==
     /\ WorldCarriers
     /\ WorldFunctions
     /\ WorldTree
     /\ WorldObservations
-    /\ WorldBindings
 
 RootedAndWellTyped ==
     /\ FragmentRootType = QueryType
@@ -140,13 +114,6 @@ IsClosedUnderResolverDemand ==
     \A cell \in ActiveResolverCells :
         ResolverDemand[cell] \subseteq PresentKeys(CellObject[cell])
 
-ConformsToVariables ==
-    \A object \in ReachableObjects :
-        /\ StoredVariableNames[object] = BindingNamesAt(object)
-        /\ \A binding \in BindingsAt(object) :
-               StoredBindingValue[binding] =
-                   ExpectedBindingValue[binding]
-
 ConformsToResolvers ==
     \A observation \in Observations :
         ActualObservation[observation] = ExpectedObservation[observation]
@@ -159,7 +126,6 @@ CorrectResolution ==
     /\ RootedAndWellTyped
     /\ ConformsToFragment
     /\ IsClosedUnderResolverDemand
-    /\ ConformsToVariables
     /\ ConformsToResolvers
     /\ ConformsToTypename
 
@@ -168,10 +134,6 @@ OccurrenceCorrect(object) ==
     /\ \A cell \in ActiveResolverCells :
            CellObject[cell] = object
                => ResolverDemand[cell] \subseteq PresentKeys(object)
-    /\ StoredVariableNames[object] = BindingNamesAt(object)
-    /\ \A binding \in BindingsAt(object) :
-           StoredBindingValue[binding] =
-               ExpectedBindingValue[binding]
     /\ \A observation \in Observations :
            CellObject[ObservationResolver[observation]] = object
                => ActualObservation[observation] =
@@ -187,7 +149,7 @@ AllReachableOccurrencesCorrect ==
 Postcondition established by Resolver01 once its empty-fragment local set
 construction and value-construction cases have been refined into this
 carrier. The equality on PresentKeys is stronger than fragment conformance;
-Resolver01 has no stored execution variables or resolver input demand.
+Resolver01 has no resolver input demand.
 *)
 Resolver01Postcondition ==
     /\ RootedAndWellTyped
@@ -195,7 +157,6 @@ Resolver01Postcondition ==
            PresentKeys(object) = OperationDemand[object]
     /\ \A cell \in ActiveResolverCells :
            ResolverDemand[cell] = {}
-    /\ ConformsToVariables
     /\ ConformsToResolvers
     /\ ConformsToTypename
 

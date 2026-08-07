@@ -4,7 +4,6 @@ import model.Assumptions
 import model.EngineResult
 import model.Schema
 import model.Value
-import semantics.instantiateVariables
 import semantics.materialize
 
 /**
@@ -37,11 +36,7 @@ private fun EngineResult.Object.objectConformsToResolvers(): Boolean {
             } else {
                 val resolver = registry.resolver(key.field)
                 val input =
-                    materialize(
-                        resolver
-                            .objectFragment(key.arguments)
-                            .instantiateVariables(variableValues),
-                    )
+                    materialize(resolver.objectFragment(key.arguments))
                 val resolverValue = resolver(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }

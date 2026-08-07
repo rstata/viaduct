@@ -27,30 +27,11 @@ THEOREM ProjectionAlignmentImpliesResolverConformance ==
     BY <1>1 DEF Project
 <1>. QED BY <1>1, <1>2
 
-LEMMA NoStoredVariablesConform ==
-    NoStoredVariables => ConformsToVariables
-<1>. SUFFICES
-        ASSUME NoStoredVariables,
-               NEW object \in ReachableObjects
-        PROVE
-            /\ StoredVariableNames[object] = BindingNamesAt(object)
-            /\ \A binding \in BindingsAt(object) :
-                   StoredBindingValue[binding] =
-                       ExpectedBindingValue[binding]
-    BY DEF ConformsToVariables
-<1>1. BindingsAt(object) = {}
-    BY DEF NoStoredVariables, BindingsAt
-<1>2. BindingNamesAt(object) = {}
-    BY <1>1 DEF BindingNamesAt
-<1>. QED BY <1>1, <1>2 DEF NoStoredVariables
-
 THEOREM Resolver01ValueConstructionIsCorrect ==
     Resolver01ValueConstruction => ValueConstructionCorrect
-BY ProjectionAlignmentImpliesResolverConformance,
-   NoStoredVariablesConform
+BY ProjectionAlignmentImpliesResolverConformance
    DEF Resolver01ValueConstruction, ValueConstructionCorrect,
-       GeneratedTypenames, ConformsToTypename,
-       NoStoredVariables
+       GeneratedTypenames, ConformsToTypename
 
 THEOREM Resolver01FullConstructionRefinesPostcondition ==
     Resolver01FullConstruction => Resolver01Constructed

@@ -305,7 +305,11 @@ class AssumptionsTest {
         assertEquals(filter, limitInputField.containingType)
         assertEquals("limit", limitInputField.name)
         assertFalse(limitInputField.isRequired)
-        assertFalse(filter.fields.getValue("tags").typeExpr.isBaseTypeNullable)
+        val tagsTypeExpr =
+            assertIs<TypeExpr.List<Schema.InputType>>(
+                filter.fields.getValue("tags").typeExpr,
+            )
+        assertFalse(tagsTypeExpr.elementType.isNullable)
     }
 
     @Test

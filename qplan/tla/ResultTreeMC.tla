@@ -6,9 +6,7 @@ MCCells == {"q-user", "q-typename", "u-name", "u-typename"}
 MCKeys == {"user", "name", "__typename"}
 MCTypes == {"Query", "User"}
 MCValues == {"UserObject", "Raymie", "Query", "User"}
-MCVariables == {}
 MCObservations == {"user-shape", "user-name"}
-MCVariableBindings == {}
 
 MCRoot == "query"
 MCQueryType == "Query"
@@ -65,20 +63,6 @@ MCActualCellValue ==
 
 MCTypeNameValue ==
     [object \in MCObjects |-> MCObjectType[object]]
-
-MCStoredVariableNames ==
-    [object \in MCObjects |-> {}]
-
-MCBindingObject ==
-    [binding \in MCVariableBindings |-> "query"]
-
-MCBindingVariable ==
-    [binding \in MCVariableBindings |-> "unused-variable"]
-
-MCStoredBindingValue ==
-    [binding \in MCVariableBindings |-> "Raymie"]
-
-MCExpectedBindingValue == MCStoredBindingValue
 
 VARIABLE checked
 

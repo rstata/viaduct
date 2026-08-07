@@ -24,6 +24,8 @@ External field-relative variable-provider declarations pair alias-preserving Gra
 
 Every canonical registry is also depth-first variable-stratified. For each concrete object type, registry assembly conservatively collapses argument-distinct occurrences of one field into one structural branch, combines ordinary sibling resolver dependencies with provider-production-before-use edges, closes variable production transitively, and rejects a self-edge or longer branch cycle.
 
+These variable and provider declarations are pre-reasoning registry infrastructure. Current semantic resolvers operate in variable-free domains and do not bind, substitute, or store field-relative variable values.
+
 Input-object fields and output-field arguments share `InputLikeField`. Input-object values and output-field argument tuples share `InputLikeValue`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `ArgumentsValue` instances remain ordinary structural values rather than singletons.
 
 Kotlin inheritance and generic variance classify carrier values but do not define GraphQL interface implementation, output subtyping, input coercion, or type variance. Use canonical schema relations and documented carrier invariants for those facts.
@@ -32,7 +34,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 ## Output Representations
 
-`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value; each object result also carries its resolved nullable input values for execution variables, distinguishing absence from a null binding. List results carry their element `typeExpr` even when empty.
+`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value. An object result carries only its concrete type and cells. List results carry their element `typeExpr` even when empty.
 
 `Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 

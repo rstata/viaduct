@@ -115,9 +115,10 @@ class SpecSelectionFlattenerTest {
             )
 
         val pet = result.single()
-        val name = pet.subselections.single { it.key.field.fieldName == "name" }
+        val name =
+            pet.subselections.filter { it.key.field.fieldName == "name" }.single()
         val barkVolume =
-            pet.subselections.single { it.key.field.fieldName == "barkVolume" }
+            pet.subselections.filter { it.key.field.fieldName == "barkVolume" }.single()
 
         assertEquals(fixture.pet, name.key.field.containingType)
         assertEquals(setOf(fixture.dog), name.possibleTypes)

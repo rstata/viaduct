@@ -2,21 +2,21 @@
 
 ## Purpose
 
-This document describes a possible future executor that preserves the demand-collection work established by Resolver03 and Resolver04 while replacing their recursive depth-first execution order with a worklist of resolution obligations over a write-once OER store.
+This document describes a possible future executor that preserves Resolver03's current demand-collection work and incorporates lessons from the historical Resolver04 experiment while replacing recursive depth-first execution with a worklist of resolution obligations over a write-once OER store.
 
-The proposal responds to one specific discovery. Variables can transport a value from a provider path already contained in the defining resolver's fixed-shape object fragment to resolver arguments elsewhere in that fragment. A subtree may therefore contain structurally known demand whose exact `Value.ObjectKey` cannot be formed until work in another subtree finishes. Resolver04 handles this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells. A worklist executor would model the underlying process directly.
+The proposal responds to one specific discovery. Variables can transport a value from a provider path already contained in the defining resolver's fixed-shape object fragment to resolver arguments elsewhere in that fragment. A subtree may therefore contain structurally known demand whose exact `Value.ObjectKey` cannot be formed until work in another subtree finishes. Resolver04 attempted to handle this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells; focused counterexamples showed that recovery after an under-projected application was insufficient. A worklist executor would model pending work directly and must seal complete producer demand before dispatch.
 
 ## Demand Collection Is Not Being Reopened
 
-A worklist executor should not rediscover demand incrementally as execution proceeds. Resolver03 and Resolver04 already establish the relevant demand-collection shape:
+A worklist executor should not rediscover demand incrementally as execution proceeds. Resolver03 establishes the current variable-free demand-collection shape, while the Resolver04 retrospective supplies requirements for any future variable-aware extension:
 
 - Resolver fragments contribute transitive demand before a selective producer is applied.
 - Demand is rooted at the exact OER occurrence path and guarded by possible concrete types.
 - Multiple contributors targeting one producer occurrence are combined.
 - Symbolic variable arguments may remain at behavioral boundaries where projection stops before materializing the exact key.
-- Resolver04 conservatively covers symbolic and concrete occurrences that may later converge on one exact key.
+- Possible symbolic and concrete occurrences that may later converge on one exact key must contribute complete producer demand before application; Resolver04 exposed this obligation but did not solve it generally.
 
-Resolution obligations would still be discovered through the same depth-first traversal that lets Resolver03 and Resolver04 collect demand. What changes is the mechanism for enforcing field-execution order: readiness follows demand availability rather than one recursive topological fold, and resolvers whose arguments depend on variables join that same readiness relation even when their order is not determined by tree depth.
+Resolution obligations would still be discovered through a structural traversal related to Resolver03's demand collection. What changes is the mechanism for enforcing field-execution order: readiness follows demand availability rather than one recursive topological fold, and resolvers whose arguments depend on variables join that same readiness relation even when their order is not determined by tree depth.
 
 ## Resolution Obligations
 
@@ -58,7 +58,7 @@ The exact shape may differ, but the semantic distinction matters. A `Selection` 
 
 Variable bindings are also write-once facts on the containing OER. A binding becomes available when its provider path can be read from the current store. Binding the variable instantiates affected pending selections. Each resulting concrete key is then inserted into, or matched with, the obligation map.
 
-Late equality needs special care. A concrete occurrence such as `field(arg: "literal")` and a pending occurrence `field(arg: $value)` may become the same key. Resolver04 already treats this as a demand-coverage problem: the earlier application must have received the variable-free output demand of a symbolic occurrence that may converge with it. A worklist executor must consume the same complete symbolic envelope. It must not execute the currently concrete obligation with only its local subselections and then discover additional output demand when the variable binds.
+Late equality needs special care. A concrete occurrence such as `field(arg: "literal")` and a pending occurrence `field(arg: $value)` may become the same key. Resolver04 exposed this as a demand-coverage problem: the earlier application must have received the output demand of every symbolic occurrence that may converge with it. A worklist executor therefore needs a complete, sound symbolic envelope rather than inheriting Resolver04's matching approximation. It must not execute the currently concrete obligation with only its local subselections and then discover additional output demand when the variable binds.
 
 This is the principal contract between demand collection and obligation scheduling:
 
@@ -109,13 +109,15 @@ data class PartialObject(
 )
 ```
 
+`PartialObject.variableValues` is proposed intermediate execution state. It is not a field of the final `EngineResult.Object` carrier.
+
 Absence from `cells` means unwritten. Object-valued cells contain `ObjectRef`; list values contain terminal values or references at stable list positions. A transition adds a previously absent cell or variable binding and never changes an existing one.
 
 Although this state models semi-mutable OERs, semantic Kotlin should remain purely functional. Each transition yields a new `ExecutionState` with persistent maps and sets. This follows the repository's mathematical modeling discipline and translates naturally to a TLA+ next-state relation. An eventual implementation may use concurrent mutable maps, promises, or atomics without changing the modeled write-once semantics.
 
-When no work remains, a `freeze` operation recursively replaces object references with immutable `EngineResult.Object` values. The final value is then checked by the existing `correctResolution` judgment. Cyclic object references remain outside the model; the allocated occurrence graph must be a finite tree of object and list positions.
+When no work remains, a `freeze` operation recursively replaces object references with immutable `EngineResult.Object` values. The current `correctResolution` judgment can check the variable-free final result properties, but it cannot validate provider bindings; a future variable-aware oracle or separate execution-state invariant is required before a variable-bearing executor can claim correctness. Cyclic object references remain outside the model; the allocated occurrence graph must be a finite tree of object and list positions.
 
-Resolver04's `ResolutionSources` side table should not be copied automatically. If demand collection is complete, all producer-owned passive fields needed later are projected and written when the producer runs. The worklist design should retain an immutable raw resolver source only if a focused counterexample proves it necessary, and any later projection must remain covered by the demand originally supplied to that application.
+The historical `ResolutionSources` side table should not be copied automatically. If demand collection is complete, all producer-owned passive fields needed later are projected and written when the producer runs. The worklist design should retain an immutable raw resolver source only if a focused counterexample proves it necessary, and any later projection must remain covered by the demand originally supplied to that application.
 
 ## State Invariants
 
@@ -158,28 +160,29 @@ Parallelism also clarifies why write-once cells matter. Concurrent workers may r
 The worklist design should reuse rather than replace:
 
 - Resolver03's guarded predecessor closure and successor-demand lifting.
-- Resolver04's variable ownership, provider evaluation, substitution, and conservative symbolic-demand coverage.
+- The retained registry's variable ownership, provider-path compilation, containment, and branch-stratification invariants.
+- The historical requirements for provider evaluation, substitution before exact merge, and conservative convergence accounting, without assuming Resolver04's coverage approximation was correct.
 - `materialize` as the definition of a resolver's input.
 - `snipToDemand` as selective projection to complete supplied demand.
-- `correctResolution` as the final extensional oracle.
+- `correctResolution` as the variable-free final extensional oracle, supplemented by a future variable-aware execution oracle.
 
 The worklist design would replace:
 
 - Recursive post-order function application.
 - Immutable prefix union as an execution mechanism.
-- `widened` reconstruction of an already-returned subtree.
+- Post-application widening of an already-returned subtree.
 - Identity-based recovery of raw sources when the write-once store can carry the necessary state explicitly.
 
-On variable-free worlds, the worklist executor should observationally agree with Resolver03. On variable-bearing worlds, it should agree with Resolver04 and satisfy the same correctness predicates while exposing a simpler execution history.
+On variable-free worlds, the worklist executor should observationally agree with Resolver03. On variable-bearing worlds, it should replay the historical accepted and rejected examples against a new variable-aware oracle; agreement with Resolver04 is neither available nor a correctness criterion.
 
 ## Proposed Work Sequence
 
-1. Define `ObjectId`, object references, partial cells, variable slots, obligations, pending selections, and immutable `ExecutionState` transitions without changing Resolver04.
+1. Define `ObjectId`, object references, partial cells, variable slots, obligations, pending selections, and immutable `ExecutionState` transitions.
 2. Implement freezing and test that hand-constructed completed stores produce the expected `EngineResult.Object`.
 3. Port the `common` and `child.field2($value)` regression as the first worklist execution trace.
 4. Add direct, nested, list, null, error, recursive, abstract-type, and equal-valued convergence traces.
 5. Connect the existing demand collector to obligation creation, preserving symbolic envelopes at behavioral boundaries.
-6. Compare the worklist executor with Resolver03 on variable-free generated worlds and with Resolver04 on variable-bearing generated worlds.
+6. Compare the worklist executor with Resolver03 on variable-free generated worlds and replay the historical variable fixtures under a new variable-aware correctness oracle.
 7. Run randomized ready-obligation schedules and assert identical frozen results and one application per exact resolver-bearing OER cell.
 8. Extend the stress corpus before translating the state machine into TLA+ or using it as an implementation blueprint.
 

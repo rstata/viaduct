@@ -4,14 +4,12 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectSelection
 import model.PathComponent
-import model.Schema
 import model.SelectionForest
 import model.Value
 import model.merge
 import model.registry.demandsFromSibling
-import model.selectionForestOf
 import model.union
-import semantics.bindFromArguments
+import semantics.closeResolverDemand
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
 import semantics.resolvePaths
@@ -37,44 +35,12 @@ private fun Value.Object.resolve(
     resolved: EngineResult.Object,
 ): EngineResult.Object {
     val closedDemand = type.closeResolverDemand(path, selections)
-    val mergedSelections = closedDemand.merge(type)
-    val unresolvedKeys = mergedSelections.keys() - resolved.keys
+    val unresolvedKeys = closedDemand.keys() - resolved.keys
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
-        val selection = mergedSelections[key]
+        val selection = closedDemand[key]
         result.union(resolveKey(path, selection, result))
     }
-}
-
-context(world: Assumptions)
-private fun Schema.ObjectType.closeResolverDemand(
-    path: List<PathComponent>,
-    selections: SelectionForest,
-    expanded: Set<Value.ObjectKey> = emptySet(),
-): SelectionForest {
-    val applicableSelections = selections.merge(this)
-    applicableSelections.keys().bindFromArguments(path)
-    val unexpandedResolverKeys =
-        applicableSelections.keys().filter { key ->
-            key !in expanded &&
-                !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.resolverRegistry
-        }.toSet()
-
-    if (unexpandedResolverKeys.isEmpty()) return applicableSelections
-
-    val resolverDemand =
-        unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
-            demand +
-                world.resolverRegistry
-                    .resolver(key.field)
-                    .infusedPredecessorDemand(key.arguments, path + key)
-        }
-    return closeResolverDemand(
-        path = path,
-        selections = applicableSelections + resolverDemand,
-        expanded = expanded + unexpandedResolverKeys,
-    )
 }
 
 context(world: Assumptions)

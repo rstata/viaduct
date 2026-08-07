@@ -166,68 +166,6 @@ class GeneratorTest {
     }
 
     @Test
-    fun `resolver argument errors do not import skipped resolver requirements`() {
-        val config =
-            Config.default +
-                (SchemaObjectCount to 4..6) +
-                (ObjectFieldCount to 4..6) +
-                (FieldArgumentWeight to 1.0) +
-                (ExplicitFieldResolverWeight to 1.0) +
-                (ResolverFragmentWeight to 1.0) +
-                (ResolverFragmentDepth to 1) +
-                (ResolverArgumentErrorWeight to 1.0)
-        val random = RandomSource.seeded(64203L)
-        var generatedErrorArguments = 0
-        var checkedSkippedResolvers = 0
-
-        repeat(200) {
-            val schema = Arb.schema(config).next(random)
-            val registry = schema.registry(config).next(random)
-            val world = registry.world(schema).assumptions
-            generatedErrorArguments += registry.features.resolverErrorArgumentCount
-
-            registry.fieldResolverCoordinates.forEach { coordinate ->
-                val field =
-                    world.schema.objectField(
-                        coordinate.typeName,
-                        coordinate.fieldName,
-                    )
-                val resolver = world.resolverRegistry.resolver(field)
-                if (resolver.objectFragment.size != 1) return@forEach
-
-                val selection = resolver.objectFragment.single()
-                if (
-                    !selection.key.arguments.containsErrorValue() ||
-                    !selection.subselections.isEmpty()
-                ) {
-                    return@forEach
-                }
-                val selectedField =
-                    selection.possibleTypes
-                        .asSequence()
-                        .mapNotNull { possibleType ->
-                            possibleType.fields[selection.key.field.fieldName]
-                        }.firstOrNull { possibleField ->
-                            possibleField in world.resolverRegistry &&
-                                !world.resolverRegistry
-                                    .resolver(possibleField)
-                                    .objectFragment
-                                    .isEmpty()
-                        } ?: return@forEach
-                checkedSkippedResolvers += 1
-                assertEquals(
-                    resolver.objectFragment.size,
-                    resolver.predecessorDemand.size,
-                    "An error-bearing resolver occurrence imported transitive requirements",
-                )
-            }
-        }
-
-        assertTrue(generatedErrorArguments > 0)
-        assertTrue(checkedSkippedResolvers > 0)
-    }
-
-    @Test
     fun `abstract selections can omit concrete implementation defaults`() {
         val config =
             Config.default +
@@ -425,6 +363,36 @@ class GeneratorTest {
                     },
                 )
             }
+        }
+
+        assertTrue(generatedVariables > 0)
+    }
+
+    @Test
+    fun `fromArgument variables generate owner-argument-backed fragment arguments`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 0.8) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(97531L)
+        var generatedVariables = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            generatedVariables += registry.features.fromArgumentVariableCount
+            assertTrue(
+                registry.variableProviders.all {
+                    it is FromArgumentVariableProviderPlan
+                },
+            )
         }
 
         assertTrue(generatedVariables > 0)

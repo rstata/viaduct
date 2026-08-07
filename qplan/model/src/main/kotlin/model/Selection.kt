@@ -140,11 +140,15 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
  * This operation preserves arguments while applying the argument definition, including defaults,
  * of the corresponding canonical object field.
  */
-fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey =
-    Value.ObjectKey.of(
-        field = type.fields.getValue(key.field.fieldName),
+fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey {
+    val concreteField = type.fields.getValue(key.field.fieldName)
+    val concreteKey = key as? Value.ObjectKey
+    if (concreteKey?.field == concreteField) return concreteKey
+    return Value.ObjectKey.of(
+        field = concreteField,
         arguments = key.arguments.fieldValues,
     )
+}
 
 /**
  * A post-validation field-selection occurrence used for Viaduct field resolution.

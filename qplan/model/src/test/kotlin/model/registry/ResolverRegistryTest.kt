@@ -155,7 +155,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `predecessor demands preserve exact arguments on lowered node bridges`() {
+    fun `object fragments preserve exact arguments on lowered node bridges`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -201,10 +201,10 @@ class ResolverRegistryTest {
         val bridge = schema.objectField("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
         val resolver = world.resolverRegistry.resolver(user)
-        val representativeBridge = resolver.predecessorDemand.single()
-        val predecessorDemand = resolver.predecessorDemand(arguments)
+        val representativeBridge = resolver.objectFragment.single()
+        val exactObjectFragment = resolver.objectFragment(arguments)
         val bridgeSelection =
-            predecessorDemand.filter { selection -> selection.key.field == bridge }.single()
+            exactObjectFragment.filter { selection -> selection.key.field == bridge }.single()
 
         assertEquals(bridge, representativeBridge.key.field)
         assertEquals(
@@ -215,13 +215,6 @@ class ResolverRegistryTest {
         assertEquals(
             Value.ID.of("42"),
             bridgeSelection.key.arguments.fieldValues.getValue("id"),
-        )
-        assertTrue(
-            predecessorDemand
-                .filter { selection -> selection.key.field.fieldName == "seed" }
-                .single()
-                .subselections
-                .isEmpty(),
         )
     }
 

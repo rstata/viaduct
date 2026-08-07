@@ -4,23 +4,20 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectSelection
 import model.PathComponent
-import model.Schema
 import model.SelectionForest
 import model.Value
 import model.merge
 import model.registry.demandsFromSibling
-import model.selectionForestOf
 import model.union
-import semantics.bindFromArguments
+import semantics.closeResolverDemand
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
 import semantics.resolvePaths
 import semantics.resolveValue
 
 /**
- * Resolves [selections] when resolver object fragments may be nonempty but contain no variables.
- * Results are non-selective and may contain more OER nodes than are strictly necessary to resolve
- * the query.
+ * Resolves [selections] with non-selective resolver applications. Results may contain more OER
+ * nodes than are strictly necessary to resolve the query.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
@@ -40,64 +37,19 @@ private fun Value.Object.resolve(
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
 
-    val closedDemand = closeResolverDemand(path, selections)
-    val mergedSelections = closedDemand.merge(type)
+    val closedDemand = type.closeResolverDemand(path, selections)
     val unresolvedKeys =
-        mergedSelections
+        closedDemand
             .keys()
             .filter { key ->
                 key !in resolved.keys ||
-                    (
-                        key.field !in world.resolverRegistry &&
-                            key.field.fieldName != "__typename"
-                    )
+                    !world.behavioral(key.field)
             }.toSet()
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
-        val selection = mergedSelections[key]
+        val selection = closedDemand[key]
         result.union(resolveKey(path, selection, result))
     }
-}
-
-/**
- * Returns the applicable demand, including all transitive resolver demand on this concrete object.
- */
-context(world: Assumptions)
-private fun Value.Object.closeResolverDemand(
-    path: List<PathComponent>,
-    selections: SelectionForest,
-): SelectionForest =
-    type.closeResolverDemand(path, selections)
-
-context(world: Assumptions)
-private fun Schema.ObjectType.closeResolverDemand(
-    path: List<PathComponent>,
-    selections: SelectionForest,
-    expanded: Set<Value.ObjectKey> = emptySet(),
-): SelectionForest {
-    val applicableSelections = selections.merge(this)
-    applicableSelections.keys().bindFromArguments(path)
-    val unexpandedResolverKeys =
-        applicableSelections.keys().filter { key ->
-            key !in expanded &&
-                !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.resolverRegistry
-        }.toSet()
-
-    if (unexpandedResolverKeys.isEmpty()) return applicableSelections
-
-    val resolverDemand =
-        unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
-            demand +
-                world.resolverRegistry
-                    .resolver(key.field)
-                    .infusedPredecessorDemand(key.arguments, path + key)
-        }
-    return closeResolverDemand(
-        path = path,
-        selections = applicableSelections + resolverDemand,
-        expanded = expanded + unexpandedResolverKeys,
-    )
 }
 
 /**

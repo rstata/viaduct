@@ -9,18 +9,16 @@ import model.Value
 import model.merge
 import model.registry.demandsFromSibling
 import model.registry.successorDemand
-import model.selectionForestOf
 import model.union
-import semantics.bindFromArguments
+import semantics.closeResolverDemand
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
 import semantics.resolvePaths
 import semantics.resolveValue
 
 /**
- * Resolves [selections] when resolver object fragments may be nonempty but contain no variables.
- * Results are selective relative to Resolver02; whether they contain only the necessary OER nodes
- * has not been proved.
+ * Resolves [selections] with selective resolver applications. Whether the results contain only the
+ * necessary OER nodes has not been proved.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
@@ -40,29 +38,11 @@ private fun Value.Object.resolve(
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
 
-    val applicableSelections = selections.merge(type)
-    applicableSelections.keys().bindFromArguments(path)
-    val resolverInputDemand =
-        applicableSelections
-            .keys()
-            .fold(selectionForestOf()) { demand, key ->
-                if (
-                    key.arguments.argumentsContainErrorValue() ||
-                    key.field !in world.resolverRegistry
-                ) {
-                    demand
-                } else {
-                    val resolver = world.resolverRegistry.resolver(key.field)
-                    demand + resolver.infusedPredecessorDemand(key.arguments, path + key)
-                }
-            }
-    val mergedSelections =
-        (applicableSelections + resolverInputDemand)
-            .merge(type)
-    val unresolvedKeys = mergedSelections.keys() - resolved.keys
+    val closedDemand = type.closeResolverDemand(path, selections)
+    val unresolvedKeys = closedDemand.keys() - resolved.keys
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
-        val selection = mergedSelections[key]
+        val selection = closedDemand[key]
         result.union(resolveKey(path, selection, result))
     }
 }
@@ -139,12 +119,11 @@ private fun Value.Object.resolveKey(
                 }
 
                 // Resolution applies this producer before recursively visiting fields with resolvers
-                // in its output. When those successor resolvers are reached, their predecessor
-                // demand will be added to their containing OER's local demand, but that happens
-                // after this producer's output has been selectively projected. successorDemand
-                // anticipates that situation by adding the predecessor demand from those successor
-                // resolvers to this producer's output demand, ensuring the passive values
-		// needed to materialize each successor's input will be produced.
+                // in its output. When those successor resolvers are reached, their local input demand
+                // will be closed, but that happens after this producer's output has been selectively
+                // projected. successorDemand anticipates that situation by adding the predecessor
+                // demand from those successor resolvers to this producer's output demand, ensuring
+                // the passive values needed to materialize each successor's input will be produced.
                 val resolutionSelections = fieldSelection.subselections.successorDemand()
 
                 val resolver = world.resolverRegistry.resolver(key.field)
@@ -154,11 +133,9 @@ private fun Value.Object.resolveKey(
                         .merge(type)
                 val fieldValue =
                     resolver(
-                        // The predecessor demand added in [resolve] for this resolver, either
-                        // directly or through another resolver's [predecessorDemand] closure,
-                        // combined with dependency ordering of field resolution, ensures
-                        // that the complete input needed by this resolver is already in the
-                        // OER tree and can be materialized.
+                        // The direct-fragment closure in [resolve], combined with dependency ordering
+                        // of field resolution, ensures that the complete input needed by this resolver
+                        // is already in the OER tree and can be materialized.
                         input = resolved.materialize(objectFragment),
                         arguments = key.arguments,
                         selections = resolutionSelections,

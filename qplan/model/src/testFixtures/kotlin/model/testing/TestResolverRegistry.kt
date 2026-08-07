@@ -643,24 +643,12 @@ private class TestResolverRegistry(
             when (site) {
                 is DependencyVertex.Field -> {
                     val definition = fieldResolverDefinitions.getValue(site.field)
-                    val predecessorResolvers = assembledResolvers.toMap()
                     assembledResolvers[site.field] =
                         definition.assemble(
                             variables =
                                 variableDefinitions.filterKeys { variable ->
                                     variable.field == site.field
                                 },
-                            predecessorDemand =
-                                closePredecessorDemand(
-                                    fragment = definition.objectFragment,
-                                    predecessorResolvers = predecessorResolvers,
-                                ),
-                            predecessorDemandFunction = { exactObjectFragment ->
-                                closePredecessorDemand(
-                                    fragment = exactObjectFragment,
-                                    predecessorResolvers = predecessorResolvers,
-                                )
-                            },
                             validateObjectFragment = { fragment ->
                                 validateProviderContainment(site.field, fragment)
                             },
@@ -885,72 +873,6 @@ private class TestResolverRegistry(
             ordered = ordered + ready,
         )
     }
-
-    private fun closePredecessorDemand(
-        fragment: Fragment,
-        predecessorResolvers: Map<Schema.OutputField, FieldResolver>,
-    ): Fragment {
-        val additions = mutableListOf<Selection>()
-        fragment.nominalType.possibleTypes.forEach { possibleType ->
-            collectPredecessorDemand(
-                selections = fragment.subselections,
-                objectType = possibleType,
-                path = emptyList(),
-                predecessorResolvers = predecessorResolvers,
-                additions = additions,
-            )
-        }
-        return Fragment.of(
-            nominalType = fragment.nominalType,
-            subselections = fragment.subselections + additions.toSelectionForest(),
-        )
-    }
-
-    private fun collectPredecessorDemand(
-        selections: model.SelectionForest,
-        objectType: Schema.ObjectType,
-        path: List<Selection>,
-        predecessorResolvers: Map<Schema.OutputField, FieldResolver>,
-        additions: MutableList<Selection>,
-    ) {
-        selections.forEach { selection ->
-            if (objectType !in selection.possibleTypes) return@forEach
-            if (selection.key.arguments.containsErrorValue()) return@forEach
-
-            val field = objectType.fields.getValue(selection.key.field.fieldName)
-            predecessorResolvers[field]
-                ?.predecessorDemand(selection.key.arguments.retarget(field))
-                ?.let { requirements ->
-                    rootAt(path, requirements).forEach(additions::add)
-                }
-
-            val outputType = field.typeExpr.baseType as? Schema.CompositeType
-                ?: return@forEach
-            outputType.possibleTypes.forEach { possibleType ->
-                collectPredecessorDemand(
-                    selections = selection.subselections,
-                    objectType = possibleType,
-                    path = path + selection,
-                    predecessorResolvers = predecessorResolvers,
-                    additions = additions,
-                )
-            }
-        }
-    }
-
-    private fun rootAt(
-        path: List<Selection>,
-        requirements: model.SelectionForest,
-    ): model.SelectionForest =
-        path.asReversed().fold(requirements) { rooted, selection ->
-            selectionForestOf(
-                Selection.of(
-                    key = selection.key,
-                    possibleTypes = selection.possibleTypes,
-                    subselections = rooted,
-                ),
-            )
-        }
 
 }
 

@@ -18,6 +18,7 @@ import model.objectOf
 import model.toSelectionForest
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import model.testing.fromArgument
 import model.testing.fromObjectField
 import model.testing.nodeResolverOf
 
@@ -42,6 +43,7 @@ data class RegistryFeatures(
     val inputAndArgumentSensitiveResolvers: Int,
     val resolverErrorArgumentCount: Int,
     val variableCount: Int,
+    val fromArgumentVariableCount: Int,
     val maximumVariablesPerOwner: Int,
     val hasNestedInputVariable: Boolean,
     val hasListVariable: Boolean,
@@ -310,12 +312,20 @@ class ArbitraryRegistry internal constructor(
                         field,
                         provider.variableName,
                     ) to
-                        canonicalSchema.fromObjectField(
-                            objectFragmentSource =
-                                objectFragmentSources.getValue(provider.owner),
-                            responsePath = provider.responsePath(),
-                            variableField = field,
-                        )
+                        when (provider) {
+                            is FromArgumentVariableProviderPlan ->
+                                canonicalSchema.fromArgument(
+                                    field = field,
+                                    argumentName = provider.argumentName,
+                                )
+                            is FromObjectFieldVariableProviderPlan ->
+                                canonicalSchema.fromObjectField(
+                                    objectFragmentSource =
+                                        objectFragmentSources.getValue(provider.owner),
+                                    responsePath = provider.responsePath(),
+                                    variableField = field,
+                                )
+                        }
                 }
             },
         )
@@ -336,10 +346,19 @@ class ArbitraryRegistry internal constructor(
             }
             appendLine("variables:")
             variableProviders.sortedBy(VariableProviderPlan::variableName).forEach { provider ->
-                appendLine(
-                    "  \$${provider.variableName} owner=${provider.owner}",
-                )
-                appendLine(provider.source().prependIndent("    "))
+                when (provider) {
+                    is FromArgumentVariableProviderPlan ->
+                        appendLine(
+                            "  \$${provider.variableName} owner=${provider.owner} " +
+                                "fromArgument=${provider.argumentName}",
+                        )
+                    is FromObjectFieldVariableProviderPlan -> {
+                        appendLine(
+                            "  \$${provider.variableName} owner=${provider.owner}",
+                        )
+                        appendLine(provider.source().prependIndent("    "))
+                    }
+                }
             }
             appendLine("node resolvers:")
             nodeResolverTypes.sorted().forEach { site ->
@@ -444,7 +463,9 @@ private class RegistryGenerator(
             objectFragmentSources =
                 objectFragments.mapValues { (_, fragment) -> fragment.source() },
             variableProviderSources =
-                variableProviders.associate { provider ->
+                variableProviders
+                    .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                    .associate { provider ->
                     provider.variableName to provider.source()
                 },
             fieldValues = fieldValues,
@@ -471,6 +492,10 @@ private class RegistryGenerator(
                     resolverErrorArgumentCount =
                         objectFragments.values.sumOf(FragmentPlan::errorArgumentCount),
                     variableCount = variableProviders.size,
+                    fromArgumentVariableCount =
+                        variableProviders.count {
+                            it is FromArgumentVariableProviderPlan
+                        },
                     maximumVariablesPerOwner =
                         variableProviders
                             .groupingBy(VariableProviderPlan::owner)
@@ -483,7 +508,9 @@ private class RegistryGenerator(
                     hasListVariable = variableProviders.any(VariableProviderPlan::listValue),
                     hasNullableProvider = variableProviders.any(VariableProviderPlan::nullable),
                     hasAbstractProviderPath =
-                        variableProviders.any(VariableProviderPlan::abstractPath),
+                        variableProviders
+                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                            .any(FromObjectFieldVariableProviderPlan::abstractPath),
                     hasAbstractResolverFragment =
                         objectFragments.any { (_, fragment) ->
                             fragment.selections.any { selection ->
@@ -516,7 +543,9 @@ private class RegistryGenerator(
                     depth = 0,
                 ),
         )
-        return fragment.withVariableProvider(consumer, ranks, variableProviders)
+        return fragment
+            .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
+            .withFromObjectFieldVariableProvider(consumer, ranks, variableProviders)
     }
 
     private fun fragmentSelections(
@@ -607,7 +636,54 @@ private class RegistryGenerator(
             }
     }
 
-    private fun FragmentPlan.withVariableProvider(
+    private fun FragmentPlan.withFromArgumentVariableProvider(
+        consumer: FieldCoordinate,
+        ranks: Map<FieldCoordinate, Int>,
+        variableProviders: MutableList<VariableProviderPlan>,
+    ): FragmentPlan {
+        if (
+            !config[ResolverFromArgumentVariablesEnabled] ||
+            !chance(config[ResolverVariableWeight])
+        ) {
+            return this
+        }
+        val resolverArguments = field(consumer).arguments
+        val variableCount = Arb.int(config[ResolverVariableCount]).next(random)
+        return (0 until variableCount).fold(this) { fragment, variableIndex ->
+            val candidate =
+                fragment.argumentOccurrences()
+                    .shuffled(random)
+                    .firstNotNullOfOrNull { occurrence ->
+                        occurrence.target?.let { target ->
+                            resolverArguments
+                                .shuffled(random)
+                                .firstOrNull { argument -> target.accepts(argument.type) }
+                                ?.let { argument -> occurrence to argument }
+                        }
+                    } ?: return@fold fragment
+            val variableName = "resolverArgVar${ranks.getValue(consumer)}_$variableIndex"
+            variableProviders +=
+                FromArgumentVariableProviderPlan(
+                    owner = consumer,
+                    variableName = variableName,
+                    argumentName = candidate.second.name,
+                    nestedInput = candidate.first.valuePath.isNotEmpty(),
+                    listValue = candidate.second.type is ListInputTypeSpec,
+                    nullable = candidate.second.type.nullable,
+                )
+            fragment.copy(
+                selections =
+                    fragment.selections.replaceArgument(
+                        selectionPath = candidate.first.selectionPath,
+                        argumentName = candidate.first.argument.name,
+                        valuePath = candidate.first.valuePath,
+                        value = VariableInputPlan(variableName),
+                    ),
+            )
+        }
+    }
+
+    private fun FragmentPlan.withFromObjectFieldVariableProvider(
         consumer: FieldCoordinate,
         ranks: Map<FieldCoordinate, Int>,
         variableProviders: MutableList<VariableProviderPlan>,
@@ -651,7 +727,7 @@ private class RegistryGenerator(
             val providerSelection =
                 candidate.second.withResponseAliases(variableName)
             variableProviders +=
-                VariableProviderPlan(
+                FromObjectFieldVariableProviderPlan(
                     owner = consumer,
                     variableName = variableName,
                     selection = providerSelection,
@@ -1211,6 +1287,8 @@ internal sealed interface VariableTarget {
     val nullable: Boolean
 
     fun matches(type: OutputTypeSpec): Boolean
+
+    fun accepts(type: InputTypeSpec): Boolean
 }
 
 internal data class ScalarVariableTarget(
@@ -1219,6 +1297,11 @@ internal data class ScalarVariableTarget(
 ) : VariableTarget {
     override fun matches(type: OutputTypeSpec): Boolean =
         !type.list && type.namedType == scalar.graphQLName
+
+    override fun accepts(type: InputTypeSpec): Boolean =
+        type is ScalarInputTypeSpec &&
+            type.scalar == scalar &&
+            (!type.nullable || nullable)
 }
 
 internal data class ListVariableTarget(
@@ -1230,17 +1313,42 @@ internal data class ListVariableTarget(
         type.list &&
             type.namedType == scalar.graphQLName &&
             (!type.elementNullable || elementNullable)
+
+    override fun accepts(type: InputTypeSpec): Boolean {
+        val list = type as? ListInputTypeSpec ?: return false
+        val element = list.element as? ScalarInputTypeSpec ?: return false
+        return element.scalar == scalar &&
+            (!list.nullable || nullable) &&
+            (!element.nullable || elementNullable)
+    }
 }
 
-internal data class VariableProviderPlan(
-    val owner: FieldCoordinate,
-    val variableName: String,
+internal sealed interface VariableProviderPlan {
+    val owner: FieldCoordinate
+    val variableName: String
+    val nestedInput: Boolean
+    val listValue: Boolean
+    val nullable: Boolean
+}
+
+internal data class FromArgumentVariableProviderPlan(
+    override val owner: FieldCoordinate,
+    override val variableName: String,
+    val argumentName: String,
+    override val nestedInput: Boolean,
+    override val listValue: Boolean,
+    override val nullable: Boolean,
+) : VariableProviderPlan
+
+internal data class FromObjectFieldVariableProviderPlan(
+    override val owner: FieldCoordinate,
+    override val variableName: String,
     val selection: FragmentSelectionPlan,
-    val nestedInput: Boolean,
-    val listValue: Boolean,
-    val nullable: Boolean,
+    override val nestedInput: Boolean,
+    override val listValue: Boolean,
+    override val nullable: Boolean,
     val abstractPath: Boolean,
-) {
+) : VariableProviderPlan {
     fun source(): String =
         FragmentPlan(owner.typeName, listOf(selection)).source()
 

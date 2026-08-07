@@ -110,12 +110,14 @@ private class AssumptionsImpl(
 }
 
 context(world: Assumptions)
-internal fun Value.Arguments.substituteBindings(): Value.Arguments =
-    withFieldValues(
+internal fun Value.Arguments.substituteBindings(): Value.Arguments {
+    if (fieldValues.values.none { value -> value.containsVariableValue() }) return this
+    return withFieldValues(
         fieldValues.mapValues { (_, value) ->
             value.substituteBindings()
         },
     )
+}
 
 context(world: Assumptions)
 internal fun Value.Input?.substituteBindings(): Value.Input? =
@@ -129,24 +131,34 @@ internal fun Value.Input?.substituteBindings(): Value.Input? =
                 this
             }
         is Value.InputList ->
-            Value.InputList.of(
-                typeExpr = typeExpr,
-                values = values.map { value -> value.substituteBindings() },
-            )
+            if (containsVariableValue()) {
+                Value.InputList.of(
+                    typeExpr = typeExpr,
+                    values = values.map { value -> value.substituteBindings() },
+                )
+            } else {
+                this
+            }
         is Value.InputObject ->
-            Value.InputObject.of(
-                type = type,
-                fields =
-                    fieldValues.mapValues { (_, fieldValue) ->
-                        fieldValue.substituteBindings()
-                    },
-            )
+            if (containsVariableValue()) {
+                Value.InputObject.of(
+                    type = type,
+                    fields =
+                        fieldValues.mapValues { (_, fieldValue) ->
+                            fieldValue.substituteBindings()
+                        },
+                )
+            } else {
+                this
+            }
         else -> this
     }
 
 context(world: Assumptions)
-internal fun Value.ObjectKey.substituteBindings(): Value.ObjectKey =
-    Value.ObjectKey.of(
+internal fun Value.ObjectKey.substituteBindings(): Value.ObjectKey {
+    if (arguments.fieldValues.values.none { value -> value.containsVariableValue() }) return this
+    return Value.ObjectKey.of(
         field = field,
         arguments = arguments.substituteBindings(),
     )
+}

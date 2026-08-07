@@ -9,8 +9,13 @@ import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.arbitrary.Config
+import semantics.arbitrary.ExplicitFieldResolverWeight
+import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.ImplementationArgumentDefaultWeight
+import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
@@ -29,6 +34,7 @@ class ResolverGeneratedTest {
     fun `arbitrary valid worlds resolve correctly`(): Unit =
         runBlocking {
             var activatedImplementationDefaultCases = 0
+            var generatedFromArgumentVariables = 0
             val counts =
                 TestCaseCount(
                     schemas = 20,
@@ -38,9 +44,16 @@ class ResolverGeneratedTest {
             val config =
                 Config.default +
                     (ImplementationArgumentDefaultWeight to 1.0) +
-                    (ResolverFragmentsEnabled to true)
+                    (FieldArgumentWeight to 1.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
+                    (ResolverVariableWeight to 1.0)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
+                generatedFromArgumentVariables +=
+                    testCase.registry.features.fromArgumentVariableCount
                 if (testCase.query.features.hasAbstractImplementationDefaultSelection) {
                     activatedImplementationDefaultCases += 1
                 }
@@ -55,6 +68,10 @@ class ResolverGeneratedTest {
             assertTrue(
                 activatedImplementationDefaultCases > 0,
                 "Resolver03 property activated no abstract implementation defaults",
+            )
+            assertTrue(
+                generatedFromArgumentVariables > 0,
+                "Resolver03 property generated no FromArgument variables",
             )
         }
 

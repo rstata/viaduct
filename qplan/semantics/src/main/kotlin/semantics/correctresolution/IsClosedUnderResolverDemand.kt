@@ -2,7 +2,9 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
+import model.PathComponent
 import model.Value
+import model.merge
 
 /**
  * Whether every resolver activated by this result has its required input in the same result tree.
@@ -16,10 +18,12 @@ import model.Value
  */
 context(world: Assumptions)
 fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
-    objectIsClosedUnderResolverDemand()
+    objectIsClosedUnderResolverDemand(emptyList())
 
 context(world: Assumptions)
-private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
+private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
+    path: List<PathComponent>,
+): Boolean {
     val registry = world.resolverRegistry
 
     return keys.all { key ->
@@ -29,25 +33,32 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
                 conformsToSelections(
                     registry
                         .resolver(key.field)
-                        .objectFragment(key.arguments),
+                        .stampedObjectFragment(key.arguments, path + key)
+                        .merge(type),
                 )
 
         fieldResolverDemandIsClosed &&
-            fetch(key).value.engineResultIsClosedUnderResolverDemand()
+            fetch(key).value.engineResultIsClosedUnderResolverDemand(path + key)
     }
 }
 
 context(world: Assumptions)
-private fun EngineResult?.engineResultIsClosedUnderResolverDemand(): Boolean =
+private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
+    path: List<PathComponent>,
+): Boolean =
     when (this) {
         null,
         Value.Error,
         is Value.Simple,
         -> true
 
-        is EngineResult.Object -> objectIsClosedUnderResolverDemand()
+        is EngineResult.Object -> objectIsClosedUnderResolverDemand(path)
         is EngineResult.List ->
-            all { cell -> cell.value.engineResultIsClosedUnderResolverDemand() }
+            withIndex().all { (index, cell) ->
+                cell.value.engineResultIsClosedUnderResolverDemand(
+                    path + Value.ListIndex.of(index),
+                )
+            }
     }
 
 internal fun Value.Arguments.argumentsContainErrorValue(): Boolean =

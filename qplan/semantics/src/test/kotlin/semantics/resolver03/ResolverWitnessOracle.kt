@@ -2,9 +2,12 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
+import model.merge
 import semantics.arbitrary.ResolverApplicationIdentity
+import semantics.arbitrary.RegisteredResolverCell
 import semantics.arbitrary.registeredResolverCells
 import semantics.arbitrary.resolutionFingerprint
+import semantics.correctresolution.conformsToSelections
 import semantics.materialize
 
 /**
@@ -21,7 +24,13 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
                     cell.canonicalField.fieldName,
                 )
             val resolver = world.resolverRegistry.resolver(field)
-            val fragment = resolver.objectFragment(cell.applicationKey.arguments)
+            val fragment =
+                resolver
+                    .stampedObjectFragment(
+                        arguments = cell.applicationKey.arguments,
+                        path = cell.occurrencePath,
+                    )
+                    .merge(cell.containingObject.type)
             ResolverApplicationIdentity(
                 key = cell.applicationKey,
                 inputFingerprint =
@@ -31,3 +40,23 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
             )
         }.groupingBy { identity -> identity }
         .eachCount()
+
+context(world: Assumptions)
+internal fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredResolverCell> =
+    registeredResolverCells(world.resolverRegistry)
+        .filter { cell ->
+            val field =
+                world.schema.objectField(
+                    cell.canonicalField.typeName,
+                    cell.canonicalField.fieldName,
+                )
+            val resolver = world.resolverRegistry.resolver(field)
+            val fragment =
+                resolver
+                    .stampedObjectFragment(
+                        arguments = cell.applicationKey.arguments,
+                        path = cell.occurrencePath,
+                    )
+                    .merge(cell.containingObject.type)
+            !cell.containingObject.conformsToSelections(fragment)
+        }

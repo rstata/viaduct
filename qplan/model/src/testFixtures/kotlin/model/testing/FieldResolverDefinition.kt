@@ -78,8 +78,6 @@ class FieldResolverDefinition private constructor(
     internal fun assemble(
         objectType: Schema.ObjectType,
         variables: Map<Value.Variable.Template, VariableDefinition>,
-        predecessorDemand: Fragment,
-        predecessorDemandFunction: (Fragment) -> Fragment,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {
         fun normalize(
@@ -113,15 +111,8 @@ class FieldResolverDefinition private constructor(
         return FieldResolver.of(
             objectFragment = normalize(objectFragment, "Object fragment"),
             variables = variables,
-            predecessorDemand = normalize(predecessorDemand, "Predecessor demand"),
             objectFragmentFunction = { arguments ->
                 normalize(exactObjectFragment(arguments), "Exact object fragment")
-            },
-            predecessorDemandFunction = { arguments ->
-                normalize(
-                    predecessorDemandFunction(exactObjectFragment(arguments)),
-                    "Exact predecessor demand",
-                )
             },
             function = function,
             projectionDemand = projectionDemand,

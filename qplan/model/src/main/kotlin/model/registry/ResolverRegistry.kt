@@ -24,13 +24,10 @@ typealias FieldResolverApplicationObserver =
  * Equality is undefined. Resolver-demand identity is expressed with canonical object fields
  * instead.
  *
- * [objectFragment] is the representative direct object-valued input requirement. For an exact
- * resolver occurrence, its predecessor demand is the guarded, path-rooted transitive closure of
- * its exact object fragment under resolver-dependency expansion. It therefore supplies the current
- * resolver's complete input prerequisites. [successorDemand] separately uses these closures to
- * extend a producer's output demand. The argument-taking forms preserve exact argument-dependent
- * coordinates. In a canonical registry entry, [variables] maps every variable template defined by
- * this resolver to its argument or nonempty alias-free object-field path definition.
+ * [objectFragment] is the representative direct object-valued input requirement. The
+ * argument-taking form preserves exact argument-dependent coordinates. In a canonical registry
+ * entry, [variables] maps every variable template defined by this resolver to its argument or
+ * nonempty alias-free object-field path definition.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
@@ -48,10 +45,8 @@ typealias FieldResolverApplicationObserver =
  */
 class FieldResolver private constructor(
     val objectFragment: ObjectSelectionForest,
-    val predecessorDemand: ObjectSelectionForest,
     val variables: Map<Value.Variable.Template, VariableDefinition>,
     private val objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
-    private val predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
@@ -78,22 +73,6 @@ class FieldResolver private constructor(
         path: List<PathComponent>,
     ): ObjectSelectionForest =
         objectFragment(arguments).stampVariables(path)
-
-    /** Returns the guarded, path-rooted predecessor demand for this exact argument tuple. */
-    fun predecessorDemand(arguments: Value.Arguments): ObjectSelectionForest =
-        predecessorDemandFunction(arguments)
-
-    /**
-     * Returns the exact predecessor demand with every variable template stamped at [path].
-     *
-     * Stamping preserves the selection fields, applicability guards, occurrence shape, and
-     * non-variable argument values.
-     */
-    fun infusedPredecessorDemand(
-        arguments: Value.Arguments,
-        path: List<PathComponent>,
-    ): ObjectSelectionForest =
-        predecessorDemand(arguments).stampVariables(path)
 
     /**
      * Applies this field resolver and projects its selection-independent result to
@@ -124,22 +103,17 @@ class FieldResolver private constructor(
         /**
          * Constructs one fully assembled canonical registry entry.
          *
-         * External composition is responsible for lowering coordinates, attaching variables and
-         * observers, and computing predecessor demand before calling this factory.
+         * External composition is responsible for lowering coordinates and attaching variables and
+         * observers before calling this factory.
          */
         fun of(
             objectFragment: ObjectSelectionForest,
             variables: Map<Value.Variable.Template, VariableDefinition>,
-            predecessorDemand: ObjectSelectionForest,
             objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
-            predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
         ): FieldResolver {
-            require(predecessorDemand.type == objectFragment.type) {
-                "Predecessor demand type must match object fragment type"
-            }
             variables.forEach { (variable, definition) ->
                 require(variable.field.containingType == objectFragment.type) {
                     "Variable ${variable.variableName} is not defined by a resolver on " +
@@ -168,10 +142,8 @@ class FieldResolver private constructor(
             }
             return FieldResolver(
                 objectFragment = objectFragment,
-                predecessorDemand = predecessorDemand,
                 variables = variables,
                 objectFragmentFunction = objectFragmentFunction,
-                predecessorDemandFunction = predecessorDemandFunction,
                 function = function,
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,

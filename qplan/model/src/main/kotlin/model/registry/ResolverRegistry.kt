@@ -25,8 +25,8 @@ typealias FieldResolverApplicationObserver =
  * its exact object fragment under resolver-dependency expansion. It therefore supplies the current
  * resolver's complete input prerequisites. [successorDemand] separately uses these closures to
  * extend a producer's output demand. The argument-taking forms preserve exact argument-dependent
- * coordinates. In a canonical registry entry, [variables] maps every variable defined by this
- * resolver to its nonempty alias-free provider path.
+ * coordinates. In a canonical registry entry, [variables] maps every variable template defined by
+ * this resolver to its nonempty alias-free provider path.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
@@ -37,7 +37,7 @@ typealias FieldResolverApplicationObserver =
 class FieldResolver private constructor(
     val objectFragment: ObjectSelectionForest,
     val predecessorDemand: ObjectSelectionForest,
-    val variables: Map<Value.Variable, List<Value.Key>>,
+    val variables: Map<Value.Variable.Template, List<Value.Key>>,
     private val objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
     private val predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
     private val function: FieldResolverFunction,
@@ -93,7 +93,7 @@ class FieldResolver private constructor(
          */
         fun of(
             objectFragment: ObjectSelectionForest,
-            variables: Map<Value.Variable, List<Value.Key>>,
+            variables: Map<Value.Variable.Template, List<Value.Key>>,
             predecessorDemand: ObjectSelectionForest,
             objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
             predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
@@ -124,11 +124,12 @@ class FieldResolver private constructor(
  *
  * A canonical object field is an actual resolver coordinate exactly when [contains] returns true.
  * The registry satisfies canonical schema ownership, special-field exclusions, query coverage,
- * resolver-local variable names, and acyclicity across object fields and [Value.Variable] values.
- * Acyclicity is intentionally checked over a conservative coordinate-level possibility relation
- * derived from representative fragment shapes. The relation may therefore contain an edge whose
- * exact occurrence is inactive because of a runtime type guard or [Value.Error] argument, and the
- * registry may reject a world whose exact active occurrences would be acyclic.
+ * resolver-local variable-template names, and acyclicity across object fields and
+ * [Value.Variable.Template] values. Acyclicity is intentionally checked over a conservative
+ * coordinate-level possibility relation derived from representative fragment shapes. The relation
+ * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
+ * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
+ * would be acyclic.
  *
  * Every variable provider is one nonempty canonical [Value.Key] path relative to its coordinate's
  * containing object and is structurally contained by the defining field resolver's fixed

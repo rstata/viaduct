@@ -7,7 +7,7 @@ import kotlin.test.assertNotEquals
 
 class ValueVariableTest {
     @Test
-    fun `variable identity contains its name defining field and nullable path`() {
+    fun `template identity contains its name and defining field`() {
         val schema =
             TestWorld.fromSDL(
                 """
@@ -19,14 +19,39 @@ class ValueVariableTest {
             ).schema
         val first = schema.objectField("Query", "first")
         val second = schema.objectField("Query", "second")
-        val path = listOf(Value.ListIndex.of(0))
-        val variable = Value.Variable.of("value", first, path)
+        val template = Value.Variable.of(first, "value")
 
-        assertEquals(Value.Variable.of("value", first, path), variable)
-        assertNotEquals(Value.Variable.of("other", first, path), variable)
-        assertNotEquals(Value.Variable.of("value", second, path), variable)
-        assertNotEquals(Value.Variable.of("value", first, null), variable)
-        assertNotEquals(Value.Variable.of("value", first, emptyList()), variable)
-        assertEquals("Variable(name=value, field=Query/first, path=[index=0])", "$variable")
+        assertEquals(Value.Variable.of(first, "value"), template)
+        assertNotEquals(Value.Variable.of(first, "other"), template)
+        assertNotEquals(Value.Variable.of(second, "value"), template)
+        assertEquals("Variable.Template(name=value, field=Query/first)", "$template")
+    }
+
+    @Test
+    fun `stamp identity contains its template and opaque occurrence path`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  first: Int
+                  second: Int
+                }
+                """.trimIndent(),
+            ).schema
+        val first = schema.objectField("Query", "first")
+        val second = schema.objectField("Query", "second")
+        val template = Value.Variable.of(first, "value")
+        val path = listOf(Value.ListIndex.of(0))
+        val stamp = template.stamp(path)
+
+        assertEquals(template.stamp(path), stamp)
+        assertNotEquals(Value.Variable.of(first, "other").stamp(path), stamp)
+        assertNotEquals(Value.Variable.of(second, "value").stamp(path), stamp)
+        assertNotEquals<Value.Variable>(template, stamp)
+        assertNotEquals(template.stamp(emptyList()), stamp)
+        assertEquals(
+            "Variable.Stamped(name=value, field=Query/first, path=[index=0])",
+            "$stamp",
+        )
     }
 }

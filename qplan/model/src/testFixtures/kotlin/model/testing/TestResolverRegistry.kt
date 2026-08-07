@@ -31,15 +31,15 @@ internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
-    variableProviders: Map<Value.Variable, FromObjectField>,
+    variableProviders: Map<Value.Variable.Template, FromObjectField>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
     val variablesByField =
         variableProviders.keys
-            .groupBy(Value.Variable::field)
+            .groupBy(Value.Variable.Template::field)
             .mapValues { (_, variables) ->
-                variables.associateBy(Value.Variable::variableName)
+                variables.associateBy(Value.Variable.Template::variableName)
             }
     val registryResolvers =
         lowering.fieldResolvers.mapValues { (field, resolver) ->
@@ -132,11 +132,7 @@ private class NodeResolverLowering(
                             .mapObjectFragment { fragment ->
                                 fragment.mapVariables { variable ->
                                     if (variable.field == field) {
-                                        Value.Variable.of(
-                                            variable.variableName,
-                                            bridge,
-                                            variable.path,
-                                        )
+                                        Value.Variable.of(bridge, variable.variableName)
                                     } else {
                                         variable
                                     }
@@ -517,7 +513,7 @@ private sealed interface DependencyVertex {
     ) : DependencyVertex
 
     data class Variable(
-        val variable: Value.Variable,
+        val variable: Value.Variable.Template,
     ) : DependencyVertex
 }
 
@@ -525,7 +521,7 @@ private class TestResolverRegistry(
     private val schema: Schema,
     fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
-    variableDeclarations: Map<Value.Variable, FromObjectField>,
+    variableDeclarations: Map<Value.Variable.Template, FromObjectField>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
@@ -568,9 +564,6 @@ private class TestResolverRegistry(
             validateCanonicalField(variable.field, "variable-defining field")
             require(variable.field in fieldResolverDefinitions) {
                 "Variable ${variable.variableName} belongs to an unregistered resolver"
-            }
-            require(variable.path == null) {
-                "Registered variable ${variable.variableName} must have a null occurrence path"
             }
             require(declaration.objectFragment.nominalType == variable.field.containingType) {
                 "Variable ${variable.variableName} declaration is not relative to " +
@@ -687,7 +680,7 @@ private class TestResolverRegistry(
     }
 
     private fun validateVariableUses(
-        variable: Value.Variable,
+        variable: Value.Variable.Template,
         declaration: FromObjectField,
         fragment: Fragment,
     ) {
@@ -730,7 +723,7 @@ private class TestResolverRegistry(
     )
 
     private fun model.SelectionForest.variableUses(
-        variable: Value.Variable,
+        variable: Value.Variable.Template,
     ): List<VariableUse> =
         buildList {
             this@variableUses.forEach { selection ->
@@ -749,7 +742,7 @@ private class TestResolverRegistry(
         }
 
     private fun Value.Input?.variableUses(
-        variable: Value.Variable,
+        variable: Value.Variable.Template,
         typeExpr: TypeExpr<Schema.InputType>,
         hasDefault: Boolean,
     ): List<VariableUse> =
@@ -826,7 +819,7 @@ private class TestResolverRegistry(
                 ?.takeIf { it in sourceFieldResolvers }
                 ?.let { add(DependencyVertex.Field(it as Schema.ObjectField)) }
         }
-        selection.key.arguments.variables().forEach { variable ->
+        selection.key.arguments.variableTemplates().forEach { variable ->
             require(variable in variableProviders) {
                 "Missing variable provider: \$${variable.variableName}"
             }
@@ -930,8 +923,8 @@ private class TestResolverRegistry(
 
 }
 
-private fun Value.Arguments.variables(): Set<Value.Variable> =
-    fieldValues.values.flatMapTo(linkedSetOf()) { it.variables() }
+private fun Value.Arguments.variableTemplates(): Set<Value.Variable.Template> =
+    fieldValues.values.flatMapTo(linkedSetOf()) { it.variableTemplates() }
 
 private fun Value.Arguments.containsErrorValue(): Boolean =
     fieldValues.values.any { value -> value.containsErrorValue() }
@@ -948,12 +941,15 @@ private fun Value.Input?.containsErrorValue(): Boolean =
 private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
     Value.Arguments.of(field, fieldValues)
 
-private fun Value.Input?.variables(): Set<Value.Variable> =
+private fun Value.Input?.variableTemplates(): Set<Value.Variable.Template> =
     when {
         this == null || this == Value.Error -> emptySet()
-        this is Value.Variable -> setOf(this)
-        this is Value.InputList -> values.flatMapTo(linkedSetOf()) { it.variables() }
+        this is Value.Variable.Template -> setOf(this)
+        this is Value.Variable.Stamped ->
+            throw IllegalArgumentException("Resolver fragments cannot contain stamped variables")
+        this is Value.InputList ->
+            values.flatMapTo(linkedSetOf()) { it.variableTemplates() }
         this is Value.InputObject ->
-            fieldValues.values.flatMapTo(linkedSetOf()) { it.variables() }
+            fieldValues.values.flatMapTo(linkedSetOf()) { it.variableTemplates() }
         else -> emptySet()
     }

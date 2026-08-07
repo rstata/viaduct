@@ -14,7 +14,8 @@ sealed interface PathComponent
  * A GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
- * by the interface. [Variable] equality is structural over its name, defining field, and path.
+ * by the interface. [Variable.Template] equality is structural over its name and defining field.
+ * [Variable.Stamped] equality additionally distinguishes the path used to stamp its template.
  *
  * ### Invariant: schema-value-canonicality
  *
@@ -459,30 +460,59 @@ sealed interface Value {
     }
 
     /**
-     * A symbolic reference to an execution variable.
+     * Identifier of an execution variable.
      *
-     * Two variables are equal exactly when they have the same [variableName], [field], and [path].
-     * A null path denotes the resolver-level variable before future occurrence-specific
-     * alpha-renaming.
+     * Each field with a resolver can define variables that use values resolved for a field in one
+     * part of the resolver's object fragment as a field argument in another part. The registry
+     * contains [Template] variables associated with the resolver. During resolution, those
+     * templates are [Stamped] as they enter occurrence-specific resolution structures. A resolver
+     * can occur multiple times in one resolution; stamping distinguishes the variable instances
+     * belonging to those occurrences.
      */
     sealed interface Variable : Input {
-        val variableName: kotlin.String
         val field: Schema.ObjectField
-        val path: kotlin.collections.List<PathComponent>?
+        val variableName: kotlin.String
+
+        /**
+         * A variable in the [ResolverRegistry]. A template is stamped during resolution to create
+         * a distinct variable for one occurrence of its defining resolver.
+         *
+         * Exact [EngineResult.Object] paths stamp templates. Stamps are otherwise opaque and
+         * uninterpreted except for equality; paths provide uniqueness and useful diagnostics
+         * without becoming an observable dimension of [Stamped].
+         */
+        sealed interface Template : Variable {
+            /**
+             * Returns the variable for this template at [path].
+             *
+             * Equal templates stamped with equal paths yield equal results. A result is unequal to
+             * every other variable except an equal template stamped with the same path.
+             *
+             * ### Invariant: stamped-variable-value-factory-schema-conformance
+             *
+             * Every [PathComponent] in [path] belongs to the template's reasoning world, and every
+             * result satisfies `result.conformsToSchema()` in that world.
+             */
+            fun stamp(path: kotlin.collections.List<PathComponent>): Stamped
+        }
+
+        /** An opaque occurrence-specific variable created by stamping a [Template]. */
+        sealed interface Stamped : Variable
 
         companion object {
             /**
+             * Returns the template named [variableName] defined by [field]. Equal arguments yield
+             * equal templates.
+             *
              * ### Invariant: variable-value-factory-schema-conformance
              *
-             * [field] is the canonical field of the resolver defining this variable, every
-             * [PathComponent] in [path] belongs to the same reasoning world, and every result
-             * satisfies `result.conformsToSchema()` in that world.
+             * [field] is the canonical field of the resolver defining this variable, and every
+             * result satisfies `result.conformsToSchema()` in that reasoning world.
              */
             fun of(
-                variableName: kotlin.String,
                 field: Schema.ObjectField,
-                path: kotlin.collections.List<PathComponent>?,
-            ): Variable = VariableValueImpl(variableName, field, path)
+                variableName: kotlin.String,
+            ): Template = TemplateVariableValueImpl(variableName, field)
         }
     }
 
@@ -529,9 +559,6 @@ sealed interface Value {
             get() = unsupported()
 
         override val field: Nothing
-            get() = unsupported()
-
-        override val path: Nothing
             get() = unsupported()
 
         private fun unsupported(): Nothing =
@@ -612,21 +639,37 @@ private data class ArgumentsValueImpl(
     override val fieldValues: Value.Fields<Schema.FieldArguments, Value.Input>,
 ) : Value.Arguments
 
-private data class VariableValueImpl(
+private data class TemplateVariableValueImpl(
     override val variableName: String,
     override val field: Schema.ObjectField,
-    override val path: List<PathComponent>?,
-) : Value.Variable {
+) : Value.Variable.Template {
+    override fun stamp(
+        path: kotlin.collections.List<PathComponent>,
+    ): Value.Variable.Stamped =
+        StampedVariableValueImpl(variableName, field, path)
+
     override fun toString(): String =
-        "Variable(" +
+        "Variable.Template(" +
+            "name=$variableName, " +
+            "field=${field.containingType.typeName}/${field.fieldName}" +
+            ")"
+}
+
+private data class StampedVariableValueImpl(
+    override val variableName: String,
+    override val field: Schema.ObjectField,
+    private val path: kotlin.collections.List<PathComponent>,
+) : Value.Variable.Stamped {
+    override fun toString(): String =
+        "Variable.Stamped(" +
             "name=$variableName, " +
             "field=${field.containingType.typeName}/${field.fieldName}, " +
             "path=${path.renderVariablePath()}" +
             ")"
 }
 
-private fun List<PathComponent>?.renderVariablePath(): String =
-    this?.joinToString(prefix = "[", postfix = "]") { component ->
+private fun kotlin.collections.List<PathComponent>.renderVariablePath(): String =
+    joinToString(prefix = "[", postfix = "]") { component ->
         when (component) {
             is Value.ObjectKey ->
                 "${component.field.containingType.typeName}/${component.field.fieldName}" +
@@ -636,7 +679,7 @@ private fun List<PathComponent>?.renderVariablePath(): String =
                         .orEmpty()
             is Value.ListIndex -> "index=${component.index}"
         }
-    } ?: "null"
+    }
 
 private data class KeyImpl(
     override val field: Schema.OutputField,

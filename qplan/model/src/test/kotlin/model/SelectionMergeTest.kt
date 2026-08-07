@@ -209,7 +209,7 @@ class SelectionMergeTest {
                     fields =
                         mapOf(
                             "values" to
-                                listOf(Value.Variable.of("x", variableField, path = null)),
+                                listOf(Value.Variable.of(variableField, "x")),
                         ),
                 ),
             )
@@ -220,7 +220,7 @@ class SelectionMergeTest {
                     fields =
                         mapOf(
                             "values" to
-                                listOf(Value.Variable.of("x", variableField, path = null)),
+                                listOf(Value.Variable.of(variableField, "x")),
                         ),
                 ),
             )
@@ -231,7 +231,7 @@ class SelectionMergeTest {
                     fields =
                         mapOf(
                             "values" to
-                                listOf(Value.Variable.of("y", variableField, path = null)),
+                                listOf(Value.Variable.of(variableField, "y")),
                         ),
                 ),
             )

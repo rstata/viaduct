@@ -457,7 +457,7 @@ internal fun decodeLiteral(
             requireNotNull(variableField) {
                 "Unbound operation variable \$${value.name}"
             }
-            Value.Variable.of(value.name, variableField, path = null)
+            Value.Variable.of(variableField, value.name)
         }
     }
     if (value is NullValue) {

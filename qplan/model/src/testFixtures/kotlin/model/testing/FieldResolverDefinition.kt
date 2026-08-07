@@ -75,7 +75,7 @@ class FieldResolverDefinition private constructor(
 
     internal fun assemble(
         objectType: Schema.ObjectType,
-        variables: Map<Value.Variable, List<Value.Key>>,
+        variables: Map<Value.Variable.Template, List<Value.Key>>,
         predecessorDemand: Fragment,
         predecessorDemandFunction: (Fragment) -> Fragment,
         validateObjectFragment: (Fragment) -> Unit,

@@ -25,11 +25,11 @@ class ResolvedValue(
  * Returns this output as a passive result tree together with every object path requiring registered
  * field resolution for [resolverDemand].
  *
- * [selections] controls passive construction. A null value includes every passive field actually
- * present in the output, recursively stopping at registered resolver boundaries. A non-null value
- * includes only those selections. [resolverDemand] independently identifies registered boundaries
- * that must be resumed after passive construction. When [Assumptions.selectiveResolvers] is true,
- * a non-null [selections] value also requires every supplied object field to be selected.
+ * [beSelective] controls passive construction. A false value includes every passive field actually
+ * present in the output, recursively stopping at registered resolver boundaries. A true value
+ * includes only fields in [resolverDemand]. The demand also identifies registered boundaries that
+ * must be resumed after passive construction. When [Assumptions.selectiveResolvers] is true,
+ * selective construction requires every supplied object field to be demanded.
  *
  * [path] is the concrete object-field path from the root output to this value. Selected
  * `__typename` fields are supplied directly from the concrete object type. Null, error, and simple
@@ -39,14 +39,14 @@ class ResolvedValue(
 context(world: Assumptions)
 internal fun Value.Output?.resolveValue(
     resolverDemand: SelectionForest,
-    selections: SelectionForest? = resolverDemand,
+    beSelective: Boolean,
     path: List<Value.ObjectKey> = emptyList(),
 ): ResolvedValue =
     when (this) {
         null -> ResolvedValue(null, emptyMap())
         Value.Error -> ResolvedValue(Value.Error, emptyMap())
         is Value.Simple -> ResolvedValue(this, emptyMap())
-        is Value.Object -> resolveObjectValue(resolverDemand, selections, path)
+        is Value.Object -> resolveObjectValue(resolverDemand, beSelective, path)
         is Value.OutputList ->
             values
                 .fold(
@@ -58,7 +58,7 @@ internal fun Value.Output?.resolveValue(
                     val element =
                         value.resolveValue(
                             resolverDemand = resolverDemand,
-                            selections = selections,
+                            beSelective = beSelective,
                             path = path,
                         )
                     ResolvedList(
@@ -80,17 +80,13 @@ internal fun Value.Output?.resolveValue(
 context(world: Assumptions)
 private fun Value.Object.resolveObjectValue(
     resolverDemand: SelectionForest,
-    selections: SelectionForest?,
+    beSelective: Boolean,
     path: List<Value.ObjectKey>,
 ): ResolvedValue {
     val mergedResolverDemand = resolverDemand.merge(type)
     val resolverDemandByKey = mergedResolverDemand.byKey()
-    val selectionsByKey =
-        selections
-            ?.merge(type)
-            ?.byKey()
-    if (world.selectiveResolvers && selectionsByKey != null) {
-        val unselectedKeys = fieldValues.keys - selectionsByKey.keys
+    if (world.selectiveResolvers && beSelective) {
+        val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${type.typeName} contains unselected fields: " +
                 unselectedKeys.joinToString { key -> key.field.fieldName }
@@ -105,15 +101,15 @@ private fun Value.Object.resolveObjectValue(
             emptyMap()
         }
     val selectedKeys =
-        if (selectionsByKey == null) {
+        if (beSelective) {
+            resolverDemandByKey.keys
+                .filter { key -> key.field !in world.resolverRegistry }
+                .toSet()
+        } else {
             fieldValues.keys.filter { key -> !world.behavioral(key.field) }.toSet() +
                 resolverDemandByKey.keys.filter { key ->
                     key.field.fieldName == "__typename"
                 }
-        } else {
-            selectionsByKey.keys
-                .filter { key -> key.field !in world.resolverRegistry }
-                .toSet()
         }
     val resolved =
         selectedKeys
@@ -143,10 +139,7 @@ private fun Value.Object.resolveObjectValue(
                                 resolverDemandByKey[key]
                                     ?.subselections
                                     ?: selectionForestOf(),
-                            selections =
-                                selectionsByKey
-                                    ?.get(key)
-                                    ?.subselections,
+                            beSelective = beSelective,
                             path = path + key,
                         )
                     ResolvedObject(

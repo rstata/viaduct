@@ -85,7 +85,10 @@ class ResolveValueTest {
 
         val resolved =
             context(world) {
-                value.resolveValue(selections)
+                value.resolveValue(
+                    resolverDemand = selections,
+                    beSelective = true,
+                )
             }
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
@@ -109,7 +112,7 @@ class ResolveValueTest {
     }
 
     @Test
-    fun `null selections unpack every provided passive field but only demanded resolver paths`() {
+    fun `non-selective traversal unpacks every provided passive field but only demanded resolver paths`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -168,7 +171,7 @@ class ResolveValueTest {
             context(world) {
                 value.resolveValue(
                     resolverDemand = resolverDemand,
-                    selections = null,
+                    beSelective = false,
                 )
             }
 
@@ -208,7 +211,10 @@ class ResolveValueTest {
 
         assertFailsWith<IllegalArgumentException> {
             context(world) {
-                value.resolveValue(selections)
+                value.resolveValue(
+                    resolverDemand = selections,
+                    beSelective = true,
+                )
             }
         }
     }
@@ -244,7 +250,10 @@ class ResolveValueTest {
 
         val resolved =
             context(world) {
-                value.resolveValue(selections)
+                value.resolveValue(
+                    resolverDemand = selections,
+                    beSelective = true,
+                )
             }
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)

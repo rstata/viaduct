@@ -20,7 +20,7 @@ class FromObjectField private constructor(
     internal val keyPath: List<Value.Key>,
     internal val terminalType: TypeExpr<Schema.OutputType>,
     private val nullableTraversal: Boolean,
-) {
+) : VariableDeclaration {
     internal fun mapVariables(
         transform: (Value.Variable.Template) -> Value.Variable.Template,
     ): FromObjectField =

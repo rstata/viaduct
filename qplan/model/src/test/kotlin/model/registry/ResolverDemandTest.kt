@@ -10,10 +10,12 @@ import model.fragmentFrom
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
+import model.testing.fromArgument
 import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ResolverDemandTest {
@@ -160,12 +162,114 @@ class ResolverDemandTest {
         )
         assertEquals(
             schema.objectField("Query", "xSource"),
-            world.resolverRegistry.resolver(x).variables.getValue(xVariable).single().field,
+            assertIs<VariableDefinition.FromObjectField>(
+                world.resolverRegistry.resolver(x).variables.getValue(xVariable),
+            ).path.single().field,
         )
         assertEquals(
             schema.objectField("Query", "ySource"),
-            world.resolverRegistry.resolver(y).variables.getValue(yVariable).single().field,
+            assertIs<VariableDefinition.FromObjectField>(
+                world.resolverRegistry.resolver(y).variables.getValue(yVariable),
+            ).path.single().field,
         )
+    }
+
+    @Test
+    fun `defines a variable from an argument without adding provider demand`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      source(seed: Int!): Int
+                      consume(value: Int): Int
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.field("Query", "source") to
+                            resolver(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Query {
+                                      consume(value: ${'$'}seed)
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ),
+                        schema.field("Query", "consume") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                    )
+                },
+                variableProviders = { schema ->
+                    val source = schema.objectField("Query", "source")
+                    mapOf(
+                        Value.Variable.of(source, "seed") to
+                            schema.fromArgument(source, "seed"),
+                    )
+                },
+            )
+        val source = world.schema.objectField("Query", "source")
+        val consume = world.schema.objectField("Query", "consume")
+        val variable = Value.Variable.of(source, "seed")
+
+        val definition =
+            assertIs<VariableDefinition.FromArgument>(
+                world.resolverRegistry.resolver(source).variables.getValue(variable),
+            )
+        assertEquals(source.arguments.fields.getValue("seed"), definition.argument)
+        assertEquals(setOf(consume), world.resolverRegistry.mayDemandFrom(source))
+
+        val resolver = world.resolverRegistry.resolver(source)
+        val arguments = Value.Arguments.of(source, mapOf("seed" to 7))
+        val path = listOf(Value.ListIndex.of(3))
+        val predecessor = resolver.predecessorDemand(arguments).single()
+        val infused = resolver.infusedPredecessorDemand(arguments, path).single()
+
+        assertEquals(predecessor.key.field, infused.key.field)
+        assertEquals(predecessor.possibleTypes, infused.possibleTypes)
+        assertEquals(predecessor.subselections.size, infused.subselections.size)
+        assertEquals(
+            variable,
+            predecessor.key.arguments.fieldValues.getValue("value"),
+        )
+        assertEquals(
+            variable.stamp(path),
+            infused.key.arguments.fieldValues.getValue("value"),
+        )
+    }
+
+    @Test
+    fun `rejects an argument from a different resolver field`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          source(seed: Int!): Int
+                          other(seed: Int!): Int
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val empty = schema.emptyFragmentOf("Query")
+                        mapOf(
+                            schema.field("Query", "source") to resolver(empty),
+                            schema.field("Query", "other") to resolver(empty),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val source = schema.objectField("Query", "source")
+                        val other = schema.objectField("Query", "other")
+                        mapOf(
+                            Value.Variable.of(source, "seed") to
+                                schema.fromArgument(other, "seed"),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("does not belong to Query/source"))
     }
 
     @Test

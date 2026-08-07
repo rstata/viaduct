@@ -11,6 +11,16 @@ import model.invariants.conformsToSchemaType
 sealed interface PathComponent
 
 /**
+ * Returns this exact OER path as an object-key-only selection path.
+ *
+ * A null path or any path containing a [Value.ListIndex] has no corresponding selection path and
+ * yields null.
+ */
+fun kotlin.collections.List<PathComponent>?.toSelectionPath():
+    kotlin.collections.List<Value.ObjectKey>? =
+    this?.map { component -> component as? Value.ObjectKey ?: return null }
+
+/**
  * A GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
@@ -23,7 +33,15 @@ sealed interface PathComponent
  * [Assumptions.schema] under which that value is interpreted.
  */
 sealed interface Value {
-    sealed interface Input : Value
+    /**
+     * A GraphQL input value or schema-synthetic field-argument tuple.
+     *
+     * [Input] values are members of [Value], while [Arguments] is an input-like tuple rather than a
+     * GraphQL value.
+     */
+    sealed interface InputLike
+
+    sealed interface Input : Value, InputLike
 
     sealed interface Output : Value
 
@@ -166,6 +184,13 @@ sealed interface Value {
     sealed interface InputList : Input, List<Schema.InputType> {
         override val values: kotlin.collections.List<Input?>
 
+        /**
+         * Returns this list with every nested [Variable.Template] stamped at [path].
+         *
+         * Existing [Variable.Stamped] values and non-variable values are preserved.
+         */
+        fun stamp(path: kotlin.collections.List<PathComponent>): InputList
+
         companion object {
             /**
              * ### Invariant: input-list-value-factory-schema-conformance
@@ -208,7 +233,7 @@ sealed interface Value {
     /**
      * A value shaped like a GraphQL input object.
      *
-     * ### Invariant: input-like-value-coherence
+     * ### Invariant: input-object-like-value-coherence
      *
      * [type] is the canonical input-object-like definition whose fields [fieldValues] inhabit.
      * `fieldValues.containingType == type`.
@@ -216,15 +241,23 @@ sealed interface Value {
      * Implementations narrow [type] to match their corresponding definition category. This common
      * interface is not itself a GraphQL [Value], because [Arguments] is a schema-synthetic tuple.
      */
-    sealed interface InputLike {
+    sealed interface InputObjectLike : InputLike {
         val type: Schema.InputObjectLike
         val fieldValues: Fields<Schema.InputObjectLike, Input>
+
+        /**
+         * Returns this value with every nested [Variable.Template] stamped at [path].
+         *
+         * Existing [Variable.Stamped] values and non-variable values are preserved.
+         */
+        fun stamp(path: kotlin.collections.List<PathComponent>): InputObjectLike
     }
 
     /** An input object whose fields may contain nested [Variable] instances. */
-    sealed interface InputObject : Input, Typed, InputLike {
+    sealed interface InputObject : Input, Typed, InputObjectLike {
         override val type: Schema.InputObjectType
         override val fieldValues: Fields<Schema.InputObjectType, Input>
+        override fun stamp(path: kotlin.collections.List<PathComponent>): InputObject
 
         companion object {
             /**
@@ -254,9 +287,10 @@ sealed interface Value {
      * A value may contain nested [Variable] instances when it belongs to a [Key] used outside a
      * [Value.Object] or [EngineResult.Object].
      */
-    sealed interface Arguments : InputLike {
+    sealed interface Arguments : InputObjectLike {
         override val type: Schema.FieldArguments
         override val fieldValues: Fields<Schema.FieldArguments, Input>
+        override fun stamp(path: kotlin.collections.List<PathComponent>): Arguments
 
         companion object {
             /**
@@ -462,12 +496,12 @@ sealed interface Value {
     /**
      * Identifier of an execution variable.
      *
-     * Each field with a resolver can define variables that use values resolved for a field in one
-     * part of the resolver's object fragment as a field argument in another part. The registry
-     * contains [Template] variables associated with the resolver. During resolution, those
-     * templates are [Stamped] as they enter occurrence-specific resolution structures. A resolver
-     * can occur multiple times in one resolution; stamping distinguishes the variable instances
-     * belonging to those occurrences.
+     * Each field with a resolver can define variables from one of that field's arguments or from a
+     * value resolved along a path in its object fragment. The registry contains [Template]
+     * variables associated with the resolver. During resolution, those templates are [Stamped] as
+     * they enter occurrence-specific resolution structures. A resolver can occur multiple times in
+     * one resolution; stamping distinguishes the variable instances belonging to those
+     * occurrences.
      */
     sealed interface Variable : Input {
         val field: Schema.ObjectField
@@ -561,6 +595,8 @@ sealed interface Value {
         override val field: Nothing
             get() = unsupported()
 
+        override fun stamp(path: kotlin.collections.List<PathComponent>): Error = this
+
         private fun unsupported(): Nothing =
             throw UnsupportedOperationException("Value.Error has no observable properties")
     }
@@ -617,7 +653,15 @@ private data class EnumValueImpl(
 private data class InputListValueImpl(
     override val typeExpr: TypeExpr<Schema.InputType>,
     override val values: kotlin.collections.List<Value.Input?>,
-) : Value.InputList
+) : Value.InputList {
+    override fun stamp(
+        path: kotlin.collections.List<PathComponent>,
+    ): Value.InputList =
+        Value.InputList.of(
+            typeExpr = typeExpr,
+            values = values.map { value -> value.stampVariables(path) },
+        )
+}
 
 private data class OutputListValueImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
@@ -632,12 +676,28 @@ private data class ObjectValueImpl(
 private data class InputObjectValueImpl(
     override val type: Schema.InputObjectType,
     override val fieldValues: Value.Fields<Schema.InputObjectType, Value.Input>,
-) : Value.InputObject
+) : Value.InputObject {
+    override fun stamp(
+        path: kotlin.collections.List<PathComponent>,
+    ): Value.InputObject =
+        InputObjectValueImpl(
+            type = type,
+            fieldValues = fieldValues.stampVariables(path),
+        )
+}
 
 private data class ArgumentsValueImpl(
     override val type: Schema.FieldArguments,
     override val fieldValues: Value.Fields<Schema.FieldArguments, Value.Input>,
-) : Value.Arguments
+) : Value.Arguments {
+    override fun stamp(
+        path: kotlin.collections.List<PathComponent>,
+    ): Value.Arguments =
+        ArgumentsValueImpl(
+            type = type,
+            fieldValues = fieldValues.stampVariables(path),
+        )
+}
 
 private data class TemplateVariableValueImpl(
     override val variableName: String,
@@ -698,6 +758,24 @@ private data class ListIndexImpl(
 private data class PresentDefaultValueImpl(
     override val value: Value.Input?,
 ) : Value.Default.Present
+
+private fun <T : Schema.InputObjectLike> Value.Fields<T, Value.Input>.stampVariables(
+    path: kotlin.collections.List<PathComponent>,
+): Value.Fields<T, Value.Input> =
+    FieldValuesImpl(
+        containingType,
+        mapValues { (_, value) -> value.stampVariables(path) },
+    )
+
+private fun Value.Input?.stampVariables(
+    path: kotlin.collections.List<PathComponent>,
+): Value.Input? =
+    when (this) {
+        is Value.Variable.Template -> stamp(path)
+        is Value.InputList -> stamp(path)
+        is Value.InputObject -> stamp(path)
+        else -> this
+    }
 
 private class ObjectFieldValuesImpl(
     override val containingType: Schema.ObjectType,
@@ -793,6 +871,14 @@ private fun coerceInputLikeFields(
         putAll(suppliedFields)
     }
 }
+
+internal fun Value.Arguments.withFieldValues(
+    fields: Map<String, Value.Input?>,
+): Value.Arguments =
+    ArgumentsValueImpl(
+        type = type,
+        fieldValues = FieldValuesImpl(type, fields),
+    )
 
 private fun coerceInputValue(
     typeExpr: TypeExpr<Schema.InputType>,

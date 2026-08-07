@@ -8,6 +8,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class AssumptionsTest {
@@ -310,6 +312,107 @@ class AssumptionsTest {
                 filter.fields.getValue("tags").typeExpr,
             )
         assertFalse(tagsTypeExpr.elementType.isNullable)
+    }
+
+    @Test
+    fun `variable bindings distinguish unbound from bound to null`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val field = assumptions.schema.objectField("Query", "node")
+        val variable = Value.Variable.of(field, "value").stamp(emptyList())
+
+        assertFalse(assumptions.isBound(variable))
+        assertFailsWith<IllegalStateException> {
+            assumptions.binding(variable)
+        }
+
+        assumptions.bind(variable, null)
+
+        assertTrue(assumptions.isBound(variable))
+        assertNull(assumptions.binding(variable))
+        assertFalse(
+            assumptions.isBound(
+                Value.Variable.of(field, "value")
+                    .stamp(listOf(Value.ListIndex.of(0))),
+            ),
+        )
+    }
+
+    @Test
+    fun `variable bindings are written once`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val field = assumptions.schema.objectField("Query", "node")
+        val variable = Value.Variable.of(field, "value").stamp(emptyList())
+        val first = Value.Int.of(1)
+
+        assumptions.bind(variable, first)
+        assertFailsWith<IllegalStateException> {
+            assumptions.bind(
+                Value.Variable.of(field, "value").stamp(emptyList()),
+                Value.Int.of(2),
+            )
+        }
+
+        assertEquals(first, assumptions.binding(variable))
+    }
+
+    @Test
+    fun `variable binding values cannot contain variables`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val field = assumptions.schema.objectField("Query", "node")
+        val binding = Value.Variable.of(field, "binding").stamp(emptyList())
+        val nestedVariable = Value.Variable.of(field, "nested")
+        val filter =
+            Value.InputObject.of(
+                type = assumptions.schema.type("Filter") as Schema.InputObjectType,
+                fields = mapOf("limit" to nestedVariable),
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            assumptions.bind(binding, filter)
+        }
+
+        assertFalse(assumptions.isBound(binding))
+    }
+
+    @Test
+    fun `argument substitution recursively replaces input bindings`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val node = assumptions.schema.objectField("Query", "node")
+        val variable = Value.Variable.of(node, "filter").stamp(emptyList())
+        val filter =
+            Value.InputObject.of(
+                type = assumptions.schema.type("Filter") as Schema.InputObjectType,
+                fields = mapOf("limit" to 3),
+            )
+        val arguments =
+            Value.Arguments.of(
+                field = node,
+                fields = mapOf("filter" to variable),
+            )
+        assumptions.bind(variable, filter)
+
+        val substituted =
+            context(assumptions) {
+                arguments.substituteBindings()
+            }
+
+        assertEquals(
+            filter,
+            substituted.fieldValues.getValue("filter"),
+        )
+    }
+
+    @Test
+    fun `input substitution preserves the error value`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val error: Value.Input? = Value.Error
+
+        val substituted =
+            context(assumptions) {
+                error.substituteBindings()
+            }
+
+        assertSame(Value.Error, substituted)
     }
 
     @Test

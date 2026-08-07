@@ -48,7 +48,7 @@ class TestWorld private constructor(
             fieldResolvers:
                 ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)? = null,
             variableProviders:
-                (Schema) -> Map<Value.Variable.Template, FromObjectField> = { emptyMap() },
+                (Schema) -> Map<Value.Variable.Template, VariableDeclaration> = { emptyMap() },
             selectiveResolvers: Boolean = true,
             applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld {
@@ -79,7 +79,7 @@ private class TestWorldModule(
     private val schemaSDL: String,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)?,
-    private val variableProviders: (Schema) -> Map<Value.Variable.Template, FromObjectField>,
+    private val variableProviders: (Schema) -> Map<Value.Variable.Template, VariableDeclaration>,
     private val selectiveResolvers: Boolean,
     private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ) : AbstractModule() {
@@ -107,7 +107,7 @@ private class TestWorldModule(
 
     @Provides
     @VariableProviders
-    fun variableProviders(schema: GJSchema): Map<Value.Variable.Template, FromObjectField> =
+    fun variableProviders(schema: GJSchema): Map<Value.Variable.Template, VariableDeclaration> =
         variableProviders.invoke(schema)
 
     @Provides
@@ -116,7 +116,8 @@ private class TestWorldModule(
         schema: GJSchema,
         @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
         @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
-        @VariableProviders variableProviders: Map<Value.Variable.Template, FromObjectField>,
+        @VariableProviders
+        variableProviders: Map<Value.Variable.Template, VariableDeclaration>,
     ): ResolverRegistry =
         resolverRegistryOf(
             schema = schema,

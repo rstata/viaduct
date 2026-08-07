@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class ValueKeyTest {
@@ -41,6 +42,17 @@ class ValueKeyTest {
     fun `list index rejects negative positions`() {
         Value.ListIndex.of(2)
         assertFailsWith<IllegalArgumentException> { Value.ListIndex.of(-1) }
+    }
+
+    @Test
+    fun `selection paths contain only object keys`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val user = Value.ObjectKey.of(schema.objectField("Query", "user"), emptyMap())
+        val id = Value.ObjectKey.of(schema.objectField("User", "id"), emptyMap())
+
+        assertEquals(listOf(user, id), listOf<PathComponent>(user, id).toSelectionPath())
+        assertNull(listOf<PathComponent>(user, Value.ListIndex.of(0), id).toSelectionPath())
+        assertNull((null as List<PathComponent>?).toSelectionPath())
     }
 
     private companion object {

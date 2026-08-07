@@ -47,6 +47,7 @@ A possible solution is first to make every failure reproducible by reporting and
 * ObjectSelectionSet.get is defined as an operator but throws an exception which i don't think is idiomatic kotlin
 * Go back to making `snip` explicit in resolve rather than implicit in the resolver function
 * Value.Argument.argumentsContainErrorValue is currently an extension function in the semantics layer, it should be function in the model (containsError) on input-like objects
+* FieldArgument has both `name` and `argumentName` as aliases -- needed?
 
 
 ## Most Recent Step

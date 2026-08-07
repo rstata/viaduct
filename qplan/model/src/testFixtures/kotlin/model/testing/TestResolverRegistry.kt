@@ -10,6 +10,7 @@ import model.emptyFragmentOf
 import model.registry.FieldResolver
 import model.registry.MissingResolverException
 import model.registry.ResolverRegistry
+import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toSelectionForest
 
@@ -31,7 +32,7 @@ internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
-    variableProviders: Map<Value.Variable.Template, FromObjectField>,
+    variableProviders: Map<Value.Variable.Template, VariableDeclaration>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
@@ -56,9 +57,14 @@ internal fun resolverRegistryOf(
         }
     val registryVariableProviders =
         variableProviders.mapValues { (variable, declaration) ->
-            val variablesByName = variablesByField.getValue(variable.field)
-            declaration.mapVariables { variable ->
-                variablesByName[variable.variableName] ?: variable
+            when (declaration) {
+                is FromArgument -> declaration
+                is FromObjectField -> {
+                    val variablesByName = variablesByField.getValue(variable.field)
+                    declaration.mapVariables { variable ->
+                        variablesByName[variable.variableName] ?: variable
+                    }
+                }
             }
         }
     val observedResolvers =
@@ -521,12 +527,19 @@ private class TestResolverRegistry(
     private val schema: Schema,
     fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
     additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
-    variableDeclarations: Map<Value.Variable.Template, FromObjectField>,
+    variableDeclarations: Map<Value.Variable.Template, VariableDeclaration>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
-    private val variableProviders =
-        variableDeclarations.mapValues { (_, declaration) -> declaration.keyPath }
+    private val variableDefinitions =
+        variableDeclarations.mapValues { (_, declaration) ->
+            when (declaration) {
+                is FromArgument ->
+                    VariableDefinition.FromArgument.of(declaration.argument)
+                is FromObjectField ->
+                    VariableDefinition.FromObjectField.of(declaration.keyPath)
+            }
+        }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
 
     init {
@@ -565,19 +578,30 @@ private class TestResolverRegistry(
             require(variable.field in fieldResolverDefinitions) {
                 "Variable ${variable.variableName} belongs to an unregistered resolver"
             }
-            require(declaration.objectFragment.nominalType == variable.field.containingType) {
-                "Variable ${variable.variableName} declaration is not relative to " +
-                    "${variable.field.containingType.typeName}/${variable.field.fieldName}"
+            when (declaration) {
+                is FromArgument -> {
+                    require(declaration.argument.containingType == variable.field.arguments) {
+                        "Variable ${variable.variableName} argument " +
+                            "${declaration.argument.argumentName} does not belong to " +
+                            "${variable.field.containingType.typeName}/${variable.field.fieldName}"
+                    }
+                }
+                is FromObjectField -> {
+                    require(declaration.objectFragment.nominalType == variable.field.containingType) {
+                        "Variable ${variable.variableName} declaration is not relative to " +
+                            "${variable.field.containingType.typeName}/${variable.field.fieldName}"
+                    }
+                    validateProviderContainment(
+                        variable.field,
+                        fieldResolverDefinitions.getValue(variable.field).objectFragment,
+                    )
+                    validateVariableUses(
+                        variable = variable,
+                        declaration = declaration,
+                        fragment = fieldResolverDefinitions.getValue(variable.field).objectFragment,
+                    )
+                }
             }
-            validateProviderContainment(
-                variable.field,
-                fieldResolverDefinitions.getValue(variable.field).objectFragment,
-            )
-            validateVariableUses(
-                variable = variable,
-                declaration = declaration,
-                fragment = fieldResolverDefinitions.getValue(variable.field).objectFragment,
-            )
         }
 
         val objectFieldResolvers =
@@ -593,18 +617,24 @@ private class TestResolverRegistry(
                             },
                     )
                 }
-                variableProviders.forEach { (variable, path) ->
+                variableDefinitions.forEach { (variable, definition) ->
                     put(
                         DependencyVertex.Variable(variable),
-                        implicatedVertices(
-                            Fragment.of(
-                                variable.field.containingType,
-                                selectionForestOf(
-                                    path.toSelection(setOf(variable.field.containingType)),
-                                ),
-                            ),
-                            variable.field,
-                        ),
+                        when (definition) {
+                            is VariableDefinition.FromArgument -> emptySet<DependencyVertex>()
+                            is VariableDefinition.FromObjectField ->
+                                implicatedVertices(
+                                    Fragment.of(
+                                        variable.field.containingType,
+                                        selectionForestOf(
+                                            definition.path.toSelection(
+                                                setOf(variable.field.containingType),
+                                            ),
+                                        ),
+                                    ),
+                                    variable.field,
+                                )
+                        },
                     )
                 }
             }
@@ -617,7 +647,7 @@ private class TestResolverRegistry(
                     assembledResolvers[site.field] =
                         definition.assemble(
                             variables =
-                                variableProviders.filterKeys { variable ->
+                                variableDefinitions.filterKeys { variable ->
                                     variable.field == site.field
                                 },
                             predecessorDemand =
@@ -670,9 +700,10 @@ private class TestResolverRegistry(
         field: Schema.ObjectField,
         fragment: Fragment,
     ) {
-        variableProviders.forEach { (variable, providerPath) ->
+        variableDefinitions.forEach { (variable, definition) ->
             if (variable.field != field) return@forEach
-            require(fragment.subselections.containsProviderPath(providerPath)) {
+            if (definition !is VariableDefinition.FromObjectField) return@forEach
+            require(fragment.subselections.containsProviderPath(definition.path)) {
                 "Variable ${variable.variableName} provider path is not contained by " +
                     "${field.containingType.typeName}/${field.fieldName} object fragment"
             }
@@ -820,8 +851,8 @@ private class TestResolverRegistry(
                 ?.let { add(DependencyVertex.Field(it as Schema.ObjectField)) }
         }
         selection.key.arguments.variableTemplates().forEach { variable ->
-            require(variable in variableProviders) {
-                "Missing variable provider: \$${variable.variableName}"
+            require(variable in variableDefinitions) {
+                "Missing variable definition: \$${variable.variableName}"
             }
             require(variable.field == ownerField) {
                 "Variable \$${variable.variableName} is not defined by " +

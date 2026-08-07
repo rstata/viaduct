@@ -116,51 +116,51 @@ private fun Value.Object.resolveKey(
 ): EngineResult.Object {
     val key = fieldSelection.key
     val cell =
-        if (key.arguments.argumentsContainErrorValue()) {
-            EngineResult.Cell.Error
-        } else {
-            val subselections = fieldSelection.subselections
-            val resolutionSelections =
-                if (key.field in world.resolverRegistry) {
-                    subselections.successorDemand()
-                } else {
-                    subselections
-                }
-            val fieldValue =
-                when {
-                    key.field.fieldName == "__typename" ->
-                        Value.String.of(type.typeName)
+        when {
+            key.arguments.argumentsContainErrorValue() ->
+                EngineResult.Cell.Error
 
-                    key.field in world.resolverRegistry -> {
-                        val resolver = world.resolverRegistry.resolver(key.field)
-                        val objectFragment = resolver.objectFragment(key.arguments)
-                        // The predecessor demand and dependency order put the complete input here.
-                        val input = resolved.materialize(objectFragment)
-                        resolver(
-                            input = input,
-                            arguments = key.arguments,
-                            selections = resolutionSelections,
-                        )
-                    }
+            key.field.fieldName == "__typename" ->
+                EngineResult.Cell.of(Value.String.of(type.typeName))
 
-                    else -> {
-                        // The producing resolver supplies demanded output-selection fields.
-                        fieldValues.getValue(key)
-                    }
+            else -> {
+                require(key.field in world.resolverRegistry) {
+                    "Passive key found ($key)."
                 }
-            EngineResult.Cell.of(
-                value =
-                    fieldValue
-                        .resolveValue(
-                            resolverDemand = resolutionSelections,
-                            beSelective = true,
-                        ).let { resolvedValue ->
-                            fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
-                                value.resolve(selections, resolved)
-                            }
-                        },
-            )
+
+                // Resolution applies this producer before recursively visiting fields with resolvers
+                // in its output. When those successor resolvers are reached, their predecessor
+                // demand will be added to their containing OER's local demand, but that happens
+                // after this producer's output has been selectively projected. successorDemand
+                // anticipates that situation by adding the predecessor demand from those successor
+                // resolvers to this producer's output demand, ensuring the passive values
+		// needed to materialize each successor's input will be produced.
+                val resolutionSelections = fieldSelection.subselections.successorDemand()
+
+                val resolver = world.resolverRegistry.resolver(key.field)
+                val objectFragment = resolver.objectFragment(key.arguments)
+                val fieldValue =
+                    resolver(
+                        // The predecessor demand added in [resolve] for this resolver, either
+                        // directly or through another resolver's [predecessorDemand] closure,
+                        // combined with dependency ordering of field resolution, ensures
+                        // that the complete input needed by this resolver is already in the
+                        // OER tree and can be materialized.
+                        input = resolved.materialize(objectFragment),
+                        arguments = key.arguments,
+                        selections = resolutionSelections,
+                    )
+                val resolvedValue =
+                    fieldValue.resolveValue(
+                        resolverDemand = resolutionSelections,
+                        beSelective = true,
+                    )
+                EngineResult.Cell.of(
+                    fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
+                        value.resolve(selections, resolved)
+                    }
+                )
+            }
         }
-
     return EngineResult.Object.of(type, mapOf(key to cell))
 }

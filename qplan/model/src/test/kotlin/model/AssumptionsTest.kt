@@ -31,11 +31,11 @@ class AssumptionsTest {
 
         val node = fragment.subselections.single()
         assertEquals(
-            Value.Variable.of("filter", variableField, path = null),
+            Value.Variable.of(variableField, "filter"),
             node.key.arguments.fieldValues.getValue("filter"),
         )
         assertNotEquals(
-            Value.Variable.of("other", variableField, path = null),
+            Value.Variable.of(variableField, "other"),
             node.key.arguments.fieldValues.getValue("filter"),
         )
     }
@@ -137,7 +137,7 @@ class AssumptionsTest {
                 type = filterType,
                 fields =
                     mapOf(
-                        "limit" to Value.Variable.of("nested", variableField, path = null),
+                        "limit" to Value.Variable.of(variableField, "nested"),
                     ),
             )
 
@@ -341,9 +341,8 @@ class AssumptionsTest {
                             mapOf(
                                 "limit" to
                                     Value.Variable.of(
-                                        "limit",
                                         schema.objectField("Query", "node"),
-                                        path = null,
+                                        "limit",
                                     ),
                             ),
                         ) to friendValue,

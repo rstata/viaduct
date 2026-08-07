@@ -7,7 +7,7 @@ import model.Value
 import model.selectionForestOf
 
 internal fun Fragment.mapVariables(
-    transform: (Value.Variable) -> Value.Variable,
+    transform: (Value.Variable.Template) -> Value.Variable.Template,
 ): Fragment =
     Fragment.of(
         nominalType = nominalType,
@@ -15,7 +15,7 @@ internal fun Fragment.mapVariables(
     )
 
 internal fun List<Value.Key>.mapVariables(
-    transform: (Value.Variable) -> Value.Variable,
+    transform: (Value.Variable.Template) -> Value.Variable.Template,
 ): List<Value.Key> =
     map { key ->
         Value.Key.of(
@@ -28,7 +28,7 @@ internal fun List<Value.Key>.mapVariables(
     }
 
 private fun SelectionForest.mapVariables(
-    transform: (Value.Variable) -> Value.Variable,
+    transform: (Value.Variable.Template) -> Value.Variable.Template,
 ): SelectionForest =
     flatMap { selection ->
         selectionForestOf(
@@ -48,11 +48,13 @@ private fun SelectionForest.mapVariables(
     }
 
 private fun Value.Input?.mapVariables(
-    transform: (Value.Variable) -> Value.Variable,
+    transform: (Value.Variable.Template) -> Value.Variable.Template,
 ): Value.Input? =
     when {
         this == null || this == Value.Error -> this
-        this is Value.Variable -> transform(this)
+        this is Value.Variable.Template -> transform(this)
+        this is Value.Variable.Stamped ->
+            throw IllegalArgumentException("Pre-reasoning fragments cannot contain stamped variables")
         this is Value.InputList ->
             Value.InputList.of(
                 typeExpr = typeExpr,

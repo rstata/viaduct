@@ -309,7 +309,7 @@ class FromObjectFieldTest {
             variableProviders = { schema ->
                 val owner = schema.field("Query", "result") as Schema.ObjectField
                 mapOf(
-                    Value.Variable.of("value", owner, path = null) to
+                    Value.Variable.of(owner, "value") to
                         schema.fromObjectField(objectFragment, responsePath),
                 )
             },

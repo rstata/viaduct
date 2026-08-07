@@ -28,7 +28,7 @@ internal class BranchOrderValidator(
         }
 
         data class VariableProduction(
-            val variable: Value.Variable,
+            val variable: Value.Variable.Template,
             val providerPath: String,
             val productionPath: String,
             val usePath: String,
@@ -208,7 +208,7 @@ private fun Selection.branchOn(type: Schema.ObjectType): Schema.ObjectField? =
     }
 
 private fun SelectionForest.variableUsePaths(
-    variable: Value.Variable,
+    variable: Value.Variable.Template,
     type: Schema.ObjectType,
 ): Map<Schema.ObjectField, Set<String>> {
     val result = linkedMapOf<Schema.ObjectField, MutableSet<String>>()
@@ -222,7 +222,7 @@ private fun SelectionForest.variableUsePaths(
 }
 
 private fun Selection.pathsContaining(
-    variable: Value.Variable,
+    variable: Value.Variable.Template,
     prefix: List<String> = emptyList(),
 ): Set<String> {
     val path = prefix + key.field.fieldName

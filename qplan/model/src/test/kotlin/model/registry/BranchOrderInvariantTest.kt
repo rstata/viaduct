@@ -82,7 +82,7 @@ class BranchOrderInvariantTest {
                     variableProviders = { schema ->
                         val owner = schema.field("Parent", "result") as Schema.ObjectField
                         mapOf(
-                            Value.Variable.of("value", owner, path = null) to
+                            Value.Variable.of(owner, "value") to
                                 schema.fromObjectField(
                                     "fragment ignored on Parent { shared { value } }",
                                     listOf("shared", "value"),
@@ -488,10 +488,10 @@ class BranchOrderInvariantTest {
             name: String,
             provider: String,
             responsePath: List<String>,
-        ): Map<Value.Variable, FromObjectField> {
+        ): Map<Value.Variable.Template, FromObjectField> {
             val owner = schema.field("Query", "result") as Schema.ObjectField
             return mapOf(
-                Value.Variable.of(name, owner, path = null) to
+                Value.Variable.of(owner, name) to
                     schema.fromObjectField(provider, responsePath),
             )
         }

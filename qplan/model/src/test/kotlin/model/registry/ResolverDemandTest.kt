@@ -52,7 +52,7 @@ class ResolverDemandTest {
                 variableProviders = { schema ->
                     val owner = schema.objectField("Query", "x")
                     mapOf(
-                        Value.Variable.of("b", owner, path = null) to
+                        Value.Variable.of(owner, "b") to
                             schema.fromObjectField(
                                 """
                                 fragment ignored on Query {
@@ -61,7 +61,7 @@ class ResolverDemandTest {
                                 """.trimIndent(),
                                 listOf("z"),
                             ),
-                        Value.Variable.of("c", owner, path = null) to
+                        Value.Variable.of(owner, "c") to
                             schema.fromObjectField(
                                 """
                                 fragment ignored on Query {
@@ -131,12 +131,12 @@ class ResolverDemandTest {
                     val x = schema.objectField("Query", "x")
                     val y = schema.objectField("Query", "y")
                     mapOf(
-                        Value.Variable.of("same", x, path = null) to
+                        Value.Variable.of(x, "same") to
                             schema.fromObjectField(
                                 "fragment ignored on Query { xSource }",
                                 listOf("xSource"),
                             ),
-                        Value.Variable.of("same", y, path = null) to
+                        Value.Variable.of(y, "same") to
                             schema.fromObjectField(
                                 "fragment ignored on Query { ySource }",
                                 listOf("ySource"),
@@ -147,8 +147,8 @@ class ResolverDemandTest {
         val schema = world.schema
         val x = schema.objectField("Query", "x")
         val y = schema.objectField("Query", "y")
-        val xVariable = Value.Variable.of("same", x, path = null)
-        val yVariable = Value.Variable.of("same", y, path = null)
+        val xVariable = Value.Variable.of(x, "same")
+        val yVariable = Value.Variable.of(y, "same")
 
         assertEquals(
             setOf(xVariable),
@@ -206,12 +206,12 @@ class ResolverDemandTest {
                     variableProviders = { schema ->
                         val owner = schema.objectField("Query", "x")
                         mapOf(
-                            Value.Variable.of("a", owner, path = null) to
+                            Value.Variable.of(owner, "a") to
                                 schema.fromObjectField(
                                     "fragment ignored on Query { z(a: 0, b: ${'$'}b) }",
                                     listOf("z"),
                                 ),
-                            Value.Variable.of("b", owner, path = null) to
+                            Value.Variable.of(owner, "b") to
                                 schema.fromObjectField(
                                     "fragment ignored on Query { z(a: ${'$'}a, b: 0) }",
                                     listOf("z"),
@@ -324,7 +324,7 @@ class ResolverDemandTest {
                     variableProviders = { schema ->
                         val owner = schema.field("Query", "result") as Schema.ObjectField
                         mapOf(
-                            Value.Variable.of("value", owner, path = null) to
+                            Value.Variable.of(owner, "value") to
                                 schema.fromObjectField(
                                     """
                                     fragment ignored on Query {
@@ -390,7 +390,7 @@ class ResolverDemandTest {
                 variableProviders = { schema ->
                     val owner = schema.objectField("Query", "result")
                     mapOf(
-                        Value.Variable.of("value", owner, path = null) to
+                        Value.Variable.of(owner, "value") to
                             schema.fromObjectField(
                                 "fragment ignored on Query { source(id: 1) }",
                                 listOf("source"),
@@ -789,7 +789,7 @@ class ResolverDemandTest {
                 variableProviders = { schema ->
                     val owner = schema.field("Query", "result") as Schema.ObjectField
                     mapOf(
-                        Value.Variable.of("value", owner, path = null) to
+                        Value.Variable.of(owner, "value") to
                             schema.fromObjectField(
                                 providerFragment,
                                 providerResponsePath,

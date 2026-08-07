@@ -307,9 +307,8 @@ class ArbitraryRegistry internal constructor(
                             canonicalFieldName,
                         ) as Schema.ObjectField
                     Value.Variable.of(
-                        provider.variableName,
                         field,
-                        path = null,
+                        provider.variableName,
                     ) to
                         canonicalSchema.fromObjectField(
                             objectFragmentSource =

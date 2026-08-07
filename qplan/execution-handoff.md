@@ -105,7 +105,7 @@ data class ExecutionState(
 data class PartialObject(
     val type: Schema.ObjectType,
     val cells: Map<Value.ObjectKey, PartialCell>,
-    val variableValues: Map<Value.Variable, Value.Input?>,
+    val variableValues: Map<Value.Variable.Stamped, Value.Input?>,
 )
 ```
 

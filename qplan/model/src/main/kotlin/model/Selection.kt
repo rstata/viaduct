@@ -8,15 +8,16 @@ package model
  * [size] observes the number of current members. A forest returned directly by
  * [model.spec.flatten] has one member for each flattened GraphQL field occurrence, but that is a
  * postcondition of flattening rather than an invariant of every forest. In particular, [merge]
- * replaces members with equal concrete structural keys by one normalized member, which may
- * represent several source occurrences.
+ * replaces members with equal concrete coordinates under current variable bindings by one
+ * normalized member, which may represent several source occurrences.
  *
  * ### Equality And Observation
  *
  * Selection and forest equality are undefined, and no operation internally compares whole
  * [Selection] values or exposes member order. [keys] and [groupBy] may compare and deduplicate
- * explicitly projected values without changing the forest's members. [merge] is the
- * explicit normalization boundary that compares structural keys and coalesces forest members.
+ * explicitly projected values without changing the forest's members. [merge] is the explicit
+ * normalization boundary that compares coordinates under current bindings and coalesces forest
+ * members.
  */
 sealed interface SelectionForest {
     val size: Int
@@ -99,7 +100,7 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
     SelectionForestImpl(toList())
 
 /**
- * Returns the demand applicable to concrete parent [type], normalized by structural key.
+ * Returns the demand applicable to concrete parent [type], normalized under current bindings.
  *
  * Applicability is tested before specialization, so an inapplicable occurrence contributes neither
  * its key nor its descendants. Each applicable key is reconstructed against the canonical field on
@@ -111,24 +112,25 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
  * Subselections are not recursively merged because their concrete runtime parent type is not yet
  * known.
  *
- * A reconstructed key may still contain [Value.Variable] values. Such a key is a symbolic
- * concrete-field coordinate and cannot inhabit a [Value.Object] or [EngineResult.Object] until its
- * variables are instantiated. Merging uses ordinary structural key equality and must be repeated
- * after substitution can make formerly distinct argument tuples equal.
+ * Every currently bound stamped variable is replaced by its binding before the result key is
+ * constructed. Unbound stamped variables and templates remain symbolic, so the result may still
+ * contain [Value.Variable] values and must be merged again after additional bindings are added.
  */
+context(world: Assumptions)
 fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
     val selections =
         filter { selection -> type in selection.possibleTypes }
-        .groupBy { selection -> selection.objectKey(type) }
-        .entries
-        .map { (key, selections) ->
-            ObjectSelection.of(
-                key = key,
-                possibleTypes = setOf(type),
-                subselections =
-                    selections.flatMap { selection -> selection.subselections },
-            )
-        }
+            .groupBy { selection ->
+                selection.objectKey(type).substituteBindings()
+            }.entries
+            .map { (key, selections) ->
+                ObjectSelection.of(
+                    key = key,
+                    possibleTypes = setOf(type),
+                    subselections =
+                        selections.flatMap { selection -> selection.subselections },
+                )
+            }
     return ObjectSelectionForest.of(type, selections)
 }
 

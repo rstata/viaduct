@@ -252,6 +252,38 @@ class SelectionMergeTest {
         assertEquals(3, merged.keys().size)
     }
 
+    @Test
+    fun `bound nested variables merge with equal concrete arguments`() {
+        val fixture = Fixture()
+        val variableField = fixture.schema.objectField("Query", "search")
+        val variable =
+            Value.Variable.of(variableField, "x")
+                .stamp(listOf(Value.ListIndex.of(0)))
+        val symbolic =
+            fixture.searchSelection(
+                Value.InputObject.of(
+                    type = fixture.filter,
+                    fields = mapOf("values" to listOf(variable)),
+                ),
+            )
+        val concrete =
+            fixture.searchSelection(
+                Value.InputObject.of(
+                    type = fixture.filter,
+                    fields = mapOf("values" to listOf(1)),
+                ),
+            )
+        fixture.world.bind(variable, Value.Int.of(1))
+
+        val merged =
+            context(fixture.world) {
+                selectionForestOf(symbolic, concrete).merge(fixture.query)
+            }
+
+        assertEquals(1, merged.size)
+        assertEquals(concrete.objectKey(fixture.query), merged.single().key)
+    }
+
     private class Fixture {
         val testWorld = TestWorld.fromSDL(SCHEMA)
         val world = testWorld.assumptions

@@ -5,6 +5,7 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.registry.FieldResolver
+import model.registry.VariableDefinition
 
 /**
  * Validates the argument-insensitive structural branch order before semantic reasoning begins.
@@ -73,7 +74,9 @@ internal class BranchOrderValidator(
         do {
             val additions = mutableListOf<Pair<Edge, EdgeReason.VariableProduction>>()
             fieldResolvers.values.forEach { resolver ->
-                resolver.variables.forEach { (variable, providerPath) ->
+                resolver.variables.forEach variables@{ (variable, definition) ->
+                    if (definition !is VariableDefinition.FromObjectField) return@variables
+                    val providerPath = definition.path
                     val type = variable.field.containingType
                     val graph = graphs.getValue(type)
                     val providerBranch =

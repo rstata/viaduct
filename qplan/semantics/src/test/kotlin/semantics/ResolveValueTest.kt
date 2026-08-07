@@ -1,7 +1,9 @@
 package semantics
 
 import model.EngineResult
+import model.PathComponent
 import model.Schema
+import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -15,7 +17,7 @@ import kotlin.test.assertTrue
 
 class ResolveValueTest {
     @Test
-    fun `constructs typename directly and returns collapsed resolver paths`() {
+    fun `constructs typename directly and returns exact resolver paths`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -86,6 +88,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
+                    path = emptyList(),
                     resolverDemand = selections,
                     beSelective = true,
                 )
@@ -170,6 +173,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
+                    path = emptyList(),
                     resolverDemand = resolverDemand,
                     beSelective = false,
                 )
@@ -212,6 +216,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
+                    path = emptyList(),
                     resolverDemand = selections,
                     beSelective = true,
                 )
@@ -251,6 +256,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
+                    path = emptyList(),
                     resolverDemand = selections,
                     beSelective = true,
                 )
@@ -258,5 +264,108 @@ class ResolveValueTest {
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
         assertEquals(setOf(selectedKey), result.keys)
+    }
+
+    @Test
+    fun `list traversal records and replays exact object occurrence paths`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Nested {
+                      rendered: Int!
+                    }
+
+                    type Item {
+                      nested: Nested!
+                      computed: Int!
+                    }
+
+                    type Query {
+                      items: [Item!]!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val emptyQuery = schema.emptyFragmentOf("Query")
+                    val emptyItem = schema.emptyFragmentOf("Item")
+                    val emptyNested = schema.emptyFragmentOf("Nested")
+                    mapOf(
+                        schema.field("Query", "items") to
+                            model.testing.fieldResolverOf(emptyQuery) { _, _ ->
+                                error("Not invoked")
+                            },
+                        schema.field("Item", "computed") to
+                            model.testing.fieldResolverOf(emptyItem) { _, _ ->
+                                error("Not invoked")
+                            },
+                        schema.field("Nested", "rendered") to
+                            model.testing.fieldResolverOf(emptyNested) { _, _ ->
+                                error("Not invoked")
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val itemsField = schema.objectField("Query", "items")
+        val elementType =
+            (itemsField.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
+        val output =
+            Value.OutputList.of(
+                typeExpr = elementType,
+                values =
+                    listOf(
+                        schema.objectOf("Item") {
+                            "nested" setTo schema.objectOf("Nested")
+                        },
+                        schema.objectOf("Item") {
+                            "nested" setTo schema.objectOf("Nested")
+                        },
+                    ),
+            )
+        val selections =
+            world.fragmentFrom(
+                """
+                fragment ignored on Item {
+                  computed
+                  nested {
+                    rendered
+                  }
+                }
+                """.trimIndent(),
+            ).subselections
+        val itemsKey = Value.ObjectKey.of(itemsField, emptyMap())
+        val nestedKey = Value.ObjectKey.of(schema.objectField("Item", "nested"), emptyMap())
+        val rootPath = listOf<PathComponent>(itemsKey)
+        val expectedPaths =
+            setOf(
+                rootPath + Value.ListIndex.of(0),
+                rootPath + Value.ListIndex.of(0) + nestedKey,
+                rootPath + Value.ListIndex.of(1),
+                rootPath + Value.ListIndex.of(1) + nestedKey,
+            )
+
+        val resolvedValue =
+            context(world) {
+                output.resolveValue(
+                    path = rootPath,
+                    resolverDemand = selections,
+                    beSelective = true,
+                )
+            }
+        val callbackPaths = mutableListOf<List<PathComponent>>()
+        val replayed =
+            output.resolvePaths(
+                path = rootPath,
+                resolvedValue = resolvedValue,
+            ) { path, _, _, resolved ->
+                callbackPaths += path
+                resolved
+            }
+
+        assertEquals(expectedPaths, resolvedValue.pathsNeedingResolution.keys)
+        assertEquals(expectedPaths, callbackPaths.toSet())
+        assertEquals(expectedPaths.size, callbackPaths.size)
+        assertEquals(resolvedValue.engineResult, replayed)
     }
 }

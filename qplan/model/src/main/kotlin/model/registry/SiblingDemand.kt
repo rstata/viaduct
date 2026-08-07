@@ -1,8 +1,10 @@
 package model.registry
 
 import model.Assumptions
+import model.PathComponent
 import model.Schema
 import model.Value
+import model.merge
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
@@ -21,6 +23,7 @@ import model.Value
 context(world: Assumptions)
 fun Value.ObjectKey.demandsFromSibling(
     siblingKey: Value.ObjectKey,
+    path: List<PathComponent> = emptyList(),
 ): Boolean {
     val field = this.field
     val objectType = field.containingType
@@ -34,6 +37,7 @@ fun Value.ObjectKey.demandsFromSibling(
     return siblingKey in
         world.resolverRegistry
             .resolver(field)
-            .objectFragment(arguments)
+            .stampedObjectFragment(arguments, path)
+            .merge(objectType)
             .keys()
 }

@@ -97,7 +97,7 @@ fun EngineResult.conformsToSchema(): Boolean =
     }
 
 context(world: Assumptions)
-private fun Value.InputLike.inputLikeConformsToSchema(): Boolean =
+private fun Value.InputObjectLike.inputLikeConformsToSchema(): Boolean =
     fieldValues.containingType == type &&
         fieldValues.all { (fieldName, value) ->
             val field = type.fields.getValue(fieldName)

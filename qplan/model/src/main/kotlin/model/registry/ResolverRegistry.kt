@@ -1,10 +1,14 @@
 package model.registry
 
 import model.Assumptions
+import model.ObjectSelection
 import model.ObjectSelectionForest
+import model.PathComponent
 import model.Schema
+import model.Selection
 import model.SelectionForest
 import model.Value
+import model.selectionForestOf
 
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
@@ -26,18 +30,26 @@ typealias FieldResolverApplicationObserver =
  * resolver's complete input prerequisites. [successorDemand] separately uses these closures to
  * extend a producer's output demand. The argument-taking forms preserve exact argument-dependent
  * coordinates. In a canonical registry entry, [variables] maps every variable template defined by
- * this resolver to its nonempty alias-free provider path.
+ * this resolver to its argument or nonempty alias-free object-field path definition.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
  * [objectFragment] and every `objectFragment(arguments)` have the same concrete parent type and
  * normalized field-coordinate shape. Exact fragments may differ only in the values occupying
  * fixed argument positions.
+ *
+ * ### Invariant: field-resolver-variable-definitions
+ *
+ * Every variable is defined by this resolver's field. A [VariableDefinition.FromArgument]
+ * references one argument belonging to that field. A [VariableDefinition.FromObjectField] is a
+ * valid selection path relative to that field's containing type and is structurally contained by
+ * [objectFragment]; its factory additionally ensures that the path does not cross a list and ends
+ * at a simple value. External composition preserves containment in every exact object fragment.
  */
 class FieldResolver private constructor(
     val objectFragment: ObjectSelectionForest,
     val predecessorDemand: ObjectSelectionForest,
-    val variables: Map<Value.Variable.Template, List<Value.Key>>,
+    val variables: Map<Value.Variable.Template, VariableDefinition>,
     private val objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
     private val predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
     private val function: FieldResolverFunction,
@@ -55,9 +67,33 @@ class FieldResolver private constructor(
     fun objectFragment(arguments: Value.Arguments): ObjectSelectionForest =
         objectFragmentFunction(arguments)
 
+    /**
+     * Returns the exact object fragment with every variable template stamped at [path].
+     *
+     * Stamping preserves the selection fields, applicability guards, occurrence shape, and
+     * non-variable argument values.
+     */
+    fun stampedObjectFragment(
+        arguments: Value.Arguments,
+        path: List<PathComponent>,
+    ): ObjectSelectionForest =
+        objectFragment(arguments).stampVariables(path)
+
     /** Returns the guarded, path-rooted predecessor demand for this exact argument tuple. */
     fun predecessorDemand(arguments: Value.Arguments): ObjectSelectionForest =
         predecessorDemandFunction(arguments)
+
+    /**
+     * Returns the exact predecessor demand with every variable template stamped at [path].
+     *
+     * Stamping preserves the selection fields, applicability guards, occurrence shape, and
+     * non-variable argument values.
+     */
+    fun infusedPredecessorDemand(
+        arguments: Value.Arguments,
+        path: List<PathComponent>,
+    ): ObjectSelectionForest =
+        predecessorDemand(arguments).stampVariables(path)
 
     /**
      * Applies this field resolver and projects its selection-independent result to
@@ -93,7 +129,7 @@ class FieldResolver private constructor(
          */
         fun of(
             objectFragment: ObjectSelectionForest,
-            variables: Map<Value.Variable.Template, List<Value.Key>>,
+            variables: Map<Value.Variable.Template, VariableDefinition>,
             predecessorDemand: ObjectSelectionForest,
             objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
             predecessorDemandFunction: (Value.Arguments) -> ObjectSelectionForest,
@@ -103,6 +139,32 @@ class FieldResolver private constructor(
         ): FieldResolver {
             require(predecessorDemand.type == objectFragment.type) {
                 "Predecessor demand type must match object fragment type"
+            }
+            variables.forEach { (variable, definition) ->
+                require(variable.field.containingType == objectFragment.type) {
+                    "Variable ${variable.variableName} is not defined by a resolver on " +
+                        objectFragment.type.typeName
+                }
+                when (definition) {
+                    is VariableDefinition.FromArgument -> {
+                        val argument = definition.argument
+                        require(
+                            argument.containingType == variable.field.arguments &&
+                                variable.field.arguments.fields[argument.argumentName] == argument,
+                        ) {
+                            "Variable ${variable.variableName} argument ${argument.argumentName} " +
+                                "does not belong to ${variable.field.containingType.typeName}/" +
+                                variable.field.fieldName
+                        }
+                    }
+                    is VariableDefinition.FromObjectField -> {
+                        require(objectFragment.containsPath(definition.path)) {
+                            "Variable ${variable.variableName} object-field path is not contained " +
+                                "by ${variable.field.containingType.typeName}/" +
+                                "${variable.field.fieldName} object fragment"
+                        }
+                    }
+                }
             }
             return FieldResolver(
                 objectFragment = objectFragment,
@@ -118,8 +180,54 @@ class FieldResolver private constructor(
     }
 }
 
+private fun ObjectSelectionForest.stampVariables(
+    path: List<PathComponent>,
+): ObjectSelectionForest =
+    ObjectSelectionForest.of(
+        type = type,
+        selections =
+            byKey().values.map { selection ->
+                ObjectSelection.of(
+                    key =
+                        Value.ObjectKey.of(
+                            field = selection.key.field,
+                            arguments = selection.key.arguments.stamp(path),
+                        ),
+                    possibleTypes = selection.possibleTypes,
+                    subselections = selection.subselections.stampVariables(path),
+                )
+            },
+    )
+
+private fun SelectionForest.stampVariables(
+    path: List<PathComponent>,
+): SelectionForest =
+    flatMap { selection ->
+        selectionForestOf(
+            Selection.of(
+                key =
+                    Value.Key.of(
+                        field = selection.key.field,
+                        arguments = selection.key.arguments.stamp(path),
+                    ),
+                possibleTypes = selection.possibleTypes,
+                subselections = selection.subselections.stampVariables(path),
+            ),
+        )
+    }
+
+private fun SelectionForest.containsPath(path: List<Value.Key>): Boolean {
+    if (path.isEmpty()) return false
+    val key = path.first()
+    val remaining = path.drop(1)
+    return !filter { selection ->
+        selection.key == key &&
+            (remaining.isEmpty() || selection.subselections.containsPath(remaining))
+    }.isEmpty()
+}
+
 /**
- * The externally supplied field resolvers and field-relative variable providers fixed for one
+ * The externally supplied field resolvers and field-relative variable definitions fixed for one
  * reasoning world.
  *
  * A canonical object field is an actual resolver coordinate exactly when [contains] returns true.
@@ -131,23 +239,26 @@ class FieldResolver private constructor(
  * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
  * would be acyclic.
  *
- * Every variable provider is one nonempty canonical [Value.Key] path relative to its coordinate's
- * containing object and is structurally contained by the defining field resolver's fixed
- * [FieldResolver.objectFragment] envelope. Variables referenced by a field resolver's object
- * fragment or one of its providers belong to that same field. A provider path must terminate at an
- * input-compatible value whose effective nullability and list shape can be coerced at every
- * argument position consuming the variable.
+ * Every variable is defined from one argument of its resolver field or from one nonempty canonical
+ * [Value.Key] path relative to that field's containing object. Object-field paths are structurally
+ * contained by the defining field resolver's fixed [FieldResolver.objectFragment] envelope.
+ * Variables referenced by a field resolver's object fragment or one of its object-field paths
+ * belong to that same field. An object-field path must terminate at an input-compatible value whose
+ * effective nullability and list shape can be coerced at every argument position consuming the
+ * variable.
  *
  * ### Invariant: resolver-registry-depth-first-variable-stratification
  *
  * For every concrete object type, form one graph whose vertices are its canonical object fields,
  * interpreted as argument-insensitive structural branches. The graph contains each ordinary
  * resolver-input edge from a required sibling branch to its consuming resolver branch. For each
- * variable, its production branches are the provider's root branch and every transitive branch
- * prerequisite of that root; every production branch has an edge to each branch of the defining
- * resolver's fixed object-fragment envelope whose subtree contains a use of that variable. The
- * least graph closed under these variable edges is acyclic. Consequently, one topological branch
- * order binds every variable used in a branch before resolution enters that branch.
+ * object-field variable, its production branches are the provider's root branch and every
+ * transitive branch prerequisite of that root; every production branch has an edge to each branch
+ * of the defining resolver's fixed object-fragment envelope whose subtree contains a use of that
+ * variable. Argument-defined variables add no branch edge because their values are resolver
+ * inputs. The least graph closed under the object-field variable edges is acyclic. Consequently,
+ * one topological branch order binds every object-field variable used in a branch before resolution
+ * enters that branch.
  */
 interface ResolverRegistry {
     operator fun contains(field: Schema.ObjectField): Boolean

@@ -1,6 +1,7 @@
 package model.testing
 
 import model.Fragment
+import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.Schema
 import model.Selection
@@ -9,7 +10,8 @@ import model.Value
 import model.registry.FieldResolver
 import model.registry.FieldResolverApplicationObserver
 import model.registry.FieldResolverFunction
-import model.merge
+import model.registry.VariableDefinition
+import model.objectKey
 import model.selectionForestOf
 
 /**
@@ -75,7 +77,7 @@ class FieldResolverDefinition private constructor(
 
     internal fun assemble(
         objectType: Schema.ObjectType,
-        variables: Map<Value.Variable.Template, List<Value.Key>>,
+        variables: Map<Value.Variable.Template, VariableDefinition>,
         predecessorDemand: Fragment,
         predecessorDemandFunction: (Fragment) -> Fragment,
         validateObjectFragment: (Fragment) -> Unit,
@@ -87,7 +89,22 @@ class FieldResolverDefinition private constructor(
             require(fragment.nominalType == objectType) {
                 "$role type ${fragment.nominalType.typeName} does not match ${objectType.typeName}"
             }
-            return fragment.subselections.merge(objectType)
+            val selections =
+                fragment.subselections
+                    .filter { selection -> objectType in selection.possibleTypes }
+                    .groupBy { selection -> selection.objectKey(objectType) }
+                    .entries
+                    .map { (key, occurrences) ->
+                        ObjectSelection.of(
+                            key = key,
+                            possibleTypes = setOf(objectType),
+                            subselections =
+                                occurrences.flatMap { occurrence ->
+                                    occurrence.subselections
+                                },
+                        )
+                    }
+            return ObjectSelectionForest.of(objectType, selections)
         }
 
         fun exactObjectFragment(arguments: Value.Arguments): Fragment =

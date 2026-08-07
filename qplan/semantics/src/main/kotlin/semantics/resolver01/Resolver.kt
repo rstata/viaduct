@@ -3,6 +3,7 @@ package semantics.resolver01
 import model.Assumptions
 import model.EngineResult
 import model.ObjectSelection
+import model.PathComponent
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -10,6 +11,7 @@ import model.merge
 import model.registry.demandsFromSibling
 import model.selectionForestOf
 import model.union
+import semantics.bindFromArguments
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
 import semantics.resolvePaths
@@ -23,30 +25,35 @@ import semantics.resolveValue
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
     resolve(
+        path = emptyList(),
         selections = selections,
         resolved = EngineResult.Object.of(type, emptyMap()),
     )
 
 context(world: Assumptions)
 private fun Value.Object.resolve(
+    path: List<PathComponent>,
     selections: SelectionForest,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
-    val closedDemand = type.closeResolverDemand(selections)
+    val closedDemand = type.closeResolverDemand(path, selections)
     val mergedSelections = closedDemand.merge(type)
-    val orderedKeys = dependencyOrder(mergedSelections.keys() - resolved.keys)
+    val unresolvedKeys = mergedSelections.keys() - resolved.keys
+    val orderedKeys = dependencyOrder(path, unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
         val selection = mergedSelections[key]
-        result.union(resolveKey(selection, result))
+        result.union(resolveKey(path, selection, result))
     }
 }
 
 context(world: Assumptions)
 private fun Schema.ObjectType.closeResolverDemand(
+    path: List<PathComponent>,
     selections: SelectionForest,
     expanded: Set<Value.ObjectKey> = emptySet(),
 ): SelectionForest {
     val applicableSelections = selections.merge(this)
+    applicableSelections.keys().bindFromArguments(path)
     val unexpandedResolverKeys =
         applicableSelections.keys().filter { key ->
             key !in expanded &&
@@ -61,9 +68,10 @@ private fun Schema.ObjectType.closeResolverDemand(
             demand +
                 world.resolverRegistry
                     .resolver(key.field)
-                    .objectFragment(key.arguments)
+                    .infusedPredecessorDemand(key.arguments, path + key)
         }
     return closeResolverDemand(
+        path = path,
         selections = applicableSelections + resolverDemand,
         expanded = expanded + unexpandedResolverKeys,
     )
@@ -71,6 +79,7 @@ private fun Schema.ObjectType.closeResolverDemand(
 
 context(world: Assumptions)
 private fun Value.Object.dependencyOrder(
+    path: List<PathComponent>,
     keys: Set<Value.ObjectKey>,
     ordered: List<Value.ObjectKey> = emptyList(),
 ): List<Value.ObjectKey> {
@@ -78,12 +87,13 @@ private fun Value.Object.dependencyOrder(
 
     val ready =
         keys.filter { key ->
-            dependenciesOf(key, keys).isEmpty()
+            dependenciesOf(path, key, keys).isEmpty()
         }.toSet()
     require(ready.isNotEmpty()) {
         "Resolver dependencies on ${type.typeName} contain a cycle"
     }
     return dependencyOrder(
+        path = path,
         keys = keys - ready,
         ordered = ordered + ready,
     )
@@ -91,6 +101,7 @@ private fun Value.Object.dependencyOrder(
 
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
+    path: List<PathComponent>,
     consumer: Value.ObjectKey,
     unresolved: Set<Value.ObjectKey>,
 ): Set<Value.ObjectKey> {
@@ -104,12 +115,13 @@ private fun Value.Object.dependenciesOf(
     return unresolved
         .filter { sibling ->
             sibling != consumer &&
-                consumer.demandsFromSibling(sibling)
+                consumer.demandsFromSibling(sibling, path + consumer)
         }.toSet()
 }
 
 context(world: Assumptions)
 private fun Value.Object.resolveKey(
+    path: List<PathComponent>,
     fieldSelection: ObjectSelection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
@@ -126,7 +138,10 @@ private fun Value.Object.resolveKey(
 
                     key.field in world.resolverRegistry -> {
                         val resolver = world.resolverRegistry.resolver(key.field)
-                        val objectFragment = resolver.objectFragment(key.arguments)
+                        val objectFragment =
+                            resolver
+                                .stampedObjectFragment(key.arguments, path + key)
+                                .merge(type)
                         resolver(
                             input = resolved.materialize(objectFragment),
                             arguments = key.arguments,
@@ -139,11 +154,15 @@ private fun Value.Object.resolveKey(
                 value =
                     fieldValue
                         .resolveValue(
+                            path = path + key,
                             resolverDemand = subselections,
                             beSelective = false,
                         ).let { resolvedValue ->
-                            fieldValue.resolvePaths(resolvedValue) { value, selections, resolved ->
-                                value.resolve(selections, resolved)
+                            fieldValue.resolvePaths(
+                                path = path + key,
+                                resolvedValue = resolvedValue,
+                            ) { objectPath, value, selections, resolved ->
+                                value.resolve(objectPath, selections, resolved)
                             }
                         },
             )

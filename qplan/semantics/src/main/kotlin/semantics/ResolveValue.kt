@@ -257,7 +257,6 @@ private fun Value.Output?.resolvePath(
                                             check = existing.check,
                                         )
                                 ),
-                        variableValues = resolved.variableValues,
                     )
                 }
             }

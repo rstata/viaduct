@@ -81,20 +81,17 @@ THEOREM LocalJudgmentsLiftToWholeTree ==
         BY <2>2 DEF AllReachableOccurrencesCorrect
     <2>. QED
         BY <2>3 DEF OccurrenceCorrect
-<1>3. ConformsToVariables
-    BY DEF AllReachableOccurrencesCorrect, OccurrenceCorrect,
-           ConformsToVariables
-<1>4. ConformsToResolvers
+<1>3. ConformsToResolvers
     BY ResultTreeWorld, Isa
        DEF World, WorldTree, WorldConnected, WorldObservations,
            AllReachableOccurrencesCorrect, OccurrenceCorrect,
            ConformsToResolvers, ActiveResolverCells
-<1>5. ConformsToTypename
+<1>4. ConformsToTypename
     BY ResultTreeWorld, Isa
        DEF World, WorldTree, WorldConnected,
            AllReachableOccurrencesCorrect, OccurrenceCorrect,
            ConformsToTypename
-<1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5
+<1>. QED BY <1>1, <1>2, <1>3, <1>4
           DEF CorrectResolution
 
 THEOREM WholeTreeJudgmentDecomposesLocally ==
@@ -103,8 +100,8 @@ THEOREM WholeTreeJudgmentDecomposesLocally ==
 BY ResultTreeWorld, Isa
    DEF World, AllReachableOccurrencesCorrect, OccurrenceCorrect,
        CorrectResolution, ConformsToFragment,
-       IsClosedUnderResolverDemand, ConformsToVariables,
-       ConformsToResolvers, ConformsToTypename
+       IsClosedUnderResolverDemand, ConformsToResolvers,
+       ConformsToTypename
 
 THEOREM Resolver01PostconditionImpliesCorrectResolution ==
     Resolver01Postcondition => CorrectResolution

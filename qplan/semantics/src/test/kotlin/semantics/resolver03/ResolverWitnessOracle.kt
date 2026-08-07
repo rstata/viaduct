@@ -5,7 +5,6 @@ import model.EngineResult
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.registeredResolverCells
 import semantics.arbitrary.resolutionFingerprint
-import semantics.instantiateVariables
 import semantics.materialize
 
 /**
@@ -22,10 +21,7 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
                     cell.canonicalField.fieldName,
                 )
             val resolver = world.resolverRegistry.resolver(field)
-            val fragment =
-                resolver
-                    .objectFragment(cell.applicationKey.arguments)
-                    .instantiateVariables(cell.containingObject.variableValues)
+            val fragment = resolver.objectFragment(cell.applicationKey.arguments)
             ResolverApplicationIdentity(
                 key = cell.applicationKey,
                 inputFingerprint =

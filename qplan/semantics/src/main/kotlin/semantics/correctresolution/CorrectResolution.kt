@@ -28,7 +28,6 @@ fun EngineResult.Object.correctResolution(selections: ObjectSelectionForest): Bo
     return rootedAndWellTyped() &&          // Is the result rooted on the `Query` type?
         conformsToSelections(selections) && // Does the result conform to the selections?
         isClosedUnderResolverDemand() &&    // Have the RSSes of all necessary resolvers (transitively) been satisfied
-        conformsToVariables() &&            // Do stored variables equal their field-relative provider values?
         conformsToResolvers() &&            // Do the actual values conform to what the resolvers produce?
         conformsToTypename()                // Where the __typename field exists does it have the right value?
 }

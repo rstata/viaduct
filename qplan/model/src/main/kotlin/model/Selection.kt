@@ -14,8 +14,8 @@ package model
  * ### Equality And Observation
  *
  * Selection and forest equality are undefined, and no operation internally compares whole
- * [Selection] values or exposes member order. [flatMapToSet], [keys], and [groupBy] may compare and
- * deduplicate explicitly projected values without changing the forest's members. [merge] is the
+ * [Selection] values or exposes member order. [keys] and [groupBy] may compare and deduplicate
+ * explicitly projected values without changing the forest's members. [merge] is the
  * explicit normalization boundary that compares structural keys and coalesces forest members.
  */
 sealed interface SelectionForest {
@@ -29,9 +29,6 @@ sealed interface SelectionForest {
 
     fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest
 
-    /** The union of the sets produced independently from each occurrence. */
-    fun <T> flatMapToSet(transform: (Selection) -> Set<T>): Set<T>
-
     /** The structural keys contributed independently by all occurrences. */
     fun keys(): Set<Value.Key>
 
@@ -40,8 +37,6 @@ sealed interface SelectionForest {
     fun forEach(action: (Selection) -> Unit)
 
     fun single(): Selection
-
-    fun single(predicate: (Selection) -> Boolean): Selection
 
     operator fun plus(other: SelectionForest): SelectionForest
 }
@@ -354,9 +349,6 @@ private abstract class AbstractSelectionForest(
             .groupBy(keySelector)
             .mapValues { (_, selections) -> SelectionForestImpl(selections) }
 
-    override fun <T> flatMapToSet(transform: (Selection) -> Set<T>): Set<T> =
-        occurrences.fold(emptySet()) { result, selection -> result + transform(selection) }
-
     override fun keys(): Set<Value.Key> =
         occurrences.fold(emptySet()) { result, selection -> result + selection.key }
 
@@ -365,9 +357,6 @@ private abstract class AbstractSelectionForest(
     }
 
     override fun single(): Selection = occurrences.single()
-
-    override fun single(predicate: (Selection) -> Boolean): Selection =
-        occurrences.single(predicate)
 
     override fun plus(other: SelectionForest): SelectionForest =
         SelectionForestImpl(occurrences + other.occurrences())

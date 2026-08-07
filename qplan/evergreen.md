@@ -371,9 +371,9 @@ For an accepted provider, GraphQL field-merging validity requires field occurren
 
 The model therefore distinguishes the external declaration from its canonical semantic form. Pre-reasoning composition resolves a `List<String>` response-key path against the unflattened alias-preserving object fragment, enforces the production restrictions above, and emits one alias-free `List<Value.Key>` whose keys retain canonical fields and coerced arguments; aliases are used to select occurrences and then discarded. Canonical registry construction rejects a path whose surviving occurrences do not yield one such key at every step, and arbitrary generation constructs an alias-preserving fragment and valid response path before invoking the same compilation boundary rather than generating provider `Selection` paths directly.
 
-In the canonical Kotlin model, every field-relative provider path is already selected by its defining resolver's object fragment. Argument-dependent exact fragments preserve the representative fragment's argument-erased field coordinates, guards, nesting, and occurrence multiplicity, so binding a variable changes exact argument values without revealing a new structural branch. Providers remain value-flow dependencies and participate in ordering, but they are not independent sources of structural demand.
+In the canonical Kotlin model, every field-relative provider path is already selected by its defining resolver's object fragment. Argument-dependent exact fragments preserve the representative fragment's argument-erased field coordinates, guards, nesting, and occurrence multiplicity, so binding a variable would change exact argument values without revealing a new structural branch. Providers remain value-flow dependencies in pre-reasoning registry construction and participate in ordering, but they are not independent sources of structural demand. No current semantic resolver evaluates their bindings.
 
-The canonical registry further restricts execution variables to a depth-first branch-stratified domain. At each concrete OER type, argument-distinct occurrences of one immediate field are one structural branch; ordinary resolver-input edges and every transitive provider-production-before-use edge must form one acyclic graph. This deliberately rejects provider/use overlap and cross-variable ordering contradictions even when runtime values, arguments, guards, nulls, errors, or list contents would make a particular execution harmless.
+The canonical registry further restricts execution-variable metadata to a depth-first branch-stratified domain. At each concrete OER type, argument-distinct occurrences of one immediate field are one structural branch; ordinary resolver-input edges and every transitive provider-production-before-use edge must form one acyclic graph. This deliberately rejects provider/use overlap and cross-variable ordering contradictions even when runtime values, arguments, guards, nulls, errors, or list contents would make a particular execution harmless. The restriction is retained as a forward invariant, not as evidence of a completed variable-aware resolver.
 
 If the value needed to decide the target OER key or its demand depends on that same occurrence's output, exact pre-dispatch merging may be cyclic. The shape cannot remain in the one-shot scope unless conservative demand or isolated execution breaks that cycle; otherwise it must be rejected or excluded.
 
@@ -403,7 +403,7 @@ One static field path can produce many runtime objects, including nested lists. 
 
 ### Aliases, arguments, directives, and fragments
 
-Resolvers should not see aliases as semantic demand. Aliases remain important to external response paths, but they do not participate in `Value.Key` identity in the current model. A modeled field coordinate is the canonical schema output field plus fully coerced arguments; equal field names at distinct schema coordinates remain distinct. A selection or demand key outside an OER or `Value.Object` may carry an abstract interface or union field or unresolved variables, but every key actually present in either value carries the corresponding field owned by its concrete object type and has instantiated arguments. Concrete runtime type specialization and variable instantiation must therefore occur before such a key is materialized in an OER or resolved object value. Directives and variables control applicability. Named and inline fragments carry both syntax and type conditions.
+Resolvers should not see aliases as semantic demand. Aliases remain important to external response paths, but they do not participate in `Value.Key` identity in the current model. A modeled field coordinate is the canonical schema output field plus fully coerced arguments; equal field names at distinct schema coordinates remain distinct. A selection or demand key outside an OER or `Value.Object` may carry an abstract interface or union field or unresolved variables, but every key actually present in either value carries the corresponding field owned by its concrete object type and has instantiated arguments. Any future variable-aware constructor must therefore specialize concrete runtime types and instantiate variables before materializing such a key in an OER or resolved object value. Directives and variables control applicability. Named and inline fragments carry both syntax and type conditions.
 
 Selection normalization must preserve every distinction execution uses while avoiding invalid merged ASTs.
 
@@ -594,6 +594,55 @@ MAT's ability to fetch only the missing difference supports repeated materializa
 16. How is concurrency preserved across unrelated objects and list items?  
 17. What evidence will establish equivalence with existing execution?  
 18. What measurements will reveal over-selection, repeated work, and fallback frequency?
+
+## Appendix: Resolver04 Retrospective
+
+### What Resolver04 Explored
+
+Resolver04 was a selective, variable-aware extension of Resolver03. It modeled field-relative execution variables whose provider values had to be read from the defining resolver's containing OER before variable-bearing argument keys could become exact. External `fromObjectField` declarations were compiled from alias-preserving response-key paths to alias-free canonical key paths already contained by the defining resolver's fixed-shape object fragment.
+
+Resolver04 recursively resolved provider prerequisites, read and stored bindings on the containing OER, substituted those bindings before exact-key grouping and materialization, and kept variables owned by descendant object occurrences symbolic until resolution reached those occurrences. A symbolic envelope attempted to preserve structural demand that was known before the values needed to form exact `Value.ObjectKey` instances were available.
+
+### Why Widening Existed
+
+Variable value flow does not necessarily follow selection-tree return order. Producing a provider value in one branch can reveal a new exact descendant key beneath a child OER that a depth-first traversal has already returned from. Resolver04 handled that case by resuming the existing subtree instead of applying its parent producer again.
+
+To support resumption, Resolver04 retained each selective producer's raw, selection-independent output in an identity-based `ResolutionSources` side table. When binding revealed a newly distinct descendant key, the algorithm could re-enter the existing projected cell, construct the missing descendants from the retained source, and union the enlarged immutable subtree back into the result. This demonstrated that binding can reveal new exact work without revealing a new structural path.
+
+### Where The Strategy Failed
+
+Widening could handle late distinctness. If an existing child contained `field(arg: "literal")` and a variable later became `"bound"`, the child could acquire the distinct cell `field(arg: "bound")` while each exact resolver-bearing cell still had one application.
+
+Late equality exposed the stronger failure. Suppose the first occurrence applies `field(arg: "literal")` with output demand `{ forProvider }`, while a symbolic occurrence `field(arg: $value)` carries `{ forConsumer }`. If the provider later binds `$value` to `"literal"`, both occurrences identify the same exact cell, but the first resolver application has already projected away `forConsumer`. Widening cannot manufacture that missing passive value from the projected result, and reapplying the resolver violates one-shot execution. Speculatively adding every symbolic occurrence's demand is also not generally sound because the arguments may resolve to unequal keys.
+
+Focused counterexamples found related ambient-demand failures: a shared producer could be sealed before later provider-dependent demand became concrete; variable-free portions of symbolic demand could be discarded with their symbolic descendants; and symbolic demand could be retargeted onto a different concrete argument occurrence of the same field. The hard obligation was not subtree union. It was deriving complete producer-specific demand before the first selective application without erasing guards or exact argument distinctions. The complete worked examples remain in [Resolution Algorithms By Example](./examples.md#historical-resolver04-widening-example).
+
+### Why Tests And Proofs Did Not Rescue It
+
+Resolver04 passed broad generated and 10,000-case stress campaigns, but later focused examples still found missing sealing, wrong retargeting, guarded-provider, error-binding, recursive-scope, and late-convergence failures. The passing campaigns established useful finite coverage; they did not cover the decisive adversarial shapes or prove one-shot completeness.
+
+The Resolver04 TLA+ layer proved finite ordering, provider-read, ambient-union, and extensional result properties under explicit assumptions. It did not refine the Kotlin operations that discovered ambient contributions, matched symbolic and concrete occurrences, selected provider roots and paths, or constructed returned cells. In particular, complete contribution discovery and observation coverage were premises rather than consequences. The durable proof lesson is to derive the difficult implementation correspondence instead of assuming the relation whose correctness is in question.
+
+### What Survived
+
+- Symbolic selections and exact OER cells are different domains; substitution must occur at an explicit boundary before exact-key grouping.
+- Late equality is a producer-demand coverage problem, not merely key deduplication.
+- Complete output demand must be sealed before a selective resolver application; post-application widening cannot repair an under-projected producer.
+- Provider paths are response-key declarations externally and canonical key paths after validation.
+- A contained provider path adds value-flow ordering but does not independently add a structural branch outside the defining object fragment.
+- Provider production, variable use, and ordinary resolver dependencies need one explicit, diagnosable ordering relation.
+- One-shot identity is occurrence-scoped; recursive objects and list positions need identities beyond resolver coordinate and arguments.
+- Final-result correctness and producer-specific one-shot completeness are separate proof obligations.
+- Raw source retention and runtime binding state belong in an explicit execution model if they are needed; they should not be hidden in the final immutable OER carrier.
+- Passing generated stress tests is finite evidence, and replayable focused counterexamples remain necessary.
+
+### How The Project Moved Forward
+
+The project changed the accepted domain instead of continuing to generalize recovery after application. Canonical registry construction now collapses argument-distinct immediate occurrences into structural branches, combines ordinary resolver-input edges with every transitive provider-production-before-use edge, and rejects self-overlap and cycles. The former widening and symbolic-convergence examples became negative registry-construction cases: worlds that require returning to a provider-production branch after entering a variable-use branch are rejected before semantic execution.
+
+That branch-stratified domain made Resolver04's defining capability unnecessary for accepted worlds, while its source retention, ambient matching, and resumption machinery remained substantial complexity. Attempts to build a variable-aware Resolver03 successor exposed additional requirements around recursive occurrence scope, substitution before exact merge, binding identity, list positions, and passive-only deepening, but no such successor was retained.
+
+Resolver04, OER binding storage, variable conformance, and the corresponding provider/Resolver04 TLA+ composition were therefore removed. Resolver03 remains the maintained selective construction and is variable-free. Variable/provider carriers, declaration compilation, containment, generation, and branch-order validation remain as pre-reasoning infrastructure. Future variable-aware work must explicitly choose its domain and correctness oracle: it may exploit the branch-stratified depth-first order, or model pending symbolic work and bindings in a separate write-once execution state, but it should not revive post-application widening as a substitute for complete producer demand.
 
 ## References
 

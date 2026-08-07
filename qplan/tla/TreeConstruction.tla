@@ -47,7 +47,6 @@ NoObjectFragments ==
 
 ValueConstructionCorrect ==
     /\ RootedAndWellTyped
-    /\ ConformsToVariables
     /\ ConformsToResolvers
     /\ ConformsToTypename
 

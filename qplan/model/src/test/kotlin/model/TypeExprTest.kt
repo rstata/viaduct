@@ -6,20 +6,17 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TypeExprTest {
-    private val world = TestWorld.fromSDL(SCHEMA_SDL)
-    private val schema = world.schema
+    private val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
 
     @Test
     fun `outer nullability controls compatibility`() {
         val nullable = TypeExpr.Named.of(Schema.StringType)
         val nonNull = TypeExpr.Named.of(Schema.StringType, isNullable = false)
 
-        context(world.assumptions) {
-            assertTrue(nullable.canContain(nullable))
-            assertTrue(nullable.canContain(nonNull))
-            assertFalse(nonNull.canContain(nullable))
-            assertTrue(nonNull.canContain(nonNull))
-        }
+        assertTrue(nullable.canContainPure(nullable))
+        assertTrue(nullable.canContainPure(nonNull))
+        assertFalse(nonNull.canContainPure(nullable))
+        assertTrue(nonNull.canContainPure(nonNull))
     }
 
     @Test
@@ -32,12 +29,10 @@ class TypeExprTest {
             TypeExpr.List.of(TypeExpr.Named.of(Schema.StringType))
         val ints = TypeExpr.List.of(TypeExpr.Named.of(Schema.IntType))
 
-        context(world.assumptions) {
-            assertTrue(nullableStrings.canContain(strings))
-            assertFalse(strings.canContain(nullableStrings))
-            assertFalse(strings.canContain(ints))
-            assertFalse(strings.canContain(TypeExpr.Named.of(Schema.StringType)))
-        }
+        assertTrue(nullableStrings.canContainPure(strings))
+        assertFalse(strings.canContainPure(nullableStrings))
+        assertFalse(strings.canContainPure(ints))
+        assertFalse(strings.canContainPure(TypeExpr.Named.of(Schema.StringType)))
     }
 
     @Test
@@ -51,12 +46,10 @@ class TypeExprTest {
         val userExpr = TypeExpr.Named.of(user, isNullable = false)
         val adminExpr = TypeExpr.Named.of(admin)
 
-        context(world.assumptions) {
-            assertTrue(nodeExpr.canContain(userExpr))
-            assertTrue(actorExpr.canContain(userExpr))
-            assertFalse(userExpr.canContain(nodeExpr))
-            assertFalse(userExpr.canContain(adminExpr))
-        }
+        assertTrue(nodeExpr.canContainPure(userExpr))
+        assertTrue(actorExpr.canContainPure(userExpr))
+        assertFalse(userExpr.canContainPure(nodeExpr))
+        assertFalse(userExpr.canContainPure(adminExpr))
     }
 
     private companion object {

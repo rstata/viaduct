@@ -3,7 +3,6 @@ package semantics.correctresolution
 import model.Assumptions
 import model.EngineResult
 import model.Value
-import semantics.instantiateVariables
 
 /**
  * Whether every resolver activated by this result has its required input in the same result tree.
@@ -30,8 +29,7 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(): Boolean {
                 conformsToSelections(
                     registry
                         .resolver(key.field)
-                        .objectFragment(key.arguments)
-                        .instantiateVariables(variableValues),
+                        .objectFragment(key.arguments),
                 )
 
         fieldResolverDemandIsClosed &&

@@ -36,16 +36,10 @@ GeneratedTypenames ==
     \A cell \in PresentCells \cap TypenameCells :
         ActualCellValue[cell] = TypeNameValue[CellObject[cell]]
 
-NoStoredVariables ==
-    /\ VariableBindings = {}
-    /\ \A object \in ReachableObjects :
-           StoredVariableNames[object] = {}
-
 Resolver01ValueConstruction ==
     /\ RootedAndWellTyped
     /\ ProjectionAlignment
     /\ GeneratedTypenames
-    /\ NoStoredVariables
 
 Resolver01FullConstruction ==
     /\ FoldCompleted

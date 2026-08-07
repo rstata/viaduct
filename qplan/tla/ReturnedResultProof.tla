@@ -36,17 +36,6 @@ BY ReturnedCellsAreFinal, CompletedResultRefinesFoldCompleted,
        IsClosedUnderResolverDemand, ActiveResolverCells,
        PresentKeys
 
-LEMMA ReturnedConformsToVariables ==
-    ReturnedTree!ConformsToVariables
-BY Isa
-   DEF ReturnedTree!ConformsToVariables,
-       ReturnedTree!ReachableObjects,
-       ReturnedTree!ObjectClosedSets,
-       ReturnedTree!BindingsAt,
-       ReturnedTree!BindingNamesAt,
-       EmptyStoredVariableNames, EmptyBindingObject,
-       EmptyBindingVariable, EmptyBindingValue
-
 LEMMA ReturnedConformsToResolvers ==
     ReturnedProjectionCoverage =>
         ReturnedTree!ConformsToResolvers
@@ -83,8 +72,8 @@ THEOREM CompletedReturnedResultIsCorrect ==
     AllFoldsCompleted /\ ReturnedProjectionCoverage =>
         ReturnedCorrect
 BY ReturnedConformsToFragment, ReturnedClosesResolverDemand,
-   ReturnedConformsToVariables, ReturnedConformsToResolvers,
-   ReturnedConformsToTypename, ReturnedResultAssumptions
+   ReturnedConformsToResolvers, ReturnedConformsToTypename,
+   ReturnedResultAssumptions
    DEF ReturnedCorrect, ReturnedTree!CorrectResolution,
        ReturnedTree!RootedAndWellTyped, ReturnedResultBaseWorld,
        FoldWorld, ConstructionWorld, World,

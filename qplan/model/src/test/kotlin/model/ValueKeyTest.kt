@@ -38,16 +38,8 @@ class ValueKeyTest {
     }
 
     @Test
-    fun `path component projections distinguish keys from list indices`() {
-        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val field = schema.query.fields.getValue("user")
-        val key = Value.ObjectKey.of(field, emptyMap())
-        val index = Value.ListIndex.of(2)
-
-        assertSame(key, key.asKey())
-        assertEquals(2, index.asIndex())
-        assertFailsWith<IllegalArgumentException> { key.asIndex() }
-        assertFailsWith<IllegalArgumentException> { index.asKey() }
+    fun `list index rejects negative positions`() {
+        Value.ListIndex.of(2)
         assertFailsWith<IllegalArgumentException> { Value.ListIndex.of(-1) }
     }
 

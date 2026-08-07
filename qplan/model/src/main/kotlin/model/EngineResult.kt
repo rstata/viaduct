@@ -37,14 +37,11 @@ sealed interface EngineResult {
      * A finite object result whose [cells] are exact, alias-free schema coordinates.
      *
      * Every cell key belongs to [type], contains no variables, and has a value that conforms
-     * recursively to the field's type expression. [variableValues] distinguishes an absent variable
-     * from one bound to GraphQL null. Its keys are non-error variables, and every non-null value is
-     * an input value containing no variables.
+     * recursively to the field's type expression.
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
         val cells: Map<Value.ObjectKey, Cell>
-        val variableValues: Map<Value.Variable, Value.Input?>
 
         val keys: Set<Value.ObjectKey>
             get() = cells.keys
@@ -58,14 +55,11 @@ sealed interface EngineResult {
             /**
              * ### Invariant: object-engine-result-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world. Its
-             * variable keys are non-error [Value.Variable] values, and every non-null variable
-             * value is a [Value.Input] containing no variables.
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
              */
             fun of(
                 type: Schema.ObjectType,
                 cells: Map<Value.ObjectKey, Cell>,
-                variableValues: Map<Value.Variable, Value.Input?> = emptyMap(),
             ): Object {
                 require(cells.keys.all { it.field.containingType == type }) {
                     "${type.typeName} result contains a field owned by another type"
@@ -84,13 +78,7 @@ sealed interface EngineResult {
                             key.field.typeExpr
                     }
                 }
-                require(variableValues.keys.none { it == Value.Error }) {
-                    "Object-result variable keys cannot be Value.Error"
-                }
-                require(variableValues.values.none { it.containsVariableValue() }) {
-                    "Object-result variable values cannot contain variables"
-                }
-                return ObjectResultImpl(type, cells, variableValues)
+                return ObjectResultImpl(type, cells)
             }
         }
     }
@@ -163,15 +151,12 @@ fun EngineResult?.union(other: EngineResult?): EngineResult? {
 }
 
 /**
- * Returns the object result containing the union of every cell and variable value present in either
- * operand.
+ * Returns the object result containing the union of every cell present in either operand.
  *
  * A cell present in both operands is unioned componentwise. A cell present in only one operand is
- * retained unchanged. A variable present in both operands must have equal values, including equal
- * null bindings; a variable present in only one operand retains that binding.
+ * retained unchanged.
  *
- * @throws IllegalArgumentException when the object types differ, any shared cell has no union, or
- * a shared variable has unequal values
+ * @throws IllegalArgumentException when the object types differ or any shared cell has no union
  */
 fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
     require(type == other.type) {
@@ -186,22 +171,7 @@ fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
                 else -> fetch(key).union(other.fetch(key))
             }
         }
-    val variableKeys = variableValues.keys + other.variableValues.keys
-    val unionVariableValues =
-        variableKeys.associateWith { variable ->
-            when {
-                variable !in variableValues -> other.variableValues.getValue(variable)
-                variable !in other.variableValues -> variableValues.getValue(variable)
-                else -> {
-                    val value = variableValues.getValue(variable)
-                    require(value == other.variableValues.getValue(variable)) {
-                        "Cannot union unequal values for variable \$${variable.variableName}"
-                    }
-                    value
-                }
-            }
-        }
-    return EngineResult.Object.of(type, unionCells, unionVariableValues)
+    return EngineResult.Object.of(type, unionCells)
 }
 
 /**
@@ -233,7 +203,6 @@ private data class CellImpl(
 private data class ObjectResultImpl(
     override val type: Schema.ObjectType,
     override val cells: Map<Value.ObjectKey, EngineResult.Cell>,
-    override val variableValues: Map<Value.Variable, Value.Input?>,
 ) : EngineResult.Object
 
 private data class ListResultImpl(

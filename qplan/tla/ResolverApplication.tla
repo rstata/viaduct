@@ -39,13 +39,7 @@ AppliedTree ==
         WITH PresentCells <- BuiltCells,
              ActualObservation <- ProjectedActualObservation,
              ExpectedObservation <- FinalExpectedObservation,
-             ActualCellValue <- GeneratedCellValue,
-             StoredVariableNames <- EmptyStoredVariableNames,
-             VariableBindings <- {},
-             BindingObject <- EmptyBindingObject,
-             BindingVariable <- EmptyBindingVariable,
-             StoredBindingValue <- EmptyBindingValue,
-             ExpectedBindingValue <- EmptyBindingValue
+             ActualCellValue <- GeneratedCellValue
 
 ResolverApplicationBaseWorld ==
     /\ ReturnedResultBaseWorld

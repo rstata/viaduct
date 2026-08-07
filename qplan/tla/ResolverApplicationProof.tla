@@ -87,7 +87,6 @@ LEMMA CompletedAppliedResultIsCorrect ==
 <1>2. /\ ReturnedTree!RootedAndWellTyped
       /\ ReturnedTree!ConformsToFragment
       /\ ReturnedTree!IsClosedUnderResolverDemand
-      /\ ReturnedTree!ConformsToVariables
       /\ ReturnedTree!ConformsToResolvers
       /\ ReturnedTree!ConformsToTypename
     BY <1>1
@@ -114,25 +113,13 @@ LEMMA CompletedAppliedResultIsCorrect ==
            ReturnedTree!IsClosedUnderResolverDemand,
            ReturnedTree!ActiveResolverCells,
            ReturnedTree!PresentKeys
-<1>6. AppliedTree!ConformsToVariables
-    BY <1>2, Isa
-       DEF AppliedTree!ConformsToVariables,
-           AppliedTree!ReachableObjects,
-           AppliedTree!ObjectClosedSets,
-           AppliedTree!BindingsAt,
-           AppliedTree!BindingNamesAt,
-           ReturnedTree!ConformsToVariables,
-           ReturnedTree!ReachableObjects,
-           ReturnedTree!ObjectClosedSets,
-           ReturnedTree!BindingsAt,
-           ReturnedTree!BindingNamesAt
-<1>7. AppliedTree!ConformsToResolvers
+<1>6. AppliedTree!ConformsToResolvers
     BY <1>2, ReturnedResolverConformanceImpliesApplied
-<1>8. AppliedTree!ConformsToTypename
+<1>7. AppliedTree!ConformsToTypename
     BY <1>2
        DEF AppliedTree!ConformsToTypename,
            ReturnedTree!ConformsToTypename
-<1>. QED BY <1>3, <1>4, <1>5, <1>6, <1>7, <1>8
+<1>. QED BY <1>3, <1>4, <1>5, <1>6, <1>7
           DEF AppliedCorrect, AppliedTree!CorrectResolution
 
 =============================================================================

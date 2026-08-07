@@ -204,9 +204,7 @@ class ResolverRegistryTest {
         val representativeBridge = resolver.predecessorDemand.single()
         val predecessorDemand = resolver.predecessorDemand(arguments)
         val bridgeSelection =
-            predecessorDemand.single { selection ->
-                selection.key.field == bridge
-            }
+            predecessorDemand.filter { selection -> selection.key.field == bridge }.single()
 
         assertEquals(bridge, representativeBridge.key.field)
         assertEquals(
@@ -219,9 +217,11 @@ class ResolverRegistryTest {
             bridgeSelection.key.arguments.fieldValues.getValue("id"),
         )
         assertTrue(
-            predecessorDemand.single { selection ->
-                selection.key.field.fieldName == "seed"
-            }.subselections.isEmpty(),
+            predecessorDemand
+                .filter { selection -> selection.key.field.fieldName == "seed" }
+                .single()
+                .subselections
+                .isEmpty(),
         )
     }
 

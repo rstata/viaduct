@@ -6,14 +6,9 @@ import model.invariants.conformsToSchemaType
  * One step in an exact path through an engine-result tree.
  *
  * An [Value.ObjectKey] selects an object cell, while a [Value.ListIndex] selects a list cell.
- * Calling the projection for the other variant is outside that projection's domain.
  * Equality is structural within each variant.
  */
-sealed interface PathComponent {
-    fun asKey(): Value.ObjectKey
-
-    fun asIndex(): Int
-}
+sealed interface PathComponent
 
 /**
  * A GraphQL semantic value.
@@ -357,11 +352,6 @@ sealed interface Value {
     sealed interface ObjectKey : Key, PathComponent {
         override val field: Schema.ObjectField
 
-        override fun asKey(): ObjectKey = this
-
-        override fun asIndex(): kotlin.Int =
-            throw IllegalArgumentException("An object key is not a list index")
-
         companion object {
             fun of(
                 field: Schema.ObjectField,
@@ -383,11 +373,6 @@ sealed interface Value {
     /** A non-negative position selecting one cell of an engine-result list. */
     sealed interface ListIndex : PathComponent {
         val index: kotlin.Int
-
-        override fun asKey(): ObjectKey =
-            throw IllegalArgumentException("A list index is not an object key")
-
-        override fun asIndex(): kotlin.Int = index
 
         companion object {
             fun of(index: kotlin.Int): ListIndex {

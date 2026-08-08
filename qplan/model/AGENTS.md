@@ -10,7 +10,7 @@ The `model.invariants` package defines reusable relations used to state carrier 
 
 ## Domain Assumptions
 
-`EngineResult` values are finite, inductively defined algebraic values. Kotlin object sharing, reference identity, self-reference, and cyclic runtime object graphs are outside the model.  ("OER" which stands for object engine-result is a common shorthand for the `EngineResult.Object` type.)
+`EngineResult` values are finite, inductively defined algebraic values. An opt-in mutable `EngineResult.Object` may gain validated cells monotonically, and a written parent cell may retain a mutable child OER while that child gains cells. Reference identity is not part of structural engine-result equality, and self-reference and cyclic runtime object graphs remain outside the model. ("OER" which stands for object engine-result is a common shorthand for the `EngineResult.Object` type.)
 
 Schema definitions form reciprocal graphs: type definitions contain fields, while fields and arguments navigate back to their containing definitions. `Assumptions.schema` externally stipulates one complete canonical graph; schema decoding and reciprocal graph assembly are not semantic model operations.
 
@@ -24,7 +24,7 @@ External field-relative variable declarations either identify one argument of th
 
 Every canonical registry is also depth-first variable-stratified. For each concrete object type, registry assembly conservatively collapses argument-distinct occurrences of one field into one structural branch, combines ordinary sibling resolver dependencies with `fromObjectField` provider-production-before-use edges, closes object-field variable production transitively, and rejects a self-edge or longer branch cycle. `fromArgument` definitions add no branch edge because resolver arguments are already available.
 
-`Assumptions` carries request-local monotonic variable-binding state whose domain can only grow and whose values are ground by type. This write-once state is the deliberate exception to the usual immutable-value discipline. Resolver01-03 bind `fromArgument` variables at their exact OER occurrences; `fromObjectField` runtime binding remains deferred.
+`Assumptions` carries request-local monotonic variable-binding state whose domain can only grow and whose values are ground by type. These bindings and opt-in mutable OER cells are the documented write-once exceptions to the usual immutable-value discipline. Resolver01-03 bind `fromArgument` variables at their exact OER occurrences; `fromObjectField` runtime binding remains deferred.
 
 Input-object fields and output-field arguments share `Schema.InputLikeField`. Ground GraphQL input values and ground output-field argument tuples share `Value.InputLike`; the object-shaped `Value.InputObject` and `Value.Arguments` categories additionally share `Value.InputObjectLike`, mirroring `Schema.InputObjectLike`. `OpenValue` and `OpenArguments` are opaque, schema-checked input expressions that may contain `Value.Variable`; `Value.Input` implements `OpenValue`, and `Value.Arguments` implements `OpenArguments`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `Value.Arguments` instances remain ordinary structural values rather than singletons.
 
@@ -36,7 +36,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 ## Output Representations
 
-`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each object field and list element has an `EngineResult.Cell` containing its value and retained check value. An object result carries only its concrete type and cells. List results carry their element `typeExpr` even when empty.
+`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each present object field and every list element has an `EngineResult.Cell` containing its value and retained check value. Object construction is immutable by default; an explicitly mutable object may atomically add an absent exact cell once, and reads of unset cells throw. Its `cells` and `keys` observations are detached snapshots. List results remain immutable and carry their element `typeExpr` even when empty.
 
 `Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 

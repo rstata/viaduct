@@ -36,7 +36,7 @@ An obligation is ready when:
 
 1. Its exact key contains no unresolved variable.
 2. Every field required to materialize its exact object fragment is written in the containing OER.
-3. Every variable referenced by that fragment is bound on the containing OER.
+3. Every stamped variable referenced by that fragment is bound in the request-local `Assumptions`.
 4. Its destination cell is still unwritten.
 
 Argument errors follow the current carrier rule: they write the required error cell without applying the resolver.
@@ -56,7 +56,7 @@ data class PendingSelection(
 
 The exact shape may differ, but the semantic distinction matters. A `Selection` may contain a broad key with variables; a `Value.ObjectKey` stored in an OER may not contain variables.
 
-Variable bindings are also write-once facts on the containing OER. A binding becomes available when its provider path can be read from the current store. Binding the variable instantiates affected pending selections. Each resulting concrete key is then inserted into, or matched with, the obligation map.
+Variable bindings are write-once facts in request-local `Assumptions`, keyed by variables stamped for their exact OER occurrences. A binding becomes available when its provider path can be read from the current store. Binding the variable instantiates affected pending selections. Each resulting concrete key is then inserted into, or matched with, the obligation map.
 
 Late equality needs special care. A concrete occurrence such as `field(arg: "literal")` and a pending occurrence `field(arg: $value)` may become the same key. Resolver04 exposed this as a demand-coverage problem: the earlier application must have received the output demand of every symbolic occurrence that may converge with it. A worklist executor therefore needs a complete, sound symbolic envelope rather than inheriting Resolver04's matching approximation. It must not execute the currently concrete obligation with only its local subselections and then discover additional output demand when the variable binds.
 
@@ -93,29 +93,21 @@ No field is rewritten. The `Object2` OER simply acquires two distinct field cell
 
 ## A Write-Once OER Store
 
-`EngineResult.Object` should remain the immutable, finite result-tree carrier used by `correctResolution`. A future worklist executor should introduce a separate intermediate execution-state domain with explicit object identity:
+[`mutable-handoff.md`](./mutable-handoff.md) supersedes the earlier proposal to introduce a separate `PartialObject` solely for write-once cells. `EngineResult.Object` now has an opt-in mutable mode: each exact cell changes atomically from absent to written, a present cell never changes, and default construction remains immutable.
+
+A future worklist executor still needs explicit occurrence identity and scheduling state, but its object table can point directly to mutable OERs:
 
 ```kotlin
 data class ExecutionState(
-    val objects: Map<ObjectId, PartialObject>,
+    val objects: Map<ObjectId, EngineResult.Object>,
     val obligations: Map<CellId, ResolutionObligation>,
     val pendingSelections: Set<PendingSelection>,
 )
-
-data class PartialObject(
-    val type: Schema.ObjectType,
-    val cells: Map<Value.ObjectKey, PartialCell>,
-    val variableValues: Map<Value.Variable.Stamped, Value.Input?>,
-)
 ```
 
-`PartialObject.variableValues` is proposed intermediate execution state. It is not a field of the final `EngineResult.Object` carrier.
+Absence from an OER's cells means unwritten. Object-valued cells may contain mutable child OERs, and immutable list values may contain cells referring to mutable child OERs at stable positions. A transition adds a previously absent cell or variable binding and never changes an existing one. Variable bindings remain in request-local `Assumptions`; moving them onto OERs is not part of this carrier change.
 
-Absence from `cells` means unwritten. Object-valued cells contain `ObjectRef`; list values contain terminal values or references at stable list positions. A transition adds a previously absent cell or variable binding and never changes an existing one.
-
-Although this state models semi-mutable OERs, semantic Kotlin should remain purely functional. Each transition yields a new `ExecutionState` with persistent maps and sets. This follows the repository's mathematical modeling discipline and translates naturally to a TLA+ next-state relation. An eventual implementation may use concurrent mutable maps, promises, or atomics without changing the modeled write-once semantics.
-
-When no work remains, a `freeze` operation recursively replaces object references with immutable `EngineResult.Object` values. The current `correctResolution` judgment can check the variable-free final result properties, but it cannot validate provider bindings; a future variable-aware oracle or separate execution-state invariant is required before a variable-bearing executor can claim correctness. Cyclic object references remain outside the model; the allocated occurrence graph must be a finite tree of object and list positions.
+When no work remains, no result-tree freeze is intrinsically required: the quiescent mutable OER tree already has ordinary `EngineResult` shape. The current `correctResolution` judgment can check its variable-free final properties, but it cannot validate provider bindings; a future variable-aware oracle or separate execution-state invariant is required before a variable-bearing executor can claim correctness. Cyclic object references remain outside the model; the allocated occurrence graph must be a finite tree of object and list positions.
 
 The historical `ResolutionSources` side table should not be copied automatically. If demand collection is complete, all producer-owned passive fields needed later are projected and written when the producer runs. The worklist design should retain an immutable raw resolver source only if a focused counterexample proves it necessary, and any later projection must remain covered by the demand originally supplied to that application.
 
@@ -129,12 +121,12 @@ The worklist executor should make these properties explicit:
 - A variable changes only from unbound to one stored nullable input value.
 - Every concrete obligation has one complete demanded-output envelope.
 - Every resolver-bearing cell has at most one function application.
-- Every pending selection is instantiated only from bindings on its defining containing OER.
+- Every pending selection is instantiated only from bindings stamped for its defining containing OER.
 - Equal instantiated keys converge on one obligation and one cell.
 - Different list positions and recursive object occurrences remain different `ObjectId` values.
 - Null and error outputs prevent creation of unreachable descendant obligations.
 - An empty worklist with unresolved demanded cells is a deadlock or invalid-state witness, not successful completion.
-- Freezing a completed store yields a finite `EngineResult` tree satisfying carrier invariants.
+- A quiescent completed OER store is a finite `EngineResult` tree satisfying carrier invariants.
 
 These are stronger and easier to inspect than reconstructing execution history from a final immutable union.
 
@@ -151,7 +143,7 @@ The implementation correspondence is direct:
 - Independent sibling cells, separate list items, and unrelated subtrees become parallel work automatically.
 - Resolver batching can group ready obligations below the semantic scheduler without changing their per-occurrence identities.
 
-The semantic model need not execute transitions literally in parallel. It can choose one ready obligation per step and prove or test that all fair schedules freeze to the same result and application set. Randomized scheduler permutations are especially valuable here: they can expose hidden dependence on map iteration or a privileged depth-first order before a real concurrent implementation does.
+The semantic model need not execute transitions literally in parallel. It can choose one ready obligation per step and prove or test that all fair schedules reach the same quiescent result and application set. Randomized scheduler permutations are especially valuable here: they can expose hidden dependence on map iteration or a privileged depth-first order before a real concurrent implementation does.
 
 Parallelism also clarifies why write-once cells matter. Concurrent workers may race to discover the same exact obligation, but they must converge before application. Claiming a cell is an implementation concern; semantically, there is still one obligation, one application, and one write.
 
@@ -177,13 +169,13 @@ On variable-free worlds, the worklist executor should observationally agree with
 
 ## Proposed Work Sequence
 
-1. Define `ObjectId`, object references, partial cells, variable slots, obligations, pending selections, and immutable `ExecutionState` transitions.
-2. Implement freezing and test that hand-constructed completed stores produce the expected `EngineResult.Object`.
+1. Define `ObjectId`, obligations, pending selections, and execution-state transitions around opt-in mutable `EngineResult.Object` values.
+2. Test that hand-constructed quiescent stores produce the expected completed result tree.
 3. Port the `common` and `child.field2($value)` regression as the first worklist execution trace.
 4. Add direct, nested, list, null, error, recursive, abstract-type, and equal-valued convergence traces.
 5. Connect the existing demand collector to obligation creation, preserving symbolic envelopes at behavioral boundaries.
 6. Compare the worklist executor with Resolver03 on variable-free generated worlds and replay the historical variable fixtures under a new variable-aware correctness oracle.
-7. Run randomized ready-obligation schedules and assert identical frozen results and one application per exact resolver-bearing OER cell.
+7. Run randomized ready-obligation schedules and assert identical quiescent results and one application per exact resolver-bearing OER cell.
 8. Extend the stress corpus before translating the state machine into TLA+ or using it as an implementation blueprint.
 
 ## Open Design Questions

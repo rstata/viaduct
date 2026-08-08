@@ -32,7 +32,7 @@ Compilation and tests provide finite evidence that the model is internally consi
 
 Type aliases introduce no new semantics. For example, a resolver-function alias only abbreviates a Kotlin function type. Put invariants on the properties, parameters, results, or declarations that use an alias rather than expecting the alias to carry them.
 
-Semantic values are assumed immutable as they pass through the model. Do not add defensive collection snapshots solely to guard against mutation.
+Semantic values are assumed immutable as they pass through the model except for documented monotonic state in `Assumptions` bindings and opt-in mutable `EngineResult.Object` values. Mutable OER cells change only from absent to written; present cells are immutable. Do not add defensive collection snapshots solely to guard against mutation outside these documented boundaries.
 
 Semantic logic uses immutable collection types and purely functional transformations such as `map`, `filter`, `fold`, and `+`. Do not use mutable state, mutable collection types, local mutable builders, or mutation hidden inside builder APIs in reasoning code. Pre-reasoning parsing, schema decoding, registry assembly, and composition infrastructure are outside this restriction.
 

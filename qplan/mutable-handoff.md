@@ -8,7 +8,9 @@ The immediate motivation is to make an OER usable as the stable result object po
 
 ## Current State
 
-`EngineResult.Object` is currently an immutable structural value constructed from a complete cell map. Resolver01-03 instead construct private mutable `PartialOER` trees, write each partial cell once, and freeze the completed tree into immutable `EngineResult.Object` values.
+`EngineResult.Object` now supports opt-in monotonic mutation. Construction remains immutable by default. A mutable object stores cells in `OnceStore`, validates each write before publication, returns detached snapshots, preserves structural equality over current cells, and rejects every repeated write.
+
+Resolver01-03 do not use mutable OERs. `Resolve.kt` recursively constructs immutable one-cell results and unions them into immutable prefixes. `ResolveValue.kt` constructs immutable passive trees, records exact descendant paths that require resolver work, and replaces those paths deepest first with recursively completed immutable results. Direct resolver adoption remains a later milestone.
 
 `EngineResult.List` no longer implements Kotlin `List`. It exposes only `size`, `indices`, indexed `get`, `map`, `all`, and `forEachIndexed`, which keeps future representation changes local. LER mutation is not part of the initial OER work.
 
@@ -43,7 +45,7 @@ This is per-cell immutability, not an initial global sealing protocol. After a k
 
 ## Storage And Observation
 
-The private OER implementation should store cells in `OnceStore<Value.GroundKey, EngineResult.Cell>`. `OnceStore` will need construction from initial entries and an immutable snapshot operation in addition to its current `isSet`, `read`, and `write` operations. Mutability policy belongs to the OER wrapper: its private `mutable` mode gates calls to the store, while `OnceStore` remains the reusable write-once mechanism.
+The private OER implementation stores cells in `OnceStore<Value.GroundKey, EngineResult.Cell>`. `OnceStore` supports construction from initial entries and detached snapshots in addition to `isSet`, `read`, and `write`. Mutability policy belongs to the OER wrapper: its private `mutable` mode gates calls to the store, while `OnceStore` remains the reusable write-once mechanism.
 
 The existing public `cells: Map<Value.GroundKey, Cell>` property and derived `keys` property should return immutable snapshots rather than exposing the backing `ConcurrentHashMap`. `fetch` and `isSet` should use direct store operations. Since the store never removes entries, an `isSet` followed by `read` remains valid, but callers should prefer one domain-specific operation when possible.
 
@@ -71,7 +73,7 @@ Do not move bindings onto OERs or introduce an annotation carrier as part of mut
 
 All legacy construction paths remain immutable by default, including fixture DSLs and direct `EngineResult.Object.of(type, cells)` calls. Copy-producing operations such as `union` must always return immutable OERs regardless of the modes of their inputs.
 
-No existing resolver should opt into mutable OERs in the carrier commit. `PartialOER` remains the constructor's intermediate representation until the mutable carrier behavior and concurrency tests are independently established.
+No existing resolver opts into mutable OERs in the carrier milestone. The recursive immutable constructor remains unchanged until the mutable carrier behavior and concurrency tests are independently established.
 
 ## Test Requirements
 
@@ -91,17 +93,12 @@ Carrier tests should establish:
 
 The existing `OnceStore` tests remain the lower-level evidence for null representation, duplicate-write rejection, same-key races, and preservation of distinct-key races. Full repository validation remains `./gradlew check`.
 
-## Migration Sequence
+## Remaining Migration Sequence
 
-1. Keep the current `OnceStore` and `Assumptions` binding migration as an independent foundation.
-2. Extend `OnceStore` with initial entries and immutable snapshots.
-3. Add opt-in mutable mode, `isSet`, and atomic `write` to `EngineResult.Object`, while preserving immutable defaults and structural behavior.
-4. Add the focused carrier and concurrency tests above without changing resolver construction.
-5. Update `AGENTS.md`, `model/AGENTS.md`, `semantics/AGENTS.md`, `handoff.md`, and `execution-handoff.md` where they currently require immutable OER carriers or freezing.
-6. In a later commit, make the shared resolver constructor allocate mutable OERs directly. Parent cells can then contain child OER references, and immutable LERs can contain cells whose values are mutable child OERs.
-7. Remove `PartialOER`, `PartialCell`, `PartialValue`, and recursive freezing only after Resolver01-03 and their correctness, witness, generated, and stress tests pass against direct mutable construction.
-8. Build the reactive readiness and variable-provider model on top of write-once OER cells as a separate design step; mutable storage alone does not solve symbolic demand closure, late key convergence, obligation claiming, or one-shot dispatch.
+1. In a later commit, make the shared resolver constructor allocate mutable OERs directly instead of recursively unioning immutable one-cell results. Parent cells can then contain child OER references, and immutable LERs can contain cells whose values are mutable child OERs.
+2. Replace immutable descendant-path repair in `ResolveValue.kt` with direct population of those allocated mutable child OERs only after Resolver01-03 and their correctness, witness, generated, and stress tests pass against direct mutable construction.
+3. Build the reactive readiness and variable-provider model on top of write-once OER cells as a separate design step; mutable storage alone does not solve symbolic demand closure, late key convergence, obligation claiming, or one-shot dispatch.
 
 ## Completion Boundary
 
-The mutable-carrier milestone is complete when the opt-in OER API and concurrency contract are tested, immutable callers remain compatible, and no resolver behavior has changed. Direct resolver adoption is a subsequent milestone. A reactive executor remains later work and must still establish complete producer demand before application, exact occurrence identity, readiness, deadlock detection, and schedule-independent results.
+The mutable-carrier milestone is complete when the opt-in OER API and concurrency contract are tested, immutable callers remain compatible, and no resolver behavior has changed. Direct resolver adoption is a subsequent milestone that would replace recursive immutable union and descendant-path repair. A reactive executor remains later work and must still establish complete producer demand before application, exact occurrence identity, readiness, deadlock detection, and schedule-independent results.

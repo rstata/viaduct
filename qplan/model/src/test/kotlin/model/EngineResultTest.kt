@@ -1,12 +1,19 @@
 package model
 
 import model.testing.TestWorld
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class EngineResultTest {
     @Test
@@ -87,6 +94,212 @@ class EngineResultTest {
         assertFailsWith<IllegalArgumentException> {
             EngineResult.Object.of(schema.query, mapOf(key to cell))
         }
+    }
+
+    @Test
+    fun `mutable object publishes each cell once and returns stable snapshots`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val firstCell = EngineResult.Cell.of(Value.String.of("first"))
+        val result = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
+        val emptyCells = result.cells
+        val emptyKeys = result.keys
+
+        assertFalse(result.isSet(key))
+        assertFailsWith<MissingFieldException> {
+            result.fetch(key)
+        }
+
+        result.write(key, firstCell)
+
+        assertTrue(result.isSet(key))
+        assertSame(firstCell, result.fetch(key))
+        assertEquals(mapOf(key to firstCell), result.cells)
+        assertEquals(setOf(key), result.keys)
+        assertTrue(emptyCells.isEmpty())
+        assertTrue(emptyKeys.isEmpty())
+
+        assertFailsWith<IllegalStateException> {
+            result.write(key, EngineResult.Cell.of(Value.String.of("second")))
+        }
+        assertSame(firstCell, result.fetch(key))
+    }
+
+    @Test
+    fun `immutable object and union results reject writes`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val firstKey = schema.key("Query", "first")
+        val secondKey = schema.key("Query", "second")
+        val requiredKey = schema.key("Query", "required")
+        val immutable = EngineResult.Object.of(schema.query, emptyMap())
+
+        assertFailsWith<IllegalStateException> {
+            immutable.write(firstKey, EngineResult.Cell.of(Value.String.of("first")))
+        }
+        val fixture = schema.engineResultOf("Query")
+        assertFailsWith<IllegalStateException> {
+            fixture.write(firstKey, EngineResult.Cell.of(Value.String.of("first")))
+        }
+
+        val left =
+            EngineResult.Object.of(
+                schema.query,
+                mapOf(firstKey to EngineResult.Cell.of(Value.String.of("first"))),
+                mutable = true,
+            )
+        val right =
+            EngineResult.Object.of(
+                schema.query,
+                mapOf(secondKey to EngineResult.Cell.of(Value.String.of("second"))),
+            )
+        val union = left.union(right)
+
+        assertFailsWith<IllegalStateException> {
+            union.write(requiredKey, EngineResult.Cell.of(Value.String.of("required")))
+        }
+    }
+
+    @Test
+    fun `mutable object rejects invalid cells before publication`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val result = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
+        val foreignKey = schema.key("User", "first")
+        val requiredKey = schema.key("Query", "required")
+        val lookupWithError =
+            Value.GroundKey.of(
+                schema.objectField("User", "lookup"),
+                mapOf("limit" to Value.Error),
+            )
+        val user =
+            EngineResult.Object.of(
+                schema.objectField("User", "first").containingType,
+                emptyMap(),
+                mutable = true,
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            result.write(foreignKey, EngineResult.Cell.of(Value.String.of("wrong owner")))
+        }
+        assertFalse(result.isSet(foreignKey))
+
+        assertFailsWith<IllegalArgumentException> {
+            result.write(requiredKey, EngineResult.Cell.of(null))
+        }
+        assertFalse(result.isSet(requiredKey))
+
+        assertFailsWith<IllegalArgumentException> {
+            user.write(lookupWithError, EngineResult.Cell.of(Value.String.of("not an error")))
+        }
+        assertFalse(user.isSet(lookupWithError))
+
+        user.write(lookupWithError, EngineResult.Cell.Error)
+        assertSame(EngineResult.Cell.Error, user.fetch(lookupWithError))
+    }
+
+    @Test
+    fun `concurrent object writers produce one winner and one exception`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+        val successes = AtomicInteger()
+        val failures = ConcurrentLinkedQueue<Throwable>()
+        val writers =
+            listOf("first", "second").map { value ->
+                thread {
+                    ready.countDown()
+                    start.await()
+                    try {
+                        result.write(key, EngineResult.Cell.of(Value.String.of(value)))
+                        successes.incrementAndGet()
+                    } catch (throwable: Throwable) {
+                        failures.add(throwable)
+                    }
+                }
+            }
+
+        ready.await()
+        start.countDown()
+        writers.forEach(Thread::join)
+
+        assertEquals(1, successes.get())
+        assertIs<IllegalStateException>(failures.single())
+        val value = assertIs<Value.String>(result.fetch(key).value)
+        assertTrue(value.stringValue in setOf("first", "second"))
+    }
+
+    @Test
+    fun `concurrent object writes to distinct keys are retained`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val result = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+        val writes =
+            listOf(
+                schema.key("Query", "first") to "first",
+                schema.key("Query", "second") to "second",
+            )
+        val writers =
+            writes.map { (key, value) ->
+                thread {
+                    ready.countDown()
+                    start.await()
+                    result.write(key, EngineResult.Cell.of(Value.String.of(value)))
+                }
+            }
+
+        ready.await()
+        start.countDown()
+        writers.forEach(Thread::join)
+
+        writes.forEach { (key, value) ->
+            assertEquals(value, assertIs<Value.String>(result.fetch(key).value).stringValue)
+        }
+    }
+
+    @Test
+    fun `written parent cell observes later writes to mutable child`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val userKey = schema.key("Query", "user")
+        val firstKey = schema.key("User", "first")
+        val child =
+            EngineResult.Object.of(
+                schema.objectField("User", "first").containingType,
+                emptyMap(),
+                mutable = true,
+            )
+        val parent = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
+        val parentCell = EngineResult.Cell.of(child)
+
+        parent.write(userKey, parentCell)
+        child.write(firstKey, EngineResult.Cell.of(Value.String.of("later")))
+
+        assertSame(parentCell, parent.fetch(userKey))
+        val retainedChild = assertIs<EngineResult.Object>(parent.fetch(userKey).value)
+        assertEquals(
+            Value.String.of("later"),
+            retainedChild.fetch(firstKey).value,
+        )
+    }
+
+    @Test
+    fun `completed mutable object has structural equality`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val firstKey = schema.key("Query", "first")
+        val secondKey = schema.key("Query", "second")
+        val firstCell = EngineResult.Cell.of(Value.String.of("first"))
+        val mutable = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
+        val immutable = EngineResult.Object.of(schema.query, mapOf(firstKey to firstCell))
+
+        mutable.write(firstKey, firstCell)
+
+        assertEquals(immutable, mutable)
+        assertEquals(immutable.hashCode(), mutable.hashCode())
+
+        mutable.write(secondKey, EngineResult.Cell.of(Value.String.of("second")))
+
+        assertNotEquals(immutable, mutable)
     }
 
     @Test

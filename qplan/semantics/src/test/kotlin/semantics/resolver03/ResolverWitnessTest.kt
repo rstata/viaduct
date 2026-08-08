@@ -56,11 +56,13 @@ class ResolverWitnessTest {
             var activatedDistinctArgumentCases = 0
             var generatedFromArgumentVariables = 0
 
-            checkResolverTestCases(
-                counts,
-                config,
-                captureSuppliedDemand = true,
-            ) { testWorld, testCase ->
+            val run =
+                checkResolverTestCases(
+                    counts,
+                    config,
+                    profile = "resolver03-construction-witness",
+                    captureSuppliedDemand = true,
+                ) { testWorld, testCase ->
                 generatedFromArgumentVariables +=
                     testCase.registry.features.fromArgumentVariableCount
                 val world = testWorld.newAssumptions()
@@ -173,12 +175,30 @@ class ResolverWitnessTest {
                 )
             }
 
-            assertTrue(inputSensitiveApplications >= 10)
-            assertTrue(argumentSensitiveApplications >= 10)
-            assertTrue(exactAliasCases >= 10)
-            assertTrue(activatedExactAliasCases >= 10)
-            assertTrue(activatedDistinctArgumentCases >= 10)
-            assertTrue(generatedFromArgumentVariables > 0)
+            run.assertAggregate(
+                inputSensitiveApplications >= 10,
+                "Too few input-sensitive applications: $inputSensitiveApplications",
+            )
+            run.assertAggregate(
+                argumentSensitiveApplications >= 10,
+                "Too few argument-sensitive applications: $argumentSensitiveApplications",
+            )
+            run.assertAggregate(
+                exactAliasCases >= 10,
+                "Too few exact-alias cases: $exactAliasCases",
+            )
+            run.assertAggregate(
+                activatedExactAliasCases >= 10,
+                "Too few activated exact-alias cases: $activatedExactAliasCases",
+            )
+            run.assertAggregate(
+                activatedDistinctArgumentCases >= 10,
+                "Too few activated distinct-argument cases: $activatedDistinctArgumentCases",
+            )
+            run.assertAggregate(
+                generatedFromArgumentVariables > 0,
+                "Generated no FromArgument variables",
+            )
         }
 
     @Disabled("not currently worth the effort")

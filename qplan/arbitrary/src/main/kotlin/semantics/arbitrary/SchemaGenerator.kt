@@ -37,6 +37,9 @@ class ArbitrarySchema internal constructor(
     internal val deepFields: Map<String, String>,
     val features: SchemaFeatures,
 ) {
+    val domainObjectTypeNames: Set<String> =
+        objects.mapTo(linkedSetOf(), ObjectDefinition::name)
+
     internal val allObjects: List<ObjectDefinition>
         get() = listOf(query) + objects + hashType
 

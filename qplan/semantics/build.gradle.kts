@@ -1,9 +1,13 @@
 plugins {
     kotlin("jvm")
+    `java-test-fixtures`
 }
 
 dependencies {
     implementation(project(":model"))
+
+    testFixturesImplementation(testFixtures(project(":model")))
+    testFixturesImplementation(kotlin("test-junit5"))
 
     testImplementation(project(":arbitrary"))
     testImplementation(testFixtures(project(":model")))

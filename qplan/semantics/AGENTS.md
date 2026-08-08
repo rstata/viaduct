@@ -4,6 +4,10 @@
 
 This project defines transformations, predicates, and other reasoning over the carrier algebra in `model`. Follow the repository-wide mathematical interpretation in [`../AGENTS.md`](../AGENTS.md).
 
+Agents writing or interpreting semantic tests must also read
+[`testing-contracts.md`](testing-contracts.md) for the feature-contract and
+policy-mixin organization of the resolver test suites.
+
 Semantic code may construct model values but must not redefine or defensively re-check model invariants. It may express relations between a carrier value and a judgment input, such as requiring an OER and ground selection forest to share the Query root.
 
 The principal judgment is:

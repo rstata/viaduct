@@ -267,7 +267,7 @@ class ResolveValueTest {
     }
 
     @Test
-    fun `list traversal records and replays exact object occurrence paths`() {
+    fun `list traversal records exact object occurrence work`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -353,19 +353,10 @@ class ResolveValueTest {
                     beSelective = true,
                 )
             }
-        val callbackPaths = mutableListOf<List<PathComponent>>()
-        val replayed =
-            output.resolvePaths(
-                path = rootPath,
-                resolvedValue = resolvedValue,
-            ) { path, _, _, resolved ->
-                callbackPaths += path
-                resolved
-            }
+        val pendingPaths = resolvedValue.pending.map { work -> work.oer.path }
 
         assertEquals(expectedPaths, resolvedValue.pathsNeedingResolution.keys)
-        assertEquals(expectedPaths, callbackPaths.toSet())
-        assertEquals(expectedPaths.size, callbackPaths.size)
-        assertEquals(resolvedValue.engineResult, replayed)
+        assertEquals(expectedPaths, pendingPaths.toSet())
+        assertEquals(expectedPaths.size, pendingPaths.size)
     }
 }

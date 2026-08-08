@@ -39,6 +39,23 @@ class ValueKeyTest {
     }
 
     @Test
+    fun `concrete fields with open arguments construct object keys`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val field = schema.objectField("Query", "find")
+        val variable = Value.Variable.of(field, "id")
+
+        val key =
+            Value.Key.of(
+                field = field as Schema.OutputField,
+                arguments = OpenArguments.of(field, mapOf("id" to variable)),
+            )
+
+        assertIs<Value.ObjectKey>(key)
+        assertFalse(key is Value.GroundKey)
+        assertSame(field, key.field)
+    }
+
+    @Test
     fun `list index rejects negative positions`() {
         Value.ListIndex.of(2)
         assertFailsWith<IllegalArgumentException> { Value.ListIndex.of(-1) }
@@ -68,6 +85,7 @@ class ValueKeyTest {
 
             type Query {
               user: User
+              find(id: ID!): User
             }
             """.trimIndent()
     }

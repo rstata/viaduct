@@ -8,7 +8,8 @@ import model.Value
 import model.emptyFragmentOf
 import model.fieldExpressions
 import model.fragmentFrom
-import model.mergeToGround
+import model.instantiateBindings
+import model.merge
 import model.objectOf
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
@@ -228,7 +229,8 @@ class ResolverRegistryTest {
             context(world.assumptions) {
                 resolver
                     .stampedObjectFragment(path)
-                    .mergeToGround(schema.query)
+                    .merge(schema.query)
+                    .instantiateBindings()
                     .single()
             }
         assertEquals(Value.GroundKey.of(bridge, mapOf("id" to "42")), groundedBridge.key)

@@ -5,7 +5,8 @@ import model.SelectionForest
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.mergeToGround
+import model.instantiateBindings
+import model.merge
 import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -76,8 +77,9 @@ class ResolverSelectiveDemandWitnessTest {
             setOf("base", "computed"),
             context(world) {
                 requireNotNull(producerDemand)
-                    .mergeToGround(itemType)
-                    .keys()
+                    .merge(itemType)
+                    .instantiateBindings()
+                    .groundKeys()
                     .mapTo(linkedSetOf()) { key -> key.field.fieldName }
             },
         )

@@ -10,7 +10,7 @@ The principal judgment is:
 
 ```kotlin
 context(world: Assumptions)
-fun EngineResult.Object.correctResolution(selections: GroundSelectionForest): Boolean
+fun EngineResult.Object.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
 This predicate characterizes whether an OER is a correct field-resolution result for a
@@ -20,10 +20,10 @@ Query-rooted ground selection forest under one reasoning world.
 
 Main code depends only on `model`. Schema parsing, dependency injection, registry assembly, and other pre-reasoning composition belong in test fixtures or application composition code.
 
-Semantic code may receive open selection forests but must cross `mergeToGround(type)` before OER lookup, materialization, dependency ordering, or resolver application. `merge(type)` only filters and specializes occurrences; it preserves open arguments and multiplicity. `mergeToGround(type)` instantiates bindings, applies concrete defaults, throws if any expression remains open, and coalesces ordinary-equal `GroundKey` values.
+Semantic code may receive open selection forests. `merge(type)` filters applicability, specializes fields and argument defaults to one concrete object type, and coalesces ordinary-equal open `ObjectKey` values into an `ObjectSelectionForest`. `ObjectSelectionForest.instantiateBindings()` later substitutes bindings and coalesces keys that converge after grounding. OER lookup, materialization, dependency ordering, resolver application, and path formation must cross the checked `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()` boundary.
 
 Resolver01-03 stamp field-relative templates at exact OER paths, bind `fromArgument` variables from each resolver occurrence's ground arguments, and ground demand only after those bindings are available. Canonical registry construction validates argument-variable ownership and every object-field provider path; runtime `fromObjectField` binding remains deferred. Operation-variable substitution remains pre-reasoning composition and is distinct from field-relative execution-variable metadata.
 
-Resolver01-03 share one depth-first constructor in `Resolve.kt`: local demand closure, sibling dependency ordering, resolver-input materialization, one-cell construction, passive output traversal, and recursive continuation are identical. Each public resolver entry point supplies a `SelectionCompleter` context that defines its output-boundary policy. Resolver01 preserves incoming selections and applies complete outputs; Resolver02 applies complete outputs and uses `successorBoundaryDemand()` only to expose nested behavioral continuation paths; Resolver03 uses full `successorDemand()` and selective projection so passive successor prerequisites are retained.
+Resolver01-03 share one fixed LIFO constructor in `Resolve.kt`: local demand closure, sibling dependency ordering, resolver-input materialization, one-cell construction, passive output traversal, and descendant-first continuation are identical. The constructor allocates mutable `PartialOER` values whose exact cells are written once, stores references to child OERs in object-valued cells, and freezes the completed tree to an immutable `EngineResult.Object`. Each public resolver entry point supplies a `SelectionCompleter` context that defines its output-boundary policy. Resolver01 preserves incoming selections and applies complete outputs; Resolver02 applies complete outputs and uses `successorBoundaryDemand()` only to expose nested behavioral continuation paths; Resolver03 uses full `successorDemand()` and selective projection so passive successor prerequisites are retained.
 
 Raw node resolvers, node references, typed-ID encoding, and `$id`/`$ids` schema augmentation are fixture-composition concerns; generated node loaders enter semantic reasoning as ordinary field resolvers with explicit bridge fragments.

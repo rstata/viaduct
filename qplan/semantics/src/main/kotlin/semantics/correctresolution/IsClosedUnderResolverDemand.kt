@@ -33,7 +33,7 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
                 conformsToSelections(
                     registry
                         .resolver(key.field)
-                        .stampedObjectFragment(key.arguments, path + key)
+                        .stampedObjectFragment(path + key)
                         .mergeToGround(type),
                 )
 

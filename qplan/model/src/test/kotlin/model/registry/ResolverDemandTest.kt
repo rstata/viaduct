@@ -222,8 +222,7 @@ class ResolverDemandTest {
         assertEquals(setOf(consume), world.resolverRegistry.mayDemandFrom(source))
 
         val resolver = world.resolverRegistry.resolver(source)
-        val arguments = Value.Arguments.of(source, mapOf("seed" to 7))
-        val objectFragment = resolver.objectFragment(arguments).single()
+        val objectFragment = resolver.objectFragment.single()
 
         assertEquals(
             variable,
@@ -439,73 +438,6 @@ class ResolverDemandTest {
             }
 
         assertTrue(failure.message!!.contains("lossy type condition Subject to Second"))
-    }
-
-    @Test
-    fun `rejects an exact fragment that retargets its contained provider path`() {
-        val world =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result(selector: Int!): Int!
-                      consume(value: Int!): Int!
-                      source(id: Int!): Int!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val representative =
-                        schema.fragmentFrom(
-                            """
-                            fragment ignored on Query {
-                              consume(value: ${'$'}value)
-                              source(id: 1)
-                            }
-                            """.trimIndent(),
-                        )
-                    val source = schema.field("Query", "source")
-                    mapOf(
-                        schema.field("Query", "result") to
-                            FieldResolverDefinition.ofArgumentRetargeting(
-                                objectFragment = representative,
-                                retargetArguments = { key, _ ->
-                                    if (key.field == source) {
-                                        Value.Arguments.of(source, mapOf("id" to 2))
-                                    } else {
-                                        key.arguments
-                                    }
-                                },
-                                function = { _, _ -> Value.Int.of(1) },
-                            ),
-                        schema.field("Query", "consume") to
-                            resolver(schema.emptyFragmentOf("Query")),
-                        schema.field("Query", "source") to
-                            resolver(schema.emptyFragmentOf("Query")),
-                    )
-                },
-                variableProviders = { schema ->
-                    val owner = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(owner, "value") to
-                            schema.fromObjectField(
-                                "fragment ignored on Query { source(id: 1) }",
-                                listOf("source"),
-                            ),
-                    )
-                },
-            )
-        val result = world.schema.objectField("Query", "result")
-
-        val failure =
-            assertFailsWith<IllegalArgumentException> {
-                world.resolverRegistry
-                    .resolver(result)
-                    .objectFragment(
-                        Value.Arguments.of(result, mapOf("selector" to 2)),
-                    )
-            }
-
-        assertTrue(failure.message!!.contains("not contained"))
     }
 
     @Test

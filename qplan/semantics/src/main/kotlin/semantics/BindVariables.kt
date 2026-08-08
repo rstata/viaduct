@@ -9,8 +9,8 @@ import model.registry.VariableDefinition
  * Establishes every argument-defined variable belonging to these resolver occurrences.
  *
  * The exact resolver key completes the containing-object [path], so argument-distinct occurrences
- * of one resolver field define distinct stamped variables. Re-observing an occurrence preserves
- * its existing equal binding rather than attempting a second write.
+ * of one resolver field define distinct stamped variables. Every occurrence must be supplied
+ * exactly once; [Assumptions.bind] rejects a repeated write.
  */
 context(world: Assumptions)
 internal fun Iterable<Value.GroundKey>.bindFromArguments(path: List<PathComponent>) {
@@ -27,13 +27,7 @@ internal fun Iterable<Value.GroundKey>.bindFromArguments(path: List<PathComponen
                         key.arguments.fieldValues.getValue(
                             definition.argument.argumentName,
                         )
-                    if (world.isBound(stamped)) {
-                        check(world.binding(stamped) == value) {
-                            "Resolver occurrence $key has inconsistent FromArgument bindings"
-                        }
-                    } else {
-                        world.bind(stamped, value)
-                    }
+                    world.bind(stamped, value)
                 }
             }
     }

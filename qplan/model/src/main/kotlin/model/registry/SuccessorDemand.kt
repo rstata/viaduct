@@ -49,6 +49,73 @@ fun SelectionForest.successorDemand(): SelectionForest =
         selectionForestOf(rootedSelection) + resolverInputDemand
     }
 
+/**
+ * Extends this output demand with the paths needed to find every successor behavioral boundary.
+ *
+ * Unlike [successorDemand], this operation assumes that passive traversal copies the complete
+ * finite resolver output. It therefore omits passive input leaves while retaining resolver and
+ * `__typename` selections, their passive ancestor paths, and transitive successor boundaries.
+ */
+context(world: Assumptions)
+fun SelectionForest.successorBoundaryDemand(): SelectionForest =
+    flatMap { selection ->
+        val requested =
+            Selection.of(
+                key = selection.key,
+                possibleTypes = selection.possibleTypes,
+                subselections = selection.subselections.successorBoundaryDemand(),
+            )
+
+        selectionForestOf(requested) + selection.successorInputBoundaries()
+    }
+
+context(world: Assumptions)
+private fun Selection.successorInputBoundaries(): SelectionForest =
+    possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
+        val specializedKey = specializedKey(possibleType)
+        val key =
+            Value.GroundKey.of(
+                field = specializedKey.field as model.Schema.ObjectField,
+                arguments = specializedKey.arguments.instantiateBindings(),
+            )
+        if (
+            key.arguments.containsErrorValue() ||
+            key.field !in world.resolverRegistry
+        ) {
+            demand
+        } else {
+            demand +
+                world.resolverRegistry
+                    .resolver(key.field)
+                    .objectFragmentWithFromArguments(key.arguments)
+                    .boundarySkeleton()
+                    .successorBoundaryDemand()
+        }
+    }
+
+context(world: Assumptions)
+private fun SelectionForest.boundarySkeleton(): SelectionForest =
+    flatMap { selection ->
+        val nested = selection.subselections.boundarySkeleton()
+        val isBehavioral =
+            selection.possibleTypes.any { possibleType ->
+                val field = possibleType.fields.getValue(selection.key.field.fieldName)
+                world.behavioral(field)
+            }
+
+        if (isBehavioral || !nested.isEmpty()) {
+            selectionForestOf(
+                Selection.of(
+                    key = selection.key,
+                    possibleTypes = selection.possibleTypes,
+                    subselections = nested,
+                ),
+            )
+        } else {
+            selectionForestOf()
+        }
+    }
+
 private fun FieldResolver.objectFragmentWithFromArguments(
     arguments: Value.Arguments,
 ): SelectionForest {
@@ -61,7 +128,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
                     )
             }
         }.toMap()
-    return objectFragment(arguments).substitute(bindings)
+    return objectFragment.substitute(bindings)
 }
 
 private fun SelectionForest.substitute(

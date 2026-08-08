@@ -107,6 +107,27 @@ class ArbitraryRegistry internal constructor(
         canonicalField.isNodeLoader(schema) ||
             objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
 
+    fun nodeLoaderPossibleTypes(
+        schema: ArbitrarySchema,
+        canonicalField: FieldCoordinate,
+    ): Set<String> {
+        val sourceField =
+            schema
+                .objectNamed(canonicalField.typeName)
+                .fields
+                .singleOrNull { field -> field.name == canonicalField.fieldName }
+                ?: return emptySet()
+        if (!schema.isComposite(sourceField.type.namedType)) return emptySet()
+
+        val possibleTypes =
+            schema
+                .possibleObjects(sourceField.type.namedType)
+                .mapTo(linkedSetOf(), ObjectDefinition::name)
+        return possibleTypes.takeIf { types ->
+            types.isNotEmpty() && types.all { type -> type in nodeResolverTypes }
+        }.orEmpty()
+    }
+
     private fun sourceField(canonicalField: FieldCoordinate): FieldCoordinate {
         if (canonicalField in resolverPrograms) return canonicalField
         return listOf("\$ids", "\$id")
@@ -121,16 +142,7 @@ class ArbitraryRegistry internal constructor(
     }
 
     private fun FieldCoordinate.isNodeLoader(schema: ArbitrarySchema): Boolean {
-        val sourceField =
-            schema
-                .objectNamed(typeName)
-                .fields
-                .singleOrNull { field -> field.name == fieldName }
-                ?: return false
-        return schema.isComposite(sourceField.type.namedType) &&
-            schema
-                .possibleObjects(sourceField.type.namedType)
-                .all { possibleType -> possibleType.name in nodeResolverTypes }
+        return nodeLoaderPossibleTypes(schema, this).isNotEmpty()
     }
 
     fun world(

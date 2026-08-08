@@ -42,7 +42,7 @@ private fun EngineResult.Object.objectConformsToResolvers(
                 val input =
                     materialize(
                         resolver
-                            .stampedObjectFragment(key.arguments, path + key)
+                            .stampedObjectFragment(path + key)
                             .mergeToGround(type),
                     )
                 val resolverValue = resolver(input, key.arguments)

@@ -24,4 +24,6 @@ Semantic code may receive open selection forests but must cross `mergeToGround(t
 
 Resolver01-03 stamp field-relative templates at exact OER paths, bind `fromArgument` variables from each resolver occurrence's ground arguments, and ground demand only after those bindings are available. Canonical registry construction validates argument-variable ownership and every object-field provider path; runtime `fromObjectField` binding remains deferred. Operation-variable substitution remains pre-reasoning composition and is distinct from field-relative execution-variable metadata.
 
+Resolver02 applies complete finite outputs and uses `successorBoundaryDemand()` only to expose nested behavioral continuation paths before non-selective traversal. Resolver03 uses full `successorDemand()` because selective projection must also retain passive successor prerequisites.
+
 Raw node resolvers, node references, typed-ID encoding, and `$id`/`$ids` schema augmentation are fixture-composition concerns; generated node loaders enter semantic reasoning as ordinary field resolvers with explicit bridge fragments.

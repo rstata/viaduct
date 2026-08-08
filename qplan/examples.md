@@ -2,7 +2,7 @@
 
 These examples describe two current Resolver03 jobs and one historical experiment. Demand closure determines everything needed to construct resolver inputs. Output projection determines everything a producer must retain in its output so that client demand and downstream resolver inputs can be satisfied. The final example records how the removed Resolver04 attempted to widen demand after an execution variable was bound and why that strategy was abandoned.
 
-An `objectFragment` is the resolver's declared input requirement at its containing object. A `predecessorDemand` is the same requirement closed transitively under the requirements of every resolver occurrence reachable through it, with occurrence paths and concrete-type guards preserved.
+An `objectFragment` is the resolver's fixed open input requirement at its containing object. Local demand closure repeatedly adds the stamped and grounded object fragments of activated resolver occurrences until every direct and transitive input requirement is present.
 
 ## Demand Closure
 
@@ -43,26 +43,26 @@ query {
 
 The direct input requirement of `User.greeting` is not enough by itself. Its `objectFragment` asks for `displayName`, but `displayName` is another resolver field whose own input must be constructed before that resolver can yield a value.
 
-Registry assembly computes these closures in dependency-first order. Because `firstName` is passive, the closure for `displayName` is just its direct fragment:
+Because `firstName` is passive, activating `displayName` adds just its direct fragment:
 
 ```graphql
-# User.displayName.predecessorDemand
+# demand added for User.displayName
 fragment on User {
   firstName
 }
 ```
 
-The direct fragment for `greeting` contains the resolver occurrence `displayName`. Registry assembly roots `displayName`'s already-computed closure at that occurrence, giving:
+The direct fragment for `greeting` first adds `displayName`. That newly activated resolver then adds its own fragment on the next closure step, giving:
 
 ```graphql
-# User.greeting.predecessorDemand
+# demand after closing User.greeting
 fragment on User {
   displayName
   firstName
 }
 ```
 
-The closure is transitive. If `displayName` had depended on another resolver, that resolver's requirements would already be present inside `displayName.predecessorDemand` and would therefore also become part of `greeting.predecessorDemand`.
+The closure is transitive. If `displayName` had depended on another resolver, that newly activated resolver would contribute its object fragment on a subsequent step.
 
 When resolution reaches the concrete `User` object, the initial local demand is:
 
@@ -72,7 +72,7 @@ fragment on User {
 }
 ```
 
-Activating the exact `greeting` resolver occurrence adds its exact predecessor demand. The complete local demand becomes:
+Activating the exact `greeting` resolver occurrence and closing the resulting demand produces:
 
 ```graphql
 fragment on User {
@@ -90,20 +90,20 @@ firstName -> displayName -> greeting
 
 It first reads the passive `firstName` supplied by `Query.user`. It then materializes `{ firstName: "Ada" }` as the input to `displayName`, whose resolver yields `"Ada"`. Finally it materializes `{ displayName: "Ada" }` as the input to `greeting`, whose resolver yields `"Hello, Ada"`.
 
-This combines what might otherwise look like two closure mechanisms. Registry assembly computes each resolver's reusable, guarded transitive closure. At a concrete OER occurrence, the resolution algorithm selects the predecessor demands of the exact resolver occurrences activated there and combines them with the local demand. No runtime fixed-point search is needed because each selected predecessor demand is already transitively closed.
+At a concrete OER occurrence, the resolution algorithm repeatedly selects each exact resolver occurrence not yet expanded, binds its argument-defined variables, stamps its fixed fragment at that occurrence path, and combines the grounded requirements with local demand. The finite closure reaches a fixed point when no activated resolver key remains unexpanded.
 
 One question remains: `firstName` originated in the raw output of `Query.user`, but the client asked only for `greeting`. The next section explains why `firstName` survives projection of `Query.user`'s output.
 
 ## Output Projection
 
-This section applies to Resolver03's selective producers. Resolver01 and Resolver02 instead consume each resolver's complete finite returned value, so their passive OER construction is bounded by that value rather than by `successorDemand()`.
+This section applies to Resolver03's selective producers. Resolver01 and Resolver02 instead consume each resolver's complete finite returned value, so their passive OER construction is bounded by that value rather than by `successorDemand()`. Resolver02 uses the smaller `successorBoundaryDemand()` only to expose nested behavioral continuation paths; it does not need full passive successor demand.
 
 For a producer `P`:
 
-- `P.predecessorDemand` closes `P.objectFragment`, so it constructs `P`'s input, including the requirements of each **predecessor** resolver needed to provide that input.
-- Output projection instead needs the `predecessorDemand` of each demanded **successor** resolver `S` inside `P`'s output.
+- Local demand closure expands `P.objectFragment`, so it constructs `P`'s input, including the requirements of each **predecessor** resolver needed to provide that input.
+- Output projection instead needs the recursively closed input requirements of each demanded **successor** resolver `S` inside `P`'s output.
 
-`successorDemand()` computes this output-projection demand. It collects the predecessor demands of a producer's demanded successor resolver occurrences and roots them in the producer's output demand, making those successors' prerequisites visible to the producer before its output is projected.
+`successorDemand()` computes this output-projection demand. It recursively expands a producer's demanded successor resolver occurrences and roots their input requirements in the producer's output demand, making those prerequisites visible before the producer is projected.
 
 Extend the running schema with:
 
@@ -139,7 +139,7 @@ query {
 The initial call to `Value.Object.resolve` operates on the concrete `Query` OER. Its local demand contains the exact key `Query.project`; `User.greeting` is nested output demand, not a key on that current OER. Closing the input demand for `Query.project` adds nothing:
 
 ```text
-Query.project.predecessorDemand = {}
+closed input demand added for Query.project = {}
 ```
 
 The descendant `User` OER does not exist until `Query.project` yields its result. Before resolution can enter that `User` and close its local demand, the `Query.project` result must be projected.
@@ -164,10 +164,10 @@ Project {
 
 Only after this projection does resolution enter the returned `User` OER. Its local input closure correctly discovers that `greeting` requires `displayName` and transitively requires `firstName`, but the producer projection has already discarded `firstName`.
 
-`successorDemand()` prevents that loss. It walks through the passive `owner` selection, finds the demanded `User.greeting` successor occurrence, and roots `greeting.predecessorDemand` at that occurrence's containing `User`. From the Demand Closure section:
+`successorDemand()` prevents that loss. It walks through the passive `owner` selection, finds the demanded `User.greeting` successor occurrence, and recursively adds `greeting`'s input requirements at that occurrence's containing `User`. From the Demand Closure section:
 
 ```graphql
-# User.greeting.predecessorDemand
+# demand after closing User.greeting
 fragment on User {
   displayName
   firstName
@@ -196,11 +196,11 @@ Project {
 }
 ```
 
-When resolution subsequently enters that `User`, local input closure can construct `displayName` and then `greeting`. The two closures act at different times and in different directions: `Query.project.predecessorDemand` constructs the producer's input from predecessors on the current `Query` OER, while `successorDemand()` preserves data needed by successors on descendant OERs inside the producer's output.
+When resolution subsequently enters that `User`, local input closure can construct `displayName` and then `greeting`. The two closures act at different times and in different directions: local closure constructs the producer's input from predecessors on the current `Query` OER, while `successorDemand()` preserves data needed by successors on descendant OERs inside the producer's output.
 
 More generally, a resolver must supply the demanded portion of its output selection set. Some fields within that output are boundaries owned by successor resolvers. The producer does not supply the successor field itself, but it must supply any passive values in its own output that those successor resolvers will require as input. Client selections alone do not necessarily name those prerequisites.
 
-`successorDemand()` recursively walks the requested output and adds every encountered successor resolver occurrence's exact `predecessorDemand` at its containing-object path. `snipToDemand` then clips the resulting demand at behavioral boundaries, retaining only the demanded passive portion owned by the producer.
+`successorDemand()` recursively walks the requested output and adds every encountered successor resolver occurrence's closed input requirements at its containing-object path. `snipToDemand` then clips the resulting demand at behavioral boundaries, retaining only the demanded passive portion owned by the producer.
 
 In a production implementation, the resulting selection forest describes what the selective resolver must generate. The model represents selective resolution as a selection-independent function followed by `snipToDemand`, so the same forest instead describes what must survive projection of the raw resolver output. These are two interpretations of the same requirement: the producer's output must contain everything expected from its output selection set.
 
@@ -208,7 +208,7 @@ The operation can be described as lifting because requirements originating at su
 
 ```text
 successor resolver occurrence
-    -> successor predecessor demand
+    -> successor input closure
     -> root at the successor's containing-object path
     -> producer output demand
     -> producer-owned passive projection

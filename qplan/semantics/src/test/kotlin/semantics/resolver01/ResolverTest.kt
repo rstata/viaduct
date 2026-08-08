@@ -34,7 +34,7 @@ class ResolverTest {
                     (ResolverFragmentsEnabled to false)
 
             checkResolverTestCases(counts, config) { testWorld, testCase ->
-                val world = testWorld.assumptions
+                val world = testWorld.newAssumptions()
                 val fragment = world.fragmentFrom(testCase.query.source)
                 val selections = fragment.subselections
                 val result =
@@ -48,11 +48,12 @@ class ResolverTest {
                     },
                 )
 
+                val permutedWorld = testWorld.newAssumptions()
                 val permutedFragment =
-                    world.fragmentFrom(testCase.query.permutationEquivalentSource)
+                    permutedWorld.fragmentFrom(testCase.query.permutationEquivalentSource)
                 val permutedResult =
-                    context(world) {
-                        world.objectOf("Query").resolve(permutedFragment.subselections)
+                    context(permutedWorld) {
+                        permutedWorld.objectOf("Query").resolve(permutedFragment.subselections)
                     }
                 assertEquals(result, permutedResult)
             }

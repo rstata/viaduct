@@ -79,7 +79,7 @@ class ResolverGeneratedTest {
         testWorld: TestWorld,
         querySource: String,
     ): EngineResult.Object {
-        val world = testWorld.assumptions
+        val world = testWorld.newAssumptions()
         val fragment = world.fragmentFrom(querySource)
         val selections = fragment.subselections
         val result =

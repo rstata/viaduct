@@ -4,9 +4,9 @@
 
 **[field-only-node-lowering]** Within the fixture-supported node domain, synthetic singular `$id` and list-shaped `$ids` bridge fields plus generated field resolvers preserve the field-resolution obligations of external node-valued field and node-resolver inputs.
 
-**[resolver03-one-shot-construction]** Within Resolver03's variable-free acyclic domain, every resolver-bearing OER occurrence is constructed by one field-resolver application after all guarded transitive demand for that occurrence has been aggregated.
+**[resolver03-one-shot-construction]** Within Resolver03's acyclic domain with argument-defined variables, every resolver-bearing OER occurrence is constructed by one field-resolver application after all guarded transitive demand for that occurrence has been aggregated.
 
-**[resolver-provider-containment-construction]** Pre-reasoning construction of every canonical Kotlin registry built by `TestWorld` contains each field-relative variable provider path in its defining resolver's representative and exact fixed-shape object fragments.
+**[resolver-provider-containment-construction]** Pre-reasoning construction of every canonical Kotlin registry built by `TestWorld` contains each field-relative variable provider path in its defining resolver's fixed object fragment.
 
 **[resolver-local-construction-proof]** Under the finite exact-key world assumptions in `tla/ResolverCore.tla`, TLAPS proves that least demand closure followed by a valid dependency-first fold terminates, supplies every exact direct resolver input first, and gives each activated resolver key one unique application position per concrete OER occurrence.
 

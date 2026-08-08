@@ -56,17 +56,18 @@ class ResolverMutationTest {
                 val ordinaryWorld = registry.world(batch.schema)
 
                 batch.queries.forEach { query ->
+                    val ordinaryAssumptions = ordinaryWorld.newAssumptions()
                     val ordinaryFragment =
-                        ordinaryWorld.assumptions.fragmentFrom(query.source)
+                        ordinaryAssumptions.fragmentFrom(query.source)
                     registry.clearResolutionWitness()
                     val ordinary =
-                        context(ordinaryWorld.assumptions) {
-                            ordinaryWorld.assumptions
+                        context(ordinaryAssumptions) {
+                            ordinaryAssumptions
                                 .objectOf("Query")
                                 .resolve(ordinaryFragment.subselections)
                         }
                     assertTrue(
-                        context(ordinaryWorld.assumptions) {
+                        context(ordinaryAssumptions) {
                             ordinary.correctResolution(ordinaryFragment)
                         },
                     )
@@ -79,12 +80,13 @@ class ResolverMutationTest {
                                 schema = batch.schema,
                                 resolverProgramMutation = mutation,
                             )
+                        val mutantAssumptions = mutantWorld.newAssumptions()
                         registry.clearResolutionWitness()
                         val mutantResult =
                             runCatching {
-                                val fragment = mutantWorld.assumptions.fragmentFrom(query.source)
-                                context(mutantWorld.assumptions) {
-                                    mutantWorld.assumptions
+                                val fragment = mutantAssumptions.fragmentFrom(query.source)
+                                context(mutantAssumptions) {
+                                    mutantAssumptions
                                         .objectOf("Query")
                                         .resolve(fragment.subselections)
                                 }
@@ -99,7 +101,7 @@ class ResolverMutationTest {
                                     when (mutation) {
                                         ResolverProgramMutation.DUPLICATE_APPLICATION ->
                                             witness.applicationIdentityCounts() !=
-                                                context(mutantWorld.assumptions) {
+                                                context(mutantAssumptions) {
                                                     result
                                                         .registeredResolverApplicationIdentityCounts()
                                                 }

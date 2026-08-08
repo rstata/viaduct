@@ -23,16 +23,13 @@ typealias FieldResolverApplicationObserver =
  * Equality is undefined. Resolver-demand identity is expressed with canonical object fields
  * instead.
  *
- * [objectFragment] is the representative direct object-valued input requirement. The
- * argument-taking form preserves exact argument-dependent coordinates. In a canonical registry
- * entry, [variables] maps every variable template defined by this resolver to its argument or
- * nonempty alias-free object-field path definition.
+ * [objectFragment] is the direct object-valued input requirement. In a canonical registry entry,
+ * [variables] maps every variable template defined by this resolver to its argument or nonempty
+ * alias-free object-field path definition.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
- * [objectFragment] and every `objectFragment(arguments)` are specialized to the same concrete
- * parent type and have the same field-coordinate occurrence shape. Exact fragments may differ only
- * in the values occupying fixed argument positions.
+ * [objectFragment] is specialized to the resolver field's concrete parent type.
  *
  * ### Invariant: field-resolver-variable-definitions
  *
@@ -40,28 +37,16 @@ typealias FieldResolverApplicationObserver =
  * references one argument belonging to that field. A [VariableDefinition.FromObjectField] is a
  * valid selection path relative to that field's containing type and is structurally contained by
  * [objectFragment]; its factory additionally ensures that the path does not cross a list and ends
- * at a simple value. External composition preserves containment in every exact object fragment.
+ * at a simple value.
  */
 class FieldResolver private constructor(
     val field: Schema.ObjectField,
     val objectFragment: SelectionForest,
     val variables: Map<Value.Variable.Template, VariableDefinition>,
-    private val objectFragmentFunction: (Value.Arguments) -> SelectionForest,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
-    /**
-     * Returns the object fragment required for this exact argument tuple.
-     *
-     * Ordinary field resolvers return [objectFragment]. Pre-reasoning lowering may construct a
-     * resolver whose required synthetic sibling coordinates carry the same arguments as the
-     * resolved field. Semantic operations use this function rather than assuming the
-     * representative [objectFragment] is exact.
-     */
-    fun objectFragment(arguments: Value.Arguments): SelectionForest =
-        objectFragmentFunction(arguments)
-
     /**
      * Returns the exact object fragment with every variable template stamped at [path].
      *
@@ -69,10 +54,9 @@ class FieldResolver private constructor(
      * non-variable argument values.
      */
     fun stampedObjectFragment(
-        arguments: Value.Arguments,
         path: List<PathComponent>,
     ): SelectionForest =
-        objectFragment(arguments).stampVariables(path)
+        objectFragment.stampVariables(path)
 
     /**
      * Applies this field resolver and projects its selection-independent result to
@@ -110,7 +94,6 @@ class FieldResolver private constructor(
             field: Schema.ObjectField,
             objectFragment: SelectionForest,
             variables: Map<Value.Variable.Template, VariableDefinition>,
-            objectFragmentFunction: (Value.Arguments) -> SelectionForest,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
@@ -153,7 +136,6 @@ class FieldResolver private constructor(
                 field = field,
                 objectFragment = objectFragment,
                 variables = variables,
-                objectFragmentFunction = objectFragmentFunction,
                 function = function,
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,
@@ -197,7 +179,7 @@ private fun SelectionForest.containsPath(path: List<Value.Key>): Boolean {
  * The registry satisfies canonical schema ownership, special-field exclusions, query coverage,
  * resolver-local variable-template names, and acyclicity across object fields and
  * [Value.Variable.Template] values. Acyclicity is intentionally checked over a conservative
- * coordinate-level possibility relation derived from representative fragment shapes. The relation
+ * coordinate-level possibility relation derived from fixed open fragment shapes. The relation
  * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
  * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
  * would be acyclic.

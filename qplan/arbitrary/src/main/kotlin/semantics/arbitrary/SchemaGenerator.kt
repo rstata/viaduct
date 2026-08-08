@@ -195,7 +195,7 @@ private class SchemaGenerator(
         val inputObjects = inputObjects()
         val nodeNames =
             if (config[InterfacesEnabled] && config[NodeResolversEnabled]) {
-                objectNames.filter { chance(0.35) }.toSet()
+                objectNames.filter { chance(config[NodeObjectWeight]) }.toSet()
             } else {
                 emptySet()
             }

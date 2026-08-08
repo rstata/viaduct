@@ -40,8 +40,12 @@ internal fun resolverRegistryOf(
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
+    require(variableProviders.keys.intersect(lowering.variableProviders.keys).isEmpty()) {
+        "Variable declarations collide with generated node-loader argument variables"
+    }
+    val allVariableProviders = variableProviders + lowering.variableProviders
     val variablesByField =
-        variableProviders.keys
+        allVariableProviders.keys
             .groupBy(Value.Variable.Template::field)
             .mapValues { (_, variables) ->
                 variables.associateBy(Value.Variable.Template::variableName)
@@ -60,7 +64,7 @@ internal fun resolverRegistryOf(
             }
         }
     val registryVariableProviders =
-        variableProviders.mapValues { (variable, declaration) ->
+        allVariableProviders.mapValues { (variable, declaration) ->
             when (declaration) {
                 is FromArgument -> declaration
                 is FromObjectField -> {
@@ -84,7 +88,6 @@ internal fun resolverRegistryOf(
     return TestResolverRegistry(
         schema = schema,
         fieldResolverDefinitions = observedResolvers,
-        additionalDemand = lowering.additionalDemand,
         variableDeclarations = registryVariableProviders,
     )
 }
@@ -114,7 +117,7 @@ private class NodeResolverLowering(
         loweredFields.associateWith(::bridgeField)
 
     val fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>
-    val additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>
+    val variableProviders: Map<Value.Variable.Template, VariableDeclaration>
 
     fun variableOwner(field: Schema.OutputField): Schema.ObjectField? =
         loweredByField.entries
@@ -156,17 +159,18 @@ private class NodeResolverLowering(
                         }
                 }
             }.toMap()
+        variableProviders =
+            loweredFields
+                .flatMap { field ->
+                    field.arguments.fields.keys.map { argumentName ->
+                        Value.Variable.of(field, argumentVariableName(argumentName)) to
+                            schema.fromArgument(field, argumentName)
+                    }
+                }.toMap()
         val loaderResolvers =
             loweredFields.associateWith(::loaderResolver)
 
         fieldResolvers = ordinaryResolvers + bridgeResolvers + loaderResolvers
-        additionalDemand =
-            loweredFields.associateWith { field ->
-                bridgeField(field)
-                    .takeIf { it in fieldResolvers }
-                    ?.let(::setOf)
-                    .orEmpty()
-            }
     }
 
     private fun canonicalNodeType(): Schema.InterfaceType? {
@@ -252,7 +256,7 @@ private class NodeResolverLowering(
     private fun loaderResolver(field: Schema.ObjectField): FieldResolverDefinition {
         val owner = field.containingType
         val bridge = bridgeField(field)
-        val representativeFragment =
+        val objectFragment =
             Fragment.of(
                 nominalType = owner,
                 subselections =
@@ -263,7 +267,11 @@ private class NodeResolverLowering(
                                     field = bridge,
                                     arguments =
                                         bridge.arguments.fields.keys.associateWith {
-                                            Value.Error
+                                            argumentName ->
+                                            Value.Variable.of(
+                                                field,
+                                                argumentVariableName(argumentName),
+                                            )
                                         },
                                 ),
                             possibleTypes = setOf(owner),
@@ -271,9 +279,8 @@ private class NodeResolverLowering(
                         ),
                     ),
             )
-        return FieldResolverDefinition.ofArgumentRetargeting(
-            objectFragment = representativeFragment,
-            retargetArguments = { _, arguments -> arguments.retargetGround(bridge) },
+        return FieldResolverDefinition.of(
+            objectFragment = objectFragment,
             function = { input, arguments ->
                 val bridgeKey = Value.GroundKey.of(bridge, arguments.retargetGround(bridge))
                 loadNodes(
@@ -514,6 +521,9 @@ private class NodeResolverLowering(
 
     private companion object {
         const val TYPED_ID_PREFIX = "\$node:"
+
+        fun argumentVariableName(argumentName: String): String =
+            "$argumentName\$arg"
     }
 }
 
@@ -530,7 +540,6 @@ private sealed interface DependencyVertex {
 private class TestResolverRegistry(
     private val schema: Schema,
     fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
-    additionalDemand: Map<Schema.OutputField, Set<Schema.OutputField>>,
     variableDeclarations: Map<Value.Variable.Template, VariableDeclaration>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
@@ -615,10 +624,7 @@ private class TestResolverRegistry(
                 objectFieldResolvers.forEach { (field, resolver) ->
                     put(
                         DependencyVertex.Field(field),
-                        implicatedVertices(resolver.objectFragment, field) +
-                            additionalDemand[field].orEmpty().map {
-                                DependencyVertex.Field(it as Schema.ObjectField)
-                            },
+                        implicatedVertices(resolver.objectFragment, field),
                     )
                 }
                 variableDefinitions.forEach { (variable, definition) ->

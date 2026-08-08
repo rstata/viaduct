@@ -49,7 +49,7 @@ private fun Schema.ObjectType.closeResolverDemand(
             demand +
                 world.resolverRegistry
                     .resolver(key.field)
-                    .stampedObjectFragment(key.arguments, path + key)
+                    .stampedObjectFragment(path + key)
         }
     return closeResolverDemand(
         path = path,

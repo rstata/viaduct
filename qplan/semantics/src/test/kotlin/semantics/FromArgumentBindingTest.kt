@@ -14,6 +14,7 @@ import semantics.resolver02.resolve as resolve02
 import semantics.resolver03.resolve as resolve03
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class FromArgumentBindingTest {
@@ -44,6 +45,21 @@ class FromArgumentBindingTest {
         }
     }
 
+    @Test
+    fun `binding one resolver occurrence twice is rejected`() {
+        val testWorld = argumentBindingWorld()
+        val world = testWorld.assumptions
+        val field = world.schema.objectField("Query", "echo")
+        val key = Value.GroundKey.of(field, mapOf("value" to 1))
+
+        context(world) {
+            listOf(key).bindFromArguments(emptyList())
+            assertFailsWith<IllegalStateException> {
+                listOf(key).bindFromArguments(emptyList())
+            }
+        }
+    }
+
     private fun assertArgumentBindings(
         resolve:
             (
@@ -52,32 +68,7 @@ class FromArgumentBindingTest {
                 SelectionForest,
             ) -> EngineResult.Object,
     ) {
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      echo(value: Int): Int
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    mapOf(
-                        schema.field("Query", "echo") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                Value.Int.of(0)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val field = schema.objectField("Query", "echo")
-                    mapOf(
-                        Value.Variable.of(field, "value") to
-                            schema.fromArgument(field, "value"),
-                    )
-                },
-            )
+        val testWorld = argumentBindingWorld()
         val world = testWorld.assumptions
         val field = world.schema.objectField("Query", "echo")
         val variable = Value.Variable.of(field, "value")
@@ -109,4 +100,31 @@ class FromArgumentBindingTest {
         )
         assertFalse(world.isBound(variable.stamp(emptyList())))
     }
+
+    private fun argumentBindingWorld(): TestWorld =
+        TestWorld.fromSDL(
+            schemaSDL =
+                """
+                type Query {
+                  echo(value: Int): Int
+                }
+                """.trimIndent(),
+            fieldResolvers = { schema ->
+                mapOf(
+                    schema.field("Query", "echo") to
+                        model.testing.fieldResolverOf(
+                            schema.emptyFragmentOf("Query"),
+                        ) { _, _ ->
+                            Value.Int.of(0)
+                        },
+                )
+            },
+            variableProviders = { schema ->
+                val field = schema.objectField("Query", "echo")
+                mapOf(
+                    Value.Variable.of(field, "value") to
+                        schema.fromArgument(field, "value"),
+                )
+            },
+        )
 }

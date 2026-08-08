@@ -79,7 +79,7 @@ class ResolverStressTest {
             var resolverApplications = 0
             var generatedNodeResolvers = 0
             var nodeLoaderApplications = 0
-            var argumentBearingNodeLoaderApplications = 0
+            var argumentBearingNodeBridgeProducerApplications = 0
             var polymorphicNodeLoaderApplications = 0
             val previousSeed = PropertyTesting.defaultSeed
             PropertyTesting.defaultSeed = seed
@@ -106,16 +106,19 @@ class ResolverStressTest {
                     assertTrue(context(world) { result.correctResolution(fragment) })
                     resolverApplications += witness.applications.size
                     witness.applications.forEach { application ->
+                        if (
+                            application.key.field.fieldName.endsWith("\$bridge") &&
+                            application.key.arguments.type.fields.isNotEmpty()
+                        ) {
+                            argumentBearingNodeBridgeProducerApplications += 1
+                        }
                         val possibleTypes =
                             testCase.registry.nodeLoaderPossibleTypes(
                                 testCase.schema,
                                 application.key.field,
-                            )
+                        )
                         if (possibleTypes.isNotEmpty()) {
                             nodeLoaderApplications += 1
-                            if (application.key.arguments.type.fields.isNotEmpty()) {
-                                argumentBearingNodeLoaderApplications += 1
-                            }
                             if (possibleTypes.size > 1) {
                                 polymorphicNodeLoaderApplications += 1
                             }
@@ -131,8 +134,8 @@ class ResolverStressTest {
                         "resolverApplications=$resolverApplications, " +
                         "generatedNodeResolvers=$generatedNodeResolvers, " +
                         "nodeLoaderApplications=$nodeLoaderApplications, " +
-                        "argumentBearingNodeLoaderApplications=" +
-                        "$argumentBearingNodeLoaderApplications, " +
+                        "argumentBearingNodeBridgeProducerApplications=" +
+                        "$argumentBearingNodeBridgeProducerApplications, " +
                         "polymorphicNodeLoaderApplications=" +
                         "$polymorphicNodeLoaderApplications, minimumDepth=4",
                 )
@@ -143,7 +146,7 @@ class ResolverStressTest {
             assertTrue(resolverApplications >= requestedCases)
             assertTrue(generatedNodeResolvers >= requestedCases / 100)
             assertTrue(nodeLoaderApplications >= requestedCases / 1_000)
-            assertTrue(argumentBearingNodeLoaderApplications >= requestedCases / 1_000)
+            assertTrue(argumentBearingNodeBridgeProducerApplications >= requestedCases / 1_000)
         }
 
     private fun configured(

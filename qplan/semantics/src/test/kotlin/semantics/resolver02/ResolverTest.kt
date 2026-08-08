@@ -456,20 +456,22 @@ class ResolverTest {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
 
-        val nodesField = schema.objectField("Query", "nodes")
-        val bridgeField = schema.objectField("Query", "nodes\$ids")
-        val firstKey = Value.GroundKey.of(nodesField, mapOf("group" to "first"))
-        val secondKey = Value.GroundKey.of(nodesField, mapOf("group" to "second"))
+        val bridgeField = schema.objectField("Query", "nodes\$bridge")
         val firstBridge = Value.GroundKey.of(bridgeField, mapOf("group" to "first"))
         val secondBridge = Value.GroundKey.of(bridgeField, mapOf("group" to "second"))
         assertEquals(
-            setOf(firstKey, secondKey, firstBridge, secondBridge),
+            setOf(firstBridge, secondBridge),
             result.keys,
         )
-        val first = assertIs<EngineResult.List>(result.fetch(firstKey).value)
+        val first = assertIs<EngineResult.List>(result.fetch(firstBridge).value)
         assertEquals(
             listOf("User", "Admin"),
-            first.map { cell -> assertIs<EngineResult.Object>(cell.value).type.typeName },
+            first.map { cell ->
+                val bridge = assertIs<EngineResult.Object>(cell.value)
+                assertIs<EngineResult.Object>(
+                    bridge.fetch(schema.key(bridge.type, "\$node")).value,
+                ).type.typeName
+            },
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }

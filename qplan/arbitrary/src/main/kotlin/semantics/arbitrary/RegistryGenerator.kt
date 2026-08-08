@@ -111,17 +111,18 @@ class ArbitraryRegistry internal constructor(
         schema: ArbitrarySchema,
         canonicalField: FieldCoordinate,
     ): Set<String> {
-        val sourceField =
-            schema
-                .objectNamed(canonicalField.typeName)
-                .fields
-                .singleOrNull { field -> field.name == canonicalField.fieldName }
-                ?: return emptySet()
-        if (!schema.isComposite(sourceField.type.namedType)) return emptySet()
+        if (
+            canonicalField.fieldName != "\$node" ||
+            !canonicalField.typeName.endsWith("\$Bridge")
+        ) {
+            return emptySet()
+        }
+        val nodeTypeName = canonicalField.typeName.removeSuffix("\$Bridge")
+        if (!schema.isComposite(nodeTypeName)) return emptySet()
 
         val possibleTypes =
             schema
-                .possibleObjects(sourceField.type.namedType)
+                .possibleObjects(nodeTypeName)
                 .mapTo(linkedSetOf(), ObjectDefinition::name)
         return possibleTypes.takeIf { types ->
             types.isNotEmpty() && types.all { type -> type in nodeResolverTypes }
@@ -130,15 +131,13 @@ class ArbitraryRegistry internal constructor(
 
     private fun sourceField(canonicalField: FieldCoordinate): FieldCoordinate {
         if (canonicalField in resolverPrograms) return canonicalField
-        return listOf("\$ids", "\$id")
-            .firstNotNullOfOrNull { suffix ->
-                canonicalField.fieldName
-                    .removeSuffix(suffix)
-                    .takeIf { fieldName -> fieldName != canonicalField.fieldName }
-                    ?.let { fieldName ->
-                        FieldCoordinate(canonicalField.typeName, fieldName)
-                    }?.takeIf { sourceField -> sourceField in resolverPrograms }
-            } ?: canonicalField
+        return canonicalField.fieldName
+            .removeSuffix("\$bridge")
+            .takeIf { fieldName -> fieldName != canonicalField.fieldName }
+            ?.let { fieldName ->
+                FieldCoordinate(canonicalField.typeName, fieldName)
+            }?.takeIf { sourceField -> sourceField in resolverPrograms }
+            ?: canonicalField
     }
 
     private fun FieldCoordinate.isNodeLoader(schema: ArbitrarySchema): Boolean {
@@ -299,27 +298,10 @@ class ArbitraryRegistry internal constructor(
             },
             variableProviders = { canonicalSchema ->
                 variableProviders.associate { provider ->
-                    val sourceField =
-                        schema
-                            .objectNamed(provider.owner.typeName)
-                            .fields
-                            .single { it.name == provider.owner.fieldName }
-                    val loweredToNodeBridge =
-                        schema.isComposite(sourceField.type.namedType) &&
-                            schema
-                                .possibleObjects(sourceField.type.namedType)
-                                .all { possibleType -> possibleType.name in nodeResolverTypes }
-                    val canonicalFieldName =
-                        if (loweredToNodeBridge) {
-                            provider.owner.fieldName +
-                                if (sourceField.type.list) "\$ids" else "\$id"
-                        } else {
-                            provider.owner.fieldName
-                        }
                     val field =
                         canonicalSchema.field(
                             provider.owner.typeName,
-                            canonicalFieldName,
+                            provider.owner.fieldName,
                         ) as Schema.ObjectField
                     Value.Variable.of(
                         field,
@@ -1210,10 +1192,30 @@ private fun List<FragmentSelectionPlan>.materialize(
                     .filterValues { argument -> argument is ErrorInputPlan }
                     .keys,
             ).let { materializedSelection ->
+                if (materializedSelection.key.field.fieldName.endsWith("\$bridge")) {
+                    val payload = materializedSelection.subselections.single()
+                    return@let Selection.of(
+                        key = materializedSelection.key,
+                        possibleTypes = materializedSelection.possibleTypes,
+                        subselections =
+                            model.selectionForestOf(
+                                Selection.of(
+                                    key = payload.key,
+                                    possibleTypes = payload.possibleTypes,
+                                    subselections =
+                                        plan.subselections.materialize(
+                                            schema,
+                                            payload.subselections,
+                                        ),
+                                ),
+                            ),
+                    )
+                }
                 Selection.of(
-                key = materializedSelection.key,
-                possibleTypes = selection.possibleTypes,
-                subselections = plan.subselections.materialize(schema, selection.subselections),
+                    key = materializedSelection.key,
+                    possibleTypes = selection.possibleTypes,
+                    subselections =
+                        plan.subselections.materialize(schema, selection.subselections),
                 )
             }
         }.toSelectionForest()

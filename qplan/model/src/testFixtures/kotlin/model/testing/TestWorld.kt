@@ -44,10 +44,10 @@ class TestWorld private constructor(
         /**
          * Composes ordinary GraphQL and raw resolver inputs into one canonical reasoning world.
          *
-         * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] are lowered
-         * with node-valued source field resolvers into synthetic `$id`/`$ids` bridge fields and
-         * generated field resolvers before [Assumptions] is constructed, so semantic code observes
-         * only field resolver coordinates.
+         * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] and node-valued
+         * source fields are lowered through synthetic bridge objects and generated `$node` field
+         * resolvers before [Assumptions] is constructed, so semantic code observes only field
+         * resolver coordinates.
          */
         fun fromSDL(
             schemaSDL: String,
@@ -154,7 +154,7 @@ private class TestWorldModule(
         return schema.query.fields.values
             .filter {
                 it.fieldName != "__typename" &&
-                    !isNodeIdBridgeName(it.fieldName)
+                    !isNodeBridgeFieldName(it.fieldName)
             }
             .associateWith {
                 fieldResolverOf(

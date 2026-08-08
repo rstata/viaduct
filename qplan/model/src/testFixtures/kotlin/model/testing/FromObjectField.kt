@@ -74,9 +74,12 @@ class FromObjectField private constructor(
                 objectFragment =
                     Fragment.of(
                         nominalType = parsed.nominalType,
-                        subselections = flatten(schema, parsed.nominalType, parsed.selections),
+                        subselections =
+                            schema.lowerNodeSelections(
+                                flatten(schema, parsed.nominalType, parsed.selections),
+                            ),
                     ),
-                keyPath = compiled.keys,
+                keyPath = schema.lowerNodeKeyPath(compiled.keys),
                 terminalType = compiled.terminalType,
                 nullableTraversal = compiled.nullableTraversal,
             )

@@ -59,7 +59,7 @@ class AssumptionsTest {
 
         assertEquals(assumptions.schema.query, fragment.nominalType)
         val node = fragment.subselections.single()
-        assertEquals("node", node.key.field.fieldName)
+        assertEquals("node\$bridge", node.key.field.fieldName)
 
         val filter =
             assertIs<Value.InputObject>(
@@ -78,7 +78,9 @@ class AssumptionsTest {
             assertIs<Value.String>(tags.values.single()).stringValue,
         )
 
-        val id = node.subselections.single()
+        val payload = node.subselections.single()
+        assertEquals("\$node", payload.key.field.fieldName)
+        val id = payload.subselections.single()
         assertEquals("id", id.key.field.fieldName)
     }
 

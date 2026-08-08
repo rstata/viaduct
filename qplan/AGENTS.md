@@ -22,7 +22,7 @@ Each reasoning exercise fixes one `Assumptions` and one canonical `Schema`. Thes
 
 Schema decoding, GraphQL parsing, registry assembly, dependency injection, and implementations of externally supplied interfaces prepare a world before reasoning begins. This pre-reasoning infrastructure may use implementation techniques that semantic model logic deliberately excludes.
 
-External composition may accept ordinary GraphQL text, source field resolvers, and raw node lookup functions, but the canonical reasoning world exposes only field resolver coordinates. Test-fixture composition lowers node-valued source fields to synthetic `$id` or `$ids` bridge fields and generated field resolvers before semantic logic receives the schema and registry.
+External composition may accept ordinary GraphQL text, source field resolvers, and raw node lookup functions, but the canonical reasoning world exposes only field resolver coordinates. Test-fixture composition lowers node-valued source fields through synthetic bridge-object types, `foo$bridge` producer fields, and argumentless `$node` loader fields before semantic logic receives the schema and registry.
 
 Trust carrier invariants established by model factories or stipulated external inputs. Downstream reasoning should not defensively re-check those invariants; retain checks only when they establish a construction boundary, validate raw external input, or express a precondition not already guaranteed by the carrier.
 

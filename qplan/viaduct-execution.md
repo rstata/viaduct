@@ -143,13 +143,13 @@ The production documentation calls this fragment a [required selection set](http
 
 ## Canonical Field-Only Lowering
 
-The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. For every source node-valued field `foo(args)`, schema decoding adds a hidden bridge whose named output is `ID` and whose list and nullability structure matches `foo`: singular fields use `foo$id(args)`, while fields with any list layer use `foo$ids(args)`.
+The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. For every Node subtype `T` used as a source field's named output type, schema decoding adds one concrete programmatic type `T$Bridge { $id: ID, $node: T }`; these types have no generated hierarchy. Every source `foo(args): W<T>` receives `foo$bridge(args): W<T$Bridge>`, preserving the complete list and nullability wrapper `W`.
 
-If `foo` has a source field resolver, its canonical producer is relocated to its `foo$id` or `foo$ids` bridge and adapted to extract a typed global ID from each node reference. A generated canonical field resolver remains at `foo`; its fixed `objectFragment` requires that bridge using one resolver-owned `FromArgument` variable per source argument, and its function decodes each typed ID and applies the appropriate raw node lookup. Binding those variables grounds the bridge to the current loader arguments. Both coordinates retain the source arguments, so `foo(a)` and `foo(b)` remain distinct `Value.GroundKey` values.
+If `foo` has a source field resolver, its canonical producer is relocated to `foo$bridge` and adapted to map each node reference to a bridge object containing its typed global ID. Arguments remain only on that producer coordinate, so `foo(a)` and `foo(b)` lower to distinct `foo$bridge(a)` and `foo$bridge(b)` keys without argument transfer. The generated argumentless field resolver at `T$Bridge.$node` has fixed `objectFragment` `{ $id }`; its function decodes the typed ID and applies the appropriate raw node lookup.
 
-Typed fixture IDs carry the concrete object type as well as the internal ID. This lets one generated loader dispatch each element of an abstract `Node` list independently. The current lowering accepts only fields declared as `Node` or a subtype whose every possible concrete type has a raw node resolver; it rejects possible-type sets that mix node-resolved and inline object values.
+Typed fixture IDs carry the concrete object type as well as the internal ID. A list contains one bridge object per non-null node reference, so ordinary list traversal applies `$node` independently at each element occurrence, including for abstract `Node` outputs. The current lowering accepts only fields declared as `Node` or a subtype whose every possible concrete type has a raw node resolver; it rejects possible-type sets that mix node-resolved and inline object values.
 
-After this composition step, `Resolver.Node`, object-type resolver coordinates, node references, and node-specific ownership rules do not exist in the canonical algebra. The registry, resolver-demand graph, correctness predicates, and resolver constructors see only ordinary and generated field resolvers. Synthetic `$id` and `$ids` fields are explicit internal dependencies and never appear in GraphQL input text.
+After this composition step, `Resolver.Node`, object-type resolver coordinates, node references, and node-specific ownership rules do not exist in the canonical algebra. The registry, resolver-demand graph, correctness predicates, and resolver constructors see only ordinary and generated field resolvers. Synthetic bridge types and fields are absent from GraphQL input text; parsing lowers `foo(args) { selections }` to `foo$bridge(args) { $node { selections } }`.
 
 ## Output selection sets and ownership
 
@@ -176,7 +176,7 @@ The containing resolver therefore cannot omit the ID merely because the client d
 
 The OSS rule separates ownership from demand. A client selection or an `objectFragment` says which values are needed. Resolver boundaries say which resolver must provide each needed value.
 
-Canonical lowering preserves this transfer as the ordinary field dependency from `foo(args)` to its `foo$id(args)` or `foo$ids(args)` bridge. The generated loader owns `foo`, the containing producer owns or resolves the bridge, and all further ownership uses the same field-resolver boundary rule.
+Canonical lowering preserves this transfer as ordinary nested field resolution: the containing producer owns `foo$bridge(args)` and its bridge objects, while the generated `$node` resolver owns each loaded node payload and requires passive sibling `$id`. All further ownership uses the same field-resolver boundary rule.
 
 ## Resolution as closure of obligations
 
@@ -193,7 +193,7 @@ This is a closure because resolver inputs can introduce demand that was not writ
 
 The rules describe dependencies, not execution events. An implementation may schedule independent obligations concurrently, batch compatible node lookups, or reuse a materialization, provided the resulting values satisfy the same ownership and input requirements.
 
-Under canonical lowering, rules 4 and 5 are represented without a distinct obligation kind: the generated field resolver for `foo` requires its `foo$id` or `foo$ids` bridge, and resolving `foo` recursively activates ordinary field resolvers on the loaded object.
+Under canonical lowering, rules 4 and 5 are represented without a distinct obligation kind: resolving `foo$bridge` recursively reaches `$node` on each bridge object, whose fixed `{ $id }` input dispatches the raw node lookup, and resolution then activates ordinary field resolvers on the loaded object.
 
 ## Example 1: a field resolver and its object fragment
 
@@ -335,7 +335,7 @@ For a validated query `Q`, a schema `S`, a source node-resolver registry `N`, an
 
 These conditions characterize acceptable resolution without choosing a query-plan representation or execution order. A planner and executor are correct relative to this model when their completed result satisfies the conditions and every resolver application receives the inputs and demand assigned to it.
 
-The canonical qplanning formulation states the same obligations over the lowered schema and one field-resolver registry: each source node-valued `foo(args)` is represented by a singular `foo$id(args)` or list-shaped `foo$ids(args)` bridge plus the generated loader at `foo(args)`, and typed IDs preserve the concrete dispatch formerly expressed by `N`.
+The canonical qplanning formulation states the same obligations over the lowered schema and one field-resolver registry: each source node-valued `foo(args): W<T>` is represented by `foo$bridge(args): W<T$Bridge>` plus the generated loader at `T$Bridge.$node`, and typed IDs preserve the concrete dispatch formerly expressed by `N`.
 
 ## References
 

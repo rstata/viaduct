@@ -8,7 +8,7 @@ This file records informal mathematical theorem statements and supporting argume
 
 Fix an ordinary reasoning world whose schema, values, selections, and resolver registry satisfy their documented invariants, including an acyclic resolver-demand graph. Assume every runtime variable is defined `FromArgument`; runtime `FromObjectField` binding remains outside the domain. For every Query-rooted fragment in the domain of `semantics.resolver02`, applying `Value.Object.resolve` under fresh request-local binding state to the empty Query value and the fragment's selection forest yields an `EngineResult.Object` that satisfies `isClosedUnderResolverDemand()`.
 
-The theorem concerns the mathematical result of [`resolver02/Resolver.kt`](src/main/kotlin/semantics/resolver02/Resolver.kt), which applies each resolver non-selectively and treats its finite returned value as the complete output selection set. It does not establish the genuinely selective one-shot algorithm and does not assert an execution order, invocation schedule, or complexity bound.
+The theorem concerns the Resolver02 policy supplied by [`resolver02/Resolver.kt`](src/main/kotlin/semantics/resolver02/Resolver.kt) to the shared constructor in [`Resolve.kt`](src/main/kotlin/semantics/Resolve.kt). That policy applies each resolver non-selectively and treats its finite returned value as the complete output selection set. It does not establish the genuinely selective one-shot algorithm and does not assert an execution order, invocation schedule, or complexity bound.
 
 ### Proof structure
 

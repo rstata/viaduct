@@ -74,6 +74,17 @@ class ArbitraryRegistry internal constructor(
     private val applicationLog = ResolutionApplicationLog()
     private val applicationCounts = mutableMapOf<FieldCoordinate, Long>()
 
+    /** Source resolver fields whose generated fragments consume a `FromArgument` variable. */
+    val fromArgumentVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromArgumentVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    fun sourceResolverHasFromArgumentVariables(
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        sourceField(canonicalField) in fromArgumentVariableOwnerFields
+
     fun clearResolutionWitness() {
         applicationLog.clear()
     }

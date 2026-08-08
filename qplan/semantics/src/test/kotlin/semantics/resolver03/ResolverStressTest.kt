@@ -85,7 +85,11 @@ class ResolverStressTest {
             PropertyTesting.defaultSeed = seed
 
             try {
-                checkResolverTestCases(counts, config) { testWorld, testCase ->
+                checkResolverTestCases(
+                    counts,
+                    config,
+                    profile = "resolver03-stress",
+                ) { testWorld, testCase ->
                     attemptedCases += 1
                     generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
                     assertTrue(testCase.query.selectionDepth >= 4)

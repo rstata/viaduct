@@ -6,7 +6,9 @@ This project defines transformations, predicates, and other reasoning over the c
 
 Agents writing or interpreting semantic tests must also read
 [`testing-contracts.md`](testing-contracts.md) for the feature-contract and
-policy-mixin organization of the resolver test suites.
+policy-mixin organization of the resolver test suites. For generated failures,
+use its coordinate-based `resolverPropertyReplay` workflow first; do not
+brute-force a full generated test class when `S:R:Q` coordinates are reported.
 
 Semantic code may construct model values but must not redefine or defensively re-check model invariants. It may express relations between a carrier value and a judgment input, such as requiring an OER and ground selection forest to share the Query root.
 

@@ -82,6 +82,11 @@ The shared static contracts live in
 - `ObjectFragmentFromArgumentResolverContract` covers nonempty object
   fragments containing variables bound from resolver arguments, including a
   transitive variable chain.
+- `GeneratedResolverContract.kt` applies the same four feature scopes to
+  ordinary generated-world correctness and permutation properties. Each
+  generated profile owns its configuration, sample budget, and executable
+  feature-activation guards. It also defines a full-feature interaction-depth
+  contract for resolvers supporting nonempty fragments.
 - `ResolverOutputPolicyContract.kt` contains the complete and selective output
   policy mixins.
 - `PostTestValidationPolicy.kt` contains the reusable whole-result correctness
@@ -100,11 +105,120 @@ The concrete classes in `src/test/kotlin/semantics/resolver01`,
 | Selective output policies | no | no | yes |
 | `correctResolution` post-validation | yes | yes | yes |
 
-The ordinary generated properties are currently separate resolver-specific
-tests, and Resolver03's opt-in stress suite remains separate by design. Future
-generated contracts should use the same feature-scope composition while
-preserving profile activation assertions, sample strength, shrinking, replay,
-and resolver-specific depth or witness checks.
+Each ordinary generated profile runs 150 cases and checks whole-result
+correctness plus permutation-equivalent query results. The empty-fragment and
+node profiles apply to Resolver01-03; the two nonempty-fragment profiles apply
+to Resolver02-03. Their guards distinguish generation from activation: for
+example, the node profile requires an actual fixture-lowered loader
+application and activated mixed node/non-node topology, while the
+`FromArgument` profile requires an application of a variable-bearing resolver.
+
+Resolver02 and Resolver03 additionally run a 300-case full-feature interaction
+profile. It preserves broad pressure across nodes, mixed node/non-node schemas,
+nonempty fragments, arguments, and `FromArgument` variables while requiring
+those features to be coactivated by generated queries.
+
+Resolver03's opt-in stress suite remains separate by design. Its trace oracle,
+mutation, list-deepening, selective-demand, and witness tests also remain
+separate because they make stronger Resolver03-specific claims than ordinary
+feature acceptance.
+
+## Reproducing Generated Failures
+
+**Agents should start with coordinate replay for a per-case failure. Do not
+brute-force the full test class when the failure reports concrete `S`, `R`, and
+`Q` coordinates.** Use the dedicated Gradle task, the concrete test class named
+by JUnit, and the reported profile, seed, and coordinates:
+
+```shell
+./gradlew :semantics:resolverPropertyReplay \
+  -PresolverPropertyClass=semantics.resolver02.ResolverGeneratedTest \
+  -PresolverPropertyProfile=node \
+  -PresolverPropertySeed=424242 \
+  -PresolverPropertyCase=2:2:1
+```
+
+This generates through schema iteration `S` to preserve the random stream, but
+executes only the selected registry/query case. It suppresses whole-profile
+aggregate guards because a single case cannot establish sample-budget or
+feature-activation claims.
+
+`ResolverTestReplayTest` guards this contract directly: across 32 seeded,
+randomly sized products, it selects a random case from each full run and
+requires coordinate replay to reproduce the same schema, registry recipe,
+query, feature metadata, and generated resolver plans.
+
+Every generated resolver profile runs with an explicit `Long` seed. A
+per-case failure reports:
+
+- The contract profile.
+- The seed.
+- One-based `S`, `R`, and `Q` coordinates for the schema iteration, registry
+  within that schema, and query within that registry.
+- The complete generated schema, registry, and query.
+
+Aggregate activation and sample-budget failures report the same profile and
+seed with `S=all R=all Q=all`, because the whole generated run is the failing
+observation rather than one case.
+
+The profile identifiers are part of the replay UI and must remain stable:
+
+| Profile ID | Scope | Concrete resolvers | Normal `S:R:Q` |
+| --- | --- | --- | --- |
+| `empty-object-fragment` | Empty object fragments, no variables | Resolver01-03 | `10:3:5` (150) |
+| `node` | Source-level node resolution | Resolver01-03 | `10:3:5` (150) |
+| `object-fragment` | Nonempty object fragments, no variables | Resolver02-03 | `10:3:5` (150) |
+| `object-fragment-from-argument` | Nonempty fragments with `FromArgument` | Resolver02-03 | `10:3:5` (150) |
+| `feature-interaction` | Full ordinary feature interaction | Resolver02-03 | `20:3:5` (300) |
+| `resolver03-construction-witness` | Resolver03 construction witness | Resolver03 | `12:2:4` (96) |
+
+For an aggregate `S=all R=all Q=all` failure, rerun the entire reported profile
+with `Case=all` (the default):
+
+```shell
+./gradlew :semantics:resolverPropertyReplay \
+  -PresolverPropertyClass=semantics.resolver02.ResolverGeneratedTest \
+  -PresolverPropertyProfile=node \
+  -PresolverPropertySeed=424242 \
+  -PresolverPropertyCase=all
+```
+
+`Case=all` keeps aggregate sample-budget and feature-activation guards active.
+For ad hoc investigation, `resolverPropertySize=S:R:Q` replaces the profile's
+normal product dimensions and still runs those guards:
+
+```shell
+./gradlew :semantics:resolverPropertyReplay \
+  -PresolverPropertyClass=semantics.resolver02.ResolverGeneratedTest \
+  -PresolverPropertyProfile=empty-object-fragment \
+  -PresolverPropertySeed=424242 \
+  -PresolverPropertyCase=all \
+  -PresolverPropertySize=2:1:2
+```
+
+`resolverPropertySize` is valid only with `resolverPropertyCase=all`. Small
+products can legitimately fail an activation guard when the generated sample
+does not exercise the profile's promised feature; increase a dimension or
+choose another seed rather than disabling the guard.
+
+The dedicated task is the normal replay interface. A seed-only full-class run
+remains the broad fallback and authoritative reproduction when debugging
+cross-profile behavior:
+
+```shell
+./gradlew :semantics:test \
+  --tests 'semantics.resolver02.ResolverGeneratedTest' \
+  -PresolverPropertySeed=424242
+```
+
+The equivalent inputs are `RESOLVER_PROPERTY_SEED=<reported-seed>` and
+`-Dresolver.property.seed=<reported-seed>`. Gradle forwards the selected seed
+to both the resolver-test harness and Kotest, and a seeded test task always
+runs even when its previous outputs are up to date. Running the same concrete
+class and seed regenerates the same cases and product coordinates.
+
+Resolver03's opt-in stress task retains its separate
+`resolver03StressSeed`/`RESOLVER03_STRESS_SEED` interface.
 
 ## Adding Tests
 

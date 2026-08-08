@@ -128,7 +128,7 @@ class ResolverRegressionTest {
                     val groupsField = schema.field("Query", "groups")
                     val groupElementType =
                         (groupsField.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    val seedKey = Value.ObjectKey.of(schema.objectField("Group", "seed"), emptyMap())
+                    val seedKey = Value.GroundKey.of(schema.objectField("Group", "seed"), emptyMap())
 
                     fun computedResolver(typeName: String) =
                         model.testing.fieldResolverOf(
@@ -139,7 +139,7 @@ class ResolverRegressionTest {
                             computedApplications += 1
                             val base =
                                 input.fieldValues.getValue(
-                                    Value.ObjectKey.of(schema.objectField(typeName, "base"), emptyMap()),
+                                    Value.GroundKey.of(schema.objectField(typeName, "base"), emptyMap()),
                                 ) as Value.Int
                             Value.Int.of(
                                 if (typeName == "EvenProduct") {
@@ -230,7 +230,7 @@ class ResolverRegressionTest {
 
         val groups =
             assertIs<EngineResult.List>(
-                result.fetch(Value.ObjectKey.of(schema.objectField("Query", "groups"), emptyMap())).value,
+                result.fetch(Value.GroundKey.of(schema.objectField("Query", "groups"), emptyMap())).value,
             )
         listOf(1, 2).forEachIndexed { index, seed ->
             val group = assertIs<EngineResult.Object>(groups[index].value)
@@ -238,7 +238,7 @@ class ResolverRegressionTest {
                 val product =
                     assertIs<EngineResult.Object>(
                         group.fetch(
-                            Value.ObjectKey.of(
+                            Value.GroundKey.of(
                                 schema.objectField("Group", "product"),
                                 mapOf("factor" to factor),
                             ),
@@ -250,13 +250,13 @@ class ResolverRegressionTest {
                 assertEquals(
                     Value.String.of("${seed}x$factor"),
                     product.fetch(
-                        Value.ObjectKey.of(schema.objectField(expectedType, "label"), emptyMap()),
+                        Value.GroundKey.of(schema.objectField(expectedType, "label"), emptyMap()),
                     ).value,
                 )
                 assertEquals(
                     Value.Int.of(base * if (expectedType == "EvenProduct") 10 else 100),
                     product.fetch(
-                        Value.ObjectKey.of(schema.objectField(expectedType, "computed"), emptyMap()),
+                        Value.GroundKey.of(schema.objectField(expectedType, "computed"), emptyMap()),
                     ).value,
                 )
             }
@@ -303,8 +303,8 @@ class ResolverRegressionTest {
                     val entriesField = schema.field("Group", "entries")
                     val entryElementType =
                         (entriesField.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    val seedKey = Value.ObjectKey.of(schema.objectField("Group", "seed"), emptyMap())
-                    val rawKey = Value.ObjectKey.of(schema.objectField("Entry", "raw"), emptyMap())
+                    val seedKey = Value.GroundKey.of(schema.objectField("Group", "seed"), emptyMap())
+                    val rawKey = Value.GroundKey.of(schema.objectField("Entry", "raw"), emptyMap())
 
                     mapOf(
                         groupsField to
@@ -381,7 +381,7 @@ class ResolverRegressionTest {
 
         val groups =
             assertIs<EngineResult.List>(
-                result.fetch(Value.ObjectKey.of(schema.objectField("Query", "groups"), emptyMap())).value,
+                result.fetch(Value.GroundKey.of(schema.objectField("Query", "groups"), emptyMap())).value,
             )
         listOf(10, 20).forEachIndexed { groupIndex, seed ->
             val group = assertIs<EngineResult.Object>(groups[groupIndex].value)
@@ -389,7 +389,7 @@ class ResolverRegressionTest {
                 val entries =
                     assertIs<EngineResult.List>(
                         group.fetch(
-                            Value.ObjectKey.of(
+                            Value.GroundKey.of(
                                 schema.objectField("Group", "entries"),
                                 mapOf("count" to count),
                             ),
@@ -401,7 +401,7 @@ class ResolverRegressionTest {
                     assertEquals(
                         Value.String.of("entry-${seed + offset}"),
                         entry.fetch(
-                            Value.ObjectKey.of(schema.objectField("Entry", "rendered"), emptyMap()),
+                            Value.GroundKey.of(schema.objectField("Entry", "rendered"), emptyMap()),
                         ).value,
                     )
                 }

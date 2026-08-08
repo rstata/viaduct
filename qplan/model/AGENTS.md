@@ -24,9 +24,11 @@ External field-relative variable declarations either identify one argument of th
 
 Every canonical registry is also depth-first variable-stratified. For each concrete object type, registry assembly conservatively collapses argument-distinct occurrences of one field into one structural branch, combines ordinary sibling resolver dependencies with `fromObjectField` provider-production-before-use edges, closes object-field variable production transitively, and rejects a self-edge or longer branch cycle. `fromArgument` definitions add no branch edge because resolver arguments are already available.
 
-`Assumptions` carries request-local monotonic variable-binding state whose domain can only grow and whose values contain no variables. This write-once state is the deliberate exception to the usual immutable-value discipline. Current semantic resolvers still operate in variable-free domains and do not yet populate bindings or substitute them into selections.
+`Assumptions` carries request-local monotonic variable-binding state whose domain can only grow and whose values are ground by type. This write-once state is the deliberate exception to the usual immutable-value discipline. Resolver01-03 bind `fromArgument` variables at their exact OER occurrences; `fromObjectField` runtime binding remains deferred.
 
-Input-object fields and output-field arguments share `Schema.InputLikeField`. GraphQL input values and output-field argument tuples share `Value.InputLike`; the object-shaped `Value.InputObject` and `Value.Arguments` categories additionally share `Value.InputObjectLike`, mirroring `Schema.InputObjectLike`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `Value.Arguments` instances remain ordinary structural values rather than singletons.
+Input-object fields and output-field arguments share `Schema.InputLikeField`. Ground GraphQL input values and ground output-field argument tuples share `Value.InputLike`; the object-shaped `Value.InputObject` and `Value.Arguments` categories additionally share `Value.InputObjectLike`, mirroring `Schema.InputObjectLike`. `OpenValue` and `OpenArguments` are opaque, schema-checked input expressions that may contain `Value.Variable`; `Value.Input` implements `OpenValue`, and `Value.Arguments` implements `OpenArguments`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `Value.Arguments` instances remain ordinary structural values rather than singletons.
+
+`Value.Variable` is an open-expression atom, not a `Value.Input`. Checked open-expression builders accept ground values, variables, lists, and input-object maps, but expose no open list or open input-object carrier. Grounding operations are partial: they throw when an expression contains an unbound stamped variable or an unstamped template.
 
 Kotlin inheritance and generic variance classify carrier values but do not define GraphQL interface implementation, output subtyping, input coercion, or type variance. Use canonical schema relations and documented carrier invariants for those facts.
 
@@ -38,7 +40,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 `Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 
-`Value.Object` fields and OER cells are keyed by exact `Value.ObjectKey` coordinates, preserving distinct coerced argument tuples for one field. `Value.Key` remains the broader selection-key category and may carry an abstract-type field.
+`Value.Object` fields and OER cells are keyed by exact `Value.GroundKey` coordinates, preserving distinct coerced argument tuples for one field. A `GroundKey` has a concrete `Schema.ObjectField` and ground `Value.Arguments`. `Value.Key` is the broader open selection-key category: its field may be abstract or concrete and its arguments are `OpenArguments`.
 
 The `Value` model is incomplete: lazy values and similar engine-specific intermediate values are not represented. Raw node references exist only as external test-fixture inputs and are lowered to synthetic ID bridge values before semantic reasoning; the canonical value algebra has no distinct node-reference variant.
 
@@ -46,6 +48,6 @@ The `Value` model is incomplete: lazy values and similar engine-specific interme
 
 `Value.Key` does not include a response alias. Canonical output fields and fully coerced arguments determine field-resolution identity; aliases and response ordering belong to external field completion.
 
-Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and contains no unresolved variables. Keys used by selections may instead carry abstract fields or unresolved variables and must be specialized and instantiated before entering either value.
+Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and is ground by type. Keys used by selections may instead carry abstract fields or unresolved variables and must pass through `mergeToGround(type)` before entering either value.
 
-`PathComponent` is the exact OER-tree path category. Its variants are `Value.ObjectKey` for an object-cell step and `Value.ListIndex` for a list-element step.
+`PathComponent` is the exact OER-tree path category. Its variants are `Value.GroundKey` for an object-cell step and `Value.ListIndex` for a list-element step.

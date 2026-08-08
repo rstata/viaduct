@@ -61,8 +61,8 @@ class SchemaConformanceTest {
     private fun Schema.key(
         type: Schema.ObjectType,
         fieldName: String,
-    ): Value.ObjectKey =
-        Value.ObjectKey.of(
+    ): Value.GroundKey =
+        Value.GroundKey.of(
             field = objectField(type.typeName, fieldName),
             arguments = emptyMap(),
         )

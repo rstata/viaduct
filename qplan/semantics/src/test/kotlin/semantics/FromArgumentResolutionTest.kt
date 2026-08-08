@@ -73,8 +73,8 @@ class FromArgumentResolutionTest {
                     val one = schema.objectField("Query", "one")
                     val two = schema.objectField("Query", "two")
                     val three = schema.objectField("Query", "three")
-                    val twoKey = Value.ObjectKey.of(two, mapOf("value" to 7))
-                    val threeKey = Value.ObjectKey.of(three, mapOf("value" to 7))
+                    val twoKey = Value.GroundKey.of(two, mapOf("value" to 7))
+                    val threeKey = Value.GroundKey.of(three, mapOf("value" to 7))
                     mapOf(
                         one to
                             model.testing.fieldResolverOf(
@@ -123,7 +123,7 @@ class FromArgumentResolutionTest {
             )
         val world = testWorld.assumptions
         val one = world.schema.objectField("Query", "one")
-        val oneKey = Value.ObjectKey.of(one, mapOf("seed" to 7))
+        val oneKey = Value.GroundKey.of(one, mapOf("seed" to 7))
         val fragment =
             world.fragmentFrom(
                 "fragment ignored on Query { one(seed: 7) }",
@@ -159,7 +159,7 @@ class FromArgumentResolutionTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val consume = schema.objectField("Query", "consume")
-                    val consumeKey = Value.ObjectKey.of(consume, mapOf("value" to 7))
+                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 7))
                     mapOf(
                         schema.field("Query", "result") to
                             model.testing.fieldResolverOf(
@@ -193,7 +193,7 @@ class FromArgumentResolutionTest {
             )
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Query", "result")
-        val resultKey = Value.ObjectKey.of(resultField, mapOf("seed" to 7))
+        val resultKey = Value.GroundKey.of(resultField, mapOf("seed" to 7))
         val fragment =
             world.fragmentFrom(
                 "fragment ignored on Query { result(seed: 7) }",

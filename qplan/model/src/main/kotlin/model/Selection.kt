@@ -7,17 +7,12 @@ package model
  *
  * [size] observes the number of current members. A forest returned directly by
  * [model.spec.flatten] has one member for each flattened GraphQL field occurrence, but that is a
- * postcondition of flattening rather than an invariant of every forest. In particular, [merge]
- * replaces members with equal concrete coordinates under current variable bindings by one
- * normalized member, which may represent several source occurrences.
+ * postcondition of flattening rather than an invariant of every forest.
  *
  * ### Equality And Observation
  *
- * Selection and forest equality are undefined, and no operation internally compares whole
- * [Selection] values or exposes member order. [keys] and [groupBy] may compare and deduplicate
- * explicitly projected values without changing the forest's members. [merge] is the explicit
- * normalization boundary that compares coordinates under current bindings and coalesces forest
- * members.
+ * Selection and forest equality are undefined, and no operation compares whole [Selection] values
+ * or exposes member order.
  */
 sealed interface SelectionForest {
     val size: Int
@@ -30,11 +25,6 @@ sealed interface SelectionForest {
 
     fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest
 
-    /** The structural keys contributed independently by all occurrences. */
-    fun keys(): Set<Value.Key>
-
-    fun <K> groupBy(keySelector: (Selection) -> K): Map<K, SelectionForest>
-
     fun forEach(action: (Selection) -> Unit)
 
     fun single(): Selection
@@ -43,36 +33,37 @@ sealed interface SelectionForest {
 }
 
 /**
- * A normalized selection forest specialized to one concrete parent object type.
+ * A normalized ground selection forest specialized to one concrete parent object type.
  *
- * ### Invariant: object-selection-forest-normalization
+ * ### Invariant: ground-selection-forest-normalization
  *
- * Every selection is an [ObjectSelection] whose key field belongs to [type], whose
+ * Every selection is a [GroundSelection] whose key field belongs to [type], whose
  * `possibleTypes == setOf(type)`, and whose key occurs exactly once.
  */
-sealed interface ObjectSelectionForest : SelectionForest {
+sealed interface GroundSelectionForest : SelectionForest {
     val type: Schema.ObjectType
 
-    override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest
+    override fun filter(predicate: (Selection) -> Boolean): GroundSelectionForest
 
-    override fun keys(): Set<Value.ObjectKey>
+    /** The ground keys contributed by these normalized selections. */
+    fun keys(): Set<Value.GroundKey>
 
     /** Returns the unique selection for each key. */
-    fun byKey(): Map<Value.ObjectKey, ObjectSelection>
+    fun byKey(): Map<Value.GroundKey, GroundSelection>
 
     /**
      * Returns the selection for [key].
      *
      * @throws NoSuchElementException when [key] is absent
      */
-    operator fun get(key: Value.ObjectKey): ObjectSelection
+    operator fun get(key: Value.GroundKey): GroundSelection
 
     companion object {
-        /** Constructs a normalized forest satisfying [ObjectSelectionForest]'s invariant. */
+        /** Constructs a normalized forest satisfying [GroundSelectionForest]'s invariant. */
         fun of(
             type: Schema.ObjectType,
-            selections: Iterable<ObjectSelection>,
-        ): ObjectSelectionForest {
+            selections: Iterable<GroundSelection>,
+        ): GroundSelectionForest {
             val occurrences = selections.toList()
             require(
                 occurrences.all { selection ->
@@ -82,11 +73,11 @@ sealed interface ObjectSelectionForest : SelectionForest {
             ) {
                 "Object selections must belong exclusively to ${type.typeName}"
             }
-            val byKey = occurrences.associateBy(ObjectSelection::key)
+            val byKey = occurrences.associateBy(GroundSelection::key)
             require(byKey.size == occurrences.size) {
                 "Object selection keys must be unique"
             }
-            return ObjectSelectionForestImpl(type, byKey)
+            return GroundSelectionForestImpl(type, byKey)
         }
     }
 }
@@ -100,38 +91,62 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
     SelectionForestImpl(toList())
 
 /**
- * Returns the demand applicable to concrete parent [type], normalized under current bindings.
+ * Returns the occurrences applicable to concrete parent [type], specialized to that type.
  *
  * Applicability is tested before specialization, so an inapplicable occurrence contributes neither
- * its key nor its descendants. Each applicable key is reconstructed against the canonical field on
- * [type], including concrete argument defaults, and occurrences with equal reconstructed keys are
- * replaced by one selection whose subselections are their concatenated subselections.
+ * its key nor its descendants. Each applicable key is reconstructed against the canonical field
+ * on [type], including concrete argument defaults. Occurrences remain distinct and arguments
+ * remain open. Every result selection has `possibleTypes == setOf(type)`. Subselections are not
+ * recursively specialized because their concrete runtime parent type is not yet known.
+ */
+fun SelectionForest.merge(type: Schema.ObjectType): SelectionForest =
+    flatMap { selection ->
+        if (type !in selection.possibleTypes) {
+            selectionForestOf()
+        } else {
+            selectionForestOf(
+                Selection.of(
+                    key = selection.specializedKey(type),
+                    possibleTypes = setOf(type),
+                    subselections = selection.subselections,
+                ),
+            )
+        }
+    }
+
+/**
+ * Grounds and normalizes the demand applicable to concrete parent [type].
  *
- * The result has exactly one top-level selection for each reconstructed key. Every result key's
- * field belongs to [type], and every result selection has `possibleTypes == setOf(type)`.
- * Subselections are not recursively merged because their concrete runtime parent type is not yet
- * known.
+ * Applicable occurrences are specialized, every stamped variable is replaced by its binding, and
+ * equal resulting [Value.GroundKey] coordinates are coalesced by concatenating their
+ * subselections.
  *
- * Every currently bound stamped variable is replaced by its binding before the result key is
- * constructed. Unbound stamped variables and templates remain symbolic, so the result may still
- * contain [Value.Variable] values and must be merged again after additional bindings are added.
+ * @throws IllegalStateException when an applicable key contains an unbound stamped variable or an
+ * unstamped template
  */
 context(world: Assumptions)
-fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
+fun SelectionForest.mergeToGround(type: Schema.ObjectType): GroundSelectionForest {
     val selections =
-        filter { selection -> type in selection.possibleTypes }
+        merge(type)
+            .occurrences()
             .groupBy { selection ->
-                selection.objectKey(type).substituteBindings()
-            }.entries
-            .map { (key, selections) ->
-                ObjectSelection.of(
+                Value.GroundKey.of(
+                    field = selection.key.field as Schema.ObjectField,
+                    arguments = selection.key.arguments.instantiateBindings(),
+                )
+            }.map { (key, occurrences) ->
+                GroundSelection.of(
                     key = key,
                     possibleTypes = setOf(type),
                     subselections =
-                        selections.flatMap { selection -> selection.subselections },
+                        occurrences
+                            .map { selection -> selection.subselections }
+                            .fold(selectionForestOf()) { forest, children ->
+                                forest + children
+                            },
                 )
             }
-    return ObjectSelectionForest.of(type, selections)
+    return GroundSelectionForest.of(type, selections)
 }
 
 /**
@@ -140,13 +155,16 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
  * This operation preserves arguments while applying the argument definition, including defaults,
  * of the corresponding canonical object field.
  */
-fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey {
+fun Selection.specializedKey(type: Schema.ObjectType): Value.Key {
     val concreteField = type.fields.getValue(key.field.fieldName)
-    val concreteKey = key as? Value.ObjectKey
-    if (concreteKey?.field == concreteField) return concreteKey
-    return Value.ObjectKey.of(
+    if (key.field == concreteField) return key
+    return Value.Key.of(
         field = concreteField,
-        arguments = key.arguments.fieldValues,
+        arguments =
+            OpenArguments.of(
+                concreteField,
+                key.arguments.fieldExpressions(),
+            ),
     )
 }
 
@@ -164,7 +182,7 @@ fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey {
  * - [possibleTypes] is a subset of the object types contained by [key]'s field owner.
  * - When [isLeaf] is true, [subselections] is empty. The converse does not hold: a composite
  *   selection may also have no subselections.
- * - A selection's [key] is a [Value.ObjectKey] exactly when it is an [ObjectSelection].
+ * - A selection's [key] is a [Value.GroundKey] exactly when it is an [GroundSelection].
  *
  * ### Invariant: selection-well-foundedness
  *
@@ -262,8 +280,8 @@ sealed interface Selection {
         ): Selection {
             validateSelection(key, possibleTypes, subselections)
             return when (key) {
-                is Value.ObjectKey ->
-                    ObjectSelectionImpl(
+                is Value.GroundKey ->
+                    GroundSelectionImpl(
                         key = key,
                         possibleTypes = possibleTypes,
                         subselections = subselections,
@@ -279,25 +297,25 @@ sealed interface Selection {
 
         /** Constructs the precise selection category for a concrete-object field key. */
         fun of(
-            key: Value.ObjectKey,
+            key: Value.GroundKey,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
-        ): ObjectSelection = ObjectSelection.of(key, possibleTypes, subselections)
+        ): GroundSelection = GroundSelection.of(key, possibleTypes, subselections)
     }
 }
 
-/** A selection whose field coordinate belongs to a concrete object type. */
-sealed interface ObjectSelection : Selection {
-    override val key: Value.ObjectKey
+/** A selection whose field coordinate and arguments are ground. */
+sealed interface GroundSelection : Selection {
+    override val key: Value.GroundKey
 
     companion object {
         fun of(
-            key: Value.ObjectKey,
+            key: Value.GroundKey,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
-        ): ObjectSelection {
+        ): GroundSelection {
             validateSelection(key, possibleTypes, subselections)
-            return ObjectSelectionImpl(key, possibleTypes, subselections)
+            return GroundSelectionImpl(key, possibleTypes, subselections)
         }
     }
 }
@@ -324,11 +342,11 @@ private class SelectionImpl(
     override val subselections: SelectionForest,
 ) : Selection
 
-private class ObjectSelectionImpl(
-    override val key: Value.ObjectKey,
+private class GroundSelectionImpl(
+    override val key: Value.GroundKey,
     override val possibleTypes: Set<Schema.ObjectType>,
     override val subselections: SelectionForest,
-) : ObjectSelection
+) : GroundSelection
 
 private abstract class AbstractSelectionForest(
     val occurrences: List<Selection>,
@@ -350,14 +368,6 @@ private abstract class AbstractSelectionForest(
             },
         )
 
-    override fun <K> groupBy(keySelector: (Selection) -> K): Map<K, SelectionForest> =
-        occurrences
-            .groupBy(keySelector)
-            .mapValues { (_, selections) -> SelectionForestImpl(selections) }
-
-    override fun keys(): Set<Value.Key> =
-        occurrences.fold(emptySet()) { result, selection -> result + selection.key }
-
     override fun forEach(action: (Selection) -> Unit) {
         occurrences.forEach(action)
     }
@@ -372,22 +382,22 @@ private class SelectionForestImpl(
     occurrences: List<Selection>,
 ) : AbstractSelectionForest(occurrences)
 
-private class ObjectSelectionForestImpl(
+private class GroundSelectionForestImpl(
     override val type: Schema.ObjectType,
-    private val selectionsByKey: Map<Value.ObjectKey, ObjectSelection>,
+    private val selectionsByKey: Map<Value.GroundKey, GroundSelection>,
 ) : AbstractSelectionForest(selectionsByKey.values.toList()),
-    ObjectSelectionForest {
-    override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest =
-        ObjectSelectionForestImpl(
+    GroundSelectionForest {
+    override fun filter(predicate: (Selection) -> Boolean): GroundSelectionForest =
+        GroundSelectionForestImpl(
             type,
             selectionsByKey.filterValues(predicate),
         )
 
-    override fun keys(): Set<Value.ObjectKey> = selectionsByKey.keys
+    override fun keys(): Set<Value.GroundKey> = selectionsByKey.keys
 
-    override fun byKey(): Map<Value.ObjectKey, ObjectSelection> = selectionsByKey
+    override fun byKey(): Map<Value.GroundKey, GroundSelection> = selectionsByKey
 
-    override fun get(key: Value.ObjectKey): ObjectSelection = selectionsByKey.getValue(key)
+    override fun get(key: Value.GroundKey): GroundSelection = selectionsByKey.getValue(key)
 }
 
 private fun SelectionForest.occurrences(): List<Selection> =

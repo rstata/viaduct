@@ -77,7 +77,7 @@ class IsClosedUnderResolverDemandTest {
             )
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Parent", "result")
-        val resultKey = Value.ObjectKey.of(resultField, mapOf("seed" to 7))
+        val resultKey = Value.GroundKey.of(resultField, mapOf("seed" to 7))
         val variable = Value.Variable.of(resultField, "seed")
         world.bind(variable.stamp(listOf(resultKey)), Value.Int.of(7))
         val result =

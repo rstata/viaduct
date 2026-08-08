@@ -58,13 +58,13 @@ class ResolverImplementationArgumentDefaultTest {
             }
         val item =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "item"), emptyMap())).value,
+                result.fetch(Value.GroundKey.of(world.schema.objectField("Query", "item"), emptyMap())).value,
             )
 
         assertEquals(
             Value.Int.of(7),
             item.fetch(
-                Value.ObjectKey.of(
+                Value.GroundKey.of(
                     world.schema.objectField("ConcreteItem", "computed"),
                     mapOf("factor" to 7),
                 ),
@@ -111,10 +111,10 @@ class ResolverImplementationArgumentDefaultTest {
             }
         val item =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "item"), emptyMap())).value,
+                result.fetch(Value.GroundKey.of(world.schema.objectField("Query", "item"), emptyMap())).value,
             )
         val concreteDefaultKey =
-            Value.ObjectKey.of(
+            Value.GroundKey.of(
                 world.schema.objectField("ConcreteItem", "computed"),
                 mapOf("factor" to 7),
             )
@@ -133,9 +133,9 @@ class ResolverImplementationArgumentDefaultTest {
                 schemaSDL = TRANSITIVE_SCHEMA,
                 fieldResolvers = { schema ->
                     val itemKey =
-                        Value.ObjectKey.of(schema.objectField("Holder", "item"), emptyMap())
+                        Value.GroundKey.of(schema.objectField("Holder", "item"), emptyMap())
                     val computedKey =
-                        Value.ObjectKey.of(
+                        Value.GroundKey.of(
                             schema.objectField("ConcreteItem", "computed"),
                             mapOf("factor" to 7),
                         )
@@ -185,13 +185,13 @@ class ResolverImplementationArgumentDefaultTest {
             }
         val holder =
             assertIs<EngineResult.Object>(
-                result.fetch(Value.ObjectKey.of(world.schema.objectField("Query", "holder"), emptyMap())).value,
+                result.fetch(Value.GroundKey.of(world.schema.objectField("Query", "holder"), emptyMap())).value,
             )
 
         assertEquals(
             Value.Int.of(7),
             holder.fetch(
-                Value.ObjectKey.of(world.schema.objectField("Holder", "result"), emptyMap()),
+                Value.GroundKey.of(world.schema.objectField("Holder", "result"), emptyMap()),
             ).value,
         )
     }

@@ -19,7 +19,6 @@ fun Value.conformsToSchema(): Boolean =
         Value.Error -> true
         is Value.Enum -> enumValue in type.values
         is Value.Simple -> true
-        is Value.Variable -> true
         is Value.InputList ->
             values.all { value -> value.conformsToSchema(typeExpr) }
         is Value.OutputList ->
@@ -37,8 +36,8 @@ fun Value.conformsToSchema(): Boolean =
 /**
  * Whether this input value recursively conforms to [typeExpr].
  *
- * Null conforms exactly at a nullable outer layer. [Value.Error] and [Value.Variable] conform to
- * every input type expression.
+ * Null conforms exactly at a nullable outer layer. [Value.Error] conforms to every input type
+ * expression.
  */
 context(world: Assumptions)
 fun Value.Input?.conformsToSchema(
@@ -67,9 +66,11 @@ fun Value.Arguments.conformsToSchema(): Boolean =
 
 /** Whether this key's arguments recursively conform to its output field. */
 context(world: Assumptions)
-fun Value.Key.conformsToSchema(): Boolean =
-    arguments.type == field.arguments &&
-        arguments.conformsToSchema()
+fun Value.Key.conformsToSchema(): Boolean {
+    val keyArguments = arguments
+    return keyArguments.type == field.arguments &&
+        (keyArguments !is Value.Arguments || keyArguments.conformsToSchema())
+}
 
 /**
  * Whether this engine result recursively conforms to the schema definitions carried by its
@@ -109,7 +110,7 @@ internal fun Value.Input?.conformsToSchemaType(
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
-        Value.Error, is Value.Variable -> true
+        Value.Error -> true
         is Value.InputList ->
             typeExpr is TypeExpr.List &&
                 typeExpr.elementType.canContainPure(this.typeExpr)

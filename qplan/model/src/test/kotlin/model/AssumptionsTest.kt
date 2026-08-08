@@ -34,11 +34,11 @@ class AssumptionsTest {
         val node = fragment.subselections.single()
         assertEquals(
             Value.Variable.of(variableField, "filter"),
-            node.key.arguments.fieldValues.getValue("filter"),
+            node.key.arguments.fieldExpressions().getValue("filter"),
         )
         assertNotEquals(
             Value.Variable.of(variableField, "other"),
-            node.key.arguments.fieldValues.getValue("filter"),
+            node.key.arguments.fieldExpressions().getValue("filter"),
         )
     }
 
@@ -63,7 +63,7 @@ class AssumptionsTest {
 
         val filter =
             assertIs<Value.InputObject>(
-                node.key.arguments.fieldValues.getValue("filter"),
+                node.key.arguments.fieldExpressions().getValue("filter"),
             )
         assertEquals(assumptions.schema.type("Filter"), filter.type)
         val role = assertIs<Value.Enum>(filter.fieldValues["role"])
@@ -125,35 +125,23 @@ class AssumptionsTest {
 
         assertEquals(
             filter,
-            fragment.subselections.single().key.arguments.fieldValues.getValue("filter"),
+            fragment.subselections.single().key.arguments.fieldExpressions().getValue("filter"),
         )
     }
 
     @Test
-    fun `rejects operation bindings containing unresolved variables`() {
+    fun `ground input object construction rejects unresolved variables`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val variableField = schema.objectField("Query", "node")
-        val filter =
+
+        assertFailsWith<ClassCastException> {
             Value.InputObject.of(
                 type = filterType,
                 fields =
                     mapOf(
                         "limit" to Value.Variable.of(variableField, "nested"),
                     ),
-            )
-
-        assertFailsWith<IllegalArgumentException> {
-            schema.fragmentFrom(
-                source =
-                    """
-                    fragment ignored on Query {
-                      node(filter: ${'$'}filter) {
-                        id
-                      }
-                    }
-                    """.trimIndent(),
-                bindings = mapOf("filter" to filter),
             )
         }
     }
@@ -274,7 +262,7 @@ class AssumptionsTest {
             )
         assertEquals(nodeField, nodeKey.field)
         assertEquals(nodeField.arguments, nodeKey.arguments.type)
-        assertEquals(filterValue, nodeKey.arguments.fieldValues["filter"])
+        assertEquals(filterValue, nodeKey.arguments.fieldExpressions()["filter"])
         assertEquals(
             nodeKey,
             Value.Key.of(
@@ -356,26 +344,23 @@ class AssumptionsTest {
     }
 
     @Test
-    fun `variable binding values cannot contain variables`() {
+    fun `binding values are ground by type`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val field = assumptions.schema.objectField("Query", "node")
         val binding = Value.Variable.of(field, "binding").stamp(emptyList())
-        val nestedVariable = Value.Variable.of(field, "nested")
         val filter =
             Value.InputObject.of(
                 type = assumptions.schema.type("Filter") as Schema.InputObjectType,
-                fields = mapOf("limit" to nestedVariable),
+                fields = mapOf("limit" to 1),
             )
 
-        assertFailsWith<IllegalArgumentException> {
-            assumptions.bind(binding, filter)
-        }
+        assumptions.bind(binding, filter)
 
-        assertFalse(assumptions.isBound(binding))
+        assertEquals(filter, assumptions.binding(binding))
     }
 
     @Test
-    fun `argument substitution recursively replaces input bindings`() {
+    fun `open arguments instantiate recursively from bindings`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val node = assumptions.schema.objectField("Query", "node")
         val variable = Value.Variable.of(node, "filter").stamp(emptyList())
@@ -385,34 +370,35 @@ class AssumptionsTest {
                 fields = mapOf("limit" to 3),
             )
         val arguments =
-            Value.Arguments.of(
+            OpenArguments.of(
                 field = node,
                 fields = mapOf("filter" to variable),
             )
         assumptions.bind(variable, filter)
 
-        val substituted =
+        val instantiated =
             context(assumptions) {
-                arguments.substituteBindings()
+                arguments.instantiateBindings()
             }
 
         assertEquals(
             filter,
-            substituted.fieldValues.getValue("filter"),
+            instantiated.fieldValues.getValue("filter"),
         )
     }
 
     @Test
-    fun `input substitution preserves the error value`() {
+    fun `argument instantiation preserves the error value`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val error: Value.Input? = Value.Error
+        val node = assumptions.schema.objectField("Query", "node")
+        val arguments = OpenArguments.of(node, mapOf("filter" to Value.Error))
 
-        val substituted =
+        val instantiated =
             context(assumptions) {
-                error.substituteBindings()
+                arguments.instantiateBindings()
             }
 
-        assertSame(Value.Error, substituted)
+        assertSame(Value.Error, instantiated.fieldValues.getValue("filter"))
     }
 
     @Test
@@ -420,8 +406,8 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val user = schema.type("User") as Schema.ObjectType
         val friend = schema.objectField("User", "friend")
-        val firstKey = Value.ObjectKey.of(friend, mapOf("limit" to 1))
-        val secondKey = Value.ObjectKey.of(friend, mapOf("limit" to 2))
+        val firstKey = Value.GroundKey.of(friend, mapOf("limit" to 1))
+        val secondKey = Value.GroundKey.of(friend, mapOf("limit" to 2))
         val friendValue = schema.objectOf("User")
 
         val value =
@@ -439,7 +425,7 @@ class AssumptionsTest {
                 type = user,
                 fields =
                     mapOf(
-                        Value.ObjectKey.of(
+                        Value.GroundKey.of(
                             friend,
                             mapOf(
                                 "limit" to

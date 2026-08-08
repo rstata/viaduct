@@ -2,11 +2,11 @@ package semantics.resolver02
 
 import model.Assumptions
 import model.EngineResult
-import model.ObjectSelection
+import model.GroundSelection
 import model.PathComponent
 import model.SelectionForest
 import model.Value
-import model.merge
+import model.mergeToGround
 import model.registry.demandsFromSibling
 import model.union
 import semantics.closeResolverDemand
@@ -58,9 +58,9 @@ private fun Value.Object.resolve(
 context(world: Assumptions)
 private fun Value.Object.dependencyOrder(
     path: List<PathComponent>,
-    keys: Set<Value.ObjectKey>,
-    ordered: List<Value.ObjectKey> = emptyList(),
-): List<Value.ObjectKey> {
+    keys: Set<Value.GroundKey>,
+    ordered: List<Value.GroundKey> = emptyList(),
+): List<Value.GroundKey> {
     if (keys.isEmpty()) return ordered
 
     val ready =
@@ -83,9 +83,9 @@ private fun Value.Object.dependencyOrder(
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
     path: List<PathComponent>,
-    consumer: Value.ObjectKey,
-    unresolved: Set<Value.ObjectKey>,
-): Set<Value.ObjectKey> {
+    consumer: Value.GroundKey,
+    unresolved: Set<Value.GroundKey>,
+): Set<Value.GroundKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
         consumer.field !in world.resolverRegistry
@@ -106,7 +106,7 @@ private fun Value.Object.dependenciesOf(
 context(world: Assumptions)
 private fun Value.Object.resolveKey(
     path: List<PathComponent>,
-    fieldSelection: ObjectSelection,
+    fieldSelection: GroundSelection,
     resolved: EngineResult.Object,
 ): EngineResult.Object {
     val key = fieldSelection.key
@@ -125,7 +125,7 @@ private fun Value.Object.resolveKey(
                         val objectFragment =
                             resolver
                                 .stampedObjectFragment(key.arguments, path + key)
-                                .merge(type)
+                                .mergeToGround(type)
                         // Closure and dependency order put the complete input in this prefix.
                         val input = resolved.materialize(objectFragment)
                         resolver(

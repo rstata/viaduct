@@ -7,12 +7,16 @@ import model.SelectionForest
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
+import model.fieldExpressions
+import model.matchingVariableTypes
 import model.registry.FieldResolver
 import model.registry.MissingResolverException
 import model.registry.ResolverRegistry
 import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toSelectionForest
+import model.retarget
+import model.variableTemplates
 
 /**
  * A raw external node lookup accepted only by test-fixture composition.
@@ -269,9 +273,9 @@ private class NodeResolverLowering(
             )
         return FieldResolverDefinition.ofArgumentRetargeting(
             objectFragment = representativeFragment,
-            retargetArguments = { _, arguments -> arguments.retarget(bridge) },
+            retargetArguments = { _, arguments -> arguments.retargetGround(bridge) },
             function = { input, arguments ->
-                val bridgeKey = Value.ObjectKey.of(bridge, arguments.retarget(bridge))
+                val bridgeKey = Value.GroundKey.of(bridge, arguments.retargetGround(bridge))
                 loadNodes(
                     ids = input.fieldValues.getValue(bridgeKey),
                     nodeTypeExpr = field.typeExpr,
@@ -346,7 +350,7 @@ private class NodeResolverLowering(
                     "Node field resolver did not return a node reference"
                 }
                 val idField = validateNodeIdField(output.type)
-                val id = output.fieldValues.getValue(Value.ObjectKey.of(idField, emptyMap()))
+                val id = output.fieldValues.getValue(Value.GroundKey.of(idField, emptyMap()))
                 require(id != Value.Error && id is Value.ID) {
                     "Node reference ${output.type.typeName}/id must contain a non-error ID"
                 }
@@ -396,7 +400,7 @@ private class NodeResolverLowering(
                 }
                 val returnedId =
                     result.fieldValues.getValue(
-                        Value.ObjectKey.of(validateNodeIdField(type), emptyMap()),
+                        Value.GroundKey.of(validateNodeIdField(type), emptyMap()),
                     )
                 require(returnedId == id) {
                     "Node resolver for ${type.typeName} did not repeat its input ID"
@@ -435,7 +439,7 @@ private class NodeResolverLowering(
                     if (bridge == null) {
                         key to lowerNestedOutput(value, key.field.typeExpr)
                     } else {
-                        Value.ObjectKey.of(bridge, key.arguments.retarget(bridge)) to
+                        Value.GroundKey.of(bridge, key.arguments.retargetGround(bridge)) to
                             extractNodeIds(
                                 output = value,
                                 nodeTypeExpr = key.field.typeExpr,
@@ -652,7 +656,7 @@ private class TestResolverRegistry(
                             validateObjectFragment = { fragment ->
                                 validateProviderContainment(site.field, fragment)
                             },
-                            objectType = site.field.containingType,
+                            field = site.field,
                         )
                 }
                 is DependencyVertex.Variable -> Unit
@@ -746,47 +750,21 @@ private class TestResolverRegistry(
     ): List<VariableUse> =
         buildList {
             this@variableUses.forEach { selection ->
-                selection.key.arguments.fieldValues.forEach { (name, value) ->
+                selection.key.arguments.fieldExpressions().forEach { (name, value) ->
                     val argument = selection.key.arguments.type.fields.getValue(name)
                     addAll(
-                        value.variableUses(
-                            variable = variable,
-                            typeExpr = argument.typeExpr,
-                            hasDefault = argument.defaultValue is Value.Default.Present,
-                        ),
+                        value
+                            .matchingVariableTypes(
+                                variable = variable,
+                                typeExpr = argument.typeExpr,
+                                hasDefault = argument.defaultValue is Value.Default.Present,
+                            ).map { (typeExpr, hasDefault) ->
+                                VariableUse(typeExpr, hasDefault)
+                            },
                     )
                 }
                 addAll(selection.subselections.variableUses(variable))
             }
-        }
-
-    private fun Value.Input?.variableUses(
-        variable: Value.Variable.Template,
-        typeExpr: TypeExpr<Schema.InputType>,
-        hasDefault: Boolean,
-    ): List<VariableUse> =
-        when {
-            this == null || this == Value.Error -> emptyList()
-            this == variable -> listOf(VariableUse(typeExpr, hasDefault))
-            this is Value.InputList && typeExpr is TypeExpr.List ->
-                values.flatMap { value ->
-                    value.variableUses(
-                        variable = variable,
-                        typeExpr = typeExpr.elementType,
-                        hasDefault = false,
-                    )
-                }
-            this is Value.InputObject -> {
-                fieldValues.flatMap { (name, value) ->
-                    val field = type.fields.getValue(name)
-                    value.variableUses(
-                        variable = variable,
-                        typeExpr = field.typeExpr,
-                        hasDefault = field.defaultValue is Value.Default.Present,
-                    )
-                }
-            }
-            else -> emptyList()
         }
 
     private fun validateCanonicalField(
@@ -876,33 +854,5 @@ private class TestResolverRegistry(
 
 }
 
-private fun Value.Arguments.variableTemplates(): Set<Value.Variable.Template> =
-    fieldValues.values.flatMapTo(linkedSetOf()) { it.variableTemplates() }
-
-private fun Value.Arguments.containsErrorValue(): Boolean =
-    fieldValues.values.any { value -> value.containsErrorValue() }
-
-private fun Value.Input?.containsErrorValue(): Boolean =
-    when (this) {
-        Value.Error -> true
-        is Value.InputList -> values.any { value -> value.containsErrorValue() }
-        is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsErrorValue() }
-        else -> false
-    }
-
-private fun Value.Arguments.retarget(field: Schema.OutputField): Value.Arguments =
+private fun Value.Arguments.retargetGround(field: Schema.OutputField): Value.Arguments =
     Value.Arguments.of(field, fieldValues)
-
-private fun Value.Input?.variableTemplates(): Set<Value.Variable.Template> =
-    when {
-        this == null || this == Value.Error -> emptySet()
-        this is Value.Variable.Template -> setOf(this)
-        this is Value.Variable.Stamped ->
-            throw IllegalArgumentException("Resolver fragments cannot contain stamped variables")
-        this is Value.InputList ->
-            values.flatMapTo(linkedSetOf()) { it.variableTemplates() }
-        this is Value.InputObject ->
-            fieldValues.values.flatMapTo(linkedSetOf()) { it.variableTemplates() }
-        else -> emptySet()
-    }

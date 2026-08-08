@@ -69,7 +69,7 @@ class ResolverStressTest {
                     (ResolverFragmentWeight to 0.85) +
                     (ResolverFragmentDepth to 3) +
                     (NodeResolversEnabled to false) +
-                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverVariablesEnabled to false)
             var attemptedCases = 0
             var verifiedCases = 0

@@ -13,7 +13,7 @@ import model.registry.VariableDefinition
  * its existing equal binding rather than attempting a second write.
  */
 context(world: Assumptions)
-internal fun Iterable<Value.ObjectKey>.bindFromArguments(path: List<PathComponent>) {
+internal fun Iterable<Value.GroundKey>.bindFromArguments(path: List<PathComponent>) {
     forEach { key ->
         if (key.field !in world.resolverRegistry) return@forEach
 

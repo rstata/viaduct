@@ -21,8 +21,8 @@ class SelectionMergeTest {
                 possibleTypes = setOf(fixture.item),
             )
 
-        assertIs<ObjectSelection>(concrete)
-        assertFalse(abstract is ObjectSelection)
+        assertIs<GroundSelection>(concrete)
+        assertFalse(abstract is GroundSelection)
     }
 
     @Test
@@ -32,14 +32,14 @@ class SelectionMergeTest {
         val two = fixture.selection("Query", "scalar", mapOf("arg" to 2))
         val forest = selectionForestOf(one, one, two)
 
-        val merged = context(fixture.world) { forest.merge(fixture.query) }
+        val merged = context(fixture.world) { forest.mergeToGround(fixture.query) }
         val oneKey =
-            Value.ObjectKey.of(
+            Value.GroundKey.of(
                 fixture.schema.objectField("Query", "scalar"),
                 mapOf("arg" to 1),
             )
         val missingKey =
-            Value.ObjectKey.of(
+            Value.GroundKey.of(
                 fixture.schema.objectField("Query", "scalar"),
                 mapOf("arg" to 3),
             )
@@ -50,11 +50,11 @@ class SelectionMergeTest {
         assertEquals(merged.keys(), merged.byKey().keys)
         assertSame(merged.byKey().getValue(oneKey), merged[oneKey])
         assertFailsWith<NoSuchElementException> { merged[missingKey] }
-        val filtered: ObjectSelectionForest =
+        val filtered: GroundSelectionForest =
             merged.filter { selection -> selection.key == oneKey }
         assertEquals(setOf(oneKey), filtered.keys())
         merged.forEach { selection ->
-            assertIs<ObjectSelection>(selection)
+            assertIs<GroundSelection>(selection)
             assertEquals(fixture.query, selection.key.field.containingType)
             assertEquals(setOf(fixture.query), selection.possibleTypes)
             assertTrue(selection.subselections.isEmpty())
@@ -65,24 +65,24 @@ class SelectionMergeTest {
     fun `object selection forest validates parent type exclusive applicability and unique keys`() {
         val fixture = Fixture()
         val querySelection =
-            assertIs<ObjectSelection>(fixture.selection("Query", "item"))
+            assertIs<GroundSelection>(fixture.selection("Query", "item"))
         val itemSelection =
-            assertIs<ObjectSelection>(fixture.selection("ConcreteItem", "a"))
+            assertIs<GroundSelection>(fixture.selection("ConcreteItem", "a"))
         val inapplicableQuerySelection =
-            ObjectSelection.of(
+            GroundSelection.of(
                 key = querySelection.key,
                 possibleTypes = emptySet(),
                 subselections = querySelection.subselections,
             )
 
         assertFailsWith<IllegalArgumentException> {
-            ObjectSelectionForest.of(fixture.query, listOf(itemSelection))
+            GroundSelectionForest.of(fixture.query, listOf(itemSelection))
         }
         assertFailsWith<IllegalArgumentException> {
-            ObjectSelectionForest.of(fixture.query, listOf(inapplicableQuerySelection))
+            GroundSelectionForest.of(fixture.query, listOf(inapplicableQuerySelection))
         }
         assertFailsWith<IllegalArgumentException> {
-            ObjectSelectionForest.of(fixture.query, listOf(querySelection, querySelection))
+            GroundSelectionForest.of(fixture.query, listOf(querySelection, querySelection))
         }
     }
 
@@ -101,16 +101,21 @@ class SelectionMergeTest {
 
         val merged =
             context(fixture.world) {
-                selectionForestOf(first, second).merge(fixture.query)
+                selectionForestOf(first, second).mergeToGround(fixture.query)
             }
 
         val item = merged.single()
         assertEquals(3, item.subselections.size)
-        assertEquals(setOf(a.key, b.key), item.subselections.keys())
+        assertEquals(
+            setOf(a.key, b.key),
+            context(fixture.world) {
+                item.subselections.mergeToGround(fixture.item).keys()
+            },
+        )
         assertEquals(
             2,
             context(fixture.world) {
-                item.subselections.merge(fixture.item).size
+                item.subselections.mergeToGround(fixture.item).size
             },
         )
     }
@@ -133,7 +138,7 @@ class SelectionMergeTest {
 
         val merged =
             context(fixture.world) {
-                selectionForestOf(abstract, concrete).merge(fixture.item)
+                selectionForestOf(abstract, concrete).mergeToGround(fixture.item)
             }
 
         assertEquals(1, merged.size)
@@ -167,12 +172,17 @@ class SelectionMergeTest {
 
         val merged =
             context(fixture.world) {
-                selectionForestOf(inapplicable, applicable).merge(fixture.query)
+                selectionForestOf(inapplicable, applicable).mergeToGround(fixture.query)
             }
 
         val item = merged.single()
         assertEquals(1, item.subselections.size)
-        assertEquals(setOf(visible.key), item.subselections.keys())
+        assertEquals(
+            setOf(visible.key),
+            context(fixture.world) {
+                item.subselections.mergeToGround(fixture.item).keys()
+            },
+        )
     }
 
     @Test
@@ -185,71 +195,96 @@ class SelectionMergeTest {
 
         val forward =
             context(fixture.world) {
-                selectionForestOf(first, second).merge(fixture.query)
+                selectionForestOf(first, second).mergeToGround(fixture.query)
             }.single()
         val reverse =
             context(fixture.world) {
-                selectionForestOf(second, first).merge(fixture.query)
+                selectionForestOf(second, first).mergeToGround(fixture.query)
             }.single()
 
         assertEquals(forward.key, reverse.key)
         assertEquals(forward.possibleTypes, reverse.possibleTypes)
         assertEquals(forward.subselections.size, reverse.subselections.size)
-        assertEquals(forward.subselections.keys(), reverse.subselections.keys())
+        assertEquals(
+            context(fixture.world) {
+                forward.subselections.mergeToGround(fixture.item).keys()
+            },
+            context(fixture.world) {
+                reverse.subselections.mergeToGround(fixture.item).keys()
+            },
+        )
     }
 
     @Test
-    fun `nested variables merge only under structural argument equality`() {
+    fun `merge preserves open occurrences without coalescing by open equality`() {
         val fixture = Fixture()
         val variableField = fixture.schema.objectField("Query", "search")
         val sameX =
             fixture.searchSelection(
-                Value.InputObject.of(
-                    type = fixture.filter,
-                    fields =
-                        mapOf(
-                            "values" to
-                                listOf(Value.Variable.of(variableField, "x")),
-                        ),
+                mapOf(
+                    "values" to
+                        listOf(Value.Variable.of(variableField, "x")),
                 ),
             )
         val anotherX =
             fixture.searchSelection(
-                Value.InputObject.of(
-                    type = fixture.filter,
-                    fields =
-                        mapOf(
-                            "values" to
-                                listOf(Value.Variable.of(variableField, "x")),
-                        ),
+                mapOf(
+                    "values" to
+                        listOf(Value.Variable.of(variableField, "x")),
                 ),
             )
         val y =
             fixture.searchSelection(
-                Value.InputObject.of(
-                    type = fixture.filter,
-                    fields =
-                        mapOf(
-                            "values" to
-                                listOf(Value.Variable.of(variableField, "y")),
-                        ),
+                mapOf(
+                    "values" to
+                        listOf(Value.Variable.of(variableField, "y")),
                 ),
             )
         val literal =
             fixture.searchSelection(
-                Value.InputObject.of(
-                    type = fixture.filter,
-                    fields = mapOf("values" to listOf(1)),
-                ),
+                mapOf("values" to listOf(1)),
             )
 
         val merged =
-            context(fixture.world) {
-                selectionForestOf(sameX, anotherX, y, literal).merge(fixture.query)
-            }
+            selectionForestOf(sameX, anotherX, y, literal).merge(fixture.query)
 
-        assertEquals(3, merged.size)
-        assertEquals(3, merged.keys().size)
+        assertEquals(4, merged.size)
+    }
+
+    @Test
+    fun `mergeToGround rejects an unstamped variable template`() {
+        val fixture = Fixture()
+        val variableField = fixture.schema.objectField("Query", "search")
+        val symbolic =
+            fixture.searchSelection(
+                mapOf(
+                    "values" to
+                        listOf(Value.Variable.of(variableField, "x")),
+                ),
+            )
+
+        assertFailsWith<IllegalStateException> {
+            context(fixture.world) {
+                selectionForestOf(symbolic).mergeToGround(fixture.query)
+            }
+        }
+    }
+
+    @Test
+    fun `mergeToGround rejects an unbound stamped variable`() {
+        val fixture = Fixture()
+        val variableField = fixture.schema.objectField("Query", "search")
+        val variable = Value.Variable.of(variableField, "x").stamp(emptyList())
+        val symbolic =
+            fixture.searchSelection(
+                mapOf("values" to listOf(variable)),
+            )
+
+        assertFailsWith<IllegalStateException> {
+            context(fixture.world) {
+                selectionForestOf(symbolic).mergeToGround(fixture.query)
+            }
+        }
     }
 
     @Test
@@ -261,27 +296,21 @@ class SelectionMergeTest {
                 .stamp(listOf(Value.ListIndex.of(0)))
         val symbolic =
             fixture.searchSelection(
-                Value.InputObject.of(
-                    type = fixture.filter,
-                    fields = mapOf("values" to listOf(variable)),
-                ),
+                mapOf("values" to listOf(variable)),
             )
         val concrete =
             fixture.searchSelection(
-                Value.InputObject.of(
-                    type = fixture.filter,
-                    fields = mapOf("values" to listOf(1)),
-                ),
+                mapOf("values" to listOf(1)),
             )
         fixture.world.bind(variable, Value.Int.of(1))
 
         val merged =
             context(fixture.world) {
-                selectionForestOf(symbolic, concrete).merge(fixture.query)
+                selectionForestOf(symbolic, concrete).mergeToGround(fixture.query)
             }
 
         assertEquals(1, merged.size)
-        assertEquals(concrete.objectKey(fixture.query), merged.single().key)
+        assertEquals(concrete.specializedKey(fixture.query), merged.single().key)
     }
 
     @Test
@@ -304,14 +333,14 @@ class SelectionMergeTest {
 
         val once =
             context(fixture.world) {
-                selectionForestOf(symbolic).merge(fixture.query)
+                selectionForestOf(symbolic).mergeToGround(fixture.query)
             }
         val twice =
             context(fixture.world) {
-                once.merge(fixture.query)
+                once.mergeToGround(fixture.query)
             }
 
-        assertSame(once.single().key, twice.single().key)
+        assertEquals(once.single().key, twice.single().key)
     }
 
     private class Fixture {
@@ -336,7 +365,7 @@ class SelectionMergeTest {
                 subselections = subselections,
             )
 
-        fun searchSelection(filter: Value.InputObject): Selection =
+        fun searchSelection(filter: Any): Selection =
             selection(
                 typeName = "Query",
                 fieldName = "search",

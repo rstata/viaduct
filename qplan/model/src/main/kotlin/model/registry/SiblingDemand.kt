@@ -4,7 +4,7 @@ import model.Assumptions
 import model.PathComponent
 import model.Schema
 import model.Value
-import model.merge
+import model.mergeToGround
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
@@ -21,8 +21,8 @@ import model.merge
  * @throws MissingResolverException when this field has no registered field resolver
  */
 context(world: Assumptions)
-fun Value.ObjectKey.demandsFromSibling(
-    siblingKey: Value.ObjectKey,
+fun Value.GroundKey.demandsFromSibling(
+    siblingKey: Value.GroundKey,
     path: List<PathComponent> = emptyList(),
 ): Boolean {
     val field = this.field
@@ -38,6 +38,6 @@ fun Value.ObjectKey.demandsFromSibling(
         world.resolverRegistry
             .resolver(field)
             .stampedObjectFragment(arguments, path)
-            .merge(objectType)
+            .mergeToGround(objectType)
             .keys()
 }

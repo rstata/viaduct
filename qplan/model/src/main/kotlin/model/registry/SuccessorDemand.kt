@@ -1,13 +1,13 @@
 package model.registry
 
 import model.Assumptions
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.objectKey
+import model.instantiateBindings
 import model.selectionForestOf
-import model.substituteBindings
+import model.specializedKey
+import model.substituteTemplates
 
 /**
  * Extends this output demand with every encountered successor resolver's transitive input demand.
@@ -27,7 +27,12 @@ fun SelectionForest.successorDemand(): SelectionForest =
             )
         val resolverInputDemand =
             selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-                val key = selection.objectKey(possibleType).substituteBindings()
+                val specializedKey = selection.specializedKey(possibleType)
+                val key =
+                    Value.GroundKey.of(
+                        field = specializedKey.field as model.Schema.ObjectField,
+                        arguments = specializedKey.arguments.instantiateBindings(),
+                    )
                 if (
                     key.arguments.containsErrorValue() ||
                     key.field !in world.resolverRegistry
@@ -68,52 +73,12 @@ private fun SelectionForest.substitute(
                 key =
                     Value.Key.of(
                         field = selection.key.field,
-                        arguments =
-                            selection.key.arguments.substitute(
-                                field = selection.key.field,
-                                bindings = bindings,
-                            ),
+                        arguments = selection.key.arguments.substituteTemplates(bindings),
                     ),
                 possibleTypes = selection.possibleTypes,
                 subselections = selection.subselections.substitute(bindings),
             ),
         )
-    }
-
-private fun Value.Arguments.substitute(
-    field: Schema.OutputField,
-    bindings: Map<Value.Variable.Template, Value.Input?>,
-): Value.Arguments =
-    Value.Arguments.of(
-        field = field,
-        fields =
-            fieldValues.mapValues { (_, value) ->
-                value.substitute(bindings)
-            },
-    )
-
-private fun Value.Input?.substitute(
-    bindings: Map<Value.Variable.Template, Value.Input?>,
-): Value.Input? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Variable.Template ->
-            if (this in bindings) bindings[this] else this
-        is Value.InputList ->
-            Value.InputList.of(
-                typeExpr = typeExpr,
-                values = values.map { value -> value.substitute(bindings) },
-            )
-        is Value.InputObject ->
-            Value.InputObject.of(
-                type = type,
-                fields =
-                    fieldValues.mapValues { (_, value) ->
-                        value.substitute(bindings)
-                    },
-            )
-        else -> this
     }
 
 private fun Value.Arguments.containsErrorValue(): Boolean =

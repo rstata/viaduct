@@ -15,7 +15,7 @@ import model.selectionForestOf
  * occurrence contributes one member to the corresponding [SelectionForest], which erases source
  * order while preserving occurrences and does not define semantic equality for [Selection]. This
  * one-to-one correspondence is a postcondition of this translation; later normalization with
- * [model.merge] may combine members that have equal concrete structural keys.
+ * [model.mergeToGround] may combine members that produce equal ground keys.
  */
 context(world: Assumptions)
 fun flatten(

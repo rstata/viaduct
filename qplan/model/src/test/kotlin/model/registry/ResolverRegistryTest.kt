@@ -6,6 +6,7 @@ import model.Selection
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
+import model.fieldExpressions
 import model.fragmentFrom
 import model.objectOf
 import model.selectionForestOf
@@ -89,7 +90,12 @@ class ResolverRegistryTest {
         val fieldResolver = registry.resolver(userField)
         val arguments = Value.Arguments.of(userField, emptyMap())
         val objectFragment = fieldResolver.objectFragment(arguments)
-        assertEquals(schema.query, objectFragment.type)
+        assertTrue(
+            objectFragment.all {
+                it.key.field.containingType == schema.query &&
+                    it.possibleTypes == setOf(schema.query)
+            },
+        )
         assertEquals(1, objectFragment.size)
         assertEquals(
             user,
@@ -99,7 +105,7 @@ class ResolverRegistryTest {
                         Value.Object.of(
                             schema.query,
                             mapOf(
-                                Value.Key.of(userIdField, emptyMap()) to bridgeValue,
+                                Value.GroundKey.of(userIdField, emptyMap()) to bridgeValue,
                             ),
                         ),
                     arguments = arguments,
@@ -209,12 +215,12 @@ class ResolverRegistryTest {
         assertEquals(bridge, representativeBridge.key.field)
         assertEquals(
             Value.Error,
-            representativeBridge.key.arguments.fieldValues.getValue("id"),
+            representativeBridge.key.arguments.fieldExpressions().getValue("id"),
         )
         assertEquals(bridge, bridgeSelection.key.field)
         assertEquals(
             Value.ID.of("42"),
-            bridgeSelection.key.arguments.fieldValues.getValue("id"),
+            bridgeSelection.key.arguments.fieldExpressions().getValue("id"),
         )
     }
 

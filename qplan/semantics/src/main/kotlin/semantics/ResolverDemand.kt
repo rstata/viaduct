@@ -1,12 +1,12 @@
 package semantics
 
 import model.Assumptions
-import model.ObjectSelectionForest
+import model.GroundSelectionForest
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
 import model.Value
-import model.merge
+import model.mergeToGround
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 
@@ -20,7 +20,7 @@ context(world: Assumptions)
 fun Schema.ObjectType.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
-): ObjectSelectionForest =
+): GroundSelectionForest =
     closeResolverDemand(
         path = path,
         selections = selections,
@@ -31,9 +31,9 @@ context(world: Assumptions)
 private fun Schema.ObjectType.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
-    expanded: Set<Value.ObjectKey>,
-): ObjectSelectionForest {
-    val applicableSelections = selections.merge(this)
+    expanded: Set<Value.GroundKey>,
+): GroundSelectionForest {
+    val applicableSelections = selections.mergeToGround(this)
     val unexpandedResolverKeys =
         applicableSelections.keys().filter { key ->
             key !in expanded &&

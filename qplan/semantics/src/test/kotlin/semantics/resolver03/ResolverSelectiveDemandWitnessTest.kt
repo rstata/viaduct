@@ -5,7 +5,7 @@ import model.SelectionForest
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.merge
+import model.mergeToGround
 import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -53,7 +53,7 @@ class ResolverSelectiveDemandWitnessTest {
                             ) { input, _ ->
                                 val base =
                                     input.fieldValues.getValue(
-                                        Value.ObjectKey.of(
+                                        Value.GroundKey.of(
                                             schema.objectField("Item", "base"),
                                             emptyMap(),
                                         ),
@@ -76,7 +76,7 @@ class ResolverSelectiveDemandWitnessTest {
             setOf("base", "computed"),
             context(world) {
                 requireNotNull(producerDemand)
-                    .merge(itemType)
+                    .mergeToGround(itemType)
                     .keys()
                     .mapTo(linkedSetOf()) { key -> key.field.fieldName }
             },

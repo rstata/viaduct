@@ -45,7 +45,7 @@ class EngineResultScope internal constructor(
     private val schema: Schema,
     private val type: Schema.ObjectType,
 ) {
-    private val cells = linkedMapOf<Value.ObjectKey, EngineResult.Cell>()
+    private val cells = linkedMapOf<Value.GroundKey, EngineResult.Cell>()
 
     /** Selects a field coordinate on this scope's object type. */
     fun field(
@@ -57,7 +57,7 @@ class EngineResultScope internal constructor(
         }
         return EngineResultFieldReference(
             key =
-                Value.ObjectKey.of(
+                Value.GroundKey.of(
                     field = schema.objectField(type.typeName, fieldName),
                     arguments = arguments.toMap(),
                 ),
@@ -105,7 +105,7 @@ class EngineResultScope internal constructor(
 
 /** One exact object-field coordinate selected in an [EngineResultScope]. */
 class EngineResultFieldReference internal constructor(
-    internal val key: Value.ObjectKey,
+    internal val key: Value.GroundKey,
 )
 
 private fun cellOf(

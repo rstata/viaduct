@@ -15,7 +15,7 @@ package model
  *
  * Test-fixture field-resolver definitions use fragments while fixture preparation preserves source
  * guards and occurrence shape. Canonical registry assembly specializes the root to its concrete
- * resolver owner and exposes the result as an [ObjectSelectionForest].
+ * resolver owner and exposes the result as an [GroundSelectionForest].
  */
 sealed interface Fragment {
     /** The nominal type carried by this fragment. */

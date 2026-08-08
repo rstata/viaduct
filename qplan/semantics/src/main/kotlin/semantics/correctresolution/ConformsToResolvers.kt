@@ -5,7 +5,7 @@ import model.EngineResult
 import model.PathComponent
 import model.Schema
 import model.Value
-import model.merge
+import model.mergeToGround
 import semantics.materialize
 
 /**
@@ -43,7 +43,7 @@ private fun EngineResult.Object.objectConformsToResolvers(
                     materialize(
                         resolver
                             .stampedObjectFragment(key.arguments, path + key)
-                            .merge(type),
+                            .mergeToGround(type),
                     )
                 val resolverValue = resolver(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)

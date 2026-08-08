@@ -92,7 +92,7 @@ class ResolverValueTraversalTest {
         val items =
             assertIs<EngineResult.List>(
                 result.fetch(
-                    Value.ObjectKey.of(world.schema.objectField("Query", "items"), emptyMap()),
+                    Value.GroundKey.of(world.schema.objectField("Query", "items"), emptyMap()),
                 ).value,
             )
         val a = assertIs<EngineResult.Object>(items[0].value)
@@ -100,7 +100,7 @@ class ResolverValueTraversalTest {
         assertEquals(
             Value.Int.of(2),
             a.fetch(
-                Value.ObjectKey.of(
+                Value.GroundKey.of(
                     world.schema.objectField("A", "computed"),
                     mapOf("factor" to 2),
                 ),
@@ -108,7 +108,7 @@ class ResolverValueTraversalTest {
         )
         assertEquals(
             Value.Int.of(3),
-            b.fetch(Value.ObjectKey.of(world.schema.objectField("B", "computed"), emptyMap())).value,
+            b.fetch(Value.GroundKey.of(world.schema.objectField("B", "computed"), emptyMap())).value,
         )
         assertEquals(listOf("A", "B"), applications)
         assertTrue(context(world) { result.correctResolution(fragment) })
@@ -161,7 +161,7 @@ class ResolverValueTraversalTest {
                                 computedApplications += 1
                                 val seed =
                                     input.fieldValues.getValue(
-                                        Value.ObjectKey.of(
+                                        Value.GroundKey.of(
                                             schema.objectField("Item", "seed"),
                                             emptyMap(),
                                         ),
@@ -183,7 +183,7 @@ class ResolverValueTraversalTest {
         val items =
             assertIs<EngineResult.List>(
                 result.fetch(
-                    Value.ObjectKey.of(world.schema.objectField("Query", "items"), emptyMap()),
+                    Value.GroundKey.of(world.schema.objectField("Query", "items"), emptyMap()),
                 ).value,
             )
 
@@ -194,7 +194,7 @@ class ResolverValueTraversalTest {
         assertEquals(
             Value.Int.of(6),
             item.fetch(
-                Value.ObjectKey.of(world.schema.objectField("Item", "computed"), emptyMap()),
+                Value.GroundKey.of(world.schema.objectField("Item", "computed"), emptyMap()),
             ).value,
         )
         assertEquals(1, itemsApplications)

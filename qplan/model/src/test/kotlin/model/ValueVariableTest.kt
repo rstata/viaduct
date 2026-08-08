@@ -8,6 +8,26 @@ import kotlin.test.assertNotEquals
 
 class ValueVariableTest {
     @Test
+    fun `template substitution preserves a present null binding`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.objectField("Query", "source")
+        val template = Value.Variable.of(source, "value")
+        val arguments = OpenArguments.of(source, mapOf("value" to template))
+
+        val substituted = arguments.substituteTemplates(mapOf(template to null))
+
+        assertIs<Value.Arguments>(substituted)
+        assertEquals(null, substituted.fieldValues.getValue("value"))
+    }
+
+    @Test
     fun `template identity contains its name and defining field`() {
         val schema =
             TestWorld.fromSDL(
@@ -57,8 +77,8 @@ class ValueVariableTest {
     }
 
     @Test
-    fun `input-like values and lists recursively stamp variable templates`() {
-        val schema =
+    fun `open arguments recursively stamp and instantiate variable templates`() {
+        val world =
             TestWorld.fromSDL(
                 """
                 input Filter {
@@ -71,12 +91,13 @@ class ValueVariableTest {
                   consume(filter: Filter, values: [Int]): Int
                 }
                 """.trimIndent(),
-            ).schema
+            ).assumptions
+        val schema = world.schema
         val first = schema.objectField("Query", "first")
         val consume = schema.objectField("Query", "consume")
         val template = Value.Variable.of(first, "value")
         val arguments =
-            Value.Arguments.of(
+            OpenArguments.of(
                 consume,
                 mapOf(
                     "filter" to
@@ -90,25 +111,23 @@ class ValueVariableTest {
         val path = listOf(Value.ListIndex.of(2))
 
         val stamped = arguments.stamp(path)
+        val stampedVariable = template.stamp(path)
+        world.bind(stampedVariable, Value.Int.of(9))
+        val instantiated =
+            context(world) {
+                stamped.instantiateBindings()
+            }
         val filter =
-            assertIs<Value.InputObject>(stamped.fieldValues.getValue("filter"))
+            assertIs<Value.InputObject>(instantiated.fieldValues.getValue("filter"))
         val nested =
             assertIs<Value.InputList>(filter.fieldValues.getValue("nested"))
         val values =
-            assertIs<Value.InputList>(stamped.fieldValues.getValue("values"))
+            assertIs<Value.InputList>(instantiated.fieldValues.getValue("values"))
 
-        assertEquals(template.stamp(path), filter.fieldValues.getValue("direct"))
-        assertEquals(template.stamp(path), nested.values[0])
+        assertEquals(Value.Int.of(9), filter.fieldValues.getValue("direct"))
+        assertEquals(Value.Int.of(9), nested.values[0])
         assertEquals(Value.Int.of(1), nested.values[1])
-        assertEquals(template.stamp(path), values.values.single())
-        assertEquals(
-            template.stamp(path),
-            assertIs<Value.InputList>(
-                arguments.fieldValues.getValue("values"),
-            ).stamp(path).values.single(),
-        )
-        val originalFilter =
-            assertIs<Value.InputObject>(arguments.fieldValues.getValue("filter"))
-        assertEquals(template, originalFilter.fieldValues.getValue("direct"))
+        assertEquals(Value.Int.of(9), values.values.single())
+        assertEquals(setOf(template), arguments.variableTemplates())
     }
 }

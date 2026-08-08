@@ -58,10 +58,10 @@ class ResolveValueTest {
         val schema = world.schema
         val userType = schema.type("User") as Schema.ObjectType
         val profileType = schema.type("Profile") as Schema.ObjectType
-        val typeNameKey = Value.ObjectKey.of(schema.objectField("User", "__typename"), emptyMap())
-        val computedKey = Value.ObjectKey.of(schema.objectField("User", "computed"), emptyMap())
-        val profileKey = Value.ObjectKey.of(schema.objectField("User", "profile"), emptyMap())
-        val rawKey = Value.ObjectKey.of(schema.objectField("Profile", "raw"), emptyMap())
+        val typeNameKey = Value.GroundKey.of(schema.objectField("User", "__typename"), emptyMap())
+        val computedKey = Value.GroundKey.of(schema.objectField("User", "computed"), emptyMap())
+        val profileKey = Value.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
+        val rawKey = Value.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "name" setTo "Ada"
@@ -154,9 +154,9 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val nameKey = Value.ObjectKey.of(schema.objectField("User", "name"), emptyMap())
-        val profileKey = Value.ObjectKey.of(schema.objectField("User", "profile"), emptyMap())
-        val rawKey = Value.ObjectKey.of(schema.objectField("Profile", "raw"), emptyMap())
+        val nameKey = Value.GroundKey.of(schema.objectField("User", "name"), emptyMap())
+        val profileKey = Value.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
+        val rawKey = Value.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "name" setTo "Ada"
@@ -242,7 +242,7 @@ class ResolveValueTest {
                 selectiveResolvers = false,
             )
         val world = testWorld.assumptions
-        val selectedKey = Value.ObjectKey.of(world.schema.objectField("User", "selected"), emptyMap())
+        val selectedKey = Value.GroundKey.of(world.schema.objectField("User", "selected"), emptyMap())
         val value =
             world.schema.objectOf("User") {
                 "selected" setTo "kept"
@@ -334,8 +334,8 @@ class ResolveValueTest {
                 }
                 """.trimIndent(),
             ).subselections
-        val itemsKey = Value.ObjectKey.of(itemsField, emptyMap())
-        val nestedKey = Value.ObjectKey.of(schema.objectField("Item", "nested"), emptyMap())
+        val itemsKey = Value.GroundKey.of(itemsField, emptyMap())
+        val nestedKey = Value.GroundKey.of(schema.objectField("Item", "nested"), emptyMap())
         val rootPath = listOf<PathComponent>(itemsKey)
         val expectedPaths =
             setOf(

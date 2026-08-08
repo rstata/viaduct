@@ -12,9 +12,9 @@ import model.registry.ResolverRegistry
  *
  * ### Invariant: assumptions-monotonic-variable-bindings
  *
- * The binding domain grows only through [bind]. Every bound variable has exactly one
- * variable-free [Value.Input] value, including a possible null value, and that value never changes.
- * [binding] is defined exactly on this domain.
+ * The binding domain grows only through [bind]. Every bound variable has exactly one ground
+ * [Value.Input] value, including a possible null value, and that value never changes. [binding] is
+ * defined exactly on this domain.
  */
 sealed interface Assumptions {
     val schema: Schema
@@ -36,10 +36,9 @@ sealed interface Assumptions {
     /**
      * Adds the first and only binding for [variable].
      *
-     * [value] may be null but contains no [Value.Variable] at any depth.
+     * [value] may be null. Its ground type excludes [Value.Variable] by construction.
      *
      * @throws IllegalStateException when [variable] is already bound
-     * @throws IllegalArgumentException when [value] contains a variable
      */
     fun bind(
         variable: Value.Variable.Stamped,
@@ -93,9 +92,6 @@ private class AssumptionsImpl(
         check(!isBound(variable)) {
             "Variable $variable is already bound"
         }
-        require(!value.containsVariableValue()) {
-            "Variable binding values cannot contain variables"
-        }
         bindings[variable] = value
     }
 
@@ -107,58 +103,4 @@ private class AssumptionsImpl(
         return field.fieldName == "__typename" ||
             field in resolverRegistry
     }
-}
-
-context(world: Assumptions)
-internal fun Value.Arguments.substituteBindings(): Value.Arguments {
-    if (fieldValues.values.none { value -> value.containsVariableValue() }) return this
-    return withFieldValues(
-        fieldValues.mapValues { (_, value) ->
-            value.substituteBindings()
-        },
-    )
-}
-
-context(world: Assumptions)
-internal fun Value.Input?.substituteBindings(): Value.Input? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Variable.Stamped ->
-            if (world.isBound(this)) {
-                world.binding(this)
-            } else {
-                this
-            }
-        is Value.InputList ->
-            if (containsVariableValue()) {
-                Value.InputList.of(
-                    typeExpr = typeExpr,
-                    values = values.map { value -> value.substituteBindings() },
-                )
-            } else {
-                this
-            }
-        is Value.InputObject ->
-            if (containsVariableValue()) {
-                Value.InputObject.of(
-                    type = type,
-                    fields =
-                        fieldValues.mapValues { (_, fieldValue) ->
-                            fieldValue.substituteBindings()
-                        },
-                )
-            } else {
-                this
-            }
-        else -> this
-    }
-
-context(world: Assumptions)
-internal fun Value.ObjectKey.substituteBindings(): Value.ObjectKey {
-    if (arguments.fieldValues.values.none { value -> value.containsVariableValue() }) return this
-    return Value.ObjectKey.of(
-        field = field,
-        arguments = arguments.substituteBindings(),
-    )
 }

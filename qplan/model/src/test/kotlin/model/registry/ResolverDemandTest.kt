@@ -6,6 +6,7 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.emptyFragmentOf
+import model.fieldExpressions
 import model.fragmentFrom
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
@@ -226,7 +227,7 @@ class ResolverDemandTest {
 
         assertEquals(
             variable,
-            objectFragment.key.arguments.fieldValues.getValue("value"),
+            objectFragment.key.arguments.fieldExpressions().getValue("value"),
         )
     }
 

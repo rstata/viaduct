@@ -1,14 +1,13 @@
 package model.registry
 
 import model.Assumptions
-import model.ObjectSelection
-import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
 import model.selectionForestOf
+import model.stamp
 
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
@@ -31,9 +30,9 @@ typealias FieldResolverApplicationObserver =
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
- * [objectFragment] and every `objectFragment(arguments)` have the same concrete parent type and
- * normalized field-coordinate shape. Exact fragments may differ only in the values occupying
- * fixed argument positions.
+ * [objectFragment] and every `objectFragment(arguments)` are specialized to the same concrete
+ * parent type and have the same field-coordinate occurrence shape. Exact fragments may differ only
+ * in the values occupying fixed argument positions.
  *
  * ### Invariant: field-resolver-variable-definitions
  *
@@ -44,9 +43,10 @@ typealias FieldResolverApplicationObserver =
  * at a simple value. External composition preserves containment in every exact object fragment.
  */
 class FieldResolver private constructor(
-    val objectFragment: ObjectSelectionForest,
+    val field: Schema.ObjectField,
+    val objectFragment: SelectionForest,
     val variables: Map<Value.Variable.Template, VariableDefinition>,
-    private val objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
+    private val objectFragmentFunction: (Value.Arguments) -> SelectionForest,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
@@ -59,7 +59,7 @@ class FieldResolver private constructor(
      * resolved field. Semantic operations use this function rather than assuming the
      * representative [objectFragment] is exact.
      */
-    fun objectFragment(arguments: Value.Arguments): ObjectSelectionForest =
+    fun objectFragment(arguments: Value.Arguments): SelectionForest =
         objectFragmentFunction(arguments)
 
     /**
@@ -71,7 +71,7 @@ class FieldResolver private constructor(
     fun stampedObjectFragment(
         arguments: Value.Arguments,
         path: List<PathComponent>,
-    ): ObjectSelectionForest =
+    ): SelectionForest =
         objectFragment(arguments).stampVariables(path)
 
     /**
@@ -107,17 +107,26 @@ class FieldResolver private constructor(
          * observers before calling this factory.
          */
         fun of(
-            objectFragment: ObjectSelectionForest,
+            field: Schema.ObjectField,
+            objectFragment: SelectionForest,
             variables: Map<Value.Variable.Template, VariableDefinition>,
-            objectFragmentFunction: (Value.Arguments) -> ObjectSelectionForest,
+            objectFragmentFunction: (Value.Arguments) -> SelectionForest,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
         ): FieldResolver {
+            require(
+                objectFragment.all { selection ->
+                    selection.key.field.containingType == field.containingType &&
+                        selection.possibleTypes == setOf(field.containingType)
+                },
+            ) {
+                "Object fragment must be specialized to ${field.containingType.typeName}"
+            }
             variables.forEach { (variable, definition) ->
-                require(variable.field.containingType == objectFragment.type) {
+                require(variable.field == field) {
                     "Variable ${variable.variableName} is not defined by a resolver on " +
-                        objectFragment.type.typeName
+                        "${field.containingType.typeName}/${field.fieldName}"
                 }
                 when (definition) {
                     is VariableDefinition.FromArgument -> {
@@ -141,6 +150,7 @@ class FieldResolver private constructor(
                 }
             }
             return FieldResolver(
+                field = field,
                 objectFragment = objectFragment,
                 variables = variables,
                 objectFragmentFunction = objectFragmentFunction,
@@ -151,25 +161,6 @@ class FieldResolver private constructor(
         }
     }
 }
-
-private fun ObjectSelectionForest.stampVariables(
-    path: List<PathComponent>,
-): ObjectSelectionForest =
-    ObjectSelectionForest.of(
-        type = type,
-        selections =
-            byKey().values.map { selection ->
-                ObjectSelection.of(
-                    key =
-                        Value.ObjectKey.of(
-                            field = selection.key.field,
-                            arguments = selection.key.arguments.stamp(path),
-                        ),
-                    possibleTypes = selection.possibleTypes,
-                    subselections = selection.subselections.stampVariables(path),
-                )
-            },
-    )
 
 private fun SelectionForest.stampVariables(
     path: List<PathComponent>,

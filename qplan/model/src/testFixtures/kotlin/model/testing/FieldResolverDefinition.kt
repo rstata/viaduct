@@ -1,8 +1,7 @@
 package model.testing
 
 import model.Fragment
-import model.ObjectSelection
-import model.ObjectSelectionForest
+import model.OpenArguments
 import model.Schema
 import model.Selection
 import model.SelectionForest
@@ -11,7 +10,7 @@ import model.registry.FieldResolver
 import model.registry.FieldResolverApplicationObserver
 import model.registry.FieldResolverFunction
 import model.registry.VariableDefinition
-import model.objectKey
+import model.merge
 import model.selectionForestOf
 
 /**
@@ -76,39 +75,27 @@ class FieldResolverDefinition private constructor(
         )
 
     internal fun assemble(
-        objectType: Schema.ObjectType,
+        field: Schema.ObjectField,
         variables: Map<Value.Variable.Template, VariableDefinition>,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {
+        val objectType = field.containingType
+
         fun normalize(
             fragment: Fragment,
             role: String,
-        ): ObjectSelectionForest {
+        ): SelectionForest {
             require(fragment.nominalType == objectType) {
                 "$role type ${fragment.nominalType.typeName} does not match ${objectType.typeName}"
             }
-            val selections =
-                fragment.subselections
-                    .filter { selection -> objectType in selection.possibleTypes }
-                    .groupBy { selection -> selection.objectKey(objectType) }
-                    .entries
-                    .map { (key, occurrences) ->
-                        ObjectSelection.of(
-                            key = key,
-                            possibleTypes = setOf(objectType),
-                            subselections =
-                                occurrences.flatMap { occurrence ->
-                                    occurrence.subselections
-                                },
-                        )
-                    }
-            return ObjectSelectionForest.of(objectType, selections)
+            return fragment.subselections.merge(objectType)
         }
 
         fun exactObjectFragment(arguments: Value.Arguments): Fragment =
             objectFragment(arguments).also(validateObjectFragment)
 
         return FieldResolver.of(
+            field = field,
             objectFragment = normalize(objectFragment, "Object fragment"),
             variables = variables,
             objectFragmentFunction = { arguments ->
@@ -135,7 +122,7 @@ class FieldResolverDefinition private constructor(
 
         fun ofArgumentRetargeting(
             objectFragment: Fragment,
-            retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
+            retargetArguments: (Value.Key, Value.Arguments) -> OpenArguments,
             function: FieldResolverFunction,
         ): FieldResolverDefinition =
             FieldResolverDefinition(
@@ -157,7 +144,7 @@ fun fieldResolverOf(
 
 private fun Fragment.retargetArguments(
     resolverArguments: Value.Arguments,
-    retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
+    retargetArguments: (Value.Key, Value.Arguments) -> OpenArguments,
 ): Fragment =
     Fragment.of(
         nominalType = nominalType,
@@ -166,7 +153,7 @@ private fun Fragment.retargetArguments(
 
 private fun SelectionForest.retargetArguments(
     resolverArguments: Value.Arguments,
-    retargetArguments: (Value.Key, Value.Arguments) -> Value.Arguments,
+    retargetArguments: (Value.Key, Value.Arguments) -> OpenArguments,
 ): SelectionForest =
     flatMap { selection ->
         selectionForestOf(

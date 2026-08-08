@@ -41,13 +41,13 @@ sealed interface EngineResult {
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
-        val cells: Map<Value.ObjectKey, Cell>
+        val cells: Map<Value.GroundKey, Cell>
 
-        val keys: Set<Value.ObjectKey>
+        val keys: Set<Value.GroundKey>
             get() = cells.keys
 
         /** @throws MissingFieldException when [key] is absent */
-        fun fetch(key: Value.ObjectKey): Cell =
+        fun fetch(key: Value.GroundKey): Cell =
             cells[key]
                 ?: throw MissingFieldException(type.typeName, key.field.fieldName)
 
@@ -59,13 +59,10 @@ sealed interface EngineResult {
              */
             fun of(
                 type: Schema.ObjectType,
-                cells: Map<Value.ObjectKey, Cell>,
+                cells: Map<Value.GroundKey, Cell>,
             ): Object {
                 require(cells.keys.all { it.field.containingType == type }) {
                     "${type.typeName} result contains a field owned by another type"
-                }
-                require(cells.keys.none { it.arguments.containsVariableValue() }) {
-                    "${type.typeName} result keys cannot contain unresolved variables"
                 }
                 cells.forEach { (key, cell) ->
                     if (key.arguments.containsErrorValue()) {
@@ -202,7 +199,7 @@ private data class CellImpl(
 
 private data class ObjectResultImpl(
     override val type: Schema.ObjectType,
-    override val cells: Map<Value.ObjectKey, EngineResult.Cell>,
+    override val cells: Map<Value.GroundKey, EngineResult.Cell>,
 ) : EngineResult.Object
 
 private data class ListResultImpl(
@@ -218,9 +215,6 @@ private fun EngineResult.Cell.union(other: EngineResult.Cell): EngineResult.Cell
         check = check,
     )
 }
-
-private fun Value.Arguments.containsVariableValue(): Boolean =
-    fieldValues.values.any { it.containsVariableValue() }
 
 private fun Value.Arguments.containsErrorValue(): Boolean =
     fieldValues.values.any { it.containsErrorValue() }

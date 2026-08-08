@@ -5,7 +5,7 @@ import model.invariants.conformsToSchemaType
 /**
  * One step in an exact path through an engine-result tree.
  *
- * An [Value.ObjectKey] selects an object cell, while a [Value.ListIndex] selects a list cell.
+ * A [Value.GroundKey] selects an object cell, while a [Value.ListIndex] selects a list cell.
  * Equality is structural within each variant.
  */
 sealed interface PathComponent
@@ -17,15 +17,17 @@ sealed interface PathComponent
  * yields null.
  */
 fun kotlin.collections.List<PathComponent>?.toSelectionPath():
-    kotlin.collections.List<Value.ObjectKey>? =
-    this?.map { component -> component as? Value.ObjectKey ?: return null }
+    kotlin.collections.List<Value.GroundKey>? =
+    this?.map { component -> component as? Value.GroundKey ?: return null }
 
 /**
- * A GraphQL semantic value.
+ * A ground GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
- * by the interface. [Variable.Template] equality is structural over its name and defining field.
- * [Variable.Stamped] equality additionally distinguishes the path used to stamp its template.
+ * by the interface. No implementation contains a [Variable]. Variables are nested here for
+ * namespacing but inhabit [OpenValue] rather than [Value]. [Variable.Template] equality is
+ * structural over its name and defining field; [Variable.Stamped] equality additionally
+ * distinguishes its occurrence path.
  *
  * ### Invariant: schema-value-canonicality
  *
@@ -34,14 +36,14 @@ fun kotlin.collections.List<PathComponent>?.toSelectionPath():
  */
 sealed interface Value {
     /**
-     * A GraphQL input value or schema-synthetic field-argument tuple.
+     * A ground GraphQL input value or schema-synthetic field-argument tuple.
      *
      * [Input] values are members of [Value], while [Arguments] is an input-like tuple rather than a
      * GraphQL value.
      */
     sealed interface InputLike
 
-    sealed interface Input : Value, InputLike
+    sealed interface Input : Value, InputLike, OpenValue
 
     sealed interface Output : Value
 
@@ -184,13 +186,6 @@ sealed interface Value {
     sealed interface InputList : Input, List<Schema.InputType> {
         override val values: kotlin.collections.List<Input?>
 
-        /**
-         * Returns this list with every nested [Variable.Template] stamped at [path].
-         *
-         * Existing [Variable.Stamped] values and non-variable values are preserved.
-         */
-        fun stamp(path: kotlin.collections.List<PathComponent>): InputList
-
         companion object {
             /**
              * ### Invariant: input-list-value-factory-schema-conformance
@@ -245,20 +240,12 @@ sealed interface Value {
         val type: Schema.InputObjectLike
         val fieldValues: Fields<Schema.InputObjectLike, Input>
 
-        /**
-         * Returns this value with every nested [Variable.Template] stamped at [path].
-         *
-         * Existing [Variable.Stamped] values and non-variable values are preserved.
-         */
-        fun stamp(path: kotlin.collections.List<PathComponent>): InputObjectLike
     }
 
-    /** An input object whose fields may contain nested [Variable] instances. */
+    /** A ground input object. */
     sealed interface InputObject : Input, Typed, InputObjectLike {
         override val type: Schema.InputObjectType
         override val fieldValues: Fields<Schema.InputObjectType, Input>
-        override fun stamp(path: kotlin.collections.List<PathComponent>): InputObject
-
         companion object {
             /**
              * ### Invariant: input-object-value-factory-schema-conformance
@@ -284,14 +271,12 @@ sealed interface Value {
     /**
      * The values supplied for one output field's complete argument definition.
      *
-     * A value may contain nested [Variable] instances when it belongs to a [Key] used outside a
-     * [Value.Object] or [EngineResult.Object].
+     * This tuple is ground and inspectable. [OpenArguments] represents a tuple that may contain
+     * variables.
      */
-    sealed interface Arguments : InputObjectLike {
+    sealed interface Arguments : InputObjectLike, OpenArguments {
         override val type: Schema.FieldArguments
         override val fieldValues: Fields<Schema.FieldArguments, Input>
-        override fun stamp(path: kotlin.collections.List<PathComponent>): Arguments
-
         companion object {
             /**
              * ### Invariant: arguments-value-factory-schema-conformance
@@ -302,18 +287,13 @@ sealed interface Value {
             fun of(
                 field: Schema.OutputField,
                 fields: Map<kotlin.String, Any?>,
-            ): Arguments =
-                ArgumentsValueImpl(
-                    type = field.arguments,
-                    fieldValues =
-                        FieldValuesImpl(
-                            field.arguments,
-                            coerceInputLikeFields(
-                                field.arguments,
-                                fields,
-                            ),
-                        ),
-                )
+            ): Arguments {
+                val arguments = OpenArguments.of(field, fields)
+                require(arguments is Arguments) {
+                    "Ground arguments cannot contain variables"
+                }
+                return arguments
+            }
         }
     }
 
@@ -324,15 +304,11 @@ sealed interface Value {
      *
      * `arguments.type == field.arguments`.
      *
-     * ### Invariant: object-key-field-classification
-     *
-     * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
-     *
      * Equality is structural over [field] and [arguments], using canonical schema equality.
      */
     sealed interface Key {
         val field: Schema.OutputField
-        val arguments: Arguments
+        val arguments: OpenArguments
 
         companion object {
             /**
@@ -343,13 +319,13 @@ sealed interface Value {
             fun of(
                 field: Schema.OutputField,
                 arguments: Map<kotlin.String, Any?>,
-            ): Key = of(field, Arguments.of(field, arguments))
+            ): Key = of(field, OpenArguments.of(field, arguments))
 
             /** Constructs the precise key category for a field on a concrete object type. */
             fun of(
                 field: Schema.ObjectField,
                 arguments: Map<kotlin.String, Any?>,
-            ): ObjectKey = ObjectKey.of(field, arguments)
+            ): Key = of(field, OpenArguments.of(field, arguments))
 
             /**
              * ### Invariant: arguments-key-factory-schema-conformance
@@ -358,14 +334,15 @@ sealed interface Value {
              */
             fun of(
                 field: Schema.OutputField,
-                arguments: Arguments,
+                arguments: OpenArguments,
             ): Key {
                 require(arguments.type == field.arguments) {
                     "Key arguments do not belong to its output field"
                 }
-                return when (field) {
-                    is Schema.ObjectField -> ObjectKeyImpl(field, arguments)
-                    else -> KeyImpl(field, arguments)
+                return if (field is Schema.ObjectField && arguments is Arguments) {
+                    GroundKeyImpl(field, arguments)
+                } else {
+                    KeyImpl(field, arguments)
                 }
             }
 
@@ -373,34 +350,34 @@ sealed interface Value {
             fun of(
                 field: Schema.ObjectField,
                 arguments: Arguments,
-            ): ObjectKey = ObjectKey.of(field, arguments)
+            ): GroundKey = GroundKey.of(field, arguments)
         }
     }
 
     /**
-     * A key whose field belongs to a concrete object type.
+     * A key whose field belongs to a concrete object type and whose arguments are ground.
      *
-     * Every [Key] whose field is a [Schema.ObjectField] is constructed as an [ObjectKey], and every
-     * [ObjectKey] carries a [Schema.ObjectField]. Equality remains the structural [Key] equality
-     * over [field] and [arguments].
+     * Every instance carries a [Schema.ObjectField] and ground [Arguments]. Equality is structural
+     * over those properties.
      */
-    sealed interface ObjectKey : Key, PathComponent {
+    sealed interface GroundKey : Key, PathComponent {
         override val field: Schema.ObjectField
+        override val arguments: Arguments
 
         companion object {
             fun of(
                 field: Schema.ObjectField,
                 arguments: Map<kotlin.String, Any?>,
-            ): ObjectKey = of(field, Arguments.of(field, arguments))
+            ): GroundKey = of(field, Arguments.of(field, arguments))
 
             fun of(
                 field: Schema.ObjectField,
                 arguments: Arguments,
-            ): ObjectKey {
+            ): GroundKey {
                 require(arguments.type == field.arguments) {
                     "Key arguments do not belong to its output field"
                 }
-                return ObjectKeyImpl(field, arguments)
+                return GroundKeyImpl(field, arguments)
             }
         }
     }
@@ -422,8 +399,8 @@ sealed interface Value {
      *
      * ### Invariant: object-value-owner
      *
-     * `fieldValues.containingType == type`. Every present [ObjectKey] carries a field owned by [type]
-     * and arguments containing no unresolved [Variable].
+     * `fieldValues.containingType == type`. Every present [GroundKey] carries a field owned by
+     * [type].
      */
     sealed interface Object : Output, Typed {
         override val type: Schema.ObjectType
@@ -437,7 +414,7 @@ sealed interface Value {
              */
             fun of(
                 type: Schema.ObjectType,
-                fields: Map<ObjectKey, Output?> = emptyMap(),
+                fields: Map<GroundKey, Output?> = emptyMap(),
             ): Object {
                 fields.forEach { (key, value) ->
                     require(value.conformsToSchemaType(key.field.typeExpr)) {
@@ -459,17 +436,16 @@ sealed interface Value {
      * ### Invariant: object-field-values-owner
      *
      * [containingType] is the concrete object type whose fields these values inhabit. Every present
-     * [ObjectKey] carries a field owned by [containingType] and arguments containing no unresolved
-     * [Variable].
+     * [GroundKey] carries a field owned by [containingType].
      */
-    sealed interface ObjectFields : Map<ObjectKey, Output?> {
+    sealed interface ObjectFields : Map<GroundKey, Output?> {
         val containingType: Schema.ObjectType
 
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: ObjectKey): Output?
+        override operator fun get(key: GroundKey): Output?
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: ObjectKey): Output?
+        fun getValue(key: GroundKey): Output?
     }
 
     /**
@@ -503,7 +479,7 @@ sealed interface Value {
      * one resolution; stamping distinguishes the variable instances belonging to those
      * occurrences.
      */
-    sealed interface Variable : Input {
+    sealed interface Variable : OpenValue {
         val field: Schema.ObjectField
         val variableName: kotlin.String
 
@@ -564,7 +540,7 @@ sealed interface Value {
         Enum,
         InputObject,
         Object,
-        Variable {
+        OpenValue {
         override val type: Nothing
             get() = unsupported()
 
@@ -588,14 +564,6 @@ sealed interface Value {
 
         override val fieldValues: Nothing
             get() = unsupported()
-
-        override val variableName: kotlin.String
-            get() = unsupported()
-
-        override val field: Nothing
-            get() = unsupported()
-
-        override fun stamp(path: kotlin.collections.List<PathComponent>): Error = this
 
         private fun unsupported(): Nothing =
             throw UnsupportedOperationException("Value.Error has no observable properties")
@@ -653,15 +621,7 @@ private data class EnumValueImpl(
 private data class InputListValueImpl(
     override val typeExpr: TypeExpr<Schema.InputType>,
     override val values: kotlin.collections.List<Value.Input?>,
-) : Value.InputList {
-    override fun stamp(
-        path: kotlin.collections.List<PathComponent>,
-    ): Value.InputList =
-        Value.InputList.of(
-            typeExpr = typeExpr,
-            values = values.map { value -> value.stampVariables(path) },
-        )
-}
+) : Value.InputList
 
 private data class OutputListValueImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
@@ -676,28 +636,12 @@ private data class ObjectValueImpl(
 private data class InputObjectValueImpl(
     override val type: Schema.InputObjectType,
     override val fieldValues: Value.Fields<Schema.InputObjectType, Value.Input>,
-) : Value.InputObject {
-    override fun stamp(
-        path: kotlin.collections.List<PathComponent>,
-    ): Value.InputObject =
-        InputObjectValueImpl(
-            type = type,
-            fieldValues = fieldValues.stampVariables(path),
-        )
-}
+) : Value.InputObject
 
 private data class ArgumentsValueImpl(
     override val type: Schema.FieldArguments,
     override val fieldValues: Value.Fields<Schema.FieldArguments, Value.Input>,
-) : Value.Arguments {
-    override fun stamp(
-        path: kotlin.collections.List<PathComponent>,
-    ): Value.Arguments =
-        ArgumentsValueImpl(
-            type = type,
-            fieldValues = fieldValues.stampVariables(path),
-        )
-}
+) : Value.Arguments
 
 private data class TemplateVariableValueImpl(
     override val variableName: String,
@@ -731,7 +675,7 @@ private data class StampedVariableValueImpl(
 private fun kotlin.collections.List<PathComponent>.renderVariablePath(): String =
     joinToString(prefix = "[", postfix = "]") { component ->
         when (component) {
-            is Value.ObjectKey ->
+            is Value.GroundKey ->
                 "${component.field.containingType.typeName}/${component.field.fieldName}" +
                     component.arguments.fieldValues
                         .takeIf { arguments -> arguments.isNotEmpty() }
@@ -743,13 +687,13 @@ private fun kotlin.collections.List<PathComponent>.renderVariablePath(): String 
 
 private data class KeyImpl(
     override val field: Schema.OutputField,
-    override val arguments: Value.Arguments,
+    override val arguments: OpenArguments,
 ) : Value.Key
 
-private data class ObjectKeyImpl(
+private data class GroundKeyImpl(
     override val field: Schema.ObjectField,
     override val arguments: Value.Arguments,
-) : Value.ObjectKey
+) : Value.GroundKey
 
 private data class ListIndexImpl(
     override val index: Int,
@@ -759,29 +703,11 @@ private data class PresentDefaultValueImpl(
     override val value: Value.Input?,
 ) : Value.Default.Present
 
-private fun <T : Schema.InputObjectLike> Value.Fields<T, Value.Input>.stampVariables(
-    path: kotlin.collections.List<PathComponent>,
-): Value.Fields<T, Value.Input> =
-    FieldValuesImpl(
-        containingType,
-        mapValues { (_, value) -> value.stampVariables(path) },
-    )
-
-private fun Value.Input?.stampVariables(
-    path: kotlin.collections.List<PathComponent>,
-): Value.Input? =
-    when (this) {
-        is Value.Variable.Template -> stamp(path)
-        is Value.InputList -> stamp(path)
-        is Value.InputObject -> stamp(path)
-        else -> this
-    }
-
 private class ObjectFieldValuesImpl(
     override val containingType: Schema.ObjectType,
-    private val backingMap: Map<Value.ObjectKey, Value.Output?>,
+    private val backingMap: Map<Value.GroundKey, Value.Output?>,
 ) : Value.ObjectFields,
-    Map<Value.ObjectKey, Value.Output?> by backingMap {
+    Map<Value.GroundKey, Value.Output?> by backingMap {
     init {
         require(backingMap.keys.all { it.field.containingType == containingType }) {
             val foreignFields =
@@ -791,18 +717,11 @@ private class ObjectFieldValuesImpl(
             "${containingType.typeName} cannot contain output fields " +
                 foreignFields.sorted().joinToString()
         }
-        require(
-            backingMap.keys.none { key ->
-                key.arguments.fieldValues.values.any { it.containsVariableValue() }
-            },
-        ) {
-            "${containingType.typeName} object-value keys cannot contain unresolved variables"
-        }
     }
 
-    override operator fun get(key: Value.ObjectKey): Value.Output? = getValue(key)
+    override operator fun get(key: Value.GroundKey): Value.Output? = getValue(key)
 
-    override fun getValue(key: Value.ObjectKey): Value.Output? {
+    override fun getValue(key: Value.GroundKey): Value.Output? {
         if (!backingMap.containsKey(key)) {
             throw MissingFieldException(containingType.typeName, key.field.fieldName)
         }
@@ -880,6 +799,24 @@ internal fun Value.Arguments.withFieldValues(
         fieldValues = FieldValuesImpl(type, fields),
     )
 
+internal fun argumentsOfGround(
+    type: Schema.FieldArguments,
+    fields: Map<String, Value.Input?>,
+): Value.Arguments {
+    require(
+        fields.all { (name, value) ->
+            val field = type.fields[name] ?: return@all false
+            value.conformsToSchemaType(field.typeExpr)
+        },
+    ) {
+        "Ground argument values do not conform to their field definition"
+    }
+    return ArgumentsValueImpl(
+        type = type,
+        fieldValues = FieldValuesImpl(type, fields),
+    )
+}
+
 private fun coerceInputValue(
     typeExpr: TypeExpr<Schema.InputType>,
     value: Any?,
@@ -889,7 +826,6 @@ private fun coerceInputValue(
         return null
     }
     if (value == Value.Error) return Value.Error
-    if (value is Value.Variable) return value
 
     return when (typeExpr) {
         is TypeExpr.Named -> coerceNamedInputValue(typeExpr.baseType, value)
@@ -969,13 +905,4 @@ private fun Map<*, *>.toStringKeyedMap(): Map<String, Any?> =
     entries.associate { (key, value) ->
         if (key !is String) throw ClassCastException()
         key to value
-    }
-
-internal fun Value.Input?.containsVariableValue(): Boolean =
-    when {
-        this == null || this == Value.Error -> false
-        this is Value.Variable -> true
-        this is Value.InputList -> values.any { it.containsVariableValue() }
-        this is Value.InputObject -> fieldValues.values.any { it.containsVariableValue() }
-        else -> false
     }

@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.OpenArguments
 import model.PathComponent
 import model.Schema
 import model.Selection
@@ -151,7 +152,7 @@ data class ResolutionWitness(
 /**
  * One registered resolver-bearing cell found by traversing a returned result independently of the
  * resolver constructors and correctness predicates. [occurrencePath] is the exact root-to-cell OER
- * path: [Value.ObjectKey] components select object fields and [Value.ListIndex] components select
+ * path: [Value.GroundKey] components select object fields and [Value.ListIndex] components select
  * list elements, distinguishing equal fields at different list positions.
  */
 data class RegisteredResolverCell(
@@ -348,16 +349,20 @@ private class FingerprintBudget(
 ) {
     private var nodes = 0
 
-    fun arguments(arguments: Value.Arguments): String =
-        node(
-            "args(" +
-                arguments.fieldValues.entries
-                    .sortedBy(Map.Entry<String, Value.Input?>::key)
-                    .joinToString(",") { (name, value) ->
-                        atom(name) + "=" + input(value)
-                    } +
-                ")",
-        )
+    fun arguments(arguments: OpenArguments): String =
+        if (arguments is Value.Arguments) {
+            node(
+                "args(" +
+                    arguments.fieldValues.entries
+                        .sortedBy(Map.Entry<String, Value.Input?>::key)
+                        .joinToString(",") { (name, value) ->
+                            atom(name) + "=" + input(value)
+                        } +
+                    ")",
+            )
+        } else {
+            node("open-args:${arguments.hashCode()}")
+        }
 
     fun output(value: Value.Output?): String =
         when {
@@ -422,7 +427,6 @@ private class FingerprintBudget(
         when {
             value == null -> node("null")
             value == Value.Error -> node("error")
-            value is Value.Variable -> node("variable:${atom(value.variableName)}")
             value is Value.Int -> node("int:${value.intValue}")
             value is Value.Float -> node("float:${value.floatValue.toBits()}")
             value is Value.String -> node("string:${atom(value.stringValue)}")
@@ -477,7 +481,7 @@ private class FingerprintBudget(
     private fun atom(value: String): String = "${value.length}:$value"
 }
 
-private fun Value.Key.canonicalFingerprint(
+private fun Value.GroundKey.canonicalFingerprint(
     bounds: ResolutionWitnessBounds,
 ): ResolutionFingerprint =
     ResolutionFingerprint(

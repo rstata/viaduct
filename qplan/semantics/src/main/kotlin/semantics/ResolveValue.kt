@@ -5,14 +5,14 @@ import model.EngineResult
 import model.PathComponent
 import model.SelectionForest
 import model.Value
-import model.merge
+import model.mergeToGround
 import model.selectionForestOf
 
 /**
  * A passive result tree and the registered resolver work remaining within it.
  *
  * Each key in [pathsNeedingResolution] is the exact root-relative OER path of one object occurrence
- * requiring registered field resolution. Object fields contribute [Value.ObjectKey] components and
+ * requiring registered field resolution. Object fields contribute [Value.GroundKey] components and
  * list positions contribute [Value.ListIndex] components. Each map value is the selection forest
  * already collapsed to the object at that path.
  */
@@ -83,7 +83,7 @@ private fun Value.Object.resolveObjectValue(
     beSelective: Boolean,
     path: List<PathComponent>,
 ): ResolvedValue {
-    val mergedResolverDemand = resolverDemand.merge(type)
+    val mergedResolverDemand = resolverDemand.mergeToGround(type)
     val resolverDemandByKey = mergedResolverDemand.byKey()
     if (world.selectiveResolvers && beSelective) {
         val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
@@ -256,7 +256,7 @@ private fun Value.Output?.resolvePath(
             if (path == targetPath) {
                 resolveObject(path, this, selections, resolved)
             } else {
-                val key = targetPath.getOrNull(path.size) as? Value.ObjectKey
+                val key = targetPath.getOrNull(path.size) as? Value.GroundKey
                     ?: throw IllegalArgumentException(
                         "Resolution path does not select an object field",
                     )
@@ -300,6 +300,6 @@ private class ResolvedList(
 )
 
 private class ResolvedObject(
-    val cells: Map<Value.ObjectKey, EngineResult.Cell>,
+    val cells: Map<Value.GroundKey, EngineResult.Cell>,
     val pathsNeedingResolution: Map<List<PathComponent>, SelectionForest>,
 )

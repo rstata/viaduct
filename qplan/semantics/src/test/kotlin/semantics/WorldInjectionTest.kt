@@ -93,7 +93,7 @@ class WorldInjectionTest {
                                 Value.Object.of(
                                     schema.query,
                                     mapOf(
-                                        Value.ObjectKey.of(userIdField, emptyMap()) to bridge,
+                                        Value.GroundKey.of(userIdField, emptyMap()) to bridge,
                                     ),
                                 ),
                             arguments = Value.Arguments.of(userField, emptyMap()),
@@ -146,8 +146,8 @@ class WorldInjectionTest {
 private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
-): Value.ObjectKey =
-    Value.ObjectKey.of(
+): Value.GroundKey =
+    Value.GroundKey.of(
         field = objectField(type.typeName, fieldName),
         arguments = emptyMap(),
     )

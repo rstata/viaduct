@@ -97,8 +97,8 @@ class FromArgumentBindingTest {
             fragment.subselections,
         )
 
-        val one = Value.ObjectKey.of(field, mapOf("value" to 1))
-        val two = Value.ObjectKey.of(field, mapOf("value" to 2))
+        val one = Value.GroundKey.of(field, mapOf("value" to 1))
+        val two = Value.GroundKey.of(field, mapOf("value" to 2))
         assertEquals(
             Value.Int.of(1),
             world.binding(variable.stamp(listOf(one))),

@@ -21,9 +21,9 @@ class ValueKeyTest {
                 field = field as Schema.OutputField,
                 arguments = emptyMap(),
             )
-        val precise = Value.ObjectKey.of(field, emptyMap())
+        val precise = Value.GroundKey.of(field, emptyMap())
 
-        assertIs<Value.ObjectKey>(general)
+        assertIs<Value.GroundKey>(general)
         assertEquals(precise, general)
         assertSame(field, general.field)
     }
@@ -35,7 +35,7 @@ class ValueKeyTest {
 
         val key = Value.Key.of(field, emptyMap())
 
-        assertFalse(key is Value.ObjectKey)
+        assertFalse(key is Value.GroundKey)
     }
 
     @Test
@@ -47,8 +47,8 @@ class ValueKeyTest {
     @Test
     fun `selection paths contain only object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = Value.ObjectKey.of(schema.objectField("Query", "user"), emptyMap())
-        val id = Value.ObjectKey.of(schema.objectField("User", "id"), emptyMap())
+        val user = Value.GroundKey.of(schema.objectField("Query", "user"), emptyMap())
+        val id = Value.GroundKey.of(schema.objectField("User", "id"), emptyMap())
 
         assertEquals(listOf(user, id), listOf<PathComponent>(user, id).toSelectionPath())
         assertNull(listOf<PathComponent>(user, Value.ListIndex.of(0), id).toSelectionPath())

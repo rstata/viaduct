@@ -2,11 +2,10 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
-import model.ObjectSelectionForest
+import model.GroundSelectionForest
 import model.SelectionForest
 import model.Value
-import model.merge
-import model.objectKey
+import model.mergeToGround
 
 /**
  * Whether this result contains every cell required by [selections].
@@ -25,15 +24,15 @@ fun EngineResult.Object.conformsToSelections(selections: SelectionForest): Boole
     objectConformsToSelections(selections)
 
 context(world: Assumptions)
-fun EngineResult.Object.conformsToSelections(selections: ObjectSelectionForest): Boolean =
+fun EngineResult.Object.conformsToSelections(selections: GroundSelectionForest): Boolean =
     type == selections.type && objectConformsToSelections(selections)
 
 context(world: Assumptions)
 private fun EngineResult.Object.objectConformsToSelections(
     selections: SelectionForest,
 ): Boolean =
-    selections.merge(type).all { selection ->
-        val key = selection.objectKey(type)
+    selections.mergeToGround(type).byKey().values.all { selection ->
+        val key = selection.key
         key in keys &&
             fetch(key).value.engineResultConformsToSelections(selection.subselections)
     }

@@ -3,6 +3,7 @@ package model.spec
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.fieldExpressions
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +23,7 @@ class SpecSelectionFlattenerTest {
         val version = result.single()
         assertEquals(fixture.schema.field("Query", "version"), version.key.field)
         assertEquals(Schema.NoArguments, version.key.arguments.type)
-        assertEquals(emptyMap(), version.key.arguments.fieldValues)
+        assertEquals(emptyMap(), version.key.arguments.fieldExpressions())
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertTrue(version.isLeaf)
         assertTrue(version.subselections.isEmpty())
@@ -66,13 +67,9 @@ class SpecSelectionFlattenerTest {
         assertEquals(field, release.key.field)
         assertEquals(field.arguments, release.key.arguments.type)
         assertEquals(
-            field.arguments,
-            release.key.arguments.fieldValues.containingType,
-        )
-        assertEquals(
             "beta",
             assertIs<Value.String>(
-                release.key.arguments.fieldValues["channel"],
+                release.key.arguments.fieldExpressions()["channel"],
             ).stringValue,
         )
     }

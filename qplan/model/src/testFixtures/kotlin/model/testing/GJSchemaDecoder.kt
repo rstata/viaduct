@@ -24,6 +24,7 @@ import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLType
 import graphql.schema.GraphQLUnionType
 import graphql.schema.InputValueWithState
+import model.OpenValue
 import model.Schema
 import model.TypeExpr
 import model.Value
@@ -406,14 +407,15 @@ internal class GJSchemaDecoder(
         if (value.isNotSet) {
             Value.Default.Absent
         } else {
-            Value.Default.of(
+            val decoded =
                 decodeInputValue(
                     type,
                     value,
                     noVariableValues,
                     schema,
-                ),
-            )
+                )
+            check(decoded == null || decoded is Value.Input)
+            Value.Default.of(decoded as Value.Input?)
         }
 
     private fun implementsInterface(
@@ -430,7 +432,7 @@ internal fun decodeInputValue(
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
     variableField: Schema.ObjectField? = null,
-): Value.Input? =
+): OpenValue? =
     if (value.isLiteral) {
         decodeLiteral(
             type,
@@ -449,7 +451,7 @@ internal fun decodeLiteral(
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
     variableField: Schema.ObjectField? = null,
-): Value.Input? {
+): OpenValue? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
             variableValues.getValue(value.name)
@@ -476,9 +478,9 @@ internal fun decodeLiteral(
 
         is GraphQLList -> {
             val values = if (value is ArrayValue) value.values else listOf(value)
-            Value.InputList.of(
-                typeExpr = decodeModelInputType(type.wrappedType as GraphQLInputType, schema),
-                values = values.map {
+            OpenValue.of(
+                typeExpr = decodeModelInputType(type, schema),
+                value = values.map {
                     decodeLiteral(
                         type.wrappedType as GraphQLInputType,
                         it,
@@ -547,12 +549,12 @@ private fun decodeScalarLiteral(
 private inline fun decodeInputObjectFields(
     type: GraphQLInputObjectType,
     isFieldSupplied: (String) -> Boolean,
-    decodeSupplied: (GraphQLInputType, String) -> Value.Input?,
+    decodeSupplied: (GraphQLInputType, String) -> OpenValue?,
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
-): Value.Input {
+): OpenValue {
     val fields =
-        buildMap<String, Value.Input?> {
+        buildMap<String, OpenValue?> {
             type.fieldDefinitions.forEach { field ->
                 when {
                     isFieldSupplied(field.name) ->
@@ -571,9 +573,14 @@ private inline fun decodeInputObjectFields(
                 }
             }
         }
-    return Value.InputObject.of(
-        type = schema.type(type.name) as Schema.InputObjectType,
-        fields = fields,
+    return requireNotNull(
+        OpenValue.of(
+            typeExpr =
+                TypeExpr.Named.of(
+                    schema.type(type.name) as Schema.InputObjectType,
+                ),
+            value = fields,
+        ),
     )
 }
 
@@ -583,7 +590,7 @@ private fun decodeObjectLiteral(
     variableValues: Map<String, Value.Input?>,
     schema: Schema,
     variableField: Schema.ObjectField?,
-): Value.Input {
+): OpenValue {
     val suppliedFields = value.objectFields.associateBy { it.name }
     return decodeInputObjectFields(
         type = type,
@@ -709,7 +716,8 @@ private fun decodeObjectExternal(
     schema: Schema,
 ): Value.Input {
     val valueMap = value as Map<*, *>
-    return decodeInputObjectFields(
+    val decoded =
+        decodeInputObjectFields(
         type = type,
         isFieldSupplied = { valueMap.containsKey(it) },
         decodeSupplied = { fieldType, fieldName ->
@@ -718,6 +726,8 @@ private fun decodeObjectExternal(
         variableValues = variableValues,
         schema = schema,
     )
+    check(decoded is Value.Input)
+    return decoded
 }
 
 private class EnumTypeImpl(

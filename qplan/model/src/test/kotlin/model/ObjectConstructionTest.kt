@@ -131,7 +131,7 @@ class ObjectConstructionTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
         val user = schema.objectOf("User")
-        val viewerKey = Value.ObjectKey.of(schema.objectField("Query", "viewer"), emptyMap())
+        val viewerKey = Value.GroundKey.of(schema.objectField("Query", "viewer"), emptyMap())
 
         assertFailsWith<IllegalArgumentException> {
             Value.Object.of(
@@ -163,8 +163,8 @@ class ObjectConstructionTest {
         schema: Schema,
         fieldName: String,
         vararg arguments: Pair<String, Any?>,
-    ): Value.ObjectKey =
-        Value.ObjectKey.of(
+    ): Value.GroundKey =
+        Value.GroundKey.of(
             field = schema.objectField("User", fieldName),
             arguments = arguments.toMap(),
         )

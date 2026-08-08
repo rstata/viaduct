@@ -6,6 +6,7 @@ import model.SelectionForest
 import model.Value
 import model.registry.FieldResolver
 import model.registry.VariableDefinition
+import model.variables
 
 /**
  * Validates the argument-insensitive structural branch order before semantic reasoning begins.
@@ -241,16 +242,3 @@ private fun Selection.pathsContaining(
 
 private fun Schema.ObjectField.coordinate(): String =
     "${containingType.typeName}/$fieldName"
-
-private fun Value.Arguments.variables(): Set<Value.Variable> =
-    fieldValues.values.flatMapTo(linkedSetOf()) { value -> value.variables() }
-
-private fun Value.Input?.variables(): Set<Value.Variable> =
-    when {
-        this == null || this == Value.Error -> emptySet()
-        this is Value.Variable -> setOf(this)
-        this is Value.InputList -> values.flatMapTo(linkedSetOf()) { value -> value.variables() }
-        this is Value.InputObject ->
-            fieldValues.values.flatMapTo(linkedSetOf()) { value -> value.variables() }
-        else -> emptySet()
-    }

@@ -1,6 +1,6 @@
 package semantics.correctresolution
 
-import model.ObjectSelectionForest
+import model.GroundSelectionForest
 import model.Schema
 import model.engineResultOf
 import model.testing.TestWorld
@@ -13,7 +13,7 @@ class CorrectResolutionTest {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val result = world.engineResultOf("Query")
         val profileSelections =
-            ObjectSelectionForest.of(
+            GroundSelectionForest.of(
                 type = world.schema.type("Profile") as Schema.ObjectType,
                 selections = emptyList(),
             )

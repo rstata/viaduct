@@ -2,7 +2,7 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
-import model.ObjectSelectionForest
+import model.GroundSelectionForest
 
 /**
  * Whether this Query-rooted result is a correct field-resolution result for [selections].
@@ -21,7 +21,7 @@ import model.ObjectSelectionForest
  * be reasoned about as inductively-defined relations, not recursive routines.
  */
 context(world: Assumptions)
-fun EngineResult.Object.correctResolution(selections: ObjectSelectionForest): Boolean {
+fun EngineResult.Object.correctResolution(selections: GroundSelectionForest): Boolean {
     require(selections.type == world.schema.query) {
         "Correct-resolution selections must be rooted at Query"
     }

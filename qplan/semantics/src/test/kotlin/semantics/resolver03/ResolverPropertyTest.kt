@@ -41,7 +41,7 @@ class ResolverPropertyTest {
                 TestWorld.fromSDL(
                     schemaSDL = SCHEMA,
                     fieldResolvers = { schema ->
-                        val seedKey = Value.ObjectKey.of(schema.objectField("Item", "seed"), emptyMap())
+                        val seedKey = Value.GroundKey.of(schema.objectField("Item", "seed"), emptyMap())
                         val itemsField = schema.field("Query", "items")
                         val itemsType = itemsField.typeExpr as TypeExpr.List<Schema.OutputType>
 
@@ -108,7 +108,7 @@ class ResolverPropertyTest {
                                     evenMetricApplications += 1
                                     val common =
                                         input.fieldValues.getValue(
-                                            Value.ObjectKey.of(
+                                            Value.GroundKey.of(
                                                 schema.objectField("EvenMetric", "common"),
                                                 emptyMap(),
                                             ),
@@ -124,7 +124,7 @@ class ResolverPropertyTest {
                                     oddMetricApplications += 1
                                     val common =
                                         input.fieldValues.getValue(
-                                            Value.ObjectKey.of(
+                                            Value.GroundKey.of(
                                                 schema.objectField("OddMetric", "common"),
                                                 emptyMap(),
                                             ),
@@ -171,13 +171,13 @@ class ResolverPropertyTest {
             val item =
                 assertIs<EngineResult.Object>(
                     result.fetch(
-                        Value.ObjectKey.of(world.schema.objectField("Query", "item"), mapOf("seed" to seed)),
+                        Value.GroundKey.of(world.schema.objectField("Query", "item"), mapOf("seed" to seed)),
                     ).value,
                 )
             assertEquals(
                 Value.Int.of(seed * firstFactor),
                 item.fetch(
-                    Value.ObjectKey.of(
+                    Value.GroundKey.of(
                         world.schema.objectField("Item", "computed"),
                         mapOf("factor" to firstFactor),
                     ),
@@ -186,7 +186,7 @@ class ResolverPropertyTest {
             assertEquals(
                 Value.Int.of(seed * secondFactor),
                 item.fetch(
-                    Value.ObjectKey.of(
+                    Value.GroundKey.of(
                         world.schema.objectField("Item", "computed"),
                         mapOf("factor" to secondFactor),
                     ),
@@ -195,13 +195,13 @@ class ResolverPropertyTest {
             val child =
                 assertIs<EngineResult.Object>(
                     item.fetch(
-                        Value.ObjectKey.of(world.schema.objectField("Item", "child"), emptyMap()),
+                        Value.GroundKey.of(world.schema.objectField("Item", "child"), emptyMap()),
                     ).value,
                 )
             assertEquals(
                 Value.Int.of((seed + 1) * firstFactor),
                 child.fetch(
-                    Value.ObjectKey.of(
+                    Value.GroundKey.of(
                         world.schema.objectField("Item", "computed"),
                         mapOf("factor" to firstFactor),
                     ),
@@ -210,13 +210,13 @@ class ResolverPropertyTest {
             val metric =
                 assertIs<EngineResult.Object>(
                     item.fetch(
-                        Value.ObjectKey.of(world.schema.objectField("Item", "metric"), emptyMap()),
+                        Value.GroundKey.of(world.schema.objectField("Item", "metric"), emptyMap()),
                     ).value,
                 )
             assertEquals(
                 Value.Int.of(seed),
                 metric.fetch(
-                    Value.ObjectKey.of(world.schema.objectField(metric.type.typeName, "common"), emptyMap()),
+                    Value.GroundKey.of(world.schema.objectField(metric.type.typeName, "common"), emptyMap()),
                 ).value,
             )
             val concreteMetricField = if (seed % 2 == 0) "even" else "odd"
@@ -225,7 +225,7 @@ class ResolverPropertyTest {
             assertEquals(
                 Value.Int.of(concreteMetricValue),
                 metric.fetch(
-                    Value.ObjectKey.of(
+                    Value.GroundKey.of(
                         world.schema.objectField(metric.type.typeName, concreteMetricField),
                         emptyMap(),
                     ),
@@ -235,7 +235,7 @@ class ResolverPropertyTest {
             val items =
                 assertIs<EngineResult.List>(
                     result.fetch(
-                        Value.ObjectKey.of(
+                        Value.GroundKey.of(
                             world.schema.objectField("Query", "items"),
                             mapOf("seed" to seed),
                         ),
@@ -247,7 +247,7 @@ class ResolverPropertyTest {
                 assertEquals(
                     Value.Int.of(itemSeed * firstFactor),
                     listItem.fetch(
-                        Value.ObjectKey.of(
+                        Value.GroundKey.of(
                             world.schema.objectField("Item", "computed"),
                             mapOf("factor" to firstFactor),
                         ),

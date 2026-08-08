@@ -21,6 +21,7 @@ import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
 import model.testing.nodeResolverOf
+import model.testing.withErrorArguments
 
 enum class ResolverProgramKind {
     CONSTANT,
@@ -1192,19 +1193,17 @@ private fun List<FragmentSelectionPlan>.materialize(
     }
     return zip(parsed)
         .map { (plan, selection) ->
-            val arguments =
-                selection.key.arguments.fieldValues.mapValues { (name, value) ->
-                    if (plan.arguments[name] is ErrorInputPlan) Value.Error else value
-                }
-            Selection.of(
-                key =
-                    Value.Key.of(
-                        selection.key.field,
-                        Value.Arguments.of(selection.key.field, arguments),
-                    ),
+            selection.withErrorArguments(
+                plan.arguments
+                    .filterValues { argument -> argument is ErrorInputPlan }
+                    .keys,
+            ).let { materializedSelection ->
+                Selection.of(
+                key = materializedSelection.key,
                 possibleTypes = selection.possibleTypes,
                 subselections = plan.subselections.materialize(schema, selection.subselections),
-            )
+                )
+            }
         }.toSelectionForest()
 }
 

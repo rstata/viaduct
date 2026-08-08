@@ -81,40 +81,12 @@ State constant world predicates as TLC invariants so an invalid fixture fails vi
 
 ## Validation
 
-From `scratchpad/qplanning`, parse every `tla/*.tla` module and run these proof modules serially:
+From `scratchpad/qplanning`, parse every module, prove every proof module serially, and run every TLC model:
 
 ```sh
-mise run tla:prove -- tla/MaterializationProof.tla
-mise run tla:prove -- tla/OccurrenceFoldsProof.tla
-mise run tla:prove -- tla/ProjectionProof.tla
-mise run tla:prove -- tla/Resolver01And02ApplicationProof.tla
-mise run tla:prove -- tla/Resolver03ApplicationProof.tla
-mise run tla:prove -- tla/Resolver03ProjectionProof.tla
-mise run tla:prove -- tla/ResolverApplicationProof.tla
-mise run tla:prove -- tla/ResolverCoreProof.tla
-mise run tla:prove -- tla/ResultTreeProof.tla
-mise run tla:prove -- tla/ReturnedResultCoveredProof.tla
-mise run tla:prove -- tla/ReturnedResultProof.tla
-mise run tla:prove -- tla/TreeConstructionProof.tla
-mise run tla:prove -- tla/ValueConstructionProof.tla
+for module in tla/*.tla; do mise run tla:parse -- "$module"; done
+for module in tla/*Proof.tla; do mise run tla:prove -- "$module"; done
+for module in tla/*MC.tla; do mise run tla:check -- "$module"; done
 ```
 
-Run every surviving TLC model:
-
-```sh
-mise run tla:check -- tla/DependencyOrderMC.tla
-mise run tla:check -- tla/MaterializationMC.tla
-mise run tla:check -- tla/OccurrenceFoldsMC.tla
-mise run tla:check -- tla/ProjectionMC.tla
-mise run tla:check -- tla/Resolver02MC.tla
-mise run tla:check -- tla/Resolver03ApplicationMC.tla
-mise run tla:check -- tla/Resolver03MC.tla
-mise run tla:check -- tla/Resolver03ProjectionMC.tla
-mise run tla:check -- tla/ResolverApplicationMC.tla
-mise run tla:check -- tla/ResultTreeMC.tla
-mise run tla:check -- tla/ReturnedResultMC.tla
-mise run tla:check -- tla/TreeConstructionMC.tla
-mise run tla:check -- tla/ValueConstructionMC.tla
-```
-
-TLC commands may run concurrently only when each receives a unique absolute `-metadir`; `tla:check` changes to the specification directory and normalizes path-valued options so imports of TLAPS standard modules resolve reliably.
+TLC commands may run concurrently only when each receives a unique absolute `-metadir`; the loop above runs them serially. `tla:check` changes to the specification directory and normalizes path-valued options so TLAPS standard-library imports resolve.

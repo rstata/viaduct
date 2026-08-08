@@ -27,7 +27,7 @@ checkResolverTestCases(counts, config) { testWorld, testCase ->
 ## Generators
 
 - `Arb.schema(config)` generates GraphQL SDL in the model's supported domain.
-- `schema.registry(config)` chooses source field-resolver coordinates and raw node resolvers, infers each source resolver's output selection paths, generates one constant value for those paths, and optionally generates an acyclic object fragment whose variable providers strictly precede their use branches; generated providers are declared by alias-preserving fragment source and response-key paths, which `TestWorld` compiles to canonical key paths while lowering the result to a field-only registry.
+- `schema.registry(config)` chooses source field-resolver coordinates and raw node resolvers, infers output selection paths, and generates deterministic resolver programs that may be constant, input-sensitive, argument-sensitive, or sensitive to both. It may also generate an acyclic object fragment whose variable providers strictly precede their use branches; providers use alias-preserving fragment source and response-key paths, which `TestWorld` compiles to canonical key paths while lowering the registry.
 - `schema.query(config)` generates a valid named Query fragment containing literal arguments only.
 - `Arb.resolverTestBatch(counts, config)` composes the three generators without coordinating registry choices with query choices.
 

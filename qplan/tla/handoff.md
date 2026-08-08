@@ -1,158 +1,117 @@
-# TLA+ Adversarial Audit Handoff
+# TLA+ Refinement Handoff
 
 ## Purpose
 
-This handoff records the adversarial review of the surviving Resolver01-03 TLA+ baseline so a future session can strengthen it without reconstructing the audit. Field-relative variables, `@parent`, checkers, lazy values, cyclic resolver demand, and other future features are outside the current proof scope.
+This file records active work needed to turn the passing Resolver01-03 atomic proof baseline into a refinement argument for the Kotlin model. [`README.md`](README.md) defines what is currently machine checked. Durable historical lessons live in the root [Resolver04 and Resolver05 retrospective](../evergreen.md#resolver04-and-resolver05-retrospective).
 
-The removed Resolver04 and provider-path proof experiments exposed important failures in contribution discovery, late equality, provider correspondence, and proof premises. Those historical findings now live in the root [Resolver04 retrospective](../evergreen.md#appendix-resolver04-retrospective); they are not active modules or repair phases in this baseline.
+Field-relative variables, `@parent`, checkers, lazy values, cyclic resolver demand, and other future features remain outside the current proof scope.
 
-## Bottom Line
+## Current Assessment
 
-The TLAPS proofs appear valid over the finite atoms and assumptions they state, but the composed theorems are not yet refinement proofs of the Kotlin resolver constructors or `correctResolution`. Several assumptions directly supply relations the Kotlin algorithm is supposed to derive, important structural distinctions may collapse into the same opaque atom, and the returned result is not constructed by the modeled fold.
+The TLAPS proofs are strong within their stated finite carriers and assumptions, but they are not yet proofs of the Kotlin constructors or `correctResolution`.
 
-- Proof validity within the stated atomic model: high.
-- Refinement to the Kotlin model: low.
+- Internal proof validity: high.
+- Refinement to Kotlin structures and execution: low.
 - Adversarial TLC coverage: weak.
 
-Passing TLAPS and TLC establishes consistency of the chosen Resolver01-03 construction calculus under strong premises. It must not be described as proving the Kotlin implementation correct or proving the full one-shot claim.
+The main issue is that several relations the implementation should derive are caller-supplied premises. A broken constructor can still choose atomic maps satisfying the current theorems.
 
-## Blocking Findings
+## Refinement Gaps
 
-### 1. The Returned Result Is Assumed Rather Than Constructed
+### Returned Cells
 
-[`OccurrenceFolds.tla`](OccurrenceFolds.tla) stipulates `WorkCell` and defines `PresentCells` as its image. Its state machine removes work but does not construct cells through analogues of Kotlin `resolveKey`, recursive `resolveValue`, or `union`. Consequently, terminal fold completion does not imply that the returned OER contains the values produced by those folds.
+`OccurrenceFolds.tla` removes abstract work and maps it to stipulated `WorkCell` values. It does not construct returned cells through counterparts of `resolveKey`, recursive `resolveValue`, and write-once `EngineResult.Object.write`.
 
-Countermodel: retain an ideal observation saying a user name is `"Raymie"`, but put a different value in the stipulated final cell. The composed TLA+ premises and `CorrectResolution` can still hold because returned cells and ideal observations are independent, while Kotlin resolver comparison would fail.
+Terminal built keys therefore align with returned OER cells only by assumption. The refinement must derive both cell presence and cell values from the fold transitions.
 
-### 2. Resolver Observations Are Caller-Chosen And May Be Incomplete
+### Complete Observations
 
-[`ResultTree.tla`](ResultTree.tla) requires observations for active resolvers but does not derive the complete scalar, null, shape, list-position, and passive-descendant observations traversed by Kotlin `conformsToResolvers`. [`ReturnedResult.tla`](ReturnedResult.tla) then defines the actual observation from the ideal projection instead of extracting it from the returned cell.
+`ResultTree.tla` accepts resolver observations rather than deriving every scalar, null, shape, list-position, and passive-descendant observation traversed by Kotlin `conformsToResolvers`.
 
-Countermodel: a resolver returns `{name: "wrong"}`, while `Observations` contains only an agreeing object-shape atom. TLA+ passes and Kotlin comparison fails.
+Actual observations must come from actual returned cells; ideal observations must come from the raw resolver result on the final materialized input.
 
-### 3. Operation And Resolver Demand Are Not Extracted From Fragments
+### Fragment Demand
 
-`OperationDemand`, `ResolverDemand`, and related maps are typed functions, not derivations from structural fragments, exact keys, and the registry. [`TreeConstruction.tla`](TreeConstruction.tla) therefore proves closure over whichever demand the caller supplies, including demand that omits required Kotlin selections.
+`OperationDemand`, `ResolverDemand`, and related maps are inputs rather than extractions from structural fragments, exact keys, type guards, and registry membership. They can omit a Kotlin-required selection while the abstract closure theorem still passes.
 
-Countermodels: map a nonempty Kotlin operation `{f}` to empty `OperationDemand`, or give an active resolver whose Kotlin object fragment requires `x` an empty `DirectDemandByKey`. TLA+ can pass while Kotlin selection conformance or resolver-demand closure fails.
+### Materialization
 
-### 4. Materialization And Resolver Application Are Detached From Returned Cells
+`Materialization.tla` does not require `CellValue` to equal the corresponding returned cell. `ResolverApplication.tla` also abstracts away missing keys, resolver partiality, projection failure, and invalid construction.
 
-[`Materialization.tla`](Materialization.tla) treats `CellValue` as a typed map without requiring it to equal the corresponding returned OER cell. [`ResolverApplication.tla`](ResolverApplication.tla) uses an arbitrary total `ResolverFunction` and assumes the raw observation agrees with its prefix result. Missing-key failures, resolver partiality, object/list union failures, and the structural result of materialization are not represented.
+The next model should make these operations structural and partial, with domain violations visible to TLC.
 
-Countermodel: let a returned dependency cell contain `B`, let `CellValue` claim `A`, and use an identity resolver whose modeled projected result is `A`. Prefix/final agreement passes in TLA+, while Kotlin materializes `B` and resolver conformance fails.
+### Identity
 
-### 5. Atomic Extraction Can Collapse Unequal Kotlin Structures
+Opaque atoms do not prove that unequal Kotlin exact keys, arguments, containing-object paths, concrete guards, list positions, and OER occurrences remain unequal after extraction.
 
-The atomic carriers do not formally preserve or distinguish containing-object paths, concrete guards, exact fields and arguments, list positions, or OER occurrences. Comments saying that token identity includes these components are intended extraction obligations, not injectivity constraints.
+The refinement needs explicit structural carriers or injective preservation obligations. In particular, distinct `Value.GroundKey` values and distinct object occurrences must not collapse.
 
-Countermodels: map `f(a: 1)` and `f(a: 2)` to one key token, map two guarded branches to one requirement token, or map two list-element OER occurrences to one occurrence. A single TLA+ contribution or work item can then satisfy obligations that Kotlin keeps distinct.
+### Classifications And Attribution
 
-### 6. Semantic Classifications Are Arbitrary
+Resolver cells, argument-error cells, typename cells, behavioral boundaries, and cell producers are caller-classified. These sets should instead be derived from exact keys, registry membership, and construction transitions.
 
-`ResolverCells`, `ErrorCells`, `TypenameCells`, behavioral boundaries, and similar classifications are constrained mainly by carrier membership. They are not derived from registry membership, exact argument errors, the `__typename` coordinate, or `world.behavioral`.
+### One Application
 
-Countermodels: omit an incorrectly resolved registered cell from `ResolverCells`, omit an incorrect typename cell from `TypenameCells`, or classify a bad passive descendant as behavioral. The corresponding Kotlin correctness conjunct fails while the TLA+ obligation ignores it.
+The local core proves one sequence position per demanded exact key, but the composed Resolver03 result does not expose that fact. The final theorem should include one mathematical application per resolver-bearing `Value.GroundKey` and OER occurrence.
 
-### 7. One Application Per Occurrence Is Not In The Composed Result
+### Projection Facts
 
-The local one-application predicate exists in the core construction work, but the final Resolver03 application theorem does not compose the occurrence world's one-position result into its conclusion. The intended mathematical one-shot statement should be an explicit conjunct of the final occurrence-indexed theorem.
+The current projection relation needs a demand token to retain some scalar and shape facts that Kotlin preserves independently of nested demand. Separate demand-independent value facts from demand-dependent passive observations.
 
-This is a theorem-composition gap even before considering refinement to JVM invocation counts.
+## Repair Sequence
 
-## Additional Model Weaknesses
+### 1. Adversarial Fixtures
 
-### Demand-Independent Output Facts
-
-[`Projection.tla`](Projection.tla) retains an observation only when its coverage intersects demand. Kotlin `snipToDemand` leaves simple, null, and error outputs unchanged and preserves object/list shape under empty nested demand. The TLA+ model currently needs to invent a demand token to retain a scalar or shape observation that is demand-independent in Kotlin.
-
-### Producer Attribution
-
-`CellProducer` is typed but not tied to the resolver represented by the cell's exact key or construction work item. A model can attribute an observation from resolver `f` to resolver `g` and use `g`'s contribution to prove coverage for `f`.
-
-## Recommended Repair Order
-
-### Phase 1: Turn Every Countermodel Into A Failing TLC Fixture
-
-Before strengthening proofs, create small finite models that intentionally admit each countermodel above and assert the intended invariant. A useful model should fail before the corresponding specification link is added and pass afterward. Keep world validity as an `INVARIANT`, not only a `CONSTRAINT`, so malformed or vacuous fixtures fail visibly.
-
-At minimum, add TLC cases for:
+Create TLC fixtures that initially admit and expose:
 
 - a wrong returned cell paired with an ideal observation;
 - an omitted scalar or passive-descendant observation;
-- nonempty structural fragment mapped to empty demand;
-- returned `CellValue` disagreement;
-- two exact argument tuples and two list occurrences forced to remain distinct;
-- wrong resolver, typename, error, and behavioral classification;
-- wrong `CellProducer`;
-- local one-application set to false.
+- a nonempty fragment mapped to empty demand;
+- returned-cell and `CellValue` disagreement;
+- collapsed argument tuples or list occurrences;
+- wrong resolver, typename, error, behavioral, or producer classification;
+- a false local one-application fact.
 
-### Phase 2: Define A Structural Extraction Layer
+Each repaired relation should make its fixture pass for the intended reason. Keep validity predicates as invariants so malformed or vacuous worlds fail visibly.
 
-Introduce finite structural carriers, or explicit refinement maps with proved preservation and injectivity, for schemas, concrete object occurrences, exact keys with argument tuples, selections and type guards, fragments, values, object cells, and list positions. Derive classifications and demand maps from those structures instead of accepting arbitrary sets and functions.
+### 2. Structural Extraction
 
-Required properties include:
+Introduce finite structures or proved refinement maps for schemas, object occurrences, `Value.GroundKey`, selections, type guards, fragments, values, object cells, and list positions.
 
-- unequal exact keys remain unequal after extraction;
-- unequal OER and list-element occurrences remain unequal;
-- path and concrete-type guards are preserved;
-- resolver coordinates come exactly from registry membership;
-- typename, argument-error, and behavioral classifications agree with Kotlin definitions;
-- operation and resolver demand are extracted from the corresponding fragments.
+Derive registry classifications and operation/resolver demand from those structures. Prove preservation of arguments, paths, guards, and occurrence identity.
 
-Opaque tokens can remain as proof abbreviations only after these preservation obligations exist.
+### 3. Monotonic Construction
 
-### Phase 3: Model Construction Of The Returned OER
+Model the returned OER as transition state. Each cell moves from absent to one value and never changes; published child OER occurrences retain identity while their own cells are added.
 
-Replace stipulated `WorkCell` and `PresentCells` with state produced by the occurrence folds. Model the mathematical equivalents of `resolveKey`, recursive object/list `resolveValue`, materialization, and partial `union`. Make undefined materialization, resolver application, projection, or union exclude the transition or produce an explicit domain violation that TLC can detect.
+Model equivalents of `resolveKey`, recursive `resolveValue`, materialization, and cell write. Terminal cells and values should then be the state produced by the fold, not alignment inputs.
 
-The terminal theorem should derive:
+This is also the right basis for the future worklist executor: its refinement target should be monotonic writes, not immutable subtree union.
 
-- present cells equal the cells actually constructed by the fold;
-- each cell value is the value produced by its resolver or passive source;
-- recursive object and list results are built from their child occurrence folds;
-- terminal built keys and returned OER keys agree as a theorem, not an alignment assumption.
+### 4. Structural Observation And Projection
 
-### Phase 4: Derive Complete Observations And Projection
+Derive complete observations by traversing actual raw outputs and returned cells. Tie producer attribution to the exact resolver-bearing cell and derive `snipToDemand` behavior from the same structures.
 
-Define observations by structural traversal of actual raw resolver outputs and actual returned values. Separate demand-dependent passive observations from demand-independent scalar, null, error, object-shape, list-shape, and list-position facts. Derive `Project` from the same structural relation represented by Kotlin `snipToDemand`.
+### 5. Composed Theorems
 
-Then prove:
+State separate theorems for termination, demand closure, input availability, projection coverage, returned-result correctness, and one application per exact cell occurrence.
 
-- the observation set is complete for Kotlin resolver comparison;
-- actual observations come from actual returned cells;
-- ideal observations come from the raw resolver result on the materialized final input;
-- producer attribution follows from the exact resolver-bearing cell;
-- projection coverage is derived from structurally computed demand.
+Final premises may constrain valid worlds and resolver functions, but must not choose supplied demand, returned cells, actual observations, or application counts for the algorithm.
 
-### Phase 5: State Final Resolver01-03 Theorems Without Result-Shaped Premises
+## Immediate Work
 
-Compose occurrence construction, structural extraction, demand derivation, and projection into separate explicit theorems for termination, demand closure, input availability, producer completeness, returned-result correctness, and exactly one mathematical application position per exact resolver key and concrete OER occurrence.
+1. Preserve the passing baseline while adding a new adversarial refinement model.
+2. Add wrong-cell and missing-observation countermodels.
+3. Add structural exact-key and occurrence identity, including unequal arguments.
+4. Connect monotonic fold state to returned cells.
+5. Derive complete observations and demand-independent projection facts.
+6. Derive fragment demand and semantic classifications.
+7. Compose one-application into the final Resolver03 theorem.
 
-Audit each premise by asking whether a deliberately broken resolver algorithm could still choose values satisfying it. Premises may constrain valid worlds and executor functions, but they should not directly choose the algorithm's supplied demand, returned cells, actual observations, or application count.
+## Validation
 
-Variable/provider refinement should begin as a separate future scope with its own structural oracle and the historical Resolver04 counterexamples as required negative fixtures; it should not be added back into this baseline piecemeal.
+Run TLAPS serially because `.tlacache` is shared. Run TLC models concurrently only with distinct metadata directories.
 
-## Suggested Immediate Session Plan
+Every new world predicate needs a negative fixture. Record explored state counts, treat unexpectedly small counts as possible over-constraint, and require a mutation that breaks the modeled algorithm while preserving carrier validity.
 
-1. Preserve the passing proof baseline and its explicit claim limits.
-2. Build a new adversarial refinement MC module containing the wrong-cell and missing-observation countermodels.
-3. Add structural exact-key and occurrence identities, including an explicit unequal-arguments model.
-4. Connect constructed fold state to returned cells and make the first countermodels pass only because the new relation rules them out.
-5. Add complete structural observations and demand-independent projection facts.
-6. Add fragment-to-demand extraction and classification derivation.
-7. Compose one-application explicitly into the final Resolver03 theorem.
-
-## Validation Guidance
-
-Run TLAPS serially because its cache is shared. Run TLC models concurrently only with distinct metadata directories. Record explored state counts and treat very small counts as a prompt to inspect over-constraint and symmetry, not as evidence of strength.
-
-For every new world predicate:
-
-- include a negative fixture that violates it;
-- check it as an invariant so invalid fixtures fail;
-- avoid relying solely on a state constraint;
-- include at least one mutation that breaks the modeled algorithm while preserving carrier validity;
-- confirm the relevant correctness invariant fails for that mutation.
-
-The proof matrix in [`README.md`](README.md) is a regression suite for the internal calculus. Passing it is necessary but not sufficient validation of the refinement work described here.
+The matrix in [`README.md`](README.md) remains the regression suite for the internal calculus. Passing it is necessary but not sufficient evidence for refinement.

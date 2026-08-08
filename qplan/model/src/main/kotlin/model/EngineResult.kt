@@ -36,46 +36,56 @@ sealed interface EngineResult {
     /**
      * A finite object result whose [cells] are exact, alias-free schema coordinates.
      *
-     * Every cell key belongs to [type], contains no variables, and has a value that conforms
-     * recursively to the field's type expression.
+     * Every present cell key belongs to [type], contains no variables, and has a value that
+     * conforms recursively to the field's type expression. A mutable object may gain absent cells
+     * through [write], but a present cell never changes.
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
+
+        /** A stable snapshot of the currently written cells. */
         val cells: Map<Value.GroundKey, Cell>
 
         val keys: Set<Value.GroundKey>
             get() = cells.keys
+
+        /** Whether [key] has been written. */
+        fun isSet(key: Value.GroundKey): Boolean = key in cells
 
         /** @throws MissingFieldException when [key] is absent */
         fun fetch(key: Value.GroundKey): Cell =
             cells[key]
                 ?: throw MissingFieldException(type.typeName, key.field.fieldName)
 
+        /**
+         * Writes the first and only cell for [key].
+         *
+         * @throws IllegalStateException when this object is immutable or [key] is already written
+         * @throws IllegalArgumentException when [key] or [cell] violates an object-result invariant
+         */
+        fun write(
+            key: Value.GroundKey,
+            cell: Cell,
+        )
+
         companion object {
             /**
              * ### Invariant: object-engine-result-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Every result's present cells satisfy `result.conformsToSchema()` in its reasoning
+             * world. When [mutable] is false, every [Object.write] throws. When it is true, each
+             * absent key may be written once. A mutable result must not be used as a hash key while
+             * writes may continue because structural equality and hashing observe current cells.
              */
             fun of(
                 type: Schema.ObjectType,
                 cells: Map<Value.GroundKey, Cell>,
+                mutable: Boolean = false,
             ): Object {
-                require(cells.keys.all { it.field.containingType == type }) {
-                    "${type.typeName} result contains a field owned by another type"
-                }
                 cells.forEach { (key, cell) ->
-                    if (key.arguments.containsErrorValue()) {
-                        require(cell.value == Value.Error && cell.check == Value.Error) {
-                            "A key containing an argument error must contain an error value and check"
-                        }
-                    }
-                    require(cell.value.conformsToSchemaType(key.field.typeExpr)) {
-                        "${type.typeName}/${key.field.fieldName} result does not conform to " +
-                            key.field.typeExpr
-                    }
+                    validateObjectCell(type, key, cell)
                 }
-                return ObjectResultImpl(type, cells)
+                return ObjectResultImpl(type, cells, mutable)
             }
         }
     }
@@ -214,10 +224,48 @@ private data class CellImpl(
     override val check: Value.Boolean,
 ) : EngineResult.Cell
 
-private data class ObjectResultImpl(
+private class ObjectResultImpl(
     override val type: Schema.ObjectType,
-    override val cells: Map<Value.GroundKey, EngineResult.Cell>,
-) : EngineResult.Object
+    cells: Map<Value.GroundKey, EngineResult.Cell>,
+    private val mutable: Boolean,
+) : EngineResult.Object {
+    private val cellStore = OnceStore(cells)
+
+    override val cells: Map<Value.GroundKey, EngineResult.Cell>
+        get() = cellStore.snapshot()
+
+    override fun isSet(key: Value.GroundKey): Boolean =
+        cellStore.isSet(key)
+
+    override fun fetch(key: Value.GroundKey): EngineResult.Cell {
+        if (!cellStore.isSet(key)) {
+            throw MissingFieldException(type.typeName, key.field.fieldName)
+        }
+        return cellStore.read(key)
+    }
+
+    override fun write(
+        key: Value.GroundKey,
+        cell: EngineResult.Cell,
+    ) {
+        check(mutable) {
+            "${type.typeName} result is immutable"
+        }
+        validateObjectCell(type, key, cell)
+        cellStore.write(key, cell)
+    }
+
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is EngineResult.Object &&
+                    type == other.type &&
+                    cells == other.cells
+            )
+
+    override fun hashCode(): Int =
+        31 * type.hashCode() + cells.hashCode()
+}
 
 private data class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
@@ -235,6 +283,25 @@ private fun EngineResult.Cell.union(other: EngineResult.Cell): EngineResult.Cell
         value = value.union(other.value),
         check = check,
     )
+}
+
+private fun validateObjectCell(
+    type: Schema.ObjectType,
+    key: Value.GroundKey,
+    cell: EngineResult.Cell,
+) {
+    require(key.field.containingType == type) {
+        "${type.typeName} result contains a field owned by another type"
+    }
+    if (key.arguments.containsErrorValue()) {
+        require(cell.value == Value.Error && cell.check == Value.Error) {
+            "A key containing an argument error must contain an error value and check"
+        }
+    }
+    require(cell.value.conformsToSchemaType(key.field.typeExpr)) {
+        "${type.typeName}/${key.field.fieldName} result does not conform to " +
+            key.field.typeExpr
+    }
 }
 
 private fun Value.Arguments.containsErrorValue(): Boolean =

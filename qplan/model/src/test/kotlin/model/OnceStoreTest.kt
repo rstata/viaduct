@@ -7,6 +7,7 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -36,6 +37,20 @@ class OnceStoreTest {
             store.write("key", 2)
         }
         assertEquals(1, store.read("key"))
+    }
+
+    @Test
+    fun `initial values and snapshots are independent of later writes`() {
+        val store = OnceStore<String, Int?>(mapOf("initial" to null))
+        val snapshot = store.snapshot()
+
+        store.write("later", 2)
+
+        assertTrue(store.isSet("initial"))
+        assertNull(store.read("initial"))
+        assertEquals(mapOf("initial" to null), snapshot)
+        assertFalse("later" in snapshot)
+        assertEquals(mapOf("initial" to null, "later" to 2), store.snapshot())
     }
 
     @Test

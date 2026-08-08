@@ -84,7 +84,7 @@ An `of` factory normally accepts already semantic components. For example, `Engi
 
 GraphQL coercion may be a semantic function. For example, construction of an argument-bearing object key may apply argument coercion, but the coercion relation should be independently defined rather than embedded only inside `Value.Key.of`. Each coercion function separately specifies whether coercion failure is a modeled result or an input outside its domain.
 
-Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `EngineResult.Object.of` validates its cell coordinates, nullability, and nested result typing, so every returned object satisfies its documented carrier invariants and `correctResolution` does not need schema conformance as a separate conjunct.
+Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `EngineResult.Object.of` validates every initially present cell coordinate, nullability, and nested result type, while `EngineResult.Object.write` performs the same validation before atomically publishing a later cell. Every observable object state therefore satisfies its documented carrier invariants, and `correctResolution` does not need schema conformance as a separate conjunct.
 
 Use compositional validation for nested typed values. For example, a list factory validates its elements, and an enclosing OER factory checks that the list's declared element type is compatible with the field type rather than traversing and revalidating the entire list.
 

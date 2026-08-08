@@ -11,14 +11,21 @@ import java.util.concurrent.ConcurrentHashMap
 internal class OnceStore<K : Any, V> {
     private val values = ConcurrentHashMap<K, Any>()
 
+    constructor()
+
+    constructor(initialValues: Map<K, V>) {
+        initialValues.forEach { (key, value) ->
+            values[key] = storedValue(value)
+        }
+    }
+
     fun isSet(key: K): Boolean = values.containsKey(key)
 
     /** @throws IllegalStateException when [key] has not been written */
     fun read(key: K): V {
         val storedValue = values[key]
         check(storedValue != null) { "$key not found" }
-        @Suppress("UNCHECKED_CAST")
-        return if (storedValue === NULL_PROXY) null as V else storedValue as V
+        return value(storedValue)
     }
 
     /** @throws IllegalStateException when [key] has already been written */
@@ -26,9 +33,19 @@ internal class OnceStore<K : Any, V> {
         key: K,
         value: V,
     ) {
-        val previous = values.putIfAbsent(key, value ?: NULL_PROXY)
+        val previous = values.putIfAbsent(key, storedValue(value))
         check(previous == null) { "$key already written" }
     }
+
+    /** Returns a stable copy of the values written before or during this observation. */
+    fun snapshot(): Map<K, V> =
+        values.mapValues { (_, storedValue) -> value(storedValue) }
+
+    private fun storedValue(value: V): Any = value ?: NULL_PROXY
+
+    @Suppress("UNCHECKED_CAST")
+    private fun value(storedValue: Any): V =
+        if (storedValue === NULL_PROXY) null as V else storedValue as V
 
     private data object NULL_PROXY
 }

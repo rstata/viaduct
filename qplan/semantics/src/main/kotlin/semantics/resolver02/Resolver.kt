@@ -7,7 +7,7 @@ import model.Value
 import model.registry.successorBoundaryDemand
 import semantics.SelectionCompletion
 import semantics.SelectionCompleter
-import semantics.resolve
+import semantics.orchestrateKeys
 
 /**
  * Resolves [selections] with non-selective resolver applications. Results may contain more OER
@@ -23,7 +23,7 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
             )
         }
     return context(selectionCompleter) {
-        resolve(
+        orchestrateKeys(
             path = emptyList(),
             selections = selections,
             resolved = EngineResult.Object.of(type, emptyMap()),

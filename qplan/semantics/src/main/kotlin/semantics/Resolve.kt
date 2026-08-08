@@ -54,7 +54,7 @@ private data class KeyResolution(
  * dependency-first depth-first order without recursive object resolution or immutable path repair.
  */
 context(world: Assumptions, selectionCompleter: SelectionCompleter)
-internal fun Value.Object.resolve(
+internal fun Value.Object.orchestrateKeys(
     path: List<PathComponent>,
     selections: SelectionForest,
     resolved: EngineResult.Object,

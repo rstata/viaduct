@@ -6,7 +6,7 @@ import model.SelectionForest
 import model.Value
 import semantics.SelectionCompletion
 import semantics.SelectionCompleter
-import semantics.resolve
+import semantics.orchestrateKeys
 
 /**
  * Resolves [selections] when resolver object fragments are empty, except for generated Node-loader
@@ -20,7 +20,7 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
             SelectionCompletion(selections, selective = false)
         }
     return context(selectionCompleter) {
-        resolve(
+        orchestrateKeys(
             path = emptyList(),
             selections = selections,
             resolved = EngineResult.Object.of(type, emptyMap()),

@@ -2,7 +2,8 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
-import model.mergeToGround
+import model.instantiateBindings
+import model.merge
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.RegisteredResolverCell
 import semantics.arbitrary.registeredResolverCells
@@ -29,7 +30,8 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
                     .stampedObjectFragment(
                         path = cell.occurrencePath,
                     )
-                    .mergeToGround(cell.containingObject.type)
+                    .merge(cell.containingObject.type)
+                    .instantiateBindings()
             ResolverApplicationIdentity(
                 key = cell.applicationKey,
                 inputFingerprint =
@@ -55,6 +57,7 @@ internal fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredRes
                     .stampedObjectFragment(
                         path = cell.occurrencePath,
                     )
-                    .mergeToGround(cell.containingObject.type)
+                    .merge(cell.containingObject.type)
+                    .instantiateBindings()
             !cell.containingObject.conformsToSelections(fragment)
         }

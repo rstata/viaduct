@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes a possible future executor that preserves Resolver03's current demand-collection work and incorporates lessons from the historical Resolver04 experiment while replacing recursive depth-first execution with a worklist of resolution obligations over a write-once OER store.
+This document describes a possible future demand-availability executor that preserves Resolver03's current demand-collection work and incorporates lessons from the historical Resolver04 experiment. The current shared constructor already uses a fixed descendant-first LIFO worklist over mutable write-once partial OERs; this proposal generalizes that mechanism to explicit resolution obligations selected by readiness.
 
 The proposal responds to one specific discovery. Variables can transport a value from a provider path already contained in the defining resolver's fixed-shape object fragment to resolver arguments elsewhere in that fragment. A subtree may therefore contain structurally known demand whose exact `Value.ObjectKey` cannot be formed until work in another subtree finishes. Resolver04 attempted to handle this by retaining immutable prefixes, preserving raw output provenance, and widening already-resolved cells; focused counterexamples showed that recovery after an under-projected application was insufficient. A worklist executor would model pending work directly and must seal complete producer demand before dispatch.
 
@@ -16,7 +16,7 @@ A worklist executor should not rediscover demand incrementally as execution proc
 - Symbolic variable arguments may remain at behavioral boundaries where projection stops before materializing the exact key.
 - Possible symbolic and concrete occurrences that may later converge on one exact key must contribute complete producer demand before application; Resolver04 exposed this obligation but did not solve it generally.
 
-Resolution obligations would still be discovered through a structural traversal related to Resolver03's demand collection. What changes is the mechanism for enforcing field-execution order: readiness follows demand availability rather than one recursive topological fold, and resolvers whose arguments depend on variables join that same readiness relation even when their order is not determined by tree depth.
+Resolution obligations would still be discovered through a structural traversal related to Resolver03's demand collection. What changes is the mechanism for enforcing field-execution order: readiness follows demand availability rather than the current fixed LIFO order, and resolvers whose arguments depend on variables join that same readiness relation even when their order is not determined by tree depth.
 
 ## Resolution Obligations
 

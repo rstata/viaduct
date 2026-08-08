@@ -5,8 +5,8 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.instantiateBindings
+import model.objectKey
 import model.selectionForestOf
-import model.specializedKey
 import model.substituteTemplates
 
 /**
@@ -27,10 +27,10 @@ fun SelectionForest.successorDemand(): SelectionForest =
             )
         val resolverInputDemand =
             selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-                val specializedKey = selection.specializedKey(possibleType)
+                val specializedKey = selection.objectKey(possibleType)
                 val key =
                     Value.GroundKey.of(
-                        field = specializedKey.field as model.Schema.ObjectField,
+                        field = specializedKey.field,
                         arguments = specializedKey.arguments.instantiateBindings(),
                     )
                 if (
@@ -72,10 +72,10 @@ fun SelectionForest.successorBoundaryDemand(): SelectionForest =
 context(world: Assumptions)
 private fun Selection.successorInputBoundaries(): SelectionForest =
     possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
-        val specializedKey = specializedKey(possibleType)
+        val specializedKey = objectKey(possibleType)
         val key =
             Value.GroundKey.of(
-                field = specializedKey.field as model.Schema.ObjectField,
+                field = specializedKey.field,
                 arguments = specializedKey.arguments.instantiateBindings(),
             )
         if (

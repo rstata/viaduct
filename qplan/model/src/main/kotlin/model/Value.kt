@@ -304,6 +304,10 @@ sealed interface Value {
      *
      * `arguments.type == field.arguments`.
      *
+     * ### Invariant: object-key-field-classification
+     *
+     * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
+     *
      * Equality is structural over [field] and [arguments], using canonical schema equality.
      */
     sealed interface Key {
@@ -325,7 +329,7 @@ sealed interface Value {
             fun of(
                 field: Schema.ObjectField,
                 arguments: Map<kotlin.String, Any?>,
-            ): Key = of(field, OpenArguments.of(field, arguments))
+            ): ObjectKey = ObjectKey.of(field, arguments)
 
             /**
              * ### Invariant: arguments-key-factory-schema-conformance
@@ -339,14 +343,19 @@ sealed interface Value {
                 require(arguments.type == field.arguments) {
                     "Key arguments do not belong to its output field"
                 }
-                return if (field is Schema.ObjectField && arguments is Arguments) {
-                    GroundKeyImpl(field, arguments)
-                } else {
-                    KeyImpl(field, arguments)
+                return when (field) {
+                    is Schema.ObjectField -> ObjectKey.of(field, arguments)
+                    else -> KeyImpl(field, arguments)
                 }
             }
 
             /** Constructs the precise key category for a field on a concrete object type. */
+            fun of(
+                field: Schema.ObjectField,
+                arguments: OpenArguments,
+            ): ObjectKey = ObjectKey.of(field, arguments)
+
+            /** Constructs the precise ground key category. */
             fun of(
                 field: Schema.ObjectField,
                 arguments: Arguments,
@@ -355,13 +364,41 @@ sealed interface Value {
     }
 
     /**
-     * A key whose field belongs to a concrete object type and whose arguments are ground.
+     * A key whose field belongs to a concrete object type.
      *
-     * Every instance carries a [Schema.ObjectField] and ground [Arguments]. Equality is structural
-     * over those properties.
+     * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Equality remains the
+     * structural [Key] equality over those properties.
      */
-    sealed interface GroundKey : Key, PathComponent {
+    sealed interface ObjectKey : Key {
         override val field: Schema.ObjectField
+        override val arguments: OpenArguments
+
+        companion object {
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Map<kotlin.String, Any?>,
+            ): ObjectKey = of(field, OpenArguments.of(field, arguments))
+
+            fun of(
+                field: Schema.ObjectField,
+                arguments: OpenArguments,
+            ): ObjectKey {
+                require(arguments.type == field.arguments) {
+                    "Key arguments do not belong to its output field"
+                }
+                return if (arguments is Arguments) {
+                    GroundKeyImpl(field, arguments)
+                } else {
+                    ObjectKeyImpl(field, arguments)
+                }
+            }
+        }
+    }
+
+    /**
+     * A concrete-object key whose arguments are ground and which can therefore select an OER cell.
+     */
+    sealed interface GroundKey : ObjectKey, PathComponent {
         override val arguments: Arguments
 
         companion object {
@@ -689,6 +726,11 @@ private data class KeyImpl(
     override val field: Schema.OutputField,
     override val arguments: OpenArguments,
 ) : Value.Key
+
+private data class ObjectKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: OpenArguments,
+) : Value.ObjectKey
 
 private data class GroundKeyImpl(
     override val field: Schema.ObjectField,

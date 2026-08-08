@@ -5,35 +5,34 @@ import model.EngineResult
 import model.PathComponent
 import model.SelectionForest
 import model.Value
-import model.mergeToGround
+import model.instantiateBindings
+import model.merge
 import model.selectionForestOf
 
 /**
- * A passive result tree and the registered resolver work remaining within it.
+ * A passively populated partial result and the registered resolver work remaining within it.
  *
- * Each key in [pathsNeedingResolution] is the exact root-relative OER path of one object occurrence
- * requiring registered field resolution. Object fields contribute [Value.GroundKey] components and
- * list positions contribute [Value.ListIndex] components. Each map value is the selection forest
- * already collapsed to the object at that path.
+ * Each pending item identifies one exact object occurrence. The partial result contains references
+ * to those OERs, allowing their cells to be populated after the parent cell has been written.
  */
-class ResolvedValue(
-    val engineResult: EngineResult?,
-    val pathsNeedingResolution: Map<List<PathComponent>, SelectionForest>,
-)
+internal class ResolvedValue(
+    val partialValue: PartialValue?,
+    val pending: List<ResolveOER>,
+) {
+    val engineResult: EngineResult?
+        get() = partialValue.freeze()
+
+    val pathsNeedingResolution: Map<List<PathComponent>, SelectionForest>
+        get() = pending.associate { work -> work.oer.path to work.selections }
+}
 
 /**
- * Returns this output as a passive result tree together with every object path requiring registered
+ * Returns this output as a passive partial result together with every object requiring registered
  * field resolution for [resolverDemand].
  *
  * [beSelective] controls passive construction. A false value includes every passive field actually
  * present in the output, recursively stopping at registered resolver boundaries. A true value
- * includes only fields in [resolverDemand]. The demand also identifies registered boundaries that
- * must be resumed after passive construction. When [Assumptions.selectiveResolvers] is true,
- * selective construction requires every supplied object field to be demanded.
- *
- * [path] is the exact OER path from the Query root to this value. Selected `__typename` fields are
- * supplied directly from the concrete object type. Null, error, and simple values terminate
- * traversal, while object fields and list elements extend the path with their exact coordinates.
+ * includes only fields in [resolverDemand]. Null, error, and simple values terminate traversal.
  */
 context(world: Assumptions)
 internal fun Value.Output?.resolveValue(
@@ -42,39 +41,31 @@ internal fun Value.Output?.resolveValue(
     beSelective: Boolean,
 ): ResolvedValue =
     when (this) {
-        null -> ResolvedValue(null, emptyMap())
-        Value.Error -> ResolvedValue(Value.Error, emptyMap())
-        is Value.Simple -> ResolvedValue(this, emptyMap())
+        null -> ResolvedValue(null, emptyList())
+        Value.Error -> ResolvedValue(PartialValue.Terminal(Value.Error), emptyList())
+        is Value.Simple -> ResolvedValue(PartialValue.Terminal(this), emptyList())
         is Value.Object -> resolveObjectValue(resolverDemand, beSelective, path)
-        is Value.OutputList ->
-            values
-                .withIndex()
-                .fold(
-                    ResolvedList(
-                        cells = emptyList(),
-                        pathsNeedingResolution = emptyMap(),
-                    ),
-                ) { resolved, (index, value) ->
-                    val element =
-                        value.resolveValue(
-                            path = path + Value.ListIndex.of(index),
-                            resolverDemand = resolverDemand,
-                            beSelective = beSelective,
-                        )
-                    ResolvedList(
-                        cells =
-                            resolved.cells +
-                                EngineResult.Cell.of(element.engineResult),
-                        pathsNeedingResolution =
-                            resolved.pathsNeedingResolution +
-                                element.pathsNeedingResolution,
-                    )
-                }.let { resolved ->
-                    ResolvedValue(
-                        engineResult = EngineResult.List.of(typeExpr, resolved.cells),
-                        pathsNeedingResolution = resolved.pathsNeedingResolution,
+        is Value.OutputList -> {
+            val elements =
+                values.mapIndexed { index, value ->
+                    value.resolveValue(
+                        path = path + Value.ListIndex.of(index),
+                        resolverDemand = resolverDemand,
+                        beSelective = beSelective,
                     )
                 }
+            ResolvedValue(
+                partialValue =
+                    PartialValue.ListValue(
+                        typeExpr = typeExpr,
+                        cells =
+                            elements.map { element ->
+                                PartialCell(element.partialValue)
+                            },
+                    ),
+                pending = elements.flatMap(ResolvedValue::pending),
+            )
+        }
     }
 
 context(world: Assumptions)
@@ -83,8 +74,8 @@ private fun Value.Object.resolveObjectValue(
     beSelective: Boolean,
     path: List<PathComponent>,
 ): ResolvedValue {
-    val mergedResolverDemand = resolverDemand.mergeToGround(type)
-    val resolverDemandByKey = mergedResolverDemand.byKey()
+    val mergedResolverDemand = resolverDemand.merge(type).instantiateBindings()
+    val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     if (world.selectiveResolvers && beSelective) {
         val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
         require(unselectedKeys.isEmpty()) {
@@ -92,13 +83,13 @@ private fun Value.Object.resolveObjectValue(
                 unselectedKeys.joinToString { key -> key.field.fieldName }
         }
     }
-    val hasLocalResolverSelection =
-        resolverDemandByKey.keys.any { key -> key.field in world.resolverRegistry }
-    val localPaths =
-        if (hasLocalResolverSelection) {
-            mapOf(path to resolverDemand)
+
+    val oer = PartialOER(path, this)
+    val localPending =
+        if (resolverDemandByKey.keys.any { key -> key.field in world.resolverRegistry }) {
+            listOf(ResolveOER(oer, resolverDemand))
         } else {
-            emptyMap()
+            emptyList()
         }
     val selectedKeys =
         if (beSelective) {
@@ -111,30 +102,21 @@ private fun Value.Object.resolveObjectValue(
                     key.field.fieldName == "__typename"
                 }
         }
-    val resolved =
-        selectedKeys
-            .fold(
-                ResolvedObject(
-                    cells = emptyMap(),
-                    pathsNeedingResolution = localPaths,
-                ),
-            ) { result, key ->
-                if (key.field.fieldName == "__typename") {
-                    ResolvedObject(
-                        cells =
-                            result.cells +
-                                (
-                                    key to
-                                        EngineResult.Cell.of(
-                                            Value.String.of(type.typeName),
-                                        )
-                                ),
-                        pathsNeedingResolution = result.pathsNeedingResolution,
-                    )
-                } else {
-                    val value = fieldValues.getValue(key)
-                    val fieldValue =
-                        value.resolveValue(
+    val descendantPending =
+        selectedKeys.flatMap { key ->
+            if (key.field.fieldName == "__typename") {
+                oer.write(
+                    key,
+                    PartialCell(
+                        PartialValue.Terminal(Value.String.of(type.typeName)),
+                    ),
+                )
+                emptyList()
+            } else {
+                val fieldValue =
+                    fieldValues
+                        .getValue(key)
+                        .resolveValue(
                             path = path + key,
                             resolverDemand =
                                 resolverDemandByKey[key]
@@ -142,164 +124,13 @@ private fun Value.Object.resolveObjectValue(
                                     ?: selectionForestOf(),
                             beSelective = beSelective,
                         )
-                    ResolvedObject(
-                        cells =
-                            result.cells +
-                                (key to EngineResult.Cell.of(fieldValue.engineResult)),
-                        pathsNeedingResolution =
-                            result.pathsNeedingResolution +
-                                fieldValue.pathsNeedingResolution,
-                    )
-                }
+                oer.write(key, PartialCell(fieldValue.partialValue))
+                fieldValue.pending
             }
+        }
+
     return ResolvedValue(
-        engineResult = EngineResult.Object.of(type, resolved.cells),
-        pathsNeedingResolution = resolved.pathsNeedingResolution,
+        partialValue = PartialValue.ObjectReference(oer),
+        pending = localPending + descendantPending,
     )
 }
-
-/**
- * Resolves every path in [resolvedValue], deepest paths first, using [resolveObject].
- */
-internal fun Value.Output?.resolvePaths(
-    path: List<PathComponent>,
-    resolvedValue: ResolvedValue,
-    resolveObject:
-        (
-            path: List<PathComponent>,
-            value: Value.Object,
-            selections: SelectionForest,
-            resolved: EngineResult.Object,
-        ) -> EngineResult.Object,
-): EngineResult? =
-    resolvedValue.pathsNeedingResolution
-        .entries
-        .sortedByDescending { (path, _) -> path.size }
-        .fold(resolvedValue.engineResult) { result, (targetPath, selections) ->
-            require(
-                targetPath.size >= path.size &&
-                    targetPath.take(path.size) == path,
-            ) {
-                "Resolution target is not beneath its output root"
-            }
-            resolvePath(
-                resolved = result,
-                path = path,
-                targetPath = targetPath,
-                selections = selections,
-                resolveObject = resolveObject,
-            )
-        }
-
-private fun Value.Output?.resolvePath(
-    resolved: EngineResult?,
-    path: List<PathComponent>,
-    targetPath: List<PathComponent>,
-    selections: SelectionForest,
-    resolveObject:
-        (
-            path: List<PathComponent>,
-            value: Value.Object,
-            selections: SelectionForest,
-            resolved: EngineResult.Object,
-        ) -> EngineResult.Object,
-): EngineResult? {
-    require(
-        targetPath.size >= path.size &&
-            targetPath.take(path.size) == path,
-    ) {
-        "Resolution target is not beneath the current output value"
-    }
-    return when (this) {
-        null,
-        Value.Error,
-        is Value.Simple,
-        -> resolved
-
-        is Value.OutputList -> {
-            require(resolved is EngineResult.List && resolved.size == values.size) {
-                "Resolved list does not match its source output"
-            }
-            val index = targetPath.getOrNull(path.size) as? Value.ListIndex
-                ?: throw IllegalArgumentException("Resolution path does not select a list element")
-            require(index.index in values.indices) {
-                "Resolution list index ${index.index} is absent"
-            }
-            EngineResult.List.of(
-                typeExpr = resolved.typeExpr,
-                cells =
-                    values.indices.map { elementIndex ->
-                        val cell = resolved[elementIndex]
-                        if (elementIndex == index.index) {
-                            EngineResult.Cell.of(
-                                value =
-                                    values[elementIndex].resolvePath(
-                                        resolved = cell.value,
-                                        path = path + index,
-                                        targetPath = targetPath,
-                                        selections = selections,
-                                        resolveObject = resolveObject,
-                                    ),
-                                check = cell.check,
-                            )
-                        } else {
-                            cell
-                        }
-                    },
-            )
-        }
-
-        is Value.Object -> {
-            require(resolved is EngineResult.Object && resolved.type == type) {
-                "Resolved object does not match its source output"
-            }
-            if (path == targetPath) {
-                resolveObject(path, this, selections, resolved)
-            } else {
-                val key = targetPath.getOrNull(path.size) as? Value.GroundKey
-                    ?: throw IllegalArgumentException(
-                        "Resolution path does not select an object field",
-                    )
-                require(key.field.containingType == type) {
-                    "Resolution path field does not belong to ${type.typeName}"
-                }
-                require(key in fieldValues && key in resolved.keys) {
-                    "Resolution path is absent from ${type.typeName}"
-                }
-                val existing = resolved.fetch(key)
-                val fieldValue =
-                    fieldValues
-                        .getValue(key)
-                        .resolvePath(
-                            resolved = existing.value,
-                            path = path + key,
-                            targetPath = targetPath,
-                            selections = selections,
-                            resolveObject = resolveObject,
-                        )
-                EngineResult.Object.of(
-                    type = type,
-                    cells =
-                        resolved.cells +
-                            (
-                                key to
-                                    EngineResult.Cell.of(
-                                        value = fieldValue,
-                                        check = existing.check,
-                                    )
-                            ),
-                )
-            }
-        }
-    }
-}
-
-private class ResolvedList(
-    val cells: List<EngineResult.Cell>,
-    val pathsNeedingResolution: Map<List<PathComponent>, SelectionForest>,
-)
-
-private class ResolvedObject(
-    val cells: Map<Value.GroundKey, EngineResult.Cell>,
-    val pathsNeedingResolution: Map<List<PathComponent>, SelectionForest>,
-)

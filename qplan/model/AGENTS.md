@@ -40,7 +40,7 @@ Kotlin inheritance and generic variance classify carrier values but do not defin
 
 `Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
 
-`Value.Object` fields and OER cells are keyed by exact `Value.GroundKey` coordinates, preserving distinct coerced argument tuples for one field. A `GroundKey` has a concrete `Schema.ObjectField` and ground `Value.Arguments`. `Value.Key` is the broader open selection-key category: its field may be abstract or concrete and its arguments are `OpenArguments`.
+`Value.Object` fields and OER cells are keyed by exact `Value.GroundKey` coordinates, preserving distinct coerced argument tuples for one field. `Value.Key` is the broad open selection-key category: its field may be abstract or concrete and its arguments are `OpenArguments`. `Value.ObjectKey` refines it to a concrete `Schema.ObjectField` while retaining open arguments; `Value.GroundKey` further refines it to ground `Value.Arguments`.
 
 The `Value` model is incomplete: lazy values and similar engine-specific intermediate values are not represented. Raw node references exist only as external test-fixture inputs and are lowered to synthetic ID bridge values before semantic reasoning; the canonical value algebra has no distinct node-reference variant.
 
@@ -48,6 +48,6 @@ The `Value` model is incomplete: lazy values and similar engine-specific interme
 
 `Value.Key` does not include a response alias. Canonical output fields and fully coerced arguments determine field-resolution identity; aliases and response ordering belong to external field completion.
 
-Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and is ground by type. Keys used by selections may instead carry abstract fields or unresolved variables and must pass through `mergeToGround(type)` before entering either value.
+Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and is ground by type. Selection keys first pass through `merge(type)`, which specializes and normalizes them as `Value.ObjectKey` values, and then through `ObjectSelectionForest.instantiateBindings()`. OER lookup, materialization, dependency ordering, resolver application, and path formation use the checked `GroundKey` views of that instantiated forest.
 
 `PathComponent` is the exact OER-tree path category. Its variants are `Value.GroundKey` for an object-cell step and `Value.ListIndex` for a list-element step.

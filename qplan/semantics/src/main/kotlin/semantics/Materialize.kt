@@ -2,10 +2,11 @@ package semantics
 
 import model.Assumptions
 import model.EngineResult
-import model.GroundSelectionForest
+import model.ObjectSelectionForest
 import model.SelectionForest
 import model.Value
-import model.mergeToGround
+import model.instantiateBindings
+import model.merge
 
 /**
  * Materializes the object value selected by [selections] from this result.
@@ -15,7 +16,7 @@ import model.mergeToGround
  * key arguments.
  */
 context(world: Assumptions)
-fun EngineResult.Object.materialize(selections: GroundSelectionForest): Value.Object {
+fun EngineResult.Object.materialize(selections: ObjectSelectionForest): Value.Object {
     require(type == selections.type) {
         "Selection type ${selections.type.typeName} does not match result type ${type.typeName}"
     }
@@ -26,15 +27,15 @@ context(world: Assumptions)
 private fun EngineResult.Object.materializeSelectedObjectValue(
     selections: SelectionForest,
 ): Value.Object =
-    materializeSelectedObjectValue(selections.mergeToGround(type))
+    materializeSelectedObjectValue(selections.merge(type).instantiateBindings())
 
 context(world: Assumptions)
 private fun EngineResult.Object.materializeSelectedObjectValue(
-    selections: GroundSelectionForest,
+    selections: ObjectSelectionForest,
 ): Value.Object {
     val selectedFields =
         selections
-            .byKey()
+            .byGroundKey()
             .mapValues { (key, selection) ->
                 fetch(key).value.materializeEngineResultValue(
                     selection.subselections,

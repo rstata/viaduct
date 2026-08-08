@@ -4,7 +4,8 @@ import model.Schema
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.mergeToGround
+import model.instantiateBindings
+import model.merge
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -74,25 +75,25 @@ class SuccessorDemandTest {
 
         val full =
             context(world) {
-                selections.successorDemand().mergeToGround(schema.query)
+                selections.successorDemand().merge(schema.query).instantiateBindings()
             }[schema.key(schema.query, "root")]
                 .subselections
         val boundaries =
             context(world) {
-                selections.successorBoundaryDemand().mergeToGround(schema.query)
+                selections.successorBoundaryDemand().merge(schema.query).instantiateBindings()
             }[schema.key(schema.query, "root")]
                 .subselections
         val rootType = schema.type("Root") as Schema.ObjectType
-        val fullRoot = context(world) { full.mergeToGround(rootType) }
-        val boundaryRoot = context(world) { boundaries.mergeToGround(rootType) }
+        val fullRoot = context(world) { full.merge(rootType).instantiateBindings() }
+        val boundaryRoot = context(world) { boundaries.merge(rootType).instantiateBindings() }
 
         assertEquals(
             setOf("consumer", "source", "box"),
-            fullRoot.keys().fieldNames(),
+            fullRoot.groundKeys().fieldNames(),
         )
         assertEquals(
             setOf("consumer", "box"),
-            boundaryRoot.keys().fieldNames(),
+            boundaryRoot.groundKeys().fieldNames(),
         )
 
         val boxType = schema.type("Box") as Schema.ObjectType
@@ -101,13 +102,21 @@ class SuccessorDemandTest {
         assertEquals(
             setOf("passive", "computed", "__typename"),
             context(world) {
-                fullBox.subselections.mergeToGround(boxType).keys().fieldNames()
+                fullBox.subselections
+                    .merge(boxType)
+                    .instantiateBindings()
+                    .groundKeys()
+                    .fieldNames()
             },
         )
         assertEquals(
             setOf("computed", "__typename"),
             context(world) {
-                boundaryBox.subselections.mergeToGround(boxType).keys().fieldNames()
+                boundaryBox.subselections
+                    .merge(boxType)
+                    .instantiateBindings()
+                    .groundKeys()
+                    .fieldNames()
             },
         )
     }

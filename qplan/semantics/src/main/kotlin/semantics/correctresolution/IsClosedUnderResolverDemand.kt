@@ -56,8 +56,8 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
 
         is EngineResult.Object -> objectIsClosedUnderResolverDemand(path)
         is EngineResult.List ->
-            withIndex().all { (index, cell) ->
-                cell.value.engineResultIsClosedUnderResolverDemand(
+            indices.all { index ->
+                get(index).value.engineResultIsClosedUnderResolverDemand(
                     path + Value.ListIndex.of(index),
                 )
             }

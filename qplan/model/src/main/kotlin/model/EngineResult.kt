@@ -84,9 +84,26 @@ sealed interface EngineResult {
      * A typed list result whose elements retain checker results.
      *
      * [typeExpr] is the expected type of each element, including its nullability and nested lists.
+     * This type exposes only the finite positional operations used by engine-result reasoning; it
+     * is not a Kotlin [kotlin.collections.List].
      */
-    sealed interface List : EngineResult, kotlin.collections.List<Cell> {
+    sealed interface List : EngineResult {
         val typeExpr: TypeExpr<Schema.OutputType>
+        val size: Int
+        val indices: IntRange
+            get() = 0 until size
+
+        operator fun get(index: Int): Cell
+
+        fun <R> map(transform: (Cell) -> R): kotlin.collections.List<R> =
+            indices.map { index -> transform(get(index)) }
+
+        fun all(predicate: (Cell) -> Boolean): Boolean =
+            indices.all { index -> predicate(get(index)) }
+
+        fun forEachIndexed(action: (index: Int, Cell) -> Unit) {
+            indices.forEach { index -> action(index, get(index)) }
+        }
 
         companion object {
             /**
@@ -205,8 +222,12 @@ private data class ObjectResultImpl(
 private data class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
     private val cells: kotlin.collections.List<EngineResult.Cell>,
-) : EngineResult.List,
-    kotlin.collections.List<EngineResult.Cell> by cells
+) : EngineResult.List {
+    override val size: Int
+        get() = cells.size
+
+    override fun get(index: Int): EngineResult.Cell = cells[index]
+}
 
 private fun EngineResult.Cell.union(other: EngineResult.Cell): EngineResult.Cell {
     require(check == other.check) { "Cannot union engine-result cells with unequal checks" }

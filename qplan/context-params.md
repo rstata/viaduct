@@ -1,41 +1,17 @@
-# Context Parameters and the `Assumptions` World
+# Context Parameters And `Assumptions`
 
-This project uses Kotlin context parameters to make the one `Assumptions` value for a reasoning world available to functions interpreted under that world.
-
-The project-wide form is:
+This project uses Kotlin context parameters to make the one `Assumptions` value for a reasoning world available to operations interpreted in that world:
 
 ```kotlin
 context(world: Assumptions)
 fun ...
 ```
 
-Use `world` consistently. Although the parameter name is local to each function, it also appears throughout our claims and arguments, so one conventional name makes the model predictable for humans and coding agents.
+Use the name `world` consistently. It mirrors the mathematical judgment `world |- predicate` and keeps claims, code, and tests readable.
 
-## Why We Use Context Parameters
+## Composition
 
-Correctness propositions often have the mathematical shape:
-
-```text
-world |- predicate
-```
-
-For example, the following is mathematical pseudocode rather than a declaration of existing Kotlin functions:
-
-```text
-world |- forall(
-    obj: Value.Object,
-    demand: SelectionForest,
-) {
-    snippable(obj, demand) implies
-        obj.snipToDemand(demand).type == obj.type
-}
-```
-
-Here `snippable` abbreviates the documented preconditions of `snipToDemand`. A context parameter reflects the `world |-` premise directly while allowing operations such as `snipToDemand` to use the schema and other fixed assumptions.
-
-## Context Parameters Compose
-
-A function that already has an `Assumptions` context may directly call another function requiring the same context:
+A function with an `Assumptions` context may directly call another function requiring the same context:
 
 ```kotlin
 context(world: Assumptions)
@@ -47,25 +23,15 @@ fun Value.Object.copyTwiceInWorld(): Value.Object =
     copyInWorld().copyInWorld()
 ```
 
-The compiler satisfies both calls to `copyInWorld` from the context already available to `copyTwiceInWorld`; no nested context block is needed.
+The compiler supplies both calls from the existing context. No nested context block is needed.
 
-## Accessing the World
+## Access
 
-A context parameter is not an implicit receiver. Access members of `Assumptions` through the parameter:
+A context parameter is not an implicit receiver. Qualify members as `world.schema`, `world.resolverRegistry`, `world.selectiveResolvers`, `world.behavioral(...)`, and `world.selectionsFrom(...)`.
 
-```kotlin
-context(world: Assumptions)
-fun Value.Object.copyInWorld(): Value.Object =
-    Value.Object.of(type, fieldValues)
-```
+Prefer qualification when a body uses only a few world members.
 
-The current world surface includes `world.schema`, `world.resolverRegistry`, `world.selectiveResolvers`, `world.behavioral(...)`, and `world.selectionsFrom(...)`. Value factories belong to their precise `Value` variants rather than to `Schema` or `Assumptions`.
-
-Prefer explicit qualification when a function uses only a few world members. This is the clearest style for operations such as `Value.Output?.snipToDemand`.
-
-## Receiver-Style Bodies
-
-When an assumption-heavy body reads more clearly with `world` as an implicit receiver, use `run`:
+For an assumption-heavy body that reads better with a receiver, use `run`:
 
 ```kotlin
 context(world: Assumptions)
@@ -75,15 +41,13 @@ fun Value.Object.copyInWorld(): Value.Object = world.run {
 }
 ```
 
-Inside the `run` body, `schema` resolves against the `Assumptions` receiver while `type` and `fieldValues` remain available from the `Value.Object` extension receiver. Functions requiring the same `Assumptions` context also remain callable.
+Use `run`, not `apply`, when returning a modeled result. `run` returns the lambda result; `apply` would return `world`.
 
-Use `run`, not `apply`, when the function returns a modeled result. `run` returns the lambda result; `apply` returns its receiver, which would be `world`.
-
-Always declare the return type of a receiver-style expression body. The explicit type makes the operation's signature clear and lets the compiler catch an accidental switch to a scope function with different return semantics.
+Declare the return type of a receiver-style expression body so an accidental scope-function change is caught by the compiler.
 
 ## Call Boundaries
 
-Context parameters are not global variables. Establish an `Assumptions` value at a call boundary:
+Context parameters are not global state. Establish the world at an outer call boundary:
 
 ```kotlin
 val result =
@@ -92,10 +56,10 @@ val result =
     }
 ```
 
-Inside another function with `context(world: Assumptions)`, call context-dependent functions directly without another `context` block.
+Inside another `context(world: Assumptions)` function, call context-dependent operations directly.
 
-## Testing Context Usage
+## Validation
 
-[ContextParametersTest.kt](./model/src/test/kotlin/model/ContextParametersTest.kt) uses real `Assumptions`, `Schema`, and `Value.Object` values to exercise context establishment, implicit composition, receiver-style bodies, and `snipToDemand`.
+[ContextParametersTest.kt](model/src/test/kotlin/model/ContextParametersTest.kt) exercises context establishment, composition, receiver-style bodies, and `snipToDemand` with real model values.
 
-Compilation is the primary evidence for receiver and context resolution. Runtime assertions additionally verify that receiver-style functions return the intended model value rather than the `Assumptions` receiver.
+Compilation is the primary evidence for context and receiver resolution. Runtime assertions verify that receiver-style functions return the modeled result rather than the `Assumptions` receiver.

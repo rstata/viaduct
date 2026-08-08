@@ -1,16 +1,8 @@
 # Semantics Domain Guidance
 
-## Purpose
+## Scope
 
-This project defines transformations, predicates, and other reasoning over the carrier algebra in `model`. Follow the repository-wide mathematical interpretation in [`../AGENTS.md`](../AGENTS.md).
-
-Agents writing or interpreting semantic tests must also read
-[`testing-contracts.md`](testing-contracts.md) for the feature-contract and
-policy-mixin organization of the resolver test suites. For generated failures,
-use its coordinate-based `resolverPropertyReplay` workflow first; do not
-brute-force a full generated test class when `S:R:Q` coordinates are reported.
-
-Semantic code may construct model values but must not redefine or defensively re-check model invariants. It may express relations between a carrier value and a judgment input, such as requiring an OER and ground selection forest to share the Query root.
+This project defines transformations and judgments over the model carriers. Follow [`../AGENTS.md`](../AGENTS.md). Semantic code may construct model values but must not redefine or defensively re-check carrier invariants.
 
 The principal judgment is:
 
@@ -19,17 +11,18 @@ context(world: Assumptions)
 fun EngineResult.Object.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
-This predicate characterizes whether an OER is a correct field-resolution result for a
-Query-rooted ground selection forest under one reasoning world.
+It judges a completed Query OER extensionally; it does not establish execution order, application count, provider binding, or concurrency.
 
-## Dependencies
+## Resolution
 
-Main code depends only on `model`. Schema parsing, dependency injection, registry assembly, and other pre-reasoning composition belong in test fixtures or application composition code.
+`merge(type)` specializes open selections to one concrete object type. `instantiateBindings()` then grounds arguments and coalesces convergent keys. OER operations must cross the checked `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()` boundary.
 
-Semantic code may receive open selection forests. `merge(type)` filters applicability, specializes fields and argument defaults to one concrete object type, and coalesces ordinary-equal open `ObjectKey` values into an `ObjectSelectionForest`. `ObjectSelectionForest.instantiateBindings()` later substitutes bindings and coalesces keys that converge after grounding. OER lookup, materialization, dependency ordering, resolver application, and path formation must cross the checked `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()` boundary.
+Resolver01-03 share the monotonic constructor in `Resolve.kt`: local demand closure, dependency order, materialization, write-once publication, passive traversal, and recursive continuation. `ResolveValue.kt` allocates child OERs, retains exact active targets, and populates them deepest first without replacing parent cells.
 
-Resolver01-03 stamp field-relative templates at exact OER paths, bind `fromArgument` variables from each resolver occurrence's ground arguments, and ground demand only after those bindings are available. Canonical registry construction validates argument-variable ownership and every object-field provider path; runtime `fromObjectField` binding remains deferred. Operation-variable substitution remains pre-reasoning composition and is distinct from field-relative execution-variable metadata.
+Resolver01 supports empty user object fragments plus generated bridge loaders. Resolver02 and Resolver03 support nonempty fragments and `FromArgument`; runtime `FromObjectField` is deferred. Resolver01/02 use complete resolver outputs, while Resolver03 uses full `successorDemand()` and selective projection.
 
-Resolver01-03 share one recursive depth-first constructor in `Resolve.kt`: local demand closure, sibling dependency ordering, resolver-input materialization, write-once cell publication, passive output traversal, and recursive continuation are identical. Each resolver starts with an empty mutable root OER. `ResolveValue.kt` constructs passive trees containing mutable OERs, retains each exact object occurrence requiring behavioral resolution together with its path and collapsed selections, and populates those target OERs deepest first without replacing parent cells or immutable list positions. Each public resolver entry point supplies a `SelectionCompleter` context that defines its output-boundary policy. Resolver01 preserves incoming selections and applies complete outputs; Resolver02 applies complete outputs and uses `successorBoundaryDemand()` only to expose nested behavioral continuation paths; Resolver03 uses full `successorDemand()` and selective projection so passive successor prerequisites are retained.
+Raw node inputs and bridge schema augmentation are fixture concerns. Semantic logic sees `foo$bridge` producers and `T$Bridge.$node { $id }` loaders as ordinary field resolvers.
 
-Raw node resolvers, node references, typed-ID encoding, and bridge-object schema augmentation are fixture-composition concerns; generated `T$Bridge.$node` loaders enter semantic reasoning as ordinary argumentless field resolvers with fixed `{ $id }` fragments.
+## Tests
+
+Read [`testing-contracts.md`](testing-contracts.md) before changing or interpreting resolver tests. Start generated-failure investigation with its coordinate replay workflow rather than rerunning a whole class when exact `S:R:Q` coordinates are available.

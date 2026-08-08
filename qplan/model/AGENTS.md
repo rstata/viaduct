@@ -1,53 +1,33 @@
 # Model Domain Guidance
 
-## Purpose
+## Scope
 
-This project defines the carrier algebra for reasoning about Viaduct field resolution. Follow the repository-wide mathematical interpretation in [`../AGENTS.md`](../AGENTS.md) and the concrete API rules in [`guidelines.md`](./guidelines.md).
+This project defines the carrier algebra for field-resolution reasoning. Follow [`../AGENTS.md`](../AGENTS.md) and the concrete API rules in [`guidelines.md`](./guidelines.md). Correctness, demand derivation, execution attribution, and checker interpretation belong in semantic domains outside the carrier.
 
-The carrier defines values that may occur in an OER tree; it does not define which OER is correct for an operation. Keep correctness, demand derivation, executor attribution, and interpretation of checker results in separate semantic domains.
+`EngineResult` values are finite, well-founded algebraic values. Mutable OERs may gain validated exact cells monotonically; a written parent may retain a mutable child OER while that child gains cells. Reference identity, self-reference, and cyclic result graphs are outside structural equality.
 
-The `model.invariants` package defines reusable relations used to state carrier and world invariants precisely. Factory KDocs state the invariant postconditions established for every constructed result; because carrier implementations are sealed behind those factories, these postconditions are universally quantified over carrier values in the fixed reasoning world.
+`Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
 
-## Domain Assumptions
+## Variables And Keys
 
-`EngineResult` values are finite, inductively defined algebraic values. An opt-in mutable `EngineResult.Object` may gain validated cells monotonically, and a written parent cell may retain a mutable child OER while that child gains cells. Reference identity is not part of structural engine-result equality, and self-reference and cyclic runtime object graphs remain outside the model. ("OER" which stands for object engine-result is a common shorthand for the `EngineResult.Object` type.)
+`Value.Variable.Template` is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific `Stamped` variable. Resolver01-03 bind `FromArgument` variables in request-local monotonic `Assumptions`; runtime `FromObjectField` binding is deferred.
 
-Schema definitions form reciprocal graphs: type definitions contain fields, while fields and arguments navigate back to their containing definitions. `Assumptions.schema` externally stipulates one complete canonical graph; schema decoding and reciprocal graph assembly are not semantic model operations.
+Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and enforces an argument-insensitive branch order combining ordinary resolver dependencies with provider-production-before-use edges. This is pre-reasoning validation, not runtime provider evaluation.
 
-Nesting declarations under `Schema` provides namespacing only. A nested schema definition does not retain an enclosing `Schema` instance; canonical ownership follows from the one-world assumption and the definitions carried by values.
+`Value.Key` is an open selection key. `Value.ObjectKey` refines it to a concrete object field while retaining open arguments. `Value.GroundKey` further requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
 
-The resolver registry exposes demand between concrete `Schema.ObjectField` coordinates. During registry assembly, a private dependency graph also contains `Value.Variable.Template` vertices so providers can be ordered before variable uses and cycles through variables can be rejected. A template is structurally identified by its resolver-local name and the canonical concrete object field whose resolver defines it. During future variable-aware resolution, stamping a template with an exact OER path will create an opaque occurrence-specific `Value.Variable.Stamped`; registry assembly currently constructs and establishes canonical ownership only for templates.
-
-Test-fixture composition represents raw resolver declarations as `FieldResolverDefinition` values while it lowers node coordinates, rewrites output and demand, canonicalizes variables, and attaches observers. Registry assembly consumes those definitions only after validation and dependency analysis, producing canonical `FieldResolver` values with their variables and predecessor demand already attached; semantic code never receives a definition or a resolver-building operation.
-
-External field-relative variable declarations either identify one argument of the defining resolver field or pair alias-preserving GraphQL object-fragment source with a nonempty response-key path. Pre-reasoning composition validates the production `fromObjectField` restrictions and compiles each such declaration to one alias-free `List<Value.Key>`. Every resulting object-field provider is one structurally contained path in its defining resolver's fixed object fragment. Fixture lowering moves genuine source-field variable ownership to `foo$bridge`; generated `$node` loaders are argumentless and need no transfer variables.
-
-Every canonical registry is also depth-first variable-stratified. For each concrete object type, registry assembly conservatively collapses argument-distinct occurrences of one field into one structural branch, combines ordinary sibling resolver dependencies with `fromObjectField` provider-production-before-use edges, closes object-field variable production transitively, and rejects a self-edge or longer branch cycle. `fromArgument` definitions add no branch edge because resolver arguments are already available.
-
-`Assumptions` carries request-local monotonic variable-binding state whose domain can only grow and whose values are ground by type. These bindings and opt-in mutable OER cells are the documented write-once exceptions to the usual immutable-value discipline. Resolver01-03 bind `fromArgument` variables at their exact OER occurrences; `fromObjectField` runtime binding remains deferred.
-
-Input-object fields and output-field arguments share `Schema.InputLikeField`. Ground GraphQL input values and ground output-field argument tuples share `Value.InputLike`; the object-shaped `Value.InputObject` and `Value.Arguments` categories additionally share `Value.InputObjectLike`, mirroring `Schema.InputObjectLike`. `OpenValue` and `OpenArguments` are opaque, schema-checked input expressions that may contain `Value.Variable`; `Value.Input` implements `OpenValue`, and `Value.Arguments` implements `OpenArguments`. Every argumentless output field uses the canonical `Schema.NoArguments`, while empty `Value.Arguments` instances remain ordinary structural values rather than singletons.
-
-`Value.Variable` is an open-expression atom, not a `Value.Input`. Checked open-expression builders accept ground values, variables, lists, and input-object maps, but expose no open list or open input-object carrier. Grounding operations are partial: they throw when an expression contains an unbound stamped variable or an unstamped template.
-
-Kotlin inheritance and generic variance classify carrier values but do not define GraphQL interface implementation, output subtyping, input coercion, or type variance. Use canonical schema relations and documented carrier invariants for those facts.
-
-`FieldValues` and `ObjectFieldValues` deliberately throw when lookup is outside their domain. Check `containsKey` before lookup when absence is possible; generic `Map` helpers such as `getOrElse` may call the throwing `get`.
+Ground inputs implement the opaque `OpenValue` and `OpenArguments` interfaces. Grounding throws on an unbound stamped variable or unstamped template.
 
 ## Output Representations
 
-`EngineResult.Object` and other `EngineResult` values represent Viaduct field-resolution results. Each present object field and every list element has an `EngineResult.Cell` containing its value and retained check value. Object construction is immutable by default; an explicitly mutable object may atomically add an absent exact cell once, and reads of unset cells throw. Its `cells` and `keys` observations are detached snapshots. List results remain immutable and carry their element `typeExpr` even when empty.
+`EngineResult` represents field-resolution results with value/check cells. `Value.Output` represents resolver outputs without checks; do not collapse the two.
 
-`Value.Output` values represent outputs of executors such as resolvers and checkers. Executors yield GraphQL values rather than value/check pairs. Do not collapse these representations or infer executor semantics from the structure of an OER cell.
+Object construction is immutable by default. Opt-in mutable objects atomically write each absent exact cell once, return detached cell snapshots, and throw on unset reads or repeated writes. Lists are immutable positional values and retain their element type expression.
 
-`Value.Object` fields and OER cells are keyed by exact `Value.GroundKey` coordinates, preserving distinct coerced argument tuples for one field. `Value.Key` is the broad open selection-key category: its field may be abstract or concrete and its arguments are `OpenArguments`. `Value.ObjectKey` refines it to a concrete `Schema.ObjectField` while retaining open arguments; `Value.GroundKey` further refines it to ground `Value.Arguments`.
+Raw node references exist only as fixture inputs. Composition lowers them through `foo$bridge` producers and argumentless `T$Bridge.$node` loaders before semantic reasoning.
 
-The `Value` model is incomplete: lazy values and similar engine-specific intermediate values are not represented. Raw node references exist only as external test-fixture inputs and are lowered to synthetic ID bridge values before semantic reasoning; the canonical value algebra has no distinct node-reference variant.
+## Local Rules
 
-## Intentional Differences From Existing Viaduct
+Use canonical schema relations rather than Kotlin inheritance for GraphQL semantics. `FieldValues` and `ObjectFieldValues` deliberately throw outside their lookup domain; test membership before optional lookup.
 
-`Value.Key` does not include a response alias. Canonical output fields and fully coerced arguments determine field-resolution identity; aliases and response ordering belong to external field completion.
-
-Every key present in an `EngineResult.Object` or `Value.Object` belongs to that value's concrete `Schema.ObjectType` and is ground by type. Selection keys first pass through `merge(type)`, which specializes and normalizes them as `Value.ObjectKey` values, and then through `ObjectSelectionForest.instantiateBindings()`. OER lookup, materialization, dependency ordering, resolver application, and path formation use the checked `GroundKey` views of that instantiated forest.
-
-`PathComponent` is the exact OER-tree path category. Its variants are `Value.GroundKey` for an object-cell step and `Value.ListIndex` for a list-element step.
+Every key present in an object value belongs to its concrete object type. `PathComponent` contains only exact `Value.GroundKey` object steps and `Value.ListIndex` list steps. Response aliases and ordering remain outside field-resolution identity.

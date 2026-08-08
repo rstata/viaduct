@@ -8,6 +8,7 @@ import model.Value
 import model.emptyFragmentOf
 import model.fieldExpressions
 import model.fragmentFrom
+import model.mergeToGround
 import model.objectOf
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
@@ -89,7 +90,7 @@ class ResolverRegistryTest {
         assertIs<Value.ID>(bridgeValue)
         val fieldResolver = registry.resolver(userField)
         val arguments = Value.Arguments.of(userField, emptyMap())
-        val objectFragment = fieldResolver.objectFragment(arguments)
+        val objectFragment = fieldResolver.objectFragment
         assertTrue(
             objectFragment.all {
                 it.key.field.containingType == schema.query &&
@@ -161,7 +162,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `object fragments preserve exact arguments on lowered node bridges`() {
+    fun `node loader bridge arguments come from generated argument variables`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -206,22 +207,31 @@ class ResolverRegistryTest {
         val user = schema.objectField("Query", "user")
         val bridge = schema.objectField("Query", "user\$id")
         val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
+        val key = Value.GroundKey.of(user, arguments)
+        val path = listOf(key)
+        val variable = Value.Variable.of(user, "id\$arg")
         val resolver = world.resolverRegistry.resolver(user)
-        val representativeBridge = resolver.objectFragment.single()
-        val exactObjectFragment = resolver.objectFragment(arguments)
-        val bridgeSelection =
-            exactObjectFragment.filter { selection -> selection.key.field == bridge }.single()
+        val bridgeSelection = resolver.objectFragment.single()
+        val definition =
+            assertIs<VariableDefinition.FromArgument>(
+                resolver.variables.getValue(variable),
+            )
 
-        assertEquals(bridge, representativeBridge.key.field)
+        assertEquals(user.arguments.fields.getValue("id"), definition.argument)
         assertEquals(
-            Value.Error,
-            representativeBridge.key.arguments.fieldExpressions().getValue("id"),
-        )
-        assertEquals(bridge, bridgeSelection.key.field)
-        assertEquals(
-            Value.ID.of("42"),
+            variable,
             bridgeSelection.key.arguments.fieldExpressions().getValue("id"),
         )
+
+        world.assumptions.bind(variable.stamp(path), Value.ID.of("42"))
+        val groundedBridge =
+            context(world.assumptions) {
+                resolver
+                    .stampedObjectFragment(path)
+                    .mergeToGround(schema.query)
+                    .single()
+            }
+        assertEquals(Value.GroundKey.of(bridge, mapOf("id" to "42")), groundedBridge.key)
     }
 
     @Test

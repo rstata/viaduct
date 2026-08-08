@@ -67,6 +67,9 @@ fun Arb.Companion.resolverTestBatch(
 
 /**
  * Runs the full `S x R x Q` product while reusing one assembled world per generated registry.
+ *
+ * A callback that performs more than one independent resolution must use
+ * [TestWorld.newAssumptions] for each resolution so request-local bindings are not shared.
  */
 suspend fun checkResolverTestCases(
     counts: TestCaseCount,

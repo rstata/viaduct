@@ -129,7 +129,7 @@ private fun Value.Object.resolveKey(
                 val resolver = world.resolverRegistry.resolver(key.field)
                 val objectFragment =
                     resolver
-                        .stampedObjectFragment(key.arguments, path + key)
+                        .stampedObjectFragment(path + key)
                         .mergeToGround(type)
                 val fieldValue =
                     resolver(

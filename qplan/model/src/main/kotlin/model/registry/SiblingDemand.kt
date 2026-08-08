@@ -37,7 +37,7 @@ fun Value.GroundKey.demandsFromSibling(
     return siblingKey in
         world.resolverRegistry
             .resolver(field)
-            .stampedObjectFragment(arguments, path)
+            .stampedObjectFragment(path)
             .mergeToGround(objectType)
             .keys()
 }

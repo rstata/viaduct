@@ -11,6 +11,7 @@ import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.MinimumSelectionDepth
 import semantics.arbitrary.NullValueWeight
+import semantics.arbitrary.NodeObjectWeight
 import semantics.arbitrary.NullableTypeWeight
 import semantics.arbitrary.NodeResolversEnabled
 import semantics.arbitrary.ObjectFieldCount
@@ -68,20 +69,27 @@ class ResolverStressTest {
                     (ResolverFragmentsEnabled to true) +
                     (ResolverFragmentWeight to 0.85) +
                     (ResolverFragmentDepth to 3) +
-                    (NodeResolversEnabled to false) +
+                    (NodeResolversEnabled to true) +
+                    // Static tests exhaustively cover dispatch; stress samples interactions cheaply.
+                    (NodeObjectWeight to 0.05) +
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverVariablesEnabled to false)
             var attemptedCases = 0
             var verifiedCases = 0
             var resolverApplications = 0
+            var generatedNodeResolvers = 0
+            var nodeLoaderApplications = 0
+            var argumentBearingNodeLoaderApplications = 0
+            var polymorphicNodeLoaderApplications = 0
             val previousSeed = PropertyTesting.defaultSeed
             PropertyTesting.defaultSeed = seed
 
             try {
                 checkResolverTestCases(counts, config) { testWorld, testCase ->
                     attemptedCases += 1
+                    generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
                     assertTrue(testCase.query.selectionDepth >= 4)
-                    val world = testWorld.assumptions
+                    val world = testWorld.newAssumptions()
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
                     val result =
@@ -97,6 +105,22 @@ class ResolverStressTest {
                     )
                     assertTrue(context(world) { result.correctResolution(fragment) })
                     resolverApplications += witness.applications.size
+                    witness.applications.forEach { application ->
+                        val possibleTypes =
+                            testCase.registry.nodeLoaderPossibleTypes(
+                                testCase.schema,
+                                application.key.field,
+                            )
+                        if (possibleTypes.isNotEmpty()) {
+                            nodeLoaderApplications += 1
+                            if (application.key.arguments.type.fields.isNotEmpty()) {
+                                argumentBearingNodeLoaderApplications += 1
+                            }
+                            if (possibleTypes.size > 1) {
+                                polymorphicNodeLoaderApplications += 1
+                            }
+                        }
+                    }
                     verifiedCases += 1
                 }
             } finally {
@@ -104,13 +128,22 @@ class ResolverStressTest {
                 println(
                     "Resolver03 stress: seed=$seed, requestedCases=$requestedCases, " +
                         "attemptedCases=$attemptedCases, verifiedCases=$verifiedCases, " +
-                        "resolverApplications=$resolverApplications, minimumDepth=4",
+                        "resolverApplications=$resolverApplications, " +
+                        "generatedNodeResolvers=$generatedNodeResolvers, " +
+                        "nodeLoaderApplications=$nodeLoaderApplications, " +
+                        "argumentBearingNodeLoaderApplications=" +
+                        "$argumentBearingNodeLoaderApplications, " +
+                        "polymorphicNodeLoaderApplications=" +
+                        "$polymorphicNodeLoaderApplications, minimumDepth=4",
                 )
             }
 
             assertEquals(requestedCases, attemptedCases)
             assertEquals(requestedCases, verifiedCases)
             assertTrue(resolverApplications >= requestedCases)
+            assertTrue(generatedNodeResolvers >= requestedCases / 100)
+            assertTrue(nodeLoaderApplications >= requestedCases / 1_000)
+            assertTrue(argumentBearingNodeLoaderApplications >= requestedCases / 1_000)
         }
 
     private fun configured(

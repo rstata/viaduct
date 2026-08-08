@@ -27,7 +27,6 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
             val fragment =
                 resolver
                     .stampedObjectFragment(
-                        arguments = cell.applicationKey.arguments,
                         path = cell.occurrencePath,
                     )
                     .mergeToGround(cell.containingObject.type)
@@ -54,7 +53,6 @@ internal fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredRes
             val fragment =
                 resolver
                     .stampedObjectFragment(
-                        arguments = cell.applicationKey.arguments,
                         path = cell.occurrencePath,
                     )
                     .mergeToGround(cell.containingObject.type)

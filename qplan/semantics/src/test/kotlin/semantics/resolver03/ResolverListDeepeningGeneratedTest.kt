@@ -58,8 +58,8 @@ class ResolverListDeepeningGeneratedTest {
             val batch = Arb.resolverTestBatch(counts, config).next(random)
             batch.registries.forEach { registry ->
                 val testWorld = registry.world(batch.schema)
-                val world = testWorld.assumptions
                 batch.queries.forEach { query ->
+                    val world = testWorld.newAssumptions()
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
                         context(world) {
@@ -107,7 +107,7 @@ private fun countListPassiveDeepening(
 
         world.resolverRegistry
             .resolver(field)
-            .objectFragment(selectedResolver.key.arguments)
+            .objectFragment
             .mergeToGround(type)
             .byKey()
             .values

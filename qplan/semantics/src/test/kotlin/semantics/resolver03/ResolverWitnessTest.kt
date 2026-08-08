@@ -63,7 +63,7 @@ class ResolverWitnessTest {
             ) { testWorld, testCase ->
                 generatedFromArgumentVariables +=
                     testCase.registry.features.fromArgumentVariableCount
-                val world = testWorld.assumptions
+                val world = testWorld.newAssumptions()
                 val registry = testCase.registry
                 val fragment = world.fragmentFrom(testCase.query.source)
                 registry.clearResolutionWitness()
@@ -147,12 +147,13 @@ class ResolverWitnessTest {
                     activatedDistinctArgumentCases += 1
                 }
 
+                val permutedWorld = testWorld.newAssumptions()
                 val permuted =
-                    world.fragmentFrom(testCase.query.permutationEquivalentSource)
+                    permutedWorld.fragmentFrom(testCase.query.permutationEquivalentSource)
                 registry.clearResolutionWitness()
                 val permutedResult =
-                    context(world) {
-                        world.objectOf("Query").resolve(permuted.subselections)
+                    context(permutedWorld) {
+                        permutedWorld.objectOf("Query").resolve(permuted.subselections)
                     }
                 val permutedWitness = registry.resolutionWitness()
                 assertEquals(result, permutedResult)

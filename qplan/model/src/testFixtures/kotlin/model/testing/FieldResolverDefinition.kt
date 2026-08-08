@@ -1,9 +1,7 @@
 package model.testing
 
 import model.Fragment
-import model.OpenArguments
 import model.Schema
-import model.Selection
 import model.SelectionForest
 import model.Value
 import model.registry.FieldResolver
@@ -11,7 +9,6 @@ import model.registry.FieldResolverApplicationObserver
 import model.registry.FieldResolverFunction
 import model.registry.VariableDefinition
 import model.merge
-import model.selectionForestOf
 
 /**
  * A raw field-resolver definition accepted only by test-fixture composition.
@@ -21,18 +18,13 @@ import model.selectionForestOf
  */
 class FieldResolverDefinition private constructor(
     val objectFragment: Fragment,
-    private val objectFragmentFunction: (Value.Arguments) -> Fragment,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
-    fun objectFragment(arguments: Value.Arguments): Fragment =
-        objectFragmentFunction(arguments)
-
     fun mapOutput(transform: (Value.Output?) -> Value.Output?): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
-            objectFragmentFunction = objectFragmentFunction,
             function = { input, arguments -> transform(function(input, arguments)) },
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
@@ -43,7 +35,6 @@ class FieldResolverDefinition private constructor(
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
-            objectFragmentFunction = objectFragmentFunction,
             function = function,
             projectionDemand = { demand -> transform(projectionDemand(demand)) },
             applicationObserver = applicationObserver,
@@ -52,9 +43,6 @@ class FieldResolverDefinition private constructor(
     fun mapObjectFragment(transform: (Fragment) -> Fragment): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = transform(objectFragment),
-            objectFragmentFunction = { arguments ->
-                transform(objectFragment(arguments))
-            },
             function = function,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
@@ -65,7 +53,6 @@ class FieldResolverDefinition private constructor(
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
-            objectFragmentFunction = objectFragmentFunction,
             function = function,
             projectionDemand = projectionDemand,
             applicationObserver = { input, arguments, selections ->
@@ -91,16 +78,12 @@ class FieldResolverDefinition private constructor(
             return fragment.subselections.merge(objectType)
         }
 
-        fun exactObjectFragment(arguments: Value.Arguments): Fragment =
-            objectFragment(arguments).also(validateObjectFragment)
+        validateObjectFragment(objectFragment)
 
         return FieldResolver.of(
             field = field,
             objectFragment = normalize(objectFragment, "Object fragment"),
             variables = variables,
-            objectFragmentFunction = { arguments ->
-                normalize(exactObjectFragment(arguments), "Exact object fragment")
-            },
             function = function,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
@@ -114,22 +97,6 @@ class FieldResolverDefinition private constructor(
         ): FieldResolverDefinition =
             FieldResolverDefinition(
                 objectFragment = objectFragment,
-                objectFragmentFunction = { objectFragment },
-                function = function,
-                projectionDemand = { it },
-                applicationObserver = { _, _, _ -> },
-            )
-
-        fun ofArgumentRetargeting(
-            objectFragment: Fragment,
-            retargetArguments: (Value.Key, Value.Arguments) -> OpenArguments,
-            function: FieldResolverFunction,
-        ): FieldResolverDefinition =
-            FieldResolverDefinition(
-                objectFragment = objectFragment,
-                objectFragmentFunction = { arguments ->
-                    objectFragment.retargetArguments(arguments, retargetArguments)
-                },
                 function = function,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
@@ -141,34 +108,3 @@ fun fieldResolverOf(
     objectFragment: Fragment,
     function: FieldResolverFunction,
 ): FieldResolverDefinition = FieldResolverDefinition.of(objectFragment, function)
-
-private fun Fragment.retargetArguments(
-    resolverArguments: Value.Arguments,
-    retargetArguments: (Value.Key, Value.Arguments) -> OpenArguments,
-): Fragment =
-    Fragment.of(
-        nominalType = nominalType,
-        subselections = subselections.retargetArguments(resolverArguments, retargetArguments),
-    )
-
-private fun SelectionForest.retargetArguments(
-    resolverArguments: Value.Arguments,
-    retargetArguments: (Value.Key, Value.Arguments) -> OpenArguments,
-): SelectionForest =
-    flatMap { selection ->
-        selectionForestOf(
-            Selection.of(
-                key =
-                    Value.Key.of(
-                        selection.key.field,
-                        retargetArguments(selection.key, resolverArguments),
-                    ),
-                possibleTypes = selection.possibleTypes,
-                subselections =
-                    selection.subselections.retargetArguments(
-                        resolverArguments,
-                        retargetArguments,
-                    ),
-            ),
-        )
-    }

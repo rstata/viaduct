@@ -8,6 +8,7 @@ import model.SelectionForest
 import model.Value
 import model.mergeToGround
 import model.registry.demandsFromSibling
+import model.registry.successorBoundaryDemand
 import model.union
 import semantics.closeResolverDemand
 import semantics.correctresolution.argumentsContainErrorValue
@@ -38,13 +39,7 @@ private fun Value.Object.resolve(
     }
 
     val closedDemand = type.closeResolverDemand(path, selections)
-    val unresolvedKeys =
-        closedDemand
-            .keys()
-            .filter { key ->
-                key !in resolved.keys ||
-                    !world.behavioral(key.field)
-            }.toSet()
+    val unresolvedKeys = closedDemand.keys() - resolved.keys
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     return orderedKeys.fold(resolved) { result, key ->
         val selection = closedDemand[key]
@@ -114,7 +109,8 @@ private fun Value.Object.resolveKey(
         if (key.arguments.argumentsContainErrorValue()) {
             EngineResult.Cell.Error
         } else {
-            val subselections = fieldSelection.subselections
+            val resolutionSelections =
+                fieldSelection.subselections.successorBoundaryDemand()
             val fieldValue =
                 when {
                     key.field.fieldName == "__typename" ->
@@ -124,7 +120,7 @@ private fun Value.Object.resolveKey(
                         val resolver = world.resolverRegistry.resolver(key.field)
                         val objectFragment =
                             resolver
-                                .stampedObjectFragment(key.arguments, path + key)
+                                .stampedObjectFragment(path + key)
                                 .mergeToGround(type)
                         // Closure and dependency order put the complete input in this prefix.
                         val input = resolved.materialize(objectFragment)
@@ -144,7 +140,7 @@ private fun Value.Object.resolveKey(
                     fieldValue
                         .resolveValue(
                             path = path + key,
-                            resolverDemand = subselections,
+                            resolverDemand = resolutionSelections,
                             beSelective = false,
                         ).let { resolvedValue ->
                             fieldValue.resolvePaths(

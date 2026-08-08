@@ -27,6 +27,14 @@ class TestWorld private constructor(
     val assumptions: Assumptions =
         injector.getInstance(Assumptions::class.java)
 
+    /** Creates independent request-local binding state over this world's schema and registry. */
+    fun newAssumptions(): Assumptions =
+        Assumptions.of(
+            schema = schema,
+            resolverRegistry = resolverRegistry,
+            selectiveResolvers = assumptions.selectiveResolvers,
+        )
+
     fun <T : Any> instance(type: Class<T>): T = injector.getInstance(type)
 
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> =

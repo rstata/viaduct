@@ -19,9 +19,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class FromArgumentNodeResolutionTest {
+class NodeBridgeResolutionTest {
     @Test
-    fun `resolver01 dispatches argument-bearing abstract node lists`() {
+    fun `resolver01 dispatches argument-bearing abstract node bridge lists`() {
         assertNodeDispatch { world, root, selections ->
             context(world) {
                 root.resolve01(selections)
@@ -30,7 +30,7 @@ class FromArgumentNodeResolutionTest {
     }
 
     @Test
-    fun `resolver02 dispatches argument-bearing abstract node lists`() {
+    fun `resolver02 dispatches argument-bearing abstract node bridge lists`() {
         assertNodeDispatch { world, root, selections ->
             context(world) {
                 root.resolve02(selections)
@@ -39,12 +39,120 @@ class FromArgumentNodeResolutionTest {
     }
 
     @Test
-    fun `resolver03 dispatches argument-bearing abstract node lists`() {
+    fun `resolver03 dispatches argument-bearing abstract node bridge lists`() {
         assertNodeDispatch { world, root, selections ->
             context(world) {
                 root.resolve03(selections)
             }
         }
+    }
+
+    @Test
+    fun `resolver03 dispatches every nested node-list bridge occurrence`() {
+        val observedFields = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
+
+                    type User implements Node {
+                      id: ID!
+                      name: String!
+                    }
+
+                    type Query {
+                      matrix: [[User!]!]!
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    observedFields += field.fieldName
+                },
+                nodeResolvers = { schema ->
+                    mapOf(
+                        schema.objectType("User") to
+                            model.testing.nodeResolverOf { id ->
+                                schema.objectOf("User") {
+                                    "id" setTo id
+                                    "name" setTo "user-${id.idValue}"
+                                }
+                            },
+                    )
+                },
+                fieldResolvers = { schema ->
+                    val matrix = schema.field("Query", "matrix")
+                    val outer = matrix.typeExpr as TypeExpr.List<Schema.OutputType>
+                    val inner = outer.elementType as TypeExpr.List<Schema.OutputType>
+                    fun row(vararg ids: String): Value.OutputList =
+                        Value.OutputList.of(
+                            typeExpr = inner.elementType,
+                            values =
+                                ids.map { id ->
+                                    schema.objectOf("User") {
+                                        "id" setTo id
+                                    }
+                                },
+                        )
+                    mapOf(
+                        matrix to
+                            model.testing.fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ ->
+                                    Value.OutputList.of(
+                                        typeExpr = outer.elementType,
+                                        values = listOf(row("a", "b"), row("c")),
+                                    )
+                                },
+                            ),
+                    )
+                },
+            )
+        val world = testWorld.newAssumptions()
+        val fragment =
+            world.fragmentFrom(
+                """
+                fragment ignored on Query {
+                  matrix {
+                    id
+                    name
+                  }
+                }
+                """.trimIndent(),
+            )
+
+        val result =
+            context(world) {
+                world.objectOf("Query").resolve03(fragment.subselections)
+            }
+
+        val matrix =
+            assertIs<EngineResult.List>(
+                result.fetch(
+                    Value.GroundKey.of(
+                        world.schema.objectField("Query", "matrix\$bridge"),
+                        emptyMap(),
+                    ),
+                ).value,
+            )
+        val payloadTypes =
+            matrix.map { rowCell ->
+                assertIs<EngineResult.List>(rowCell.value).map { bridgeCell ->
+                    val bridge = assertIs<EngineResult.Object>(bridgeCell.value)
+                    assertIs<EngineResult.Object>(
+                        bridge.fetch(
+                            Value.GroundKey.of(
+                                world.schema.objectField("User\$Bridge", "\$node"),
+                                emptyMap(),
+                            ),
+                        ).value,
+                    ).type.typeName
+                }
+            }.flatten()
+        assertEquals(listOf("User", "User", "User"), payloadTypes)
+        assertEquals(3, observedFields.count { it == "\$node" })
+        assertTrue(context(world) { result.correctResolution(fragment) })
     }
 
     private fun assertNodeDispatch(
@@ -133,24 +241,26 @@ class FromArgumentNodeResolutionTest {
                 fragment.subselections,
             )
 
-        val nodes = schema.objectField("Query", "nodes")
-        val bridge = schema.objectField("Query", "nodes\$ids")
-        val firstKey = Value.GroundKey.of(nodes, mapOf("group" to "first"))
-        val secondKey = Value.GroundKey.of(nodes, mapOf("group" to "second"))
+        val bridge = schema.objectField("Query", "nodes\$bridge")
+        val bridgeType = schema.objectType("Node\$Bridge")
+        val payload = schema.objectField("Node\$Bridge", "\$node")
+        val firstKey = Value.GroundKey.of(bridge, mapOf("group" to "first"))
+        val secondKey = Value.GroundKey.of(bridge, mapOf("group" to "second"))
         assertEquals(
-            setOf(
-                firstKey,
-                secondKey,
-                Value.GroundKey.of(bridge, mapOf("group" to "first")),
-                Value.GroundKey.of(bridge, mapOf("group" to "second")),
-            ),
+            setOf(firstKey, secondKey),
             result.keys,
         )
 
         val first = assertIs<EngineResult.List>(result.fetch(firstKey).value)
         assertEquals(
             listOf("User", "Admin"),
-            first.map { cell -> assertIs<EngineResult.Object>(cell.value).type.typeName },
+            first.map { cell ->
+                val bridgeObject = assertIs<EngineResult.Object>(cell.value)
+                assertEquals(bridgeType, bridgeObject.type)
+                assertIs<EngineResult.Object>(
+                    bridgeObject.fetch(Value.GroundKey.of(payload, emptyMap())).value,
+                ).type.typeName
+            },
         )
         assertTrue(context(world) { result.correctResolution(fragment) })
     }

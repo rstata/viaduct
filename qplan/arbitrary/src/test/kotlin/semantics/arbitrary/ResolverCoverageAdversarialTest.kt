@@ -8,6 +8,7 @@ import model.objectOf
 import org.junit.jupiter.api.Disabled
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class ResolverCoverageAdversarialTest {
     @Disabled("not currently worth the effort")
@@ -55,30 +56,44 @@ class ResolverCoverageAdversarialTest {
                     ?: error("Could not generate a Node-valued resolver with list=$listOutput")
             val (schema, registry, sourceField) = generated
             val world = registry.world(schema).assumptions
-            val suffix = if (listOutput) "\$ids" else "\$id"
-            val loaderField =
-                world.schema.objectField(sourceField.typeName, sourceField.fieldName)
+            val sourceDefinition =
+                schema
+                    .objectNamed(sourceField.typeName)
+                    .fields
+                    .single { field -> field.name == sourceField.fieldName }
             val bridgeField =
-                world.schema.objectField(sourceField.typeName, sourceField.fieldName + suffix)
+                world.schema.objectField(sourceField.typeName, sourceField.fieldName + "\$bridge")
+            val payloadField =
+                world.schema.objectField(
+                    sourceDefinition.type.namedType + "\$Bridge",
+                    "\$node",
+                )
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
                 world.resolverRegistry
                     .resolver(bridgeField)(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
-            val loaderInput =
-                world.schema.objectOf(sourceField.typeName) {
-                    field(bridgeField.fieldName) setTo bridgeValue
+            val payloadInput =
+                if (listOutput) {
+                    assertIs<Value.Object>(
+                        assertIs<Value.OutputList>(bridgeValue).values.first(),
+                    )
+                } else {
+                    assertIs<Value.Object>(bridgeValue)
                 }
 
             registry.clearResolutionWitness()
             world.resolverRegistry
                 .resolver(bridgeField)(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
             world.resolverRegistry
-                .resolver(loaderField)(loaderInput, Value.Arguments.of(loaderField, emptyMap()))
+                .resolver(payloadField)(
+                    payloadInput,
+                    Value.Arguments.of(payloadField, emptyMap()),
+                )
 
             assertEquals(
                 listOf(
-                    FieldCoordinate(sourceField.typeName, sourceField.fieldName + suffix),
-                    sourceField,
+                    FieldCoordinate(sourceField.typeName, sourceField.fieldName + "\$bridge"),
+                    FieldCoordinate(sourceDefinition.type.namedType + "\$Bridge", "\$node"),
                 ),
                 registry.resolutionWitness().applications.map { application ->
                     application.key.field

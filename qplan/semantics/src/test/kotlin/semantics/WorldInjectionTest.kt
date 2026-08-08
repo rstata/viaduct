@@ -7,13 +7,10 @@ import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.registry.ResolverRegistry
-import model.registry.MissingResolverException
 import model.testing.FieldResolverDefinition
-import model.selectionForestOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
@@ -61,18 +58,17 @@ class WorldInjectionTest {
         assertEquals(world, testWorld.instance(Assumptions::class.java))
 
         val userField = schema.objectField("Query", "user")
-        val userIdField = schema.objectField("Query", "user\$id")
+        val bridgeField = schema.objectField("Query", "user\$bridge")
+        val payloadField = schema.objectField("User\$Bridge", "\$node")
         val user = schema.type("User") as Schema.ObjectType
         val bridge =
-            context(world) {
+            assertIs<Value.Object>(
                 registry
-                    .resolver(userIdField)(
+                    .resolver(bridgeField)(
                         input = world.objectOf("Query"),
-                        arguments = Value.Arguments.of(userIdField, emptyMap()),
-                        selections = selectionForestOf(),
-                    )
-            }
-        assertIs<Value.ID>(bridge)
+                        arguments = Value.Arguments.of(bridgeField, emptyMap()),
+                    ),
+            )
 
         val selections =
             world.fragmentFrom(
@@ -88,16 +84,10 @@ class WorldInjectionTest {
             assertIs<Value.Object>(
                 context(world) {
                     registry
-                        .resolver(userField)(
-                            input =
-                                Value.Object.of(
-                                    schema.query,
-                                    mapOf(
-                                        Value.GroundKey.of(userIdField, emptyMap()) to bridge,
-                                    ),
-                                ),
-                            arguments = Value.Arguments.of(userField, emptyMap()),
-                            selections = selections.single().subselections,
+                        .resolver(payloadField)(
+                            input = bridge,
+                            arguments = Value.Arguments.of(payloadField, emptyMap()),
+                            selections = selections.single().subselections.single().subselections,
                         )
                 },
             )
@@ -108,10 +98,15 @@ class WorldInjectionTest {
             ).idValue,
         )
 
-        assertEquals(userField, selections.single().key.field)
+        assertFalse(userField in registry)
+        assertEquals(bridgeField, selections.single().key.field)
+        assertEquals(
+            payloadField,
+            selections.single().subselections.single().key.field,
+        )
         assertEquals(
             schema.field("User", "id"),
-            selections.single().subselections.single().key.field,
+            selections.single().subselections.single().subselections.single().key.field,
         )
     }
 
@@ -121,7 +116,7 @@ class WorldInjectionTest {
 
         assertFalse(world.schema.objectField("User", "id") in world.resolverRegistry)
         world.resolverRegistry.resolver(
-            world.schema.objectField("Query", "user"),
+            world.schema.objectField("Query", "user\$bridge"),
         )
     }
 

@@ -492,20 +492,20 @@ class ResolverDemandTest {
         val registry = world.resolverRegistry
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
-        val queryNode = schema.objectField("Query", "node")
-        val queryNodeId = schema.objectField("Query", "node\$id")
+        val queryNodeBridge = schema.objectField("Query", "node\$bridge")
+        val nodePayload = schema.objectField("Node\$Bridge", "\$node")
         val consumer = schema.objectField("Query", "consumer")
         val outer = schema.objectField("Query", "outer")
         val userResolved = schema.objectField("User", "resolved")
         val adminResolved = schema.objectField("Admin", "resolved")
 
         assertEquals(
-            setOf(queryNode, userResolved, adminResolved),
+            setOf(queryNodeBridge, nodePayload, userResolved, adminResolved),
             registry.mayDemandFrom(consumer),
         )
         assertEquals(setOf(consumer), registry.mayDemandFrom(outer))
-        assertEquals(setOf(queryNodeId), registry.mayDemandFrom(queryNode))
-        assertTrue(registry.mayDemandFrom(queryNodeId).isEmpty())
+        assertTrue(registry.mayDemandFrom(queryNodeBridge).isEmpty())
+        assertTrue(registry.mayDemandFrom(nodePayload).isEmpty())
         assertTrue(registry.mayDemandFrom(userResolved).isEmpty())
         assertTrue(registry.mayDemandFrom(adminResolved).isEmpty())
 

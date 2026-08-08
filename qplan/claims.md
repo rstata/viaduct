@@ -2,7 +2,7 @@
 
 **[flattened-equivalence]** Flattened selection sets are operationally equivalent to the GraphQL spec's nested ones.
 
-**[field-only-node-lowering]** Within the fixture-supported node domain, synthetic singular `$id` and list-shaped `$ids` bridge fields plus generated field resolvers preserve the field-resolution obligations of external node-valued field and node-resolver inputs.
+**[field-only-node-lowering]** Within the fixture-supported node domain, synthetic bridge-object types, source-field bridge coordinates, and `$node` field resolvers preserve the field-resolution obligations of external node-valued field and node-resolver inputs.
 
 **[resolver03-one-shot-construction]** Within Resolver03's acyclic domain with argument-defined variables, every resolver-bearing OER occurrence is constructed by one field-resolver application after all guarded transitive demand for that occurrence has been aggregated.
 

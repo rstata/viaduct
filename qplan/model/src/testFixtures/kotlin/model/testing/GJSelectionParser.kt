@@ -21,9 +21,9 @@ import model.spec.flatten
 /**
  * Parses and validates external GraphQL fragment text against the unaugmented source schema.
  *
- * Decoded selections are then mapped to canonical definitions in [schema]. Synthetic lowering
- * fields cannot be selected in the source text and enter semantic demand only through generated
- * resolver fragments.
+ * Decoded selections are mapped to canonical definitions in [schema], then every node-valued
+ * source field `foo { selections }` is lowered to
+ * `foo$bridge { $node { selections } }`. Synthetic definitions cannot be selected in source text.
  */
 internal class GJSelectionParser(
     private val schema: GJSchema,
@@ -34,7 +34,10 @@ internal class GJSelectionParser(
 
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
         val parsed = specSelectionsFrom(fragment)
-        val selections = flatten(schema, parsed.nominalType, parsed.selections)
+        val selections =
+            schema.lowerNodeSelections(
+                flatten(schema, parsed.nominalType, parsed.selections),
+            )
         return parsed.nominalType to selections
     }
 

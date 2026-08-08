@@ -6,10 +6,7 @@ import model.Selection
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
-import model.fieldExpressions
 import model.fragmentFrom
-import model.instantiateBindings
-import model.merge
 import model.objectOf
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
@@ -71,46 +68,42 @@ class ResolverRegistryTest {
                 "id" setTo "42"
             }
         val userField = schema.objectField("Query", "user")
-        val userIdField = schema.objectField("Query", "user\$id")
+        val bridgeField = schema.objectField("Query", "user\$bridge")
+        val bridgeType = schema.type("User\$Bridge") as Schema.ObjectType
+        val bridgeIdField = schema.objectField("User\$Bridge", "\$id")
+        val payloadField = schema.objectField("User\$Bridge", "\$node")
         val registry = world.resolverRegistry
         val assumptions = world.assumptions
 
         assertEquals(registry, assumptions.resolverRegistry)
-        assertTrue(userField in registry)
-        assertTrue(userIdField in registry)
-        assertEquals(setOf(userIdField), registry.mayDemandFrom(userField))
+        assertFalse(userField in registry)
+        assertTrue(bridgeField in registry)
+        assertTrue(payloadField in registry)
+        assertTrue(registry.mayDemandFrom(bridgeField).isEmpty())
+        assertTrue(registry.mayDemandFrom(payloadField).isEmpty())
         val bridgeValue =
-            context(assumptions) {
-                registry
-                    .resolver(userIdField)(
-                        input = query,
-                        arguments = Value.Arguments.of(userIdField, emptyMap()),
-                        selections = selectionForestOf(),
-                    )
-            }
-        assertIs<Value.ID>(bridgeValue)
-        val fieldResolver = registry.resolver(userField)
-        val arguments = Value.Arguments.of(userField, emptyMap())
-        val objectFragment = fieldResolver.objectFragment
-        assertTrue(
-            objectFragment.all {
-                it.key.field.containingType == schema.query &&
-                    it.possibleTypes == setOf(schema.query)
-            },
+            registry
+                .resolver(bridgeField)(
+                    input = query,
+                    arguments = Value.Arguments.of(bridgeField, emptyMap()),
+                )
+        val bridgeObject = assertIs<Value.Object>(bridgeValue)
+        assertEquals(bridgeType, bridgeObject.type)
+        assertIs<Value.ID>(
+            bridgeObject.fieldValues.getValue(
+                Value.GroundKey.of(bridgeIdField, emptyMap()),
+            ),
         )
+        val payloadResolver = registry.resolver(payloadField)
+        val objectFragment = payloadResolver.objectFragment
         assertEquals(1, objectFragment.size)
+        assertEquals(bridgeIdField, objectFragment.single().key.field)
         assertEquals(
             user,
             context(assumptions) {
-                fieldResolver(
-                    input =
-                        Value.Object.of(
-                            schema.query,
-                            mapOf(
-                                Value.GroundKey.of(userIdField, emptyMap()) to bridgeValue,
-                            ),
-                        ),
-                    arguments = arguments,
+                payloadResolver(
+                    input = bridgeObject,
+                    arguments = Value.Arguments.of(payloadField, emptyMap()),
                     selections =
                         schema.fragmentFrom(
                             """
@@ -122,11 +115,11 @@ class ResolverRegistryTest {
                 )
             },
         )
-        assertEquals(listOf("user\$id", "user"), observedFields)
+        assertEquals(listOf("user\$bridge", "\$node"), observedFields)
     }
 
     @Test
-    fun `pluralizes every list-shaped node bridge once`() {
+    fun `reuses one bridge type while preserving every source list layer`() {
         val schema =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -147,23 +140,26 @@ class ResolverRegistryTest {
                     """.trimIndent(),
             ).schema
 
-        assertTrue("user\$id" in schema.query.fields)
-        assertTrue("users\$ids" in schema.query.fields)
-        assertTrue("matrix\$ids" in schema.query.fields)
-        assertFalse("users\$id" in schema.query.fields)
-        assertFalse("matrix\$idss" in schema.query.fields)
+        assertTrue("user\$bridge" in schema.query.fields)
+        assertTrue("users\$bridge" in schema.query.fields)
+        assertTrue("matrix\$bridge" in schema.query.fields)
+        assertFailsWith<Schema.MissingSchemaElementException> {
+            schema.type("Node\$Bridge")
+        }
 
-        val matrixBridge = schema.field("Query", "matrix\$ids")
+        val userBridge = schema.type("User\$Bridge") as Schema.ObjectType
+        assertEquals(setOf("__typename", "\$id", "\$node"), userBridge.fields.keys)
+        val matrixBridge = schema.field("Query", "matrix\$bridge")
         val outer = assertIs<TypeExpr.List<Schema.OutputType>>(matrixBridge.typeExpr)
         val inner = assertIs<TypeExpr.List<Schema.OutputType>>(outer.elementType)
-        assertEquals(Schema.IDType, inner.elementType.baseType)
+        assertEquals(userBridge, inner.elementType.baseType)
         assertFalse(outer.isNullable)
         assertFalse(inner.isNullable)
         assertFalse(inner.elementType.isNullable)
     }
 
     @Test
-    fun `node loader bridge arguments come from generated argument variables`() {
+    fun `node bridge keeps producer arguments off its payload resolver`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -205,35 +201,18 @@ class ResolverRegistryTest {
                 },
             )
         val schema = world.schema
-        val user = schema.objectField("Query", "user")
-        val bridge = schema.objectField("Query", "user\$id")
-        val arguments = Value.Arguments.of(user, mapOf("id" to "42"))
-        val key = Value.GroundKey.of(user, arguments)
-        val path = listOf(key)
-        val variable = Value.Variable.of(user, "id\$arg")
-        val resolver = world.resolverRegistry.resolver(user)
-        val bridgeSelection = resolver.objectFragment.single()
-        val definition =
-            assertIs<VariableDefinition.FromArgument>(
-                resolver.variables.getValue(variable),
-            )
+        val source = schema.objectField("Query", "user")
+        val bridge = schema.objectField("Query", "user\$bridge")
+        val payload = schema.objectField("User\$Bridge", "\$node")
+        val bridgeId = schema.objectField("User\$Bridge", "\$id")
 
-        assertEquals(user.arguments.fields.getValue("id"), definition.argument)
-        assertEquals(
-            variable,
-            bridgeSelection.key.arguments.fieldExpressions().getValue("id"),
-        )
-
-        world.assumptions.bind(variable.stamp(path), Value.ID.of("42"))
-        val groundedBridge =
-            context(world.assumptions) {
-                resolver
-                    .stampedObjectFragment(path)
-                    .merge(schema.query)
-                    .instantiateBindings()
-                    .single()
-            }
-        assertEquals(Value.GroundKey.of(bridge, mapOf("id" to "42")), groundedBridge.key)
+        assertFalse(source in world.resolverRegistry)
+        assertEquals(source.arguments.fields.keys, bridge.arguments.fields.keys)
+        assertTrue(world.resolverRegistry.resolver(bridge).variables.isEmpty())
+        val payloadResolver = world.resolverRegistry.resolver(payload)
+        assertTrue(payloadResolver.variables.isEmpty())
+        assertEquals(Schema.NoArguments, payload.arguments)
+        assertEquals(bridgeId, payloadResolver.objectFragment.single().key.field)
     }
 
     @Test
@@ -509,26 +488,23 @@ class ResolverRegistryTest {
                 "friend" setTo friend
                 "peers" setTo listOf(peer, null)
             }
+        val user = fixture.schema.type("User") as Schema.ObjectType
+        val idSelection = fixture.selection(typeName = "Node", fieldName = "id")
+        val nameSelection = fixture.selection(typeName = "Node", fieldName = "name")
         val selections =
-            fixture.schema.fragmentFrom(
-                """
-                fragment ignored on Node {
-                  id
-                  ... on User {
-                    friend {
-                      ... on Node {
-                        id
-                      }
-                    }
-                    peers {
-                      ... on Node {
-                        name
-                      }
-                    }
-                  }
-                }
-                """.trimIndent(),
-            ).subselections +
+            selectionForestOf(
+                idSelection,
+                Selection.of(
+                    key = Value.Key.of(fixture.schema.field("User", "friend"), emptyMap()),
+                    possibleTypes = setOf(user),
+                    subselections = selectionForestOf(idSelection),
+                ),
+                Selection.of(
+                    key = Value.Key.of(fixture.schema.field("User", "peers"), emptyMap()),
+                    possibleTypes = setOf(user),
+                    subselections = selectionForestOf(nameSelection),
+                ),
+            ) +
                 selectionForestOf(
                     fixture.selection(
                         typeName = "Node",
@@ -686,7 +662,12 @@ class ResolverRegistryTest {
 
         assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "id")))
         assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "name")))
-        assertTrue(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "search")))
+        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "search")))
+        assertTrue(
+            fieldFixture.assumptions.behavioral(
+                fieldFixture.schema.objectField("User", "search\$bridge"),
+            ),
+        )
         assertTrue(
             fieldFixture.assumptions.behavioral(
                 fieldFixture.schema.objectField("User", "__typename"),
@@ -701,8 +682,18 @@ class ResolverRegistryTest {
         assertFalse(
             nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "name")),
         )
-        assertTrue(
+        assertFalse(
             nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "search")),
+        )
+        assertTrue(
+            nodeFixture.assumptions.behavioral(
+                nodeFixture.schema.objectField("User", "search\$bridge"),
+            ),
+        )
+        assertTrue(
+            nodeFixture.assumptions.behavioral(
+                nodeFixture.schema.objectField("User\$Bridge", "\$node"),
+            ),
         )
 
         assertFailsWith<IllegalArgumentException> {

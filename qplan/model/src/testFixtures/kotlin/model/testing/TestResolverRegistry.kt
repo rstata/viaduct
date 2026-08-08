@@ -15,7 +15,6 @@ import model.registry.ResolverRegistry
 import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toSelectionForest
-import model.retarget
 import model.variableTemplates
 
 /**
@@ -40,39 +39,40 @@ internal fun resolverRegistryOf(
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
-    require(variableProviders.keys.intersect(lowering.variableProviders.keys).isEmpty()) {
-        "Variable declarations collide with generated node-loader argument variables"
+    val canonicalVariableProviders =
+        variableProviders.entries.associate { (variable, declaration) ->
+            lowering.canonicalVariable(variable) to
+                lowering.canonicalDeclaration(variable, declaration)
+        }
+    require(canonicalVariableProviders.size == variableProviders.size) {
+        "Variable declarations collide after node bridge lowering"
     }
-    val allVariableProviders = variableProviders + lowering.variableProviders
     val variablesByField =
-        allVariableProviders.keys
+        canonicalVariableProviders.keys
             .groupBy(Value.Variable.Template::field)
             .mapValues { (_, variables) ->
                 variables.associateBy(Value.Variable.Template::variableName)
             }
     val registryResolvers =
         lowering.fieldResolvers.mapValues { (field, resolver) ->
-            val variablesByName =
-                lowering
-                    .variableOwner(field)
-                    ?.let { owner -> variablesByField[owner] }
-                    .orEmpty()
+            val variablesByName = variablesByField[field].orEmpty()
             resolver.mapObjectFragment { fragment ->
                 fragment.mapVariables { variable ->
-                    variablesByName[variable.variableName] ?: variable
+                    variablesByName[variable.variableName]
+                        ?: lowering.canonicalVariable(variable)
                 }
             }
         }
     val registryVariableProviders =
-        allVariableProviders.mapValues { (variable, declaration) ->
-            when (declaration) {
-                is FromArgument -> declaration
-                is FromObjectField -> {
-                    val variablesByName = variablesByField.getValue(variable.field)
-                    declaration.mapVariables { variable ->
-                        variablesByName[variable.variableName] ?: variable
-                    }
+        canonicalVariableProviders.mapValues { (variable, declaration) ->
+            if (declaration is FromObjectField) {
+                val variablesByName = variablesByField.getValue(variable.field)
+                declaration.mapVariables { referenced ->
+                    variablesByName[referenced.variableName]
+                        ?: lowering.canonicalVariable(referenced)
                 }
+            } else {
+                declaration
             }
         }
     val observedResolvers =
@@ -95,12 +95,11 @@ internal fun resolverRegistryOf(
 /**
  * Lowers source-world node references and node lookups into the canonical field-only world.
  *
- * For each eligible source field `foo(args)` with a raw field resolver, that producer is moved to
- * singular `foo$id(args)` or list-shaped `foo$ids(args)` bridge and adapted to emit typed IDs. A
- * generated resolver at every eligible `foo(args)` demands that exact bridge key and dispatches the
- * typed ID values to the raw node lookup. Bridge type expressions preserve the source field's list
- * and nullability shape. Outputs of containing resolvers are rewritten recursively so passive
- * nested node references also become bridge values.
+ * For each node-valued source field `foo(args)`, that producer is moved to `foo$bridge(args)` and
+ * adapted to emit same-shaped node bridge objects. For each used declared Node subtype `T` whose
+ * possible concrete types have raw node lookups, one generated resolver at `T$Bridge.$node`
+ * requires `$id` and dispatches that typed ID to the raw lookup. Outputs of containing resolvers
+ * are rewritten recursively so passive nested node references also become bridge objects.
  *
  * A lowered field must be declared as `Node` or a subtype whose every possible concrete type has a
  * raw node lookup. Mixed node-resolved and inline possible types are rejected at this composition
@@ -115,15 +114,42 @@ private class NodeResolverLowering(
     private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
     private val loweredByField: Map<Schema.ObjectField, Schema.ObjectField> =
         loweredFields.associateWith(::bridgeField)
+    private val payloadTypes: Set<Schema.CompositeType> =
+        loweredFields
+            .mapTo(linkedSetOf()) { field ->
+                field.typeExpr.baseType as Schema.CompositeType
+            }.filterTo(linkedSetOf()) { type ->
+                type.possibleTypes.isNotEmpty() &&
+                    type.possibleTypes.all { it in nodeResolvers }
+            }
 
     val fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>
-    val variableProviders: Map<Value.Variable.Template, VariableDeclaration>
 
-    fun variableOwner(field: Schema.OutputField): Schema.ObjectField? =
-        loweredByField.entries
-            .singleOrNull { (_, bridge) -> bridge == field }
-            ?.key
-            ?: field as? Schema.ObjectField
+    fun canonicalVariable(variable: Value.Variable.Template): Value.Variable.Template =
+        Value.Variable.of(
+            field = loweredByField[variable.field] ?: variable.field,
+            variableName = variable.variableName,
+        )
+
+    fun canonicalDeclaration(
+        sourceVariable: Value.Variable.Template,
+        declaration: VariableDeclaration,
+    ): VariableDeclaration {
+        val canonicalField = loweredByField[sourceVariable.field]
+            ?: return declaration
+        return when (declaration) {
+            is FromArgument -> {
+                require(declaration.argument.containingType == sourceVariable.field.arguments) {
+                    "Variable ${sourceVariable.variableName} argument " +
+                        "${declaration.argument.argumentName} does not belong to " +
+                        "${sourceVariable.field.containingType.typeName}/" +
+                        sourceVariable.field.fieldName
+                }
+                schema.fromArgument(canonicalField, declaration.argument.argumentName)
+            }
+            is FromObjectField -> declaration.mapVariables(::canonicalVariable)
+        }
+    }
 
     init {
         validateRawFieldResolvers(rawFieldResolvers)
@@ -132,9 +158,11 @@ private class NodeResolverLowering(
             rawFieldResolvers
                 .filterKeys { it !in loweredFields }
                 .mapValues { (field, resolver) ->
-                    resolver.mapOutput { output ->
-                        lowerNestedOutput(output, field.typeExpr)
-                    }.mapDemand(::lowerDemand)
+                    resolver
+                        .mapObjectFragment(schema::lowerNodeFragment)
+                        .mapOutput { output ->
+                            lowerNestedOutput(output, field.typeExpr)
+                        }.mapDemand(schema::lowerNodeSelections)
                 }
         val bridgeResolvers =
             loweredFields.mapNotNull { field ->
@@ -143,48 +171,37 @@ private class NodeResolverLowering(
                     bridge to
                         resolver
                             .mapObjectFragment { fragment ->
-                                fragment.mapVariables { variable ->
-                                    if (variable.field == field) {
-                                        Value.Variable.of(bridge, variable.variableName)
-                                    } else {
-                                        variable
-                                    }
-                                }
+                                schema
+                                    .lowerNodeFragment(fragment)
+                                    .mapVariables(::canonicalVariable)
                             }.mapOutput { output ->
-                            extractNodeIds(
+                            bridgeNodeReferences(
                                 output = output,
-                                nodeTypeExpr = field.typeExpr,
-                                idTypeExpr = bridge.typeExpr,
+                                sourceTypeExpr = field.typeExpr,
+                                bridgeTypeExpr = bridge.typeExpr,
                             )
-                        }
+                        }.mapDemand(schema::lowerNodeSelections)
                 }
             }.toMap()
-        variableProviders =
-            loweredFields
-                .flatMap { field ->
-                    field.arguments.fields.keys.map { argumentName ->
-                        Value.Variable.of(field, argumentVariableName(argumentName)) to
-                            schema.fromArgument(field, argumentName)
-                    }
-                }.toMap()
-        val loaderResolvers =
-            loweredFields.associateWith(::loaderResolver)
+        val payloadResolvers =
+            payloadTypes.associate { type ->
+                val payload = payloadField(type)
+                payload to payloadResolver(type)
+            }
 
-        fieldResolvers = ordinaryResolvers + bridgeResolvers + loaderResolvers
+        fieldResolvers = ordinaryResolvers + bridgeResolvers + payloadResolvers
     }
 
     private fun canonicalNodeType(): Schema.InterfaceType? {
-        if (nodeResolvers.isEmpty()) return null
         val candidate =
             try {
                 schema.type("Node")
             } catch (_: Schema.MissingSchemaElementException) {
                 null
             }
+        if (candidate == null && nodeResolvers.isEmpty()) return null
         return candidate as? Schema.InterfaceType
-            ?: throw IllegalArgumentException(
-                "Node resolvers require a canonical Node interface",
-            )
+            ?: throw IllegalArgumentException("Node resolvers require a canonical Node interface")
     }
 
     private fun loweredNodeFields(): Set<Schema.ObjectField> {
@@ -198,15 +215,13 @@ private class NodeResolverLowering(
 
         return schema.objectTypes
             .flatMap { it.fields.values }
-            .filterNot { isNodeIdBridgeName(it.fieldName) }
             .mapNotNullTo(linkedSetOf()) { field ->
-                val outputType = field.typeExpr.baseType as? Schema.CompositeType
+                val bridge = schema.nodeBridgeFieldOrNull(field)
                     ?: return@mapNotNullTo null
+                val outputType = field.typeExpr.baseType as Schema.CompositeType
                 val registeredTypes = outputType.possibleTypes.filterTo(linkedSetOf()) {
                     it in nodeResolvers
                 }
-                if (registeredTypes.isEmpty()) return@mapNotNullTo null
-
                 val isDeclaredNode =
                     nodeType != null &&
                         schema.relation(nodeType, outputType) in
@@ -214,7 +229,14 @@ private class NodeResolverLowering(
                             Schema.TypeRelation.SAME,
                             Schema.TypeRelation.WIDER_THAN,
                         )
-                require(isDeclaredNode && registeredTypes == outputType.possibleTypes) {
+                require(isDeclaredNode) {
+                    "Synthetic bridge ${bridge.containingType.typeName}/${bridge.fieldName} " +
+                        "does not correspond to a Node-valued source field"
+                }
+                require(
+                    registeredTypes.isEmpty() ||
+                        registeredTypes == outputType.possibleTypes,
+                ) {
                     "Field ${field.containingType.typeName}/${field.fieldName} mixes node-resolved " +
                         "and inline object values; declare a Node output whose every possible type " +
                         "has a node resolver"
@@ -233,8 +255,11 @@ private class NodeResolverLowering(
             require(field.containingType is Schema.ObjectType) {
                 "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
             }
-            require(!isNodeIdBridgeName(field.fieldName)) {
+            require(!isNodeBridgeFieldName(field.fieldName)) {
                 "Synthetic field $typeName/${field.fieldName} cannot be supplied directly"
+            }
+            require(!field.containingType.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)) {
+                "Synthetic node bridge field $typeName/${field.fieldName} cannot be supplied directly"
             }
             require(field !in nodeIdFields) {
                 "Node id field $typeName/${field.fieldName} cannot have a field resolver"
@@ -253,106 +278,59 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun loaderResolver(field: Schema.ObjectField): FieldResolverDefinition {
-        val owner = field.containingType
-        val bridge = bridgeField(field)
+    private fun payloadResolver(nodeOutputType: Schema.CompositeType): FieldResolverDefinition {
+        val bridgeType = schema.nodeBridgeType(nodeOutputType)
+        val idField = schema.objectField(bridgeType.typeName, NODE_BRIDGE_ID_FIELD)
         val objectFragment =
             Fragment.of(
-                nominalType = owner,
+                nominalType = bridgeType,
                 subselections =
                     selectionForestOf(
                         Selection.of(
-                            key =
-                                Value.Key.of(
-                                    field = bridge,
-                                    arguments =
-                                        bridge.arguments.fields.keys.associateWith {
-                                            argumentName ->
-                                            Value.Variable.of(
-                                                field,
-                                                argumentVariableName(argumentName),
-                                            )
-                                        },
-                                ),
-                            possibleTypes = setOf(owner),
+                            key = Value.Key.of(idField, emptyMap()),
+                            possibleTypes = setOf(bridgeType),
                             subselections = selectionForestOf(),
                         ),
                     ),
             )
         return FieldResolverDefinition.of(
             objectFragment = objectFragment,
-            function = { input, arguments ->
-                val bridgeKey = Value.GroundKey.of(bridge, arguments.retargetGround(bridge))
-                loadNodes(
-                    ids = input.fieldValues.getValue(bridgeKey),
-                    nodeTypeExpr = field.typeExpr,
-                    idTypeExpr = bridge.typeExpr,
+            function = { input, _ ->
+                loadNode(
+                    typedId =
+                        input.fieldValues.getValue(
+                            Value.GroundKey.of(idField, emptyMap()),
+                        ),
+                    nodeOutputType = nodeOutputType,
                 )
             },
-        ).mapDemand(::lowerDemand)
+        ).mapDemand(schema::lowerNodeSelections)
     }
 
-    private fun lowerDemand(selections: model.SelectionForest): model.SelectionForest =
-        selections.flatMap { selection ->
-            val loweredSubselections = lowerDemand(selection.subselections)
-            val original =
-                Selection.of(
-                    key = selection.key,
-                    possibleTypes = selection.possibleTypes,
-                    subselections = loweredSubselections,
-                )
-            val bridgePossibleTypes =
-                selection.possibleTypes.filterTo(linkedSetOf()) { possibleType ->
-                    possibleType.fields[selection.key.field.fieldName]
-                        ?.let { field -> field in loweredFields }
-                        ?: false
-                }
-            val bridgeField =
-                selection.key.field.containingType.fields[
-                    nodeIdBridgeName(selection.key.field)
-                ]
-            if (bridgeField == null || bridgePossibleTypes.isEmpty()) {
-                selectionForestOf(original)
-            } else {
-                selectionForestOf(
-                    original,
-                    Selection.of(
-                        key =
-                            Value.Key.of(
-                                bridgeField,
-                                selection.key.arguments.retarget(bridgeField),
-                            ),
-                        possibleTypes = bridgePossibleTypes,
-                        subselections = selectionForestOf(),
-                    ),
-                )
-            }
-        }
-
-    private fun extractNodeIds(
+    private fun bridgeNodeReferences(
         output: Value.Output?,
-        nodeTypeExpr: TypeExpr<Schema.OutputType>,
-        idTypeExpr: TypeExpr<Schema.OutputType>,
+        sourceTypeExpr: TypeExpr<Schema.OutputType>,
+        bridgeTypeExpr: TypeExpr<Schema.OutputType>,
     ): Value.Output? =
         when {
             output == null || output == Value.Error -> output
-            nodeTypeExpr is TypeExpr.List && idTypeExpr is TypeExpr.List -> {
+            sourceTypeExpr is TypeExpr.List && bridgeTypeExpr is TypeExpr.List -> {
                 require(output is Value.OutputList) {
                     "Node-list field resolver did not return a list"
                 }
                 Value.OutputList.of(
-                    typeExpr = idTypeExpr.elementType,
+                    typeExpr = bridgeTypeExpr.elementType,
                     values =
                         output.values.map { value ->
-                            extractNodeIds(
+                            bridgeNodeReferences(
                                 output = value,
-                                nodeTypeExpr = nodeTypeExpr.elementType,
-                                idTypeExpr = idTypeExpr.elementType,
+                                sourceTypeExpr = sourceTypeExpr.elementType,
+                                bridgeTypeExpr = bridgeTypeExpr.elementType,
                             )
                         },
                 )
             }
-            nodeTypeExpr is TypeExpr.Named && idTypeExpr is TypeExpr.Named -> {
+            sourceTypeExpr is TypeExpr.Named && bridgeTypeExpr is TypeExpr.Named -> {
                 require(output is Value.Object) {
                     "Node field resolver did not return a node reference"
                 }
@@ -361,61 +339,47 @@ private class NodeResolverLowering(
                 require(id != Value.Error && id is Value.ID) {
                     "Node reference ${output.type.typeName}/id must contain a non-error ID"
                 }
-                typedId(output.type, id)
-            }
-            else -> error("Node and ID bridge type expressions have different list shapes")
-        }
-
-    private fun loadNodes(
-        ids: Value.Output?,
-        nodeTypeExpr: TypeExpr<Schema.OutputType>,
-        idTypeExpr: TypeExpr<Schema.OutputType>,
-    ): Value.Output? =
-        when {
-            ids == null || ids == Value.Error -> ids
-            nodeTypeExpr is TypeExpr.List && idTypeExpr is TypeExpr.List -> {
-                require(ids is Value.OutputList) {
-                    "Node-ID bridge did not contain a list"
-                }
-                Value.OutputList.of(
-                    typeExpr = nodeTypeExpr.elementType,
-                    values =
-                        ids.values.map { value ->
-                            loadNodes(
-                                ids = value,
-                                nodeTypeExpr = nodeTypeExpr.elementType,
-                                idTypeExpr = idTypeExpr.elementType,
-                            )
-                        },
+                val bridgeType = bridgeTypeExpr.baseType as Schema.ObjectType
+                val bridgeId = schema.objectField(bridgeType.typeName, NODE_BRIDGE_ID_FIELD)
+                Value.Object.of(
+                    type = bridgeType,
+                    fields =
+                        mapOf(
+                            Value.GroundKey.of(bridgeId, emptyMap()) to
+                                typedId(output.type, id),
+                        ),
                 )
             }
-            nodeTypeExpr is TypeExpr.Named && idTypeExpr is TypeExpr.Named -> {
-                require(ids is Value.ID) {
-                    "Node-ID bridge did not contain an ID"
-                }
-                val (type, id) = decodeTypedId(ids)
-                require(type in (nodeTypeExpr.baseType as Schema.CompositeType).possibleTypes) {
-                    "Typed node ID ${type.typeName} is not valid for ${nodeTypeExpr.baseType.typeName}"
-                }
-                val result =
-                    nodeResolvers[type]?.invoke(id)
-                        ?: throw IllegalArgumentException(
-                            "No fixture node resolver for ${type.typeName}",
-                        )
-                require(result.type == type) {
-                    "Node resolver for ${type.typeName} returned ${result.type.typeName}"
-                }
-                val returnedId =
-                    result.fieldValues.getValue(
-                        Value.GroundKey.of(validateNodeIdField(type), emptyMap()),
-                    )
-                require(returnedId == id) {
-                    "Node resolver for ${type.typeName} did not repeat its input ID"
-                }
-                lowerObject(result)
-            }
-            else -> error("Node and ID bridge type expressions have different list shapes")
+            else -> error("Node and bridge type expressions have different list shapes")
         }
+
+    private fun loadNode(
+        typedId: Value.Output?,
+        nodeOutputType: Schema.CompositeType,
+    ): Value.Output? {
+        if (typedId == null || typedId == Value.Error) return typedId
+        require(typedId is Value.ID) {
+            "Node bridge ${nodeBridgeTypeName(nodeOutputType)} did not contain an ID"
+        }
+        val (type, id) = decodeTypedId(typedId)
+        require(type in nodeOutputType.possibleTypes) {
+            "Typed node ID ${type.typeName} is not valid for ${nodeOutputType.typeName}"
+        }
+        val result =
+            nodeResolvers[type]?.invoke(id)
+                ?: throw IllegalArgumentException("No fixture node resolver for ${type.typeName}")
+        require(result.type == type) {
+            "Node resolver for ${type.typeName} returned ${result.type.typeName}"
+        }
+        val returnedId =
+            result.fieldValues.getValue(
+                Value.GroundKey.of(validateNodeIdField(type), emptyMap()),
+            )
+        require(returnedId == id) {
+            "Node resolver for ${type.typeName} did not repeat its input ID"
+        }
+        return lowerObject(result)
+    }
 
     private fun lowerNestedOutput(
         output: Value.Output?,
@@ -447,10 +411,10 @@ private class NodeResolverLowering(
                         key to lowerNestedOutput(value, key.field.typeExpr)
                     } else {
                         Value.GroundKey.of(bridge, key.arguments.retargetGround(bridge)) to
-                            extractNodeIds(
+                            bridgeNodeReferences(
                                 output = value,
-                                nodeTypeExpr = key.field.typeExpr,
-                                idTypeExpr = bridge.typeExpr,
+                                sourceTypeExpr = key.field.typeExpr,
+                                bridgeTypeExpr = bridge.typeExpr,
                             )
                     }
                 }.toMap(),
@@ -459,7 +423,13 @@ private class NodeResolverLowering(
     private fun bridgeField(field: Schema.OutputField): Schema.ObjectField =
         schema.objectField(
             field.containingType.typeName,
-            nodeIdBridgeName(field),
+            nodeBridgeFieldName(field),
+        )
+
+    private fun payloadField(nodeOutputType: Schema.CompositeType): Schema.ObjectField =
+        schema.objectField(
+            nodeBridgeTypeName(nodeOutputType),
+            NODE_BRIDGE_PAYLOAD_FIELD,
         )
 
     private fun typedId(
@@ -521,9 +491,6 @@ private class NodeResolverLowering(
 
     private companion object {
         const val TYPED_ID_PREFIX = "\$node:"
-
-        fun argumentVariableName(argumentName: String): String =
-            "$argumentName\$arg"
     }
 }
 
@@ -577,8 +544,11 @@ private class TestResolverRegistry(
         val missingQueryFields =
             schema.query.fields.values
                 .filter {
+                    val isNodeSourceField =
+                        !isNodeBridgeFieldName(it.fieldName) &&
+                            nodeBridgeFieldName(it) in schema.query.fields
                     it.fieldName != "__typename" &&
-                        !isNodeIdBridgeName(it.fieldName) &&
+                        !isNodeSourceField &&
                         it !in fieldResolverDefinitions
                 }
         require(missingQueryFields.isEmpty()) {

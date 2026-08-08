@@ -11,9 +11,9 @@ import model.Value
  *
  * Construct the reasoning world's one schema before its values and assumptions so every non-error
  * value is created through this exact canonical graph. The canonical graph may contain synthetic
- * `$id`/`$ids` bridge fields absent from the retained GraphQL Java schema. [Value.Error] is
+ * node bridge types and fields absent from the retained GraphQL Java schema. [Value.Error] is
  * schema-independent. The retained source schema parses and validates GraphQL selections, ensuring
- * those inputs cannot name synthetic fields.
+ * those inputs cannot name synthetic definitions.
  */
 internal class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,

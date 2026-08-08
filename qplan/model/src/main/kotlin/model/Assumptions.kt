@@ -37,6 +37,7 @@ sealed interface Assumptions {
      * Adds the first and only binding for [variable].
      *
      * [value] may be null. Its ground type excludes [Value.Variable] by construction.
+     * Concurrent writes are atomic; exactly one write can succeed for a variable.
      *
      * @throws IllegalStateException when [variable] is already bound
      */
@@ -73,27 +74,18 @@ private class AssumptionsImpl(
     override val resolverRegistry: ResolverRegistry,
     override val selectiveResolvers: Boolean,
 ) : Assumptions {
-    private val bindings = mutableMapOf<Value.Variable.Stamped, Value.Input?>()
+    private val bindings = OnceStore<Value.Variable.Stamped, Value.Input?>()
 
     override fun isBound(variable: Value.Variable.Stamped): Boolean =
-        variable in bindings
+        bindings.isSet(variable)
 
-    override fun binding(variable: Value.Variable.Stamped): Value.Input? {
-        check(isBound(variable)) {
-            "Variable $variable is unbound"
-        }
-        return bindings[variable]
-    }
+    override fun binding(variable: Value.Variable.Stamped): Value.Input? =
+        bindings.read(variable)
 
     override fun bind(
         variable: Value.Variable.Stamped,
         value: Value.Input?,
-    ) {
-        check(!isBound(variable)) {
-            "Variable $variable is already bound"
-        }
-        bindings[variable] = value
-    }
+    ) = bindings.write(variable, value)
 
     override fun behavioral(field: Schema.ObjectField): Boolean {
         val containingType = field.containingType

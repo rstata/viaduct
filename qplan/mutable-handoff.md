@@ -10,19 +10,19 @@ The immediate motivation is to make an OER usable as the stable result object po
 
 `EngineResult.Object` now supports opt-in monotonic mutation. Construction remains immutable by default. A mutable object stores cells in `OnceStore`, validates each write before publication, returns detached snapshots, preserves structural equality over current cells, and rejects every repeated write.
 
-Resolver01-03 do not use mutable OERs. `Resolve.kt` recursively constructs immutable one-cell results and unions them into immutable prefixes. `ResolveValue.kt` constructs immutable passive trees, records exact descendant paths that require resolver work, and replaces those paths deepest first with recursively completed immutable results. Direct resolver adoption remains a later milestone.
+Resolver01-03 now use mutable OERs while retaining their recursive depth-first execution order. Each entry point allocates an empty mutable root. `Resolve.kt` publishes each exact cell once after dependency ordering and materialization. `ResolveValue.kt` allocates mutable child OERs during passive traversal, retains exact target occurrences with their paths and collapsed selections, and populates them deepest first without replacing parent cells or immutable list positions.
 
 `EngineResult.List` no longer implements Kotlin `List`. It exposes only `size`, `indices`, indexed `get`, `map`, `all`, and `forEachIndexed`, which keeps future representation changes local. LER mutation is not part of the initial OER work.
 
 `OnceStore<K, V>` is the shared internal write-once primitive. It uses `ConcurrentHashMap.putIfAbsent` as the atomic write guard, stores non-null values directly, and stores the private `NULL_PROXY` sentinel for null values. An absent read throws, and every write after the winner throws. `Assumptions` variable bindings use this store, including bindings to GraphQL null.
 
-## Target OER Contract
+## OER Contract
 
 An OER has one fixed concrete object type and a monotonically growing set of exact `Value.GroundKey` cells. Absence means unset. `fetch(key)` continues to throw `MissingFieldException` when the key is unset, including while a mutable OER is incomplete.
 
 Writing a cell is atomic and write-once. Before publication, the write validates the same carrier invariants as the current factory: the key belongs to the OER type, an argument-error key receives the canonical error value and check, and the cell value conforms to the field type expression. Two writers racing for one key must produce exactly one successful write; every loser must throw instead of silently retaining or replacing either value.
 
-The first implementation should expose an opt-in API shaped approximately as follows:
+The implementation exposes this opt-in API:
 
 ```kotlin
 fun EngineResult.Object.Companion.of(
@@ -39,9 +39,9 @@ fun EngineResult.Object.write(
 )
 ```
 
-Existing factory calls remain source-compatible and produce immutable OERs because `mutable` defaults to false. A mutable OER will normally start with an empty cell map, although allowing validated initial cells makes incremental migration easier. `write` on an immutable OER throws even when the key is absent.
+Existing factory calls remain source-compatible and produce immutable OERs because `mutable` defaults to false. A mutable OER normally starts with an empty cell map, although validated initial cells are supported. `write` on an immutable OER throws even when the key is absent.
 
-This is per-cell immutability, not an initial global sealing protocol. After a key is written its value never changes, while other keys may still be added. The first phase should not add `freeze`, `seal`, blocking reads, promises, callbacks, or suspension.
+This is per-cell immutability, not an initial global sealing protocol. After a key is written its value never changes, while other keys may still be added. The carrier adds no `freeze`, `seal`, blocking reads, promises, callbacks, or suspension.
 
 ## Storage And Observation
 
@@ -73,11 +73,11 @@ Do not move bindings onto OERs or introduce an annotation carrier as part of mut
 
 All legacy construction paths remain immutable by default, including fixture DSLs and direct `EngineResult.Object.of(type, cells)` calls. Copy-producing operations such as `union` must always return immutable OERs regardless of the modes of their inputs.
 
-No existing resolver opts into mutable OERs in the carrier milestone. The recursive immutable constructor remains unchanged until the mutable carrier behavior and concurrency tests are independently established.
+Resolver01-03 explicitly opt into mutable OERs. Other construction paths remain immutable unless they explicitly pass `mutable = true`; fixture factories and copy-producing operations do not opt in.
 
 ## Test Requirements
 
-Carrier tests should establish:
+Carrier tests establish:
 
 - A mutable empty OER reports an unset key and throws on `fetch`.
 - A valid first write succeeds and is observable through `fetch`, `cells`, and `keys`.
@@ -93,12 +93,12 @@ Carrier tests should establish:
 
 The existing `OnceStore` tests remain the lower-level evidence for null representation, duplicate-write rejection, same-key races, and preservation of distinct-key races. Full repository validation remains `./gradlew check`.
 
-## Remaining Migration Sequence
+## Migration Status
 
-1. In a later commit, make the shared resolver constructor allocate mutable OERs directly instead of recursively unioning immutable one-cell results. Parent cells can then contain child OER references, and immutable LERs can contain cells whose values are mutable child OERs.
-2. Replace immutable descendant-path repair in `ResolveValue.kt` with direct population of those allocated mutable child OERs only after Resolver01-03 and their correctness, witness, generated, and stress tests pass against direct mutable construction.
-3. Build the reactive readiness and variable-provider model on top of write-once OER cells as a separate design step; mutable storage alone does not solve symbolic demand closure, late key convergence, obligation claiming, or one-shot dispatch.
+1. The carrier milestone added opt-in mutable OERs, atomic write-once cells, detached snapshots, and concurrency tests while preserving immutable defaults.
+2. The direct-adoption milestone made Resolver01-03 populate mutable root and child OERs without immutable prefix union or descendant-path reconstruction while preserving their fixed recursive order.
+3. A later milestone may build reactive readiness and variable-provider execution on top of these write-once OER cells; mutable storage alone does not solve symbolic demand closure, late key convergence, obligation claiming, or one-shot dispatch.
 
 ## Completion Boundary
 
-The mutable-carrier milestone is complete when the opt-in OER API and concurrency contract are tested, immutable callers remain compatible, and no resolver behavior has changed. Direct resolver adoption is a subsequent milestone that would replace recursive immutable union and descendant-path repair. A reactive executor remains later work and must still establish complete producer demand before application, exact occurrence identity, readiness, deadlock detection, and schedule-independent results.
+The mutable-carrier and direct-adoption milestones are complete when their focused tests, full repository checks, and seeded stress corpus pass while existing resolver results and application witnesses remain unchanged. A reactive executor remains later work and must still establish complete producer demand before application, exact occurrence identity, readiness, deadlock detection, and schedule-independent results.

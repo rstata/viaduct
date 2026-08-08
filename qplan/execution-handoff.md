@@ -128,7 +128,7 @@ The worklist executor should make these properties explicit:
 - An empty worklist with unresolved demanded cells is a deadlock or invalid-state witness, not successful completion.
 - A quiescent completed OER store is a finite `EngineResult` tree satisfying carrier invariants.
 
-These are stronger and easier to inspect than reconstructing execution history from a final immutable union.
+These are stronger and easier to inspect than reconstructing execution history from a final result tree.
 
 ## Parallel Execution
 
@@ -161,7 +161,7 @@ The worklist design should reuse rather than replace:
 The worklist design would replace:
 
 - Recursive post-order function application.
-- Immutable prefix union as an execution mechanism.
+- The fixed deepest-first continuation order used to populate the current write-once OER tree.
 - Post-application widening of an already-returned subtree.
 - Identity-based recovery of raw sources when the write-once store can carry the necessary state explicitly.
 

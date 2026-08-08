@@ -13,11 +13,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ResolveValueTest {
     @Test
-    fun `constructs typename directly and returns exact resolver paths`() {
+    fun `constructs typename directly and retains exact resolver objects`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -106,12 +107,18 @@ class ResolveValueTest {
         assertEquals(userType, result.type)
         assertEquals(profileType, profile.type)
         assertEquals(setOf(rawKey), profile.keys)
+        val resolutionsByPath =
+            resolved.objectsNeedingResolution.associateBy { objectResolution ->
+                objectResolution.path
+            }
         assertEquals(
             setOf(emptyList(), listOf(profileKey)),
-            resolved.pathsNeedingResolution.keys,
+            resolutionsByPath.keys,
         )
-        assertEquals(4, resolved.pathsNeedingResolution.getValue(emptyList()).size)
-        assertEquals(2, resolved.pathsNeedingResolution.getValue(listOf(profileKey)).size)
+        assertSame(result, resolutionsByPath.getValue(emptyList()).target)
+        assertSame(profile, resolutionsByPath.getValue(listOf(profileKey)).target)
+        assertEquals(4, resolutionsByPath.getValue(emptyList()).selections.size)
+        assertEquals(2, resolutionsByPath.getValue(listOf(profileKey)).selections.size)
     }
 
     @Test
@@ -183,7 +190,10 @@ class ResolveValueTest {
         assertEquals(setOf(nameKey, profileKey), result.keys)
         val profile = assertIs<EngineResult.Object>(result.fetch(profileKey).value)
         assertEquals(setOf(rawKey), profile.keys)
-        assertEquals(setOf(emptyList()), resolved.pathsNeedingResolution.keys)
+        assertEquals(
+            setOf(emptyList()),
+            resolved.objectsNeedingResolution.map { it.path }.toSet(),
+        )
     }
 
     @Test
@@ -267,7 +277,7 @@ class ResolveValueTest {
     }
 
     @Test
-    fun `list traversal records and replays exact object occurrence paths`() {
+    fun `list traversal populates exact object occurrences without rebuilding paths`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -336,6 +346,8 @@ class ResolveValueTest {
             ).subselections
         val itemsKey = Value.GroundKey.of(itemsField, emptyMap())
         val nestedKey = Value.GroundKey.of(schema.objectField("Item", "nested"), emptyMap())
+        val computedKey = Value.GroundKey.of(schema.objectField("Item", "computed"), emptyMap())
+        val renderedKey = Value.GroundKey.of(schema.objectField("Nested", "rendered"), emptyMap())
         val rootPath = listOf<PathComponent>(itemsKey)
         val expectedPaths =
             setOf(
@@ -355,17 +367,50 @@ class ResolveValueTest {
             }
         val callbackPaths = mutableListOf<List<PathComponent>>()
         val replayed =
-            output.resolvePaths(
-                path = rootPath,
-                resolvedValue = resolvedValue,
-            ) { path, _, _, resolved ->
-                callbackPaths += path
-                resolved
+            resolvedValue.resolveObjects { objectResolution ->
+                callbackPaths += objectResolution.path
+                when (objectResolution.target.type.typeName) {
+                    "Item" ->
+                        objectResolution.target.write(
+                            computedKey,
+                            EngineResult.Cell.of(Value.Int.of(1)),
+                        )
+
+                    "Nested" ->
+                        objectResolution.target.write(
+                            renderedKey,
+                            EngineResult.Cell.of(Value.Int.of(2)),
+                        )
+
+                    else -> error("Unexpected object type")
+                }
             }
 
-        assertEquals(expectedPaths, resolvedValue.pathsNeedingResolution.keys)
+        val resolutionsByPath =
+            resolvedValue.objectsNeedingResolution.associateBy { objectResolution ->
+                objectResolution.path
+            }
+        assertEquals(expectedPaths, resolutionsByPath.keys)
         assertEquals(expectedPaths, callbackPaths.toSet())
         assertEquals(expectedPaths.size, callbackPaths.size)
-        assertEquals(resolvedValue.engineResult, replayed)
+        assertTrue(
+            callbackPaths.zipWithNext().all { (left, right) -> left.size >= right.size },
+        )
+        assertSame(resolvedValue.engineResult, replayed)
+
+        val result = assertIs<EngineResult.List>(replayed)
+        result.forEachIndexed { index, cell ->
+            val item = assertIs<EngineResult.Object>(cell.value)
+            val itemPath = rootPath + Value.ListIndex.of(index)
+            assertSame(item, resolutionsByPath.getValue(itemPath).target)
+            assertEquals(Value.Int.of(1), item.fetch(computedKey).value)
+
+            val nested = assertIs<EngineResult.Object>(item.fetch(nestedKey).value)
+            assertSame(
+                nested,
+                resolutionsByPath.getValue(itemPath + nestedKey).target,
+            )
+            assertEquals(Value.Int.of(2), nested.fetch(renderedKey).value)
+        }
     }
 }

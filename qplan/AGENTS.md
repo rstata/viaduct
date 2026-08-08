@@ -36,6 +36,8 @@ Semantic values are assumed immutable as they pass through the model except for 
 
 Semantic logic uses immutable collection types and purely functional transformations such as `map`, `filter`, `fold`, and `+`. Do not use mutable state, mutable collection types, local mutable builders, or mutation hidden inside builder APIs in reasoning code. Pre-reasoning parsing, schema decoding, registry assembly, and composition infrastructure are outside this restriction.
 
+The shared resolver constructor is the deliberate semantic-logic exception: it allocates opt-in mutable OERs, writes each exact cell once, and retains mutable child OERs through already-written parent cells and immutable list positions. Its current continuation order remains fixed and depth-first. Do not rewrite a present cell or introduce other mutable semantic state under this exception.
+
 Every context function in semantic logic uses `context(world: Assumptions)`, even when it currently needs only one part of the world such as `world.schema`. Do not introduce narrower `Schema` contexts or make `Assumptions` a subtype of `Schema`.
 
 Context parameters compose implicitly but are not implicit receivers. Access members as `world.schema` and `world.resolverRegistry`. Prefer explicit `world` qualification when only a few members are used; when a body benefits from a receiver, use `world.run { ... }`, declare the return type explicitly, and do not use `world.apply { ... }` to produce a modeled result.

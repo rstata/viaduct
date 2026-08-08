@@ -26,7 +26,7 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
         orchestrateKeys(
             path = emptyList(),
             selections = selections,
-            resolved = EngineResult.Object.of(type, emptyMap()),
+            resolved = EngineResult.Object.of(type, emptyMap(), mutable = true),
         )
     }
 }

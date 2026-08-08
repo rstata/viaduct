@@ -10,7 +10,6 @@ import model.groundKey
 import model.instantiateBindings
 import model.merge
 import model.registry.demandsFromSibling
-import model.union
 import semantics.correctresolution.argumentsContainErrorValue
 
 internal data class SelectionCompletion(
@@ -49,10 +48,11 @@ internal fun Value.Object.orchestrateKeys(
     val closedDemand = type.closeResolverDemand(path, selections)
     val unresolvedKeys = closedDemand.groundKeys() - resolved.keys
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
-    return orderedKeys.fold(resolved) { result, key ->
+    orderedKeys.forEach { key ->
         val selection = closedDemand[key]
-        result.union(resolveKey(path, selection, result))
+        resolveKey(path, selection, resolved)
     }
+    return resolved
 }
 
 /**
@@ -101,67 +101,71 @@ private fun Value.Object.dependenciesOf(
         }.toSet()
 }
 
-/** Returns a one-cell object result for the merged [fieldSelection]. */
+/** Resolves and writes the cell for [fieldSelection]. */
 context(world: Assumptions, selectionCompleter: SelectionCompleter)
 private fun Value.Object.resolveKey(
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
     resolved: EngineResult.Object,
-): EngineResult.Object {
+): Unit {
     val key = fieldSelection.groundKey()
-    val cell =
-        when {
-            key.arguments.argumentsContainErrorValue() ->
-                EngineResult.Cell.Error
+    when {
+        key.arguments.argumentsContainErrorValue() ->
+            resolved.write(key, EngineResult.Cell.Error)
 
-            key.field.fieldName == "__typename" ->
-                EngineResult.Cell.of(Value.String.of(type.typeName))
+        key.field.fieldName == "__typename" ->
+            resolved.write(
+                key,
+                EngineResult.Cell.of(Value.String.of(type.typeName)),
+            )
 
-            else -> {
-                val completion = selectionCompleter.complete(fieldSelection.subselections)
-                val resolutionSelections = completion.selections
-                val fieldValue =
-                    if (key.field in world.resolverRegistry) {
-                        val resolver = world.resolverRegistry.resolver(key.field)
-                        val objectFragment =
-                            resolver
-                                .stampedObjectFragment(path + key)
-                                .merge(type)
-                                .instantiateBindings()
-                        val input = resolved.materialize(objectFragment)
-                        if (completion.selective) {
-                            resolver(
-                                input = input,
-                                arguments = key.arguments,
-                                selections = resolutionSelections,
-                            )
-                        } else {
-                            resolver(
-                                input = input,
-                                arguments = key.arguments,
-                            )
-                        }
+        else -> {
+            val completion = selectionCompleter.complete(fieldSelection.subselections)
+            val resolutionSelections = completion.selections
+            val fieldValue =
+                if (key.field in world.resolverRegistry) {
+                    val resolver = world.resolverRegistry.resolver(key.field)
+                    val objectFragment =
+                        resolver
+                            .stampedObjectFragment(path + key)
+                            .merge(type)
+                            .instantiateBindings()
+                    val input = resolved.materialize(objectFragment)
+                    if (completion.selective) {
+                        resolver(
+                            input = input,
+                            arguments = key.arguments,
+                            selections = resolutionSelections,
+                        )
                     } else {
-                        require(!completion.selective) {
-                            "Passive key found ($key)."
-                        }
-                        fieldValues.getValue(key)
+                        resolver(
+                            input = input,
+                            arguments = key.arguments,
+                        )
                     }
-                val resolvedValue =
-                    fieldValue.resolveValue(
-                        path = path + key,
-                        resolverDemand = resolutionSelections,
-                        beSelective = completion.selective,
-                    )
-                EngineResult.Cell.of(
-                    fieldValue.resolvePaths(
-                        path = path + key,
-                        resolvedValue = resolvedValue,
-                    ) { objectPath, value, selections, resolved ->
-                        value.orchestrateKeys(objectPath, selections, resolved)
-                    },
+                } else {
+                    require(!completion.selective) {
+                        "Passive key found ($key)."
+                    }
+                    fieldValues.getValue(key)
+                }
+            val resolvedValue =
+                fieldValue.resolveValue(
+                    path = path + key,
+                    resolverDemand = resolutionSelections,
+                    beSelective = completion.selective,
+                )
+            resolved.write(
+                key,
+                EngineResult.Cell.of(resolvedValue.engineResult),
+            )
+            resolvedValue.resolveObjects { objectResolution ->
+                objectResolution.source.orchestrateKeys(
+                    path = objectResolution.path,
+                    selections = objectResolution.selections,
+                    resolved = objectResolution.target,
                 )
             }
         }
-    return EngineResult.Object.of(type, mapOf(key to cell))
+    }
 }

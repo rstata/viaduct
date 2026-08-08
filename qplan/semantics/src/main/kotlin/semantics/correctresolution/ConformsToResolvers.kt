@@ -67,8 +67,8 @@ private fun EngineResult?.engineResultConformsToResolvers(
 
         is EngineResult.Object -> objectConformsToResolvers(path)
         is EngineResult.List ->
-            withIndex().all { (index, cell) ->
-                cell.value.engineResultConformsToResolvers(
+            indices.all { index ->
+                get(index).value.engineResultConformsToResolvers(
                     path + Value.ListIndex.of(index),
                 )
             }

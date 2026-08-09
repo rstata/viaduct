@@ -20,13 +20,15 @@ Each reasoning exercise fixes one `Assumptions`, one canonical `Schema`, and one
 
 `EngineResult.Object` supports opt-in monotonic mutation. Resolver01-03 allocate empty mutable root and child OERs, close local demand, order exact sibling dependencies, materialize inputs from cells already written, and publish every exact cell once. `ResolveValue.kt` creates passive result structure, retains each child OER occurrence requiring active work, and populates those targets deepest first without replacing parent cells or immutable list positions.
 
-The three resolvers share this constructor and differ only at output boundaries:
+The recursive resolvers share this constructor and differ only at output boundaries:
 
 | Resolver | Supported user fragment domain | Output policy |
 | --- | --- | --- |
 | Resolver01 | Empty object fragments, plus generated `$node { $id }` loaders | Complete output |
 | Resolver02 | Nonempty fragments, including `FromArgument` | Complete output with `successorBoundaryDemand()` |
 | Resolver03 | Nonempty fragments, including `FromArgument` | Selective output with full `successorDemand()` |
+
+Resolver06-08 mirror Resolver01-03 through a single-threaded `DepthFirstReactor`. `SlotOrchestrator` tasks close local demand and enqueue dependency-ordered slots; `SlotResolver` tasks execute one slot, publish its passive result tree, and enqueue its fringe. A stable priority queue orders tasks by longest containing-OER path, resolver-before-orchestrator task kind, and insertion order, reproducing the recursive constructor's depth-first traversal without recursive scheduling. Resolver08 uses selective output with full `successorDemand()`.
 
 Resolver03's scoped one-shot construction claim is recorded in [`claims.md`](./claims.md) and [`arguments/resolver03-one-shot-construction.md`](./arguments/resolver03-one-shot-construction.md). The current constructor is still a mathematical depth-first construction, not the future concurrent executor sketched in [`execution-handoff.md`](./execution-handoff.md).
 
@@ -44,9 +46,7 @@ Canonical node lowering requires every possible concrete type of a node-valued s
 
 ## Active Work
 
-The next architectural step is a demand-availability worklist over monotonic OERs. It needs explicit occurrence identity, pending symbolic selections for runtime `FromObjectField` values, complete producer-demand sealing before dispatch, fair readiness, deadlock detection, and schedule-independent results. The current proposal and open questions are in [`execution-handoff.md`](./execution-handoff.md).
-
-The TLA+ baseline still assumes structural extraction and result alignment that should eventually be derived from the Kotlin carriers and monotonic construction. It also excludes field-relative execution variables. The active repair sequence is in [`tla/handoff.md`](./tla/handoff.md).
+The next reactive milestone after the queue-backed Resolver06-08 counterparts is a demand-availability worklist over monotonic OERs. That worklist needs explicit occurrence identity, pending symbolic selections for runtime `FromObjectField` values, complete producer-demand sealing before dispatch, fair readiness, deadlock detection, and schedule-independent results. The current proposal and open questions are in [`execution-handoff.md`](./execution-handoff.md).
 
 The previously observed `ResolverWitnessBoundExceededException` remains unexplained. Generated failures now report explicit seeds, `S:R:Q` coordinates, and full schema/registry/query inputs through the replay workflow in [`semantics/testing-contracts.md`](./semantics/testing-contracts.md); use that evidence to distinguish unintended growth from an overly broad generated resource envelope.
 

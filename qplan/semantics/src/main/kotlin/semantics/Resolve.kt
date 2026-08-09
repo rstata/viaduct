@@ -51,6 +51,13 @@ internal fun Value.Object.orchestrateKeys(
     orderedKeys.forEach { key ->
         val selection = closedDemand[key]
         resolveKey(path, selection, resolved)
+            ?.resolveObjects { objectResolution ->
+                objectResolution.source.orchestrateKeys(
+                    path = objectResolution.path,
+                    selections = objectResolution.selections,
+                    resolved = objectResolution.target,
+                )
+            }
     }
     return resolved
 }
@@ -59,7 +66,7 @@ internal fun Value.Object.orchestrateKeys(
  * Returns a topological ordering of [keys] using Kahn's algorithm, with demand before consumption.
  */
 context(world: Assumptions)
-private fun Value.Object.dependencyOrder(
+internal fun Value.Object.dependencyOrder(
     path: List<PathComponent>,
     keys: Set<Value.GroundKey>,
     ordered: List<Value.GroundKey> = emptyList(),
@@ -101,23 +108,29 @@ private fun Value.Object.dependenciesOf(
         }.toSet()
 }
 
-/** Resolves and writes the cell for [fieldSelection]. */
+/**
+ * Resolves and writes the cell for [fieldSelection], yielding its passive result-tree fringe.
+ */
 context(world: Assumptions, selectionCompleter: SelectionCompleter)
-private fun Value.Object.resolveKey(
+internal fun Value.Object.resolveKey(
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
     resolved: EngineResult.Object,
-): Unit {
+): ResolvedValue? {
     val key = fieldSelection.groundKey()
-    when {
-        key.arguments.argumentsContainErrorValue() ->
+    return when {
+        key.arguments.argumentsContainErrorValue() -> {
             resolved.write(key, EngineResult.Cell.Error)
+            null
+        }
 
-        key.field.fieldName == "__typename" ->
+        key.field.fieldName == "__typename" -> {
             resolved.write(
                 key,
                 EngineResult.Cell.of(Value.String.of(type.typeName)),
             )
+            null
+        }
 
         else -> {
             val completion = selectionCompleter.complete(fieldSelection.subselections)
@@ -159,13 +172,7 @@ private fun Value.Object.resolveKey(
                 key,
                 EngineResult.Cell.of(resolvedValue.engineResult),
             )
-            resolvedValue.resolveObjects { objectResolution ->
-                objectResolution.source.orchestrateKeys(
-                    path = objectResolution.path,
-                    selections = objectResolution.selections,
-                    resolved = objectResolution.target,
-                )
-            }
+            resolvedValue
         }
     }
 }

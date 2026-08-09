@@ -104,7 +104,7 @@ For cross-profile debugging, run the concrete class with only the seed:
   -PresolverPropertySeed=424242
 ```
 
-Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03 stress uses its separate `resolver03StressSeed` or `RESOLVER03_STRESS_SEED` interface.
+Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03 and Resolver08 stress use their separate `resolver03StressSeed`/`RESOLVER03_STRESS_SEED` and `resolver08StressSeed`/`RESOLVER08_STRESS_SEED` interfaces.
 
 ## Adding Tests
 

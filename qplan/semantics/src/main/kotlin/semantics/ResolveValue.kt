@@ -51,7 +51,7 @@ internal fun Value.Output?.resolveValue(
                 .withIndex()
                 .fold(
                     ResolvedList(
-                        cells = emptyList(),
+                        values = emptyList(),
                         objectsNeedingResolution = emptyList(),
                         objectOccurrences = emptyList(),
                     ),
@@ -63,9 +63,7 @@ internal fun Value.Output?.resolveValue(
                             beSelective = beSelective,
                         )
                     ResolvedList(
-                        cells =
-                            resolved.cells +
-                                EngineResult.Cell.of(element.engineResult),
+                        values = resolved.values + element.engineResult,
                         objectsNeedingResolution =
                             resolved.objectsNeedingResolution +
                                 element.objectsNeedingResolution,
@@ -75,7 +73,7 @@ internal fun Value.Output?.resolveValue(
                     )
                 }.let { resolved ->
                     ResolvedValue(
-                        engineResult = EngineResult.List.of(typeExpr, resolved.cells),
+                        engineResult = EngineResult.List.of(typeExpr, resolved.values),
                         objectsNeedingResolution = resolved.objectsNeedingResolution,
                         objectOccurrences = resolved.objectOccurrences,
                     )
@@ -112,21 +110,16 @@ private fun Value.Object.resolveObjectValue(
     val resolved =
         selectedKeys.fold(
             ResolvedObject(
-                cells = emptyMap(),
+                values = emptyMap(),
                 objectsNeedingResolution = emptyList(),
                 objectOccurrences = emptyList(),
             ),
         ) { result, key ->
             if (key.field.fieldName == "__typename") {
                 ResolvedObject(
-                    cells =
-                        result.cells +
-                            (
-                                key to
-                                    EngineResult.Cell.of(
-                                        Value.String.of(type.typeName),
-                                    )
-                            ),
+                    values =
+                        result.values +
+                            (key to Value.String.of(type.typeName)),
                     objectsNeedingResolution = result.objectsNeedingResolution,
                     objectOccurrences = result.objectOccurrences,
                 )
@@ -143,9 +136,9 @@ private fun Value.Object.resolveObjectValue(
                             beSelective = beSelective,
                         )
                 ResolvedObject(
-                    cells =
-                        result.cells +
-                            (key to EngineResult.Cell.of(fieldValue.engineResult)),
+                    values =
+                        result.values +
+                            (key to fieldValue.engineResult),
                     objectsNeedingResolution =
                         result.objectsNeedingResolution +
                             fieldValue.objectsNeedingResolution,
@@ -155,7 +148,7 @@ private fun Value.Object.resolveObjectValue(
                 )
             }
         }
-    val engineResult = EngineResult.Object.of(type, resolved.cells, mutable = true)
+    val engineResult = EngineResult.Object.of(type, resolved.values, mutable = true)
     val localOccurrence =
         ObjectResolution(
             path = path,
@@ -185,13 +178,13 @@ internal fun ResolvedValue.resolveObjects(resolveObject: (ObjectResolution) -> U
 }
 
 private class ResolvedList(
-    val cells: List<EngineResult.Cell>,
+    val values: List<EngineResult?>,
     val objectsNeedingResolution: List<ObjectResolution>,
     val objectOccurrences: List<ObjectResolution>,
 )
 
 private class ResolvedObject(
-    val cells: Map<Value.GroundKey, EngineResult.Cell>,
+    val values: Map<Value.GroundKey, EngineResult?>,
     val objectsNeedingResolution: List<ObjectResolution>,
     val objectOccurrences: List<ObjectResolution>,
 )

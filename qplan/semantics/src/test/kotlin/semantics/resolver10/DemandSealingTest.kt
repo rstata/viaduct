@@ -129,12 +129,12 @@ class DemandSealingTest {
         assertEquals(listOf(2, 1), branchLaunches)
         assertEquals(
             Value.Int.of(11),
-            result.fetch(
+            result.getValue(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).value,
+            ).get(),
         )
     }
 
@@ -230,12 +230,12 @@ class DemandSealingTest {
         )
         assertEquals(
             Value.Int.of(9),
-            result.fetch(
+            result.getValue(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).value,
+            ).get(),
         )
     }
 
@@ -330,12 +330,12 @@ class DemandSealingTest {
             },
         )
         assertTrue(
-            result.fetch(
+            result.getValue(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).value == Value.Int.of(8),
+            ).get() == Value.Int.of(8),
         )
     }
 
@@ -434,12 +434,12 @@ class DemandSealingTest {
         assertEquals(listOf("parent", "provider", "activate", "trigger"), applications)
         assertEquals(
             Value.Int.of(9),
-            result.fetch(
+            result.getValue(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).value,
+            ).get(),
         )
     }
 

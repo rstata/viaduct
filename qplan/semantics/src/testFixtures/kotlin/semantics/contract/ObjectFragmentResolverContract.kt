@@ -84,7 +84,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(world.schema.contractKey("Query", "viewer")).value,
+                result.getValue(world.schema.contractKey("Query", "viewer")).get(),
             )
 
         assertEquals(
@@ -151,11 +151,11 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val viewer =
             assertIs<EngineResult.Object>(
-                result.fetch(world.schema.contractKey("Query", "viewer")).value,
+                result.getValue(world.schema.contractKey("Query", "viewer")).get(),
             )
         val profile =
             assertIs<EngineResult.Object>(
-                viewer.fetch(world.schema.contractKey("User", "profile")).value,
+                viewer.getValue(world.schema.contractKey("User", "profile")).get(),
             )
 
         assertEquals(setOf("raw", "rendered"), profile.keys.map { it.field.fieldName }.toSet())
@@ -207,17 +207,17 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val chain =
             assertIs<EngineResult.Object>(
-                result.fetch(world.schema.contractKey("Query", "chain")).value,
+                result.getValue(world.schema.contractKey("Query", "chain")).get(),
             )
         val next =
             assertIs<EngineResult.Object>(
-                chain.fetch(world.schema.contractKey("Chain", "next")).value,
+                chain.getValue(world.schema.contractKey("Chain", "next")).get(),
             )
 
         assertTrue("label" in next.keys.map { it.field.fieldName })
         assertEquals(
             Value.String.of("second"),
-            chain.fetch(world.schema.contractKey("Chain", "computed")).value,
+            chain.getValue(world.schema.contractKey("Chain", "computed")).get(),
         )
     }
 
@@ -276,12 +276,12 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val holder =
             assertIs<EngineResult.Object>(
-                result.fetch(world.schema.contractKey("Query", "holder")).value,
+                result.getValue(world.schema.contractKey("Query", "holder")).get(),
             )
 
         assertEquals(
             Value.Int.of(7),
-            holder.fetch(world.schema.contractKey("Holder", "result")).value,
+            holder.getValue(world.schema.contractKey("Holder", "result")).get(),
         )
     }
 
@@ -340,16 +340,16 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val items =
             assertIs<EngineResult.List>(
-                result.fetch(world.schema.contractKey("Query", "items")).value,
+                result.getValue(world.schema.contractKey("Query", "items")).get(),
             )
 
         assertEquals(3, items.size)
-        assertEquals(null, items[0].value)
-        assertEquals(Value.Error, items[1].value)
-        val item = assertIs<EngineResult.Object>(items[2].value)
+        assertEquals(null, items[0])
+        assertEquals(Value.Error, items[1])
+        val item = assertIs<EngineResult.Object>(items[2])
         assertEquals(
             Value.Int.of(6),
-            item.fetch(world.schema.contractKey("Item", "computed")).value,
+            item.getValue(world.schema.contractKey("Item", "computed")).get(),
         )
         assertEquals(1, itemsApplications)
         assertEquals(1, computedApplications)
@@ -423,7 +423,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         assertEquals(expected, result)
         assertEquals(
             Value.Int.of(1),
-            result.fetch(world.schema.contractKey("Query", "result")).value,
+            result.getValue(world.schema.contractKey("Query", "result")).get(),
         )
     }
 
@@ -542,20 +542,20 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val groups =
             assertIs<EngineResult.List>(
-                result.fetch(world.schema.contractKey("Query", "groups")).value,
+                result.getValue(world.schema.contractKey("Query", "groups")).get(),
             )
 
         listOf(1, 2).forEachIndexed { groupIndex, seed ->
-            val group = assertIs<EngineResult.Object>(groups[groupIndex].value)
+            val group = assertIs<EngineResult.Object>(groups[groupIndex])
             listOf(2, 3).forEach { factor ->
                 val product =
                     assertIs<EngineResult.Object>(
-                        group.fetch(
+                        group.getValue(
                             Value.GroundKey.of(
                                 world.schema.objectField("Group", "product"),
                                 mapOf("factor" to factor),
                             ),
-                        ).value,
+                        ).get(),
                     )
                 val base = seed * factor
                 val typeName =
@@ -563,11 +563,11 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 assertEquals(typeName, product.type.typeName)
                 assertEquals(
                     Value.String.of("${seed}x$factor"),
-                    product.fetch(world.schema.contractKey(typeName, "label")).value,
+                    product.getValue(world.schema.contractKey(typeName, "label")).get(),
                 )
                 assertEquals(
                     Value.Int.of(base * if (typeName == "EvenProduct") 10 else 100),
-                    product.fetch(world.schema.contractKey(typeName, "computed")).value,
+                    product.getValue(world.schema.contractKey(typeName, "computed")).get(),
                 )
             }
         }
@@ -671,27 +671,27 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val groups =
             assertIs<EngineResult.List>(
-                result.fetch(world.schema.contractKey("Query", "groups")).value,
+                result.getValue(world.schema.contractKey("Query", "groups")).get(),
             )
 
         listOf(10, 20).forEachIndexed { groupIndex, seed ->
-            val group = assertIs<EngineResult.Object>(groups[groupIndex].value)
+            val group = assertIs<EngineResult.Object>(groups[groupIndex])
             listOf(1, 3).forEach { count ->
                 val entries =
                     assertIs<EngineResult.List>(
-                        group.fetch(
+                        group.getValue(
                             Value.GroundKey.of(
                                 world.schema.objectField("Group", "entries"),
                                 mapOf("count" to count),
                             ),
-                        ).value,
+                        ).get(),
                     )
                 assertEquals(count, entries.size)
-                entries.forEachIndexed { offset, cell ->
-                    val entry = assertIs<EngineResult.Object>(cell.value)
+                entries.forEachIndexed { offset, value ->
+                    val entry = assertIs<EngineResult.Object>(value)
                     assertEquals(
                         Value.String.of("entry-${seed + offset}"),
-                        entry.fetch(world.schema.contractKey("Entry", "rendered")).value,
+                        entry.getValue(world.schema.contractKey("Entry", "rendered")).get(),
                     )
                 }
             }

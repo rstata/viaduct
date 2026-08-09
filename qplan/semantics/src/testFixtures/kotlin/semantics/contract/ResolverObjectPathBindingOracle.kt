@@ -11,7 +11,7 @@ import model.Value
 import model.instantiateBindings
 import model.objectKey
 import model.selectionForestOf
-import semantics.arbitrary.registeredResolverCells
+import semantics.arbitrary.registeredResolverOccurrences
 import kotlin.test.assertEquals
 
 /**
@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
  */
 context(world: Assumptions)
 fun EngineResult.Object.validateObjectPathBindings() {
-    registeredResolverCells(world.resolverRegistry).forEach { cell ->
+    registeredResolverOccurrences(world.resolverRegistry).forEach { cell ->
         val resolver =
             world.resolverRegistry.resolver(
                 world.schema.objectField(
@@ -62,7 +62,7 @@ private fun EngineResult.Object.readCompletedProvider(
             ).instantiateBindings()
                 .groundKeys()
                 .single()
-        val value = current.fetch(key).value
+        val value = current.getValue(key).get()
         if (value == null) return null
         if (value == Value.Error) return Value.Error
         if (index == path.lastIndex) return value.toInputValue()
@@ -87,6 +87,6 @@ private fun EngineResult.List.toInputList(): Value.InputList {
     require(typeExpr.baseType is Schema.InputType)
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { cell -> cell.value?.toInputValue() },
+        values = map { value -> value?.toInputValue() },
     )
 }

@@ -26,7 +26,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
         assertEquals(
             "Query",
             assertIs<Value.String>(
-                result.fetch(world.schema.contractKey("Query", "__typename")).value,
+                result.getValue(world.schema.contractKey("Query", "__typename")).get(),
             ).stringValue,
         )
     }
@@ -125,23 +125,23 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val items =
             assertIs<EngineResult.List>(
-                result.fetch(world.schema.contractKey("Query", "items")).value,
+                result.getValue(world.schema.contractKey("Query", "items")).get(),
             )
-        val a = assertIs<EngineResult.Object>(items[0].value)
-        val b = assertIs<EngineResult.Object>(items[1].value)
+        val a = assertIs<EngineResult.Object>(items[0])
+        val b = assertIs<EngineResult.Object>(items[1])
 
         assertEquals(
             Value.Int.of(2),
-            a.fetch(
+            a.getValue(
                 Value.GroundKey.of(
                     world.schema.objectField("A", "computed"),
                     mapOf("factor" to 2),
                 ),
-            ).value,
+            ).get(),
         )
         assertEquals(
             Value.Int.of(3),
-            b.fetch(world.schema.contractKey("B", "computed")).value,
+            b.getValue(world.schema.contractKey("B", "computed")).get(),
         )
         assertEquals(listOf("A", "B"), applications)
     }
@@ -184,7 +184,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val item =
             assertIs<EngineResult.Object>(
-                result.fetch(world.schema.contractKey("Query", "item")).value,
+                result.getValue(world.schema.contractKey("Query", "item")).get(),
             )
         val concreteDefaultKey =
             Value.GroundKey.of(
@@ -192,7 +192,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
                 mapOf("factor" to 7),
             )
 
-        assertEquals(Value.Int.of(7), item.fetch(concreteDefaultKey).value)
+        assertEquals(Value.Int.of(7), item.getValue(concreteDefaultKey).get())
         assertEquals(setOf(concreteDefaultKey), item.keys)
     }
 }

@@ -7,10 +7,10 @@ import model.ObjectSelectionForest
 /**
  * Whether this Query-rooted result is a correct field-resolution result for [selections].
  *
- * The judgment is plan-independent and does not observe cell check components.  Also,
+ * The judgment is plan-independent and does not observe field or type checks. Also,
  * this judgment is purposefully permissive: as long as the [EngineResult.Object] conforms
  * to our world assumptions (e.g., regarding schema conformance and resolver conformance),
- * this predicate allows the [EngineResult.Object] to contain more cells than the input
+ * this predicate allows the [EngineResult.Object] to contain more values than the input
  * [selections] and implicated [model.registry.FieldResolver.objectFragment]s require. Other
  * predicates define various degrees of minimality.
  *

@@ -170,88 +170,88 @@ class ResolverPropertyTest {
 
             val item =
                 assertIs<EngineResult.Object>(
-                    result.fetch(
+                    result.getValue(
                         Value.GroundKey.of(world.schema.objectField("Query", "item"), mapOf("seed" to seed)),
-                    ).value,
+                    ).get(),
                 )
             assertEquals(
                 Value.Int.of(seed * firstFactor),
-                item.fetch(
+                item.getValue(
                     Value.GroundKey.of(
                         world.schema.objectField("Item", "computed"),
                         mapOf("factor" to firstFactor),
                     ),
-                ).value,
+                ).get(),
             )
             assertEquals(
                 Value.Int.of(seed * secondFactor),
-                item.fetch(
+                item.getValue(
                     Value.GroundKey.of(
                         world.schema.objectField("Item", "computed"),
                         mapOf("factor" to secondFactor),
                     ),
-                ).value,
+                ).get(),
             )
             val child =
                 assertIs<EngineResult.Object>(
-                    item.fetch(
+                    item.getValue(
                         Value.GroundKey.of(world.schema.objectField("Item", "child"), emptyMap()),
-                    ).value,
+                    ).get(),
                 )
             assertEquals(
                 Value.Int.of((seed + 1) * firstFactor),
-                child.fetch(
+                child.getValue(
                     Value.GroundKey.of(
                         world.schema.objectField("Item", "computed"),
                         mapOf("factor" to firstFactor),
                     ),
-                ).value,
+                ).get(),
             )
             val metric =
                 assertIs<EngineResult.Object>(
-                    item.fetch(
+                    item.getValue(
                         Value.GroundKey.of(world.schema.objectField("Item", "metric"), emptyMap()),
-                    ).value,
+                    ).get(),
                 )
             assertEquals(
                 Value.Int.of(seed),
-                metric.fetch(
+                metric.getValue(
                     Value.GroundKey.of(world.schema.objectField(metric.type.typeName, "common"), emptyMap()),
-                ).value,
+                ).get(),
             )
             val concreteMetricField = if (seed % 2 == 0) "even" else "odd"
             val concreteMetricValue = if (seed % 2 == 0) seed * 2 else seed * 3
             if (seed % 2 == 0) sawEvenMetric = true else sawOddMetric = true
             assertEquals(
                 Value.Int.of(concreteMetricValue),
-                metric.fetch(
+                metric.getValue(
                     Value.GroundKey.of(
                         world.schema.objectField(metric.type.typeName, concreteMetricField),
                         emptyMap(),
                     ),
-                ).value,
+                ).get(),
             )
 
             val items =
                 assertIs<EngineResult.List>(
-                    result.fetch(
+                    result.getValue(
                         Value.GroundKey.of(
                             world.schema.objectField("Query", "items"),
                             mapOf("seed" to seed),
                         ),
-                    ).value,
+                    ).get(),
                 )
             assertEquals(2, items.size)
             listOf(seed, seed + 10).forEachIndexed { index, itemSeed ->
-                val listItem = assertIs<EngineResult.Object>(items[index].value)
+                val listItem = assertIs<EngineResult.Object>(items[index])
                 assertEquals(
                     Value.Int.of(itemSeed * firstFactor),
-                    listItem.fetch(
+                    listItem.getValue(
                         Value.GroundKey.of(
                             world.schema.objectField("Item", "computed"),
                             mapOf("factor" to firstFactor),
                         ),
-                    ).value,
+                    ).get(),
                 )
             }
             assertTrue(context(world) { result.correctResolution(fragment) })

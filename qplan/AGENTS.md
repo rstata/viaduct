@@ -10,7 +10,7 @@ The repository also contains a scoped machine-checked TLA+ construction calculus
 
 ## Implementation Discipline
 
-Semantic values are immutable except for two documented monotonic stores: request-local variable bindings and opt-in mutable `EngineResult.Object` cells. Each entry changes only from absent to one validated value. The shared resolver constructor may allocate mutable OERs, publish an exact cell once, and retain mutable child OERs through written parents; do not rewrite cells or introduce unrelated mutable reasoning state.
+Semantic values are immutable except for documented monotonic stores: request-local variable bindings and opt-in mutable `EngineResult.Object` value, field-check, and type-check promises. Each entry changes only from absent to one immediate or deferred promise, and each deferred promise completes once. The shared resolver constructor may allocate mutable OERs, publish an exact value once, and retain mutable child OERs through written parents; do not replace promises or introduce unrelated mutable reasoning state.
 
 Otherwise use immutable collections and functional transformations in semantic code. Pre-reasoning infrastructure may use ordinary implementation techniques.
 

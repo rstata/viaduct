@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation(project(":model"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
     testFixturesImplementation(project(":arbitrary"))
     testFixturesImplementation(testFixtures(project(":model")))

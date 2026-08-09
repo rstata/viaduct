@@ -4,7 +4,7 @@
 
 This project defines the carrier algebra for field-resolution reasoning. Follow [`../AGENTS.md`](../AGENTS.md) and the concrete API rules in [`guidelines.md`](./guidelines.md). Correctness, demand derivation, execution attribution, and checker interpretation belong in semantic domains outside the carrier.
 
-`EngineResult` values are finite, well-founded algebraic values. Mutable OERs may gain validated exact cells monotonically; a written parent may retain a mutable child OER while that child gains cells. Reference identity, self-reference, and cyclic result graphs are outside structural equality.
+`EngineResult` values are finite, well-founded algebraic values. Mutable OERs may gain validated exact value, field-check, and type-check promises monotonically; a written parent may retain a mutable child OER while that child gains promises. Reference identity, self-reference, and cyclic result graphs are outside structural equality.
 
 `Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
 
@@ -14,15 +14,15 @@ This project defines the carrier algebra for field-resolution reasoning. Follow 
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and enforces an argument-insensitive branch order combining ordinary resolver dependencies with provider-production-before-use edges. This is pre-reasoning validation, not runtime provider evaluation.
 
-`Value.Key` is an open selection key. `Value.ObjectKey` refines it to a concrete object field while retaining open arguments. `Value.GroundKey` further requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
+`Value.Key` is an open selection key. `Value.ObjectKey` refines it to a concrete object field while retaining open arguments. `Value.GroundKey` further requires ground arguments and is the only key admitted to `Value.Object`, OER field promises, exact paths, materialization, dependency ordering, and resolver application.
 
 Ground inputs implement the opaque `OpenValue` and `OpenArguments` interfaces. Grounding throws on an unbound stamped variable or unstamped template.
 
 ## Output Representations
 
-`EngineResult` represents field-resolution results with value/check cells. `Value.Output` represents resolver outputs without checks; do not collapse the two.
+`EngineResult.Object` represents field-resolution results with independent value, field-check, and type-check promises. For a completed check, `true` means access is accepted and `false` means access is rejected. Object occurrences carry their own type checks, so `EngineResult.List` needs only positional values. `Value.Output` represents resolver outputs without checks; do not collapse the two.
 
-Object construction is immutable by default. Opt-in mutable objects atomically write each absent exact cell once, return detached cell snapshots, and throw on unset reads or repeated writes. Lists are immutable positional values and retain their element type expression.
+Object construction is immutable by default. Opt-in mutable objects atomically install each absent exact promise once and throw on unset reads or repeated writes. Lists are immutable positional values and retain their element type expression.
 
 Raw node references exist only as fixture inputs. Composition lowers them through `foo$bridge` producers and argumentless `T$Bridge.$node` loaders before semantic reasoning.
 

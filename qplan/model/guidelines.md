@@ -14,7 +14,7 @@ A semantic category is a modeled set of values represented by an interface hiera
 
 A concrete variant is one particular form of value in a category, such as `EngineResult.Object` within `EngineResult` or `TypeExpr.List` within `TypeExpr`.
 
-A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `EngineResult.Object`, `EngineResult.Cell`, `Value.Key`, and `FieldResolver` are examples.
+A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `EngineResult.Object`, `Promise`, `Value.Key`, and `FieldResolver` are examples.
 
 An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema` and `ResolverRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `FieldResolver`.
 
@@ -40,7 +40,7 @@ Public singleton semantic values are `data object` declarations. `Value.Error`, 
 
 Public enums represent finite scalar sets of unique values, such as the five possible results of `Schema.TypeRelation`. They are not used as substitutes for algebraic categories with variants such as `EngineResult`.
 
-Do not expose public data classes or public sealed classes. For example, expose `EngineResult.Cell` as a sealed interface backed by a private data class rather than exposing the data class and its generated destructuring operations.
+Do not expose public data classes or public sealed classes. For example, expose `Promise` as a sealed interface backed by private implementations rather than exposing their generated component operations.
 
 ## Equality
 
@@ -60,13 +60,13 @@ Semantic logic must not apply equality-dependent operations to undefined-equalit
 
 The test-fixture `Fragment` carrier retains a nominal composite type and an unnormalized forest for parsed selection requirements and pre-reasoning transformations. It is not part of the production model artifact. Canonical field-resolver `objectFragment` values are open `SelectionForest`s whose top-level occurrences have been specialized to the resolver field's concrete containing type.
 
-Prefer a private data-class implementation when its generated structural equality exactly matches the category's equality contract. `IntValueImpl`, `KeyImpl`, `GroundKeyImpl`, and `CellImpl` are representative examples. Use a private regular implementation for an undefined-equality category such as `SelectionImpl`, or whenever generated componentwise equality is otherwise not the category's modeled equality.
+Prefer a private data-class implementation when its generated structural equality exactly matches the category's equality contract. `IntValueImpl`, `KeyImpl`, and `GroundKeyImpl` are representative examples. Use a private regular implementation for an undefined-equality category such as `SelectionImpl`, or whenever generated componentwise equality is otherwise not the category's modeled equality.
 
 ## Construction
 
 Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned field-resolver wrappers are logic-constructible; `Schema` and `ResolverRegistry` are externally supplied. Field-resolver functions are supplied during pre-reasoning assembly and encapsulated by `FieldResolver` behind a model-owned factory and public demand-projection operation. External raw node lookups, when accepted by composition infrastructure, are lowered to field resolvers before the canonical registry is exposed.
 
-Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `EngineResult.Cell`, `Value.Int`, and `FieldResolver` have factories. Abstract categories such as `EngineResult` and `Value` need no factory when their concrete variants provide the construction operations.
+Every non-singleton concrete logic-constructible type has a public factory, conventionally named `of`. For example, `EngineResult.Object`, `Promise`, `Value.Int`, and `FieldResolver` have factories. Abstract categories such as `EngineResult` and `Value` need no factory when their concrete variants provide the construction operations.
 
 Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `Value.Key` and `GroundKeyImpl` implementing `Value.GroundKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
@@ -80,11 +80,11 @@ Factories return the most precise public type available. For example, a factory 
 
 Place a factory on the highest semantic category where its meaning remains coherent and Kotlin overload resolution remains unambiguous. For example, `Value.Default.of(value)` belongs on `Value.Default`, while scalar factories should not be collapsed into an ambiguous `Value.of`. Prefer overloads that select precise variants when their parameter types are unambiguous.
 
-An `of` factory normally accepts already semantic components. For example, `EngineResult.Cell.of` accepts an engine-result value and check value that are already in the model. Parsing GraphQL text and decoding SDL are pre-reasoning infrastructure rather than `of` factory behavior.
+An `of` factory normally accepts already semantic components. For example, `Promise.of` accepts the semantic value it immediately contains. Parsing GraphQL text and decoding SDL are pre-reasoning infrastructure rather than `of` factory behavior.
 
 GraphQL coercion may be a semantic function. For example, construction of an argument-bearing object key may apply argument coercion, but the coercion relation should be independently defined rather than embedded only inside `Value.Key.of`. Each coercion function separately specifies whether coercion failure is a modeled result or an input outside its domain.
 
-Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `EngineResult.Object.of` validates every initially present cell coordinate, nullability, and nested result type, while `EngineResult.Object.write` performs the same validation before atomically publishing a later cell. Every observable object state therefore satisfies its documented carrier invariants, and `correctResolution` does not need schema conformance as a separate conjunct.
+Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `EngineResult.Object.of` validates every initially present value coordinate, nullability, and nested result type, while `EngineResult.Object.setValue` and validating deferred promises enforce the same invariant before completion. Every observable completed value therefore satisfies its documented carrier invariants, and `correctResolution` does not need schema conformance as a separate conjunct.
 
 Use compositional validation for nested typed values. For example, a list factory validates its elements, and an enclosing OER factory checks that the list's declared element type is compatible with the field type rather than traversing and revalidating the entire list.
 

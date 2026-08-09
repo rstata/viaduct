@@ -247,9 +247,9 @@ class ResolutionWitnessTest {
                 computedTwoKey to 1,
                 baseKey to 3,
             ),
-            result.registeredResolverCellCounts(world.resolverRegistry),
+            result.registeredResolverOccurrenceCounts(world.resolverRegistry),
         )
-        val cells = result.registeredResolverCells(world.resolverRegistry)
+        val cells = result.registeredResolverOccurrences(world.resolverRegistry)
         assertTrue(
             cells
                 .single { cell -> cell.applicationKey == computedTwoKey }
@@ -329,7 +329,7 @@ class ResolutionWitnessTest {
         assertEquals(
             mapOf(computedKey to 2),
             result
-                .registeredResolverCellCounts(world.resolverRegistry)
+                .registeredResolverOccurrenceCounts(world.resolverRegistry)
                 .filterKeys { key -> key == computedKey },
         )
         val firstInput =

@@ -106,7 +106,7 @@ interface ResolverWitnessContract : ResolverContract {
                             "closed=${result.isClosedUnderResolverDemand()}, " +
                             "resolvers=${result.conformsToResolvers()}, " +
                             "typename=${result.conformsToTypename()}, " +
-                            "unclosed=${result.unclosedRegisteredResolverCells().map { cell ->
+                            "unclosed=${result.unclosedRegisteredResolverOccurrences().map { cell ->
                                 cell.applicationKey to cell.occurrencePath
                             }}"
                     },

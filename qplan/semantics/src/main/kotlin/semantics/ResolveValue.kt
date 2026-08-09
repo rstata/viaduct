@@ -5,8 +5,7 @@ import model.EngineResult
 import model.PathComponent
 import model.SelectionForest
 import model.Value
-import model.instantiateBindings
-import model.merge
+import model.applicableGroundSelections
 import model.selectionForestOf
 
 /**
@@ -83,7 +82,7 @@ private fun Value.Object.resolveObjectValue(
     beSelective: Boolean,
     path: List<PathComponent>,
 ): ResolvedValue {
-    val mergedResolverDemand = resolverDemand.merge(type).instantiateBindings()
+    val mergedResolverDemand = resolverDemand.applicableGroundSelections(type)
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     if (world.selectiveResolvers && beSelective) {
         val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys

@@ -1,18 +1,16 @@
-package semantics.resolver03
+package semantics.resolver09
 
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
 import model.Value
-import semantics.contract.ResolverMutationContract
+import semantics.contract.ResolverWitnessContract
 
-class ResolverMutationTest : ResolverMutationContract {
+class ResolverWitnessTest : ResolverWitnessContract {
     override fun resolve(
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
     ): EngineResult.Object =
-        context(world) {
-            root.resolve(selections)
-        }
+        resolveWithDependencyValidation(world, root, selections)
 }

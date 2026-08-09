@@ -5,8 +5,7 @@ import model.EngineResult
 import model.ObjectSelectionForest
 import model.SelectionForest
 import model.Value
-import model.instantiateBindings
-import model.merge
+import model.applicableGroundSelections
 
 /**
  * Materializes the object value selected by [selections] from this result.
@@ -27,7 +26,7 @@ context(world: Assumptions)
 private fun EngineResult.Object.materializeSelectedObjectValue(
     selections: SelectionForest,
 ): Value.Object =
-    materializeSelectedObjectValue(selections.merge(type).instantiateBindings())
+    materializeSelectedObjectValue(selections.applicableGroundSelections(type))
 
 context(world: Assumptions)
 private fun EngineResult.Object.materializeSelectedObjectValue(

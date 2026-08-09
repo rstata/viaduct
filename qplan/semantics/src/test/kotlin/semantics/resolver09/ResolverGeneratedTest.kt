@@ -1,4 +1,4 @@
-package semantics.resolver03
+package semantics.resolver09
 
 import model.Assumptions
 import model.EngineResult
@@ -10,10 +10,6 @@ import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 
-/**
- * Ordinary generated-world acceptance. Extended trace, mutation, depth, witness, and stress
- * claims remain in their dedicated suites or shared contracts.
- */
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
     NodeGeneratedResolverContract,
@@ -25,7 +21,5 @@ class ResolverGeneratedTest :
         root: Value.Object,
         selections: SelectionForest,
     ): EngineResult.Object =
-        context(world) {
-            root.resolve(selections)
-        }
+        resolveWithDependencyValidation(world, root, selections)
 }

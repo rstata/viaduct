@@ -1,4 +1,4 @@
-package semantics.resolver03
+package semantics.resolver09
 
 import model.Assumptions
 import model.EngineResult
@@ -7,14 +7,12 @@ import model.Value
 import semantics.contract.DeepResolverStressContract
 
 class ResolverStressTest : DeepResolverStressContract {
-    override val resolverName: String = "resolver03"
+    override val resolverName: String = "resolver09"
 
     override fun resolve(
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
     ): EngineResult.Object =
-        context(world) {
-            root.resolve(selections)
-        }
+        resolveWithDependencyValidation(world, root, selections)
 }

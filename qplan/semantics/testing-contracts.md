@@ -30,14 +30,14 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 
 Current support is:
 
-| Contract | Resolver01 | Resolver02 | Resolver03 |
+| Contract | Resolver01/06 | Resolver02/07 | Resolver03/08/09 |
 | --- | --- | --- | --- |
 | Empty object fragments | yes | yes | yes |
 | Source-level node resolution | yes | yes | yes |
 | Nonempty object fragments | no | yes | yes |
 | Nonempty fragments with `FromArgument` | no | yes | yes |
 
-Runtime `FromObjectField` binding is not supported by Resolver01-03.
+Runtime `FromObjectField` binding is not supported by Resolver01-09.
 
 ## Policy Mixins
 
@@ -47,22 +47,22 @@ Policies describe implementation choices that cut across feature scopes:
 - `CompleteObjectFragmentOutputPolicyContract` and `SelectiveObjectFragmentOutputPolicyContract` check recursive passive subtrees reached while satisfying object-fragment demand.
 - `CorrectResolutionPostTestPolicy` records results produced through `resolveAndValidate` and validates them in `@AfterEach`.
 
-Resolver01 and Resolver02 use complete-output policies; Resolver03 uses selective-output policies. All three use post-test `correctResolution` validation.
+Resolver01/02/06/07 use complete-output policies; Resolver03/08/09 use selective-output policies. Every contract implementation uses post-test `correctResolution` validation.
 
 Deferred validation keeps replayed resolver functions from changing fixture application counters before explicit assertions run. Every policy mixin must contain an executable guard.
 
-Resolver03-specific trace, mutation, witness, list-deepening, selective-demand, and stress tests stay separate because they claim more than ordinary feature acceptance.
+Extended trace, mutation, witness, list-deepening, selective-demand, readiness, and stress tests stay separate from ordinary feature acceptance. Mutation, witness, selective-demand, and deep-stress bodies use shared contracts when their assertions are implementation-independent.
 
 ## Generated Profiles
 
 | Profile ID | Scope | Resolvers | Normal `S:R:Q` |
 | --- | --- | --- | --- |
-| `empty-object-fragment` | Empty fragments | Resolver01-03 | `10:3:5` |
-| `node` | Fixture-lowered nodes | Resolver01-03 | `10:3:5` |
-| `object-fragment` | Nonempty fragments | Resolver02-03 | `10:3:5` |
-| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03 | `10:3:5` |
-| `feature-interaction` | Full ordinary interaction | Resolver02-03 | `20:3:5` |
-| `resolver03-construction-witness` | Construction witness | Resolver03 | `12:2:4` |
+| `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-09 | `10:3:5` |
+| `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-09 | `10:3:5` |
+| `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-09 | `10:3:5` |
+| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03, Resolver07-09 | `10:3:5` |
+| `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-09 | `20:3:5` |
+| `resolver03-construction-witness` | Construction witness | Resolver03, Resolver09 | `12:2:4` |
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated `$node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver.
 
@@ -104,7 +104,7 @@ For cross-profile debugging, run the concrete class with only the seed:
   -PresolverPropertySeed=424242
 ```
 
-Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03 and Resolver08 stress use their separate `resolver03StressSeed`/`RESOLVER03_STRESS_SEED` and `resolver08StressSeed`/`RESOLVER08_STRESS_SEED` interfaces.
+Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, and Resolver09 stress use their separate `resolver03StressSeed`/`RESOLVER03_STRESS_SEED`, `resolver08StressSeed`/`RESOLVER08_STRESS_SEED`, and `resolver09StressSeed`/`RESOLVER09_STRESS_SEED` interfaces.
 
 ## Adding Tests
 

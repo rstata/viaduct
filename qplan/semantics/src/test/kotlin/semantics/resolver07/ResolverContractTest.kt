@@ -42,7 +42,9 @@ class ResolverContractTest :
         context(world) {
             root.resolve(
                 selections = selections,
-                taskObserver = { task -> taskObserver(task.toContractObservation()) },
+                eventObserver = { event ->
+                    event.toContractObservation()?.let(taskObserver)
+                },
             )
         }
 }

@@ -28,6 +28,7 @@ import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.resolverTestBatch
 import semantics.correctresolution.correctResolution
+import semantics.contract.registeredResolverApplicationIdentityCounts
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

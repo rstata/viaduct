@@ -6,7 +6,7 @@ import model.SelectionForest
 import model.Value
 import model.registry.successorDemand
 import semantics.DepthFirstReactor
-import semantics.DepthFirstTaskObserver
+import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
 import semantics.SelectionCompleter
 
@@ -16,12 +16,12 @@ import semantics.SelectionCompleter
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
-    resolve(selections, taskObserver = {})
+    resolve(selections, eventObserver = {})
 
 context(world: Assumptions)
 internal fun Value.Object.resolve(
     selections: SelectionForest,
-    taskObserver: DepthFirstTaskObserver,
+    eventObserver: ReactorEventObserver,
 ): EngineResult.Object {
     val selectionCompleter =
         SelectionCompleter { selections ->
@@ -34,7 +34,7 @@ internal fun Value.Object.resolve(
         DepthFirstReactor(
             source = this@resolve,
             selections = selections,
-            taskObserver = taskObserver,
+            eventObserver = eventObserver,
         ).resolve()
     }
 }

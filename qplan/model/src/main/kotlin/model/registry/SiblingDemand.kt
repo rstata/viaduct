@@ -4,8 +4,6 @@ import model.Assumptions
 import model.PathComponent
 import model.Schema
 import model.Value
-import model.instantiateBindings
-import model.merge
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
@@ -38,8 +36,6 @@ fun Value.GroundKey.demandsFromSibling(
     return siblingKey in
         world.resolverRegistry
             .resolver(field)
-            .stampedObjectFragment(path)
-            .merge(objectType)
-            .instantiateBindings()
+            .objectFragmentAt(path)
             .groundKeys()
 }

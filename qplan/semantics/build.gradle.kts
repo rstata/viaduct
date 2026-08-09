@@ -25,12 +25,15 @@ kotlin {
     jvmToolchain(21)
 }
 
+val stressResolverNames = listOf("resolver03", "resolver08", "resolver09")
+
 tasks.test {
     useJUnitPlatform()
     maxHeapSize = "2g"
     filter {
-        excludeTestsMatching("semantics.resolver03.ResolverStressTest")
-        excludeTestsMatching("semantics.resolver08.ResolverStressTest")
+        stressResolverNames.forEach { resolverName ->
+            excludeTestsMatching("semantics.$resolverName.ResolverStressTest")
+        }
     }
 }
 
@@ -139,72 +142,44 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolverPropertyReplay") {
     }
 }
 
-val resolver03StressCases =
-    providers.environmentVariable("RESOLVER03_STRESS_CASES").orElse("10000")
-val resolver03StressSeed =
-    providers
-        .gradleProperty("resolver03StressSeed")
-        .orElse(providers.systemProperty("resolver03.stress.seed"))
-        .orElse(providers.environmentVariable("RESOLVER03_STRESS_SEED"))
+fun registerResolverStressTask(resolverName: String) {
+    val displayName = resolverName.replaceFirstChar(Char::uppercase)
+    val environmentPrefix = resolverName.uppercase()
+    val cases =
+        providers.environmentVariable("${environmentPrefix}_STRESS_CASES").orElse("10000")
+    val seed =
+        providers
+            .gradleProperty("${resolverName}StressSeed")
+            .orElse(providers.systemProperty("$resolverName.stress.seed"))
+            .orElse(providers.environmentVariable("${environmentPrefix}_STRESS_SEED"))
 
-tasks.register<org.gradle.api.tasks.testing.Test>("resolver03Stress") {
-    group = "verification"
-    description = "Runs the seeded Resolver03 deep stress property."
-    maxHeapSize = "2g"
-    testClassesDirs = sourceSets["test"].output.classesDirs
-    classpath = sourceSets["test"].runtimeClasspath
-    useJUnitPlatform()
-    filter {
-        includeTestsMatching("semantics.resolver03.ResolverStressTest")
-    }
-    outputs.upToDateWhen { false }
-    testLogging {
-        showStandardStreams = true
-    }
+    tasks.register<org.gradle.api.tasks.testing.Test>("${resolverName}Stress") {
+        group = "verification"
+        description = "Runs the seeded $displayName deep stress property."
+        maxHeapSize = "2g"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform()
+        filter {
+            includeTestsMatching("semantics.$resolverName.ResolverStressTest")
+        }
+        outputs.upToDateWhen { false }
+        testLogging {
+            showStandardStreams = true
+        }
 
-    doFirst {
-        val seed =
-            resolver03StressSeed.orNull
-                ?: throw GradleException(
-                    "Set -Presolver03StressSeed=<long>, -Dresolver03.stress.seed=<long>, " +
-                        "or RESOLVER03_STRESS_SEED=<long>",
-                )
-        systemProperty("resolver03.stress.cases", resolver03StressCases.get())
-        systemProperty("resolver03.stress.seed", seed)
+        doFirst {
+            val configuredSeed =
+                seed.orNull
+                    ?: throw GradleException(
+                        "Set -P${resolverName}StressSeed=<long>, " +
+                            "-D$resolverName.stress.seed=<long>, or " +
+                            "${environmentPrefix}_STRESS_SEED=<long>",
+                    )
+            systemProperty("$resolverName.stress.cases", cases.get())
+            systemProperty("$resolverName.stress.seed", configuredSeed)
+        }
     }
 }
 
-val resolver08StressCases =
-    providers.environmentVariable("RESOLVER08_STRESS_CASES").orElse("10000")
-val resolver08StressSeed =
-    providers
-        .gradleProperty("resolver08StressSeed")
-        .orElse(providers.systemProperty("resolver08.stress.seed"))
-        .orElse(providers.environmentVariable("RESOLVER08_STRESS_SEED"))
-
-tasks.register<org.gradle.api.tasks.testing.Test>("resolver08Stress") {
-    group = "verification"
-    description = "Runs the seeded Resolver08 deep stress property."
-    maxHeapSize = "2g"
-    testClassesDirs = sourceSets["test"].output.classesDirs
-    classpath = sourceSets["test"].runtimeClasspath
-    useJUnitPlatform()
-    filter {
-        includeTestsMatching("semantics.resolver08.ResolverStressTest")
-    }
-    outputs.upToDateWhen { false }
-    testLogging {
-        showStandardStreams = true
-    }
-
-    doFirst {
-        val seed =
-            resolver08StressSeed.orNull
-                ?: throw GradleException(
-                    "Set -Presolver08StressSeed=<long>, -Dresolver08.stress.seed=<long>, " +
-                        "or RESOLVER08_STRESS_SEED=<long>",
-                )
-        systemProperty("resolver08.stress.cases", resolver08StressCases.get())
-        systemProperty("resolver08.stress.seed", seed)
-    }
-}
+stressResolverNames.forEach(::registerResolverStressTask)

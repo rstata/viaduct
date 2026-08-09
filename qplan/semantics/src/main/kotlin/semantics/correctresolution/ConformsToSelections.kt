@@ -5,9 +5,8 @@ import model.EngineResult
 import model.ObjectSelectionForest
 import model.SelectionForest
 import model.Value
+import model.applicableGroundSelections
 import model.groundKey
-import model.instantiateBindings
-import model.merge
 
 /**
  * Whether this result contains every cell required by [selections].
@@ -35,7 +34,7 @@ context(world: Assumptions)
 private fun EngineResult.Object.objectConformsToSelections(
     selections: SelectionForest,
 ): Boolean =
-    selections.merge(type).instantiateBindings().byGroundKey().values.all { selection ->
+    selections.applicableGroundSelections(type).byGroundKey().values.all { selection ->
         val key = selection.groundKey()
         key in keys &&
             fetch(key).value.engineResultConformsToSelections(selection.subselections)

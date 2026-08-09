@@ -13,6 +13,7 @@ import semantics.correctresolution.argumentsContainErrorValue
 internal data class SelectionCompletion(
     val selections: SelectionForest,
     val selective: Boolean,
+    val retainCompleteOutput: Boolean = false,
 )
 
 /**
@@ -140,7 +141,13 @@ internal fun Value.Object.resolveKey(
                         resolver
                             .objectFragmentAt(path + key)
                     val input = resolved.materialize(objectFragment)
-                    if (completion.selective) {
+                    if (completion.retainCompleteOutput) {
+                        resolver.completeOutput(
+                            input = input,
+                            arguments = key.arguments,
+                            selections = resolutionSelections,
+                        )
+                    } else if (completion.selective) {
                         resolver(
                             input = input,
                             arguments = key.arguments,
@@ -162,7 +169,9 @@ internal fun Value.Object.resolveKey(
                 fieldValue.resolveValue(
                     path = path + key,
                     resolverDemand = resolutionSelections,
-                    beSelective = completion.selective,
+                    beSelective =
+                        completion.selective &&
+                            !completion.retainCompleteOutput,
                 )
             resolved.write(
                 key,

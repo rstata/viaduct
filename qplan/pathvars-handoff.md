@@ -1,115 +1,115 @@
 # Resolver10 FromObjectPath Handoff
 
-## Purpose
+## Status And Purpose
 
-Add runtime support for `VariableDefinition.FromObjectField`, called **FromObjectPath** here, on top of the completed Resolver09 slot-readiness architecture.
+Resolver09 is implemented at commit `e31ceb9` and remains the readiness-based implementation of Resolver03/08's feature set. Resolver10 adds runtime support for `VariableDefinition.FromObjectField`, called **FromObjectPath** here, without changing Resolver09.
 
-Resolver10 keeps Resolver09's central rule: a created `SlotResolver` has no dependencies and runs immediately. Variables add work to persistent `SlotOrchestrator` scans before an exact slot may be created.
+Read `handoff.md`, `readiness-handoff.md`, and `semantics/src/main/kotlin/semantics/resolver09/Reactor.kt` first. Treat the implemented Resolver09 code as the scheduling baseline and this document as the design boundary for the new variable feature.
 
-Read `readiness-handoff.md` first. This document assumes Resolver09 is implemented, tested, and in place.
+Efficiency is not a goal. Prefer explicit state, repeated scans, and independently checkable predicates over callbacks, subscriptions, or an incremental dependency graph.
 
-## Assumed Resolver09 Contract
+## Implemented Resolver09 Baseline
 
-Resolver10 may rely on:
+Resolver10 should copy and adapt Resolver09's private reactor into `semantics.resolver10`; do not retrofit Resolver09 or force both versions through a shared scheduler abstraction.
 
-- one exact `List<PathComponent>` coordinate per field-resolver instance, ending in its `Value.GroundKey`;
-- a global `Map<List<PathComponent>, Unit>` containing completed resolver coordinates;
-- persistent `SlotOrchestrator` tasks only for OER occurrences with one or more applicable top-level active selections;
-- `SlotOrchestrator.launchResolvers(): Boolean`;
-- naive repeated readiness scans;
-- greedy execution of every created `SlotResolver`;
-- slot completion only after its cell, passive result tree, and fringe orchestrators are published;
-- exact paths containing every list index;
-- write-once OER cells and request-local variable bindings;
-- selective `successorDemand()` and one application per exact slot; and
-- explicit illegal-state diagnostics for quiescent unfinished work and missing producers.
+The reusable runtime shape is:
 
-Do not replace these with cell subscriptions, depth priority, or a dependency-indexing framework while adding variables.
+- every unresolved exact local slot is represented immediately by one stable `SlotResolver`;
+- exact field-resolver-instance identity is a root-relative `List<PathComponent>` ending in its `Value.GroundKey`;
+- `slotResolversByCoordinate: MutableMap<List<PathComponent>, SlotResolver>` is the global registry;
+- each slot owns `isFinished`, initially false;
+- each `SlotOrchestrator` owns `MutableMap<SlotResolver, Set<SlotResolver>>` for its unfinished local candidates;
+- `launchResolvers()` refreshes exact dependencies, queues every ready candidate, removes queued candidates, and returns whether the orchestrator is finished;
+- queued `SlotResolver` tasks have no dependencies and run greedily before the next orchestrator scan;
+- a slot publishes its cell and active fringe orchestrators before setting `isFinished`;
+- quiescent unfinished work is an illegal resolver state caused by a violated invariant or implementation bug, not a deadlock; and
+- `resolver09.Reactor` remains private while `ReactorInstrumentation`, `resolveKey`, exact coordinate rendering, and exact `resolverDependencies` are shared where their preconditions still hold.
 
-## Required Semantics
+There is no `Map<List<PathComponent>, Unit>` completion board. Readiness is tested through stable slot objects in `slotResolversByCoordinate` and their `isFinished` state.
+
+Persist a `SlotOrchestrator` only for a published OER occurrence whose applicable demand contains at least one active field with a resolver, including an active field whose key arguments are still open. Passive-only OERs receive no orchestrator.
+
+## Resolver10 Semantic Contract
 
 For one exact defining resolver occurrence:
 
-1. Its identity is its exact OER-tree `List<PathComponent>` coordinate.
-2. Every variable template is stamped with `containingObjectPath + groundKey`.
-3. `FromArgument` variables bind when that exact occurrence expands.
-4. Each FromObjectPath definition registers one occurrence-owned pending provider read with the same stamp.
-5. The provider path must become ready before its variable binds.
-6. A variable binds once to null, `Value.Error`, a scalar, an enum, or a terminal scalar list.
-7. A selection containing unbound variables remains symbolic and creates no exact slot.
-8. Binding substitution happens before exact-key grouping.
-9. Symbolic selections that converge on one ground key contribute to one slot and one application.
-10. Distinct OER occurrences and list positions retain distinct stamps and slot coordinates.
+1. Its identity and variable stamp are its exact resolver coordinate, `containingObjectPath + groundKey`.
+2. `FromArgument` definitions bind from that exact key when the occurrence expands.
+3. `FromObjectPath` definitions read relative to that occurrence's containing OER and use the same stamp.
+4. A binding is written exactly once through `Assumptions.bind`.
+5. A provider may produce null, `Value.Error`, a scalar, an enum, or a recursively shaped terminal scalar list.
+6. Provider paths cannot cross lists or terminate at objects.
+7. A selection containing an unbound stamped variable remains symbolic and creates no exact coordinate.
+8. Binding substitution and exact-key regrouping happen before resolver application.
+9. Symbolic selections that converge on one ground key contribute to one exact slot and one resolver application.
+10. Recursive occurrences and distinct list positions retain distinct coordinates and stamps.
 
-Provider reads distinguish:
+Provider reading must distinguish `not ready`, `ready with null`, `ready with Value.Error`, and `ready with a non-null ground input`. Null or error at an intermediate path component terminates the read and binds that value.
 
-```text
-not ready
-ready with null
-ready with Value.Error
-ready with a non-null ground input
-```
+## Why Resolver09 Cannot Be Reused Unchanged
 
-An intermediate null binds null, and an intermediate error binds `Value.Error`. Provider paths cannot cross a list or terminate at an object. Their terminal value may be a scalar, enum, scalar list, or nested scalar list.
+Resolver09 calls `closeResolverDemand` once, grounds every local key, constructs all exact slots, and treats the resulting local demand as sealed. FromObjectPath variables invalidate each of those assumptions.
 
-## What Variables Change
+Binding a provider can reveal a newly exact resolver occurrence. Expanding that occurrence can add its stamped fixed object fragment, register more providers, add demand to an already known exact key, or cause two formerly distinct symbolic selections to converge.
 
-Resolver09 seals local demand when an orchestrator is registered. Resolver10 cannot.
+Resolver10 therefore needs two domains:
 
-A FromObjectPath value may be needed to ground a selected resolver key. Resolving its provider can therefore reveal:
+- **symbolic pending demand**, where selections may contain unbound stamped variables and have no exact slot identity; and
+- **exact slot state**, where the field, arguments, coordinate, and stable `SlotResolver` object are known but the slot may still be accumulating demand before it is sealed and launched.
 
-- a new exact resolver occurrence;
-- that occurrence's stamped direct object fragment;
-- more provider definitions;
-- more executable demand; and
-- late equality with an exact key already known.
+Do not represent an open key with a fake coordinate or put it in `slotResolversByCoordinate`.
 
-Resolver10 orchestrators own **open local demand** for OER occurrences with one or more applicable top-level active selections and repeatedly make progress through three distinct transitions. An active selection counts even while its arguments remain open because its registered field coordinate is already known.
+## Monotonic Runtime State
 
-1. **Expand:** a newly ground exact resolver occurrence contributes its fixed input requirements and variable definitions.
-2. **Bind:** a ready provider path writes one stamped variable.
-3. **Launch:** an exact slot whose dependencies and complete output demand are ready becomes a dependency-free `SlotResolver`.
+Each OER-local orchestrator should retain explicit monotonic state:
 
-Expansion is not slot creation. An exact occurrence may expand long before its input is materializable.
+- open applicable demand contributions and their provenance;
+- pending symbolic selections;
+- exact keys discovered so far;
+- exact resolver occurrences expanded so far;
+- pending stamped provider bindings;
+- stable exact slot objects registered for discovered exact keys;
+- accumulated pre-launch selection demand for each exact slot;
+- conservative projection-envelope and sealing state; and
+- launched and finished facts.
 
-## Runtime Carriers
+Collections may grow, or an item may move once to a terminal classification. Never overwrite a binding, expand an occurrence twice, register a second slot at one coordinate, add demand after sealing, launch twice, finish twice, or reopen a sealed slot.
 
-The exact types may follow local conventions:
+An exact Resolver10 slot object may need more pre-launch state than Resolver09's immutable `selection`:
 
 ```kotlin
-data class ResolverOccurrence(
-    val coordinate: List<PathComponent>,
-)
-
-data class PendingSelection(
-    val containingObjectPath: List<PathComponent>,
-    val selection: Selection,
-    val provenance: DemandProvenance,
-)
-
-data class PendingObjectPathBinding(
-    val owner: ResolverOccurrence,
-    val variable: Value.Variable.Stamped,
-    val path: List<Value.Key>,
-)
+coordinate
+accumulatedSelection
+expanded
+sealed
+launched
+isFinished
 ```
 
-An orchestrator additionally retains:
+The exact coordinate is immutable. `accumulatedSelection` may widen only before `sealed`; all launch inputs become immutable at sealing. Register the stable placeholder in `slotResolversByCoordinate` as soon as its key becomes exact so other orchestrators can refer to the same object before it is launchable.
 
-- all open demand contributions;
-- exact resolver occurrences already expanded;
-- exact keys already assigned to slots;
-- pending provider bindings owned by occurrences on that OER;
-- exact-key demand accumulated so far; and
-- projection-envelope/sealing state.
+The object is a stable readiness candidate, not an executing task. Once queued, its `SlotResolver` task has no dependencies and runs immediately under Resolver09's greedy rule.
 
-Every collection grows or moves members monotonically. Do not remove a demand contribution except by recording its terminal classification, overwrite a binding, reopen a created slot, or add demand to a sealed slot.
+## Resolver Occurrence Expansion
 
-Keep provenance for query demand and every defining resolver occurrence. Late-demand and illegal-state diagnostics must identify who contributed each selection.
+When a pending selection becomes exact, merge it by `Value.GroundKey` with every earlier contribution. If the key names a registered resolver and has no argument error, expand that exact occurrence once:
 
-## Model Helpers
+1. Record the exact coordinate as expanded.
+2. Bind its `FromArgument` definitions from the exact key.
+3. Add `resolver.stampedObjectFragment(coordinate)` to the containing orchestrator's open demand.
+4. Register the resolver's stamped FromObjectPath definitions for occurrence-relative reading.
+5. Re-specialize new demand against the concrete containing type.
+6. Continue the local fixed point because these actions may ground more selections.
 
-Add one model-owned helper that stamps provider definitions exactly as `stampedObjectFragment` stamps selection arguments:
+Expansion is not launch. It does not materialize input, apply a resolver, publish a cell, or finish a slot.
+
+Repeated discovery of the same exact key merges subselections into the existing placeholder but does not bind definitions or add the fixed fragment again. Nested resolver templates are stamped only when their own exact occurrence expands.
+
+Argument-error and `__typename` keys do not expand a field resolver or register variable definitions. Their exact slots retain Resolver09's engine-owned behavior once their keys exist and their demand is sealed.
+
+## Stamped Provider Definitions
+
+Add a model-owned helper parallel to `FieldResolver.stampedObjectFragment`:
 
 ```kotlin
 data class StampedObjectPathDefinition(
@@ -122,133 +122,84 @@ fun FieldResolver.stampedObjectPathDefinitions(
 ): List<StampedObjectPathDefinition>
 ```
 
-Add focused variable inspection for:
+`sitePath` is the full exact defining resolver coordinate. The helper stamps both the defined variable and every variable template nested in every provider-path key argument with that same path.
 
-- `OpenArguments`;
-- one selection key;
-- a recursive selection subtree; and
-- a selection forest.
+Add focused inspection operations that return stamped variables used by `OpenArguments`, one key, one recursive selection subtree, and a selection forest. Readiness code should ask whether those variables are bound; do not use `instantiateBindings()` exceptions as ordinary control flow.
 
-Readiness predicates should ask which stamped variables are unbound. Do not call `instantiateBindings()` and catch its exception as normal control flow.
-
-Test that one exact occurrence uses the same stamp in its direct fragment, provider paths, pending selections, and `Assumptions` binding store.
-
-## Symbolic And Exact Slot Identity
-
-An exact resolver coordinate remains a `List<PathComponent>` ending in a `Value.GroundKey`.
-
-Do not put an open `Value.ObjectKey` on the readiness board and do not invent a fake exact coordinate for it. Before grounding, identity belongs to a `PendingSelection` plus its containing OER and provenance.
-
-When every stamped variable in a pending top-level key is bound:
-
-1. Instantiate its arguments.
-2. Form the exact `Value.GroundKey`.
-3. Merge its subselections with every contribution that grounds to that key.
-4. Associate the result with the one exact OER-tree coordinate.
-5. Expand that exact resolver occurrence once if it is registered and error-free.
-
-This separate pending domain is the symbolic coordinate extension that Resolver09 intentionally did not need.
-
-## Resolver Occurrence Expansion
-
-When a newly ground exact registered occurrence expands:
-
-1. Record its exact coordinate as expanded.
-2. Bind its `FromArgument` variables from its exact key.
-3. Add `resolver.stampedObjectFragment(sitePath)` to the orchestrator's open demand.
-4. Add `resolver.stampedObjectPathDefinitions(sitePath)` to pending provider work.
-5. Re-specialize newly added selection contributions against the concrete containing type.
-
-Do not materialize input, apply the resolver, or create its `SlotResolver` yet.
-
-Expand each exact occurrence once even when several symbolic selections converge on it. Repeated discovery merges demand but must not bind its definitions or add its fixed fragment again.
-
-Nested resolver templates receive their own stamps only when their own exact occurrences expand. Do not stamp a transitive fragment with an ancestor's occurrence path or reconstruct aliases later.
+Test stamp coherence directly: the defining variable, its provider path, its stamped object fragment, pending symbolic selections, and `Assumptions` must all use the same occurrence coordinate.
 
 ## Provider Readiness
 
-Provider binding is another naive orchestrator scan.
+A pending provider read owns its defining occurrence coordinate, containing OER path and target object, stamped variable, and stamped key path.
 
-Walk each pending provider path relative to its defining occurrence's containing OER:
+Read the path from the defining occurrence's containing OER:
 
-1. Specialize the next key to the current OER's concrete type.
-2. If its key arguments contain unbound stamped variables, report not ready.
-3. Ground the key.
-4. If it is active, derive its exact OER-tree coordinate.
-5. If that coordinate is absent from the readiness board, report not ready.
-6. If it is present, require its exact cell and continue through its value.
-7. If it is passive, require its value to have been published by the nearest completed authoring slot.
-8. At an intermediate null, return ready with null.
-9. At an intermediate error, return ready with `Value.Error`.
-10. At the terminal, convert the scalar, enum, or terminal list to `Value.Input?`.
+1. Specialize the next path key to the current concrete object type.
+2. If the key contains an unbound stamped variable, report not ready.
+3. Instantiate its arguments and derive the exact coordinate.
+4. For a registered resolver field, look up the stable slot in `slotResolversByCoordinate`; absence or `isFinished == false` means not ready.
+5. After an active slot is finished, require its cell to be published and continue through its value.
+6. For a passive field, require the cell to be present; otherwise report not ready and retain enough information to diagnose a missing producer at quiescence.
+7. Return ready null or ready `Value.Error` immediately when either is encountered.
+8. At the terminal, convert the scalar, enum, or `EngineResult.List` recursively to `Value.Input?`.
+9. Reject an intermediate list, a terminal object, or any value incompatible with the compiled definition.
 
-Provider paths cannot cross lists, so the reader never chooses among list elements. Terminal list conversion remains recursive and positional.
+On readiness, call `Assumptions.bind` once and mark the pending binding complete. An already-bound variable indicates a duplicate transition bug; do not make retries idempotent.
 
-On readiness, call `world.bind` and mark that pending binding complete. An already-bound variable is an error, not an idempotent retry.
+The provider path is structurally contained by the defining resolver's fixed fragment, so its active fields also enter that orchestrator's open demand. Do not invent producer slots from provider definitions separately from demand processing.
 
-If a passive provider cell is absent after all possible authoring slots are complete, report missing producer rather than waiting forever.
+## Orchestrator Fixed Point
 
-## Orchestrator Scan
+Resolver10 keeps `SlotOrchestrator.launchResolvers(): Boolean`, with `true` meaning no work remains for that orchestrator.
 
-Resolver10 extends Resolver09's `launchResolvers(): Boolean`. Before checking exact slot readiness, one call may:
+One call may repeatedly:
 
-1. Ground pending selections whose bindings are now available.
-2. Merge exact-key contributions.
-3. Expand newly exact resolver occurrences.
-4. Bind provider paths whose predecessor slots are complete.
-5. Update conservative projection envelopes and seals.
-6. Create every exact slot whose predecessor slots are complete and whose demand is sealed.
+1. specialize open contributions to the concrete OER without requiring all arguments to be ground;
+2. ground every pending selection whose stamped variables are now bound;
+3. regroup newly ground selections by exact key and widen existing pre-launch placeholders;
+4. expand newly exact resolver occurrences;
+5. bind every provider path currently ready;
+6. update conservative projection envelopes and seal exact slots whose demand can no longer grow;
+7. refresh exact Resolver09-style dependencies for sealed, fully ground candidates; and
+8. queue every sealed candidate whose dependency slot objects are finished.
 
-Repeat from the top whenever any scan made progress, even if no slot was created. Binding one variable or expanding one occurrence is progress.
+Repeat the local scan whenever any transition makes progress. A binding, expansion, merge, seal, registration, or launch all count as progress.
 
-The Boolean retains Resolver09's meaning: `true` means the orchestrator has no remaining work and should be removed; `false` means it is still waiting. Detect global progress by comparing monotonic expansion, binding, sealing, launch, or readiness-board counts across the pass.
-
-The event loop may be:
+One orchestrator's binding may unblock an orchestrator that was scanned earlier in the same global pass. Track a monotonic global progress version or equivalent snapshot, while preserving the Boolean return value solely as “this orchestrator is finished”:
 
 ```kotlin
 while (true) {
-    drainCreatedSlotResolvers()
-    val progressBefore = progressSnapshot()
+    drainSlotResolverQueue()
+    val before = progressVersion
 
-    val iterator = slotOrchestrators.iterator()
+    val iterator = unfinishedOrchestrators.iterator()
     while (iterator.hasNext()) {
-        if (iterator.next().launchResolvers()) {
-            iterator.remove()
-        }
+        if (iterator.next().launchResolvers()) iterator.remove()
     }
 
     if (slotResolverQueue.isNotEmpty()) continue
-    if (slotOrchestrators.isEmpty()) return result
+    if (unfinishedOrchestrators.isEmpty()) return validatedResult()
+    if (progressVersion != before) continue
 
-    if (progressSnapshot() == progressBefore) {
-        failWithIllegalResolverStateReport()
-    }
+    throw IllegalResolverStateException(illegalStateReport())
 }
 ```
 
-No callbacks, subscriptions, incremental dependency graph, or efficient worklist is required.
+No callback subscriptions, waiter index, priority queue, or incremental dependency graph is required.
 
-## Slot Creation
+## Exact Dependency Reuse
 
-An exact Resolver10 `SlotResolver` may be created only when:
+Keep `semantics.resolverDependencies` exact. It remains useful after a candidate's key and stamped object fragment are fully ground.
 
-- its key is ground;
-- its exact occurrence has expanded;
-- every stamped variable needed by its object fragment is bound;
-- Resolver09's recursive predecessor-slot readiness predicate is ready;
-- its destination cell is absent;
-- its exact coordinate is neither already launched nor present on the readiness board; and
-- its selective output demand is sealed.
+Do not weaken it into an open-demand operation unless implementation evidence makes that unavoidable. Prefer a Resolver10-local gate or overload that waits until the candidate fragment is ground, then calls the existing walk and translates returned coordinates through `slotResolversByCoordinate.getValue`.
 
-Once created, it has no dependencies and runs under Resolver09's greedy rule.
-
-Argument-error and `__typename` slots remain immediately launchable once their exact keys exist. They do not register resolver variables or apply a field resolver.
+After successful resolution, reuse `ResolverDependencyOracle` only after every activated occurrence's bindings are established; its `FieldResolver.objectFragmentAt` currently grounds eagerly.
 
 ## Demand Sealing
 
-Readiness does not solve producer completeness.
+Readiness of input producers does not prove that an exact slot has received all output demand. Resolver10 must solve producer-demand sealing before retaining Resolver09's selective output policy.
 
-Consider:
+The first required counterexample is:
 
 ```text
 B provides a variable used in C's key
@@ -256,9 +207,9 @@ C's fixed object fragment adds demand to A
 A and B are otherwise independent
 ```
 
-If A's slot is created before B binds the variable and C expands, C's demand arrives too late.
+Launching A merely because its current dependencies are ready can omit the demand revealed when B binds and C expands.
 
-Late equality is the second decisive case:
+The second required counterexample is late equality:
 
 ```text
 A(arg: "x") { forProvider }
@@ -266,178 +217,178 @@ A(arg: $value) { forConsumer }
 $value later binds to "x"
 ```
 
-The one exact A slot must receive both subselections before creation. A second application or post-application widening is invalid.
+Both contributions must reach one exact A slot before its single application.
 
-Resolver10 therefore needs two demand representations:
+Keep executable demand separate from a conservative **projection envelope**:
 
-- **Executable demand** retains open arguments and eventually creates exact slots.
-- **Projection envelopes** conservatively describe all producer-owned output a possible exact slot may need before every symbolic key is ground.
+- executable demand retains symbolic arguments until they bind and determines exact occurrences;
+- the projection envelope may over-approximate producer-owned output needed by every bounded future contributor;
+- open behavioral boundaries may remain symbolic in the envelope because projection stops at them;
+- passive producer-owned fields must be ground before they are read from an output value; and
+- an exact slot seals only when no pending or conservatively bounded contributor can widen the demand supplied to that application.
 
-Do not overload one `SelectionForest` value with both meanings.
+Over-projection is acceptable for the first correct implementation. Under-projection, post-launch widening, and a second application are not.
 
-The recommended first envelope is conservative by structural field branch:
+Use the finite canonical registry, query demand, fixed resolver fragments, type guards, and branch-order information to compute a conservative bound. Existing branch-order validation is useful evidence but is not itself a sealing proof: ordinary execution order and demand-discovery order are distinct.
 
-1. Bound every possible contributor using the finite canonical registry, fixed object fragments, query demand, and type guards.
-2. Preserve passive paths and behavioral boundaries without requiring every boundary argument to be ground.
-3. Union the subselection envelopes of symbolic same-field occurrences into every exact key they may later equal.
-4. Allow executable keys to instantiate only after bindings arrive.
-5. Seal an exact slot only when no bounded contributor can enlarge its supplied projection envelope.
+If an accepted registry shape cannot produce a finite conservative envelope, reject that shape during registry construction with provenance rather than launch a selectively under-supplied resolver.
 
-Over-projection is acceptable. Under-projection is not.
+## Eager-Grounding Boundaries
 
-The existing branch-order validation does not by itself prove sealing. Ordinary execution may require `A -> C`, while demand discovery requires `C expansion -> A seal`; these are different phases. If sealing needs a validated contributor relation, expose it from the canonical registry rather than reaching into test-fixture internals.
+Audit these operations together rather than patching around their exceptions:
 
-If the accepted registry domain cannot provide a finite conservative envelope for a shape, reject that shape during registry construction with provenance. Do not run a selectively under-supplied slot.
-
-## Output Traversal
-
-Audit these eager grounding boundaries together:
-
-- `SelectionForest.successorDemand`;
-- `SelectionForest.successorBoundaryDemand`;
+- `closeResolverDemand`;
+- `applicableGroundSelections`;
+- `FieldResolver.objectFragmentAt`;
+- `SelectionForest.successorDemand` and `successorBoundaryDemand`;
 - `Value.Output?.snipToDemand`; and
 - `Value.Output?.resolveValue`.
 
-The required split is:
+Resolver09 can call them only because its local demand is already ground. Resolver10 needs open-aware local closure and projection behavior.
 
-- passive producer-owned fields must be ground before reading them from a value;
-- an open behavioral boundary may contribute projection shape before its arguments are ground;
-- an open boundary creates pending executable demand, not an exact slot;
-- exact downstream stamping waits for the real containing OER and ground key; and
-- list positions always enter the exact path.
+Preserve these distinctions:
 
-Keep projection-only open boundaries separate from executable selections so they cannot accidentally create or stamp a resolver occurrence.
+- specializing and merging a selection forest does not require ground arguments;
+- creating an exact slot does require a ground key;
+- materializing passive input requires ground keys;
+- projection may carry an open behavioral boundary without creating a runtime occurrence;
+- executable occurrence stamping waits for the real exact coordinate; and
+- list indices enter paths only from actual runtime values.
 
-Resolver10 slot completion retains Resolver09's meaning: the cell and passive result tree are published, and every fringe OER with one or more active demanded fields has an orchestrator, before the slot inserts its coordinate into the readiness board. Passive-only OERs receive no orchestrator.
+Do not let projection-only symbolic boundaries create slots, bind variables, or acquire occurrence stamps.
 
-## Failure And Diagnostics
+## Slot Completion And Orchestrator Creation
 
-A quiescent unfinished Resolver10 state is illegal under the accepted-world invariants and indicates a composition or implementation bug. Its failure report should include:
+Resolver10 slot execution should retain Resolver09's publication order:
+
+1. materialize the now-ground input;
+2. apply the resolver once with its sealed demand;
+3. project and construct the passive result tree;
+4. allocate mutable child OERs;
+5. publish the exact cell once;
+6. register orchestrators for fringe OERs having at least one active demanded field; and
+7. set `isFinished` last.
+
+Completion is proof that the cell, passive result shape, and required active fringe orchestrators are visible. It is not merely proof that the resolver function returned.
+
+## Illegal-State Diagnostics
+
+Queue quiescence with unfinished work is an illegal state under the accepted-world invariants. Report:
 
 - unbound variables and their defining occurrence coordinates;
-- pending provider paths and the slot coordinate currently blocking each;
+- pending provider paths and the exact active coordinate or passive cell blocking each;
 - pending symbolic selections and their unbound variables;
-- exact expanded occurrences not yet launchable;
-- predecessor slot requirements;
-- unsealed exact slots and their possible demand contributors;
-- absent producer slots;
-- missing passive values; and
-- readiness-board/OER disagreement.
+- exact occurrences not yet expanded;
+- registered placeholders that are unsealed or unlaunched;
+- possible contributors preventing sealing;
+- exact predecessor slots and their finished state;
+- absent producer slots or passive cells; and
+- any variable or resolver dependency cycle visible in the remaining state.
 
-Distinguish the observed shape of the illegal state, including variable cycles, resolver dependency cycles, missing producers, and incomplete sealing. These are bug diagnostics, not normal execution outcomes. Queue emptiness alone is never success.
+Classify the observed shape, such as variable cycle, dependency cycle, missing producer structure, or incomplete sealing. These are diagnostics for a composition or implementation bug, not normal outcomes and not a multithreaded deadlock.
+
+Queue emptiness alone is never success. Successful completion also requires no unfinished orchestrators, no pending symbolic selections or bindings, every registered slot finished, and every sealed OER demand published.
 
 ## Correctness Evidence
 
-`correctResolution` remains an extensional final-tree judgment. It does not prove provider provenance, sealing, or one-shot application.
+`correctResolution` remains an extensional final-tree judgment. It does not prove provider provenance, exact-once binding, demand sealing, or one application per occurrence.
 
-Retain a separate execution witness recording:
+Extend execution observations to retain:
 
-- each exact slot's defining coordinate;
-- its expansion, creation, application, and completion counts;
-- the demand envelope supplied to its application;
-- every binding's defining occurrence, provider path, and value; and
-- demand-contribution provenance.
+- each exact slot coordinate and its registration, expansion, sealing, launch, and completion counts;
+- the sealed demand supplied to each resolver application;
+- each binding's defining occurrence, provider path, and value; and
+- demand-contribution provenance sufficient to explain late equality and sealing.
 
-Check that every exact slot applies once after sealing, every binding equals the value read from its occurrence-relative provider path, and every consumed producer-owned value was covered by the producing application.
+The implementation and test oracle must not share provider-reading code.
 
-## Implementation Sequence
+Add an independent final-result binding oracle. It should locate activated resolver occurrences, reconstruct each FromObjectPath definition from the registry, stamp it at the occurrence path, read the provider path from the completed result, and compare that value with `world.binding(stampedVariable)`. It must cover null, error, list, recursive, and list-position occurrences.
 
-1. Add variable-inspection and stamped-provider helpers with stamp-coherence tests.
-2. Add pending symbolic selections and exact occurrence expansion without provider binding.
-3. Add naive provider-path readiness and terminal conversion.
-4. Validate binding behavior first with complete-output resolver applications so projection cannot hide provider bugs.
-5. Define projection envelopes and sealing before enabling selective FromObjectPath execution.
-6. Pass the late-demand and late-equality counterexamples.
-7. Make output traversal tolerate projection-only open boundaries.
-8. Enable Resolver10's selective policy.
-9. Add the static FromObjectPath resolver contract alongside the FromArgument contract.
-10. Enable FromObjectPath generation in the lightweight Resolver10 CI property suite.
-11. Add fair-schedule, witness, mutation, and mixed-variable generated coverage.
-12. Add the dedicated fixed-seed Resolver10 stress suite with both variable kinds enabled.
+After final binding validation, Resolver10 can reuse Resolver09's independent dependency oracle to compare applied exact dependency coordinates.
 
-The complete-output step is scaffolding, not completion. Resolver10 is complete only with selective one-shot applications.
+## Static Test Contract
 
-## Deterministic Test Matrix
+Add `ObjectFragmentFromObjectPathResolverContract` beside `ObjectFragmentFromArgumentResolverContract`. Resolver10's contract test implements all Resolver09 contracts plus this new one; do not move FromObjectPath cases into an implementation-specific reactor test.
 
-Cover:
+The static contract should cover:
 
-- direct scalar and enum providers;
-- nested provider paths;
+- a direct sibling scalar or enum provider;
+- a nested provider path;
 - terminal scalar and nested scalar lists;
 - nullable and error intermediates;
-- provider keys depending on another variable;
-- providers with their own resolver prerequisites;
+- a provider with active resolver prerequisites;
+- provider-key arguments depending on another variable;
 - uses nested in input objects and lists;
-- multiple independent and dependent variables;
-- repeated defining keys on one object;
-- recursive defining occurrences;
-- defining occurrences in distinct list positions;
-- abstract provider paths;
-- fixture-lowered bridge prerequisites;
+- FromObjectPath and `FromArgument` in one defining fragment;
+- repeated defining keys and exact-key convergence;
+- recursive defining occurrences and distinct list-position stamps;
+- abstract provider paths and fixture-lowered bridge prerequisites;
 - argument-error keys after substitution;
-- symbolic keys remaining distinct;
-- symbolic keys converging with disjoint demand;
-- the `B -> C -> A` late-demand shape;
-- null/error preventing descendant slot creation;
-- strict second-bind, second-expansion, second-slot, and post-seal failures;
-- illegal-state diagnostics for a variable cycle; and
-- stable, reverse, and seeded-random orchestrator scans producing equal results and application sets.
+- the `B -> C -> A` late-demand case;
+- late equality with disjoint subselections; and
+- exact-once binding, expansion, slot registration, sealing, and application.
 
-For repeated and list cases, assert exact stamps as well as final values. For selective cases, assert demand supplied to the producing slot rather than only final OER contents.
-
-Generated profiles must count generated FromObjectPath definitions, activated defining occurrences, successful provider bindings, null/error bindings, list and recursive stamps, and late-equality candidates. A green profile must not silently exercise only `FromArgument`.
-
-## Static Test Contracts
-
-Add a reusable `ObjectFragmentFromObjectPathResolverContract` alongside `ObjectFragmentFromArgumentResolverContract`, and make Resolver10's static contract test implement both. The new contract covers object fragments whose arguments use path-defined variables; the existing contract continues to establish argument-defined behavior.
-
-The static FromObjectPath contract should cover:
-
-- a direct provider and sibling consumer;
-- a nested provider path;
-- null and error absorption;
-- a terminal scalar list;
-- a provider with resolver prerequisites;
-- a use nested in an input object or list;
-- dependent path and argument variables in one fragment;
-- repeated defining occurrences;
-- distinct list-position stamps;
-- exact-key convergence after binding; and
-- one application per resulting exact slot.
-
-Keep the contract independent of Resolver10 implementation details so later resolver versions can reuse it. Assert final output, exact bindings, resolver application identities, and supplied selective demand where relevant.
+Assert final output, exact bindings, application identities, and supplied selective demand where relevant.
 
 ## CI Property Tests
 
-FromObjectPath generation already exists in arbitrary registry construction but is not enabled by semantic resolver tests. Enabling and activating it in the lightweight property tests that run in CI is a required part of Resolver10.
+FromObjectPath generation already exists, but current semantic resolver profiles deliberately set `ResolverVariablesEnabled` to false. Resolver10 needs new generated infrastructure because it adds a new feature.
 
-Add an `ObjectFragmentFromObjectPathGeneratedResolverContract`. Its configuration must enable both variable kinds:
+Add `ObjectFragmentFromObjectPathGeneratedResolverContract` with an isolating path-only profile:
+
+```kotlin
+ResolverVariablesEnabled to true
+ResolverFromArgumentVariablesEnabled to false
+```
+
+Keep `ObjectFragmentFromArgumentGeneratedResolverContract` unchanged and implemented by Resolver10. Add a mixed-variable interaction profile with:
 
 ```kotlin
 ResolverVariablesEnabled to true
 ResolverFromArgumentVariablesEnabled to true
 ```
 
-Do not replace `ObjectFragmentFromArgumentGeneratedResolverContract`. Resolver10 should implement both generated contracts and an interaction profile in which path-defined and argument-defined variables occur in the same generated worlds.
+Do not enable path variables in existing Resolver01-09 profiles.
 
-The CI property suite must assert positive counts for:
+`RegistryFeatures` currently has `variableCount` and `fromArgumentVariableCount` but no explicit path-variable count. Add `fromObjectFieldVariableCount`, a set of FromObjectPath owner fields, and an activation helper such as `sourceResolverHasFromObjectFieldVariables`.
 
-- generated FromObjectPath definitions;
-- activated defining resolver occurrences;
-- successful path bindings;
-- generated and activated `FromArgument` definitions;
-- cases activating both variable kinds together; and
-- nested, repeated, recursive, list, null/error, or abstract provider features across the configured batch.
+The path-only profile must fail if it generates no path definitions or activates no path-variable-bearing resolver occurrence. The mixed profile must prove generation and coactivation of both variable kinds rather than merely enabling both flags.
 
-Preserve schema/registry/query coordinates, seed, case number, bindings, readiness board, and application witness on failure. A passing run that generated path variables but activated none is a failed profile.
+Record schema/registry/query coordinates, seed, case number, final bindings, applied dependencies, and application witness on failure.
 
 ## Stress Test
 
-Add a dedicated fixed-seed Resolver10 stress test. It must turn on FromObjectPath generation with `ResolverVariablesEnabled`, keep `ResolverFromArgumentVariablesEnabled`, and retain deep dependency-heavy object fragments, lists, abstract types, nodes, nulls, and errors.
+Resolver09 correctly reused the shared `DeepResolverStressContract`; no new feature infrastructure was needed there. Resolver10 does need new stress infrastructure because path variables have never been exercised by semantic resolver stress.
 
-The stress test should use an explicit replayable seed and case-count interface and report attempted cases, verified cases, applications, generated and activated definitions of both kinds, successful provider bindings, list and recursive stamps, null/error bindings, node-loader interactions, and late-equality candidates.
+Do not silently change Resolver03/08/09 stress behavior. Add overridable stress configuration and feature assertions with defaults preserving their current `ResolverVariablesEnabled = false`, or add a Resolver10-specific stress contract.
 
-Run the static contracts and lightweight CI property suite before the stress test. Stress volume is additional finite evidence, not a substitute for static contracts or the focused late-demand and late-equality cases.
+Resolver10 stress must enable both:
+
+```kotlin
+ResolverVariablesEnabled to true
+ResolverFromArgumentVariablesEnabled to true
+```
+
+Retain deep dependency-heavy fragments, lists, abstract types, nodes, nulls, errors, and replayable seed/case controls. Report and positively assert generated and activated definitions of both kinds, successful provider bindings, recursive and list-position stamps, null/error bindings, node-loader interactions, and late-equality candidates.
+
+Add a dedicated `resolver10Stress` Gradle task and keep stress opt-in. Static and lightweight CI properties remain required; stress volume is additional finite evidence.
+
+## Implementation Sequence
+
+1. Copy Resolver09 into `resolver10` and keep exact-slot scheduling behavior unchanged for the existing feature contracts.
+2. Add variable inspection and stamped provider-definition helpers with stamp-coherence tests.
+3. Introduce symbolic pending selections, stable exact placeholders, and one-time occurrence expansion.
+4. Add naive provider-path readiness and terminal conversion.
+5. Add the independent final-result binding oracle and pass focused complete-output provider cases first.
+6. Define open-aware projection envelopes and exact slot sealing.
+7. Pass the late-demand and late-equality counterexamples with one selective application per exact slot.
+8. Split eager-ground output traversal from projection-only open boundaries.
+9. Restore Resolver09's selective output policy and dependency-oracle validation.
+10. Add the reusable static FromObjectPath contract.
+11. Add path-only and mixed-variable CI generated contracts with generation and activation guards.
+12. Add dedicated Resolver10 mixed-variable stress infrastructure.
+
+The complete-output phase is scaffolding, not Resolver10 completion.
 
 ## Non-Goals
 
@@ -445,28 +396,13 @@ Run the static contracts and lightweight CI property suite before the stress tes
 - `fromQueryField`, `@parent`, or `VariablesProvider`;
 - callback subscriptions or efficient dependency indexing;
 - concurrent JVM execution;
-- mutable variable identity;
 - bindings stored in OERs;
-- reopening a created or completed slot;
-- post-application widening;
-- repeated resolver application; and
-- treating complete outputs as selective correctness evidence.
+- mutable variable identity;
+- fake coordinates for symbolic selections;
+- reopening a sealed or launched slot;
+- post-application widening; and
+- repeated resolver application.
 
 ## Completion Criteria
 
-Resolver10 is complete when:
-
-- every defining occurrence has coherent exact stamps;
-- providers bind null, error, scalar, enum, and terminal-list values correctly;
-- symbolic selections create no exact slot before grounding;
-- exact occurrences expand once and exact-key convergence precedes slot creation;
-- every created slot remains dependency-free;
-- every selective slot receives a sealed conservative producer envelope;
-- no binding, slot, cell, or seal is written twice or reopened;
-- recursive and list occurrences remain distinct;
-- fair tested schedules produce the same result and application set;
-- quiescent unfinished and missing-producer states fail explicitly as illegal resolver states;
-- Resolver10 has static contracts for both FromObjectPath and `FromArgument` object fragments;
-- lightweight CI property tests enable and activate both variable kinds;
-- a dedicated fixed-seed Resolver10 stress test enables FromObjectPath and `FromArgument` generation; and
-- `./gradlew check --console=plain` passes before fixed-seed stress is treated as additional evidence.
+Resolver10 is complete when every defining occurrence has coherent exact stamps; provider reads correctly bind null, error, scalar, enum, and terminal-list values; symbolic selections create no exact slot before grounding; exact-key convergence happens before sealing and launch; exact slots remain stable and queued tasks remain dependency-free; every selective application receives a sealed conservative demand envelope; no binding, expansion, slot, seal, launch, finish, or cell is written twice; recursive and list occurrences remain distinct; quiescent unfinished states fail with useful illegal-state diagnostics; the independent binding and dependency oracles pass; Resolver10 implements all Resolver09 contracts plus static FromObjectPath coverage; path-only and mixed-variable CI profiles generate and activate their promised features; dedicated stress enables both variable kinds; and `./gradlew check --console=plain` passes before stress is treated as additional evidence.

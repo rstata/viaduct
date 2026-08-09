@@ -8,6 +8,7 @@ import model.instantiateBindings
 import model.objectKey
 import model.selectionForestOf
 import model.substituteTemplates
+import model.usedVariables
 
 /**
  * Extends this output demand with every encountered successor resolver's transitive input demand.
@@ -69,6 +70,35 @@ fun SelectionForest.successorBoundaryDemand(): SelectionForest =
         selectionForestOf(requested) + selection.successorInputBoundaries()
     }
 
+/**
+ * Extends output demand through every statically ground successor boundary.
+ *
+ * Variable-bearing key branches are left for their exact runtime occurrences to stamp and expand.
+ * Variable-free provider branches remain visible so complete-output traversal can create their
+ * nested resolver orchestrators.
+ */
+context(world: Assumptions)
+fun SelectionForest.successorGroundBoundaryDemand(): SelectionForest =
+    flatMap { selection ->
+        val requested =
+            if (selection.key.arguments.usedVariables().isEmpty()) {
+                selectionForestOf(
+                    Selection.of(
+                        key = selection.key,
+                        possibleTypes = selection.possibleTypes,
+                        subselections =
+                            selection.subselections
+                                .successorGroundBoundaryDemand(),
+                    ),
+                )
+            } else {
+                selectionForestOf()
+            }
+
+        requested +
+            selection.successorGroundInputBoundaries()
+    }
+
 context(world: Assumptions)
 private fun Selection.successorInputBoundaries(): SelectionForest =
     possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
@@ -90,6 +120,37 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                     .objectFragmentWithFromArguments(key.arguments)
                     .boundarySkeleton()
                     .successorBoundaryDemand()
+        }
+    }
+
+context(world: Assumptions)
+private fun Selection.successorGroundInputBoundaries(): SelectionForest =
+    possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
+        val specializedKey = objectKey(possibleType)
+        if (specializedKey.field !in world.resolverRegistry) {
+            return@fold demand
+        }
+        val resolver = world.resolverRegistry.resolver(specializedKey.field)
+        val openArguments = specializedKey.arguments
+        val hasVariables = openArguments.usedVariables().isNotEmpty()
+        val arguments =
+            if (hasVariables) {
+                null
+            } else {
+                openArguments.instantiateBindings()
+            }
+        if (arguments?.containsErrorValue() == true) {
+            demand
+        } else {
+            val objectFragment =
+                if (arguments == null) {
+                    resolver.objectFragment
+                } else {
+                    resolver.objectFragmentWithFromArguments(arguments)
+                }
+            demand +
+                objectFragment
+                    .successorGroundBoundaryDemand()
         }
     }
 

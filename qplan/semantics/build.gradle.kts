@@ -25,7 +25,7 @@ kotlin {
     jvmToolchain(21)
 }
 
-val stressResolverNames = listOf("resolver03", "resolver08", "resolver09")
+val stressResolverNames = listOf("resolver03", "resolver08", "resolver09", "resolver10")
 
 tasks.test {
     useJUnitPlatform()
@@ -72,6 +72,10 @@ val resolverPropertyProfiles =
             "generated object fragment worlds without variables resolve correctly",
         "object-fragment-from-argument" to
             "generated object fragment worlds with fromArgument resolve correctly",
+        "object-fragment-from-object-field" to
+            "generated object fragment worlds with fromObjectField resolve correctly",
+        "mixed-variables" to
+            "generated mixed resolver variable worlds resolve correctly",
         "feature-interaction" to "generated full feature interactions resolve correctly",
         "resolver03-construction-witness" to
             "generated construction witness is exact minimal and permutation invariant",

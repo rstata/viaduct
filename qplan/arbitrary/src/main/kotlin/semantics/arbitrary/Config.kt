@@ -45,6 +45,7 @@ private fun weight(value: Double): String? =
 object SchemaObjectCount : ConfigKey<IntRange>(1..4, ::range)
 object ObjectFieldCount : ConfigKey<IntRange>(1..4, ::range)
 object QueryFieldCount : ConfigKey<IntRange>(1..3, ::range)
+object RootQueryFieldCount : ConfigKey<IntRange>(0..0, ::range)
 object FieldArgumentWeight : ConfigKey<Double>(0.3, ::weight)
 object ImplementationArgumentDefaultWeight : ConfigKey<Double>(0.3, ::weight)
 object InputObjectCount : ConfigKey<IntRange>(0..2, ::range)

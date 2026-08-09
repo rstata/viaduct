@@ -284,6 +284,13 @@ private fun OpenValue?.mapVariableTemplates(
 internal fun OpenArguments.variables(): Set<Value.Variable> =
     fieldExpressions().values.flatMapTo(linkedSetOf()) { value -> value.variables() }
 
+/** Returns the occurrence-specific variables used anywhere in this argument tuple. */
+fun OpenArguments.stampedVariables(): Set<Value.Variable.Stamped> =
+    variables().filterIsInstanceTo(linkedSetOf())
+
+/** Returns every variable expression used anywhere in this argument tuple. */
+fun OpenArguments.usedVariables(): Set<Value.Variable> = variables()
+
 private fun OpenValue?.variables(): Set<Value.Variable> =
     when (this) {
         is Value.Variable -> setOf(this)

@@ -187,6 +187,32 @@ fun ObjectSelection.groundKey(): Value.GroundKey =
     key as? Value.GroundKey
         ?: error("Object selection key contains open arguments: $key")
 
+/** Returns the occurrence-specific variables used by this key's arguments. */
+fun Value.Key.stampedVariables(): Set<Value.Variable.Stamped> =
+    arguments.stampedVariables()
+
+/** Returns the occurrence-specific variables used recursively by this selection. */
+fun Selection.stampedVariables(): Set<Value.Variable.Stamped> =
+    key.stampedVariables() + subselections.stampedVariables()
+
+/** Returns the occurrence-specific variables used recursively by this forest. */
+fun SelectionForest.stampedVariables(): Set<Value.Variable.Stamped> {
+    val variables = linkedSetOf<Value.Variable.Stamped>()
+    forEach { selection -> variables += selection.stampedVariables() }
+    return variables
+}
+
+/** Returns every variable expression used recursively by this selection. */
+fun Selection.usedVariables(): Set<Value.Variable> =
+    key.arguments.usedVariables() + subselections.usedVariables()
+
+/** Returns every variable expression used recursively by this forest. */
+fun SelectionForest.usedVariables(): Set<Value.Variable> {
+    val variables = linkedSetOf<Value.Variable>()
+    forEach { selection -> variables += selection.usedVariables() }
+    return variables
+}
+
 /**
  * Specializes this selection's field coordinate to concrete parent [type].
  *

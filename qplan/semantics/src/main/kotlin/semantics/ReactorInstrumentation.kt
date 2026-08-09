@@ -55,6 +55,25 @@ internal sealed interface ReactorEvent {
         val coordinate: List<PathComponent>,
         val dependencyCoordinates: Set<List<PathComponent>>,
     ) : ReactorEvent
+
+    data class SlotRegistered(
+        val coordinate: List<PathComponent>,
+    ) : ReactorEvent
+
+    data class ResolverOccurrenceExpanded(
+        val coordinate: List<PathComponent>,
+    ) : ReactorEvent
+
+    data class SlotSealed(
+        val coordinate: List<PathComponent>,
+    ) : ReactorEvent
+
+    data class ObjectPathVariableBound(
+        val ownerCoordinate: List<PathComponent>,
+        val variable: Value.Variable.Stamped,
+        val providerPath: List<Value.Key>,
+        val value: Value.Input?,
+    ) : ReactorEvent
 }
 
 internal typealias ReactorEventObserver = (ReactorEvent) -> Unit
@@ -86,6 +105,10 @@ internal class ReactorInstrumentation(
     private val finishedResolvers = mutableSetOf<List<PathComponent>>()
     private val appliedResolverDependencies =
         mutableMapOf<List<PathComponent>, Set<List<PathComponent>>>()
+    private val registeredSlots = mutableSetOf<List<PathComponent>>()
+    private val expandedOccurrences = mutableSetOf<List<PathComponent>>()
+    private val sealedSlots = mutableSetOf<List<PathComponent>>()
+    private val boundObjectPathVariables = mutableSetOf<Value.Variable.Stamped>()
 
     fun orchestratorLaunched(
         path: List<PathComponent>,
@@ -184,6 +207,49 @@ internal class ReactorInstrumentation(
         )
     }
 
+    fun slotRegistered(coordinate: List<PathComponent>) {
+        check(registeredSlots.add(coordinate)) {
+            "Slot registered more than once: ${coordinate.renderReactorPath()}"
+        }
+        eventObserver(ReactorEvent.SlotRegistered(coordinate))
+    }
+
+    fun resolverOccurrenceExpanded(coordinate: List<PathComponent>) {
+        check(expandedOccurrences.add(coordinate)) {
+            "Resolver occurrence expanded more than once: ${coordinate.renderReactorPath()}"
+        }
+        eventObserver(ReactorEvent.ResolverOccurrenceExpanded(coordinate))
+    }
+
+    fun slotSealed(coordinate: List<PathComponent>) {
+        check(coordinate in registeredSlots) {
+            "Slot sealed before registration: ${coordinate.renderReactorPath()}"
+        }
+        check(sealedSlots.add(coordinate)) {
+            "Slot sealed more than once: ${coordinate.renderReactorPath()}"
+        }
+        eventObserver(ReactorEvent.SlotSealed(coordinate))
+    }
+
+    fun objectPathVariableBound(
+        ownerCoordinate: List<PathComponent>,
+        variable: Value.Variable.Stamped,
+        providerPath: List<Value.Key>,
+        value: Value.Input?,
+    ) {
+        check(boundObjectPathVariables.add(variable)) {
+            "Object-path variable bound more than once: $variable"
+        }
+        eventObserver(
+            ReactorEvent.ObjectPathVariableBound(
+                ownerCoordinate = ownerCoordinate,
+                variable = variable,
+                providerPath = providerPath,
+                value = value,
+            ),
+        )
+    }
+
     fun resolutionFinished() {
         check(startedOrchestrators == launchedOrchestrators.keys) {
             "Started orchestrators do not equal launched orchestrators"
@@ -196,6 +262,9 @@ internal class ReactorInstrumentation(
         }
         check(finishedResolvers == launchedResolvers.keys) {
             "Finished resolver coordinates do not equal launched coordinates"
+        }
+        check(registeredSlots == sealedSlots) {
+            "Registered slots do not equal sealed slots"
         }
         orchestratorResults.forEach { result ->
             val missing = result.closedDemand.groundKeys() - result.target.keys

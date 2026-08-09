@@ -10,12 +10,12 @@ import model.applicableGroundSelections
 /**
  * Materializes the object value selected by [selections] from this result.
  *
- * This operation is defined when this result contains every cell selected by [selections] and every
- * selection applicable at an object visited by this operation contains no [Value.Variable] in its
- * key arguments.
+ * This operation is defined when this result contains every value promise selected by [selections]
+ * and every selection applicable at an object visited by this operation contains no
+ * [Value.Variable] in its key arguments.
  */
 context(world: Assumptions)
-fun EngineResult.Object.materialize(selections: ObjectSelectionForest): Value.Object {
+suspend fun EngineResult.Object.materialize(selections: ObjectSelectionForest): Value.Object {
     require(type == selections.type) {
         "Selection type ${selections.type.typeName} does not match result type ${type.typeName}"
     }
@@ -23,29 +23,28 @@ fun EngineResult.Object.materialize(selections: ObjectSelectionForest): Value.Ob
 }
 
 context(world: Assumptions)
-private fun EngineResult.Object.materializeSelectedObjectValue(
+private suspend fun EngineResult.Object.materializeSelectedObjectValue(
     selections: SelectionForest,
 ): Value.Object =
     materializeSelectedObjectValue(selections.applicableGroundSelections(type))
 
 context(world: Assumptions)
-private fun EngineResult.Object.materializeSelectedObjectValue(
+private suspend fun EngineResult.Object.materializeSelectedObjectValue(
     selections: ObjectSelectionForest,
 ): Value.Object {
-    val selectedFields =
-        selections
-            .byGroundKey()
-            .mapValues { (key, selection) ->
-                fetch(key).value.materializeEngineResultValue(
-                    selection.subselections,
-                )
-            }
+    val selectedFields = linkedMapOf<Value.GroundKey, Value.Output?>()
+    selections.byGroundKey().forEach { (key, selection) ->
+        selectedFields[key] =
+            getValue(key).await().materializeEngineResultValue(
+                selection.subselections,
+            )
+    }
 
     return Value.Object.of(type, selectedFields)
 }
 
 context(world: Assumptions)
-private fun EngineResult?.materializeEngineResultValue(
+private suspend fun EngineResult?.materializeEngineResultValue(
     selections: SelectionForest,
 ): Value.Output? =
     when (this) {
@@ -56,9 +55,17 @@ private fun EngineResult?.materializeEngineResultValue(
         is EngineResult.List ->
             Value.OutputList.of(
                 typeExpr = typeExpr,
-                values =
-                    map { cell ->
-                        cell.value.materializeEngineResultValue(selections)
-                    },
+                values = materializeValues(selections),
             )
     }
+
+context(world: Assumptions)
+private suspend fun EngineResult.List.materializeValues(
+    selections: SelectionForest,
+): kotlin.collections.List<Value.Output?> {
+    val materialized = mutableListOf<Value.Output?>()
+    indices.forEach { index ->
+        materialized += get(index).materializeEngineResultValue(selections)
+    }
+    return materialized
+}

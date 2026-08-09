@@ -5,7 +5,7 @@ import model.invariants.conformsToSchemaType
 /**
  * One step in an exact path through an engine-result tree.
  *
- * A [Value.GroundKey] selects an object cell, while a [Value.ListIndex] selects a list cell.
+ * A [Value.GroundKey] selects an object field, while a [Value.ListIndex] selects a list element.
  * Equality is structural within each variant.
  */
 sealed interface PathComponent
@@ -396,7 +396,7 @@ sealed interface Value {
     }
 
     /**
-     * A concrete-object key whose arguments are ground and which can therefore select an OER cell.
+     * A concrete-object key whose arguments are ground and which can therefore select an OER field.
      */
     sealed interface GroundKey : ObjectKey, PathComponent {
         override val arguments: Arguments
@@ -419,7 +419,7 @@ sealed interface Value {
         }
     }
 
-    /** A non-negative position selecting one cell of an engine-result list. */
+    /** A non-negative position selecting one element of an engine-result list. */
     sealed interface ListIndex : PathComponent {
         val index: kotlin.Int
 

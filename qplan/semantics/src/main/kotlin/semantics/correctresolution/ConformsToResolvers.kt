@@ -1,5 +1,6 @@
 package semantics.correctresolution
 
+import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import model.PathComponent
@@ -17,7 +18,7 @@ import semantics.materialize
  * their own resolvers.
  *
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
- * cell is present. It observes cell values but never cell check components.
+ * value is present. It observes values but never field or type checks.
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToResolvers(): Boolean =
@@ -29,7 +30,7 @@ private fun EngineResult.Object.objectConformsToResolvers(
 ): Boolean {
     val registry = world.resolverRegistry
     return keys.all { key ->
-        val value = fetch(key).value
+        val value = getValue(key).get()
         val fieldResolverConforms =
             if (
                 key.arguments.argumentsContainErrorValue() ||
@@ -39,10 +40,12 @@ private fun EngineResult.Object.objectConformsToResolvers(
             } else {
                 val resolver = registry.resolver(key.field)
                 val input =
-                    materialize(
-                        resolver
-                            .objectFragmentAt(path + key),
-                    )
+                    runBlocking {
+                        materialize(
+                            resolver
+                                .objectFragmentAt(path + key),
+                        )
+                    }
                 val resolverValue = resolver(input, key.arguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }
@@ -64,7 +67,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
         is EngineResult.Object -> objectConformsToResolvers(path)
         is EngineResult.List ->
             indices.all { index ->
-                get(index).value.engineResultConformsToResolvers(
+                get(index).engineResultConformsToResolvers(
                     path + Value.ListIndex.of(index),
                 )
             }
@@ -92,7 +95,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
             resolverValue is Value.OutputList &&
                 size == resolverValue.values.size &&
                 indices.all { index ->
-                    get(index).value.engineResultConformsToResolverValue(
+                    get(index).engineResultConformsToResolverValue(
                         resolverValue.values[index],
                     )
                 }
@@ -111,7 +114,7 @@ private fun EngineResult.Object.objectFieldsConformToResolverValue(
         } else if (!resolverValue.fieldValues.containsKey(key)) {
             false
         } else {
-            fetch(key).value.engineResultConformsToResolverValue(
+            getValue(key).get().engineResultConformsToResolverValue(
                 resolverValue.fieldValues.getValue(key),
             )
         }

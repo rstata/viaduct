@@ -1,0 +1,75 @@
+package model
+
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import model.testing.TestWorld
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+
+class PromiseTest {
+    @Test
+    fun `completed promise returns its value and rejects completion`() =
+        runBlocking {
+            val promise = Promise.of("ready")
+
+            assertEquals("ready", promise.get())
+            assertEquals("ready", promise.await())
+            assertEquals(null, promise.getDeferredStamp())
+            assertFailsWith<IllegalStateException> {
+                promise.complete("again")
+            }
+        }
+
+    @Test
+    fun `deferred promise throws from get and resumes await after completion`() =
+        runBlocking {
+            val promise = Promise.ofDeferred<String>("writer")
+            val awaited = async { promise.await() }
+
+            assertFailsWith<UncompletedPromiseException> {
+                promise.get()
+            }
+            assertEquals("writer", promise.getDeferredStamp())
+            assertFalse(awaited.isCompleted)
+
+            promise.complete("ready")
+
+            assertEquals("ready", awaited.await())
+            assertEquals("ready", promise.get())
+            assertFailsWith<IllegalStateException> {
+                promise.complete("again")
+            }
+        }
+
+    @Test
+    fun `field promise validates before completion`() {
+        val schema =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query { required: String! }
+                    """.trimIndent(),
+                ).schema
+        val field =
+            Value.GroundKey.of(
+                schema.objectField("Query", "required"),
+                emptyMap(),
+            )
+        val promise =
+            EngineResult.Object
+                .of(schema.query, mutable = true)
+                .createValuePromise(field, "writer")
+
+        assertFailsWith<IllegalArgumentException> {
+            promise.complete(null)
+        }
+        assertFailsWith<UncompletedPromiseException> {
+            promise.get()
+        }
+
+        promise.complete(Value.String.of("ready"))
+        assertEquals(Value.String.of("ready"), promise.get())
+    }
+}

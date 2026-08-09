@@ -1,10 +1,11 @@
 package semantics.contract
 
+import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import semantics.arbitrary.ResolverApplicationIdentity
-import semantics.arbitrary.RegisteredResolverCell
-import semantics.arbitrary.registeredResolverCells
+import semantics.arbitrary.RegisteredResolverOccurrence
+import semantics.arbitrary.registeredResolverOccurrences
 import semantics.arbitrary.resolutionFingerprint
 import semantics.correctresolution.conformsToSelections
 import semantics.materialize
@@ -15,7 +16,7 @@ import semantics.materialize
 context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> =
-    registeredResolverCells(world.resolverRegistry)
+    registeredResolverOccurrences(world.resolverRegistry)
         .map { cell ->
             val field =
                 world.schema.objectField(
@@ -31,16 +32,18 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
             ResolverApplicationIdentity(
                 key = cell.applicationKey,
                 inputFingerprint =
-                    cell.containingObject
-                        .materialize(fragment)
-                        .resolutionFingerprint(),
+                    runBlocking {
+                        cell.containingObject
+                            .materialize(fragment)
+                            .resolutionFingerprint()
+                    },
             )
         }.groupingBy { identity -> identity }
         .eachCount()
 
 context(world: Assumptions)
-fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredResolverCell> =
-    registeredResolverCells(world.resolverRegistry)
+fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolverOccurrence> =
+    registeredResolverOccurrences(world.resolverRegistry)
         .filter { cell ->
             val field =
                 world.schema.objectField(

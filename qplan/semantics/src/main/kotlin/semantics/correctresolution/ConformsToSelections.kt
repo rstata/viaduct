@@ -9,14 +9,15 @@ import model.applicableGroundSelections
 import model.groundKey
 
 /**
- * Whether this result contains every cell required by [selections].
+ * Whether this result contains every value required by [selections].
  *
  * At every object occurrence, selections are normalized against the runtime concrete object type
  * and current variable bindings before lookup. Null and error values stop recursive requirements.
- * Cells not required by [selections] are permitted.
+ * Values not required by [selections] are permitted.
  *
  * This predicate trusts the selections' post-validation schema compatibility and the engine-result
- * carrier invariants established by its factories. It observes values, but not check components.
+ * carrier invariants established by its factories. It observes values, but not field or type
+ * checks.
  *
  * This operation is defined only when applicable selection keys contain no unbound variables.
  */
@@ -37,7 +38,7 @@ private fun EngineResult.Object.objectConformsToSelections(
     selections.applicableGroundSelections(type).byGroundKey().values.all { selection ->
         val key = selection.groundKey()
         key in keys &&
-            fetch(key).value.engineResultConformsToSelections(selection.subselections)
+            getValue(key).get().engineResultConformsToSelections(selection.subselections)
     }
 
 context(world: Assumptions)
@@ -52,5 +53,5 @@ private fun EngineResult?.engineResultConformsToSelections(
 
         is EngineResult.Object -> objectConformsToSelections(selections)
         is EngineResult.List ->
-            all { cell -> cell.value.engineResultConformsToSelections(selections) }
+            all { value -> value.engineResultConformsToSelections(selections) }
     }

@@ -8,12 +8,12 @@ import model.Value
 /**
  * Whether every resolver activated by this result has its required input in the same result tree.
  *
- * A present field cell activates its registered field resolver unless its arguments contain an
+ * A present field value activates its registered field resolver unless its arguments contain an
  * error. The containing object must then conform to that resolver's object fragment. Recursing
  * through every present value makes these requirements transitive while preserving the type guards
  * interpreted by [conformsToSelections].
  *
- * This predicate observes cell presence and values, but never cell check components.
+ * This predicate observes value presence and content, but never field or type checks.
  */
 context(world: Assumptions)
 fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
@@ -36,7 +36,7 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
                 )
 
         fieldResolverDemandIsClosed &&
-            fetch(key).value.engineResultIsClosedUnderResolverDemand(path + key)
+            getValue(key).get().engineResultIsClosedUnderResolverDemand(path + key)
     }
 }
 
@@ -53,7 +53,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
         is EngineResult.Object -> objectIsClosedUnderResolverDemand(path)
         is EngineResult.List ->
             indices.all { index ->
-                get(index).value.engineResultIsClosedUnderResolverDemand(
+                get(index).engineResultIsClosedUnderResolverDemand(
                     path + Value.ListIndex.of(index),
                 )
             }

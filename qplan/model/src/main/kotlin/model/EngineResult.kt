@@ -6,96 +6,103 @@ import model.invariants.conformsToSchemaType
  * A finite, well-founded field-resolution result.
  *
  * Engine-result equality is structural over the documented properties. Schema definitions within
- * those properties use the canonical equality documented by [Schema].
+ * those properties use the canonical equality documented by [Schema]. Equality of a result
+ * containing an uncompleted [Promise] is undefined.
  */
 sealed interface EngineResult {
     /**
-     * One resolved value and its retained checker result.
+     * A finite object result whose value, field-check, and type-check promises are write-once.
      *
-     * A cell is used both for object fields and list elements. [check] remains uninterpreted by the
-     * current correctness judgment.
-     */
-    sealed interface Cell {
-        val value: EngineResult?
-        val check: Value.Boolean
-
-        /** The canonical cell whose value and check are both [Value.Error]. */
-        data object Error : Cell {
-            override val value: EngineResult = Value.Error
-            override val check: Value.Boolean = Value.Error
-        }
-
-        companion object {
-            fun of(
-                value: EngineResult?,
-                check: Value.Boolean = Value.Boolean.of(true),
-            ): Cell = CellImpl(value, check)
-        }
-    }
-
-    /**
-     * A finite object result whose [cells] are exact, alias-free schema coordinates.
-     *
-     * Every present cell key belongs to [type], contains no variables, and has a value that
-     * conforms recursively to the field's type expression. A mutable object may gain absent cells
-     * through [write], but a present cell never changes.
+     * Every present value key belongs to [type], contains no variables, and completes only with a
+     * value conforming to the field's type expression. A mutable object may gain absent promises,
+     * but a present promise is never replaced.
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
 
-        /** A stable snapshot of the currently written cells. */
-        val cells: Map<Value.GroundKey, Cell>
-
         val keys: Set<Value.GroundKey>
-            get() = cells.keys
 
-        /** Whether [key] has been written. */
-        fun isSet(key: Value.GroundKey): Boolean = key in cells
+        fun isValueSet(field: Value.GroundKey): Boolean = field in keys
 
-        /** @throws MissingFieldException when [key] is absent */
-        fun fetch(key: Value.GroundKey): Cell =
-            cells[key]
-                ?: throw MissingFieldException(type.typeName, key.field.fieldName)
+        /** @throws MissingFieldException when [field] has no value promise */
+        fun getValue(field: Value.GroundKey): Promise<EngineResult?>
 
-        /**
-         * Writes the first and only cell for [key].
-         *
-         * @throws IllegalStateException when this object is immutable or [key] is already written
-         * @throws IllegalArgumentException when [key] or [cell] violates an object-result invariant
-         */
-        fun write(
-            key: Value.GroundKey,
-            cell: Cell,
+        /** @throws MissingFieldException when [field] has no field-check promise */
+        fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean>
+
+        /** @throws IllegalStateException when this object has no type-check promise */
+        fun getTypeCheck(): Promise<Value.Boolean>
+
+        fun setValue(
+            field: Value.GroundKey,
+            value: EngineResult?,
         )
+
+        /** Sets whether the field check accepts access. */
+        fun setFieldCheck(
+            field: Value.GroundKey,
+            accept: Value.Boolean,
+        )
+
+        /** Sets whether the type check accepts access. */
+        fun setTypeCheck(accept: Value.Boolean)
+
+        fun createValuePromise(
+            field: Value.GroundKey,
+            deferredStamp: Any? = null,
+        ): Promise<EngineResult?>
+
+        fun createFieldCheckPromise(
+            field: Value.GroundKey,
+            deferredStamp: Any? = null,
+        ): Promise<Value.Boolean>
+
+        fun createTypeCheckPromise(
+            deferredStamp: Any? = null,
+        ): Promise<Value.Boolean>
 
         companion object {
             /**
              * ### Invariant: object-engine-result-factory-schema-conformance
              *
-             * Every result's present cells satisfy `result.conformsToSchema()` in its reasoning
-             * world. When [mutable] is false, every [Object.write] throws. When it is true, each
-             * absent key may be written once. A mutable result must not be used as a hash key while
-             * writes may continue because structural equality and hashing observe current cells.
+             * Every initially present value satisfies its field's schema type. When [mutable] is
+             * false, every set and promise-creation operation throws. When it is true, each absent
+             * value, field check, and type check may be installed once. A mutable result must not
+             * be used as a hash key while writes or promise completions may continue because
+             * structural equality and hashing observe current promises.
              */
             fun of(
                 type: Schema.ObjectType,
-                cells: Map<Value.GroundKey, Cell>,
+                values: Map<Value.GroundKey, EngineResult?> = emptyMap(),
+                fieldChecks: Map<Value.GroundKey, Value.Boolean> =
+                    values.keys.associateWith { Value.Boolean.of(true) },
+                typeCheck: Value.Boolean? = Value.Boolean.of(true),
                 mutable: Boolean = false,
             ): Object {
-                cells.forEach { (key, cell) ->
-                    validateObjectCell(type, key, cell)
+                values.forEach { (field, value) ->
+                    validateObjectField(type, field)
+                    validateObjectValue(field, value)
                 }
-                return ObjectResultImpl(type, cells, mutable)
+                fieldChecks.keys.forEach { field ->
+                    validateObjectField(type, field)
+                }
+                return ObjectResultImpl(
+                    type = type,
+                    values = values,
+                    fieldChecks = fieldChecks,
+                    typeCheck = typeCheck,
+                    mutable = mutable,
+                )
             }
         }
     }
 
     /**
-     * A typed list result whose elements retain checker results.
+     * A typed list result.
      *
      * [typeExpr] is the expected type of each element, including its nullability and nested lists.
-     * This type exposes only the finite positional operations used by engine-result reasoning; it
-     * is not a Kotlin [kotlin.collections.List].
+     * Type-check state belongs to each object element's [Object], while the containing field's
+     * field-check state belongs to its containing object.
      */
     sealed interface List : EngineResult {
         val typeExpr: TypeExpr<Schema.OutputType>
@@ -103,15 +110,15 @@ sealed interface EngineResult {
         val indices: IntRange
             get() = 0 until size
 
-        operator fun get(index: Int): Cell
+        operator fun get(index: Int): EngineResult?
 
-        fun <R> map(transform: (Cell) -> R): kotlin.collections.List<R> =
+        fun <R> map(transform: (EngineResult?) -> R): kotlin.collections.List<R> =
             indices.map { index -> transform(get(index)) }
 
-        fun all(predicate: (Cell) -> Boolean): Boolean =
+        fun all(predicate: (EngineResult?) -> Boolean): Boolean =
             indices.all { index -> predicate(get(index)) }
 
-        fun forEachIndexed(action: (index: Int, Cell) -> Unit) {
+        fun forEachIndexed(action: (index: Int, EngineResult?) -> Unit) {
             indices.forEach { index -> action(index, get(index)) }
         }
 
@@ -123,12 +130,12 @@ sealed interface EngineResult {
              */
             fun of(
                 typeExpr: TypeExpr<Schema.OutputType>,
-                cells: kotlin.collections.List<Cell>,
+                values: kotlin.collections.List<EngineResult?>,
             ): List {
-                require(cells.all { it.value.conformsToSchemaType(typeExpr) }) {
+                require(values.all { it.conformsToSchemaType(typeExpr) }) {
                     "List engine result contains an element incompatible with $typeExpr"
                 }
-                return ListResultImpl(typeExpr, cells)
+                return ListResultImpl(typeExpr, values)
             }
         }
     }
@@ -175,27 +182,30 @@ fun EngineResult?.union(other: EngineResult?): EngineResult? {
 }
 
 /**
- * Returns the object result containing the union of every cell present in either operand.
+ * Returns the object result containing the union of every value and check present in either
+ * operand.
  *
- * A cell present in both operands is unioned componentwise. A cell present in only one operand is
- * retained unchanged.
- *
- * @throws IllegalArgumentException when the object types differ or any shared cell has no union
+ * @throws IllegalArgumentException when the object types differ or any shared fact has no union
  */
 fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
     require(type == other.type) {
         "Cannot union object engine results of different types"
     }
 
-    val unionCells =
-        (keys + other.keys).associateWith { key ->
-            when {
-                key !in keys -> other.fetch(key)
-                key !in other.keys -> fetch(key)
-                else -> fetch(key).union(other.fetch(key))
-            }
-        }
-    return EngineResult.Object.of(type, unionCells)
+    val left = implementation
+    val right = other.implementation
+    return EngineResult.Object.of(
+        type = type,
+        values = unionMaps(left.completedValues, right.completedValues, EngineResult?::union),
+        fieldChecks =
+            unionMaps(left.completedFieldChecks, right.completedFieldChecks) { first, second ->
+                require(first == second) {
+                    "Cannot union object engine results with unequal field checks"
+                }
+                first
+            },
+        typeCheck = unionTypeChecks(left.completedTypeCheck, right.completedTypeCheck),
+    )
 }
 
 /**
@@ -204,7 +214,7 @@ fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
  * The operands must have equal element type expressions and lengths.
  *
  * @throws IllegalArgumentException when the type expressions or lengths differ, or when any
- * corresponding cells have no union
+ * corresponding values have no union
  */
 fun EngineResult.List.union(other: EngineResult.List): EngineResult.List {
     require(typeExpr == other.typeExpr) {
@@ -215,92 +225,192 @@ fun EngineResult.List.union(other: EngineResult.List): EngineResult.List {
     }
     return EngineResult.List.of(
         typeExpr = typeExpr,
-        cells = indices.map { index -> this[index].union(other[index]) },
+        values = indices.map { index -> this[index].union(other[index]) },
     )
 }
 
-private data class CellImpl(
-    override val value: EngineResult?,
-    override val check: Value.Boolean,
-) : EngineResult.Cell
-
 private class ObjectResultImpl(
     override val type: Schema.ObjectType,
-    cells: Map<Value.GroundKey, EngineResult.Cell>,
+    values: Map<Value.GroundKey, EngineResult?>,
+    fieldChecks: Map<Value.GroundKey, Value.Boolean>,
+    typeCheck: Value.Boolean?,
     private val mutable: Boolean,
 ) : EngineResult.Object {
-    private val cellStore = OnceStore(cells)
+    private val valueStore = promiseStore(values)
+    private val fieldCheckStore = promiseStore(fieldChecks)
+    private val typeCheckStore = promiseStore(typeCheck?.let { mapOf(Unit to it) }.orEmpty())
 
-    override val cells: Map<Value.GroundKey, EngineResult.Cell>
-        get() = cellStore.snapshot()
+    override val keys: Set<Value.GroundKey>
+        get() = valueStore.snapshot().keys
 
-    override fun isSet(key: Value.GroundKey): Boolean =
-        cellStore.isSet(key)
+    override fun isValueSet(field: Value.GroundKey): Boolean = valueStore.isSet(field)
 
-    override fun fetch(key: Value.GroundKey): EngineResult.Cell {
-        if (!cellStore.isSet(key)) {
-            throw MissingFieldException(type.typeName, key.field.fieldName)
+    override fun getValue(field: Value.GroundKey): Promise<EngineResult?> =
+        valueStore.readOrNull(field)
+            ?: throw MissingFieldException(type.typeName, field.field.fieldName)
+
+    override fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean> =
+        fieldCheckStore.readOrNull(field)
+            ?: throw MissingFieldException(type.typeName, field.field.fieldName)
+
+    override fun getTypeCheck(): Promise<Value.Boolean> =
+        checkNotNull(typeCheckStore.readOrNull(Unit)) {
+            "${type.typeName} result has no type check"
         }
-        return cellStore.read(key)
-    }
 
-    override fun write(
-        key: Value.GroundKey,
-        cell: EngineResult.Cell,
+    override fun setValue(
+        field: Value.GroundKey,
+        value: EngineResult?,
     ) {
-        check(mutable) {
-            "${type.typeName} result is immutable"
-        }
-        validateObjectCell(type, key, cell)
-        cellStore.write(key, cell)
+        checkWritable(field)
+        validateObjectValue(field, value)
+        valueStore.set(field, value)
     }
+
+    override fun setFieldCheck(
+        field: Value.GroundKey,
+        accept: Value.Boolean,
+    ) {
+        checkWritable(field)
+        fieldCheckStore.set(field, accept)
+    }
+
+    override fun setTypeCheck(accept: Value.Boolean) {
+        checkMutable()
+        typeCheckStore.set(Unit, accept)
+    }
+
+    override fun createValuePromise(
+        field: Value.GroundKey,
+        deferredStamp: Any?,
+    ): Promise<EngineResult?> {
+        checkWritable(field)
+        return valueStore.create(field, deferredStamp) { value ->
+            validateObjectValue(field, value)
+        }
+    }
+
+    override fun createFieldCheckPromise(
+        field: Value.GroundKey,
+        deferredStamp: Any?,
+    ): Promise<Value.Boolean> {
+        checkWritable(field)
+        return fieldCheckStore.create(field, deferredStamp)
+    }
+
+    override fun createTypeCheckPromise(deferredStamp: Any?): Promise<Value.Boolean> {
+        checkMutable()
+        return typeCheckStore.create(Unit, deferredStamp)
+    }
+
+    val completedValues: Map<Value.GroundKey, EngineResult?> get() = valueStore.completedValues()
+
+    val completedFieldChecks: Map<Value.GroundKey, Value.Boolean> get() =
+        fieldCheckStore.completedValues()
+
+    val completedTypeCheck: Value.Boolean? get() = typeCheckStore.readOrNull(Unit)?.get()
+
+    private fun checkWritable(field: Value.GroundKey) {
+        checkMutable()
+        validateObjectField(type, field)
+    }
+
+    private fun checkMutable() = check(mutable) { "${type.typeName} result is immutable" }
 
     override fun equals(other: Any?): Boolean =
         this === other ||
-            (
-                other is EngineResult.Object &&
-                    type == other.type &&
-                    cells == other.cells
-            )
+            (other is ObjectResultImpl && completedState() == other.completedState())
 
-    override fun hashCode(): Int =
-        31 * type.hashCode() + cells.hashCode()
+    override fun hashCode(): Int = completedState().hashCode()
+
+    private fun completedState(): List<Any?> =
+        listOf(type, completedValues, completedFieldChecks, completedTypeCheck)
 }
 
 private data class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
-    private val cells: kotlin.collections.List<EngineResult.Cell>,
+    private val values: kotlin.collections.List<EngineResult?>,
 ) : EngineResult.List {
     override val size: Int
-        get() = cells.size
+        get() = values.size
 
-    override fun get(index: Int): EngineResult.Cell = cells[index]
+    override fun get(index: Int): EngineResult? = values[index]
 }
 
-private fun EngineResult.Cell.union(other: EngineResult.Cell): EngineResult.Cell {
-    require(check == other.check) { "Cannot union engine-result cells with unequal checks" }
-    return EngineResult.Cell.of(
-        value = value.union(other.value),
-        check = check,
-    )
-}
+private val EngineResult.Object.implementation: ObjectResultImpl
+    get() = this as ObjectResultImpl
 
-private fun validateObjectCell(
-    type: Schema.ObjectType,
-    key: Value.GroundKey,
-    cell: EngineResult.Cell,
-) {
-    require(key.field.containingType == type) {
-        "${type.typeName} result contains a field owned by another type"
-    }
-    if (key.arguments.containsErrorValue()) {
-        require(cell.value == Value.Error && cell.check == Value.Error) {
-            "A key containing an argument error must contain an error value and check"
+private fun <K, V> unionMaps(
+    first: Map<K, V>,
+    second: Map<K, V>,
+    union: (V, V) -> V,
+): Map<K, V> =
+    (first.keys + second.keys).associateWith { key ->
+        when {
+            key !in first -> second.getValue(key)
+            key !in second -> first.getValue(key)
+            else -> union(first.getValue(key), second.getValue(key))
         }
     }
-    require(cell.value.conformsToSchemaType(key.field.typeExpr)) {
-        "${type.typeName}/${key.field.fieldName} result does not conform to " +
-            key.field.typeExpr
+
+private fun unionTypeChecks(
+    first: Value.Boolean?,
+    second: Value.Boolean?,
+): Value.Boolean? =
+    when {
+        first == null -> second
+        second == null -> first
+        else ->
+            first.also {
+                require(first == second) {
+                    "Cannot union object engine results with unequal type checks"
+                }
+            }
+    }
+
+private fun <K : Any, V> promiseStore(values: Map<K, V>): OnceStore<K, Promise<V>> =
+    OnceStore(values.mapValues { (_, value) -> Promise.of(value) })
+
+private fun <K : Any, V> OnceStore<K, Promise<V>>.readOrNull(key: K): Promise<V>? =
+    if (isSet(key)) read(key) else null
+
+private fun <K : Any, V> OnceStore<K, Promise<V>>.set(
+    key: K,
+    value: V,
+) = write(key, Promise.of(value))
+
+private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
+    key: K,
+    deferredStamp: Any?,
+    validate: (V) -> Unit = {},
+): Promise<V> =
+    Promise
+        .ofDeferred(deferredStamp, validate)
+        .also { write(key, it) }
+
+private fun <K : Any, V> OnceStore<K, Promise<V>>.completedValues(): Map<K, V> =
+    snapshot().mapValues { (_, promise) -> promise.get() }
+
+private fun validateObjectField(
+    type: Schema.ObjectType,
+    field: Value.GroundKey,
+): Unit =
+    require(field.field.containingType == type) {
+        "${type.typeName} result contains a field owned by another type"
+    }
+
+private fun validateObjectValue(
+    field: Value.GroundKey,
+    value: EngineResult?,
+) {
+    if (field.arguments.containsErrorValue()) {
+        require(value == Value.Error) {
+            "A key containing an argument error must contain an error value"
+        }
+    }
+    require(value.conformsToSchemaType(field.field.typeExpr)) {
+        "${field.field.containingType.typeName}/${field.field.fieldName} result does not conform to " +
+            field.field.typeExpr
     }
 }
 

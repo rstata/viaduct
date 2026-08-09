@@ -150,23 +150,23 @@ data class ResolutionWitness(
 }
 
 /**
- * One registered resolver-bearing cell found by traversing a returned result independently of the
- * resolver constructors and correctness predicates. [occurrencePath] is the exact root-to-cell OER
- * path: [Value.GroundKey] components select object fields and [Value.ListIndex] components select
- * list elements, distinguishing equal fields at different list positions.
+ * One registered resolver occurrence found by traversing a returned result independently of the
+ * resolver constructors and correctness predicates. [occurrencePath] is the exact root-to-field
+ * OER path: [Value.GroundKey] components select object fields and [Value.ListIndex] components
+ * select list elements, distinguishing equal fields at different list positions.
  */
-data class RegisteredResolverCell(
+data class RegisteredResolverOccurrence(
     val applicationKey: ResolverApplicationKey,
     val canonicalField: FieldCoordinate,
     val occurrencePath: List<PathComponent>,
     val containingObject: EngineResult.Object,
 )
 
-fun EngineResult?.registeredResolverCells(
+fun EngineResult?.registeredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
-): List<RegisteredResolverCell> {
-    val result = mutableListOf<RegisteredResolverCell>()
+): List<RegisteredResolverOccurrence> {
+    val result = mutableListOf<RegisteredResolverOccurrence>()
     var visitedNodes = 0
 
     fun visit(
@@ -191,7 +191,7 @@ fun EngineResult?.registeredResolverCells(
                         val fieldPath = path + key
                         if (key.field in registry && !key.arguments.containsErrorValue()) {
                             result +=
-                                RegisteredResolverCell(
+                                RegisteredResolverOccurrence(
                                     applicationKey =
                                         ResolverApplicationKey(
                                             field = key.field.fieldCoordinate(),
@@ -202,14 +202,14 @@ fun EngineResult?.registeredResolverCells(
                                     containingObject = value,
                                 )
                         }
-                        visit(value.fetch(key).value, fieldPath)
+                        visit(value.getValue(key).get(), fieldPath)
                     }
             }
 
             is EngineResult.List ->
-                value.forEachIndexed { index, cell ->
+                value.forEachIndexed { index, element ->
                     visit(
-                        cell.value,
+                        element,
                         path + Value.ListIndex.of(index),
                     )
                 }
@@ -224,12 +224,12 @@ fun EngineResult?.registeredResolverCells(
     return result
 }
 
-fun EngineResult?.registeredResolverCellCounts(
+fun EngineResult?.registeredResolverOccurrenceCounts(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): Map<ResolverApplicationKey, Int> =
-    registeredResolverCells(registry, bounds)
-        .groupingBy(RegisteredResolverCell::applicationKey)
+    registeredResolverOccurrences(registry, bounds)
+        .groupingBy(RegisteredResolverOccurrence::applicationKey)
         .eachCount()
 
 private fun Value.Arguments.containsErrorValue(): Boolean =

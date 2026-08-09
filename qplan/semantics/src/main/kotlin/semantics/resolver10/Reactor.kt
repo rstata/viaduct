@@ -243,7 +243,7 @@ internal class Reactor private constructor(
                     )
                 }
 
-            if (!target.isSet(key) && slotResolversByCoordinate[path + key] == null) {
+            if (!target.isValueSet(key) && slotResolversByCoordinate[path + key] == null) {
                 if (key.reactorSlotKind() == ReactorSlotKind.PASSIVE) {
                     publishPassive(selection)
                 } else {
@@ -262,10 +262,10 @@ internal class Reactor private constructor(
             }
 
             val coordinate = path + key
-            if (target.isSet(key) && !selection.subselections.isEmpty()) {
+            if (target.isValueSet(key) && !selection.subselections.isEmpty()) {
                 propagateDemand(
                     path = coordinate,
-                    value = target.fetch(key).value,
+                    value = target.getValue(key).get(),
                     demand = selection.subselections,
                 )
             }
@@ -304,7 +304,8 @@ internal class Reactor private constructor(
                             completion.selective &&
                                 !completion.retainCompleteOutput,
                     )
-            target.write(key, EngineResult.Cell.of(resolvedValue.engineResult))
+            target.setValue(key, resolvedValue.engineResult)
+            target.setFieldCheck(key, Value.Boolean.of(true))
             resolvedValue.objectOccurrences.forEach { objectResolution ->
                 launchOrchestrator(
                     path = objectResolution.path,
@@ -385,10 +386,10 @@ internal class Reactor private constructor(
                     }
                     ReactorSlotKind.ENGINE_OWNED,
                     ReactorSlotKind.PASSIVE,
-                    -> if (!currentObject.isSet(key)) return ProviderRead.NotReady
+                    -> if (!currentObject.isValueSet(key)) return ProviderRead.NotReady
                 }
-                if (!currentObject.isSet(key)) return ProviderRead.NotReady
-                val value = currentObject.fetch(key).value
+                if (!currentObject.isValueSet(key)) return ProviderRead.NotReady
+                val value = currentObject.getValue(key).get()
                 if (value == null) return ProviderRead.Ready(null)
                 if (value == Value.Error) return ProviderRead.Ready(Value.Error)
                 if (index == pending.definition.path.lastIndex) {
@@ -498,7 +499,7 @@ internal class Reactor private constructor(
             if (!selection.subselections.isEmpty()) {
                 propagateDemand(
                     path = path + key,
-                    value = target.fetch(key).value,
+                    value = target.getValue(key).get(),
                     demand = selection.subselections,
                 )
             }
@@ -691,10 +692,10 @@ internal class Reactor private constructor(
                     .addDemand(demand)
 
             is EngineResult.List ->
-                value.forEachIndexed { index, cell ->
+                value.forEachIndexed { index, element ->
                     propagateDemand(
                         path = path + Value.ListIndex.of(index),
-                        value = cell.value,
+                        value = element,
                         demand = demand,
                     )
                 }
@@ -840,8 +841,8 @@ private fun EngineResult.List.toProviderInputList(): Value.InputList {
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
         values =
-            map { cell ->
-                cell.value?.toProviderInput()
+            map { value ->
+                value?.toProviderInput()
             },
     )
 }

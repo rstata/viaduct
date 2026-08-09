@@ -34,7 +34,7 @@ data class PendingSelection(
 The exact carriers may change, but their boundaries should not:
 
 - `ObjectId` identifies one concrete OER occurrence, including distinct list positions and recursive occurrences.
-- A concrete obligation targets one exact `(ObjectId, Value.GroundKey)` cell.
+- A concrete obligation targets one exact `(ObjectId, Value.GroundKey)` field value.
 - A pending selection may contain open arguments and cannot enter an OER until substitution produces a `Value.GroundKey`.
 - Request-local variable bindings remain in `Assumptions` unless a later design gives a compelling reason to relocate them.
 
@@ -42,12 +42,12 @@ The exact carriers may change, but their boundaries should not:
 
 Mutable execution state follows one rule: facts move from unset to set and never change.
 
-- An OER cell changes atomically from absent to one validated `EngineResult.Cell`.
+- An OER value, field check, or type check changes atomically from absent to one immediate or deferred `Promise`; each deferred promise completes once.
 - A variable changes from unbound to one stored nullable input value.
 - An obligation changes from pending to claimed or completed without being recreated.
-- A published child OER retains stable identity while its own absent cells are filled.
+- A published child OER retains stable identity while its own absent promises are installed and completed.
 
-No transition replaces a cell, changes a binding, widens an application record, or rebuilds an ancestor. The quiescent mutable OER tree already has ordinary `EngineResult` shape, so a separate freeze step is not intrinsically required.
+No transition replaces a promise, changes a binding, widens an application record, or rebuilds an ancestor. The quiescent mutable OER tree already has ordinary `EngineResult` shape, so a separate freeze step is not intrinsically required.
 
 ## Demand Collection
 
@@ -61,39 +61,39 @@ The collector must account for:
 - open variable-bearing selections at boundaries where exact arguments are not yet available;
 - possible convergence between a currently concrete key and a key that becomes equal after substitution.
 
-Late equality is the central unresolved problem. If `field(arg: "literal")` and `field(arg: $value)` can become the same exact cell, their complete output demands must be combined before the one application. Scheduling cannot repair an under-projected result afterward.
+Late equality is the central unresolved problem. If `field(arg: "literal")` and `field(arg: $value)` can become the same exact field, their complete output demands must be combined before the one application. Scheduling cannot repair an under-projected result afterward.
 
 The contract is:
 
-> Demand collection conservatively seals the complete output envelope for every possible exact producer cell; scheduling later determines which envelopes instantiate and become runnable.
+> Demand collection conservatively seals the complete output envelope for every possible exact producer field; scheduling later determines which envelopes instantiate and become runnable.
 
 ## Readiness And Application
 
 A concrete obligation is ready when:
 
 1. its key is ground;
-2. every cell needed to materialize its object fragment is written;
+2. every value promise needed to materialize its object fragment is installed;
 3. every referenced stamped variable is bound;
-4. its destination cell is unwritten; and
+4. its destination value promise is absent; and
 5. its demanded-output envelope is sealed.
 
-Argument errors write the required error cell without applying the resolver.
+Argument errors set the required error value without applying the resolver.
 
 Applying a ready obligation performs one conceptual transition:
 
 1. Materialize the resolver input from the containing OER.
 2. Apply the resolver once with its complete demanded output.
-3. Write the destination cell once.
+3. Complete the destination value promise once.
 4. Allocate stable child OER identities for object and list output.
 5. Populate demanded producer-owned passive fields.
 6. Create concrete or pending obligations at behavioral boundaries.
 7. Bind any provider variables that have become readable.
 
-The worklist is a finite obligation map, not necessarily a FIFO queue. Duplicate discovery for the same exact cell must converge before application.
+The worklist is a finite obligation map, not necessarily a FIFO queue. Duplicate discovery for the same exact field must converge before application.
 
 ## Completion And Failure
 
-A successful terminal state has no unfinished demanded cells, pending selections, or unreadable required bindings. An empty ready set with unfinished work is a deadlock or invalid-state witness.
+A successful terminal state has no unfinished demanded values, pending selections, or unreadable required bindings. An empty ready set with unfinished work is a dependency-cycle or invalid-state witness.
 
 `correctResolution` remains useful as a final extensional oracle for its current domain, but it does not inspect provider bindings or application history. Runtime `FromObjectField` support therefore needs a variable-aware execution oracle or explicit state invariants in addition to final-tree validation.
 
@@ -102,19 +102,19 @@ Cyclic object references remain outside the model. The allocated object/list occ
 ## Required Invariants
 
 - Every `ObjectId` denotes one concrete OER occurrence with one concrete object type.
-- Every exact cell is identified by `(ObjectId, Value.GroundKey)`.
-- Cells and bindings are write-once.
+- Every exact field is identified by `(ObjectId, Value.GroundKey)`.
+- Promises and bindings are write-once.
 - Every concrete obligation has one sealed demanded-output envelope.
-- Every resolver-bearing exact cell has at most one mathematical application.
+- Every resolver-bearing exact field has at most one mathematical application.
 - Pending selections use bindings stamped for their defining containing OER.
-- Equal instantiated keys converge on one obligation and cell.
+- Equal instantiated keys converge on one obligation and value promise.
 - Distinct occurrences never coalesce merely because their values or node IDs are equal.
 - Null and error outputs create no unreachable descendant obligations.
 - Every valid unfinished state has ready work, subject to the intended acyclicity condition.
 
 ## Parallel Interpretation
 
-The ready set exposes independent obligations directly. A runtime may claim distinct cells concurrently, complete variable slots, and batch compatible resolver calls without changing per-occurrence identities.
+The ready set exposes independent obligations directly. A runtime may claim distinct fields concurrently, complete promises, and batch compatible resolver calls without changing per-occurrence identities.
 
 The semantic model can still take one transition at a time. Randomized fair schedules should reach the same quiescent result and application set; this is the key test for accidental dependence on map iteration or depth-first order.
 
@@ -134,5 +134,5 @@ The semantic model can still take one transition at a time. Randomized fair sche
 - What finite symbolic envelope is precise enough to seal possible late-equality demand without applying producers unnecessarily?
 - Is variable binding a first-class obligation or a deterministic transition once its provider path is readable?
 - Can complete initial projection eliminate every need to retain raw resolver output?
-- What acyclicity measure proves progress for combined cell and binding dependencies?
+- What acyclicity measure proves progress for combined promise and binding dependencies?
 - What schedule-independence theorem best supports a future parallel implementation?

@@ -1,10 +1,11 @@
 package semantics.contract
 
+import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import model.PathComponent
 import model.Value
-import semantics.arbitrary.registeredResolverCells
+import semantics.arbitrary.registeredResolverOccurrences
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
 
@@ -17,7 +18,7 @@ import semantics.materialize
 context(world: Assumptions)
 fun EngineResult.Object.expectedResolverDependencies():
     Map<List<PathComponent>, Set<List<PathComponent>>> =
-    registeredResolverCells(world.resolverRegistry)
+    registeredResolverOccurrences(world.resolverRegistry)
         .associate { cell ->
             val resolver =
                 world.resolverRegistry.resolver(
@@ -29,7 +30,10 @@ fun EngineResult.Object.expectedResolverDependencies():
             val objectFragment =
                 resolver
                     .objectFragmentAt(cell.occurrencePath)
-            val input = cell.containingObject.materialize(objectFragment)
+            val input =
+                runBlocking {
+                    cell.containingObject.materialize(objectFragment)
+                }
             cell.occurrencePath to
                 input.registeredResolverCoordinates(
                     path = cell.occurrencePath.dropLast(1),

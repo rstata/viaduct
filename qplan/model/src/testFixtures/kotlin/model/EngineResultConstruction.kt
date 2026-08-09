@@ -33,7 +33,7 @@ fun Schema.listResultOf(
 ): EngineResult.List =
     EngineResult.List.of(
         typeExpr = typeExpr,
-        cells = values.map { value -> cellOf(typeExpr, value) },
+        values = values.map { value -> coerceEngineResult(typeExpr, value) },
     )
 
 @DslMarker
@@ -45,7 +45,8 @@ class EngineResultScope internal constructor(
     private val schema: Schema,
     private val type: Schema.ObjectType,
 ) {
-    private val cells = linkedMapOf<Value.GroundKey, EngineResult.Cell>()
+    private val values = linkedMapOf<Value.GroundKey, EngineResult?>()
+    private val fieldChecks = linkedMapOf<Value.GroundKey, Value.Boolean>()
 
     /** Selects a field coordinate on this scope's object type. */
     fun field(
@@ -64,33 +65,34 @@ class EngineResultScope internal constructor(
         )
     }
 
-    /** Resolves this argumentless field to [value] with a successful check. */
+    /** Resolves this argumentless field to [value] with accepted access. */
     infix fun String.resolvesTo(value: Any?) {
         field(this).resolvesTo(value)
     }
 
-    /** Resolves this argumentless field to [value] with [check]. */
+    /** Resolves this argumentless field to [value], with [accept] determining access acceptance. */
     fun String.resolvesTo(
         value: Any?,
-        check: Value.Boolean,
+        accept: Value.Boolean,
     ) {
-        field(this).resolvesTo(value, check)
+        field(this).resolvesTo(value, accept)
     }
 
-    /** Resolves this exact field coordinate to [value] with a successful check. */
+    /** Resolves this exact field coordinate to [value] with accepted access. */
     infix fun EngineResultFieldReference.resolvesTo(value: Any?) {
         resolvesTo(value, Value.Boolean.of(true))
     }
 
-    /** Resolves this exact field coordinate to [value] with [check]. */
+    /** Resolves this exact field coordinate to [value], with [accept] determining access acceptance. */
     fun EngineResultFieldReference.resolvesTo(
         value: Any?,
-        check: Value.Boolean,
+        accept: Value.Boolean,
     ) {
-        require(key !in cells) {
+        require(key !in values) {
             "Duplicate engine-result field ${type.typeName}/${key.field.fieldName}"
         }
-        cells[key] = cellOf(key.field.typeExpr, value, check)
+        values[key] = coerceEngineResult(key.field.typeExpr, value)
+        fieldChecks[key] = accept
     }
 
     /** Constructs a nested object engine result using the same schema. */
@@ -100,23 +102,17 @@ class EngineResultScope internal constructor(
     ): EngineResult.Object = schema.engineResultOf(typeName, block)
 
     internal fun build(): EngineResult.Object =
-        EngineResult.Object.of(type, cells.toMap())
+        EngineResult.Object.of(
+            type = type,
+            values = values.toMap(),
+            fieldChecks = fieldChecks.toMap(),
+        )
 }
 
 /** One exact object-field coordinate selected in an [EngineResultScope]. */
 class EngineResultFieldReference internal constructor(
     internal val key: Value.GroundKey,
 )
-
-private fun cellOf(
-    typeExpr: TypeExpr<Schema.OutputType>,
-    value: Any?,
-    check: Value.Boolean = Value.Boolean.of(true),
-): EngineResult.Cell =
-    EngineResult.Cell.of(
-        value = coerceEngineResult(typeExpr, value),
-        check = check,
-    )
 
 private fun coerceEngineResult(
     typeExpr: TypeExpr<Schema.OutputType>,
@@ -131,7 +127,10 @@ private fun coerceEngineResult(
             }
             EngineResult.List.of(
                 typeExpr = typeExpr.elementType,
-                cells = value.map { element -> cellOf(typeExpr.elementType, element) },
+                values =
+                    value.map { element ->
+                        coerceEngineResult(typeExpr.elementType, element)
+                    },
             )
         }
 

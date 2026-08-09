@@ -1,5 +1,6 @@
 package semantics
 
+import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import model.ObjectSelection
@@ -108,7 +109,8 @@ private fun Value.Object.dependenciesOf(
 }
 
 /**
- * Resolves and writes the cell for [fieldSelection], yielding its passive result-tree fringe.
+ * Resolves and sets the value and field check for [fieldSelection], yielding its passive
+ * result-tree fringe.
  */
 context(world: Assumptions, selectionCompleter: SelectionCompleter)
 internal fun Value.Object.resolveKey(
@@ -119,15 +121,14 @@ internal fun Value.Object.resolveKey(
     val key = fieldSelection.groundKey()
     return when {
         key.arguments.argumentsContainErrorValue() -> {
-            resolved.write(key, EngineResult.Cell.Error)
+            resolved.setValue(key, Value.Error)
+            resolved.setFieldCheck(key, Value.Error)
             null
         }
 
         key.field.fieldName == "__typename" -> {
-            resolved.write(
-                key,
-                EngineResult.Cell.of(Value.String.of(type.typeName)),
-            )
+            resolved.setValue(key, Value.String.of(type.typeName))
+            resolved.setFieldCheck(key, Value.Boolean.of(true))
             null
         }
 
@@ -140,7 +141,10 @@ internal fun Value.Object.resolveKey(
                     val objectFragment =
                         resolver
                             .objectFragmentAt(path + key)
-                    val input = resolved.materialize(objectFragment)
+                    val input =
+                        runBlocking {
+                            resolved.materialize(objectFragment)
+                        }
                     if (completion.retainCompleteOutput) {
                         resolver.completeOutput(
                             input = input,
@@ -173,10 +177,8 @@ internal fun Value.Object.resolveKey(
                         completion.selective &&
                             !completion.retainCompleteOutput,
                 )
-            resolved.write(
-                key,
-                EngineResult.Cell.of(resolvedValue.engineResult),
-            )
+            resolved.setValue(key, resolvedValue.engineResult)
+            resolved.setFieldCheck(key, Value.Boolean.of(true))
             resolvedValue
         }
     }

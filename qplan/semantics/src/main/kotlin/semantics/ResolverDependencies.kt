@@ -64,12 +64,12 @@ private class ResolverDependencyWalk(
                 ReactorSlotKind.ENGINE_OWNED,
                 ReactorSlotKind.PASSIVE,
                 -> {
-                    if (!target.isSet(key)) {
+                    if (!target.isValueSet(key)) {
                         dependencies += coordinate
                     } else {
                         walkValue(
                             path = coordinate,
-                            value = target.fetch(key).value,
+                            value = target.getValue(key).get(),
                             selections = selection.subselections,
                         )
                     }
@@ -78,13 +78,13 @@ private class ResolverDependencyWalk(
                 ReactorSlotKind.FIELD_RESOLVER -> {
                     dependencies += coordinate
                     if (coordinate in completedResolverCoordinates) {
-                        check(target.isSet(key)) {
-                            "Completed resolver has no published cell: " +
+                        check(target.isValueSet(key)) {
+                            "Completed resolver has no published value: " +
                                 coordinate.renderReactorPath()
                         }
                         walkValue(
                             path = coordinate,
-                            value = target.fetch(key).value,
+                            value = target.getValue(key).get(),
                             selections = selection.subselections,
                         )
                     }
@@ -113,10 +113,10 @@ private class ResolverDependencyWalk(
                 )
 
             is EngineResult.List ->
-                value.forEachIndexed { index, cell ->
+                value.forEachIndexed { index, element ->
                     walkValue(
                         path = path + Value.ListIndex.of(index),
-                        value = cell.value,
+                        value = element,
                         selections = selections,
                     )
                 }

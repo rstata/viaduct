@@ -91,7 +91,7 @@ internal class Reactor private constructor(
             closedDemand
                 .byGroundKey()
                 .values
-                .filter { selection -> !target.isSet(selection.groundKey()) }
+                .filter { selection -> !target.isValueSet(selection.groundKey()) }
                 .map { selection ->
                     SlotResolver(
                         containingObjectPath = path,

@@ -69,7 +69,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
-        assertEquals(Value.Int.of(14), resolved.fetch(resultKey).value)
+        assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
         assertEquals(
             Value.Int.of(7),
             world.binding(
@@ -143,7 +143,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
 
             assertEquals<Value.Input?>(
                 provided,
-                resolved.fetch(resultKey).value as Value.Input?,
+                resolved.getValue(resultKey).get() as Value.Input?,
             )
             assertEquals(
                 provided,
@@ -222,7 +222,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
                 world.fragmentFrom("fragment ignored on Query { result }"),
             )
 
-        assertEquals(Value.Int.of(9), resolved.fetch(resultKey).value)
+        assertEquals(Value.Int.of(9), resolved.getValue(resultKey).get())
     }
 
     @Test
@@ -302,6 +302,6 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
                 world.fragmentFrom("fragment ignored on Query { result }"),
             )
 
-        assertEquals(Value.Int.of(10), resolved.fetch(resultKey).value)
+        assertEquals(Value.Int.of(10), resolved.getValue(resultKey).get())
     }
 }

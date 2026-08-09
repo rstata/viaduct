@@ -32,6 +32,8 @@ import kotlin.test.assertTrue
 /** Opt-in high-volume coverage for deep dependency-heavy generated worlds. */
 interface DeepResolverStressContract : ResolverContract {
     val resolverName: String
+    val objectPathVariablesEnabled: Boolean
+        get() = false
 
     @Test
     fun `deep dependency-heavy arbitrary worlds resolve correctly`(): Unit =
@@ -75,7 +77,7 @@ interface DeepResolverStressContract : ResolverContract {
                     // Static tests exhaustively cover dispatch; stress samples interactions cheaply.
                     (NodeObjectWeight to 0.05) +
                     (ResolverFromArgumentVariablesEnabled to true) +
-                    (ResolverVariablesEnabled to false)
+                    (ResolverVariablesEnabled to objectPathVariablesEnabled)
             var attemptedCases = 0
             var verifiedCases = 0
             var resolverApplications = 0
@@ -83,6 +85,8 @@ interface DeepResolverStressContract : ResolverContract {
             var nodeLoaderApplications = 0
             var argumentBearingNodeBridgeProducerApplications = 0
             var polymorphicNodeLoaderApplications = 0
+            var generatedObjectPathVariables = 0
+            var activatedObjectPathApplications = 0
             val previousSeed = PropertyTesting.defaultSeed
             PropertyTesting.defaultSeed = seed
 
@@ -94,6 +98,8 @@ interface DeepResolverStressContract : ResolverContract {
                 ) { testWorld, testCase ->
                     attemptedCases += 1
                     generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
+                    generatedObjectPathVariables +=
+                        testCase.registry.features.fromObjectFieldVariableCount
                     assertTrue(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions()
                     val fragment = world.fragmentFrom(testCase.query.source)
@@ -114,6 +120,13 @@ interface DeepResolverStressContract : ResolverContract {
                     assertTrue(context(world) { result.correctResolution(fragment) })
                     resolverApplications += witness.applications.size
                     witness.applications.forEach { application ->
+                        if (
+                            testCase.registry.sourceResolverHasFromObjectFieldVariables(
+                                application.key.field,
+                            )
+                        ) {
+                            activatedObjectPathApplications += 1
+                        }
                         if (
                             application.key.field.fieldName.endsWith("\$bridge") &&
                             application.key.arguments.type.fields.isNotEmpty()
@@ -145,7 +158,10 @@ interface DeepResolverStressContract : ResolverContract {
                         "argumentBearingNodeBridgeProducerApplications=" +
                         "$argumentBearingNodeBridgeProducerApplications, " +
                         "polymorphicNodeLoaderApplications=" +
-                        "$polymorphicNodeLoaderApplications, minimumDepth=4",
+                        "$polymorphicNodeLoaderApplications, " +
+                        "generatedObjectPathVariables=$generatedObjectPathVariables, " +
+                        "activatedObjectPathApplications=$activatedObjectPathApplications, " +
+                        "minimumDepth=4",
                 )
             }
 
@@ -155,6 +171,10 @@ interface DeepResolverStressContract : ResolverContract {
             assertTrue(generatedNodeResolvers >= requestedCases / 100)
             assertTrue(nodeLoaderApplications >= requestedCases / 1_000)
             assertTrue(argumentBearingNodeBridgeProducerApplications >= requestedCases / 1_000)
+            if (objectPathVariablesEnabled) {
+                assertTrue(generatedObjectPathVariables > 0)
+                assertTrue(activatedObjectPathApplications > 0)
+            }
         }
 
     private fun configured(

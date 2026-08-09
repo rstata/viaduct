@@ -45,6 +45,7 @@ data class RegistryFeatures(
     val resolverErrorArgumentCount: Int,
     val variableCount: Int,
     val fromArgumentVariableCount: Int,
+    val fromObjectFieldVariableCount: Int,
     val maximumVariablesPerOwner: Int,
     val hasNestedInputVariable: Boolean,
     val hasListVariable: Boolean,
@@ -80,10 +81,21 @@ class ArbitraryRegistry internal constructor(
             .filterIsInstance<FromArgumentVariableProviderPlan>()
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
+    /** Source resolver fields whose generated fragments consume a FromObjectField variable. */
+    val fromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
     fun sourceResolverHasFromArgumentVariables(
         canonicalField: FieldCoordinate,
     ): Boolean =
         sourceField(canonicalField) in fromArgumentVariableOwnerFields
+
+    fun sourceResolverHasFromObjectFieldVariables(
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        sourceField(canonicalField) in fromObjectFieldVariableOwnerFields
 
     fun clearResolutionWitness() {
         applicationLog.clear()
@@ -502,6 +514,10 @@ private class RegistryGenerator(
                         variableProviders.count {
                             it is FromArgumentVariableProviderPlan
                         },
+                    fromObjectFieldVariableCount =
+                        variableProviders.count {
+                            it is FromObjectFieldVariableProviderPlan
+                        },
                     maximumVariablesPerOwner =
                         variableProviders
                             .groupingBy(VariableProviderPlan::owner)
@@ -831,14 +847,14 @@ private class RegistryGenerator(
             .filter { field ->
                 !field.isGeneratedHashField() &&
                     field.arguments.isEmpty() &&
-                    (!field.type.nullable || target.nullable) &&
                     (
                         field.coordinate !in fieldSites ||
                             ranks.getValue(field.coordinate) < consumerRank
                     )
             }.flatMap { field ->
                 when {
-                    target.matches(field.type) ->
+                    target.matches(field.type) &&
+                        (!field.type.nullable || target.nullable) ->
                         listOf(
                             FragmentSelectionPlan(
                                 fieldName = field.name,
@@ -847,7 +863,9 @@ private class RegistryGenerator(
                             ),
                         )
 
-                    !field.type.list && schema.isComposite(field.type.namedType) ->
+                    !field.type.list &&
+                        schema.isComposite(field.type.namedType) &&
+                        (!field.type.nullable || target.acceptsNullableTraversal) ->
                         variableProviderPaths(
                             ownerName = field.type.namedType,
                             target = target,
@@ -1310,6 +1328,8 @@ internal data class ErrorInputPlan(
 internal sealed interface VariableTarget {
     val nullable: Boolean
 
+    val acceptsNullableTraversal: Boolean
+
     fun matches(type: OutputTypeSpec): Boolean
 
     fun accepts(type: InputTypeSpec): Boolean
@@ -1319,6 +1339,9 @@ internal data class ScalarVariableTarget(
     val scalar: ScalarKind,
     override val nullable: Boolean,
 ) : VariableTarget {
+    override val acceptsNullableTraversal: Boolean
+        get() = nullable
+
     override fun matches(type: OutputTypeSpec): Boolean =
         !type.list && type.namedType == scalar.graphQLName
 
@@ -1333,6 +1356,9 @@ internal data class ListVariableTarget(
     override val nullable: Boolean,
     val elementNullable: Boolean,
 ) : VariableTarget {
+    override val acceptsNullableTraversal: Boolean
+        get() = elementNullable
+
     override fun matches(type: OutputTypeSpec): Boolean =
         type.list &&
             type.namedType == scalar.graphQLName &&

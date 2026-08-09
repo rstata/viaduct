@@ -11,6 +11,12 @@ import model.applicableGroundSelections
 import model.selectionForestOf
 import model.stamp
 
+/** One occurrence-specific variable and its occurrence-specific object provider path. */
+data class StampedObjectPathDefinition(
+    val variable: Value.Variable.Stamped,
+    val path: List<Value.Key>,
+)
+
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
     (Value.Object, Value.Arguments) -> Value.Output?
@@ -60,6 +66,27 @@ class FieldResolver private constructor(
     ): SelectionForest =
         objectFragment.stampVariables(path)
 
+    /**
+     * Returns this resolver's object-field variable definitions stamped at exact [sitePath].
+     */
+    fun stampedObjectPathDefinitions(
+        sitePath: List<PathComponent>,
+    ): List<StampedObjectPathDefinition> =
+        variables.mapNotNull { (variable, definition) ->
+            (definition as? VariableDefinition.FromObjectField)?.let {
+                StampedObjectPathDefinition(
+                    variable = variable.stamp(sitePath),
+                    path =
+                        it.path.map { key ->
+                            Value.Key.of(
+                                field = key.field,
+                                arguments = key.arguments.stamp(sitePath),
+                            )
+                        },
+                )
+            }
+        }
+
     /** Returns this resolver's object fragment grounded at exact occurrence [path]. */
     context(world: Assumptions)
     fun objectFragmentAt(
@@ -80,6 +107,18 @@ class FieldResolver private constructor(
     ): Value.Output? {
         applicationObserver(input, arguments, selections)
         return function(input, arguments).snipToDemand(projectionDemand(selections))
+    }
+
+    /**
+     * Applies this field resolver with an observed demand while retaining its complete output.
+     */
+    fun completeOutput(
+        input: Value.Object,
+        arguments: Value.Arguments,
+        selections: SelectionForest,
+    ): Value.Output? {
+        applicationObserver(input, arguments, selections)
+        return function(input, arguments)
     }
 
     /**

@@ -13,6 +13,8 @@ import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.ImplementationArgumentDefaultWeight
 import semantics.arbitrary.NodeObjectWeight
 import semantics.arbitrary.NodeResolversEnabled
+import semantics.arbitrary.ObjectFieldCount
+import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
@@ -21,6 +23,8 @@ import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
+import semantics.arbitrary.RootQueryFieldCount
+import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
@@ -226,6 +230,115 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
             run.assertAggregate(
                 activatedImplementationDefaults > 0,
                 "Generated FromArgument profile activated no abstract implementation defaults",
+            )
+        }
+}
+
+/** Generated contract isolating variables read from object-fragment paths. */
+interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContract {
+    @Test
+    fun `generated object fragment worlds with fromObjectField resolve correctly`(): Unit =
+        runBlocking {
+            var generatedVariables = 0
+            var activatedApplications = 0
+            val config =
+                Config.default +
+                    (SchemaObjectCount to 4..6) +
+                    (ObjectFieldCount to 4..6) +
+                    (FieldArgumentWeight to 1.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (NodeResolversEnabled to false) +
+                    (QueryFieldCount to 6..6) +
+                    (RootQueryFieldCount to 10..10) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverVariableWeight to 1.0) +
+                    (ResolverVariablesEnabled to true)
+
+            val run =
+                checkGeneratedProfile(
+                    "object-fragment-from-object-field",
+                    config,
+                ) { testWorld, testCase ->
+                    val features = testCase.registry.features
+                    assertEquals(
+                        features.fromObjectFieldVariableCount,
+                        features.variableCount,
+                    )
+                    generatedVariables += features.fromObjectFieldVariableCount
+                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    activatedApplications +=
+                        resolution.applications.count { application ->
+                            testCase.registry.sourceResolverHasFromObjectFieldVariables(
+                                application.key.field,
+                            )
+                        }
+                }
+
+            run.assertAggregate(
+                generatedVariables > 0,
+                "Generated FromObjectField profile produced no path variables",
+            )
+            run.assertAggregate(
+                activatedApplications > 0,
+                "Generated FromObjectField profile activated no variable-bearing resolvers",
+            )
+        }
+}
+
+/** Generated contract for interactions between both resolver-variable sources. */
+interface MixedVariableGeneratedResolverContract : ResolverContract {
+    @Test
+    fun `generated mixed resolver variable worlds resolve correctly`(): Unit =
+        runBlocking {
+            var generatedFromArgument = 0
+            var generatedFromObjectField = 0
+            var coactivatedCases = 0
+            val config =
+                Config.default +
+                    (SchemaObjectCount to 3..4) +
+                    (ObjectFieldCount to 3..4) +
+                    (FieldArgumentWeight to 1.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (NodeResolversEnabled to false) +
+                    (QueryFieldCount to 4..4) +
+                    (RootQueryFieldCount to 10..10) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
+                    (ResolverVariableWeight to 1.0) +
+                    (ResolverVariablesEnabled to true)
+
+            val run =
+                checkGeneratedProfile("mixed-variables", config) { testWorld, testCase ->
+                    generatedFromArgument +=
+                        testCase.registry.features.fromArgumentVariableCount
+                    generatedFromObjectField +=
+                        testCase.registry.features.fromObjectFieldVariableCount
+                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    val fromArgument =
+                        resolution.applications.any { application ->
+                            testCase.registry.sourceResolverHasFromArgumentVariables(
+                                application.key.field,
+                            )
+                        }
+                    val fromObjectField =
+                        resolution.applications.any { application ->
+                            testCase.registry.sourceResolverHasFromObjectFieldVariables(
+                                application.key.field,
+                            )
+                        }
+                    if (fromArgument && fromObjectField) coactivatedCases += 1
+                }
+
+            run.assertAggregate(
+                generatedFromArgument > 0 && generatedFromObjectField > 0,
+                "Mixed-variable profile did not generate both variable kinds",
+            )
+            run.assertAggregate(
+                coactivatedCases > 0,
+                "Mixed-variable profile did not coactivate both variable kinds",
             )
         }
 }

@@ -116,7 +116,13 @@ private class QueryGenerator(
             schema.fieldsOn(typeName).filterNot(FieldDefinitionSpec::isGeneratedHashField) +
                 syntheticFields(typeName, objectType?.implementsNode == true)
 
-        val count = Arb.int(1..minOf(3, candidates.size)).next(random)
+        val rootOverride = config[RootQueryFieldCount]
+        val count =
+            if (typeName == "Query" && rootOverride != 0..0) {
+                Arb.int(rootOverride).next(random).coerceIn(1, candidates.size)
+            } else {
+                Arb.int(1..minOf(3, candidates.size)).next(random)
+            }
         val requiredField =
             schema.deepFields[typeName]
                 ?.takeIf { depth < config[MinimumSelectionDepth] }

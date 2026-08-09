@@ -17,6 +17,7 @@ import model.selectionForestOf
 internal class ResolvedValue(
     val engineResult: EngineResult?,
     val objectsNeedingResolution: List<ObjectResolution>,
+    val objectOccurrences: List<ObjectResolution>,
 )
 
 internal class ObjectResolution(
@@ -41,9 +42,9 @@ internal fun Value.Output?.resolveValue(
     beSelective: Boolean,
 ): ResolvedValue =
     when (this) {
-        null -> ResolvedValue(null, emptyList())
-        Value.Error -> ResolvedValue(Value.Error, emptyList())
-        is Value.Simple -> ResolvedValue(this, emptyList())
+        null -> ResolvedValue(null, emptyList(), emptyList())
+        Value.Error -> ResolvedValue(Value.Error, emptyList(), emptyList())
+        is Value.Simple -> ResolvedValue(this, emptyList(), emptyList())
         is Value.Object -> resolveObjectValue(resolverDemand, beSelective, path)
         is Value.OutputList ->
             values
@@ -52,6 +53,7 @@ internal fun Value.Output?.resolveValue(
                     ResolvedList(
                         cells = emptyList(),
                         objectsNeedingResolution = emptyList(),
+                        objectOccurrences = emptyList(),
                     ),
                 ) { resolved, (index, value) ->
                     val element =
@@ -67,11 +69,15 @@ internal fun Value.Output?.resolveValue(
                         objectsNeedingResolution =
                             resolved.objectsNeedingResolution +
                                 element.objectsNeedingResolution,
+                        objectOccurrences =
+                            resolved.objectOccurrences +
+                                element.objectOccurrences,
                     )
                 }.let { resolved ->
                     ResolvedValue(
                         engineResult = EngineResult.List.of(typeExpr, resolved.cells),
                         objectsNeedingResolution = resolved.objectsNeedingResolution,
+                        objectOccurrences = resolved.objectOccurrences,
                     )
                 }
     }
@@ -108,6 +114,7 @@ private fun Value.Object.resolveObjectValue(
             ResolvedObject(
                 cells = emptyMap(),
                 objectsNeedingResolution = emptyList(),
+                objectOccurrences = emptyList(),
             ),
         ) { result, key ->
             if (key.field.fieldName == "__typename") {
@@ -121,6 +128,7 @@ private fun Value.Object.resolveObjectValue(
                                     )
                             ),
                     objectsNeedingResolution = result.objectsNeedingResolution,
+                    objectOccurrences = result.objectOccurrences,
                 )
             } else {
                 val fieldValue =
@@ -141,26 +149,30 @@ private fun Value.Object.resolveObjectValue(
                     objectsNeedingResolution =
                         result.objectsNeedingResolution +
                             fieldValue.objectsNeedingResolution,
+                    objectOccurrences =
+                        result.objectOccurrences +
+                            fieldValue.objectOccurrences,
                 )
             }
         }
     val engineResult = EngineResult.Object.of(type, resolved.cells, mutable = true)
+    val localOccurrence =
+        ObjectResolution(
+            path = path,
+            source = this,
+            selections = resolverDemand,
+            target = engineResult,
+        )
     val localResolution =
         if (resolverDemandByKey.keys.any { key -> key.field in world.resolverRegistry }) {
-            listOf(
-                ObjectResolution(
-                    path = path,
-                    source = this,
-                    selections = resolverDemand,
-                    target = engineResult,
-                ),
-            )
+            listOf(localOccurrence)
         } else {
             emptyList()
         }
     return ResolvedValue(
         engineResult = engineResult,
         objectsNeedingResolution = localResolution + resolved.objectsNeedingResolution,
+        objectOccurrences = listOf(localOccurrence) + resolved.objectOccurrences,
     )
 }
 
@@ -175,9 +187,11 @@ internal fun ResolvedValue.resolveObjects(resolveObject: (ObjectResolution) -> U
 private class ResolvedList(
     val cells: List<EngineResult.Cell>,
     val objectsNeedingResolution: List<ObjectResolution>,
+    val objectOccurrences: List<ObjectResolution>,
 )
 
 private class ResolvedObject(
     val cells: Map<Value.GroundKey, EngineResult.Cell>,
     val objectsNeedingResolution: List<ObjectResolution>,
+    val objectOccurrences: List<ObjectResolution>,
 )

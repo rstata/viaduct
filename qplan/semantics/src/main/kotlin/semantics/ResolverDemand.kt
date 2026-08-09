@@ -6,8 +6,7 @@ import model.PathComponent
 import model.Schema
 import model.SelectionForest
 import model.Value
-import model.instantiateBindings
-import model.merge
+import model.applicableGroundSelections
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 
@@ -34,7 +33,7 @@ private fun Schema.ObjectType.closeResolverDemand(
     selections: SelectionForest,
     expanded: Set<Value.GroundKey>,
 ): ObjectSelectionForest {
-    val applicableSelections = selections.merge(this).instantiateBindings()
+    val applicableSelections = selections.applicableGroundSelections(this)
     val unexpandedResolverKeys =
         applicableSelections.groundKeys().filter { key ->
             key !in expanded &&

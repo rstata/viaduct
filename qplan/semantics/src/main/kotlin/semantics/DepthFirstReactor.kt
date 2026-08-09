@@ -6,10 +6,8 @@ import model.ObjectSelection
 import model.PathComponent
 import model.SelectionForest
 import model.Value
+import model.groundKey
 import java.util.PriorityQueue
-
-/** Receives each task immediately before it executes. */
-internal typealias DepthFirstTaskObserver = (DepthFirstReactor.Task) -> Unit
 
 /**
  * A single-threaded work queue that preserves the recursive resolver's depth-first traversal.
@@ -17,6 +15,7 @@ internal typealias DepthFirstTaskObserver = (DepthFirstReactor.Task) -> Unit
  * Each instance constructs one result and [resolve] may be called exactly once.
  */
 internal interface DepthFirstReactor {
+    context(world: Assumptions, selectionCompleter: SelectionCompleter)
     fun resolve(): EngineResult.Object
 
     sealed interface Task {
@@ -42,31 +41,37 @@ internal interface DepthFirstReactor {
         operator fun invoke(
             source: Value.Object,
             selections: SelectionForest,
-            taskObserver: DepthFirstTaskObserver = {},
-        ): DepthFirstReactor =
-            PriorityQueueDepthFirstReactor(
-                world = world,
-                selectionCompleter = selectionCompleter,
+            eventObserver: ReactorEventObserver = {},
+        ): DepthFirstReactor {
+            val reactor =
+                PriorityQueueDepthFirstReactor(
+                    source = source,
+                    eventObserver = eventObserver,
+                )
+            reactor.initialize(
                 source = source,
                 selections = selections,
-                taskObserver = taskObserver,
             )
+            return reactor
+        }
     }
 }
 
 private class PriorityQueueDepthFirstReactor(
-    private val world: Assumptions,
-    private val selectionCompleter: SelectionCompleter,
     source: Value.Object,
-    selections: SelectionForest,
-    private val taskObserver: DepthFirstTaskObserver,
+    eventObserver: ReactorEventObserver,
 ) : DepthFirstReactor {
     private val result = EngineResult.Object.of(source.type, emptyMap(), mutable = true)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
+    private val instrumentation = ReactorInstrumentation(eventObserver)
     private var nextSequence = 0L
     private var started = false
 
-    init {
+    context(world: Assumptions)
+    fun initialize(
+        source: Value.Object,
+        selections: SelectionForest,
+    ) {
         enqueue(
             DepthFirstReactor.SlotOrchestrator(
                 path = emptyList(),
@@ -77,20 +82,26 @@ private class PriorityQueueDepthFirstReactor(
         )
     }
 
+    context(world: Assumptions, selectionCompleter: SelectionCompleter)
     override fun resolve(): EngineResult.Object {
         check(!started) { "DepthFirstReactor.resolve() may only be called once" }
         started = true
 
-        context(world, selectionCompleter) {
-            while (tasks.isNotEmpty()) {
-                val task = tasks.remove().task
-                taskObserver(task)
-                when (task) {
-                    is DepthFirstReactor.SlotOrchestrator -> task.execute()
-                    is DepthFirstReactor.SlotResolver -> task.execute()
+        while (tasks.isNotEmpty()) {
+            val task = tasks.remove().task
+            when (task) {
+                is DepthFirstReactor.SlotOrchestrator -> {
+                    instrumentation.orchestratorStarted(task.path)
+                    task.execute()
+                }
+
+                is DepthFirstReactor.SlotResolver -> {
+                    instrumentation.resolverStarted(task.coordinate)
+                    task.execute()
                 }
             }
         }
+        instrumentation.resolutionFinished()
         return result
     }
 
@@ -112,6 +123,7 @@ private class PriorityQueueDepthFirstReactor(
                 ),
             )
         }
+        instrumentation.orchestratorFinished(path, target, closedDemand)
     }
 
     context(world: Assumptions, selectionCompleter: SelectionCompleter)
@@ -128,12 +140,30 @@ private class PriorityQueueDepthFirstReactor(
                     ),
                 )
             }
+        instrumentation.resolverFinished(coordinate)
     }
 
+    context(world: Assumptions)
     private fun enqueue(task: DepthFirstReactor.Task) {
+        when (task) {
+            is DepthFirstReactor.SlotOrchestrator ->
+                instrumentation.orchestratorLaunched(
+                    path = task.path,
+                    objectType = task.source.type.typeName,
+                )
+
+            is DepthFirstReactor.SlotResolver ->
+                instrumentation.resolverLaunched(
+                    coordinate = task.coordinate,
+                    kind = task.selection.groundKey().reactorSlotKind(),
+                )
+        }
         tasks += ScheduledTask(task, nextSequence)
         nextSequence += 1
     }
+
+    private val DepthFirstReactor.SlotResolver.coordinate: List<PathComponent>
+        get() = path + selection.groundKey()
 }
 
 internal class ScheduledTask(

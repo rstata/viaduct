@@ -7,8 +7,6 @@ import model.PathComponent
 import model.SelectionForest
 import model.Value
 import model.groundKey
-import model.instantiateBindings
-import model.merge
 import model.registry.demandsFromSibling
 import semantics.correctresolution.argumentsContainErrorValue
 
@@ -140,9 +138,7 @@ internal fun Value.Object.resolveKey(
                     val resolver = world.resolverRegistry.resolver(key.field)
                     val objectFragment =
                         resolver
-                            .stampedObjectFragment(path + key)
-                            .merge(type)
-                            .instantiateBindings()
+                            .objectFragmentAt(path + key)
                     val input = resolved.materialize(objectFragment)
                     if (completion.selective) {
                         resolver(

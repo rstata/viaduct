@@ -1,37 +1,41 @@
-package semantics.resolver06
+package semantics.resolver09
 
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
 import model.Value
-import semantics.DepthFirstReactor
+import model.registry.successorDemand
 import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
 import semantics.SelectionCompleter
 
 /**
- * Resolves [selections] through a depth-first work queue when resolver object fragments are empty,
- * except for generated `T$Bridge.$node` fragments that select passive sibling `$id`. Results are
- * non-selective and may contain more OER nodes than are strictly necessary to resolve the query.
+ * Resolves [selections] through exact field-resolver-instance readiness with selective outputs.
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
-    resolve(selections, eventObserver = {})
+    resolve(
+        selections = selections,
+        eventObserver = {},
+    )
 
 context(world: Assumptions)
 internal fun Value.Object.resolve(
     selections: SelectionForest,
-    eventObserver: ReactorEventObserver,
+    eventObserver: ReactorEventObserver = {},
 ): EngineResult.Object {
     val selectionCompleter =
         SelectionCompleter { selections ->
-            SelectionCompletion(selections, selective = false)
+            SelectionCompletion(
+                selections = selections.successorDemand(),
+                selective = true,
+            )
         }
     return context(selectionCompleter) {
-        DepthFirstReactor(
+        Reactor(
             source = this@resolve,
             selections = selections,
             eventObserver = eventObserver,
-        ).resolve()
+        )
     }
 }

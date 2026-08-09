@@ -1,9 +1,7 @@
-package semantics.resolver03
+package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
-import model.instantiateBindings
-import model.merge
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.RegisteredResolverCell
 import semantics.arbitrary.registeredResolverCells
@@ -15,7 +13,7 @@ import semantics.materialize
  * Expected deterministic resolver applications, independently reconstructed from OER cells.
  */
 context(world: Assumptions)
-internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
+fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> =
     registeredResolverCells(world.resolverRegistry)
         .map { cell ->
@@ -27,11 +25,9 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
             val resolver = world.resolverRegistry.resolver(field)
             val fragment =
                 resolver
-                    .stampedObjectFragment(
+                    .objectFragmentAt(
                         path = cell.occurrencePath,
                     )
-                    .merge(cell.containingObject.type)
-                    .instantiateBindings()
             ResolverApplicationIdentity(
                 key = cell.applicationKey,
                 inputFingerprint =
@@ -43,7 +39,7 @@ internal fun EngineResult?.registeredResolverApplicationIdentityCounts():
         .eachCount()
 
 context(world: Assumptions)
-internal fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredResolverCell> =
+fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredResolverCell> =
     registeredResolverCells(world.resolverRegistry)
         .filter { cell ->
             val field =
@@ -54,10 +50,8 @@ internal fun EngineResult?.unclosedRegisteredResolverCells(): List<RegisteredRes
             val resolver = world.resolverRegistry.resolver(field)
             val fragment =
                 resolver
-                    .stampedObjectFragment(
+                    .objectFragmentAt(
                         path = cell.occurrencePath,
                     )
-                    .merge(cell.containingObject.type)
-                    .instantiateBindings()
             !cell.containingObject.conformsToSelections(fragment)
         }

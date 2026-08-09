@@ -1,11 +1,13 @@
 package model.registry
 
 import model.Assumptions
+import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.applicableGroundSelections
 import model.selectionForestOf
 import model.stamp
 
@@ -57,6 +59,14 @@ class FieldResolver private constructor(
         path: List<PathComponent>,
     ): SelectionForest =
         objectFragment.stampVariables(path)
+
+    /** Returns this resolver's object fragment grounded at exact occurrence [path]. */
+    context(world: Assumptions)
+    fun objectFragmentAt(
+        path: List<PathComponent>,
+    ): ObjectSelectionForest =
+        stampedObjectFragment(path)
+            .applicableGroundSelections(field.containingType)
 
     /**
      * Applies this field resolver and projects its selection-independent result to

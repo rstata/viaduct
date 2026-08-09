@@ -1,4 +1,4 @@
-package semantics.resolver03
+package semantics.resolver09
 
 import model.Assumptions
 import model.EngineResult
@@ -12,7 +12,5 @@ class ResolverMutationTest : ResolverMutationContract {
         root: Value.Object,
         selections: SelectionForest,
     ): EngineResult.Object =
-        context(world) {
-            root.resolve(selections)
-        }
+        resolveWithDependencyValidation(world, root, selections)
 }

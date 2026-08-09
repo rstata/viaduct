@@ -171,6 +171,17 @@ fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
     return ObjectSelectionForest.of(type, selections)
 }
 
+/**
+ * Returns the selections applicable to concrete parent [type] with exact top-level keys.
+ *
+ * Descendant selections remain unspecialized until their concrete runtime parent is known.
+ */
+context(world: Assumptions)
+fun SelectionForest.applicableGroundSelections(
+    type: Schema.ObjectType,
+): ObjectSelectionForest =
+    merge(type).instantiateBindings()
+
 /** Returns this selection's ground key. */
 fun ObjectSelection.groundKey(): Value.GroundKey =
     key as? Value.GroundKey

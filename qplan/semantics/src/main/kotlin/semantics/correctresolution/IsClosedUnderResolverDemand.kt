@@ -4,8 +4,6 @@ import model.Assumptions
 import model.EngineResult
 import model.PathComponent
 import model.Value
-import model.instantiateBindings
-import model.merge
 
 /**
  * Whether every resolver activated by this result has its required input in the same result tree.
@@ -34,9 +32,7 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
                 conformsToSelections(
                     registry
                         .resolver(key.field)
-                        .stampedObjectFragment(path + key)
-                        .merge(type)
-                        .instantiateBindings(),
+                        .objectFragmentAt(path + key),
                 )
 
         fieldResolverDemandIsClosed &&

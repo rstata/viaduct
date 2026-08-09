@@ -2,22 +2,25 @@ package semantics
 
 import model.PathComponent
 import model.Value
-import model.groundKey
 import semantics.contract.ResolverTaskObservation
 
-internal fun DepthFirstReactor.Task.toContractObservation(): ResolverTaskObservation =
+internal fun ReactorEvent.toContractObservation(): ResolverTaskObservation? =
     when (this) {
-        is DepthFirstReactor.SlotOrchestrator ->
+        is ReactorEvent.OrchestratorStarted ->
             ResolverTaskObservation.SlotOrchestrator(
-                objectType = source.type.typeName,
+                objectType = objectType,
                 path = path.toContractObservationPath(),
             )
 
-        is DepthFirstReactor.SlotResolver ->
+        is ReactorEvent.ResolverStarted -> {
+            val key = coordinate.last() as Value.GroundKey
             ResolverTaskObservation.SlotResolver(
-                fieldName = selection.groundKey().field.fieldName,
-                path = path.toContractObservationPath(),
+                fieldName = key.field.fieldName,
+                path = coordinate.dropLast(1).toContractObservationPath(),
             )
+        }
+
+        else -> null
     }
 
 private fun List<PathComponent>.toContractObservationPath(): List<String> =

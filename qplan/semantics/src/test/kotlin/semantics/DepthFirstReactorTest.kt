@@ -4,15 +4,63 @@ import model.EngineResult
 import model.PathComponent
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.groundKey
 import model.merge
 import model.objectOf
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import java.util.PriorityQueue
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class DepthFirstReactorTest {
+    @Test
+    fun `reports the complete task lifecycle through reactor instrumentation`() {
+        val world = TestWorld.fromSDL("type Query { value: Int }").assumptions
+        val source = world.objectOf("Query")
+        val selections =
+            world
+                .fragmentFrom("fragment ignored on Query { __typename }")
+                .subselections
+        val selection = selections.merge(source.type).byGroundKey().values.single()
+        val coordinate = listOf<PathComponent>(selection.groundKey())
+        val events = mutableListOf<ReactorEvent>()
+        val selectionCompleter =
+            SelectionCompleter { demand ->
+                SelectionCompletion(demand, selective = false)
+            }
+
+        context(world, selectionCompleter) {
+            DepthFirstReactor(
+                source = source,
+                selections = selections,
+                eventObserver = events::add,
+            ).resolve()
+        }
+
+        assertEquals(
+            listOf(
+                ReactorEvent.OrchestratorLaunched(emptyList(), "Query"),
+                ReactorEvent.OrchestratorStarted(emptyList(), "Query"),
+                ReactorEvent.ResolverLaunched(
+                    coordinate,
+                    ReactorSlotKind.ENGINE_OWNED,
+                ),
+                ReactorEvent.OrchestratorFinished(emptyList(), "Query"),
+                ReactorEvent.ResolverStarted(
+                    coordinate,
+                    ReactorSlotKind.ENGINE_OWNED,
+                ),
+                ReactorEvent.ResolverFinished(
+                    coordinate,
+                    ReactorSlotKind.ENGINE_OWNED,
+                ),
+            ),
+            events,
+        )
+    }
+
     @Test
     fun `equal-depth resolvers precede orchestrators and preserve insertion order`() {
         val world = TestWorld.fromSDL("type Query { value: Int }").assumptions
@@ -60,10 +108,12 @@ class DepthFirstReactorTest {
                 )
             }
 
-        reactor.resolve()
-
-        assertFailsWith<IllegalStateException> {
+        context(world, selectionCompleter) {
             reactor.resolve()
+
+            assertFailsWith<IllegalStateException> {
+                reactor.resolve()
+            }
         }
     }
 }

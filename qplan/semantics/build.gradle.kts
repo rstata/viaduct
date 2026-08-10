@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm")
     `java-test-fixtures`
+    id("me.champeau.jmh")
 }
 
 dependencies {
@@ -17,6 +18,12 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    add("jmhImplementation", sourceSets["testFixtures"].output)
+}
+
+configurations.named("jmhImplementation") {
+    extendsFrom(configurations["testFixturesImplementation"])
 }
 
 kotlin {

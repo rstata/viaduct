@@ -1,3 +1,7 @@
+plugins {
+    kotlin("jvm") apply false
+}
+
 data class DocumentationLabel(
     val kind: String,
     val label: String,

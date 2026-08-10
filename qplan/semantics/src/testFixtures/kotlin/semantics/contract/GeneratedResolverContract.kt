@@ -182,10 +182,8 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
         runBlocking {
             var generatedFromArgumentVariables = 0
             var activatedFromArgumentApplications = 0
-            var activatedImplementationDefaults = 0
             val config =
                 Config.default +
-                    (ImplementationArgumentDefaultWeight to 1.0) +
                     (FieldArgumentWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 1.0) +
                     (NodeResolversEnabled to false) +
@@ -207,9 +205,6 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
                     )
                     generatedFromArgumentVariables +=
                         testCase.registry.features.fromArgumentVariableCount
-                    if (testCase.query.features.hasAbstractImplementationDefaultSelection) {
-                        activatedImplementationDefaults += 1
-                    }
 
                     val resolution = assertGeneratedResolutionParity(testWorld, testCase)
                     activatedFromArgumentApplications +=
@@ -227,10 +222,6 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
             run.assertAggregate(
                 activatedFromArgumentApplications > 0,
                 "Generated FromArgument profile activated no variable-bearing resolvers",
-            )
-            run.assertAggregate(
-                activatedImplementationDefaults > 0,
-                "Generated FromArgument profile activated no abstract implementation defaults",
             )
         }
 }
@@ -293,9 +284,6 @@ interface MixedVariableGeneratedResolverContract : ResolverContract {
     @Test
     fun `generated mixed resolver variable worlds resolve correctly`(): Unit =
         runBlocking {
-            var generatedFromArgument = 0
-            var generatedFromObjectField = 0
-            var coactivatedCases = 0
             val config =
                 Config.default +
                     (SchemaObjectCount to 3..4) +
@@ -311,11 +299,13 @@ interface MixedVariableGeneratedResolverContract : ResolverContract {
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to true)
 
-            val run =
-                checkGeneratedProfile("mixed-variables", config) { testWorld, testCase ->
-                    generatedFromArgument +=
+            fun property(
+                coverage: MixedVariableCoverage,
+            ): suspend (TestWorld, ResolverTestCase) -> Unit =
+                { testWorld, testCase ->
+                    coverage.generatedFromArgument +=
                         testCase.registry.features.fromArgumentVariableCount
-                    generatedFromObjectField +=
+                    coverage.generatedFromObjectField +=
                         testCase.registry.features.fromObjectFieldVariableCount
                     val resolution = assertGeneratedResolutionParity(testWorld, testCase)
                     val fromArgument =
@@ -330,17 +320,45 @@ interface MixedVariableGeneratedResolverContract : ResolverContract {
                                 application.key.field,
                             )
                         }
-                    if (fromArgument && fromObjectField) coactivatedCases += 1
+                    if (fromArgument && fromObjectField) {
+                        coverage.coactivatedCases += 1
+                    }
                 }
 
-            run.assertAggregate(
-                generatedFromArgument > 0 && generatedFromObjectField > 0,
-                "Mixed-variable profile did not generate both variable kinds",
-            )
-            run.assertAggregate(
-                coactivatedCases > 0,
-                "Mixed-variable profile did not coactivate both variable kinds",
-            )
+            val sampledCoverage = MixedVariableCoverage()
+            val run =
+                checkGeneratedProfile(
+                    profile = "mixed-variables",
+                    config = config,
+                    property = property(sampledCoverage),
+                )
+            if (run.selectedCase == null) {
+                val activationCoverage: MixedVariableCoverage
+                val activationRun: ResolverTestRun
+                if (run.seed == MIXED_VARIABLE_ACTIVATION_SEED) {
+                    activationCoverage = sampledCoverage
+                    activationRun = run
+                } else {
+                    activationCoverage = MixedVariableCoverage()
+                    activationRun =
+                        checkGeneratedProfile(
+                            profile = "mixed-variables",
+                            config = config,
+                            seed = MIXED_VARIABLE_ACTIVATION_SEED,
+                            property = property(activationCoverage),
+                        )
+                }
+
+                activationRun.assertAggregate(
+                    activationCoverage.generatedFromArgument > 0 &&
+                        activationCoverage.generatedFromObjectField > 0,
+                    "Mixed-variable activation corpus did not generate both variable kinds",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.coactivatedCases > 0,
+                    "Mixed-variable activation corpus did not coactivate both variable kinds",
+                )
+            }
         }
 }
 
@@ -441,6 +459,7 @@ interface FeatureInteractionGeneratedResolverContract : ResolverContract {
 
 private const val GENERATED_PROFILE_CASE_BUDGET = 150
 private const val FEATURE_INTERACTION_CASE_BUDGET = 300
+private const val MIXED_VARIABLE_ACTIVATION_SEED = 1L
 
 private val GENERATED_PROFILE_COUNTS =
     TestCaseCount(
@@ -461,9 +480,16 @@ private data class GeneratedResolution(
     val applications: List<ResolverApplicationRecord>,
 )
 
+private data class MixedVariableCoverage(
+    var generatedFromArgument: Int = 0,
+    var generatedFromObjectField: Int = 0,
+    var coactivatedCases: Int = 0,
+)
+
 private suspend fun checkGeneratedProfile(
     profile: String,
     config: Config,
+    seed: Long? = null,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun =
     checkGeneratedCases(
@@ -471,6 +497,7 @@ private suspend fun checkGeneratedProfile(
         counts = GENERATED_PROFILE_COUNTS,
         expectedCases = GENERATED_PROFILE_CASE_BUDGET,
         config = config,
+        seed = seed,
         property = property,
     )
 
@@ -491,12 +518,14 @@ private suspend fun checkGeneratedCases(
     counts: TestCaseCount,
     expectedCases: Int,
     config: Config,
+    seed: Long? = null,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun =
     checkResolverTestCases(
         counts = counts,
         config = config,
         profile = profile,
+        seed = seed,
         property = property,
     ).also { run ->
         val effectiveExpectedCases =

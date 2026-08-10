@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import model.EngineResult
 import model.fragmentFrom
 import model.objectOf
+import model.sameCompletedResultAs
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.ArbitraryRegistry
@@ -527,7 +528,7 @@ private fun ResolverContract.assertGeneratedResolutionParity(
             testCase.registry,
             testCase.query.permutationEquivalentSource,
         )
-    assertEquals(ordinary.result, permuted.result)
+    assertTrue(ordinary.result.sameCompletedResultAs(permuted.result))
     return ordinary
 }
 

@@ -44,7 +44,7 @@ class MaterializeTest {
                     type = world.schema.query,
                     mutable = true,
                 )
-            val promise = result.createValuePromise(field, "writer")
+            val promise = result.createValuePromise(field)
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
                     context(world) {

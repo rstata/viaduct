@@ -372,7 +372,7 @@ internal suspend fun Value.Object.coroutineResolve(
 
 The exact helper names may differ, but retain one root structured scope, install-before-launch, and ordinary nested procedure calls.
 
-When the root `coroutineScope` returns, every launched descendant coroutine has completed. The returned OER must therefore contain only completed promises, making synchronous `get()`, structural equality, `correctResolution`, and existing test contracts valid.
+When the root `coroutineScope` returns, every launched descendant coroutine has completed. The returned OER must therefore contain only completed promises, making synchronous `get()`, `sameCompletedResultAs`, `correctResolution`, and existing test contracts valid.
 
 ## Slot Procedure
 

@@ -133,9 +133,9 @@ class EngineResultTest {
         assertFailsWith<MissingFieldException> { result.getFieldCheck(key) }
         assertFailsWith<IllegalStateException> { result.getTypeCheck() }
 
-        val value = result.createValuePromise(key, "value-writer")
-        val fieldCheck = result.createFieldCheckPromise(key, "field-checker")
-        val typeCheck = result.createTypeCheckPromise("type-checker")
+        val value = result.createValuePromise(key)
+        val fieldCheck = result.createFieldCheckPromise(key)
+        val typeCheck = result.createTypeCheckPromise()
 
         assertFailsWith<UncompletedPromiseException> { value.get() }
         assertFailsWith<UncompletedPromiseException> { fieldCheck.get() }
@@ -310,24 +310,95 @@ class EngineResultTest {
     }
 
     @Test
-    fun `completed mutable object has structural equality`() {
+    fun `object equality is identity based and hashing is stable through mutation`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val firstKey = schema.key("Query", "first")
         val secondKey = schema.key("Query", "second")
         val firstValue = Value.String.of("first")
         val mutable = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
-        val immutable = EngineResult.Object.of(schema.query, mapOf(firstKey to firstValue))
+        val equivalent = EngineResult.Object.of(schema.query, mapOf(firstKey to firstValue))
 
         mutable.setValue(firstKey, firstValue)
         mutable.setFieldCheck(firstKey, Value.Boolean.of(true))
 
-        assertEquals(immutable, mutable)
-        assertEquals(immutable.hashCode(), mutable.hashCode())
+        assertNotEquals(equivalent, mutable)
+        assertSame(mutable, mutable)
+        val hashCode = mutable.hashCode()
+        val keyed = hashMapOf(mutable to "retained")
 
         mutable.setValue(secondKey, Value.String.of("second"))
         mutable.setFieldCheck(secondKey, Value.Boolean.of(true))
 
-        assertNotEquals(immutable, mutable)
+        assertEquals(hashCode, mutable.hashCode())
+        assertEquals("retained", keyed[mutable])
+    }
+
+    @Test
+    fun `list equality includes type expression while object elements retain identity`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val elementType = schema.field("Query", "user").typeExpr
+        val shared =
+            schema.engineResultOf("User") {
+                "first" resolvesTo "same"
+            }
+        val equivalent =
+            schema.engineResultOf("User") {
+                "first" resolvesTo "same"
+            }
+        val list = EngineResult.List.of(elementType, listOf(shared))
+
+        assertEquals(list, EngineResult.List.of(elementType, listOf(shared)))
+        assertNotEquals(list, EngineResult.List.of(elementType, listOf(equivalent)))
+        assertNotEquals(
+            EngineResult.List.of(schema.field("Query", "value").typeExpr, emptyList()),
+            EngineResult.List.of(schema.field("Query", "integer").typeExpr, emptyList()),
+        )
+    }
+
+    @Test
+    fun `completed result comparison is extensional over nested values and checks`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val accepted = Value.Boolean.of(true)
+        val left =
+            schema.engineResultOf("Query") {
+                "user" resolvesTo
+                    engineResultOf("User") {
+                        "first".resolvesTo("same", accepted)
+                    }
+            }
+        val right =
+            schema.engineResultOf("Query") {
+                "user" resolvesTo
+                    engineResultOf("User") {
+                        "first".resolvesTo("same", accepted)
+                    }
+            }
+        val differentCheck =
+            schema.engineResultOf("Query") {
+                "user" resolvesTo
+                    engineResultOf("User") {
+                        "first".resolvesTo("same", Value.Boolean.of(false))
+                    }
+            }
+
+        assertTrue(left.sameCompletedResultAs(right))
+        assertFalse(left.sameCompletedResultAs(differentCheck))
+    }
+
+    @Test
+    fun `completed result comparison rejects an uncompleted promise`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val incomplete =
+            EngineResult.Object.of(
+                type = schema.query,
+                typeCheck = null,
+                mutable = true,
+            )
+        incomplete.createValuePromise(schema.key("Query", "first"))
+
+        assertFailsWith<UncompletedPromiseException> {
+            incomplete.sameCompletedResultAs(incomplete)
+        }
     }
 
     @Test

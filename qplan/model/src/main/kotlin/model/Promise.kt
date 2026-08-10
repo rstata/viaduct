@@ -15,21 +15,16 @@ sealed interface Promise<T> {
     /** @throws IllegalStateException when this promise has already been completed */
     fun complete(value: T)
 
-    /** The producer identity retained by a deferred promise, or null for an immediate promise. */
-    fun getDeferredStamp(): Any?
-
     companion object {
         fun <T> of(value: T): Promise<T> = CompletedPromiseImpl(value)
 
-        fun <T> ofDeferred(deferredStamp: Any? = null): Promise<T> =
-            DeferredPromiseImpl(deferredStamp)
+        fun <T> ofDeferred(): Promise<T> = DeferredPromiseImpl()
     }
 }
 
 internal fun <T> Promise.Companion.ofDeferred(
-    deferredStamp: Any?,
     validate: (T) -> Unit,
-): Promise<T> = DeferredPromiseImpl(deferredStamp, validate)
+): Promise<T> = DeferredPromiseImpl(validate)
 
 private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
     override suspend fun await(): T = value
@@ -38,14 +33,9 @@ private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
 
     override fun complete(value: T): Nothing =
         throw IllegalStateException("Promise has already been completed")
-
-    override fun getDeferredStamp(): Any? = null
 }
 
-private class DeferredPromiseImpl<T>(
-    private val deferredStamp: Any?,
-    private val validate: (T) -> Unit = {},
-) : Promise<T> {
+private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : Promise<T> {
     private val deferred = CompletableDeferred<T>()
 
     override suspend fun await(): T = deferred.await()
@@ -61,6 +51,4 @@ private class DeferredPromiseImpl<T>(
         validate(value)
         check(deferred.complete(value)) { "Promise has already been completed" }
     }
-
-    override fun getDeferredStamp(): Any? = deferredStamp
 }

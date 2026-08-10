@@ -4,7 +4,7 @@
 
 This project defines the carrier algebra for field-resolution reasoning. Follow [`../AGENTS.md`](../AGENTS.md) and the concrete API rules in [`guidelines.md`](./guidelines.md). Correctness, demand derivation, execution attribution, and checker interpretation belong in semantic domains outside the carrier.
 
-`EngineResult` values are finite, well-founded algebraic values. Mutable OERs may gain validated exact value, field-check, and type-check promises monotonically; a written parent may retain a mutable child OER while that child gains promises. Reference identity, self-reference, and cyclic result graphs are outside structural equality.
+`EngineResult` values are finite and well-founded. `Value.Simple` results use structural equality, OERs use reference equality, and lists use structural equality over their type expression and positional element equality. Use `sameCompletedResultAs` for explicit extensional comparison of completed result trees. Mutable OERs may gain validated exact value, field-check, and type-check promises monotonically; a written parent may retain a mutable child OER while that child gains promises. Self-reference and cyclic result graphs are outside the result domain.
 
 `Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
 

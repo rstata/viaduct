@@ -44,11 +44,13 @@ Do not expose public data classes or public sealed classes. For example, expose 
 
 ## Equality
 
-Document equality at the highest semantic category that defines it. Subtypes inherit that contract unless they explicitly refine it.
+Document equality at the highest semantic category that defines it. Subtypes inherit that contract unless the category explicitly assigns different equality modes to its variants.
 
-Every public semantic category has one of three equality modes: structural equality, schema-canonical equality, or undefined equality.
+Every public semantic category or variant has one of four equality modes: structural equality, reference equality, schema-canonical equality, or undefined equality.
 
 Structural equality means that two values are equal exactly when they have the same semantic constructor and their corresponding components are recursively equal. For example, two object keys are equal when their fields and argument values are equal, while a named type expression is never equal to a list type expression.
+
+Reference equality means that two values are equal exactly when they are the same runtime occurrence. `EngineResult.Object` uses reference equality because its promise stores are monotonically mutable. Its identity hash is stable while promises are installed and completed, so an OER may be used safely as a map key. `EngineResult.List` remains structural over its type expression and positional element equality, which means object elements compare by reference. Use `sameCompletedResultAs` when an explicit extensional comparison of completed result trees is required.
 
 Schema-canonical equality applies only to `Schema` and schema-definition graph elements: `Schema.Type`, `Schema.OutputField`, `Schema.InputLikeField`, and `Schema.FieldArguments`. Two schemas are equal exactly when they denote the same canonical schema. Two schema elements from that schema are equal exactly when they denote the same canonical element. Applying `==` to elements from different schemas is outside the modeled equality domain, regardless of the host-language result.
 

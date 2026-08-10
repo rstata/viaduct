@@ -7,6 +7,7 @@ import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.sameCompletedResultAs
 import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import kotlin.random.Random
@@ -267,7 +268,7 @@ class ResolverPropertyTest {
                     world.objectOf("Query").resolve(reversedFragment.subselections)
                 }
 
-            assertEquals(result, reversedResult)
+            assertTrue(result.sameCompletedResultAs(reversedResult))
             assertEquals(1, itemApplications)
             assertEquals(1, itemsApplications)
             assertEquals(5, computedApplications)

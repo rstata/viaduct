@@ -5,9 +5,10 @@ import model.invariants.conformsToSchemaType
 /**
  * A finite, well-founded field-resolution result.
  *
- * Engine-result equality is structural over the documented properties. Schema definitions within
- * those properties use the canonical equality documented by [Schema]. Equality of a result
- * containing an uncompleted [Promise] is undefined.
+ * Equality depends on the result variant. [Value.Simple] values use structural equality, [Object]
+ * values use reference equality, and [List] values use structural equality over their type
+ * expression and elements. Schema definitions within those properties use the canonical equality
+ * documented by [Schema].
  */
 sealed interface EngineResult {
     /**
@@ -15,7 +16,8 @@ sealed interface EngineResult {
      *
      * Every present value key belongs to [type], contains no variables, and completes only with a
      * value conforming to the field's type expression. A mutable object may gain absent promises,
-     * but a present promise is never replaced.
+     * but a present promise is never replaced. Objects use reference equality and stable identity
+     * hashing, so they may be used as map keys while promises are installed or completed.
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
@@ -47,19 +49,11 @@ sealed interface EngineResult {
         /** Sets whether the type check accepts access. */
         fun setTypeCheck(accept: Value.Boolean)
 
-        fun createValuePromise(
-            field: Value.GroundKey,
-            deferredStamp: Any? = null,
-        ): Promise<EngineResult?>
+        fun createValuePromise(field: Value.GroundKey): Promise<EngineResult?>
 
-        fun createFieldCheckPromise(
-            field: Value.GroundKey,
-            deferredStamp: Any? = null,
-        ): Promise<Value.Boolean>
+        fun createFieldCheckPromise(field: Value.GroundKey): Promise<Value.Boolean>
 
-        fun createTypeCheckPromise(
-            deferredStamp: Any? = null,
-        ): Promise<Value.Boolean>
+        fun createTypeCheckPromise(): Promise<Value.Boolean>
 
         companion object {
             /**
@@ -67,9 +61,7 @@ sealed interface EngineResult {
              *
              * Every initially present value satisfies its field's schema type. When [mutable] is
              * false, every set and promise-creation operation throws. When it is true, each absent
-             * value, field check, and type check may be installed once. A mutable result must not
-             * be used as a hash key while writes or promise completions may continue because
-             * structural equality and hashing observe current promises.
+             * value, field check, and type check may be installed once.
              */
             fun of(
                 type: Schema.ObjectType,
@@ -102,7 +94,14 @@ sealed interface EngineResult {
      *
      * [typeExpr] is the expected type of each element, including its nullability and nested lists.
      * Type-check state belongs to each object element's [Object], while the containing field's
-     * field-check state belongs to its containing object.
+     * field-check state belongs to its containing object. Lists use structural equality over
+     * [typeExpr] and positional element equality; object elements therefore compare by reference.
+     *
+     * Including [typeExpr] in equality is intentional. The factory validates every element against
+     * it, so it acts as a retained type witness: assigning a list to a compatible list position
+     * requires comparing type expressions, not recursively revalidating its contents. Content-only
+     * equality would equate lists with different assignability unless every assignment walked the
+     * elements again.
      */
     sealed interface List : EngineResult {
         val typeExpr: TypeExpr<Schema.OutputType>
@@ -138,6 +137,30 @@ sealed interface EngineResult {
                 return ListResultImpl(typeExpr, values)
             }
         }
+    }
+}
+
+/**
+ * Returns whether two completed result trees contain the same values and checks.
+ *
+ * This explicit extensional comparison is distinct from ordinary equality because [EngineResult.Object]
+ * uses reference equality. Both trees must be finite and every present promise they contain must be
+ * completed.
+ *
+ * @throws UncompletedPromiseException when comparison reaches an uncompleted promise
+ */
+fun EngineResult?.sameCompletedResultAs(other: EngineResult?): Boolean {
+    if (this == null || other == null) return this == other
+
+    return when (this) {
+        is Value.Simple -> other is Value.Simple && this == other
+        is EngineResult.List ->
+            other is EngineResult.List &&
+                typeExpr == other.typeExpr &&
+                size == other.size &&
+                indices.all { index -> this[index].sameCompletedResultAs(other[index]) }
+        is EngineResult.Object ->
+            other is EngineResult.Object && sameCompletedObjectResultAs(other)
     }
 }
 
@@ -280,27 +303,21 @@ private class ObjectResultImpl(
         typeCheckStore.set(Unit, accept)
     }
 
-    override fun createValuePromise(
-        field: Value.GroundKey,
-        deferredStamp: Any?,
-    ): Promise<EngineResult?> {
+    override fun createValuePromise(field: Value.GroundKey): Promise<EngineResult?> {
         checkWritable(field)
-        return valueStore.create(field, deferredStamp) { value ->
+        return valueStore.create(field) { value ->
             validateObjectValue(field, value)
         }
     }
 
-    override fun createFieldCheckPromise(
-        field: Value.GroundKey,
-        deferredStamp: Any?,
-    ): Promise<Value.Boolean> {
+    override fun createFieldCheckPromise(field: Value.GroundKey): Promise<Value.Boolean> {
         checkWritable(field)
-        return fieldCheckStore.create(field, deferredStamp)
+        return fieldCheckStore.create(field)
     }
 
-    override fun createTypeCheckPromise(deferredStamp: Any?): Promise<Value.Boolean> {
+    override fun createTypeCheckPromise(): Promise<Value.Boolean> {
         checkMutable()
-        return typeCheckStore.create(Unit, deferredStamp)
+        return typeCheckStore.create(Unit)
     }
 
     val completedValues: Map<Value.GroundKey, EngineResult?> get() = valueStore.completedValues()
@@ -316,15 +333,6 @@ private class ObjectResultImpl(
     }
 
     private fun checkMutable() = check(mutable) { "${type.typeName} result is immutable" }
-
-    override fun equals(other: Any?): Boolean =
-        this === other ||
-            (other is ObjectResultImpl && completedState() == other.completedState())
-
-    override fun hashCode(): Int = completedState().hashCode()
-
-    private fun completedState(): List<Any?> =
-        listOf(type, completedValues, completedFieldChecks, completedTypeCheck)
 }
 
 private data class ListResultImpl(
@@ -339,6 +347,25 @@ private data class ListResultImpl(
 
 private val EngineResult.Object.implementation: ObjectResultImpl
     get() = this as ObjectResultImpl
+
+private fun EngineResult.Object.sameCompletedObjectResultAs(other: EngineResult.Object): Boolean {
+    val left = implementation
+    val right = other.implementation
+    val leftValues = left.completedValues
+    val rightValues = right.completedValues
+    val leftFieldChecks = left.completedFieldChecks
+    val rightFieldChecks = right.completedFieldChecks
+    val leftTypeCheck = left.completedTypeCheck
+    val rightTypeCheck = right.completedTypeCheck
+
+    return type == other.type &&
+        leftValues.keys == rightValues.keys &&
+        leftValues.all { (key, value) ->
+            value.sameCompletedResultAs(rightValues.getValue(key))
+        } &&
+        leftFieldChecks == rightFieldChecks &&
+        leftTypeCheck == rightTypeCheck
+}
 
 private fun <K, V> unionMaps(
     first: Map<K, V>,
@@ -381,11 +408,10 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.set(
 
 private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
     key: K,
-    deferredStamp: Any?,
     validate: (V) -> Unit = {},
 ): Promise<V> =
     Promise
-        .ofDeferred(deferredStamp, validate)
+        .ofDeferred(validate)
         .also { write(key, it) }
 
 private fun <K : Any, V> OnceStore<K, Promise<V>>.completedValues(): Map<K, V> =

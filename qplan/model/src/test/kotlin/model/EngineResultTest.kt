@@ -402,6 +402,17 @@ class EngineResultTest {
     }
 
     @Test
+    fun `completed result comparison audits completion after an early inequality`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val incomplete = EngineResult.Object.of(schema.query, mutable = true)
+        incomplete.createValuePromise(schema.key("Query", "first"))
+
+        assertFailsWith<UncompletedPromiseException> {
+            Value.String.of("different variant").sameCompletedResultAs(incomplete)
+        }
+    }
+
+    @Test
     fun `list result factory rejects incompatible element values`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val elementType = schema.field("Query", "value").typeExpr

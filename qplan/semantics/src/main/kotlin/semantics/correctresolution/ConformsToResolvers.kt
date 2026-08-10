@@ -6,6 +6,7 @@ import model.EngineResult
 import model.PathComponent
 import model.Schema
 import model.Value
+import semantics.RuntimeSupport
 import semantics.materialize
 
 /**
@@ -22,9 +23,11 @@ import semantics.materialize
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToResolvers(): Boolean =
-    objectConformsToResolvers(emptyList())
+    context(RuntimeSupport.noCycleChecking()) {
+        objectConformsToResolvers(emptyList())
+    }
 
-context(world: Assumptions)
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private fun EngineResult.Object.objectConformsToResolvers(
     path: List<PathComponent>,
 ): Boolean {
@@ -42,8 +45,10 @@ private fun EngineResult.Object.objectConformsToResolvers(
                 val input =
                     runBlocking {
                         materialize(
-                            resolver
-                                .objectFragmentAt(path + key),
+                            selections =
+                                resolver
+                                    .objectFragmentAt(path + key),
+                            reader = path + key,
                         )
                     }
                 val resolverValue = resolver(input, key.arguments)
@@ -54,7 +59,7 @@ private fun EngineResult.Object.objectConformsToResolvers(
     }
 }
 
-context(world: Assumptions)
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private fun EngineResult?.engineResultConformsToResolvers(
     path: List<PathComponent>,
 ): Boolean =

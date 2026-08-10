@@ -5,6 +5,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
 import model.MissingFieldException
+import model.PathComponent
+import model.Schema
 import model.Value
 import model.fragmentFrom
 import model.instantiateBindings
@@ -16,6 +18,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class MaterializeTest {
+    private val runtimeSupport = RuntimeSupport.noCycleChecking()
+
     @Test
     fun `materialization awaits a present deferred value`() =
         runBlocking {
@@ -47,8 +51,11 @@ class MaterializeTest {
             val promise = result.createValuePromise(field)
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    context(world) {
-                        result.materialize(selections)
+                    context(world, runtimeSupport) {
+                        result.materialize(
+                            selections = selections,
+                            reader = emptyList(),
+                        )
                     }
                 }
 
@@ -82,10 +89,75 @@ class MaterializeTest {
 
         assertFailsWith<MissingFieldException> {
             runBlocking {
-                context(world) {
-                    result.materialize(selections)
+                context(world, runtimeSupport) {
+                    result.materialize(
+                        selections = selections,
+                        reader = emptyList(),
+                    )
                 }
             }
         }
+    }
+
+    @Test
+    fun `nested materialization checks a cycle before awaiting`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query { child: Child! }
+                    type Child { value: String! }
+                    """.trimIndent(),
+                ).assumptions
+        val childType = world.schema.type("Child") as Schema.ObjectType
+        val childKey =
+            Value.GroundKey.of(
+                world.schema.objectField("Query", "child"),
+                emptyMap(),
+            )
+        val valueKey =
+            Value.GroundKey.of(
+                world.schema.objectField("Child", "value"),
+                emptyMap(),
+            )
+        val reader: List<PathComponent> = listOf(childKey, valueKey)
+        val childResult = EngineResult.Object.of(childType, mutable = true)
+        childResult.createValuePromise(valueKey)
+        val result =
+            EngineResult.Object.of(
+                type = world.schema.query,
+                values = mapOf(childKey to childResult),
+            )
+        val selections =
+            context(world) {
+                world
+                    .fragmentFrom("fragment ignored on Query { child { value } }")
+                    .subselections
+                    .merge(world.schema.query)
+                    .instantiateBindings()
+            }
+        val cycleCheckingSupport =
+            RuntimeSupport.cycleChecking { completedSelections ->
+                SelectionCompletion(completedSelections)
+            }
+        cycleCheckingSupport.registerWriter(
+            target = childResult,
+            key = valueKey,
+            writer = reader,
+        )
+
+        val failure =
+            assertFailsWith<ResolverReadCycleException> {
+                runBlocking {
+                    context(world, cycleCheckingSupport) {
+                        result.materialize(
+                            selections = selections,
+                            reader = reader,
+                        )
+                    }
+                }
+            }
+
+        assertEquals(listOf(reader, reader), failure.cycle)
     }
 }

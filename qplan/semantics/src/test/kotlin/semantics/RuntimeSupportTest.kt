@@ -1,0 +1,243 @@
+package semantics
+
+import model.EngineResult
+import model.PathComponent
+import model.Value
+import model.selectionForestOf
+import model.testing.TestWorld
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+class RuntimeSupportTest {
+    @Test
+    fun `cycle-checking support delegates selection completion`() {
+        val fixture = Fixture()
+        val selections = selectionForestOf()
+
+        val completion =
+            context(fixture.world) {
+                fixture.support.complete(selections)
+            }
+
+        assertEquals(selections, completion.selections)
+    }
+
+    @Test
+    fun `acyclic reads are retained without failure`() {
+        val fixture = Fixture()
+
+        fixture.register("second")
+        fixture.register("third")
+        fixture.support.cycleCheck(
+            reader = fixture.path("first"),
+            target = fixture.target,
+            key = fixture.key("second"),
+        )
+        fixture.support.cycleCheck(
+            reader = fixture.path("second"),
+            target = fixture.target,
+            key = fixture.key("third"),
+        )
+    }
+
+    @Test
+    fun `direct self-cycle reports its complete path`() {
+        val fixture = Fixture()
+        fixture.register("first")
+
+        val failure =
+            assertFailsWith<ResolverReadCycleException> {
+                fixture.support.cycleCheck(
+                    reader = fixture.path("first"),
+                    target = fixture.target,
+                    key = fixture.key("first"),
+                )
+            }
+
+        assertEquals(
+            listOf(fixture.path("first"), fixture.path("first")),
+            failure.cycle,
+        )
+    }
+
+    @Test
+    fun `multi-hop cycle reports dependency order`() {
+        val fixture = Fixture()
+        fixture.register("first")
+        fixture.register("second")
+        fixture.register("third")
+        fixture.support.cycleCheck(
+            reader = fixture.path("first"),
+            target = fixture.target,
+            key = fixture.key("second"),
+        )
+        fixture.support.cycleCheck(
+            reader = fixture.path("second"),
+            target = fixture.target,
+            key = fixture.key("third"),
+        )
+
+        val failure =
+            assertFailsWith<ResolverReadCycleException> {
+                fixture.support.cycleCheck(
+                    reader = fixture.path("third"),
+                    target = fixture.target,
+                    key = fixture.key("first"),
+                )
+            }
+
+        assertEquals(
+            listOf(
+                fixture.path("third"),
+                fixture.path("first"),
+                fixture.path("second"),
+                fixture.path("third"),
+            ),
+            failure.cycle,
+        )
+    }
+
+    @Test
+    fun `completed deferred slot still contributes a read edge`() {
+        val fixture = Fixture()
+        val key = fixture.key("first")
+        fixture.target
+            .createValuePromise(key)
+            .complete(Value.String.of("complete"))
+        fixture.register("first")
+
+        assertFailsWith<ResolverReadCycleException> {
+            fixture.support.cycleCheck(
+                reader = fixture.path("first"),
+                target = fixture.target,
+                key = key,
+            )
+        }
+    }
+
+    @Test
+    fun `recording the same acyclic edge repeatedly is harmless`() {
+        val fixture = Fixture()
+        fixture.register("second")
+
+        repeat(2) {
+            fixture.support.cycleCheck(
+                reader = fixture.path("first"),
+                target = fixture.target,
+                key = fixture.key("second"),
+            )
+        }
+    }
+
+    @Test
+    fun `writer registration is write-once per exact slot`() {
+        val fixture = Fixture()
+        fixture.register("first")
+
+        assertFailsWith<IllegalStateException> {
+            fixture.register("first")
+        }
+    }
+
+    @Test
+    fun `concurrent edge insertion detects a newly closed cycle`() {
+        val fixture = Fixture()
+        fixture.register("first")
+        fixture.register("second")
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+        val failures = ConcurrentLinkedQueue<Throwable>()
+        val checks =
+            listOf(
+                fixture.path("first") to fixture.key("second"),
+                fixture.path("second") to fixture.key("first"),
+            )
+        val workers =
+            checks.map { (reader, key) ->
+                thread {
+                    ready.countDown()
+                    start.await()
+                    try {
+                        fixture.support.cycleCheck(reader, fixture.target, key)
+                    } catch (throwable: Throwable) {
+                        failures += throwable
+                    }
+                }
+            }
+
+        ready.await()
+        start.countDown()
+        workers.forEach(Thread::join)
+
+        assertTrue(failures.isNotEmpty())
+        failures.forEach { failure ->
+            assertIs<ResolverReadCycleException>(failure)
+            assertEquals(failure.cycle.first(), failure.cycle.last())
+            assertEquals(
+                setOf(fixture.path("first"), fixture.path("second")),
+                failure.cycle.toSet(),
+            )
+        }
+    }
+
+    @Test
+    fun `default support ignores writer registration and cycle checks`() {
+        val fixture = Fixture()
+        val support =
+            RuntimeSupport { selections ->
+                SelectionCompletion(selections)
+            }
+
+        support.registerWriter(
+            target = fixture.target,
+            key = fixture.key("first"),
+            writer = fixture.path("first"),
+        )
+        support.cycleCheck(
+            reader = fixture.path("first"),
+            target = fixture.target,
+            key = fixture.key("first"),
+        )
+    }
+
+    private class Fixture {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query {
+                      first: String!
+                      second: String!
+                      third: String!
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val target = EngineResult.Object.of(world.schema.query, mutable = true)
+        val support =
+            RuntimeSupport.cycleChecking { selections ->
+                SelectionCompletion(selections)
+            }
+
+        fun key(name: String): Value.GroundKey =
+            Value.GroundKey.of(
+                world.schema.objectField("Query", name),
+                emptyMap(),
+            )
+
+        fun path(name: String): List<PathComponent> = listOf(key(name))
+
+        fun register(name: String) {
+            support.registerWriter(
+                target = target,
+                key = key(name),
+                writer = path(name),
+            )
+        }
+    }
+}

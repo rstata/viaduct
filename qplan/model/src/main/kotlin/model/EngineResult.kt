@@ -145,11 +145,21 @@ sealed interface EngineResult {
  *
  * This explicit extensional comparison is distinct from ordinary equality because [EngineResult.Object]
  * uses reference equality. Both trees must be finite and every present promise they contain must be
- * completed.
+ * completed. Its result is meaningful only after both trees are quiescent; the comparison does not
+ * take an atomic snapshot while promises or slots are being mutated concurrently.
  *
- * @throws UncompletedPromiseException when comparison reaches an uncompleted promise
+ * @throws UncompletedPromiseException when either tree contains an uncompleted promise
  */
 fun EngineResult?.sameCompletedResultAs(other: EngineResult?): Boolean {
+    val same = hasSameCompletedResultAs(other)
+    if (!same) {
+        requireCompleted()
+        other.requireCompleted()
+    }
+    return same
+}
+
+private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolean {
     if (this == null || other == null) return this == other
 
     return when (this) {
@@ -158,7 +168,7 @@ fun EngineResult?.sameCompletedResultAs(other: EngineResult?): Boolean {
             other is EngineResult.List &&
                 typeExpr == other.typeExpr &&
                 size == other.size &&
-                indices.all { index -> this[index].sameCompletedResultAs(other[index]) }
+                indices.all { index -> this[index].hasSameCompletedResultAs(other[index]) }
         is EngineResult.Object ->
             other is EngineResult.Object && sameCompletedObjectResultAs(other)
     }
@@ -333,6 +343,14 @@ private class ObjectResultImpl(
     }
 
     private fun checkMutable() = check(mutable) { "${type.typeName} result is immutable" }
+
+    fun requireCompleted() {
+        valueStore.snapshot().values.forEach { promise ->
+            promise.get().requireCompleted()
+        }
+        fieldCheckStore.snapshot().values.forEach { promise -> promise.get() }
+        typeCheckStore.snapshot().values.forEach { promise -> promise.get() }
+    }
 }
 
 private data class ListResultImpl(
@@ -348,6 +366,10 @@ private data class ListResultImpl(
 private val EngineResult.Object.implementation: ObjectResultImpl
     get() = this as ObjectResultImpl
 
+/**
+ * The result is meaningful only after both object trees are quiescent. Store snapshots and
+ * recursive reads do not form one atomic snapshot while promises or slots are being mutated.
+ */
 private fun EngineResult.Object.sameCompletedObjectResultAs(other: EngineResult.Object): Boolean {
     val left = implementation
     val right = other.implementation
@@ -361,10 +383,20 @@ private fun EngineResult.Object.sameCompletedObjectResultAs(other: EngineResult.
     return type == other.type &&
         leftValues.keys == rightValues.keys &&
         leftValues.all { (key, value) ->
-            value.sameCompletedResultAs(rightValues.getValue(key))
+            value.hasSameCompletedResultAs(rightValues.getValue(key))
         } &&
         leftFieldChecks == rightFieldChecks &&
         leftTypeCheck == rightTypeCheck
+}
+
+private fun EngineResult?.requireCompleted() {
+    when (this) {
+        null,
+        is Value.Simple,
+        -> Unit
+        is EngineResult.List -> indices.forEach { index -> get(index).requireCompleted() }
+        is EngineResult.Object -> implementation.requireCompleted()
+    }
 }
 
 private fun <K, V> unionMaps(

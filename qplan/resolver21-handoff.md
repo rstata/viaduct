@@ -6,6 +6,9 @@ Implement Resolver21 as the first coroutine-based field resolver.
 
 Resolver21 is intentionally only the coroutine counterpart of Resolver01. It supports empty user-declared resolver object fragments, fixture-generated `T$Bridge.$node { $id }` loaders, ordinary field arguments, concrete-type specialization, lists, recursion, and non-selective complete resolver outputs. It does not support nonempty user-declared object fragments, resolver variables, or selective resolver output.
 
+Resolver21 matches Resolver01's value-resolution feature surface and complete-output policy. Field-
+and type-check execution remain outside Resolver21.
+
 The purpose of Resolver21 is to validate the coroutine execution foundation before adding semantic complexity. Do not implement Resolver22 or Resolver23 in this task.
 
 The intended sequence is:
@@ -52,10 +55,7 @@ fun getValue(field: Value.GroundKey): Promise<EngineResult?>
 
 fun setValue(field: Value.GroundKey, value: EngineResult?)
 
-fun createValuePromise(
-    field: Value.GroundKey,
-    deferredStamp: Any? = null,
-): Promise<EngineResult?>
+fun createValuePromise(field: Value.GroundKey): Promise<EngineResult?>
 ```
 
 `Promise<T>` has an immediate implementation and a `CompletableDeferred`-backed deferred implementation:
@@ -64,12 +64,12 @@ fun createValuePromise(
 suspend fun await(): T
 fun get(): T
 fun complete(value: T)
-fun getDeferredStamp(): Any?
 ```
 
 `get()` throws `UncompletedPromiseException` immediately when a deferred promise is incomplete. `await()` suspends. `complete()` is non-suspending and rejects repeated completion. A deferred value promise created through the OER validates its completed value against the field schema before publication.
 
-`getDeferredStamp()` is independent of completion status. Resolver21 must stamp each deferred value promise with the exact root-relative resolver coordinate `path + key`.
+Promises carry no resolver coordinate or cycle-detection metadata. Resolver21 records deferred
+value-slot writers in `RuntimeSupport`, keyed by OER identity and exact ground key.
 
 `EngineResult.Object.materialize` is already suspending and calls `await()` on each selected value promise. Reading a selected field whose promise was never installed still throws `MissingFieldException` immediately. That distinction is essential: Resolver21 must install every promise that can legitimately be awaited before launching work that can read it.
 
@@ -91,7 +91,10 @@ Resolver21 must not have:
 - `GlobalScope`;
 - an independent scope or job per OER that escapes the root resolution.
 
-The coroutine tree itself is the execution structure. Each exact field slot is one launched coroutine. A resolver that materializes an incomplete dependency suspends at `Promise.await()`, retaining its traversal continuation. Completing the dependency resumes that continuation.
+The coroutine tree itself is the execution structure. Each newly installed deferred value slot is
+one launched coroutine; immediate passive slots launch none. A resolver that materializes an
+incomplete dependency suspends at `Promise.await()`, retaining its traversal continuation.
+Completing the dependency resumes that continuation.
 
 The public Resolver21 API remains synchronous for parity with the existing resolvers:
 
@@ -110,6 +113,7 @@ This public function should use `runBlocking` once around the complete Resolver2
 
 - its existing `complete(selections)` operation containing the output-boundary completion policy;
 - a `cycleCheck` operation that materialization invokes immediately before every promise await;
+- the registry from exact deferred value slots to their root-relative writer coordinates;
 - the monotonic resolver-read cycle graph used by cycle-checking variants.
 
 The completion result retains the two boundary-dependent facts:
@@ -119,14 +123,17 @@ val selections: SelectionForest
 val retainCompleteOutput: Boolean
 ```
 
-The exact private carrier for those two facts may remain a small data class, but it is not a context service. The only context service used by resolution and materialization is `RuntimeSupport`.
+The existing internal `SelectionCompletion` remains the carrier for those two facts; it is not a
+context service. The only context service used by resolution and materialization is
+`RuntimeSupport`.
 
 Resolver21's `complete` operation supplies identity completion. Resolver22 will later supply `selections.successorBoundaryDemand()`. Resolver23 will later supply `selections.successorDemand()`. Resolver21 and Resolver22 require `world.selectiveResolvers == false`; Resolver23 requires it to be true. The shared procedure uses that world flag for resolver invocation and passive output traversal.
 
 Provide two explicit constructions:
 
 - cycle-checking support for Resolver21, which owns one shared graph and has a functional `cycleCheck`;
-- no-cycle-check support for Resolver01-10 and for post-resolution validation, dependency, and witness oracles, whose `cycleCheck` remains a no-op even when a promise has a deferred writer-coordinate stamp.
+- no-cycle-check support for Resolver01-10 and for post-resolution validation, dependency, and
+  witness oracles, whose writer registration and `cycleCheck` operations are no-ops.
 
 Do not infer this policy from whether a reader happens to be present. Every actual Resolver21 resolver-input materialization must pass its exact reader coordinate.
 
@@ -145,7 +152,10 @@ return context(runtimeSupport) {
 }
 ```
 
-Resolvers01-10 already use `RuntimeSupport` and obtain completion facts through `runtimeSupport.complete(...)`. Give their existing lambda-constructed support a no-op `cycleCheck`; do not otherwise change their scheduling or output policy.
+Resolvers01-10 already use `RuntimeSupport` and obtain completion facts through
+`runtimeSupport.complete(...)`. Give `registerWriter` and `cycleCheck` default no-op bodies so
+`RuntimeSupport` retains one abstract method and existing lambda construction remains valid. Do not
+otherwise change their scheduling or output policy.
 
 Keep this API small. Resolver21-23 should not require separate scheduler subclasses or duplicated copies of the coroutine procedure.
 
@@ -158,78 +168,90 @@ This is cycle detection for violated resolver-validation or invariant assumption
 The cycle-checking behavior belongs to `RuntimeSupport`:
 
 ```kotlin
+fun registerWriter(
+    target: EngineResult.Object,
+    key: Value.GroundKey,
+    writer: List<PathComponent>,
+)
+
 fun cycleCheck(
     reader: List<PathComponent>,
-    promise: Promise<*>,
+    target: EngineResult.Object,
+    key: Value.GroundKey,
 )
 ```
 
-The cycle-checking implementation records and checks the edge from `reader` to the promise's writer. No-cycle-check support instead performs no graph update.
+An exact value-slot identity is the pair of an OER reference and a `Value.GroundKey`. The key must
+remain ground because two argument tuples for the same schema field are distinct slots. Define this
+carrier privately in semantics; do not add it to the model:
 
-The graph edge is:
-
-```text
-reader resolver coordinate -> promise deferred stamp
+```kotlin
+private data class ValueSlot(
+    val target: EngineResult.Object,
+    val key: Value.GroundKey,
+)
 ```
 
-Every deferred value promise created for a resolver slot must use the exact `List<PathComponent>`
-coordinate of that slot as its deferred stamp:
+`EngineResult.Object` uses reference equality and stable identity hashing, so generated data-class
+equality gives this coordinate the intended semantics. `registerWriter` records:
+
+```text
+ValueSlot(target OER identity, exact ground key) -> root-relative writer path
+```
+
+The writer path is the exact value-slot coordinate `path + key`. Register it immediately after
+creating the deferred value promise and before launching any local slot coroutine:
 
 ```kotlin
 val writer = path + key
-val valuePromise =
-    Promise.ofDeferred<EngineResult?>(
-        deferredStamp = writer,
-    )
+target.createValuePromise(key)
+runtimeSupport.registerWriter(target, key, writer)
 ```
 
-This establishes the conversion from a promise to its writer coordinate:
+Repeated registration of the same `ValueSlot` is an invariant violation and must throw. The
+promise-creation and registration calls are intentionally adjacent but do not need a model-level
+transaction: publication ordering prevents the target OER from being read between them.
+
+Immediately before awaiting a value, `cycleCheck` looks up `ValueSlot(target, key)`. An absent
+writer means that the slot contains an immediate value and contributes no resolver-read edge. A
+present writer adds the direct graph edge:
 
 ```text
-promise -> promise.getDeferredStamp() as List<PathComponent>
+reader resolver coordinate -> writer value-slot coordinate
 ```
 
-Together with `readsByReader: reader path -> Set<Promise<*>>`, that conversion makes the recorded
-relation an adjacency list over resolver coordinates:
+Every deferred value promise created by Resolver21 must have a writer registration before it
+becomes reachable. Treat that as an orchestration invariant; do not inspect promise implementation
+details to distinguish immediate and deferred promises.
 
-```text
-successors(reader) =
-    readsByReader[reader].map { promise -> promise's deferred writer coordinate }
-```
-
-Cycle traversal therefore starts at the newly read promise's writer coordinate, looks up every
-promise read by that writer, converts those promises to their writer coordinates, and continues
-until it either reaches the original reader or exhausts the graph.
-
-If `getDeferredStamp()` returns `null`, the promise is immediate and contributes no resolver edge.
-A non-null stamp encountered by cycle-checking must be a `List<PathComponent>` writer coordinate;
-fail on any other stamp because it violates Resolver21's promise-creation invariant. Do not inspect
-whether a deferred promise is complete; a completed deferred promise retains its writer stamp and
-records the same semantic read edge as an incomplete one.
-
-The graph is monotonic. Retain recorded edges for the entire root resolution and never remove them
-after an await. One resolver may read several promises, so store a set of promises per reader rather
-than one replaceable edge; each promise supplies its adjacent writer coordinate through
-`getDeferredStamp()`.
-
-A suitable concurrent representation is:
+Store the graph directly as an adjacency list over root-relative coordinates:
 
 ```kotlin
-ConcurrentHashMap<List<PathComponent>, MutableSet<Promise<*>>>()
+ConcurrentHashMap<List<PathComponent>, MutableSet<List<PathComponent>>>()
 ```
 
-Insert the promise before traversing the graph:
+The graph is monotonic. Retain recorded edges for the entire root resolution and never remove them
+after an await. Deferred completion status does not affect registration or edge recording: a
+completed deferred slot retains its writer entry for the lifetime of `RuntimeSupport`.
+
+Insert the writer path before traversing the graph:
 
 ```kotlin
 readsByReader.computeIfAbsent(reader) {
-    // One resolver coroutine normally owns this reader's set; use a concurrent set defensively.
+    // One resolver coroutine normally owns this set; use a concurrent set defensively.
     ConcurrentHashMap.newKeySet()
-}.add(promise)
+}.add(writer)
 ```
 
-Then search from the promise's deferred writer coordinate for `reader`, traversing the adjacency
-list by converting each recorded promise through `getDeferredStamp()`. If `reader` is reachable,
+Then search from `writer` for `reader` through the direct adjacency map. If `reader` is reachable,
 throw an `IllegalStateException` or a focused subtype with the complete cycle in its message.
+Each search must use its own visited set so traversal terminates even if the graph already contains
+a cycle that does not include `reader`. Also retain a predecessor map for nodes discovered by this
+search. When `reader` is reached, reconstruct and report the complete cycle in dependency order:
+
+```text
+reader -> writer -> ... -> reader
+```
 
 Insertion occurs before traversal. Because edges are never removed, the insertion that closes a concurrently formed cycle can observe the previously inserted path; no promise-completion handshake is needed. Keep the implementation thread-safe even though Resolver21 initially inherits a single-threaded dispatcher.
 
@@ -238,10 +260,11 @@ Add focused tests for:
 - an acyclic chain;
 - a direct self-cycle;
 - a multi-hop cycle;
-- a read of an already completed deferred promise;
+- a read of a registered slot whose promise has already completed;
 - repeated recording of the same edge;
+- repeated writer registration fails;
 - concurrent insertion of edges that close one cycle;
-- no-cycle-check support awaiting a stamped deferred promise without adding an edge.
+- no-cycle-check support performs no writer registration or edge checking.
 
 ## Contextual Materialization
 
@@ -249,17 +272,20 @@ Make `RuntimeSupport` a context parameter of materialization:
 
 ```kotlin
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-suspend fun EngineResult.Object.materialize(
+internal suspend fun EngineResult.Object.materialize(
     selections: ObjectSelectionForest,
     reader: List<PathComponent>,
 ): Value.Object
 ```
 
+Keep this overload internal because its signature exposes internal `RuntimeSupport`. Do not make
+`RuntimeSupport` public merely to preserve public visibility for materialization.
+
 Immediately before each await, materialization uses the contextual support directly:
 
 ```kotlin
 val promise = getValue(key)
-runtimeSupport.cycleCheck(reader, promise)
+runtimeSupport.cycleCheck(reader, this, key)
 val value = promise.await()
 ```
 
@@ -277,8 +303,8 @@ val input =
 
 Update existing materialization call sites and focused tests to provide `RuntimeSupport`. Post-resolution oracles and existing synchronous resolvers use the explicitly no-op variant.
 
-Do not put cycle-detection state in `Promise`, `EngineResult`, or `Assumptions`. `Promise` supplies
-only its writer-coordinate stamp; cycle-enabled `RuntimeSupport` owns the read relation.
+Do not put cycle-detection state in `Promise`, `EngineResult`, or `Assumptions`. Cycle-enabled
+`RuntimeSupport` owns both the writer registry and the read relation.
 
 ## Object Orchestration
 
@@ -301,9 +327,11 @@ private fun CoroutineScope.orchestrateSlot(
     val unresolvedKeys = closedDemand.groundKeys() - target.keys
 
     unresolvedKeys.forEach { key ->
-        target.createValuePromise(
-            field = key,
-            deferredStamp = path + key,
+        target.createValuePromise(key)
+        runtimeSupport.registerWriter(
+            target = target,
+            key = key,
+            writer = path + key,
         )
     }
 
@@ -321,9 +349,15 @@ private fun CoroutineScope.orchestrateSlot(
 }
 ```
 
-The two loops express a temporal invariant within one function: install every local destination
-promise before launching any local resolver coroutine. They do not justify a separate abstraction.
-Keep genuinely complicated work, such as demand closure, behind its existing focused abstraction.
+The two loops express a temporal invariant within one function: install and register every local
+destination promise before launching any local resolver coroutine. They do not justify a separate
+abstraction. Keep genuinely complicated work, such as demand closure, behind its existing focused
+abstraction.
+
+Use inherited-context `launch(start = CoroutineStart.DEFAULT)` for every slot. Do not use
+`CoroutineStart.UNDISPATCHED`, `Dispatchers.Unconfined`, or any other dispatcher. The installation
+ordering relies on launched children not beginning inline, and Resolver21 deliberately executes on
+the dispatcher inherited from the root `runBlocking`.
 
 `orchestrateSlot` must not call `dependencyOrder` or `resolverDependencies`. Every installed local
 slot may launch immediately.
@@ -372,7 +406,15 @@ internal suspend fun Value.Object.coroutineResolve(
 
 The exact helper names may differ, but retain one root structured scope, install-before-launch, and ordinary nested procedure calls.
 
-When the root `coroutineScope` returns, every launched descendant coroutine has completed. The returned OER must therefore contain only completed promises, making synchronous `get()`, `sameCompletedResultAs`, `correctResolution`, and existing test contracts valid.
+When the root `coroutineScope` returns, every launched descendant coroutine has completed and
+resolution is quiescent: no resolver-owned coroutine remains that can mutate the result tree. Every
+promise present anywhere in the successfully returned result tree is complete, and every deferred
+value promise installed by orchestration was completed exactly once. This makes synchronous
+`get()`, `sameCompletedResultAs`, `correctResolution`, and existing test contracts valid.
+
+Quiescence is a property of the completed resolution, not permanent immutability of the returned
+OER. The OER remains mutable through its public model API; a caller that installs another promise
+after return leaves the quiescent completed-result domain until that promise is completed.
 
 ## Slot Procedure
 
@@ -414,7 +456,8 @@ Resolver21 reaches only the final complete-output branch, but the shared impleme
 
 The critical publication invariant is:
 
-> Every active descendant promise reachable through a value is installed before the ancestor value promise is completed with that value.
+> Every active descendant promise reachable through a value is installed and has its writer
+> registered before the ancestor value promise is completed with that value.
 
 `resolveValue` constructs passive values and stable child OER identities. Its
 `objectsNeedingResolution` list identifies every active OER occurrence in that passive tree. Call
@@ -424,6 +467,10 @@ Do not wrap child orchestration itself in `launch`. A default `launch` may not e
 `orchestrateSlot` before parent publication, allowing a resumed consumer to descend into the child
 and observe an absent field. Calling `orchestrateSlot` directly installs child promises before it
 returns; the resolver coroutines that it launches may execute later.
+
+All launches use inherited-context `CoroutineStart.DEFAULT`, as required above. This prohibition
+against inline or independently dispatched starts is part of the publication-ordering invariant,
+not an optional scheduling preference.
 
 A suitable ordinary-slot outline is:
 
@@ -508,7 +555,12 @@ Mirror Resolver01's generated profiles exactly:
 ```kotlin
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
-    NodeGeneratedResolverContract
+    NodeGeneratedResolverContract {
+    override val selectiveResolvers: Boolean
+        get() = false
+
+    // resolve(...) adapter matching Resolver01
+}
 ```
 
 Do not opt Resolver21 into `ObjectFragmentResolverContract`, `ObjectFragmentFromArgumentResolverContract`, selective policy contracts, mutation tests, witness tests, readiness tests, or stress tests yet.
@@ -520,8 +572,9 @@ Add implementation-focused tests for:
 - all local promises exist before slot launch;
 - nested active OER promises exist before parent value publication;
 - a throwing resolver fails the root scope;
-- each exact field promise is completed once;
-- a completed Resolver21 result supports synchronous `get()` throughout;
+- each deferred value promise installed by orchestration is completed exactly once;
+- a successfully returned Resolver21 result is quiescent, supports synchronous `get()` throughout,
+  and can be passed to `sameCompletedResultAs` without an incompletion exception;
 - cycle-detection behavior listed above.
 
 Do not add reactor lifecycle or task-ordering contracts. Resolver21 has no semantic launch-order promise.
@@ -567,19 +620,21 @@ Do not run Resolver03/08/09/10 stress tasks unless a failure suggests a shared r
 
 Resolver21 is complete when all of the following hold:
 
-- Its public feature and output-policy surface matches Resolver01 exactly.
+- Its value-resolution feature surface and complete-output policy match Resolver01. Field- and
+  type-check execution remain outside Resolver21.
 - Its wrapper contains no scheduling logic.
 - `CoroutineResolve.kt` contains the shared procedure intended for Resolver21-23.
-- Every local destination value promise is installed before any local slot launches.
-- Every active descendant promise is installed before its ancestor value promise publishes the descendant OER.
-- Resolver input materialization calls contextual `runtimeSupport.cycleCheck(reader, promise)` before awaiting the promise.
+- Every local destination value promise is installed and registered before any local slot launches.
+- Every active descendant promise is installed and registered before its ancestor value promise publishes the descendant OER.
+- Resolver input materialization calls contextual `runtimeSupport.cycleCheck(reader, target, key)` before awaiting the promise.
 - Deferred completion status does not affect cycle-edge recording.
 - Resolver-read edges are retained monotonically and cycles fail explicitly.
 - The implementation does not call `dependencyOrder`, `resolverDependencies`, or a reactor.
 - There is one root structured scope and no escaping jobs.
 - The public `runBlocking` wraps the entire execution in one 90-second root timeout.
 - Child failure fails the root and cancels the remaining coroutine tree.
-- Successful return implies every demanded promise is completed exactly once.
+- Successful return establishes resolution quiescence: every promise present in the returned tree
+  is complete, and every deferred value promise installed by orchestration completed exactly once.
 - Resolver01's deterministic and generated contract suites pass unchanged through Resolver21's adapters.
 - The full seeded `check` task passes.
 

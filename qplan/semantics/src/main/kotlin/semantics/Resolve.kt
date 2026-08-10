@@ -130,7 +130,10 @@ internal fun Value.Object.resolveKey(
                             .objectFragmentAt(path + key)
                     val input =
                         runBlocking {
-                            resolved.materialize(objectFragment)
+                            resolved.materialize(
+                                selections = objectFragment,
+                                reader = path + key,
+                            )
                         }
                     if (completion.retainCompleteOutput) {
                         resolver.completeOutput(

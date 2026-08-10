@@ -5,6 +5,7 @@ import model.Assumptions
 import model.EngineResult
 import model.PathComponent
 import model.Value
+import semantics.RuntimeSupport
 import semantics.arbitrary.registeredResolverOccurrences
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
@@ -18,27 +19,32 @@ import semantics.materialize
 context(world: Assumptions)
 fun EngineResult.Object.expectedResolverDependencies():
     Map<List<PathComponent>, Set<List<PathComponent>>> =
-    registeredResolverOccurrences(world.resolverRegistry)
-        .associate { cell ->
-            val resolver =
-                world.resolverRegistry.resolver(
-                    world.schema.objectField(
-                        cell.canonicalField.typeName,
-                        cell.canonicalField.fieldName,
-                    ),
-                )
-            val objectFragment =
-                resolver
-                    .objectFragmentAt(cell.occurrencePath)
-            val input =
-                runBlocking {
-                    cell.containingObject.materialize(objectFragment)
-                }
-            cell.occurrencePath to
-                input.registeredResolverCoordinates(
-                    path = cell.occurrencePath.dropLast(1),
-                )
-        }
+    context(RuntimeSupport.noCycleChecking()) {
+        registeredResolverOccurrences(world.resolverRegistry)
+            .associate { cell ->
+                val resolver =
+                    world.resolverRegistry.resolver(
+                        world.schema.objectField(
+                            cell.canonicalField.typeName,
+                            cell.canonicalField.fieldName,
+                        ),
+                    )
+                val objectFragment =
+                    resolver
+                        .objectFragmentAt(cell.occurrencePath)
+                val input =
+                    runBlocking {
+                        cell.containingObject.materialize(
+                            selections = objectFragment,
+                            reader = cell.occurrencePath,
+                        )
+                    }
+                cell.occurrencePath to
+                    input.registeredResolverCoordinates(
+                        path = cell.occurrencePath.dropLast(1),
+                    )
+            }
+    }
 
 context(world: Assumptions)
 private fun Value.Object.registeredResolverCoordinates(

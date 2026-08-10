@@ -1,0 +1,39 @@
+> Task :model:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :model:compileKotlin UP-TO-DATE
+> Task :model:compileJava NO-SOURCE
+> Task :semantics:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :semantics:compileKotlin UP-TO-DATE
+> Task :semantics:compileJava NO-SOURCE
+> Task :semantics:processResources NO-SOURCE
+> Task :semantics:classes UP-TO-DATE
+> Task :semantics:jar UP-TO-DATE
+> Task :arbitrary:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :model:processResources NO-SOURCE
+> Task :model:classes UP-TO-DATE
+> Task :model:jar UP-TO-DATE
+> Task :model:compileTestFixturesKotlin UP-TO-DATE
+> Task :model:compileTestFixturesJava NO-SOURCE
+> Task :arbitrary:compileKotlin UP-TO-DATE
+> Task :arbitrary:compileJava NO-SOURCE
+> Task :semantics:compileTestFixturesKotlin UP-TO-DATE
+> Task :semantics:compileTestFixturesJava NO-SOURCE
+> Task :semantics:processTestFixturesResources NO-SOURCE
+> Task :semantics:testFixturesClasses UP-TO-DATE
+> Task :semantics:testFixturesJar UP-TO-DATE
+> Task :arbitrary:processResources NO-SOURCE
+> Task :arbitrary:classes UP-TO-DATE
+> Task :arbitrary:jar UP-TO-DATE
+> Task :model:processTestFixturesResources NO-SOURCE
+> Task :model:testFixturesClasses UP-TO-DATE
+> Task :model:testFixturesJar UP-TO-DATE
+> Task :semantics:compileTestKotlin UP-TO-DATE
+> Task :semantics:compileTestJava NO-SOURCE
+> Task :semantics:processTestResources NO-SOURCE
+> Task :semantics:testClasses UP-TO-DATE
+> Task :semantics:resolver24Stress
+
+ResolverStressTest > deep dependency-heavy arbitrary worlds resolve correctly() STANDARD_OUT
+    Resolver24 stress: seed=20260809, requestedCases=10000, attemptedCases=10000, verifiedCases=10000, resolverApplications=496224, generatedNodeResolvers=2130, nodeLoaderApplications=13587, argumentBearingNodeBridgeProducerApplications=5193, polymorphicNodeLoaderApplications=20, generatedObjectPathVariables=6875, activatedObjectPathApplications=5779, minimumDepth=4
+
+BUILD SUCCESSFUL in 1m 31s
+12 actionable tasks: 1 executed, 11 up-to-date

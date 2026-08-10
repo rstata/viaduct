@@ -26,7 +26,8 @@ kotlin {
     jvmToolchain(21)
 }
 
-val stressResolverNames = listOf("resolver03", "resolver08", "resolver09", "resolver10", "resolver23")
+val stressResolverNames =
+    listOf("resolver03", "resolver08", "resolver09", "resolver10", "resolver23", "resolver24")
 
 tasks.test {
     useJUnitPlatform()

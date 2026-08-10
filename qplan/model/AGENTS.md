@@ -10,7 +10,7 @@ This project defines the carrier algebra for field-resolution reasoning. Follow 
 
 ## Variables And Keys
 
-`Value.Variable.Template` is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific `Stamped` variable. Request-local `Assumptions` stores one declared promise per stamped variable: `getBinding` reads a completed binding synchronously and `fetchBinding` suspends. Resolver01-03, Resolver06-09, and Resolver21-23 declare and immediately complete `FromArgument` bindings; Resolver10 also declares `FromObjectField` bindings and completes them after provider evaluation.
+`Value.Variable.Template` is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific `Stamped` variable. Request-local `Assumptions` stores one declared promise per stamped variable: `getBinding` reads a completed binding synchronously and `fetchBinding` suspends. Resolver01-03, Resolver06-09, and Resolver21-24 declare and immediately complete `FromArgument` bindings; Resolver10 and Resolver24 also declare `FromObjectField` bindings and complete them after provider evaluation.
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and enforces an argument-insensitive branch order combining ordinary resolver dependencies with provider-production-before-use edges. This is pre-reasoning validation, not runtime provider evaluation.
 

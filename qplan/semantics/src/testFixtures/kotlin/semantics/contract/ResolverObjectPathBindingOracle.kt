@@ -32,7 +32,7 @@ fun EngineResult.Object.validateObjectPathBindings() {
             .forEach { definition ->
                 val expected =
                     cell.containingObject.readCompletedProvider(definition.path)
-                assertEquals(expected, world.binding(definition.variable))
+                assertEquals(expected, world.getBinding(definition.variable))
             }
     }
 }

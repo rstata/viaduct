@@ -1,10 +1,12 @@
 package semantics
 
+import kotlinx.coroutines.runBlocking
 import model.Value
 import model.emptyFragmentOf
 import model.testing.TestWorld
 import model.testing.fromArgument
 import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class FromArgumentBindingTest {
@@ -37,6 +39,13 @@ class FromArgumentBindingTest {
 
         context(world) {
             listOf(key).bindFromArguments(emptyList())
+            val variable =
+                Value.Variable.of(field, "value").stamp(listOf(key))
+            assertEquals(Value.Int.of(1), world.getBinding(variable))
+            assertEquals(
+                Value.Int.of(1),
+                runBlocking { world.fetchBinding(variable) },
+            )
             assertFailsWith<IllegalStateException> {
                 listOf(key).bindFromArguments(emptyList())
             }

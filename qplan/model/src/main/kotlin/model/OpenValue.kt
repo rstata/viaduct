@@ -388,7 +388,7 @@ private fun OpenValue?.instantiateBindings(): Value.Input? =
     when (this) {
         null -> null
         is Value.Input -> this
-        is Value.Variable.Stamped -> world.binding(this)
+        is Value.Variable.Stamped -> world.getBinding(this)
         is Value.Variable.Template ->
             error("Variable template $this must be stamped before it can be instantiated")
         is OpenListValueImpl ->

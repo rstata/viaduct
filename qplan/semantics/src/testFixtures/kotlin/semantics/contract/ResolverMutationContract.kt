@@ -5,6 +5,7 @@ import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.fragmentFrom
 import model.objectOf
+import model.sameCompletedResultAs
 import semantics.arbitrary.Config
 import semantics.arbitrary.DuplicateSelectionWeight
 import semantics.arbitrary.ExplicitFieldResolverWeight
@@ -101,7 +102,7 @@ interface ResolverMutationContract : ResolverContract {
                                                         result
                                                             .registeredResolverApplicationIdentityCounts()
                                                     }
-                                            else -> result != ordinary
+                                            else -> !result.sameCompletedResultAs(ordinary)
                                         }
                                     },
                                     onFailure = { true },

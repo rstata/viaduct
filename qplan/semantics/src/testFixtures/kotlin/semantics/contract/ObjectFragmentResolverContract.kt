@@ -10,6 +10,7 @@ import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.sameCompletedResultAs
 import model.selectionForestOf
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
@@ -433,7 +434,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             }
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
-        assertEquals(expected, result)
+        assertTrue(expected.sameCompletedResultAs(result))
         assertEquals(
             Value.Int.of(1),
             result.getValue(world.schema.contractKey("Query", "result")).get(),

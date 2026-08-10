@@ -3,6 +3,7 @@ package semantics.contract
 import kotlinx.coroutines.runBlocking
 import model.fragmentFrom
 import model.objectOf
+import model.sameCompletedResultAs
 import semantics.arbitrary.Config
 import semantics.arbitrary.DuplicateSelectionWeight
 import semantics.arbitrary.ExplicitFieldResolverWeight
@@ -162,7 +163,7 @@ interface ResolverWitnessContract : ResolverContract {
                         permuted.subselections,
                     )
                 val permutedWitness = registry.resolutionWitness()
-                assertEquals(result, permutedResult)
+                assertTrue(result.sameCompletedResultAs(permutedResult))
                 assertEquals(
                     witness.applicationObservationCounts(),
                     permutedWitness.applicationObservationCounts(),

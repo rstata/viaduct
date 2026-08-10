@@ -16,7 +16,6 @@ class PromiseTest {
 
             assertEquals("ready", promise.get())
             assertEquals("ready", promise.await())
-            assertEquals(null, promise.getDeferredStamp())
             assertFailsWith<IllegalStateException> {
                 promise.complete("again")
             }
@@ -25,13 +24,12 @@ class PromiseTest {
     @Test
     fun `deferred promise throws from get and resumes await after completion`() =
         runBlocking {
-            val promise = Promise.ofDeferred<String>("writer")
+            val promise = Promise.ofDeferred<String>()
             val awaited = async { promise.await() }
 
             assertFailsWith<UncompletedPromiseException> {
                 promise.get()
             }
-            assertEquals("writer", promise.getDeferredStamp())
             assertFalse(awaited.isCompleted)
 
             promise.complete("ready")
@@ -60,7 +58,7 @@ class PromiseTest {
         val promise =
             EngineResult.Object
                 .of(schema.query, mutable = true)
-                .createValuePromise(field, "writer")
+                .createValuePromise(field)
 
         assertFailsWith<IllegalArgumentException> {
             promise.complete(null)

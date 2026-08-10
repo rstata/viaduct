@@ -434,7 +434,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
             }
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
-        assertTrue(expected.sameCompletedResultAs(result))
+        assertEquals(expected.keys, result.keys)
+        expected.keys.forEach { key ->
+            assertTrue(
+                expected
+                    .getValue(key)
+                    .get()
+                    .sameCompletedResultAs(result.getValue(key).get()),
+            )
+        }
         assertEquals(
             Value.Int.of(1),
             result.getValue(world.schema.contractKey("Query", "result")).get(),

@@ -1,0 +1,33 @@
+package semantics.resolver21
+
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import model.Assumptions
+import model.EngineResult
+import model.SelectionForest
+import model.Value
+import semantics.RuntimeSupport
+import semantics.SelectionCompletion
+import semantics.coroutineResolve
+
+/**
+ * Resolves [selections] with structured coroutines when user-declared resolver object fragments are
+ * empty, except for generated `T$Bridge.$node` fragments that select passive sibling `$id`.
+ */
+context(world: Assumptions)
+fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
+    require(!world.selectiveResolvers) {
+        "Resolver21 requires non-selective resolvers"
+    }
+    val runtimeSupport =
+        RuntimeSupport.cycleChecking { completedSelections ->
+            SelectionCompletion(completedSelections)
+        }
+    return runBlocking {
+        withTimeout(90_000) {
+            context(runtimeSupport) {
+                this@resolve.coroutineResolve(selections)
+            }
+        }
+    }
+}

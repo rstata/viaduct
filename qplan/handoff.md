@@ -67,8 +67,6 @@ The previously observed `ResolverWitnessBoundExceededException` remains unexplai
 * Make `snip` explicit in resolution rather than implicit in the resolver wrapper.
 * Move recursive input-error detection from the semantics layer to an input-like model operation.
 * Decide whether `FieldArgument.name` and `argumentName` should both exist.
-* Investigate the stochastic `object-fragment-from-argument` generated-profile activation guard: `./gradlew check --rerun-tasks` failed because Resolver03's 150-case batch activated no abstract implementation defaults, and the failure reproduced with `./gradlew :semantics:resolverPropertyReplay -PresolverPropertyClass=semantics.resolver03.ResolverGeneratedTest -PresolverPropertyProfile=object-fragment-from-argument -PresolverPropertySeed=-3493719699711548687 -PresolverPropertyCase=all`; determine whether the profile should force this feature structurally, use a deterministic corpus, or stop requiring unrelated implementation-default coverage in the FromArgument profile.
-* The same stochastic activation issue affects Resolver10's `mixed-variables` profile: seed `3943921083616890788` produced no batch containing both variable kinds and reproduces with the corresponding `resolverPropertyReplay` command; no generated resolution case failed.
 
 ## Validation
 

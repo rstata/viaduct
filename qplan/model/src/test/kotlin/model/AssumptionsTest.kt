@@ -1,5 +1,7 @@
 package model
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -305,27 +307,38 @@ class AssumptionsTest {
     }
 
     @Test
-    fun `variable bindings distinguish unbound from bound to null`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.objectField("Query", "node")
-        val variable = Value.Variable.of(field, "value").stamp(emptyList())
+    fun `variable bindings distinguish undeclared incomplete and bound to null`(): Unit =
+        runBlocking {
+            val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+            val field = assumptions.schema.objectField("Query", "node")
+            val variable = Value.Variable.of(field, "value").stamp(emptyList())
 
-        assertFalse(assumptions.isBound(variable))
-        assertFailsWith<IllegalStateException> {
-            assumptions.binding(variable)
+            assertFalse(assumptions.isBound(variable))
+            assertFailsWith<IllegalStateException> {
+                assumptions.getBinding(variable)
+            }
+
+            assumptions.declareBinding(variable)
+            val fetched = async { assumptions.fetchBinding(variable) }
+
+            assertFalse(assumptions.isBound(variable))
+            assertFalse(fetched.isCompleted)
+            assertFailsWith<UncompletedPromiseException> {
+                assumptions.getBinding(variable)
+            }
+
+            assumptions.completeBinding(variable, null)
+
+            assertTrue(assumptions.isBound(variable))
+            assertNull(assumptions.getBinding(variable))
+            assertNull(fetched.await())
+            assertFalse(
+                assumptions.isBound(
+                    Value.Variable.of(field, "value")
+                        .stamp(listOf(Value.ListIndex.of(0))),
+                ),
+            )
         }
-
-        assumptions.bind(variable, null)
-
-        assertTrue(assumptions.isBound(variable))
-        assertNull(assumptions.binding(variable))
-        assertFalse(
-            assumptions.isBound(
-                Value.Variable.of(field, "value")
-                    .stamp(listOf(Value.ListIndex.of(0))),
-            ),
-        )
-    }
 
     @Test
     fun `variable bindings are written once`() {
@@ -334,15 +347,18 @@ class AssumptionsTest {
         val variable = Value.Variable.of(field, "value").stamp(emptyList())
         val first = Value.Int.of(1)
 
-        assumptions.bind(variable, first)
+        assumptions.declareBinding(variable)
         assertFailsWith<IllegalStateException> {
-            assumptions.bind(
+            assumptions.declareBinding(
                 Value.Variable.of(field, "value").stamp(emptyList()),
-                Value.Int.of(2),
             )
         }
+        assumptions.completeBinding(variable, first)
+        assertFailsWith<IllegalStateException> {
+            assumptions.completeBinding(variable, Value.Int.of(2))
+        }
 
-        assertEquals(first, assumptions.binding(variable))
+        assertEquals(first, assumptions.getBinding(variable))
     }
 
     @Test
@@ -356,9 +372,10 @@ class AssumptionsTest {
                 fields = mapOf("limit" to 1),
             )
 
-        assumptions.bind(binding, filter)
+        assumptions.declareBinding(binding)
+        assumptions.completeBinding(binding, filter)
 
-        assertEquals(filter, assumptions.binding(binding))
+        assertEquals(filter, assumptions.getBinding(binding))
     }
 
     @Test
@@ -376,7 +393,8 @@ class AssumptionsTest {
                 field = node,
                 fields = mapOf("filter" to variable),
             )
-        assumptions.bind(variable, filter)
+        assumptions.declareBinding(variable)
+        assumptions.completeBinding(variable, filter)
 
         val instantiated =
             context(assumptions) {

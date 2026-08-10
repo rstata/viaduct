@@ -112,7 +112,8 @@ class ValueVariableTest {
 
         val stamped = arguments.stamp(path)
         val stampedVariable = template.stamp(path)
-        world.bind(stampedVariable, Value.Int.of(9))
+        world.declareBinding(stampedVariable)
+        world.completeBinding(stampedVariable, Value.Int.of(9))
         val instantiated =
             context(world) {
                 stamped.instantiateBindings()

@@ -99,8 +99,8 @@ interface ObjectFragmentFromArgumentResolverContract : ResolverContract {
             ),
             consumeArguments,
         )
-        assertEquals(Value.Int.of(7), world.binding(variable.stamp(listOf(firstKey))))
-        assertEquals(Value.Int.of(8), world.binding(variable.stamp(listOf(secondKey))))
+        assertEquals(Value.Int.of(7), world.getBinding(variable.stamp(listOf(firstKey))))
+        assertEquals(Value.Int.of(8), world.getBinding(variable.stamp(listOf(secondKey))))
     }
 
     @Test

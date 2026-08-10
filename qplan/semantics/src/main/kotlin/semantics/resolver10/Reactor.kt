@@ -276,15 +276,17 @@ internal class Reactor private constructor(
                 instrumentation.resolverOccurrenceExpanded(coordinate)
                 listOf(key).bindFromArguments(path)
                 val resolver = world.resolverRegistry.resolver(key.field)
-                resolver
-                    .stampedObjectPathDefinitions(coordinate)
-                    .forEach { definition ->
-                        pendingBindings +=
-                            PendingBinding(
-                                ownerCoordinate = coordinate,
-                                definition = definition,
-                            )
-                    }
+                val definitions = resolver.stampedObjectPathDefinitions(coordinate)
+                definitions.forEach { definition ->
+                    world.declareBinding(definition.variable)
+                }
+                definitions.forEach { definition ->
+                    pendingBindings +=
+                        PendingBinding(
+                            ownerCoordinate = coordinate,
+                            definition = definition,
+                        )
+                }
                 addDemand(resolver.stampedObjectFragment(coordinate))
                 progressed()
             }
@@ -328,7 +330,7 @@ internal class Reactor private constructor(
                             "Provider variable bound before its pending transition: " +
                                 pending.definition.variable
                         }
-                        world.bind(pending.definition.variable, read.value)
+                        world.completeBinding(pending.definition.variable, read.value)
                         instrumentation.objectPathVariableBound(
                             ownerCoordinate = pending.ownerCoordinate,
                             variable = pending.definition.variable,

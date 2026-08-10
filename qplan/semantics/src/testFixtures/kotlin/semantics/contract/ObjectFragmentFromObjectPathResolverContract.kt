@@ -73,7 +73,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
         assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
         assertEquals(
             Value.Int.of(7),
-            world.binding(
+            world.getBinding(
                 Value.Variable.of(resultField, "value").stamp(listOf(resultKey)),
             ),
         )
@@ -149,7 +149,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
             )
             assertEquals(
                 provided,
-                world.binding(
+                world.getBinding(
                     Value.Variable.of(resultField, "value").stamp(listOf(resultKey)),
                 ),
             )

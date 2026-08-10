@@ -287,7 +287,8 @@ class SelectionMergeTest {
             fixture.searchSelection(
                 mapOf("values" to listOf(1)),
             )
-        fixture.world.bind(variable, Value.Int.of(1))
+        fixture.world.declareBinding(variable)
+        fixture.world.completeBinding(variable, Value.Int.of(1))
 
         val merged =
             context(fixture.world) {
@@ -316,7 +317,8 @@ class SelectionMergeTest {
                 fieldName = "nested",
                 arguments = mapOf("values" to listOf(variable, variable)),
             )
-        fixture.world.bind(variable, binding)
+        fixture.world.declareBinding(variable)
+        fixture.world.completeBinding(variable, binding)
 
         val once =
             context(fixture.world) {

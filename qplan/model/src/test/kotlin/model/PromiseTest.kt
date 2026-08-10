@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PromiseTest {
     @Test
@@ -14,6 +15,7 @@ class PromiseTest {
         runBlocking {
             val promise = Promise.of("ready")
 
+            assertTrue(promise.isCompleted)
             assertEquals("ready", promise.get())
             assertEquals("ready", promise.await())
             assertFailsWith<IllegalStateException> {
@@ -27,6 +29,7 @@ class PromiseTest {
             val promise = Promise.ofDeferred<String>()
             val awaited = async { promise.await() }
 
+            assertFalse(promise.isCompleted)
             assertFailsWith<UncompletedPromiseException> {
                 promise.get()
             }
@@ -34,6 +37,7 @@ class PromiseTest {
 
             promise.complete("ready")
 
+            assertTrue(promise.isCompleted)
             assertEquals("ready", awaited.await())
             assertEquals("ready", promise.get())
             assertFailsWith<IllegalStateException> {

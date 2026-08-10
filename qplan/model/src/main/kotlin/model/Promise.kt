@@ -7,6 +7,9 @@ class UncompletedPromiseException : IllegalStateException("Promise has not been 
 
 /** A write-once value that may be available immediately or completed later; equality is undefined. */
 sealed interface Promise<T> {
+    /** Whether this promise has completed, including completion with a null value. */
+    val isCompleted: Boolean
+
     suspend fun await(): T
 
     /** @throws UncompletedPromiseException when this promise has not been completed */
@@ -27,6 +30,9 @@ internal fun <T> Promise.Companion.ofDeferred(
 ): Promise<T> = DeferredPromiseImpl(validate)
 
 private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
+    override val isCompleted: Boolean
+        get() = true
+
     override suspend fun await(): T = value
 
     override fun get(): T = value
@@ -37,6 +43,9 @@ private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
 
 private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : Promise<T> {
     private val deferred = CompletableDeferred<T>()
+
+    override val isCompleted: Boolean
+        get() = deferred.isCompleted
 
     override suspend fun await(): T = deferred.await()
 

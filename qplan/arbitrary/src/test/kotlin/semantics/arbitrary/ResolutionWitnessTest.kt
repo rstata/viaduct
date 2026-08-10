@@ -178,6 +178,24 @@ class ResolutionWitnessTest {
     }
 
     @Test
+    fun `application log can suspend and restore recording`() {
+        val world = fingerprintWorld()
+        val field = world.schema.field("Query", "search")
+        val arguments = arguments(field, limit = 3, rank = 7, tags = listOf(1, 2))
+        val input = world.schema.objectOf("Query")
+        val coordinate = FieldCoordinate("Query", "search")
+        val log = ResolutionApplicationLog()
+
+        log.withoutRecording {
+            log.record(coordinate, arguments, input)
+        }
+        assertTrue(log.snapshot().applications.isEmpty())
+
+        log.record(coordinate, arguments, input)
+        assertEquals(1, log.snapshot().applications.size)
+    }
+
+    @Test
     fun `result traversal counts nested list occurrences and closure follows demand edges`() {
         val world = traversalWorld()
         val schema = world.schema

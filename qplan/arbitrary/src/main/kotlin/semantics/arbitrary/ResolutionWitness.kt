@@ -100,22 +100,34 @@ class ResolutionApplicationLog(
     private val bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ) {
     private val records = mutableListOf<ResolverApplicationRecord>()
+    private var recording = true
 
     fun record(
         field: FieldCoordinate,
         arguments: Value.Arguments,
         input: Value.Object,
         suppliedDemand: SelectionForest? = null,
-    ): ResolverApplicationRecord {
+    ) {
+        if (!recording) return
         if (records.size >= bounds.maxApplications) {
             throw ResolutionWitnessBoundExceededException(
                 "application",
                 bounds.maxApplications,
             )
         }
-        return ResolverApplicationRecord
+        ResolverApplicationRecord
             .capture(field, arguments, input, suppliedDemand, bounds)
             .also(records::add)
+    }
+
+    fun <T> withoutRecording(block: () -> T): T {
+        val previous = recording
+        recording = false
+        return try {
+            block()
+        } finally {
+            recording = previous
+        }
     }
 
     fun snapshot(): ResolutionWitness = ResolutionWitness(records.toList())

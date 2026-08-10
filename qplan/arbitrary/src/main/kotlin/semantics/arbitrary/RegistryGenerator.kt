@@ -103,6 +103,9 @@ class ArbitraryRegistry internal constructor(
 
     fun resolutionWitness(): ResolutionWitness = applicationLog.snapshot()
 
+    fun <T> withoutResolutionWitnessCapture(block: () -> T): T =
+        applicationLog.withoutRecording(block)
+
     fun clearResolutionApplicationCounts() {
         applicationCounts.clear()
     }

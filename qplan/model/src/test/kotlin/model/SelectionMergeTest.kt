@@ -114,6 +114,26 @@ class SelectionMergeTest {
     }
 
     @Test
+    fun `forest concatenation preserves every occurrence`() {
+        val fixture = Fixture()
+        val a = fixture.selection("ConcreteItem", "a")
+        val b = fixture.selection("ConcreteItem", "b")
+
+        val concatenated =
+            listOf(
+                selectionForestOf(a),
+                selectionForestOf(),
+                selectionForestOf(a, b),
+            ).concatenateSelectionForests()
+
+        assertEquals(3, concatenated.size)
+        assertEquals(
+            setOf(a.key, b.key),
+            concatenated.merge(fixture.item).keys(),
+        )
+    }
+
+    @Test
     fun `abstract and concrete fields merge after concrete default specialization`() {
         val fixture = Fixture()
         val abstract =

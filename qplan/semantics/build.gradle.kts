@@ -163,6 +163,52 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolverPropertyReplay") {
     }
 }
 
+val resolver24ProfileSize =
+    providers.gradleProperty("resolver24ProfileSize").orElse("50:2:5")
+val resolver24ProfileSeed =
+    providers.gradleProperty("resolver24ProfileSeed").orElse("20260810")
+val resolver24ProfileRecording =
+    rootProject.layout.buildDirectory.file("reports/resolver24-profile/resolver24-properties.jfr")
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver24PropertyProfile") {
+    group = "verification"
+    description = "Profiles the generated Resolver24 properties with Java Flight Recorder."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver24.ResolverGeneratedTest")
+    }
+    inputs.property("resolver24ProfileSize", resolver24ProfileSize)
+    inputs.property("resolver24ProfileSeed", resolver24ProfileSeed)
+    outputs.file(resolver24ProfileRecording)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        val size = resolver24ProfileSize.get()
+        require(size.matches(Regex("""[1-9][0-9]*:[1-9][0-9]*:[1-9][0-9]*"""))) {
+            "resolver24ProfileSize must have S:R:Q form with positive integers: $size"
+        }
+        val seed = resolver24ProfileSeed.get()
+        seed.toLongOrNull()
+            ?: throw GradleException("resolver24ProfileSeed must be a Long: $seed")
+
+        val recording = resolver24ProfileRecording.get().asFile
+        recording.parentFile.mkdirs()
+        recording.delete()
+        systemProperty("resolver.property.case", "all")
+        systemProperty("resolver.property.size", size)
+        systemProperty("resolver.property.seed", seed)
+        systemProperty("kotest.proptest.default.seed", seed)
+        jvmArgs(
+            "-XX:StartFlightRecording=" +
+                "filename=${recording.absolutePath},settings=profile,dumponexit=true",
+        )
+    }
+}
+
 fun registerResolverStressTask(resolverName: String) {
     val displayName = resolverName.replaceFirstChar(Char::uppercase)
     val environmentPrefix = resolverName.uppercase()

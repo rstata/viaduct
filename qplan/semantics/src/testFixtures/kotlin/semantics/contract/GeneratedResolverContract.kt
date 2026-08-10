@@ -552,12 +552,14 @@ private fun ResolverContract.assertGeneratedResolutionParity(
             testCase.query.source,
         )
     val permuted =
-        generatedResolution(
-            testWorld,
-            testCase.registry,
-            testCase.query.permutationEquivalentSource,
-        )
-    assertTrue(ordinary.result.sameCompletedResultAs(permuted.result))
+        testCase.registry.withoutResolutionWitnessCapture {
+            generatedResult(
+                testWorld,
+                testCase.registry,
+                testCase.query.permutationEquivalentSource,
+            )
+        }
+    assertTrue(ordinary.result.sameCompletedResultAs(permuted))
     return ordinary
 }
 
@@ -566,18 +568,27 @@ private fun ResolverContract.generatedResolution(
     registry: ArbitraryRegistry,
     querySource: String,
 ): GeneratedResolution {
+    registry.clearResolutionWitness()
+    val result = generatedResult(testWorld, registry, querySource)
+    val applications = registry.resolutionWitness().applications
+    return GeneratedResolution(result, applications)
+}
+
+private fun ResolverContract.generatedResult(
+    testWorld: TestWorld,
+    registry: ArbitraryRegistry,
+    querySource: String,
+): EngineResult.Object {
     val world = testWorld.newAssumptions(selectiveResolvers)
     val fragment = world.fragmentFrom(querySource)
-    registry.clearResolutionWitness()
     val result =
         resolve(
             world,
             world.objectOf("Query"),
             fragment.subselections,
         )
-    val applications = registry.resolutionWitness().applications
     assertTrue(context(world) { result.correctResolution(fragment) })
-    return GeneratedResolution(result, applications)
+    return result
 }
 
 private fun ArbitraryRegistry.hasNonemptyObjectFragment(

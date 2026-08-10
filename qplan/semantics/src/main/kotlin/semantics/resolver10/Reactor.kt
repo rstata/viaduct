@@ -10,12 +10,15 @@ import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.concatenateSelectionForests
+import model.flatMapToSelectionForest
 import model.groundKey
 import model.instantiateBindings
 import model.merge
 import model.objectKey
 import model.selectionForestOf
 import model.stampedVariables
+import model.toSelectionForest
 import model.usedVariables
 import model.registry.StampedObjectPathDefinition
 import semantics.ReactorEventObserver
@@ -414,8 +417,8 @@ internal class Reactor private constructor(
                     .byKey()
                     .values
                     .filter { selection -> selection.mayContributeTo(slot.key) }
-                    .fold(selectionForestOf()) { demand, selection ->
-                        demand + selection.subselections.variableFreeProjectionSkeleton()
+                    .flatMapToSelectionForest { selection ->
+                        selection.subselections.variableFreeProjectionSkeleton()
                     }
             return ObjectSelection.of(
                 key = slot.key,
@@ -744,9 +747,10 @@ private fun Schema.ObjectType.projectionEnvelope(
                 }
         if (newlyActivated.isEmpty()) return applicable
         demand =
-            newlyActivated.fold(demand) { current, field ->
-                current + world.resolverRegistry.resolver(field).objectFragment
-            }
+            demand +
+                newlyActivated.flatMapToSelectionForest { field ->
+                    world.resolverRegistry.resolver(field).objectFragment
+                }
     }
 }
 
@@ -781,22 +785,19 @@ private fun SelectionForest.coalesceEquivalentSelections(): SelectionForest {
             .getOrPut(coordinate, ::mutableListOf)
             .add(selection.subselections)
     }
-    return childrenByCoordinate.entries.fold(selectionForestOf()) { result, entry ->
-        val coordinate = entry.key
-        val childForests = entry.value
-        val children =
-            childForests
-                .fold(selectionForestOf(), SelectionForest::plus)
-                .coalesceEquivalentSelections()
-        result +
-            selectionForestOf(
-                Selection.of(
-                    key = coordinate.key,
-                    possibleTypes = coordinate.possibleTypes,
-                    subselections = children,
-                ),
+    return childrenByCoordinate.entries
+        .map { entry ->
+            val coordinate = entry.key
+            val children =
+                entry.value
+                    .concatenateSelectionForests()
+                    .coalesceEquivalentSelections()
+            Selection.of(
+                key = coordinate.key,
+                possibleTypes = coordinate.possibleTypes,
+                subselections = children,
             )
-    }
+        }.toSelectionForest()
 }
 
 /**

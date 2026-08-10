@@ -28,7 +28,7 @@ fun EngineResult.Object.validateObjectPathBindings() {
                 ),
             )
         resolver
-            .stampedObjectPathDefinitions(cell.occurrencePath)
+            .stampedPathVarDefinitions(cell.occurrencePath)
             .forEach { definition ->
                 val expected =
                     cell.containingObject.readCompletedProvider(definition.path)

@@ -68,7 +68,7 @@ class StampedObjectPathDefinitionTest {
                 mapOf("seed" to 3),
             )
         val sitePath = listOf(resultKey)
-        val definition = resolver.stampedObjectPathDefinitions(sitePath).single()
+        val definition = resolver.stampedPathVarDefinitions(sitePath).single()
         val seed =
             Value.Variable.of(
                 testWorld.schema.objectField("Query", "result"),

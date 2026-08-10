@@ -297,7 +297,7 @@ private class OpenObjectOrchestrator(
         }
         listOf(key).bindFromArguments(path)
         val resolver = world.resolverRegistry.resolver(key.field)
-        val definitions = resolver.stampedObjectPathDefinitions(coordinate)
+        val definitions = resolver.stampedPathVarDefinitions(coordinate)
         definitions.forEach { definition ->
             world.declareBinding(definition.variable)
         }

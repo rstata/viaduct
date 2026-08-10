@@ -66,10 +66,8 @@ class FieldResolver private constructor(
     ): SelectionForest =
         objectFragment.stampVariables(path)
 
-    /**
-     * Returns this resolver's object-field variable definitions stamped at exact [sitePath].
-     */
-    fun stampedObjectPathDefinitions(
+    /** Returns this resolver's path-variable definitions stamped at exact [sitePath]. */
+    fun stampedPathVarDefinitions(
         sitePath: List<PathComponent>,
     ): List<StampedObjectPathDefinition> =
         variables.mapNotNull { (variable, definition) ->

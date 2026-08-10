@@ -15,7 +15,7 @@ import java.util.PriorityQueue
  * Each instance constructs one result and [resolve] may be called exactly once.
  */
 internal interface DepthFirstReactor {
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     fun resolve(): EngineResult.Object
 
     sealed interface Task {
@@ -37,7 +37,7 @@ internal interface DepthFirstReactor {
     ) : Task
 
     companion object {
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         operator fun invoke(
             source: Value.Object,
             selections: SelectionForest,
@@ -82,7 +82,7 @@ private class PriorityQueueDepthFirstReactor(
         )
     }
 
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     override fun resolve(): EngineResult.Object {
         check(!started) { "DepthFirstReactor.resolve() may only be called once" }
         started = true
@@ -105,7 +105,7 @@ private class PriorityQueueDepthFirstReactor(
         return result
     }
 
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun DepthFirstReactor.SlotOrchestrator.execute() {
         require(target.type == source.type) {
             "Initial result type ${target.type.typeName} does not match ${source.type}"
@@ -126,7 +126,7 @@ private class PriorityQueueDepthFirstReactor(
         instrumentation.orchestratorFinished(path, target, closedDemand)
     }
 
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun DepthFirstReactor.SlotResolver.execute() {
         source
             .resolveKey(path, selection, target)

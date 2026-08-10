@@ -9,6 +9,9 @@ import model.Value
  * A reusable contract subject for one field-resolution strategy.
  */
 interface ResolverContract {
+    val selectiveResolvers: Boolean
+        get() = true
+
     fun resolve(
         world: Assumptions,
         root: Value.Object,

@@ -7,7 +7,7 @@ import model.Value
 import model.registry.successorDemand
 import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 
 /**
  * Resolves [selections] through exact field-resolver-instance readiness with selective outputs.
@@ -24,14 +24,16 @@ internal fun Value.Object.resolve(
     selections: SelectionForest,
     eventObserver: ReactorEventObserver = {},
 ): EngineResult.Object {
-    val selectionCompleter =
-        SelectionCompleter { selections ->
+    require(world.selectiveResolvers) {
+        "Resolver09 requires selective resolvers"
+    }
+    val runtimeSupport =
+        RuntimeSupport { selections ->
             SelectionCompletion(
                 selections = selections.successorDemand(),
-                selective = true,
             )
         }
-    return context(selectionCompleter) {
+    return context(runtimeSupport) {
         Reactor(
             source = this@resolve,
             selections = selections,

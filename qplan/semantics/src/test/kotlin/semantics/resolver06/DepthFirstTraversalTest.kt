@@ -13,6 +13,7 @@ class DepthFirstTraversalTest {
         val applications = mutableListOf<String>()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = false,
                 schemaSDL =
                     """
                     type Child { nested: String! }

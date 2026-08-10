@@ -28,11 +28,13 @@ class TestWorld private constructor(
         injector.getInstance(Assumptions::class.java)
 
     /** Creates independent request-local binding state over this world's schema and registry. */
-    fun newAssumptions(): Assumptions =
+    fun newAssumptions(
+        selectiveResolvers: Boolean = assumptions.selectiveResolvers,
+    ): Assumptions =
         Assumptions.of(
             schema = schema,
             resolverRegistry = resolverRegistry,
-            selectiveResolvers = assumptions.selectiveResolvers,
+            selectiveResolvers = selectiveResolvers,
         )
 
     fun <T : Any> instance(type: Class<T>): T = injector.getInstance(type)

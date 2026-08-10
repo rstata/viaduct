@@ -21,6 +21,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
         var producerDemand: SelectionForest? = null
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item {

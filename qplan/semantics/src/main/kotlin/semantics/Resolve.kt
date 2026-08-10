@@ -13,29 +13,16 @@ import semantics.correctresolution.argumentsContainErrorValue
 
 internal data class SelectionCompletion(
     val selections: SelectionForest,
-    val selective: Boolean,
     val retainCompleteOutput: Boolean = false,
 )
-
-/**
- * SPI for suplying the output-boundary policy for one resolution constructor.
- *
- * [complete] expands the selections visible at a resolver output boundary and indicates whether
- * the resolver result and passive traversal are selective to those completed selections.  Instances
- * of these are passed as context arguments to control how resolution works.
- */
-internal fun interface SelectionCompleter {
-    context(world: Assumptions)
-    fun complete(selections: SelectionForest): SelectionCompletion
-}
 
 /**
  * Resolves [selections] at this exact object occurrence, extending [resolved].
  *
  * The fixed local-demand closure and dependency-first fold are shared by Resolver01-03.
- * [selectionCompleter] supplies their differing output-boundary semantics.
+ * [runtimeSupport] supplies their differing output-boundary semantics.
  */
-context(world: Assumptions, selectionCompleter: SelectionCompleter)
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal fun Value.Object.orchestrateKeys(
     path: List<PathComponent>,
     selections: SelectionForest,
@@ -112,7 +99,7 @@ private fun Value.Object.dependenciesOf(
  * Resolves and sets the value and field check for [fieldSelection], yielding its passive
  * result-tree fringe.
  */
-context(world: Assumptions, selectionCompleter: SelectionCompleter)
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal fun Value.Object.resolveKey(
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
@@ -133,7 +120,7 @@ internal fun Value.Object.resolveKey(
         }
 
         else -> {
-            val completion = selectionCompleter.complete(fieldSelection.subselections)
+            val completion = runtimeSupport.complete(fieldSelection.subselections)
             val resolutionSelections = completion.selections
             val fieldValue =
                 if (key.field in world.resolverRegistry) {
@@ -151,7 +138,7 @@ internal fun Value.Object.resolveKey(
                             arguments = key.arguments,
                             selections = resolutionSelections,
                         )
-                    } else if (completion.selective) {
+                    } else if (world.selectiveResolvers) {
                         resolver(
                             input = input,
                             arguments = key.arguments,
@@ -164,7 +151,7 @@ internal fun Value.Object.resolveKey(
                         )
                     }
                 } else {
-                    require(!completion.selective) {
+                    require(!world.selectiveResolvers) {
                         "Passive key found ($key)."
                     }
                     fieldValues.getValue(key)
@@ -173,9 +160,7 @@ internal fun Value.Object.resolveKey(
                 fieldValue.resolveValue(
                     path = path + key,
                     resolverDemand = resolutionSelections,
-                    beSelective =
-                        completion.selective &&
-                            !completion.retainCompleteOutput,
+                    retainCompleteOutput = completion.retainCompleteOutput,
                 )
             resolved.setValue(key, resolvedValue.engineResult)
             resolved.setFieldCheck(key, Value.Boolean.of(true))

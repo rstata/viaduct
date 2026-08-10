@@ -40,6 +40,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
     fun `executes the exact recursive task order across equal-depth siblings`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Child { nested: String! }

@@ -20,7 +20,7 @@ sealed interface Assumptions {
     val schema: Schema
     val resolverRegistry: ResolverRegistry
 
-    /** Whether selective output traversal rejects fields outside its supplied selections. */
+    /** Whether resolver invocation and passive output traversal are selective to supplied demand. */
     val selectiveResolvers: Boolean
 
     /** Whether [variable] has a binding, including a binding whose value is null. */

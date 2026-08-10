@@ -8,7 +8,7 @@ import model.registry.successorBoundaryDemand
 import semantics.DepthFirstReactor
 import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 
 /**
  * Resolves [selections] through a depth-first work queue with non-selective resolver applications.
@@ -23,14 +23,16 @@ internal fun Value.Object.resolve(
     selections: SelectionForest,
     eventObserver: ReactorEventObserver,
 ): EngineResult.Object {
-    val selectionCompleter =
-        SelectionCompleter { selections ->
+    require(!world.selectiveResolvers) {
+        "Resolver07 requires non-selective resolvers"
+    }
+    val runtimeSupport =
+        RuntimeSupport { selections ->
             SelectionCompletion(
                 selections = selections.successorBoundaryDemand(),
-                selective = false,
             )
         }
-    return context(selectionCompleter) {
+    return context(runtimeSupport) {
         DepthFirstReactor(
             source = this@resolve,
             selections = selections,

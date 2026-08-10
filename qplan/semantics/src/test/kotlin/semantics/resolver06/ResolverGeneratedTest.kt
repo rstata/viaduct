@@ -10,6 +10,9 @@ import semantics.contract.NodeGeneratedResolverContract
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
     NodeGeneratedResolverContract {
+    override val selectiveResolvers: Boolean
+        get() = false
+
     override fun resolve(
         world: Assumptions,
         root: Value.Object,

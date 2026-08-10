@@ -21,7 +21,7 @@ import model.registry.StampedObjectPathDefinition
 import semantics.ReactorEventObserver
 import semantics.ReactorInstrumentation
 import semantics.ReactorSlotKind
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 import semantics.bindFromArguments
 import semantics.reactorSlotKind
 import semantics.renderReactorPath
@@ -51,7 +51,7 @@ internal class Reactor private constructor(
     private var progressVersion = 0L
 
     companion object {
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         operator fun invoke(
             source: Value.Object,
             selections: SelectionForest,
@@ -68,7 +68,7 @@ internal class Reactor private constructor(
         }
     }
 
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun run(): EngineResult.Object {
         while (true) {
             while (slotResolverQueue.isNotEmpty()) {
@@ -145,7 +145,7 @@ internal class Reactor private constructor(
             addDemand(initialDemand)
         }
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         fun launchResolvers(): Boolean {
             check(!finished)
             if (!started) {
@@ -205,7 +205,7 @@ internal class Reactor private constructor(
             progressed()
         }
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         private fun groundPendingSelections(): Boolean {
             val ready =
                 pendingSelections.filter { selection ->
@@ -228,7 +228,7 @@ internal class Reactor private constructor(
             return ready.isNotEmpty()
         }
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         private fun discover(selection: ObjectSelection) {
             val key = selection.groundKey()
             val previous = exactSelections[key]
@@ -290,19 +290,17 @@ internal class Reactor private constructor(
             }
         }
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         private fun publishPassive(selection: ObjectSelection) {
             val key = selection.groundKey()
-            val completion = selectionCompleter.complete(selection.subselections)
+            val completion = runtimeSupport.complete(selection.subselections)
             val resolvedValue =
                 source.fieldValues
                     .getValue(key)
                     .resolveValue(
                         path = path + key,
                         resolverDemand = completion.selections,
-                        beSelective =
-                            completion.selective &&
-                                !completion.retainCompleteOutput,
+                        retainCompleteOutput = completion.retainCompleteOutput,
                     )
             target.setValue(key, resolvedValue.engineResult)
             target.setFieldCheck(key, Value.Boolean.of(true))
@@ -625,7 +623,7 @@ internal class Reactor private constructor(
             instrumentation.resolverLaunched(coordinate, key.reactorSlotKind())
         }
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         fun execute() {
             check(launched && !isFinished)
             instrumentation.resolverStarted(coordinate)

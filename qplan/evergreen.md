@@ -219,6 +219,12 @@ The durable rules are:
 - Extensional result correctness and one-shot producer completeness are separate obligations.
 - Runtime bindings and pending work belong in explicit monotonic execution state when needed.
 
+## Kotlin Idiomatic Usage And Vocabulary
+
+In coroutine implementations, call a `Deferred<Unit>` used only to release waiters a **latch**. A value-bearing `Deferred<T>` may carry both an outcome and the latch that announces the outcome is ready; its name and documentation should state both meanings. Distinguish promise installation, coroutine launch, and coroutine completion because each releases a materially different dependency.
+
+Use `awaitAll()` when a collection of deferred values already exists and the code is expressing one collective wait. Do not allocate a collection solely to call `awaitAll()`; iteratively awaiting already-running deferred values does not serialize their work.
+
 ## Questions For Future Designs
 
 1. What exact feature scope receives the one-shot guarantee?

@@ -5,6 +5,7 @@ import model.EngineResult
 import model.PathComponent
 import model.SelectionForest
 import model.Value
+import model.registry.successorDemand
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -35,7 +36,10 @@ internal fun interface RuntimeSupport {
             RuntimeSupport { selections -> SelectionCompletion(selections) }
 
         fun cycleChecking(
-            complete: RuntimeSupport = noCycleChecking(),
+            complete: RuntimeSupport =
+                RuntimeSupport { selections ->
+                    SelectionCompletion(selections.successorDemand())
+                },
         ): RuntimeSupport =
             CycleCheckingRuntimeSupport(complete)
     }

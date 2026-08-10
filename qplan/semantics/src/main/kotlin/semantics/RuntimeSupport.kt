@@ -34,7 +34,9 @@ internal fun interface RuntimeSupport {
         fun noCycleChecking(): RuntimeSupport =
             RuntimeSupport { selections -> SelectionCompletion(selections) }
 
-        fun cycleChecking(complete: RuntimeSupport): RuntimeSupport =
+        fun cycleChecking(
+            complete: RuntimeSupport = noCycleChecking(),
+        ): RuntimeSupport =
             CycleCheckingRuntimeSupport(complete)
     }
 }

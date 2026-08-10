@@ -34,6 +34,10 @@ interface DeepResolverStressContract : ResolverContract {
     val resolverName: String
     val objectPathVariablesEnabled: Boolean
         get() = false
+    val nodeResolversEnabled: Boolean
+        get() = true
+    val mixedVariableCoverageRequired: Boolean
+        get() = false
 
     @Test
     fun `deep dependency-heavy arbitrary worlds resolve correctly`(): Unit =
@@ -73,7 +77,7 @@ interface DeepResolverStressContract : ResolverContract {
                     (ResolverFragmentsEnabled to true) +
                     (ResolverFragmentWeight to 0.85) +
                     (ResolverFragmentDepth to 3) +
-                    (NodeResolversEnabled to true) +
+                    (NodeResolversEnabled to nodeResolversEnabled) +
                     // Static tests exhaustively cover dispatch; stress samples interactions cheaply.
                     (NodeObjectWeight to 0.05) +
                     (ResolverFromArgumentVariablesEnabled to true) +
@@ -85,8 +89,11 @@ interface DeepResolverStressContract : ResolverContract {
             var nodeLoaderApplications = 0
             var argumentBearingNodeBridgeProducerApplications = 0
             var polymorphicNodeLoaderApplications = 0
+            var generatedFromArgumentVariables = 0
             var generatedObjectPathVariables = 0
+            var activatedFromArgumentApplications = 0
             var activatedObjectPathApplications = 0
+            var coactivatedMixedVariableCases = 0
             val previousSeed = PropertyTesting.defaultSeed
             PropertyTesting.defaultSeed = seed
 
@@ -98,6 +105,8 @@ interface DeepResolverStressContract : ResolverContract {
                 ) { testWorld, testCase ->
                     attemptedCases += 1
                     generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
+                    generatedFromArgumentVariables +=
+                        testCase.registry.features.fromArgumentVariableCount
                     generatedObjectPathVariables +=
                         testCase.registry.features.fromObjectFieldVariableCount
                     assertTrue(testCase.query.selectionDepth >= 4)
@@ -119,13 +128,24 @@ interface DeepResolverStressContract : ResolverContract {
                     )
                     assertTrue(context(world) { result.correctResolution(fragment) })
                     resolverApplications += witness.applications.size
+                    var activatedFromArgument = false
+                    var activatedObjectPath = false
                     witness.applications.forEach { application ->
+                        if (
+                            testCase.registry.sourceResolverHasFromArgumentVariables(
+                                application.key.field,
+                            )
+                        ) {
+                            activatedFromArgumentApplications += 1
+                            activatedFromArgument = true
+                        }
                         if (
                             testCase.registry.sourceResolverHasFromObjectFieldVariables(
                                 application.key.field,
                             )
                         ) {
                             activatedObjectPathApplications += 1
+                            activatedObjectPath = true
                         }
                         if (
                             application.key.field.fieldName.endsWith("\$bridge") &&
@@ -145,6 +165,9 @@ interface DeepResolverStressContract : ResolverContract {
                             }
                         }
                     }
+                    if (activatedFromArgument && activatedObjectPath) {
+                        coactivatedMixedVariableCases += 1
+                    }
                     verifiedCases += 1
                 }
             } finally {
@@ -159,8 +182,11 @@ interface DeepResolverStressContract : ResolverContract {
                         "$argumentBearingNodeBridgeProducerApplications, " +
                         "polymorphicNodeLoaderApplications=" +
                         "$polymorphicNodeLoaderApplications, " +
+                        "generatedFromArgumentVariables=$generatedFromArgumentVariables, " +
                         "generatedObjectPathVariables=$generatedObjectPathVariables, " +
+                        "activatedFromArgumentApplications=$activatedFromArgumentApplications, " +
                         "activatedObjectPathApplications=$activatedObjectPathApplications, " +
+                        "coactivatedMixedVariableCases=$coactivatedMixedVariableCases, " +
                         "minimumDepth=4",
                 )
             }
@@ -168,12 +194,27 @@ interface DeepResolverStressContract : ResolverContract {
             assertEquals(requestedCases, attemptedCases)
             assertEquals(requestedCases, verifiedCases)
             assertTrue(resolverApplications >= requestedCases)
-            assertTrue(generatedNodeResolvers >= requestedCases / 100)
-            assertTrue(nodeLoaderApplications >= requestedCases / 1_000)
-            assertTrue(argumentBearingNodeBridgeProducerApplications >= requestedCases / 1_000)
+            if (nodeResolversEnabled) {
+                assertTrue(generatedNodeResolvers >= requestedCases / 100)
+                assertTrue(nodeLoaderApplications >= requestedCases / 1_000)
+                assertTrue(
+                    argumentBearingNodeBridgeProducerApplications >= requestedCases / 1_000,
+                )
+            } else {
+                assertEquals(0, generatedNodeResolvers)
+                assertEquals(0, nodeLoaderApplications)
+                assertEquals(0, argumentBearingNodeBridgeProducerApplications)
+            }
             if (objectPathVariablesEnabled) {
                 assertTrue(generatedObjectPathVariables > 0)
                 assertTrue(activatedObjectPathApplications > 0)
+            }
+            if (mixedVariableCoverageRequired) {
+                assertTrue(generatedFromArgumentVariables > 0)
+                assertTrue(generatedObjectPathVariables > 0)
+                assertTrue(activatedFromArgumentApplications > 0)
+                assertTrue(activatedObjectPathApplications > 0)
+                assertTrue(coactivatedMixedVariableCases > 0)
             }
         }
 

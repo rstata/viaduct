@@ -27,7 +27,15 @@ kotlin {
 }
 
 val stressResolverNames =
-    listOf("resolver03", "resolver08", "resolver09", "resolver10", "resolver23", "resolver24")
+    listOf(
+        "resolver03",
+        "resolver08",
+        "resolver09",
+        "resolver10",
+        "resolver23",
+        "resolver24",
+        "resolver24i",
+    )
 
 tasks.test {
     useJUnitPlatform()

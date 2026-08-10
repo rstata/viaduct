@@ -79,20 +79,26 @@ sealed interface ObjectSelectionForest : SelectionForest {
             type: Schema.ObjectType,
             selections: Iterable<ObjectSelection>,
         ): ObjectSelectionForest {
-            val occurrences = selections.toList()
-            require(
-                occurrences.all { selection ->
-                    selection.key.field.containingType == type &&
-                        selection.possibleTypes == setOf(type)
-                },
-            ) {
-                "Object selections must belong exclusively to ${type.typeName}"
-            }
-            val byKey = occurrences.associateBy(ObjectSelection::key)
-            require(byKey.size == occurrences.size) {
-                "Object selection keys must be unique"
-            }
-            return ObjectSelectionForestImpl(type, byKey)
+            val occurrences =
+                buildList {
+                    addAll(selections)
+                }
+            val byKey =
+                buildMap {
+                    occurrences.forEach { selection ->
+                        require(
+                            selection.key.field.containingType == type &&
+                                selection.possibleTypes.size == 1 &&
+                                type in selection.possibleTypes,
+                        ) {
+                            "Object selections must belong exclusively to ${type.typeName}"
+                        }
+                        require(put(selection.key, selection) == null) {
+                            "Object selection keys must be unique"
+                        }
+                    }
+                }
+            return ObjectSelectionForestImpl(type, byKey, occurrences)
         }
     }
 }
@@ -104,6 +110,22 @@ fun selectionForestOf(vararg selections: Selection): SelectionForest =
 /** Constructs a [SelectionForest] from these occurrences. */
 fun Iterable<Selection>.toSelectionForest(): SelectionForest =
     SelectionForestImpl(toList())
+
+/** Maps each input to a forest and concatenates the results without comparing selections. */
+fun <T : Any> Iterable<T>.flatMapToSelectionForest(
+    transform: (T) -> SelectionForest,
+): SelectionForest =
+    SelectionForestImpl(
+        buildList {
+            this@flatMapToSelectionForest.forEach { element ->
+                addAll(transform(element).occurrences())
+            }
+        },
+    )
+
+/** Concatenates these forests without comparing their selection occurrences. */
+fun Iterable<SelectionForest>.concatenateSelectionForests(): SelectionForest =
+    flatMapToSelectionForest { forest -> forest }
 
 /**
  * Returns the demand applicable to concrete parent [type], normalized by structural object key.
@@ -118,23 +140,16 @@ fun Iterable<Selection>.toSelectionForest(): SelectionForest =
  * concrete runtime parent type is not yet known.
  */
 fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
-    val selections =
-        occurrences()
-            .filter { selection -> type in selection.possibleTypes }
-            .groupBy { selection -> selection.objectKey(type) }
-            .map { (key, occurrences) ->
-                ObjectSelection.of(
-                    key = key,
-                    possibleTypes = setOf(type),
-                    subselections =
-                        occurrences
-                            .map(Selection::subselections)
-                            .fold(selectionForestOf()) { forest, children ->
-                                forest + children
-                            },
-                )
+    val childrenByKey =
+        buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
+            occurrences().forEach { selection ->
+                if (type in selection.possibleTypes) {
+                    getOrPut(selection.objectKey(type), ::mutableListOf)
+                        .add(selection.subselections)
+                }
             }
-    return ObjectSelectionForest.of(type, selections)
+        }
+    return normalizedObjectSelectionForest(type, childrenByKey)
 }
 
 /**
@@ -148,27 +163,40 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
  */
 context(world: Assumptions)
 fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
-    val selections =
-        byKey()
-            .values
-            .groupBy { selection ->
-                Value.GroundKey.of(
-                    field = selection.key.field,
-                    arguments = selection.key.arguments.instantiateBindings(),
-                )
-            }.map { (key, occurrences) ->
-                ObjectSelection.of(
-                    key = key,
-                    possibleTypes = setOf(type),
-                    subselections =
-                        occurrences
-                            .map(Selection::subselections)
-                            .fold(selectionForestOf()) { forest, children ->
-                                forest + children
-                            },
+    val childrenByKey =
+        buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
+            byKey().values.forEach { selection ->
+                val key =
+                    Value.GroundKey.of(
+                        field = selection.key.field,
+                        arguments = selection.key.arguments.instantiateBindings(),
+                    )
+                getOrPut(key, ::mutableListOf).add(selection.subselections)
+            }
+        }
+    return normalizedObjectSelectionForest(type, childrenByKey)
+}
+
+private fun normalizedObjectSelectionForest(
+    type: Schema.ObjectType,
+    childrenByKey: Map<Value.ObjectKey, List<SelectionForest>>,
+): ObjectSelectionForest {
+    // Specialization preserves local validity; grouping establishes normalized unique keys.
+    val possibleTypes = setOf(type)
+    val selectionsByKey =
+        buildMap {
+            childrenByKey.forEach { (key, children) ->
+                put(
+                    key,
+                    ObjectSelectionImpl(
+                        key = key,
+                        possibleTypes = possibleTypes,
+                        subselections = children.concatenateSelectionForests(),
+                    ),
                 )
             }
-    return ObjectSelectionForest.of(type, selections)
+        }
+    return ObjectSelectionForestImpl(type, selectionsByKey)
 }
 
 /**
@@ -425,11 +453,7 @@ private abstract class AbstractSelectionForest(
         SelectionForestImpl(occurrences.filter(predicate))
 
     override fun flatMap(transform: (Selection) -> SelectionForest): SelectionForest =
-        SelectionForestImpl(
-            occurrences.flatMap { selection ->
-                transform(selection).occurrences()
-            },
-        )
+        occurrences.flatMapToSelectionForest(transform)
 
     override fun forEach(action: (Selection) -> Unit) {
         occurrences.forEach(action)
@@ -448,7 +472,8 @@ private class SelectionForestImpl(
 private class ObjectSelectionForestImpl(
     override val type: Schema.ObjectType,
     private val selectionsByKey: Map<Value.ObjectKey, ObjectSelection>,
-) : AbstractSelectionForest(selectionsByKey.values.toList()),
+    occurrences: List<ObjectSelection> = selectionsByKey.values.toList(),
+) : AbstractSelectionForest(occurrences),
     ObjectSelectionForest {
     override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest =
         ObjectSelectionForestImpl(

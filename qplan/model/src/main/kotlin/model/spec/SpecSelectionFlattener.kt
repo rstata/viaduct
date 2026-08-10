@@ -5,6 +5,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.flatMapToSelectionForest
 import model.selectionForestOf
 
 /**
@@ -46,23 +47,22 @@ private fun flattenSelectionSet(
     selections: List<SpecSelection>,
     context: SelectionContext,
 ): SelectionForest =
-    selections.fold(selectionForestOf()) { result, selection ->
-        result +
-            when (selection) {
-                is SpecSelection.Field ->
-                    selectionForestOf(selection.flattenField(schema, context))
-                is SpecSelection.InlineFragment -> {
-                    val fragmentContext =
-                        selection.typeCondition?.let { typeCondition ->
-                            SelectionContext(
-                                nominalType = typeCondition,
-                                possibleTypes =
-                                    context.possibleTypes intersect typeCondition.possibleTypes,
-                            )
-                        } ?: context
-                    flattenSelectionSet(schema, selection.selections, fragmentContext)
-                }
+    selections.flatMapToSelectionForest { selection ->
+        when (selection) {
+            is SpecSelection.Field ->
+                selectionForestOf(selection.flattenField(schema, context))
+            is SpecSelection.InlineFragment -> {
+                val fragmentContext =
+                    selection.typeCondition?.let { typeCondition ->
+                        SelectionContext(
+                            nominalType = typeCondition,
+                            possibleTypes =
+                                context.possibleTypes intersect typeCondition.possibleTypes,
+                        )
+                    } ?: context
+                flattenSelectionSet(schema, selection.selections, fragmentContext)
             }
+        }
     }
 
 private fun SpecSelection.Field.flattenField(

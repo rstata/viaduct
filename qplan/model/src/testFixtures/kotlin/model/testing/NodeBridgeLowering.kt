@@ -19,11 +19,7 @@ internal fun GJSchema.nodeBridgeFieldOrNull(
         graphQLSchema.getType(field.containingType.typeName) as? GraphQLFieldsContainer
             ?: return null
     if (sourceContainer.getFieldDefinition(field.fieldName) == null) return null
-    return try {
-        field(field.containingType.typeName, nodeBridgeFieldName(field))
-    } catch (_: Schema.MissingSchemaElementException) {
-        null
-    }
+    return field.containingType.fields[nodeBridgeFieldName(field)]
 }
 
 internal fun GJSchema.nodeBridgePayloadField(

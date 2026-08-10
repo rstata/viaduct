@@ -7,7 +7,7 @@ import model.Schema
 import model.SelectionForest
 import model.Value
 import model.applicableGroundSelections
-import model.selectionForestOf
+import model.flatMapToSelectionForest
 import semantics.correctresolution.argumentsContainErrorValue
 
 /**
@@ -45,11 +45,10 @@ private fun Schema.ObjectType.closeResolverDemand(
 
     unexpandedResolverKeys.bindFromArguments(path)
     val resolverDemand =
-        unexpandedResolverKeys.fold(selectionForestOf()) { demand, key ->
-            demand +
-                world.resolverRegistry
-                    .resolver(key.field)
-                    .stampedObjectFragment(path + key)
+        unexpandedResolverKeys.flatMapToSelectionForest { key ->
+            world.resolverRegistry
+                .resolver(key.field)
+                .stampedObjectFragment(path + key)
         }
     return closeResolverDemand(
         path = path,

@@ -19,13 +19,16 @@ import model.SelectionForest
 import model.TypeExpr
 import model.Value
 import model.applicableGroundSelections
+import model.concatenateSelectionForests
 import model.fetchBindings
+import model.flatMapToSelectionForest
 import model.groundKey
 import model.instantiateBindings
 import model.merge
 import model.objectKey
 import model.selectionForestOf
 import model.stampedVariables
+import model.toSelectionForest
 import model.usedVariables
 import model.registry.StampedObjectPathDefinition
 import model.registry.VariableDefinition
@@ -149,9 +152,7 @@ private class ObjectOrchestrator(
     }
 
     fun outputDemand(): SelectionForest =
-        exactSelections.values.fold(selectionForestOf()) { demand, selection ->
-            demand + selectionForestOf(selection)
-        }
+        exactSelections.values.toSelectionForest()
 
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     fun addDemand(demand: SelectionForest) {
@@ -232,9 +233,9 @@ private class ObjectOrchestrator(
                     key = key,
                     possibleTypes = setOf(source.type),
                     subselections =
-                        occurrences.fold(selectionForestOf()) { demand, occurrence ->
-                            demand + occurrence.subselections
-                        }.coalesceEquivalentSelections(),
+                        occurrences
+                            .flatMapToSelectionForest(ObjectSelection::subselections)
+                            .coalesceEquivalentSelections(),
                 )
             },
         )
@@ -452,8 +453,8 @@ private class ObjectOrchestrator(
                 .byKey()
                 .values
                 .filter { selection -> selection.mayContributeTo(key) }
-                .fold(selectionForestOf()) { demand, selection ->
-                    demand + selection.subselections.variableFreeProjectionSkeleton()
+                .flatMapToSelectionForest { selection ->
+                    selection.subselections.variableFreeProjectionSkeleton()
                 }
         return ObjectSelection.of(
             key = key,
@@ -713,21 +714,19 @@ private fun SelectionForest.coalesceEquivalentSelections(): SelectionForest {
             .getOrPut(coordinate, ::mutableListOf)
             .add(selection.subselections)
     }
-    return childrenByCoordinate.entries.fold(selectionForestOf()) { result, entry ->
-        val coordinate = entry.key
-        val children =
-            entry.value
-                .fold(selectionForestOf(), SelectionForest::plus)
-                .coalesceEquivalentSelections()
-        result +
-            selectionForestOf(
-                Selection.of(
-                    key = coordinate.key,
-                    possibleTypes = coordinate.possibleTypes,
-                    subselections = children,
-                ),
+    return childrenByCoordinate.entries
+        .map { entry ->
+            val coordinate = entry.key
+            val children =
+                entry.value
+                    .concatenateSelectionForests()
+                    .coalesceEquivalentSelections()
+            Selection.of(
+                key = coordinate.key,
+                possibleTypes = coordinate.possibleTypes,
+                subselections = children,
             )
-    }
+        }.toSelectionForest()
 }
 
 context(world: Assumptions)
@@ -748,9 +747,10 @@ private fun Schema.ObjectType.projectionEnvelope(
                 }
         if (newlyActivated.isEmpty()) return applicable
         demand =
-            newlyActivated.fold(demand) { current, field ->
-                current + world.resolverRegistry.resolver(field).objectFragment
-            }
+            demand +
+                newlyActivated.flatMapToSelectionForest { field ->
+                    world.resolverRegistry.resolver(field).objectFragment
+                }
     }
 }
 

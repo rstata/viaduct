@@ -4,6 +4,7 @@ import model.Assumptions
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.flatMapToSelectionForest
 import model.instantiateBindings
 import model.objectKey
 import model.selectionForestOf
@@ -27,7 +28,7 @@ fun SelectionForest.successorDemand(): SelectionForest =
                 subselections = nestedDemand,
             )
         val resolverInputDemand =
-            selection.possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
+            selection.possibleTypes.flatMapToSelectionForest { possibleType ->
                 val specializedKey = selection.objectKey(possibleType)
                 val key =
                     Value.GroundKey.of(
@@ -38,13 +39,12 @@ fun SelectionForest.successorDemand(): SelectionForest =
                     key.arguments.containsErrorValue() ||
                     key.field !in world.resolverRegistry
                 ) {
-                    demand
+                    selectionForestOf()
                 } else {
-                    demand +
-                        world.resolverRegistry
-                            .resolver(key.field)
-                            .objectFragmentWithFromArguments(key.arguments)
-                            .successorDemand()
+                    world.resolverRegistry
+                        .resolver(key.field)
+                        .objectFragmentWithFromArguments(key.arguments)
+                        .successorDemand()
                 }
             }
         selectionForestOf(rootedSelection) + resolverInputDemand
@@ -101,7 +101,7 @@ fun SelectionForest.successorGroundBoundaryDemand(): SelectionForest =
 
 context(world: Assumptions)
 private fun Selection.successorInputBoundaries(): SelectionForest =
-    possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
+    possibleTypes.flatMapToSelectionForest { possibleType ->
         val specializedKey = objectKey(possibleType)
         val key =
             Value.GroundKey.of(
@@ -112,23 +112,22 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
             key.arguments.containsErrorValue() ||
             key.field !in world.resolverRegistry
         ) {
-            demand
+            selectionForestOf()
         } else {
-            demand +
-                world.resolverRegistry
-                    .resolver(key.field)
-                    .objectFragmentWithFromArguments(key.arguments)
-                    .boundarySkeleton()
-                    .successorBoundaryDemand()
+            world.resolverRegistry
+                .resolver(key.field)
+                .objectFragmentWithFromArguments(key.arguments)
+                .boundarySkeleton()
+                .successorBoundaryDemand()
         }
     }
 
 context(world: Assumptions)
 private fun Selection.successorGroundInputBoundaries(): SelectionForest =
-    possibleTypes.fold(selectionForestOf()) { demand, possibleType ->
+    possibleTypes.flatMapToSelectionForest { possibleType ->
         val specializedKey = objectKey(possibleType)
         if (specializedKey.field !in world.resolverRegistry) {
-            return@fold demand
+            return@flatMapToSelectionForest selectionForestOf()
         }
         val resolver = world.resolverRegistry.resolver(specializedKey.field)
         val openArguments = specializedKey.arguments
@@ -140,7 +139,7 @@ private fun Selection.successorGroundInputBoundaries(): SelectionForest =
                 openArguments.instantiateBindings()
             }
         if (arguments?.containsErrorValue() == true) {
-            demand
+            selectionForestOf()
         } else {
             val objectFragment =
                 if (arguments == null) {
@@ -148,9 +147,8 @@ private fun Selection.successorGroundInputBoundaries(): SelectionForest =
                 } else {
                     resolver.objectFragmentWithFromArguments(arguments)
                 }
-            demand +
-                objectFragment
-                    .successorGroundBoundaryDemand()
+            objectFragment
+                .successorGroundBoundaryDemand()
         }
     }
 

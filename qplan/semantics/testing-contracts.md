@@ -26,18 +26,20 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `NodeResolverContract` covers source-level node resolution through fixture-lowered bridge producers and `$node` loaders.
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including a transitive chain.
+- `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
 - `GeneratedResolverContract.kt` applies those scopes to generated correctness and permutation properties and adds a full-feature interaction contract.
 
 Current support is:
 
-| Contract | Resolver01/06/21 | Resolver02/07/22 | Resolver03/08/09/23 |
-| --- | --- | --- | --- |
-| Empty object fragments | yes | yes | yes |
-| Source-level node resolution | yes | yes | yes |
-| Nonempty object fragments | no | yes | yes |
-| Nonempty fragments with `FromArgument` | no | yes | yes |
+| Contract | Resolver01/06/21 | Resolver02/07/22 | Resolver03/08/09/23 | Resolver10/24 |
+| --- | --- | --- | --- | --- |
+| Empty object fragments | yes | yes | yes | yes |
+| Source-level node resolution | yes | yes | yes | yes |
+| Nonempty object fragments | no | yes | yes | yes |
+| Nonempty fragments with `FromArgument` | no | yes | yes | yes |
+| Nonempty fragments with `FromObjectField` | no | no | no | yes |
 
-Runtime `FromObjectField` binding is not supported by Resolver01-09.
+Runtime `FromObjectField` binding is supported by Resolver10 and Resolver24.
 
 ## Policy Mixins
 
@@ -57,11 +59,13 @@ Extended trace, mutation, witness, list-deepening, selective-demand, readiness, 
 
 | Profile ID | Scope | Resolvers | Normal `S:R:Q` |
 | --- | --- | --- | --- |
-| `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-09, Resolver21-23 | `10:3:5` |
-| `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-09, Resolver21-23 | `10:3:5` |
-| `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-09, Resolver22-23 | `10:3:5` |
-| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03, Resolver07-09, Resolver22-23 | `10:3:5` |
-| `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-09, Resolver22-23 | `20:3:5` |
+| `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-10, Resolver21-24 | `10:3:5` |
+| `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-10, Resolver21-24 | `10:3:5` |
+| `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-10, Resolver22-24 | `10:3:5` |
+| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03, Resolver07-10, Resolver22-24 | `10:3:5` |
+| `object-fragment-from-object-field` | `FromObjectField` variables | Resolver10, Resolver24 | `10:3:5` |
+| `mixed-variables` | Both variable sources | Resolver10, Resolver24 | fixed aggregate corpus |
+| `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-10, Resolver22-24 | `20:3:5` |
 | `resolver03-construction-witness` | Construction witness | Resolver03, Resolver09 | `12:2:4` |
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated `$node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
@@ -104,7 +108,7 @@ For cross-profile debugging, run the concrete class with only the seed:
   -PresolverPropertySeed=424242
 ```
 
-Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver09, Resolver10, and Resolver23 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
+Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver09, Resolver10, Resolver23, and Resolver24 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
 
 ## Adding Tests
 

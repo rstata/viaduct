@@ -1,8 +1,11 @@
 package model
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
@@ -131,4 +134,55 @@ class ValueVariableTest {
         assertEquals(Value.Int.of(9), values.values.single())
         assertEquals(setOf(template), arguments.variableTemplates())
     }
+
+    @Test
+    fun `open arguments recursively fetch incomplete stamped variables`(): Unit =
+        runBlocking {
+            val world =
+                TestWorld.fromSDL(
+                    """
+                    input Filter {
+                      values: [Int]
+                    }
+
+                    type Query {
+                      source: Int
+                      consume(filter: Filter): Int
+                    }
+                    """.trimIndent(),
+                ).assumptions
+            val source = world.schema.objectField("Query", "source")
+            val consume = world.schema.objectField("Query", "consume")
+            val variable = Value.Variable.of(source, "value").stamp(emptyList())
+            val arguments =
+                OpenArguments.of(
+                    consume,
+                    mapOf(
+                        "filter" to
+                            mapOf(
+                                "values" to listOf(variable),
+                            ),
+                    ),
+                )
+            world.declareBinding(variable)
+
+            val fetched =
+                async {
+                    context(world) {
+                        arguments.fetchBindings()
+                    }
+                }
+
+            assertFalse(fetched.isCompleted)
+            world.completeBinding(variable, Value.Int.of(9))
+            val filter =
+                assertIs<Value.InputObject>(
+                    fetched.await().fieldValues.getValue("filter"),
+                )
+            val values =
+                assertIs<Value.InputList>(
+                    filter.fieldValues.getValue("values"),
+                )
+            assertEquals(Value.Int.of(9), values.values.single())
+        }
 }

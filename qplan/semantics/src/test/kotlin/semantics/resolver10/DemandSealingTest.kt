@@ -1,6 +1,7 @@
 package semantics.resolver10
 
 import model.Assumptions
+import model.EngineResult
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -14,10 +15,11 @@ import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
 import org.junit.jupiter.api.Test
+import semantics.contract.ResolverContract
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class DemandSealingTest {
+interface DemandSealingContract : ResolverContract {
     @Test
     fun `symbolic nested demand does not block another occurrence of the same field`() {
         val branchLaunches = mutableListOf<Int>()
@@ -445,10 +447,22 @@ class DemandSealingTest {
 
     private fun resolveTrigger(testWorld: TestWorld): model.EngineResult.Object {
         val world: Assumptions = testWorld.assumptions
-        return context(world) {
-            world.objectOf("Query").resolve(
-                world.fragmentFrom("fragment ignored on Query { trigger }").subselections,
-            )
-        }
+        return resolve(
+            world = world,
+            root = world.objectOf("Query"),
+            selections =
+                world.fragmentFrom(
+                    "fragment ignored on Query { trigger }",
+                ).subselections,
+        )
     }
+}
+
+class DemandSealingTest : DemandSealingContract {
+    override fun resolve(
+        world: Assumptions,
+        root: Value.Object,
+        selections: SelectionForest,
+    ): EngineResult.Object =
+        resolveWithDependencyValidation(world, root, selections)
 }

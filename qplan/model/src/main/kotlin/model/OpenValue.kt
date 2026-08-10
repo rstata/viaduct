@@ -383,6 +383,14 @@ internal fun OpenArguments.instantiateBindings(): Value.Arguments =
         fieldExpressions().mapValues { (_, value) -> value.instantiateBindings() },
     )
 
+/** Grounds this argument tuple, suspending until every stamped variable is complete. */
+context(world: Assumptions)
+suspend fun OpenArguments.fetchBindings(): Value.Arguments =
+    argumentsOfGround(
+        type,
+        fieldExpressions().mapValues { (_, value) -> value.fetchBindings() },
+    )
+
 context(world: Assumptions)
 private fun OpenValue?.instantiateBindings(): Value.Input? =
     when (this) {
@@ -400,5 +408,25 @@ private fun OpenValue?.instantiateBindings(): Value.Input? =
             Value.InputObject.of(
                 objectType,
                 fieldValues.mapValues { (_, value) -> value.instantiateBindings() },
+            )
+    }
+
+context(world: Assumptions)
+private suspend fun OpenValue?.fetchBindings(): Value.Input? =
+    when (this) {
+        null -> null
+        is Value.Input -> this
+        is Value.Variable.Stamped -> world.fetchBinding(this)
+        is Value.Variable.Template ->
+            error("Variable template $this must be stamped before it can be instantiated")
+        is OpenListValueImpl ->
+            Value.InputList.of(
+                elementType,
+                values.map { value -> value.fetchBindings() },
+            )
+        is OpenInputObjectValueImpl ->
+            Value.InputObject.of(
+                objectType,
+                fieldValues.mapValues { (_, value) -> value.fetchBindings() },
             )
     }

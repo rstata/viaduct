@@ -7,7 +7,7 @@ import model.Value
 import semantics.DepthFirstReactor
 import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 
 /**
  * Resolves [selections] through a depth-first work queue when resolver object fragments are empty,
@@ -23,11 +23,14 @@ internal fun Value.Object.resolve(
     selections: SelectionForest,
     eventObserver: ReactorEventObserver,
 ): EngineResult.Object {
-    val selectionCompleter =
-        SelectionCompleter { selections ->
-            SelectionCompletion(selections, selective = false)
+    require(!world.selectiveResolvers) {
+        "Resolver06 requires non-selective resolvers"
+    }
+    val runtimeSupport =
+        RuntimeSupport { selections ->
+            SelectionCompletion(selections)
         }
-    return context(selectionCompleter) {
+    return context(runtimeSupport) {
         DepthFirstReactor(
             source = this@resolve,
             selections = selections,

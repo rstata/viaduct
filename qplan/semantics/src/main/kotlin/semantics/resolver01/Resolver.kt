@@ -5,7 +5,7 @@ import model.EngineResult
 import model.SelectionForest
 import model.Value
 import semantics.SelectionCompletion
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 import semantics.orchestrateKeys
 
 /**
@@ -15,11 +15,14 @@ import semantics.orchestrateKeys
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
-    val selectionCompleter =
-        SelectionCompleter { selections ->
-            SelectionCompletion(selections, selective = false)
+    require(!world.selectiveResolvers) {
+        "Resolver01 requires non-selective resolvers"
+    }
+    val runtimeSupport =
+        RuntimeSupport { selections ->
+            SelectionCompletion(selections)
         }
-    return context(selectionCompleter) {
+    return context(runtimeSupport) {
         orchestrateKeys(
             path = emptyList(),
             selections = selections,

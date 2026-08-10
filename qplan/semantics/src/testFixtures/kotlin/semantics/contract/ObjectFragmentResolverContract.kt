@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.Assumptions
 import model.EngineResult
 import model.Fragment
 import model.Schema
@@ -25,6 +26,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `closes and orders transitive sibling resolver demand`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type User {
@@ -97,6 +99,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `resolves descendant demand before its consuming sibling`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Profile { raw: String!, rendered: String! }
@@ -165,6 +168,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `resolves recursive demand introduced by an object fragment`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Chain { label: String!, next: Chain, computed: String! }
@@ -225,6 +229,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `applies concrete implementation defaults in transitive demand`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Item { computed: Int! }
@@ -291,6 +296,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         var computedApplications = 0
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item { seed: Int!, computed: Int! }
@@ -359,6 +365,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `error-valued resolver argument does not import transitive demand`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Container { helper: Int! }
@@ -414,9 +421,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom("fragment ignored on Query { result }")
 
+        val completeWorld =
+            Assumptions.of(
+                schema = world.schema,
+                resolverRegistry = world.resolverRegistry,
+                selectiveResolvers = false,
+            )
         val expected =
-            context(world) {
-                world.objectOf("Query").resolveWithResolver01(fragment.subselections)
+            context(completeWorld) {
+                completeWorld.objectOf("Query").resolveWithResolver01(fragment.subselections)
             }
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
@@ -433,6 +446,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         var computedApplications = 0
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Product { label: String! }
@@ -589,6 +603,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         var renderedApplications = 0
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Entry { raw: Int!, rendered: String! }

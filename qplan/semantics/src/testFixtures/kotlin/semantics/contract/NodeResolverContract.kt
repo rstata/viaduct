@@ -21,6 +21,7 @@ interface NodeResolverContract : ResolverContract {
     fun `resolves an empty query through field and node resolvers`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL = FIELD_AND_NODE_SCHEMA,
                 nodeResolvers = { schema ->
                     val user = schema.contractObjectType("User")
@@ -80,6 +81,7 @@ interface NodeResolverContract : ResolverContract {
     fun `resolves a nested passive node through its synthetic bridge`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Node { id: ID! }
@@ -167,6 +169,7 @@ interface NodeResolverContract : ResolverContract {
     fun `dispatches argument-bearing abstract node lists`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Node { id: ID! }
@@ -264,6 +267,7 @@ interface NodeResolverContract : ResolverContract {
         val observedFields = mutableListOf<String>()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Node { id: ID! }

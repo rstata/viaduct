@@ -23,9 +23,13 @@ Resolver09 reuses the same slot operations through its package-local `Reactor`. 
 
 Reactors share `ReactorInstrumentation` for lifecycle observation and successful-completion invariants, not queues or scheduling algorithms. Report orchestrator and slot-resolver launch, start, and finish transitions through it. Keep scheduler-specific state such as Resolver09's worklist, slot registry, and quiescence diagnostics in that resolver's package; exact dependency derivation belongs to the shared `ResolverDependencies.kt`.
 
-Do not retain `Assumptions` or `SelectionCompleter` as reactor instance state. Keep them at the resolver entry point and declare context parameters on reactor initialization, execution, and helper functions that use them.
+Do not retain `Assumptions` or `RuntimeSupport` as reactor instance state. Keep them at the resolver entry point and declare context parameters on reactor initialization, execution, and helper functions that use them.
 
 Resolver01 and its queue-backed counterpart Resolver06 support empty user object fragments plus generated bridge loaders. Resolver02 and its queue-backed counterpart Resolver07 support nonempty fragments and `FromArgument`; Resolver03, its depth-first queue counterpart Resolver08, and readiness-driven Resolver09 support that domain with selective projection, while runtime `FromObjectField` is deferred. Resolver01/02/06/07 use complete resolver outputs, while Resolver03/08/09 use full `successorDemand()` and selective projection.
+
+Resolver01/02/06/07 require `Assumptions.selectiveResolvers == false`; Resolver03/08/09/10 require
+it to be true. Use that world flag for resolver invocation and passive output traversal rather than
+carrying another selectivity flag in completion state.
 
 Raw node inputs and bridge schema augmentation are fixture concerns. Semantic logic sees `foo$bridge` producers and `T$Bridge.$node { $id }` loaders as ordinary field resolvers.
 

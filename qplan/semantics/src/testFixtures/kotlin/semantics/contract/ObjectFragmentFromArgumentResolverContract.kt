@@ -18,6 +18,7 @@ interface ObjectFragmentFromArgumentResolverContract : ResolverContract {
         val consumeArguments = mutableListOf<Value.Arguments>()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Query {
@@ -106,6 +107,7 @@ interface ObjectFragmentFromArgumentResolverContract : ResolverContract {
     fun `resolves a transitive chain of fromArgument variables`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Query {

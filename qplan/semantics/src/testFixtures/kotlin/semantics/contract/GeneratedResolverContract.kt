@@ -536,7 +536,7 @@ private fun ResolverContract.generatedResolution(
     registry: ArbitraryRegistry,
     querySource: String,
 ): GeneratedResolution {
-    val world = testWorld.newAssumptions()
+    val world = testWorld.newAssumptions(selectiveResolvers)
     val fragment = world.fragmentFrom(querySource)
     registry.clearResolutionWitness()
     val result =

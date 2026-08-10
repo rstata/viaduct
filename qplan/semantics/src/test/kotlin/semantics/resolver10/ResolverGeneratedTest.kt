@@ -20,6 +20,9 @@ class ResolverGeneratedTest :
     ObjectFragmentFromObjectPathGeneratedResolverContract,
     MixedVariableGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
+    override val selectiveResolvers: Boolean
+        get() = true
+
     override fun resolve(
         world: Assumptions,
         root: Value.Object,

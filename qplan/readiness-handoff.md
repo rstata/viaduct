@@ -96,9 +96,11 @@ Keep Resolver08's selective policy unchanged:
 ```kotlin
 SelectionCompletion(
     selections = selections.successorDemand(),
-    selective = true,
 )
 ```
+
+Resolver09 requires `world.selectiveResolvers == true`; shared resolver invocation and passive
+output traversal read that world flag directly.
 
 Resolver09 changes scheduling, not demand discovery or projection.
 

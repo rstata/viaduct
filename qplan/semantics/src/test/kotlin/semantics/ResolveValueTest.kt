@@ -91,7 +91,7 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = selections,
-                    beSelective = true,
+                    retainCompleteOutput = false,
                 )
             }
 
@@ -125,6 +125,7 @@ class ResolveValueTest {
     fun `non-selective traversal unpacks every provided passive field but only demanded resolver paths`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = false,
                 schemaSDL =
                     """
                     type Profile {
@@ -182,7 +183,7 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = resolverDemand,
-                    beSelective = false,
+                    retainCompleteOutput = false,
                 )
             }
 
@@ -228,14 +229,14 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = selections,
-                    beSelective = true,
+                    retainCompleteOutput = false,
                 )
             }
         }
     }
 
     @Test
-    fun `non-selective assumptions allow output fields outside selections`() {
+    fun `non-selective worlds retain output fields outside selections`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -253,6 +254,7 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val selectedKey = Value.GroundKey.of(world.schema.objectField("User", "selected"), emptyMap())
+        val extraKey = Value.GroundKey.of(world.schema.objectField("User", "extra"), emptyMap())
         val value =
             world.schema.objectOf("User") {
                 "selected" setTo "kept"
@@ -268,12 +270,12 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = selections,
-                    beSelective = true,
+                    retainCompleteOutput = false,
                 )
             }
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
-        assertEquals(setOf(selectedKey), result.keys)
+        assertEquals(setOf(selectedKey, extraKey), result.keys)
     }
 
     @Test
@@ -362,7 +364,7 @@ class ResolveValueTest {
                 output.resolveValue(
                     path = rootPath,
                     resolverDemand = selections,
-                    beSelective = true,
+                    retainCompleteOutput = false,
                 )
             }
         val callbackPaths = mutableListOf<List<PathComponent>>()

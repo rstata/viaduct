@@ -26,6 +26,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Query {
@@ -90,6 +91,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
                 """.trimIndent()
             val testWorld =
                 TestWorld.fromSDL(
+                    selectiveResolvers = selectiveResolvers,
                     schemaSDL =
                         """
                         type Query {
@@ -165,6 +167,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Box {
@@ -236,6 +239,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Query {

@@ -17,7 +17,11 @@ import kotlin.test.assertSame
 class DepthFirstReactorTest {
     @Test
     fun `reports the complete task lifecycle through reactor instrumentation`() {
-        val world = TestWorld.fromSDL("type Query { value: Int }").assumptions
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = "type Query { value: Int }",
+                selectiveResolvers = false,
+            ).assumptions
         val source = world.objectOf("Query")
         val selections =
             world
@@ -26,12 +30,12 @@ class DepthFirstReactorTest {
         val selection = selections.merge(source.type).byGroundKey().values.single()
         val coordinate = listOf<PathComponent>(selection.groundKey())
         val events = mutableListOf<ReactorEvent>()
-        val selectionCompleter =
-            SelectionCompleter { demand ->
-                SelectionCompletion(demand, selective = false)
+        val runtimeSupport =
+            RuntimeSupport { demand ->
+                SelectionCompletion(demand)
             }
 
-        context(world, selectionCompleter) {
+        context(world, runtimeSupport) {
             DepthFirstReactor(
                 source = source,
                 selections = selections,
@@ -63,7 +67,11 @@ class DepthFirstReactorTest {
 
     @Test
     fun `equal-depth resolvers precede orchestrators and preserve insertion order`() {
-        val world = TestWorld.fromSDL("type Query { value: Int }").assumptions
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = "type Query { value: Int }",
+                selectiveResolvers = false,
+            ).assumptions
         val source = world.objectOf("Query")
         val selections =
             world
@@ -91,24 +99,28 @@ class DepthFirstReactorTest {
 
     @Test
     fun `resolve can only be called once`() {
-        val world = TestWorld.fromSDL("type Query { value: Int }").assumptions
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = "type Query { value: Int }",
+                selectiveResolvers = false,
+            ).assumptions
         val selections =
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
-        val selectionCompleter =
-            SelectionCompleter { demand ->
-                SelectionCompletion(demand, selective = false)
+        val runtimeSupport =
+            RuntimeSupport { demand ->
+                SelectionCompletion(demand)
             }
         val reactor =
-            context(world, selectionCompleter) {
+            context(world, runtimeSupport) {
                 DepthFirstReactor(
                     source = world.objectOf("Query"),
                     selections = selections,
                 )
             }
 
-        context(world, selectionCompleter) {
+        context(world, runtimeSupport) {
             reactor.resolve()
 
             assertFailsWith<IllegalStateException> {

@@ -11,7 +11,7 @@ import model.groundKey
 import semantics.ReactorEventObserver
 import semantics.ReactorInstrumentation
 import semantics.ReactorSlotKind
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 import semantics.closeResolverDemand
 import semantics.reactorSlotKind
 import semantics.resolverDependencies
@@ -36,7 +36,7 @@ internal class Reactor private constructor(
     private val instrumentation = ReactorInstrumentation(eventObserver)
 
     companion object {
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         operator fun invoke(
             source: Value.Object,
             selections: SelectionForest,
@@ -53,7 +53,7 @@ internal class Reactor private constructor(
         }
     }
 
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun run(): EngineResult.Object {
         while (true) {
             while (slotResolverQueue.isNotEmpty()) {
@@ -76,7 +76,7 @@ internal class Reactor private constructor(
         }
     }
 
-    context(world: Assumptions, selectionCompleter: SelectionCompleter)
+    context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun launchOrchestrator(
         path: List<PathComponent>,
         source: Value.Object,
@@ -129,7 +129,7 @@ internal class Reactor private constructor(
                 .associateWith { emptySet<SlotResolver>() }
                 .toMutableMap()
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         fun launchResolvers(): Boolean {
             if (!started) {
                 instrumentation.orchestratorStarted(path)
@@ -240,7 +240,7 @@ internal class Reactor private constructor(
             instrumentation.resolverLaunched(coordinate, key.reactorSlotKind())
         }
 
-        context(world: Assumptions, selectionCompleter: SelectionCompleter)
+        context(world: Assumptions, runtimeSupport: RuntimeSupport)
         fun execute() {
             instrumentation.resolverStarted(coordinate)
             val resolvedValue =

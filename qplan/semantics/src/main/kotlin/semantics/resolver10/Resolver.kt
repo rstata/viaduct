@@ -11,7 +11,7 @@ import model.registry.successorDemand
 import model.registry.successorGroundBoundaryDemand
 import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
-import semantics.SelectionCompleter
+import semantics.RuntimeSupport
 
 /**
  * Resolves [selections] through exact readiness with runtime object-path variables.
@@ -28,9 +28,12 @@ internal fun Value.Object.resolve(
     selections: SelectionForest,
     eventObserver: ReactorEventObserver = {},
 ): EngineResult.Object {
+    require(world.selectiveResolvers) {
+        "Resolver10 requires selective resolvers"
+    }
     val retainCompleteOutputs = world.hasObjectPathVariables()
-    val selectionCompleter =
-        SelectionCompleter { selections ->
+    val runtimeSupport =
+        RuntimeSupport { selections ->
             if (
                 retainCompleteOutputs ||
                 selections.usedVariables().isNotEmpty() ||
@@ -39,17 +42,15 @@ internal fun Value.Object.resolve(
                 SelectionCompletion(
                     selections =
                         selections.successorGroundBoundaryDemand(),
-                    selective = true,
                     retainCompleteOutput = true,
                 )
             } else {
                 SelectionCompletion(
                     selections = selections.successorDemand(),
-                    selective = true,
                 )
             }
         }
-    return context(selectionCompleter) {
+    return context(runtimeSupport) {
         Reactor(
             source = this@resolve,
             selections = selections,

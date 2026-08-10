@@ -16,7 +16,7 @@ The intended sequence is:
 | Resolver22 | Resolver02 capability: nonempty object fragments and `FromArgument` variables | Complete and non-selective, using `successorBoundaryDemand()` |
 | Resolver23 | Resolver03 capability: Resolver22 plus selective output | Selective, using `successorDemand()` |
 
-The shared implementation should live in `semantics/src/main/kotlin/semantics/CoroutineResolve.kt`. Resolver21, Resolver22, and Resolver23 should eventually differ only in the output-boundary completion policy they supply to that shared procedure.
+The shared implementation should live in `semantics/src/main/kotlin/semantics/CoroutineResolve.kt`. Resolver21, Resolver22, and Resolver23 should eventually differ only in the output-boundary completion policy they supply and the `Assumptions.selectiveResolvers` world mode they require.
 
 ## Read First
 
@@ -43,31 +43,20 @@ The Promise/OER migration that introduced the foundation below is part of the co
 
 ## Current Foundation
 
-`EngineResult.Cell` no longer exists. An `EngineResult.Object` owns independent write-once value, field-check, and type-check promises.
+`EngineResult.Cell` no longer exists. An `EngineResult.Object` owns independent write-once value promises.
 
 The relevant OER operations are:
 
 ```kotlin
 fun getValue(field: Value.GroundKey): Promise<EngineResult?>
-fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean>
-fun getTypeCheck(): Promise<Value.Boolean>
 
 fun setValue(field: Value.GroundKey, value: EngineResult?)
-fun setFieldCheck(field: Value.GroundKey, accept: Value.Boolean)
-fun setTypeCheck(accept: Value.Boolean)
 
 fun createValuePromise(
     field: Value.GroundKey,
     deferredStamp: Any? = null,
 ): Promise<EngineResult?>
-
-fun createFieldCheckPromise(
-    field: Value.GroundKey,
-    deferredStamp: Any? = null,
-): Promise<Value.Boolean>
 ```
-
-For a completed check, `true` means access is accepted and `false` means access is rejected. Resolver21 does not execute checkers, so successful ordinary and `__typename` slots complete their field check with `Value.Boolean.of(true)`. An argument-error slot completes both value and field check with `Value.Error`. OER type checks remain the immediately accepted defaults currently installed by `EngineResult.Object.of`.
 
 `Promise<T>` has an immediate implementation and a `CompletableDeferred`-backed deferred implementation:
 
@@ -113,67 +102,69 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object
 
 This public function should use `runBlocking` once around the complete Resolver21 coroutine tree, with a 90-second `withTimeout` immediately inside it. The timeout is a final guard against an undetected hang, not a replacement for resolver-read cycle detection. The shared implementation inside `CoroutineResolve.kt` should be suspending and use `coroutineScope`. Do not add `Dispatchers.Default`; inherited single-threaded `runBlocking` execution is sufficient to prove the continuation model without introducing parallel scheduling.
 
-## Shared Completion Policy
+## Runtime Support And Completion Policy
 
-The current shared synchronous constructor uses `SelectionCompleter` and `SelectionCompletion`:
+`RuntimeSupport` already exists in `semantics/src/main/kotlin/semantics/RuntimeSupport.kt` as the completion-policy context service. Extend that service rather than introducing another context abstraction.
+
+`RuntimeSupport` owns:
+
+- its existing `complete(selections)` operation containing the output-boundary completion policy;
+- a `cycleCheck` operation that materialization invokes immediately before every promise await;
+- the monotonic resolver-read cycle graph used by cycle-checking variants.
+
+The completion result retains the two boundary-dependent facts:
 
 ```kotlin
-internal data class SelectionCompletion(
-    val selections: SelectionForest,
-    val selective: Boolean,
-    val retainCompleteOutput: Boolean = false,
-)
+val selections: SelectionForest
+val retainCompleteOutput: Boolean
 ```
 
-Preserve this semantic split. Resolver21 supplies the identity completion:
+The exact private carrier for those two facts may remain a small data class, but it is not a context service. The only context service used by resolution and materialization is `RuntimeSupport`.
+
+Resolver21's `complete` operation supplies identity completion. Resolver22 will later supply `selections.successorBoundaryDemand()`. Resolver23 will later supply `selections.successorDemand()`. Resolver21 and Resolver22 require `world.selectiveResolvers == false`; Resolver23 requires it to be true. The shared procedure uses that world flag for resolver invocation and passive output traversal.
+
+Provide two explicit constructions:
+
+- cycle-checking support for Resolver21, which owns one shared graph and has a functional `cycleCheck`;
+- no-cycle-check support for Resolver01-10 and for post-resolution validation, dependency, and witness oracles, whose `cycleCheck` remains a no-op even when a promise has a deferred writer-coordinate stamp.
+
+Do not infer this policy from whether a reader happens to be present. Every actual Resolver21 resolver-input materialization must pass its exact reader coordinate.
+
+The desired Resolver21 wrapper shape is:
 
 ```kotlin
-SelectionCompletion(
-    selections = selections,
-    selective = false,
-)
-```
+val runtimeSupport =
+    RuntimeSupport.cycleChecking(
+        complete = { selections ->
+            // Identity selections, no retained-complete-output override.
+        },
+    )
 
-Resolver22 will later supply `selections.successorBoundaryDemand()` with `selective = false`. Resolver23 will later supply `selections.successorDemand()` with `selective = true`.
-
-The long-lived context service should be named `ResolverSupport` and moved to `semantics/src/main/kotlin/semantics/ResolverSupport.kt`. It replaces `SelectionCompleter` as the context object, delegates output-boundary completion to the supplied policy, and owns the resolver-read cycle graph described below. Keep `SelectionCompletion` as the small completion result unless a clearer neutral name emerges during the mechanical move.
-
-Updating existing Resolver01-10 context parameters from `SelectionCompleter` to `ResolverSupport` must be a behavior-preserving rename/extraction. Do not otherwise change their scheduling or materialization behavior.
-
-The desired wrapper shape is:
-
-```kotlin
-val resolverSupport =
-    ResolverSupport { selections ->
-        SelectionCompletion(
-            selections = selections,
-            selective = false,
-        )
-    }
-
-return context(resolverSupport) {
-    // Existing synchronous constructor or new coroutine constructor.
+return context(runtimeSupport) {
+    // New coroutine constructor.
 }
 ```
 
-Keep the policy API small. Resolver21-23 should not require separate scheduler subclasses or duplicated copies of the coroutine procedure.
+Resolvers01-10 already use `RuntimeSupport` and obtain completion facts through `runtimeSupport.complete(...)`. Give their existing lambda-constructed support a no-op `cycleCheck`; do not otherwise change their scheduling or output policy.
+
+Keep this API small. Resolver21-23 should not require separate scheduler subclasses or duplicated copies of the coroutine procedure.
 
 ## Resolver-Read Cycle Detection
 
-Coroutine dependency cycles otherwise suspend forever. Resolver21 must add monotonic resolver-read cycle detection to `ResolverSupport`.
+Coroutine dependency cycles otherwise suspend forever. Resolver21 must add monotonic resolver-read cycle detection to `RuntimeSupport`.
 
 This is cycle detection for violated resolver-validation or invariant assumptions. Do not call it general deadlock detection, and do not try to infer JVM thread deadlocks.
 
-The required API is:
+The cycle-checking behavior belongs to `RuntimeSupport`:
 
 ```kotlin
-fun recordRead(
+fun cycleCheck(
     reader: List<PathComponent>,
     promise: Promise<*>,
 )
 ```
 
-Call `recordRead` immediately before every `await()` performed while materializing a resolver input.
+The cycle-checking implementation records and checks the edge from `reader` to the promise's writer. No-cycle-check support instead performs no graph update.
 
 The graph edge is:
 
@@ -181,11 +172,64 @@ The graph edge is:
 reader resolver coordinate -> promise deferred stamp
 ```
 
-If `getDeferredStamp()` returns `null`, the promise is immediate and contributes no resolver edge. Do not inspect whether a deferred promise is complete; a completed deferred promise retains its producer stamp and records the same semantic read edge as an incomplete one.
+Every deferred value promise created for a resolver slot must use the exact `List<PathComponent>`
+coordinate of that slot as its deferred stamp:
 
-The graph is monotonic. Retain recorded edges for the entire root resolution and never remove them after an await. One resolver may read several producer promises, so store a set of producer stamps per reader rather than one replaceable edge.
+```kotlin
+val writer = path + key
+val valuePromise =
+    Promise.ofDeferred<EngineResult?>(
+        deferredStamp = writer,
+    )
+```
 
-A suitable concurrent representation is a `ConcurrentHashMap<Any, MutableSet<Any>>` whose sets come from `ConcurrentHashMap.newKeySet()`. On insertion of `reader -> producer`, search from `producer` for `reader`. If reachable, throw an `IllegalStateException` or a focused subtype with the complete cycle in its message.
+This establishes the conversion from a promise to its writer coordinate:
+
+```text
+promise -> promise.getDeferredStamp() as List<PathComponent>
+```
+
+Together with `readsByReader: reader path -> Set<Promise<*>>`, that conversion makes the recorded
+relation an adjacency list over resolver coordinates:
+
+```text
+successors(reader) =
+    readsByReader[reader].map { promise -> promise's deferred writer coordinate }
+```
+
+Cycle traversal therefore starts at the newly read promise's writer coordinate, looks up every
+promise read by that writer, converts those promises to their writer coordinates, and continues
+until it either reaches the original reader or exhausts the graph.
+
+If `getDeferredStamp()` returns `null`, the promise is immediate and contributes no resolver edge.
+A non-null stamp encountered by cycle-checking must be a `List<PathComponent>` writer coordinate;
+fail on any other stamp because it violates Resolver21's promise-creation invariant. Do not inspect
+whether a deferred promise is complete; a completed deferred promise retains its writer stamp and
+records the same semantic read edge as an incomplete one.
+
+The graph is monotonic. Retain recorded edges for the entire root resolution and never remove them
+after an await. One resolver may read several promises, so store a set of promises per reader rather
+than one replaceable edge; each promise supplies its adjacent writer coordinate through
+`getDeferredStamp()`.
+
+A suitable concurrent representation is:
+
+```kotlin
+ConcurrentHashMap<List<PathComponent>, MutableSet<Promise<*>>>()
+```
+
+Insert the promise before traversing the graph:
+
+```kotlin
+readsByReader.computeIfAbsent(reader) {
+    // One resolver coroutine normally owns this reader's set; use a concurrent set defensively.
+    ConcurrentHashMap.newKeySet()
+}.add(promise)
+```
+
+Then search from the promise's deferred writer coordinate for `reader`, traversing the adjacency
+list by converting each recorded promise through `getDeferredStamp()`. If `reader` is reachable,
+throw an `IllegalStateException` or a focused subtype with the complete cycle in its message.
 
 Insertion occurs before traversal. Because edges are never removed, the insertion that closes a concurrently formed cycle can observe the previously inserted path; no promise-completion handshake is needed. Keep the implementation thread-safe even though Resolver21 initially inherits a single-threaded dispatcher.
 
@@ -196,79 +240,102 @@ Add focused tests for:
 - a multi-hop cycle;
 - a read of an already completed deferred promise;
 - repeated recording of the same edge;
-- concurrent insertion of edges that close one cycle.
+- concurrent insertion of edges that close one cycle;
+- no-cycle-check support awaiting a stamped deferred promise without adding an edge.
 
-## Materialization Hook
+## Contextual Materialization
 
-Keep the existing public materialization operation unchanged for synchronous callers:
+Make `RuntimeSupport` a context parameter of materialization:
 
 ```kotlin
-context(world: Assumptions)
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
 suspend fun EngineResult.Object.materialize(
     selections: ObjectSelectionForest,
+    reader: List<PathComponent>,
 ): Value.Object
 ```
 
-Add an internal overload or private shared implementation that accepts a callback invoked immediately before each promise await:
+Immediately before each await, materialization uses the contextual support directly:
 
 ```kotlin
-internal suspend fun EngineResult.Object.materialize(
-    selections: ObjectSelectionForest,
-    beforeAwait: (Promise<*>) -> Unit,
-): Value.Object
+val promise = getValue(key)
+runtimeSupport.cycleCheck(reader, promise)
+val value = promise.await()
 ```
 
-The existing public operation delegates with a no-op callback. Recursive object and list materialization must carry the callback through every nested selected value. The coroutine slot calls the internal form with:
+Recursive object and list materialization retain the same `RuntimeSupport` context and pass the same `reader` coordinate throughout the walk. Do not add a callback parameter or another materialization overload solely for cycle checking.
+
+The slot passes its reader coordinate when materializing:
 
 ```kotlin
-beforeAwait = { promise ->
-    resolverSupport.recordRead(coordinate, promise)
+val input =
+    target.materialize(
+        selections = objectFragment,
+        reader = coordinate,
+    )
+```
+
+Update existing materialization call sites and focused tests to provide `RuntimeSupport`. Post-resolution oracles and existing synchronous resolvers use the explicitly no-op variant.
+
+Do not put cycle-detection state in `Promise`, `EngineResult`, or `Assumptions`. `Promise` supplies
+only its writer-coordinate stamp; cycle-enabled `RuntimeSupport` owns the read relation.
+
+## Object Orchestration
+
+Keep installation and launch together in one ordinary orchestration procedure. There is no need for
+a `PreparedSlot` carrier or a separate preparation function.
+
+A suitable shape is:
+
+```kotlin
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
+private fun CoroutineScope.orchestrateSlot(
+    path: List<PathComponent>,
+    source: Value.Object,
+    selections: SelectionForest,
+    target: EngineResult.Object,
+) {
+    require(source.type == target.type)
+
+    val closedDemand = source.type.closeResolverDemand(path, selections)
+    val unresolvedKeys = closedDemand.groundKeys() - target.keys
+
+    unresolvedKeys.forEach { key ->
+        target.createValuePromise(
+            field = key,
+            deferredStamp = path + key,
+        )
+    }
+
+    unresolvedKeys.forEach { key ->
+        launch {
+            resolveSlot(
+                path = path,
+                source = source,
+                selection = closedDemand[key],
+                target = target,
+                valuePromise = target.getValue(key),
+            )
+        }
+    }
 }
 ```
 
-Do not put cycle-detection state in `Promise`, `EngineResult`, or `Assumptions`. `Promise` supplies only the producer stamp; `ResolverSupport` owns the read relation.
+The two loops express a temporal invariant within one function: install every local destination
+promise before launching any local resolver coroutine. They do not justify a separate abstraction.
+Keep genuinely complicated work, such as demand closure, behind its existing focused abstraction.
 
-## Two-Phase Object Orchestration
-
-Every OER orchestration has a synchronous preparation phase followed by coroutine launch.
-
-Preparation must:
-
-1. Require that the source object type and target OER type match.
-2. Compute `closedDemand = source.type.closeResolverDemand(path, selections)`.
-3. Compute `unresolvedKeys = closedDemand.groundKeys() - target.keys`.
-4. For every unresolved key, create its deferred value promise and deferred field-check promise.
-5. Stamp both deferred promises with the exact coordinate `path + key`.
-6. Return immutable prepared-slot records containing the source object, containing-OER path, exact selection, target OER, coordinate, value promise, and field-check promise.
-
-Do all six steps for the complete local OER before launching any local slot coroutine. This is what converts an absent field into a legitimate suspended dependency rather than `MissingFieldException`.
-
-A suitable private carrier is:
-
-```kotlin
-private class PreparedSlot(
-    val path: List<PathComponent>,
-    val source: Value.Object,
-    val selection: ObjectSelection,
-    val target: EngineResult.Object,
-    val coordinate: List<PathComponent>,
-    val valuePromise: Promise<EngineResult?>,
-    val fieldCheckPromise: Promise<Value.Boolean>,
-)
-```
-
-This carrier is immutable execution input, not reactive state. It needs no started, ready, finished, or dependency fields.
-
-Preparation must not call `dependencyOrder` or `resolverDependencies`. All prepared slots may launch immediately.
+`orchestrateSlot` must not call `dependencyOrder` or `resolverDependencies`. Every installed local
+slot may launch immediately.
 
 ## Root Procedure
 
-The public Resolver21 wrapper creates one `ResolverSupport`, enters `runBlocking`, and places a 90-second timeout around the entire shared coroutine resolution:
+The public Resolver21 wrapper creates one root `RuntimeSupport`, enters `runBlocking`, and places a 90-second timeout around the entire shared coroutine resolution:
 
 ```kotlin
 return runBlocking {
     withTimeout(90_000) {
-        context(resolverSupport) {
+        context(runtimeSupport) {
             this@resolve.coroutineResolve(selections)
         }
     }
@@ -280,7 +347,7 @@ Do not catch `TimeoutCancellationException`. Timeout is root-originated cancella
 The shared suspending procedure should have the following shape:
 
 ```kotlin
-context(world: Assumptions, resolverSupport: ResolverSupport)
+context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal suspend fun Value.Object.coroutineResolve(
     selections: SelectionForest,
 ): EngineResult.Object {
@@ -291,60 +358,54 @@ internal suspend fun Value.Object.coroutineResolve(
     )
 
     coroutineScope {
-        prepareObject(
+        orchestrateSlot(
             path = emptyList(),
             source = this@coroutineResolve,
             selections = selections,
             target = result,
-        ).forEach { slot ->
-            launch {
-                slot.resolve()
-            }
-        }
+        )
     }
 
     return result
 }
 ```
 
-The exact helper names may differ, but retain one root structured scope, prepare-before-launch, and ordinary nested procedure calls.
+The exact helper names may differ, but retain one root structured scope, install-before-launch, and ordinary nested procedure calls.
 
 When the root `coroutineScope` returns, every launched descendant coroutine has completed. The returned OER must therefore contain only completed promises, making synchronous `get()`, structural equality, `correctResolution`, and existing test contracts valid.
 
 ## Slot Procedure
 
-Each prepared slot executes exactly once.
+Each launched resolver slot executes exactly once.
 
 For an argument-error key:
 
 ```kotlin
 valuePromise.complete(Value.Error)
-fieldCheckPromise.complete(Value.Error)
 ```
 
 For `__typename`:
 
 ```kotlin
 valuePromise.complete(Value.String.of(source.type.typeName))
-fieldCheckPromise.complete(Value.Boolean.of(true))
 ```
 
 For an ordinary key:
 
-1. Ask `ResolverSupport.complete(selection.subselections)` for the output-boundary completion.
-2. If the field has a registered resolver, stamp its object fragment at `coordinate`, materialize that fragment from the containing target OER through the cycle-recording materialization hook, and apply the resolver.
+1. Call `runtimeSupport.complete(selection.subselections)` to obtain the output-boundary completion.
+2. If the field has a registered resolver, stamp its object fragment at `coordinate`, materialize that fragment from the containing target OER with `coordinate` as its reader, and apply the resolver.
 3. If the field has no registered resolver, require non-selective operation and read the value from `source.fieldValues`.
-4. Convert the returned `Value.Output?` through `resolveValue(path = coordinate, resolverDemand = completion.selections, beSelective = completion.selective && !completion.retainCompleteOutput)`.
-5. Prepare every `ObjectResolution` in `resolvedValue.objectsNeedingResolution` before publishing `resolvedValue.engineResult`.
-6. Launch all prepared child slots as children of this slot's coroutine scope.
-7. Complete the destination value promise with `resolvedValue.engineResult`.
-8. Complete the field-check promise with accepted access.
-9. Remain in the slot's structured scope until every launched descendant completes.
+4. Convert the returned `Value.Output?` through `resolveValue(path = coordinate, resolverDemand = completion.selections, retainCompleteOutput = completion.retainCompleteOutput)`; that operation uses `world.selectiveResolvers`.
+5. Invoke `orchestrateSlot` for every `ObjectResolution` in
+   `resolvedValue.objectsNeedingResolution`. Each call synchronously installs that child's local
+   promises and launches its resolver coroutines in the current structured scope.
+6. Complete the destination value promise with `resolvedValue.engineResult`.
+7. Remain in the slot's structured scope until every launched descendant completes.
 
 The resolver invocation branch should preserve the existing `resolveKey` policy:
 
 - `retainCompleteOutput` uses `resolver.completeOutput(...)`;
-- `selective` uses `resolver(input, arguments, selections)`;
+- `world.selectiveResolvers` uses `resolver(input, arguments, selections)`;
 - otherwise use the complete-output `resolver(input, arguments)` overload.
 
 Resolver21 reaches only the final complete-output branch, but the shared implementation must preserve all three branches so Resolver22 and Resolver23 remain policy-only wrappers.
@@ -355,33 +416,30 @@ The critical publication invariant is:
 
 > Every active descendant promise reachable through a value is installed before the ancestor value promise is completed with that value.
 
-`resolveValue` constructs passive values and stable child OER identities. Its `objectsNeedingResolution` list identifies every active OER occurrence in that passive tree. Prepare all those object occurrences first, then launch their slots, then complete the parent value promise.
+`resolveValue` constructs passive values and stable child OER identities. Its
+`objectsNeedingResolution` list identifies every active OER occurrence in that passive tree. Call
+`orchestrateSlot` synchronously for every occurrence, then complete the parent value promise.
 
-It is not sufficient to call `launch { prepare child }` and immediately complete the parent value. A default `launch` may not execute before publication, allowing a resumed consumer to descend into the child and observe an absent field. Preparation itself must occur synchronously in the current coroutine before publication.
+Do not wrap child orchestration itself in `launch`. A default `launch` may not execute
+`orchestrateSlot` before parent publication, allowing a resumed consumer to descend into the child
+and observe an absent field. Calling `orchestrateSlot` directly installs child promises before it
+returns; the resolver coroutines that it launches may execute later.
 
 A suitable ordinary-slot outline is:
 
 ```kotlin
 coroutineScope {
     val resolvedValue = produceAndResolveValue()
-    val childSlots =
-        resolvedValue.objectsNeedingResolution.flatMap { child ->
-            prepareObject(
-                path = child.path,
-                source = child.source,
-                selections = child.selections,
-                target = child.target,
-            )
-        }
-
-    childSlots.forEach { child ->
-        launch {
-            child.resolve()
-        }
+    resolvedValue.objectsNeedingResolution.forEach { child ->
+        orchestrateSlot(
+            path = child.path,
+            source = child.source,
+            selections = child.selections,
+            target = child.target,
+        )
     }
 
     valuePromise.complete(resolvedValue.engineResult)
-    fieldCheckPromise.complete(Value.Boolean.of(true))
 }
 ```
 
@@ -405,7 +463,7 @@ Deferred OER promises are not child jobs and are not completed exceptionally on 
 
 Add one focused test in which a resolver throws and assert that Resolver21 throws rather than hangs or returns a partial OER.
 
-Do not add a test that waits 90 seconds. Verify the timeout structurally in the Resolver21 wrapper; focused cycle tests should fail immediately through `ResolverSupport`.
+Do not add a test that waits 90 seconds. Verify the timeout structurally in the Resolver21 wrapper; focused cycle tests should fail immediately through `RuntimeSupport.cycleCheck`.
 
 ## Resolver21 Package
 
@@ -413,20 +471,25 @@ Add:
 
 ```text
 semantics/src/main/kotlin/semantics/CoroutineResolve.kt
-semantics/src/main/kotlin/semantics/ResolverSupport.kt
 semantics/src/main/kotlin/semantics/resolver21/Resolver.kt
 semantics/src/test/kotlin/semantics/resolver21/ResolverContractTest.kt
 semantics/src/test/kotlin/semantics/resolver21/ResolverGeneratedTest.kt
 ```
 
+Extend:
+
+```text
+semantics/src/main/kotlin/semantics/RuntimeSupport.kt
+```
+
 Add focused shared tests where appropriate:
 
 ```text
-semantics/src/test/kotlin/semantics/ResolverSupportTest.kt
+semantics/src/test/kotlin/semantics/RuntimeSupportTest.kt
 semantics/src/test/kotlin/semantics/CoroutineResolveTest.kt
 ```
 
-Resolver21's wrapper should be as small as Resolver01's wrapper: construct its identity/non-selective `ResolverSupport`, call the shared coroutine resolver under one `runBlocking`, and contain no scheduling logic.
+Resolver21's wrapper should be as small as Resolver01's wrapper: require a non-selective world, construct its identity root `RuntimeSupport`, call the shared coroutine resolver under one `runBlocking`, and contain no scheduling logic.
 
 ## Resolver21 Contract Tests
 
@@ -467,7 +530,7 @@ Do not add reactor lifecycle or task-ordering contracts. Resolver21 has no seman
 
 After the implementation passes, update only the current-state documents that would otherwise become false:
 
-- `semantics/AGENTS.md`: describe Resolver21 as coroutine-driven, prepare-before-launch, and non-reactive.
+- `semantics/AGENTS.md`: describe Resolver21 as coroutine-driven, install-before-launch, and non-reactive.
 - `semantics/testing-contracts.md`: add Resolver21 alongside Resolver01/06 for empty-fragment, node, and complete-output contracts and generated profiles.
 - `handoff.md`: record Resolver21's implemented status, structured-concurrency boundary, and remaining Resolver22/23 work.
 
@@ -479,7 +542,7 @@ Run focused tests first:
 
 ```shell
 ./gradlew :semantics:test \
-  --tests 'semantics.ResolverSupportTest' \
+  --tests 'semantics.RuntimeSupportTest' \
   --tests 'semantics.CoroutineResolveTest' \
   --tests 'semantics.resolver21.ResolverContractTest' \
   --tests 'semantics.resolver21.ResolverGeneratedTest' \
@@ -507,9 +570,9 @@ Resolver21 is complete when all of the following hold:
 - Its public feature and output-policy surface matches Resolver01 exactly.
 - Its wrapper contains no scheduling logic.
 - `CoroutineResolve.kt` contains the shared procedure intended for Resolver21-23.
-- Every local destination value and field-check promise is installed before any local slot launches.
+- Every local destination value promise is installed before any local slot launches.
 - Every active descendant promise is installed before its ancestor value promise publishes the descendant OER.
-- Resolver input materialization records the read before awaiting the promise.
+- Resolver input materialization calls contextual `runtimeSupport.cycleCheck(reader, promise)` before awaiting the promise.
 - Deferred completion status does not affect cycle-edge recording.
 - Resolver-read edges are retained monotonically and cycles fail explicitly.
 - The implementation does not call `dependencyOrder`, `resolverDependencies`, or a reactor.
@@ -522,7 +585,7 @@ Resolver21 is complete when all of the following hold:
 
 ## Explicitly Deferred To Resolver22
 
-Resolver22 will add nonempty user resolver object fragments and `FromArgument` variables by changing only the supplied completion policy to non-selective `successorBoundaryDemand()`.
+Resolver22 will add nonempty user resolver object fragments and `FromArgument` variables by changing only the supplied completion policy to `successorBoundaryDemand()`. Like Resolver21, it requires a non-selective world.
 
 `closeResolverDemand` already performs local demand closure, stamps resolver occurrences, and binds `FromArgument` variables. If Resolver21 requires changes that would prevent Resolver22 from reusing that operation unchanged, stop and reconsider the shared boundary.
 
@@ -530,7 +593,7 @@ Resolver22 is the first stage expected to exercise ordinary deferred-to-deferred
 
 ## Explicitly Deferred To Resolver23
 
-Resolver23 will switch to `successorDemand()` and `selective = true`, use selective resolver invocation, and build passive outputs selectively through the existing `resolveValue` flag.
+Resolver23 will require a selective world and switch completion to `successorDemand()`. The shared procedure will consequently use selective resolver invocation and build passive outputs selectively through `world.selectiveResolvers`.
 
 No coroutine scheduler change should be necessary for Resolver23. If selective support requires a separate coroutine executor or reactive orchestration state, the Resolver21 shared abstraction is wrong.
 

@@ -18,7 +18,11 @@ import kotlin.test.assertIs
 interface EmptyObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `resolves typename as the concrete object type`() {
-        val world = TestWorld.fromSDL("type Query { value: Int }").assumptions
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL = "type Query { value: Int }",
+                selectiveResolvers = selectiveResolvers,
+            ).assumptions
         val fragment = world.fragmentFrom("fragment ignored on Query { __typename }")
 
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
@@ -35,6 +39,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
     fun `accepts position-distinct passive fields in list output`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item { selected: String!, extra: String }
@@ -78,6 +83,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
         val applications = mutableListOf<String>()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Item { computed: Int! }
@@ -150,6 +156,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
     fun `applies a concrete implementation default after interface dispatch`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Item { computed: Int! }

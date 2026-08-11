@@ -376,42 +376,159 @@ class SelectionMergeTest {
                 possibleTypes = ordinary.possibleTypes,
                 subselections = ordinary.subselections,
             )
+        val groundKey = ordinary.key as Value.GroundKey
+        val value = Value.Int.of(9)
+        val result =
+            EngineResult.Object.of(
+                fixture.query,
+                mapOf(groundKey to value),
+            )
 
         val markerOnly:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable.Stamped, Value.GroundKey>,
+                Map<Value.Variable.Stamped, Value.Input?>,
             > =
             runBlocking {
                 context(fixture.world) {
-                    selectionForestOf(firstMarker).mergeWithVariables(fixture.query)
+                    selectionForestOf(firstMarker).mergeWithVariables(result)
                 }
             }
-        val groundKey = ordinary.key as Value.GroundKey
 
         assertEquals(setOf(groundKey), markerOnly.first.groundKeys())
-        assertEquals(mapOf(firstVariable to groundKey), markerOnly.second)
+        assertEquals(mapOf(firstVariable to value), markerOnly.second)
 
         val combined:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable.Stamped, Value.GroundKey>,
+                Map<Value.Variable.Stamped, Value.Input?>,
             > =
             runBlocking {
                 context(fixture.world) {
                     selectionForestOf(ordinary, firstMarker, secondMarker)
-                        .mergeWithVariables(fixture.query)
+                        .mergeWithVariables(result)
                 }
             }
 
         assertEquals(1, combined.first.size)
         assertEquals(
             mapOf(
-                firstVariable to groundKey,
-                secondVariable to groundKey,
+                firstVariable to value,
+                secondVariable to value,
             ),
             combined.second,
         )
+    }
+
+    @Test
+    fun `variable markers report no binding for absent or incomplete result keys`() {
+        val fixture = Fixture()
+        val definingField = fixture.schema.objectField("Query", "search")
+        val variable = Value.Variable.of(definingField, "value").stamp(emptyList())
+        val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
+        val marker =
+            Selection.of(
+                key = Value.VariableKey.of(ordinary.key, variable),
+                possibleTypes = ordinary.possibleTypes,
+                subselections = ordinary.subselections,
+            )
+        val result = EngineResult.Object.of(fixture.query, mutable = true)
+
+        val absent =
+            runBlocking {
+                context(fixture.world) {
+                    selectionForestOf(marker).mergeWithVariables(result)
+                }
+            }
+        result.createValuePromise(ordinary.key as Value.GroundKey)
+        val incomplete =
+            runBlocking {
+                context(fixture.world) {
+                    selectionForestOf(marker).mergeWithVariables(result)
+                }
+            }
+
+        assertTrue(absent.second.isEmpty())
+        assertTrue(incomplete.second.isEmpty())
+        assertEquals(setOf(ordinary.key), absent.first.groundKeys())
+        assertEquals(absent.first.keys(), incomplete.first.keys())
+    }
+
+    @Test
+    fun `intermediate markers continue through objects and bind premature values`() {
+        val fixture = Fixture()
+        val definingField = fixture.schema.objectField("Query", "search")
+        val variable = Value.Variable.of(definingField, "value").stamp(emptyList())
+        val leaf = fixture.selection("ConcreteItem", "a")
+        val markedLeaf =
+            Selection.of(
+                key = Value.VariableKey.of(leaf.key, variable),
+                possibleTypes = leaf.possibleTypes,
+                subselections = leaf.subselections,
+            )
+        val intermediate =
+            fixture.selection(
+                "Query",
+                "optionalItem",
+                subselections = selectionForestOf(markedLeaf),
+            )
+        val markedIntermediate =
+            Selection.of(
+                key = Value.VariableKey.of(intermediate.key, variable),
+                possibleTypes = intermediate.possibleTypes,
+                subselections = intermediate.subselections,
+            )
+        val intermediateKey = intermediate.key as Value.GroundKey
+        val leafKey = leaf.key as Value.GroundKey
+        val leafValue = Value.Int.of(7)
+        val child =
+            EngineResult.Object.of(
+                fixture.item,
+                mapOf(leafKey to leafValue),
+            )
+        val continuedResult =
+            EngineResult.Object.of(
+                fixture.query,
+                mapOf(intermediateKey to child),
+            )
+
+        val continued =
+            runBlocking {
+                context(fixture.world) {
+                    selectionForestOf(markedIntermediate)
+                        .mergeWithVariables(continuedResult)
+                }
+            }
+        val terminal =
+            runBlocking {
+                context(fixture.world) {
+                    continued.first.single().subselections.mergeWithVariables(child)
+                }
+            }
+
+        assertTrue(continued.second.isEmpty())
+        assertEquals(mapOf(variable to leafValue), terminal.second)
+
+        listOf<EngineResult?>(null, Value.Error).forEach { prematureValue ->
+            val prematureResult =
+                EngineResult.Object.of(
+                    fixture.query,
+                    mapOf(intermediateKey to prematureValue),
+                )
+            val premature =
+                runBlocking {
+                    context(fixture.world) {
+                        selectionForestOf(markedIntermediate)
+                            .mergeWithVariables(prematureResult)
+                    }
+            }
+            assertEquals(
+                mapOf<Value.Variable.Stamped, Value.Input?>(
+                    variable to prematureValue as Value.Input?,
+                ),
+                premature.second,
+            )
+        }
     }
 
     private class Fixture {
@@ -464,6 +581,7 @@ class SelectionMergeTest {
             type Query {
               scalar(arg: Int!): Int!
               item: ConcreteItem!
+              optionalItem: ConcreteItem
               search(filter: Filter!): Int!
               source(values: [Int!]!): Int!
               nested(values: [[Int]]): Int!

@@ -16,22 +16,41 @@ import kotlin.test.assertEquals
 class AdversarialRegressionTest {
     @Test
     fun `nested provider propagates null through a nullable intermediate`() {
-        assertNestedProviderShortCircuit(provided = null)
+        assertNestedProviderShortCircuit(provided = null, passiveIntermediate = false)
     }
 
     @Test
     fun `nested provider propagates error through an intermediate`() {
-        assertNestedProviderShortCircuit(provided = Value.Error)
+        assertNestedProviderShortCircuit(provided = Value.Error, passiveIntermediate = false)
     }
 
-    private fun assertNestedProviderShortCircuit(provided: Value.Output?) {
+    @Test
+    fun `nested provider propagates null through a passive intermediate`() {
+        assertNestedProviderShortCircuit(provided = null, passiveIntermediate = true)
+    }
+
+    @Test
+    fun `nested provider propagates error through a passive intermediate`() {
+        assertNestedProviderShortCircuit(provided = Value.Error, passiveIntermediate = true)
+    }
+
+    private fun assertNestedProviderShortCircuit(
+        provided: Value.Output?,
+        passiveIntermediate: Boolean,
+    ) {
         val expectedInput = provided as Value.Input?
         val expectedResult = provided as EngineResult?
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {
+            val providerSelection =
+                if (passiveIntermediate) {
+                    "box { nested { value } }"
+                } else {
+                    "box { value }"
+                }
             val resultFragment =
                 """
                 fragment Result on Query {
-                  box { value }
+                  $providerSelection
                   consume(value: ${'$'}value)
                 }
                 """.trimIndent()
@@ -39,8 +58,13 @@ class AdversarialRegressionTest {
                 TestWorld.fromSDL(
                     schemaSDL =
                         """
+                        type Nested {
+                          value: Int
+                        }
+
                         type Box {
                           value: Int
+                          nested: Nested
                         }
 
                         type Query {
@@ -63,7 +87,13 @@ class AdversarialRegressionTest {
                                 },
                             schema.objectField("Query", "box") to
                                 fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                    provided
+                                    if (passiveIntermediate) {
+                                        schema.objectOf("Box") {
+                                            "nested" setTo provided
+                                        }
+                                    } else {
+                                        provided
+                                    }
                                 },
                             consume to
                                 fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
@@ -77,7 +107,11 @@ class AdversarialRegressionTest {
                             Value.Variable.of(result, "value") to
                                 schema.fromObjectField(
                                     resultFragment,
-                                    listOf("box", "value"),
+                                    if (passiveIntermediate) {
+                                        listOf("box", "nested", "value")
+                                    } else {
+                                        listOf("box", "value")
+                                    },
                                 ),
                         )
                     },

@@ -364,10 +364,11 @@ sealed interface Value {
     }
 
     /**
-     * A selection-only key marking the terminal field that defines one stamped path-variable.
+     * A selection-only key marking one component of a stamped path-variable's provider path.
      *
      * The marker remains distinct from [ObjectKey] even when [field] belongs to a concrete object
-     * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key.
+     * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key
+     * and reports a binding when the path terminates at this component.
      */
     sealed interface VariableKey : Key {
         val variableDefinedByThisKey: Variable.Stamped

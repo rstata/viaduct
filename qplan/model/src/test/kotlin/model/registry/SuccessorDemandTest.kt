@@ -1,5 +1,6 @@
 package model.registry
 
+import kotlinx.coroutines.runBlocking
 import model.Schema
 import model.Value
 import model.emptyFragmentOf
@@ -182,8 +183,10 @@ class SuccessorDemandTest {
             }
         }
         val deferred =
-            context(world) {
-                selections.successorDemandDeferringTemplates()
+            runBlocking {
+                context(world) {
+                    selections.fetchSuccessorDemandDeferringTemplates()
+                }
             }
         val itemType = world.schema.type("Item") as Schema.ObjectType
         val itemSelections =

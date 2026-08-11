@@ -1,14 +1,18 @@
 package model.registry
 
 import model.Assumptions
+import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.concatenateSelectionForests
+import model.fetchBindings
 import model.flatMapToSelectionForest
 import model.instantiateBindings
 import model.objectKey
 import model.selectionForestOf
 import model.substituteTemplates
+import model.toSelectionForest
 import model.usedVariables
 
 /**
@@ -19,33 +23,8 @@ import model.usedVariables
  */
 context(world: Assumptions)
 fun SelectionForest.successorDemand(): SelectionForest =
-    successorDemand(deferTemplates = false)
-
-/**
- * Extends output demand while deferring branches whose keys contain unstamped variable templates.
- *
- * Such a branch belongs to a resolver occurrence whose exact path is not yet available. Ground and
- * stamped-variable branches retain ordinary full successor closure.
- */
-context(world: Assumptions)
-fun SelectionForest.successorDemandDeferringTemplates(): SelectionForest =
-    successorDemand(deferTemplates = true)
-
-context(world: Assumptions)
-private fun SelectionForest.successorDemand(
-    deferTemplates: Boolean,
-): SelectionForest =
     flatMap { selection ->
-        if (
-            deferTemplates &&
-            selection.key.arguments.usedVariables().any { variable ->
-                variable is Value.Variable.Template
-            }
-        ) {
-            return@flatMap selectionForestOf()
-        }
-
-        val nestedDemand = selection.subselections.successorDemand(deferTemplates)
+        val nestedDemand = selection.subselections.successorDemand()
         val rootedSelection =
             Selection.of(
                 key = selection.key,
@@ -69,11 +48,93 @@ private fun SelectionForest.successorDemand(
                     world.resolverRegistry
                         .resolver(key.field)
                         .objectFragmentWithFromArguments(key.arguments)
-                        .successorDemand(deferTemplates)
+                        .successorDemand()
                 }
             }
         selectionForestOf(rootedSelection) + resolverInputDemand
     }
+
+/**
+ * Extends output demand after awaiting stamped bindings, while deferring unstamped templates.
+ *
+ * A template-bearing branch belongs to a resolver occurrence whose exact path is not yet available.
+ * Stamped branches retain ordinary full successor closure after their bindings complete.
+ */
+context(world: Assumptions)
+suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionForest {
+    val selections = mutableListOf<Selection>()
+    coalesceEquivalentSelections().forEach(selections::add)
+    val result = mutableListOf<Selection>()
+    for (selection in selections) {
+        if (
+            selection.key.arguments.usedVariables().any { variable ->
+                variable is Value.Variable.Template
+            }
+        ) {
+            continue
+        }
+
+        val nestedDemand: SelectionForest =
+            selection.subselections.fetchSuccessorDemandDeferringTemplates()
+        val rootedSelection =
+            Selection.of(
+                key = selection.key,
+                possibleTypes = selection.possibleTypes,
+                subselections = nestedDemand,
+            )
+        result += rootedSelection
+        for (possibleType in selection.possibleTypes) {
+            val specializedKey = selection.objectKey(possibleType)
+            val key =
+                Value.GroundKey.of(
+                    field = specializedKey.field,
+                    arguments = specializedKey.arguments.fetchBindings(),
+                )
+            if (
+                !key.arguments.containsErrorValue() &&
+                key.field in world.resolverRegistry
+            ) {
+                world.resolverRegistry
+                    .resolver(key.field)
+                    .objectFragmentWithFromArguments(key.arguments)
+                    .fetchSuccessorDemandDeferringTemplates()
+                    .forEach(result::add)
+            }
+        }
+    }
+    return result.toSelectionForest().coalesceEquivalentSelections()
+}
+
+private fun SelectionForest.coalesceEquivalentSelections(): SelectionForest {
+    val childrenBySelection:
+        MutableMap<
+            SelectionIdentity,
+            MutableList<SelectionForest>,
+        > = linkedMapOf()
+    forEach { selection ->
+        childrenBySelection
+            .getOrPut(
+                SelectionIdentity(selection.key, selection.possibleTypes),
+                ::mutableListOf,
+            )
+            .add(selection.subselections)
+    }
+    return childrenBySelection
+        .map { (identity, children) ->
+            Selection.of(
+                key = identity.key,
+                possibleTypes = identity.possibleTypes,
+                subselections = children.concatenateSelectionForests(),
+            )
+        }.toSelectionForest()
+}
+
+// These occurrences would converge at every concrete merge boundary. Coalescing them while closing
+// demand avoids expanding the same resolver-demand DAG once per incoming path.
+private data class SelectionIdentity(
+    val key: Value.Key,
+    val possibleTypes: Set<Schema.ObjectType>,
+)
 
 /**
  * Extends this output demand with the paths needed to find every successor behavioral boundary.

@@ -1,5 +1,6 @@
 package model
 
+import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -352,6 +353,65 @@ class SelectionMergeTest {
             }
 
         assertEquals(once.single().key, twice.single().key)
+    }
+
+    @Test
+    fun `variable markers manufacture and identify ordinary ground selections`() {
+        val fixture = Fixture()
+        val definingField = fixture.schema.objectField("Query", "search")
+        val firstVariable =
+            Value.Variable.of(definingField, "first").stamp(emptyList())
+        val secondVariable =
+            Value.Variable.of(definingField, "second").stamp(emptyList())
+        val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
+        val firstMarker =
+            Selection.of(
+                key = Value.VariableKey.of(ordinary.key, firstVariable),
+                possibleTypes = ordinary.possibleTypes,
+                subselections = ordinary.subselections,
+            )
+        val secondMarker =
+            Selection.of(
+                key = Value.VariableKey.of(ordinary.key, secondVariable),
+                possibleTypes = ordinary.possibleTypes,
+                subselections = ordinary.subselections,
+            )
+
+        val markerOnly:
+            Pair<
+                ObjectSelectionForest,
+                Map<Value.Variable.Stamped, Value.GroundKey>,
+            > =
+            runBlocking {
+                context(fixture.world) {
+                    selectionForestOf(firstMarker).mergeWithVariables(fixture.query)
+                }
+            }
+        val groundKey = ordinary.key as Value.GroundKey
+
+        assertEquals(setOf(groundKey), markerOnly.first.groundKeys())
+        assertEquals(mapOf(firstVariable to groundKey), markerOnly.second)
+
+        val combined:
+            Pair<
+                ObjectSelectionForest,
+                Map<Value.Variable.Stamped, Value.GroundKey>,
+            > =
+            runBlocking {
+                context(fixture.world) {
+                    selectionForestOf(ordinary, firstMarker, secondMarker)
+                        .mergeWithVariables(fixture.query)
+                }
+            }
+
+        assertEquals(1, combined.first.size)
+        assertEquals(
+            mapOf(
+                firstVariable to groundKey,
+                secondVariable to groundKey,
+            ),
+            combined.second,
+        )
     }
 
     private class Fixture {

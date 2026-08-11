@@ -8,6 +8,7 @@ import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
+import semantics.contract.ObjectFragmentFromObjectPathResolverContract
 import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
 import semantics.contract.SelectiveResolverOutputPolicyContract
@@ -17,6 +18,7 @@ class ResolverContractTest :
     NodeResolverContract,
     ObjectFragmentResolverContract,
     ObjectFragmentFromArgumentResolverContract,
+    ObjectFragmentFromObjectPathResolverContract,
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {

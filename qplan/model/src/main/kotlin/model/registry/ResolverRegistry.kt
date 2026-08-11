@@ -8,6 +8,7 @@ import model.Selection
 import model.SelectionForest
 import model.Value
 import model.applicableGroundSelections
+import model.concatenateSelectionForests
 import model.selectionForestOf
 import model.stamp
 
@@ -56,15 +57,34 @@ class FieldResolver private constructor(
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
     /**
-     * Returns the exact object fragment with every variable template stamped at [path].
+     * Returns the exact object fragment with every variable template stamped at [path] and a
+     * synthetic copy of each path-variable provider path whose terminal key marks the definition.
      *
      * Stamping preserves the selection fields, applicability guards, occurrence shape, and
      * non-variable argument values.
      */
     fun stampedObjectFragment(
         path: List<PathComponent>,
-    ): SelectionForest =
-        objectFragment.stampVariables(path)
+    ): SelectionForest {
+        val stampedFragment: SelectionForest = objectFragment.stampVariables(path)
+        val pathVarSelections: SelectionForest =
+            variables.entries
+                .mapNotNull { (variable, definition) ->
+                    (definition as? VariableDefinition.FromObjectField)?.let {
+                        stampedFragment.markProviderPath(
+                            path =
+                                it.path.map { key ->
+                                    Value.Key.of(
+                                        field = key.field,
+                                        arguments = key.arguments.stamp(path),
+                                    )
+                                },
+                            variable = variable.stamp(path),
+                        )
+                    }
+                }.concatenateSelectionForests()
+        return stampedFragment + pathVarSelections
+    }
 
     /** Returns this resolver's path-variable definitions stamped at exact [sitePath]. */
     fun stampedPathVarDefinitions(
@@ -207,6 +227,37 @@ private fun SelectionForest.stampVariables(
             ),
         )
     }
+
+private fun SelectionForest.markProviderPath(
+    path: List<Value.Key>,
+    variable: Value.Variable.Stamped,
+): SelectionForest {
+    val key = path.first()
+    val remaining = path.drop(1)
+    return flatMap { selection ->
+        if (selection.key != key) {
+            selectionForestOf()
+        } else {
+            selectionForestOf(
+                Selection.of(
+                    key =
+                        if (remaining.isEmpty()) {
+                            Value.VariableKey.of(selection.key, variable)
+                        } else {
+                            selection.key
+                        },
+                    possibleTypes = selection.possibleTypes,
+                    subselections =
+                        if (remaining.isEmpty()) {
+                            selectionForestOf()
+                        } else {
+                            selection.subselections.markProviderPath(remaining, variable)
+                        },
+                ),
+            )
+        }
+    }
+}
 
 private fun SelectionForest.containsPath(path: List<Value.Key>): Boolean {
     if (path.isEmpty()) return false

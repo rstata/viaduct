@@ -291,6 +291,81 @@ class DemandSealingTest {
     }
 
     @Test
+    fun `binds a nested path variable at a resolver-backed terminal field`() {
+        val resultFragment =
+            """
+            fragment Result on Query {
+              box { value }
+              consume(value: ${'$'}value)
+            }
+            """.trimIndent()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Box {
+                      value: Int!
+                    }
+
+                    type Query {
+                      result: Int!
+                      box: Box!
+                      consume(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val consume = schema.objectField("Query", "consume")
+                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 11))
+                    mapOf(
+                        schema.objectField("Query", "result") to
+                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
+                                input.fieldValues.getValue(consumeKey)
+                            },
+                        schema.objectField("Query", "box") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Box")
+                            },
+                        schema.objectField("Box", "value") to
+                            fieldResolverOf(schema.emptyFragmentOf("Box")) { _, _ ->
+                                Value.Int.of(11)
+                            },
+                        consume to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value") as Value.Int
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        Value.Variable.of(result, "value") to
+                            schema.fromObjectField(
+                                resultFragment,
+                                listOf("box", "value"),
+                            ),
+                    )
+                },
+            )
+
+        val resolved = resolveResult(testWorld)
+        val resultKey =
+            Value.GroundKey.of(
+                testWorld.schema.objectField("Query", "result"),
+                emptyMap(),
+            )
+
+        assertEquals(Value.Int.of(11), resolved.getValue(resultKey).get())
+        assertEquals(
+            Value.Int.of(11),
+            testWorld.assumptions.getBinding(
+                Value.Variable
+                    .of(resultKey.field, "value")
+                    .stamp(listOf(resultKey)),
+            ),
+        )
+    }
+
+    @Test
     fun `rejects a cycle between provider completion and consumer preparation`() {
         val resultFragment =
             """

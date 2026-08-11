@@ -153,6 +153,46 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
 }
 
 /**
+ * Grounds and normalizes the demand applicable to [type], reporting path-variable marker keys.
+ *
+ * Every applicable occurrence contributes an ordinary ground selection, including an occurrence
+ * whose [Value.VariableKey] is the only demand for that key. Equal keys are coalesced after binding
+ * substitution. A stamped variable may mark the same resulting key more than once, but may not
+ * mark conflicting keys.
+ */
+context(world: Assumptions)
+suspend fun SelectionForest.mergeWithVariables(
+    type: Schema.ObjectType,
+): Pair<ObjectSelectionForest, Map<Value.Variable.Stamped, Value.GroundKey>> {
+    val childrenByKey: MutableMap<Value.ObjectKey, MutableList<SelectionForest>> =
+        linkedMapOf()
+    val groundKeyByVariable: MutableMap<Value.Variable.Stamped, Value.GroundKey> =
+        linkedMapOf()
+    occurrences().forEach { selection ->
+        if (type !in selection.possibleTypes) return@forEach
+
+        val variable: Value.Variable.Stamped? =
+            (selection.key as? Value.VariableKey)?.variableDefinedByThisKey
+        val specializedKey: Value.ObjectKey = selection.objectKey(type)
+        val groundKey: Value.GroundKey =
+            Value.GroundKey.of(
+                field = specializedKey.field,
+                arguments = specializedKey.arguments.fetchBindings(),
+            )
+        childrenByKey
+            .getOrPut(groundKey, ::mutableListOf)
+            .add(selection.subselections)
+        if (variable != null) {
+            val previous: Value.GroundKey? = groundKeyByVariable.put(variable, groundKey)
+            require(previous == null || previous == groundKey) {
+                "Path-variable $variable is defined by conflicting keys: $previous and $groundKey"
+            }
+        }
+    }
+    return normalizedObjectSelectionForest(type, childrenByKey) to groundKeyByVariable
+}
+
+/**
  * Instantiates this normalized forest's current bindings and normalizes by the resulting exact key.
  *
  * Every result key is a [Value.GroundKey]. Occurrences whose open keys converge after substitution

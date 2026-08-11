@@ -21,6 +21,8 @@ import model.Selection
 import model.SelectionForest
 import model.TypeExpr
 import model.Value
+import model.containsErrorValue
+import model.flatMapToSelectionForest
 import model.groundKey
 import model.merge
 import model.mergeWithVariables
@@ -93,18 +95,73 @@ private class ResolverRuntime(
                 target = target,
             )
         orchestrator.addDemand(initialDemand)
+        orchestrator.addDemand(
+            source.type
+                .closeStructuralDemand(initialDemand)
+                .instanceIndependentDemand(),
+        )
         orchestrator.start()
         return orchestrator.orchestrationReady
     }
 }
 
+// Closes demand under each activated resolver field's fixed object fragment. A resolver field is
+// expanded once regardless of how many open or ground keys currently select it.
+context(world: Assumptions)
+private fun Schema.ObjectType.closeStructuralDemand(
+    incoming: SelectionForest,
+): ObjectSelectionForest {
+    var demand = incoming
+    val expandedFields = linkedSetOf<Schema.ObjectField>()
+    while (true) {
+        val merged: ObjectSelectionForest = demand.merge(this)
+        val newlyActivatedFields: List<Schema.ObjectField> =
+            merged
+                .byKey()
+                .values
+                .filter { selection ->
+                    !selection.key.arguments.containsErrorValue()
+                }
+                .map { selection -> selection.key.field }
+                .filter { field ->
+                    field in world.resolverRegistry && expandedFields.add(field)
+                }
+        if (newlyActivatedFields.isEmpty()) return merged
+        demand =
+            demand +
+                newlyActivatedFields.flatMapToSelectionForest { field ->
+                    world.resolverRegistry.resolver(field).objectFragment
+                }
+    }
+}
+
+// Retains the structurally fixed portion of demand. Variable-bearing resolver boundaries are
+// activated by structural closure but become executable only for an exact resolver instance.
+private fun SelectionForest.instanceIndependentDemand(): SelectionForest =
+    flatMap { selection ->
+        if (
+            selection.key is Value.VariableKey ||
+            selection.key.arguments.usedVariables().isNotEmpty()
+        ) {
+            selectionForestOf()
+        } else {
+            selectionForestOf(
+                Selection.of(
+                    key = selection.key,
+                    possibleTypes = selection.possibleTypes,
+                    subselections = selection.subselections.instanceIndependentDemand(),
+                ),
+            )
+        }
+    }
+
 /**
  * Resolves one object-result instance through per-field preparation latches.
  *
- * A field's demand is sealed only after every resolver field that can contribute a selection to
- * it has completed preparation and every path-variable provider needed by one of its open keys has
- * launched. Preparation grounds and merges all equal keys, prepares each resulting resolver
- * instance exactly once, and publishes the immutable demand consumed during launch.
+ * Synchronous structural closure contributes every activated resolver field's fixed demand before
+ * orchestration starts. A field then waits only for instance-specific variable demand and marker
+ * paths before grounding equal keys, preparing each resulting resolver instance exactly once, and
+ * publishing the immutable demand consumed during launch.
  */
 private class ObjectResultOrchestrator(
     private val runtime: ResolverRuntime,
@@ -196,7 +253,7 @@ private class ObjectResultOrchestrator(
      *
      * This operation:
      * - binds arg-variables;
-     * - contributes the resolver's stamped object-fragment demand;
+     * - contributes instance-specific stamped object-fragment demand;
      * - declares path-variable bindings;
      * - contributes marker paths that will complete those bindings.
      */
@@ -216,7 +273,11 @@ private class ObjectResultOrchestrator(
         definitions.forEach { definition ->
             world.declareBinding(definition.variable)
         }
-        addDemand(resolver.stampedObjectFragment(coordinate))
+        addDemand(
+            resolver
+                .stampedObjectFragment(coordinate)
+                .instanceSpecificDemand(),
+        )
     }
 
     // Eagerly installs promises so the orchestration-ready latch can be released, waits until
@@ -369,6 +430,32 @@ private class ObjectResultOrchestrator(
         val variablesByKey: Map<Value.GroundKey, Set<Value.Variable.Stamped>>,
     )
 }
+
+// Retains variable-bearing selections, their argument-independent ancestor paths, and provider
+// markers. Fixed demand has already been contributed by structural closure.
+private fun SelectionForest.instanceSpecificDemand(): SelectionForest =
+    flatMap { selection ->
+        if (
+            selection.key is Value.VariableKey ||
+            selection.key.arguments.usedVariables().isNotEmpty()
+        ) {
+            selectionForestOf(selection)
+        } else {
+            val instanceSpecificChildren: SelectionForest =
+                selection.subselections.instanceSpecificDemand()
+            if (instanceSpecificChildren.isEmpty()) {
+                selectionForestOf()
+            } else {
+                selectionForestOf(
+                    Selection.of(
+                        key = selection.key,
+                        possibleTypes = selection.possibleTypes,
+                        subselections = instanceSpecificChildren,
+                    ),
+                )
+            }
+        }
+    }
 
 /**
  * Converts one resolver output to its passive engine-result shape and identifies object results
@@ -532,7 +619,7 @@ private object StrictPreparationPlan {
         private val resolverInputFieldsByField:
             Map<Schema.ObjectField, Set<Schema.ObjectField>>,
     ) {
-        // Returns fields whose preparation can contribute additional demand to this field.
+        // Returns fields whose preparation can contribute instance-specific demand to this field.
         fun demandContributors(field: Schema.ObjectField): Set<Schema.ObjectField> =
             demandContributorsByField[field].orEmpty()
 
@@ -594,10 +681,12 @@ private object StrictPreparationPlan {
             val resolver = world.resolverRegistry.resolver(field)
             resolver.objectFragment.merge(type).byKey().values.forEach { selection ->
                 val required = selection.key.field
-                edge(
-                    FieldStep(field, Phase.PREPARE),
-                    FieldStep(required, Phase.PREPARE),
-                )
+                if (selection.usedVariables().isNotEmpty()) {
+                    edge(
+                        FieldStep(field, Phase.PREPARE),
+                        FieldStep(required, Phase.PREPARE),
+                    )
+                }
                 edge(
                     FieldStep(required, Phase.LAUNCH),
                     FieldStep(field, Phase.LAUNCH),
@@ -605,10 +694,21 @@ private object StrictPreparationPlan {
             }
             resolver.variables.forEach { (variable, definition) ->
                 if (definition !is VariableDefinition.FromObjectField) return@forEach
+                require(
+                    definition.path.all { key ->
+                        key.field.arguments.fields.isEmpty()
+                    },
+                ) {
+                    "Resolver25 path-variable provider paths cannot cross fields with arguments"
+                }
                 val provider: Schema.ObjectField =
                     type.fields.getValue(
                         definition.path.first().field.fieldName,
                     )
+                edge(
+                    FieldStep(field, Phase.PREPARE),
+                    FieldStep(provider, Phase.PREPARE),
+                )
                 pathVarUseFields(resolver.objectFragment, variable).forEach { useField ->
                     edge(
                         FieldStep(provider, Phase.LAUNCH),

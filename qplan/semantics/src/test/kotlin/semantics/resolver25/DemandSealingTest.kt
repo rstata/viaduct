@@ -14,7 +14,6 @@ import model.testing.fieldResolverOf
 import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DemandSealingTest {
@@ -291,11 +290,11 @@ class DemandSealingTest {
     }
 
     @Test
-    fun `binds a nested path variable at a resolver-backed terminal field`() {
+    fun `binds a three-component path variable at a resolver-backed terminal field`() {
         val resultFragment =
             """
             fragment Result on Query {
-              box { value }
+              box { nested { value } }
               consume(value: ${'$'}value)
             }
             """.trimIndent()
@@ -304,6 +303,10 @@ class DemandSealingTest {
                 schemaSDL =
                     """
                     type Box {
+                      nested: Nested!
+                    }
+
+                    type Nested {
                       value: Int!
                     }
 
@@ -323,10 +326,12 @@ class DemandSealingTest {
                             },
                         schema.objectField("Query", "box") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Box")
+                                schema.objectOf("Box") {
+                                    "nested" setTo schema.objectOf("Nested")
+                                }
                             },
-                        schema.objectField("Box", "value") to
-                            fieldResolverOf(schema.emptyFragmentOf("Box")) { _, _ ->
+                        schema.objectField("Nested", "value") to
+                            fieldResolverOf(schema.emptyFragmentOf("Nested")) { _, _ ->
                                 Value.Int.of(11)
                             },
                         consume to
@@ -341,7 +346,7 @@ class DemandSealingTest {
                         Value.Variable.of(result, "value") to
                             schema.fromObjectField(
                                 resultFragment,
-                                listOf("box", "value"),
+                                listOf("box", "nested", "value"),
                             ),
                     )
                 },
@@ -366,11 +371,17 @@ class DemandSealingTest {
     }
 
     @Test
-    fun `rejects a cycle between provider completion and consumer preparation`() {
+    fun `structural demand closes transitively before a nested provider can complete`() {
+        var consumerApplications = 0
+        val consumerArguments = linkedSetOf<Int>()
+        var producerApplications = 0
+        var producerDemand: SelectionForest? = null
+        var transitiveProducerApplications = 0
+        var transitiveProducerDemand: SelectionForest? = null
         val resultFragment =
             """
             fragment Result on Query {
-              b
+              b { value }
               c(value: ${'$'}value)
             }
             """.trimIndent()
@@ -378,35 +389,106 @@ class DemandSealingTest {
             TestWorld.fromSDL(
                 schemaSDL =
                     """
+                    type Box {
+                      value: Int!
+                    }
+
+                    type Payload {
+                      early: Int!
+                      late: Int!
+                    }
+
+                    type Seeds {
+                      early: Int!
+                      late: Int!
+                    }
+
                     type Query {
                       result: Int!
-                      a: Int!
-                      b: Int!
+                      a: Payload!
+                      b: Box!
                       c(value: Int!): Int!
+                      z: Seeds!
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val aKey = Value.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
+                    val zKey = Value.GroundKey.of(schema.objectField("Query", "z"), emptyMap())
+                    val earlyKey =
+                        Value.GroundKey.of(
+                            schema.objectField("Payload", "early"),
+                            emptyMap(),
+                        )
+                    val lateKey =
+                        Value.GroundKey.of(
+                            schema.objectField("Payload", "late"),
+                            emptyMap(),
+                        )
+                    val seedEarlyKey =
+                        Value.GroundKey.of(
+                            schema.objectField("Seeds", "early"),
+                            emptyMap(),
+                        )
+                    val seedLateKey =
+                        Value.GroundKey.of(
+                            schema.objectField("Seeds", "late"),
+                            emptyMap(),
+                        )
+                    val cKey =
+                        Value.GroundKey.of(
+                            schema.objectField("Query", "c"),
+                            mapOf("value" to 4),
+                        )
                     mapOf(
                         schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
-                                Value.Int.of(0)
+                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
+                                input.fieldValues.getValue(cKey)
                             },
                         schema.objectField("Query", "a") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment A on Query { z { early late } }",
+                                ),
+                            ) { input, _ ->
+                                val seeds = input.fieldValues.getValue(zKey) as Value.Object
+                                schema.objectOf("Payload") {
+                                    "early" setTo seeds.fieldValues.getValue(seedEarlyKey)
+                                    "late" setTo seeds.fieldValues.getValue(seedLateKey)
+                                }
+                            }.observeApplications { _, _, demand ->
+                                producerApplications += 1
+                                producerDemand = demand
                             },
                         schema.objectField("Query", "b") to
                             fieldResolverOf(
-                                schema.fragmentFrom("fragment B on Query { a }"),
+                                schema.fragmentFrom("fragment B on Query { a { early } }"),
                             ) { input, _ ->
-                                input.fieldValues.getValue(aKey)
+                                val payload = input.fieldValues.getValue(aKey) as Value.Object
+                                val value = payload.fieldValues.getValue(earlyKey)
+                                schema.objectOf("Box") {
+                                    "value" setTo value
+                                }
                             },
                         schema.objectField("Query", "c") to
                             fieldResolverOf(
-                                schema.fragmentFrom("fragment C on Query { a }"),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(aKey)
+                                schema.fragmentFrom("fragment C on Query { a { late } }"),
+                            ) { input, arguments ->
+                                consumerApplications += 1
+                                val value: Value.Int =
+                                    arguments.fieldValues.getValue("value") as Value.Int
+                                consumerArguments += value.intValue
+                                val payload = input.fieldValues.getValue(aKey) as Value.Object
+                                payload.fieldValues.getValue(lateKey)
+                            },
+                        schema.objectField("Query", "z") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Seeds") {
+                                    "early" setTo 4
+                                    "late" setTo 9
+                                }
+                            }.observeApplications { _, _, demand ->
+                                transitiveProducerApplications += 1
+                                transitiveProducerDemand = demand
                             },
                     )
                 },
@@ -414,18 +496,62 @@ class DemandSealingTest {
                     val result = schema.objectField("Query", "result")
                     mapOf(
                         Value.Variable.of(result, "value") to
-                            schema.fromObjectField(resultFragment, listOf("b")),
+                            schema.fromObjectField(
+                                resultFragment,
+                                listOf("b", "value"),
+                            ),
                     )
                 },
             )
 
-        val error =
-            assertFailsWith<IllegalArgumentException> {
-                resolveResult(testWorld)
+        val resolved: EngineResult.Object =
+            context(testWorld.assumptions) {
+                testWorld.assumptions
+                    .objectOf("Query")
+                    .resolve(
+                        testWorld.assumptions
+                            .fragmentFrom(
+                                "fragment ignored on Query { result c(value: 7) }",
+                            ).subselections,
+                    )
             }
+        val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
+        val seedsType = testWorld.schema.type("Seeds") as Schema.ObjectType
 
-        assertTrue(error.message.orEmpty().contains("one-shot phase order"))
-        assertTrue(error.message.orEmpty().contains("cycle"))
+        assertEquals(2, consumerApplications)
+        assertEquals(setOf(4, 7), consumerArguments)
+        assertEquals(1, producerApplications)
+        assertEquals(
+            setOf("early", "late"),
+            context(testWorld.assumptions) {
+                requireNotNull(producerDemand)
+                    .merge(payloadType)
+                    .instantiateBindings()
+                    .groundKeys()
+                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+            },
+        )
+        assertEquals(1, transitiveProducerApplications)
+        assertEquals(
+            setOf("early", "late"),
+            context(testWorld.assumptions) {
+                requireNotNull(transitiveProducerDemand)
+                    .merge(seedsType)
+                    .instantiateBindings()
+                    .groundKeys()
+                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+            },
+        )
+        assertEquals(
+            Value.Int.of(9),
+            resolved
+                .getValue(
+                    Value.GroundKey.of(
+                        testWorld.schema.objectField("Query", "result"),
+                        emptyMap(),
+                    ),
+                ).get(),
+        )
     }
 
     private fun resolveResult(testWorld: TestWorld): EngineResult.Object {

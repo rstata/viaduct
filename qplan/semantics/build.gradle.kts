@@ -42,6 +42,7 @@ val stressResolverNames =
         "resolver23",
         "resolver24",
         "resolver24i",
+        "resolver25",
     )
 
 tasks.test {

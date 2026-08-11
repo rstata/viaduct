@@ -20,6 +20,7 @@ import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverVariableWeight
@@ -228,16 +229,21 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
 
 /** Generated contract isolating variables read from object-fragment paths. */
 interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContract {
+    val objectPathGeneratorConfigOverrides: Config
+        get() = Config.default
+
     @Test
     fun `generated object fragment worlds with fromObjectField resolve correctly`(): Unit =
         runBlocking {
             var generatedVariables = 0
+            var generatedNestedProviderPaths = 0
             var activatedApplications = 0
+            var activatedNestedProviderApplications = 0
             val config =
                 Config.default +
                     (SchemaObjectCount to 4..6) +
                     (ObjectFieldCount to 4..6) +
-                    (FieldArgumentWeight to 1.0) +
+                    (FieldArgumentWeight to 0.5) +
                     (ExplicitFieldResolverWeight to 1.0) +
                     (NodeResolversEnabled to false) +
                     (QueryFieldCount to 6..6) +
@@ -245,8 +251,10 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContra
                     (ResolverFragmentsEnabled to true) +
                     (ResolverFragmentWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverNestedProviderPathWeight to 1.0) +
                     (ResolverVariableWeight to 1.0) +
-                    (ResolverVariablesEnabled to true)
+                    (ResolverVariablesEnabled to true) +
+                    objectPathGeneratorConfigOverrides
 
             val run =
                 checkGeneratedProfile(
@@ -259,10 +267,19 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContra
                         features.variableCount,
                     )
                     generatedVariables += features.fromObjectFieldVariableCount
+                    if (features.maximumFromObjectFieldPathLength > 1) {
+                        generatedNestedProviderPaths += 1
+                    }
                     val resolution = assertGeneratedResolutionParity(testWorld, testCase)
                     activatedApplications +=
                         resolution.applications.count { application ->
                             testCase.registry.sourceResolverHasFromObjectFieldVariables(
+                                application.key.field,
+                            )
+                        }
+                    activatedNestedProviderApplications +=
+                        resolution.applications.count { application ->
+                            testCase.registry.sourceResolverHasNestedFromObjectFieldVariable(
                                 application.key.field,
                             )
                         }
@@ -273,8 +290,16 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContra
                 "Generated FromObjectField profile produced no path variables",
             )
             run.assertAggregate(
+                generatedNestedProviderPaths > 0,
+                "Generated FromObjectField profile produced no nested provider paths",
+            )
+            run.assertAggregate(
                 activatedApplications > 0,
                 "Generated FromObjectField profile activated no variable-bearing resolvers",
+            )
+            run.assertAggregate(
+                activatedNestedProviderApplications > 0,
+                "Generated FromObjectField profile activated no resolver with a nested provider path",
             )
         }
 }

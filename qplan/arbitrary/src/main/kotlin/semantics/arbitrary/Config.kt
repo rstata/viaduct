@@ -82,6 +82,10 @@ object ResolverVariablesEnabled : ConfigKey<Boolean>(false, { null })
 object ResolverFromArgumentVariablesEnabled : ConfigKey<Boolean>(false, { null })
 object ResolverVariableWeight : ConfigKey<Double>(0.5, ::weight)
 object ResolverVariableCount : ConfigKey<IntRange>(1..3, ::range)
+object ResolverNestedProviderPathWeight : ConfigKey<Double>(0.5, ::weight)
+object ResolverVariablesOnQueryFieldsOnly : ConfigKey<Boolean>(false, { null })
+object ResolverFromObjectFieldVariableOwnerLimit :
+    ConfigKey<Int>(Int.MAX_VALUE, ::positive)
 
 data class TestCaseCount(
     val schemas: Int = 10,

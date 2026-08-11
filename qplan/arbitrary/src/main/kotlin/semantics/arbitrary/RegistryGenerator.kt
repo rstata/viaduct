@@ -46,6 +46,7 @@ data class RegistryFeatures(
     val variableCount: Int,
     val fromArgumentVariableCount: Int,
     val fromObjectFieldVariableCount: Int,
+    val maximumFromObjectFieldPathLength: Int,
     val maximumVariablesPerOwner: Int,
     val hasNestedInputVariable: Boolean,
     val hasListVariable: Boolean,
@@ -87,6 +88,13 @@ class ArbitraryRegistry internal constructor(
             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
+    /** Source resolver fields whose generated fragments consume a nested FromObjectField path. */
+    val nestedFromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .filter { provider -> provider.responsePath().size > 1 }
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
     fun sourceResolverHasFromArgumentVariables(
         canonicalField: FieldCoordinate,
     ): Boolean =
@@ -96,6 +104,15 @@ class ArbitraryRegistry internal constructor(
         canonicalField: FieldCoordinate,
     ): Boolean =
         sourceField(canonicalField) in fromObjectFieldVariableOwnerFields
+
+    fun sourceResolverHasNestedFromObjectFieldVariable(
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        sourceField(canonicalField) in nestedFromObjectFieldVariableOwnerFields
+
+    /** Maps a fixture-lowered application coordinate back to its generated source resolver. */
+    fun sourceResolverCoordinate(canonicalField: FieldCoordinate): FieldCoordinate =
+        sourceField(canonicalField)
 
     fun clearResolutionWitness() {
         applicationLog.clear()
@@ -521,6 +538,11 @@ private class RegistryGenerator(
                         variableProviders.count {
                             it is FromObjectFieldVariableProviderPlan
                         },
+                    maximumFromObjectFieldPathLength =
+                        variableProviders
+                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                            .maxOfOrNull { provider -> provider.responsePath().size }
+                            ?: 0,
                     maximumVariablesPerOwner =
                         variableProviders
                             .groupingBy(VariableProviderPlan::owner)
@@ -715,6 +737,12 @@ private class RegistryGenerator(
     ): FragmentPlan {
         if (
             !config[ResolverVariablesEnabled] ||
+            (config[ResolverVariablesOnQueryFieldsOnly] && consumer.typeName != "Query") ||
+            variableProviders
+                .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                .map(VariableProviderPlan::owner)
+                .distinct()
+                .size >= config[ResolverFromObjectFieldVariableOwnerLimit] ||
             !chance(config[ResolverVariableWeight])
         ) {
             return this
@@ -742,10 +770,10 @@ private class RegistryGenerator(
                                 ranks = ranks,
                             )
                         }.orEmpty()
-                        .shuffled(random)
-                        .firstOrNull { provider ->
+                        .filter { provider ->
                             structuralBranchRank(ownerName, provider, ranks) < useRank
                         }
+                        .chooseProviderPath()
                         ?.let { provider -> occurrence to provider }
                 } ?: return@fold fragment
             val variableName = "resolverVar${ranks.getValue(consumer)}_$variableIndex"
@@ -770,6 +798,17 @@ private class RegistryGenerator(
                         value = VariableInputPlan(variableName),
                     ),
             )
+        }
+    }
+
+    /** Splits direct and nested providers so configured profiles can exercise nested paths deliberately instead of relying on their share of one shuffled candidate pool. */
+    private fun List<FragmentSelectionPlan>.chooseProviderPath(): FragmentSelectionPlan? {
+        if (isEmpty()) return null
+        val (nested, direct) = shuffled(random).partition { selection -> selection.pathLength() > 1 }
+        return if (chance(config[ResolverNestedProviderPathWeight])) {
+            nested.firstOrNull() ?: direct.firstOrNull()
+        } else {
+            direct.firstOrNull() ?: nested.firstOrNull()
         }
     }
 
@@ -1427,6 +1466,9 @@ private fun FragmentSelectionPlan.withResponseAliases(
                 selection.withResponseAliases(variableName, depth + 1)
             },
     )
+
+private fun FragmentSelectionPlan.pathLength(): Int =
+    1 + (subselections.singleOrNull()?.pathLength() ?: 0)
 
 private fun sensitiveScalar(
     scalar: ScalarKind,

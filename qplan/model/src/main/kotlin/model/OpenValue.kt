@@ -329,7 +329,8 @@ internal fun OpenValue?.matchingVariableTypes(
         else -> emptyList()
     }
 
-internal fun OpenArguments.containsErrorValue(): Boolean =
+/** Returns whether any argument expression recursively contains [Value.Error]. */
+fun OpenArguments.containsErrorValue(): Boolean =
     fieldExpressions().values.any { value -> value.containsErrorValue() }
 
 private fun OpenValue?.containsErrorValue(): Boolean =

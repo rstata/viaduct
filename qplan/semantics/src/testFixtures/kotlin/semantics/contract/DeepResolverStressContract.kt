@@ -2,11 +2,15 @@ package semantics.contract
 
 import io.kotest.property.PropertyTesting
 import kotlinx.coroutines.runBlocking
+import model.Assumptions
+import model.Schema
 import model.fragmentFrom
 import model.objectOf
+import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.Config
 import semantics.arbitrary.ErrorValueWeight
 import semantics.arbitrary.ExplicitFieldResolverWeight
+import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.MinimumSelectionDepth
@@ -38,6 +42,12 @@ interface DeepResolverStressContract : ResolverContract {
         get() = true
     val mixedVariableCoverageRequired: Boolean
         get() = false
+    val nestedObjectPathCoverageRequired: Boolean
+        get() = false
+    val minimumActivatedObjectPathResolverChainLength: Int
+        get() = 0
+    val stressConfigOverrides: Config
+        get() = Config.default
 
     @Test
     fun `deep dependency-heavy arbitrary worlds resolve correctly`(): Unit =
@@ -81,7 +91,8 @@ interface DeepResolverStressContract : ResolverContract {
                     // Static tests exhaustively cover dispatch; stress samples interactions cheaply.
                     (NodeObjectWeight to 0.05) +
                     (ResolverFromArgumentVariablesEnabled to true) +
-                    (ResolverVariablesEnabled to objectPathVariablesEnabled)
+                    (ResolverVariablesEnabled to objectPathVariablesEnabled) +
+                    stressConfigOverrides
             var attemptedCases = 0
             var verifiedCases = 0
             var resolverApplications = 0
@@ -93,6 +104,8 @@ interface DeepResolverStressContract : ResolverContract {
             var generatedObjectPathVariables = 0
             var activatedFromArgumentApplications = 0
             var activatedObjectPathApplications = 0
+            var activatedNestedObjectPathApplications = 0
+            var maximumActivatedObjectPathResolverChainLength = 0
             var coactivatedMixedVariableCases = 0
             val previousSeed = PropertyTesting.defaultSeed
             PropertyTesting.defaultSeed = seed
@@ -120,6 +133,10 @@ interface DeepResolverStressContract : ResolverContract {
                             fragment.subselections,
                         )
                     val witness = testCase.registry.resolutionWitness()
+                    val activatedSourceResolvers =
+                        witness.applications.mapTo(linkedSetOf()) { application ->
+                            testCase.registry.sourceResolverCoordinate(application.key.field)
+                        }
                     assertEquals(
                         context(world) {
                             result.registeredResolverApplicationIdentityCounts()
@@ -148,6 +165,13 @@ interface DeepResolverStressContract : ResolverContract {
                             activatedObjectPath = true
                         }
                         if (
+                            testCase.registry.sourceResolverHasNestedFromObjectFieldVariable(
+                                application.key.field,
+                            )
+                        ) {
+                            activatedNestedObjectPathApplications += 1
+                        }
+                        if (
                             application.key.field.fieldName.endsWith("\$bridge") &&
                             application.key.arguments.type.fields.isNotEmpty()
                         ) {
@@ -168,6 +192,18 @@ interface DeepResolverStressContract : ResolverContract {
                     if (activatedFromArgument && activatedObjectPath) {
                         coactivatedMixedVariableCases += 1
                     }
+                    maximumActivatedObjectPathResolverChainLength =
+                        maxOf(
+                            maximumActivatedObjectPathResolverChainLength,
+                            maximumActivatedResolverChainLength(
+                                world = world,
+                                registry = testCase.registry,
+                                activatedSourceResolvers = activatedSourceResolvers,
+                                roots =
+                                    testCase.registry
+                                        .nestedFromObjectFieldVariableOwnerFields,
+                            ),
+                        )
                     verifiedCases += 1
                 }
             } finally {
@@ -186,6 +222,10 @@ interface DeepResolverStressContract : ResolverContract {
                         "generatedObjectPathVariables=$generatedObjectPathVariables, " +
                         "activatedFromArgumentApplications=$activatedFromArgumentApplications, " +
                         "activatedObjectPathApplications=$activatedObjectPathApplications, " +
+                        "activatedNestedObjectPathApplications=" +
+                        "$activatedNestedObjectPathApplications, " +
+                        "maximumActivatedObjectPathResolverChainLength=" +
+                        "$maximumActivatedObjectPathResolverChainLength, " +
                         "coactivatedMixedVariableCases=$coactivatedMixedVariableCases, " +
                         "minimumDepth=4",
                 )
@@ -209,6 +249,18 @@ interface DeepResolverStressContract : ResolverContract {
                 assertTrue(generatedObjectPathVariables > 0)
                 assertTrue(activatedObjectPathApplications > 0)
             }
+            if (nestedObjectPathCoverageRequired) {
+                assertTrue(activatedNestedObjectPathApplications > 0)
+            }
+            if (minimumActivatedObjectPathResolverChainLength > 0) {
+                assertTrue(
+                    maximumActivatedObjectPathResolverChainLength >=
+                        minimumActivatedObjectPathResolverChainLength,
+                    "Expected an activated object-path resolver chain of length " +
+                        "$minimumActivatedObjectPathResolverChainLength, found " +
+                        maximumActivatedObjectPathResolverChainLength,
+                )
+            }
             if (mixedVariableCoverageRequired) {
                 assertTrue(generatedFromArgumentVariables > 0)
                 assertTrue(generatedObjectPathVariables > 0)
@@ -217,6 +269,43 @@ interface DeepResolverStressContract : ResolverContract {
                 assertTrue(coactivatedMixedVariableCases > 0)
             }
         }
+
+    /** Returns the longest activated resolver chain beginning at one of [roots]. */
+    private fun maximumActivatedResolverChainLength(
+        world: Assumptions,
+        registry: ArbitraryRegistry,
+        activatedSourceResolvers: Set<FieldCoordinate>,
+        roots: Set<FieldCoordinate>,
+    ): Int {
+        fun canonicalField(coordinate: FieldCoordinate): Schema.ObjectField? =
+            world.schema.field(coordinate.typeName, coordinate.fieldName) as? Schema.ObjectField
+
+        fun depth(
+            field: Schema.ObjectField,
+            visited: Set<Schema.ObjectField>,
+        ): Int =
+            1 +
+                world.resolverRegistry
+                    .mayDemandFrom(field)
+                    .filter { dependency ->
+                        registry.sourceResolverCoordinate(
+                            FieldCoordinate(
+                                dependency.containingType.typeName,
+                                dependency.fieldName,
+                            ),
+                        ) in activatedSourceResolvers
+                    }.filterNot { dependency -> dependency in visited }
+                    .maxOfOrNull { dependency -> depth(dependency, visited + field) }
+                    .orZero()
+
+        return roots
+            .filter { root -> root in activatedSourceResolvers }
+            .mapNotNull(::canonicalField)
+            .maxOfOrNull { root -> depth(root, emptySet()) }
+            .orZero()
+    }
+
+    private fun Int?.orZero(): Int = this ?: 0
 
     private fun configured(
         property: String,

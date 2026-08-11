@@ -369,6 +369,38 @@ class GeneratorTest {
     }
 
     @Test
+    fun `nested object path variable providers are generated regularly`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 0.8) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (ListTypeWeight to 0.0) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverNestedProviderPathWeight to 1.0)
+        val random = RandomSource.seeded(86421L)
+        var registriesWithNestedProviders = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            if (registry.features.maximumFromObjectFieldPathLength > 1) {
+                registriesWithNestedProviders += 1
+            }
+        }
+
+        assertTrue(
+            registriesWithNestedProviders >= 10,
+            "Expected nested providers regularly, found $registriesWithNestedProviders/100",
+        )
+    }
+
+    @Test
     fun `fromArgument variables generate owner-argument-backed fragment arguments`() {
         val config =
             Config.default +
@@ -486,6 +518,7 @@ class GeneratorTest {
                 }
                 if (resolverErrorArgumentCount > 0) reached += "resolver argument errors"
                 if (maximumVariablesPerOwner > 1) reached += "multiple variables per owner"
+                if (maximumFromObjectFieldPathLength > 1) reached += "nested provider paths"
                 if (hasNestedInputVariable) reached += "nested input variables"
                 if (hasListVariable) reached += "list variables"
                 if (hasNullableProvider) reached += "nullable providers"
@@ -523,6 +556,7 @@ class GeneratorTest {
                 "input-and-argument-sensitive resolvers",
                 "resolver argument errors",
                 "multiple variables per owner",
+                "nested provider paths",
                 "nested input variables",
                 "list variables",
                 "nullable providers",

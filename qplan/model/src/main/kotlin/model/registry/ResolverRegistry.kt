@@ -58,7 +58,7 @@ class FieldResolver private constructor(
 ) {
     /**
      * Returns the exact object fragment with every variable template stamped at [path] and a
-     * synthetic copy of each path-variable provider path whose terminal key marks the definition.
+     * synthetic copy of each path-variable provider path whose keys mark the definition.
      *
      * Stamping preserves the selection fields, applicability guards, occurrence shape, and
      * non-variable argument values.
@@ -240,12 +240,7 @@ private fun SelectionForest.markProviderPath(
         } else {
             selectionForestOf(
                 Selection.of(
-                    key =
-                        if (remaining.isEmpty()) {
-                            Value.VariableKey.of(selection.key, variable)
-                        } else {
-                            selection.key
-                        },
+                    key = Value.VariableKey.of(selection.key, variable),
                     possibleTypes = selection.possibleTypes,
                     subselections =
                         if (remaining.isEmpty()) {

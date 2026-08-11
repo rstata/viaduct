@@ -19,7 +19,6 @@ import model.Promise
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.TypeExpr
 import model.Value
 import model.containsErrorValue
 import model.flatMapToSelectionForest
@@ -220,22 +219,15 @@ private class ObjectResultOrchestrator(
         val mergedDemand:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable.Stamped, Value.GroundKey>,
+                Map<Value.Variable.Stamped, Value.Input?>,
             > =
             state
                 .snapshot()
                 .toSelectionForest()
-                .mergeWithVariables(source.type)
+                .mergeWithVariables(target)
+        completeBindings(mergedDemand.second)
         val selectionsByKey: Map<Value.GroundKey, ObjectSelection> =
             mergedDemand.first.byGroundKey()
-        val variablesByKey: Map<Value.GroundKey, Set<Value.Variable.Stamped>> =
-            mergedDemand.second.entries
-                .groupBy(
-                    keySelector = Map.Entry<Value.Variable.Stamped, Value.GroundKey>::value,
-                    valueTransform = Map.Entry<Value.Variable.Stamped, Value.GroundKey>::key,
-                ).mapValues { (_, variables) ->
-                    variables.toSet()
-                }
 
         selectionsByKey.keys.forEach { key ->
             prepareResolverInstance(key)
@@ -243,7 +235,6 @@ private class ObjectResultOrchestrator(
         state.sealedDemand.complete(
             PreparedFieldDemand(
                 selectionsByKey = selectionsByKey,
-                variablesByKey = variablesByKey,
             ),
         )
     }
@@ -309,11 +300,17 @@ private class ObjectResultOrchestrator(
                     resolveKey(
                         selection = demand.selectionsByKey.getValue(key),
                         valuePromise = target.getValue(key),
-                        variablesDefinedByKey = demand.variablesByKey[key].orEmpty(),
                     )
                 }
             }
         }
+        val completedBindings: Map<Value.Variable.Stamped, Value.Input?> =
+            state
+                .snapshot()
+                .toSelectionForest()
+                .mergeWithVariables(target)
+                .second
+        completeBindings(completedBindings)
     }
 
     // Produces one exact field value from its materialized object fragment and requested output
@@ -322,22 +319,13 @@ private class ObjectResultOrchestrator(
     private suspend fun resolveKey(
         selection: ObjectSelection,
         valuePromise: Promise<EngineResult?>,
-        variablesDefinedByKey: Set<Value.Variable.Stamped>,
     ) {
         val key = selection.groundKey()
         when {
             key.arguments.argumentsContainErrorValue() ->
-                completeValueAndBindings(
-                    valuePromise = valuePromise,
-                    value = Value.Error,
-                    variables = variablesDefinedByKey,
-                )
+                valuePromise.complete(Value.Error)
             key.field.fieldName == "__typename" ->
-                completeValueAndBindings(
-                    valuePromise = valuePromise,
-                    value = Value.String.of(source.type.typeName),
-                    variables = variablesDefinedByKey,
-                )
+                valuePromise.complete(Value.String.of(source.type.typeName))
             else -> {
                 val resolutionSelections: SelectionForest =
                     selection.subselections.successorDemand()
@@ -374,27 +362,8 @@ private class ObjectResultOrchestrator(
                         )
                     }
                 descendantsNeedingResolution.awaitAll()
-                completeValueAndBindings(
-                    valuePromise = valuePromise,
-                    value = resolvedValue.engineResult,
-                    variables = variablesDefinedByKey,
-                )
+                valuePromise.complete(resolvedValue.engineResult)
             }
-        }
-    }
-
-    // Publishes the exact field value before releasing any path-variable consumers of that value.
-    context(world: Assumptions)
-    private fun completeValueAndBindings(
-        valuePromise: Promise<EngineResult?>,
-        value: EngineResult?,
-        variables: Set<Value.Variable.Stamped>,
-    ) {
-        val providerInput: Value.Input? =
-            if (variables.isEmpty()) null else value.toProviderInput()
-        valuePromise.complete(value)
-        variables.forEach { variable ->
-            world.completeBinding(variable, providerInput)
         }
     }
 
@@ -427,7 +396,6 @@ private class ObjectResultOrchestrator(
 
     private class PreparedFieldDemand(
         val selectionsByKey: Map<Value.GroundKey, ObjectSelection>,
-        val variablesByKey: Map<Value.GroundKey, Set<Value.Variable.Stamped>>,
     )
 }
 
@@ -459,8 +427,8 @@ private fun SelectionForest.instanceSpecificDemand(): SelectionForest =
 
 /**
  * Converts one resolver output to its passive engine-result shape and identifies object results
- * that still contain active resolver demand. Path-variable markers are consumed at the object
- * instance where their terminal field becomes an exact ground key.
+ * that still contain active resolver demand. Path-variable markers report a binding where their
+ * provider path reaches a terminal value or terminates early at null or error.
  */
 context(world: Assumptions)
 private suspend fun Value.Output?.resolveValue(
@@ -492,29 +460,28 @@ private suspend fun Value.Output?.resolveValue(
         }
     }
 
-// Selects passive output fields, completes path-variable bindings at terminal marker keys, and
-// retains this object instance when any selected key crosses a resolver boundary.
+// Selects passive output fields, completes discovered path-variable bindings, and retains this
+// object instance when any selected key crosses a resolver boundary.
 context(world: Assumptions)
 private suspend fun Value.Object.resolveObjectValue(
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
 ): ResolvedValue {
+    val engineResult: EngineResult.Object =
+        EngineResult.Object.of(
+            type = type,
+            values = emptyMap(),
+            mutable = true,
+        )
     val mergedDemand:
         Pair<
             ObjectSelectionForest,
-            Map<Value.Variable.Stamped, Value.GroundKey>,
+            Map<Value.Variable.Stamped, Value.Input?>,
         > =
-        resolverDemand.mergeWithVariables(type)
+        resolverDemand.mergeWithVariables(engineResult)
+    completeBindings(mergedDemand.second)
     val resolverDemandByKey: Map<Value.GroundKey, ObjectSelection> =
         mergedDemand.first.byGroundKey()
-    val variablesByKey: Map<Value.GroundKey, Set<Value.Variable.Stamped>> =
-        mergedDemand.second.entries
-            .groupBy(
-                keySelector = Map.Entry<Value.Variable.Stamped, Value.GroundKey>::value,
-                valueTransform = Map.Entry<Value.Variable.Stamped, Value.GroundKey>::key,
-            ).mapValues { (_, variables) ->
-                variables.toSet()
-            }
     val unselectedKeys: Set<Value.GroundKey> = fieldValues.keys - resolverDemandByKey.keys
     require(unselectedKeys.isEmpty()) {
         "Selective resolver output ${type.typeName} contains unselected fields: " +
@@ -542,21 +509,14 @@ private suspend fun Value.Object.resolveObjectValue(
                                     .subselections,
                         )
                 }
-            completeBindings(
-                variables = variablesByKey[key].orEmpty(),
-                value = resolvedValue.engineResult,
-            )
             ResolvedField(key, resolvedValue)
         }
-    val engineResult: EngineResult.Object =
-        EngineResult.Object.of(
-            type = type,
-            values =
-                resolvedFields.associate { resolvedField ->
-                    resolvedField.key to resolvedField.value.engineResult
-                },
-            mutable = true,
-        )
+    resolvedFields.forEach { resolvedField ->
+        engineResult.setValue(resolvedField.key, resolvedField.value.engineResult)
+    }
+    completeBindings(
+        resolverDemand.mergeWithVariables(engineResult).second,
+    )
     val localResolution: List<ObjectResolution> =
         if (resolverDemandByKey.keys.any { key -> key.field in world.resolverRegistry }) {
             listOf(
@@ -580,16 +540,18 @@ private suspend fun Value.Object.resolveObjectValue(
     )
 }
 
-// Completes every path-variable whose provider marker resolved to this exact field key.
+// Completes each newly discovered path-variable binding and verifies repeated discoveries.
 context(world: Assumptions)
-private fun completeBindings(
-    variables: Set<Value.Variable.Stamped>,
-    value: EngineResult?,
-) {
-    if (variables.isEmpty()) return
-    val providerInput: Value.Input? = value.toProviderInput()
-    variables.forEach { variable ->
-        world.completeBinding(variable, providerInput)
+private fun completeBindings(bindings: Map<Value.Variable.Stamped, Value.Input?>) {
+    bindings.forEach { (variable, value) ->
+        if (world.isBound(variable)) {
+            require(world.getBinding(variable) == value) {
+                "Path-variable $variable is defined by conflicting values: " +
+                    "${world.getBinding(variable)} and $value"
+            }
+        } else {
+            world.completeBinding(variable, value)
+        }
     }
 }
 
@@ -800,26 +762,4 @@ private object StrictPreparationPlan {
                 },
         )
     }
-}
-
-// Converts a terminal provider result into the corresponding ground path-variable input.
-private fun EngineResult?.toProviderInput(): Value.Input? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.List -> toProviderInputList()
-        is EngineResult.Object ->
-            error("A path-variable provider cannot terminate at an object")
-    }
-
-@Suppress("UNCHECKED_CAST")
-private fun EngineResult.List.toProviderInputList(): Value.InputList {
-    require(typeExpr.baseType is Schema.InputType) {
-        "A path-variable provider list must contain input-compatible simple values"
-    }
-    return Value.InputList.of(
-        typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { value -> value?.toProviderInput() },
-    )
 }

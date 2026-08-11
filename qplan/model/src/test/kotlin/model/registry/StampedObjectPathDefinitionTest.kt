@@ -94,4 +94,82 @@ class StampedObjectPathDefinitionTest {
             assertIs<Value.VariableKey>(marker.key).variableDefinedByThisKey,
         )
     }
+
+    @Test
+    fun `marks every component of a nested provider path`() {
+        val fragment =
+            """
+            fragment Provider on Query {
+              box { value }
+              consume(value: ${'$'}value)
+            }
+            """.trimIndent()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Box {
+                      value: Int
+                    }
+
+                    type Query {
+                      result: Int
+                      box: Box
+                      consume(value: Int): Int
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        result to
+                            fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                        schema.objectField("Query", "box") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                null
+                            },
+                        schema.objectField("Query", "consume") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        Value.Variable.of(result, "value") to
+                            schema.fromObjectField(fragment, listOf("box", "value")),
+                    )
+                },
+            )
+        val resolver =
+            testWorld.resolverRegistry.resolver(
+                testWorld.schema.objectField("Query", "result"),
+            )
+        val resultKey =
+            Value.GroundKey.of(
+                testWorld.schema.objectField("Query", "result"),
+                emptyMap(),
+            )
+        val definition = resolver.stampedPathVarDefinitions(listOf(resultKey)).single()
+        val markedBox =
+            resolver
+                .stampedObjectFragment(listOf(resultKey))
+                .filter { selection ->
+                    selection.key is Value.VariableKey &&
+                        selection.key.field.fieldName == "box"
+                }
+                .single()
+        val markedValue = markedBox.subselections.single()
+
+        assertEquals(
+            definition.variable,
+            assertIs<Value.VariableKey>(markedBox.key).variableDefinedByThisKey,
+        )
+        assertEquals(
+            definition.variable,
+            assertIs<Value.VariableKey>(markedValue.key).variableDefinedByThisKey,
+        )
+    }
 }

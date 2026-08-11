@@ -153,20 +153,24 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
 }
 
 /**
- * Grounds and normalizes the demand applicable to [type], reporting path-variable marker keys.
+ * Grounds and normalizes the demand applicable to [result], reporting completed path bindings.
  *
  * Every applicable occurrence contributes an ordinary ground selection, including an occurrence
  * whose [Value.VariableKey] is the only demand for that key. Equal keys are coalesced after binding
- * substitution. A stamped variable may mark the same resulting key more than once, but may not
- * mark conflicting keys.
+ * substitution. A terminal marker reports its completed simple, list, null, or error value. An
+ * intermediate marker defers a completed object to its marked child but reports null or error as a
+ * prematurely terminated binding. Absent and incomplete result keys report no binding.
  */
 context(world: Assumptions)
 suspend fun SelectionForest.mergeWithVariables(
-    type: Schema.ObjectType,
-): Pair<ObjectSelectionForest, Map<Value.Variable.Stamped, Value.GroundKey>> {
+    result: EngineResult.Object,
+): Pair<ObjectSelectionForest, Map<Value.Variable.Stamped, Value.Input?>> {
+    val type: Schema.ObjectType = result.type
     val childrenByKey: MutableMap<Value.ObjectKey, MutableList<SelectionForest>> =
         linkedMapOf()
     val groundKeyByVariable: MutableMap<Value.Variable.Stamped, Value.GroundKey> =
+        linkedMapOf()
+    val bindings: MutableMap<Value.Variable.Stamped, Value.Input?> =
         linkedMapOf()
     occurrences().forEach { selection ->
         if (type !in selection.possibleTypes) return@forEach
@@ -188,8 +192,61 @@ suspend fun SelectionForest.mergeWithVariables(
                 "Path-variable $variable is defined by conflicting keys: $previous and $groundKey"
             }
         }
+        if (variable != null && result.isValueSet(groundKey)) {
+            val promise = result.getValue(groundKey)
+            if (!promise.isCompleted) return@forEach
+
+            val value: EngineResult? = promise.get()
+            val continues =
+                selection.subselections.occurrences().any { child ->
+                    (child.key as? Value.VariableKey)?.variableDefinedByThisKey == variable
+                }
+            val binding: Value.Input? =
+                if (continues) {
+                    when (value) {
+                        null -> null
+                        Value.Error -> Value.Error
+                        is EngineResult.Object -> return@forEach
+                        else ->
+                            error(
+                                "Path-variable $variable cannot continue through a non-object value",
+                            )
+                    }
+                } else {
+                    value.toPathVariableInput()
+                }
+            if (bindings.containsKey(variable)) {
+                require(bindings[variable] == binding) {
+                    "Path-variable $variable is defined by conflicting values: " +
+                        "${bindings[variable]} and $binding"
+                }
+            } else {
+                bindings[variable] = binding
+            }
+        }
     }
-    return normalizedObjectSelectionForest(type, childrenByKey) to groundKeyByVariable
+    return normalizedObjectSelectionForest(type, childrenByKey) to bindings
+}
+
+private fun EngineResult?.toPathVariableInput(): Value.Input? =
+    when (this) {
+        null -> null
+        Value.Error -> Value.Error
+        is Value.Simple -> this
+        is EngineResult.List -> toPathVariableInputList()
+        is EngineResult.Object ->
+            error("A path-variable provider cannot terminate at an object")
+    }
+
+@Suppress("UNCHECKED_CAST")
+private fun EngineResult.List.toPathVariableInputList(): Value.InputList {
+    require(typeExpr.baseType is Schema.InputType) {
+        "A path-variable provider list must contain input-compatible simple values"
+    }
+    return Value.InputList.of(
+        typeExpr = typeExpr as TypeExpr<Schema.InputType>,
+        values = map { value -> value.toPathVariableInput() },
+    )
 }
 
 /**

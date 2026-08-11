@@ -384,7 +384,10 @@ private class ObjectResultOrchestrator(
                             selections = resolutionSelections,
                         )
                     } else {
-                        error("Resolver25 cannot resolve passive key $key")
+                        error(
+                            "Resolver25 cannot resolve passive key " +
+                                "${key.field.containingType.typeName}/${key.field.fieldName}",
+                        )
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(

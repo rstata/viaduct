@@ -29,6 +29,7 @@ class DescendantVariableOwnerRegressionTest {
                     """
                     type Item {
                       source: Int!
+                      fixed: Int!
                       consume(value: Int!): Int!
                       result: Int!
                     }
@@ -47,6 +48,11 @@ class DescendantVariableOwnerRegressionTest {
                             schema.objectField("Item", "source"),
                             emptyMap(),
                         )
+                    val fixedKey =
+                        Value.GroundKey.of(
+                            schema.objectField("Item", "fixed"),
+                            emptyMap(),
+                        )
                     mapOf(
                         items to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -55,16 +61,25 @@ class DescendantVariableOwnerRegressionTest {
                                     listOf(
                                         schema.objectOf("Item") {
                                             "source" setTo 3
+                                            "fixed" setTo 10
                                         },
                                         schema.objectOf("Item") {
                                             "source" setTo 5
+                                            "fixed" setTo 20
                                         },
                                     ),
                                 )
                             },
                         consume to
-                            fieldResolverOf(schema.emptyFragmentOf("Item")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Consume on Item { fixed }",
+                                ),
+                            ) { input, arguments ->
+                                val value =
+                                    arguments.fieldValues.getValue("value") as Value.Int
+                                val fixed = input.fieldValues.getValue(fixedKey) as Value.Int
+                                Value.Int.of(value.intValue + fixed.intValue)
                             },
                         schema.objectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
@@ -109,7 +124,7 @@ class DescendantVariableOwnerRegressionTest {
                     ),
                 ).get() as EngineResult.List
         assertEquals(
-            listOf(Value.Int.of(3), Value.Int.of(5)),
+            listOf(Value.Int.of(13), Value.Int.of(25)),
             items.map { value ->
                 val item = value as EngineResult.Object
                 item

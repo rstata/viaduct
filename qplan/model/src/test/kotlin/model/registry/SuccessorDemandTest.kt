@@ -140,6 +140,7 @@ class SuccessorDemandTest {
                     """
                     type Item {
                       source: Int!
+                      fixed: Int!
                       consume(value: Int!): Int!
                       result: Int!
                     }
@@ -155,7 +156,11 @@ class SuccessorDemandTest {
                                 Value.Error
                             },
                         schema.objectField("Item", "consume") to
-                            fieldResolverOf(schema.emptyFragmentOf("Item")) { _, _ ->
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Consume on Item { fixed }",
+                                ),
+                            ) { _, _ ->
                                 Value.Error
                             },
                         schema.objectField("Item", "result") to
@@ -197,7 +202,7 @@ class SuccessorDemandTest {
                 .merge(itemType)
 
         assertEquals(
-            setOf("result", "source"),
+            setOf("result", "source", "fixed"),
             itemSelections.groundKeys().fieldNames(),
         )
     }

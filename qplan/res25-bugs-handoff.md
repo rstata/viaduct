@@ -2,7 +2,7 @@
 
 ## Verdict
 
-Resolver25 is not yet correct over its canonically accepted domain. The audit found four deterministic failure modes and records them as seven static regression tests. The four premature from-path termination tests and the descendant-owner test are now fixed; the other two tests remain intentionally red.
+Resolver25 is not yet correct over its canonically accepted domain. The audit found four deterministic failure modes and records them as seven static regression tests. The four premature from-path termination tests, the descendant-owner test, and the nested-use test are now fixed; the phase-plan test remains intentionally red.
 
 ## Fixed
 
@@ -10,10 +10,11 @@ A nested `FromObjectField` provider now propagates `null` or `Value.Error` when 
 
 A `FromObjectField` variable owned by a resolver in a descendant list element is now stamped only after the exact descendant occurrence path exists. Resolver25's successor-demand closure defers unstamped template branches while preserving ordinary and stamped-variable closure; `DescendantVariableOwnerRegressionTest` and its directed stress profile pass.
 
+A stamped variable used below a sibling object branch now suspends successor-demand closure until its provider binding completes. The deferred closure coalesces equivalent keys and type guards at each recursive level, preventing an acyclic resolver-demand DAG from expanding into millions of duplicate selection occurrences. `NestedVariableUseRegressionTest` and its 2,000-case directed stress profile pass.
+
 ## Remaining Failures
 
-1. A variable used below a sibling object branch can be expanded before its provider value completes. `NestedVariableUseRegressionTest` currently fails with `UncompletedPromiseException`.
-2. Resolver25's two-phase field graph can reject a canonical registry whose branch order is acyclic. `PhasePlanRegressionTest` uses two path-variable owners with canonical order `source -> sink -> middle -> outer`; Resolver25 manufactures a prepare/launch cycle and throws `IllegalArgumentException`.
+Resolver25's two-phase field graph can reject a canonical registry whose branch order is acyclic. `PhasePlanRegressionTest` uses two path-variable owners with canonical order `source -> sink -> middle -> outer`; Resolver25 manufactures a prepare/launch cycle and throws `IllegalArgumentException`.
 
 The audit also observed that a consumer whose path variable grounds to `Value.Error` may cause resolver-input dependencies to execute even though the consumer itself is skipped. This overexecution is acceptable for Resolver25 and is not a correctness bug or regression requirement.
 
@@ -40,7 +41,7 @@ Run them with:
 ./gradlew :semantics:test --tests 'semantics.resolver25.*RegressionTest'
 ```
 
-All seven tests compile. The four tests in `AdversarialRegressionTest` and `DescendantVariableOwnerRegressionTest` pass; the remaining tests fail for their predicted reasons: one incomplete-promise exception and one false phase-cycle rejection.
+All seven tests compile. The four tests in `AdversarialRegressionTest`, `DescendantVariableOwnerRegressionTest`, and `NestedVariableUseRegressionTest` pass; only `PhasePlanRegressionTest` fails with the predicted false phase-cycle rejection.
 
 Run the generated reproductions with:
 
@@ -48,8 +49,8 @@ Run the generated reproductions with:
 ./gradlew :semantics:resolver25Stress -Presolver25StressSeed=250025
 ```
 
-The full task remains intentionally red until Resolver25 is corrected. At seed `250025`, the null-intermediate, error-intermediate, and descendant-list-owner profiles pass with the default 10,000-case total budget. `RESOLVER25_STRESS_CASES` is the total budget and must be a multiple of 50; the default gives each profile 2,000 cases.
+The full task remains intentionally red until Resolver25 is corrected. At seed `250025`, the null-intermediate, error-intermediate, descendant-list-owner, and nested-variable-use profiles pass with the default 10,000-case total budget. `RESOLVER25_STRESS_CASES` is the total budget and must be a multiple of 50; the default gives each profile 2,000 cases.
 
 ## Next Work
 
-Fix the nested-use and false phase-cycle failures next. Treat their static and generated regressions as the minimum correctness boundary; each directed profile must finish with nonzero shape, query-activation, runtime-activation, and completion counts.
+Fix the false phase-cycle failure next. Treat its static and generated regressions as the minimum correctness boundary; the directed profile must finish with nonzero shape, query-activation, runtime-activation, and completion counts.

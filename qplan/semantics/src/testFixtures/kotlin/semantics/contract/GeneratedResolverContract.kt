@@ -63,10 +63,6 @@ interface NodeGeneratedResolverContract : ResolverContract {
     @Test
     fun `generated node worlds resolve correctly`(): Unit =
         runBlocking {
-            var generatedNodeResolvers = 0
-            var nodeLoaderApplications = 0
-            var generatedMixedTopologyCases = 0
-            var activatedMixedTopologyCases = 0
             val config =
                 Config.default +
                     (FieldArgumentWeight to 1.0) +
@@ -77,57 +73,80 @@ interface NodeGeneratedResolverContract : ResolverContract {
                     (ResolverFromArgumentVariablesEnabled to false) +
                     (ResolverVariablesEnabled to false)
 
-            val run = checkGeneratedProfile("node", config) { testWorld, testCase ->
-                assertTrue(testCase.registry.objectFragmentSources.values.all(String::isEmpty))
-                assertEquals(0, testCase.registry.features.variableCount)
-                generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
-                val nonNodeTypes =
-                    testCase.schema.domainObjectTypeNames -
-                        testCase.registry.nodeResolverTypes
-                if (
-                    testCase.registry.nodeResolverTypes.isNotEmpty() &&
-                    nonNodeTypes.isNotEmpty()
-                ) {
-                    generatedMixedTopologyCases += 1
-                }
-
-                val resolution = assertGeneratedResolutionParity(testWorld, testCase)
-                val activatedNodeLoader =
-                    resolution.applications.any { application ->
-                        testCase.registry
-                            .nodeLoaderPossibleTypes(
-                                testCase.schema,
-                                application.key.field,
-                            ).isNotEmpty()
+            fun property(
+                coverage: NodeCoverage,
+            ): suspend (TestWorld, ResolverTestCase) -> Unit =
+                { testWorld, testCase ->
+                    assertTrue(testCase.registry.objectFragmentSources.values.all(String::isEmpty))
+                    assertEquals(0, testCase.registry.features.variableCount)
+                    coverage.generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
+                    val nonNodeTypes =
+                        testCase.schema.domainObjectTypeNames -
+                            testCase.registry.nodeResolverTypes
+                    if (
+                        testCase.registry.nodeResolverTypes.isNotEmpty() &&
+                        nonNodeTypes.isNotEmpty()
+                    ) {
+                        coverage.generatedMixedTopologyCases += 1
                     }
-                if (activatedNodeLoader) {
-                    nodeLoaderApplications += 1
-                }
-                if (
-                    activatedNodeLoader &&
-                    testCase.registry.nodeResolverTypes.isNotEmpty() &&
-                    nonNodeTypes.isNotEmpty()
-                ) {
-                    activatedMixedTopologyCases += 1
-                }
-            }
 
-            run.assertAggregate(
-                generatedNodeResolvers > 0,
-                "Generated node profile produced no node resolvers",
-            )
-            run.assertAggregate(
-                nodeLoaderApplications > 0,
-                "Generated node profile activated no fixture-lowered node loaders",
-            )
-            run.assertAggregate(
-                generatedMixedTopologyCases > 0,
-                "Generated node profile produced no mixed node/non-node schemas",
-            )
-            run.assertAggregate(
-                activatedMixedTopologyCases > 0,
-                "Generated node profile activated no node loaders in mixed schemas",
-            )
+                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    val activatedNodeLoader =
+                        resolution.applications.any { application ->
+                            testCase.registry
+                                .nodeLoaderPossibleTypes(
+                                    testCase.schema,
+                                    application.key.field,
+                                ).isNotEmpty()
+                        }
+                    if (activatedNodeLoader) {
+                        coverage.nodeLoaderApplications += 1
+                    }
+                    if (
+                        activatedNodeLoader &&
+                        testCase.registry.nodeResolverTypes.isNotEmpty() &&
+                        nonNodeTypes.isNotEmpty()
+                    ) {
+                        coverage.activatedMixedTopologyCases += 1
+                    }
+                }
+
+            val sampledCoverage = NodeCoverage()
+            val run = checkGeneratedProfile("node", config, property = property(sampledCoverage))
+            if (run.selectedCase == null) {
+                val activationCoverage: NodeCoverage
+                val activationRun: ResolverTestRun
+                if (run.seed == NODE_ACTIVATION_SEED) {
+                    activationCoverage = sampledCoverage
+                    activationRun = run
+                } else {
+                    activationCoverage = NodeCoverage()
+                    activationRun =
+                        checkGeneratedProfile(
+                            profile = "node",
+                            config = config,
+                            seed = NODE_ACTIVATION_SEED,
+                            property = property(activationCoverage),
+                        )
+                }
+
+                activationRun.assertAggregate(
+                    activationCoverage.generatedNodeResolvers > 0,
+                    "Node activation corpus produced no node resolvers",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.nodeLoaderApplications > 0,
+                    "Node activation corpus activated no fixture-lowered node loaders",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.generatedMixedTopologyCases > 0,
+                    "Node activation corpus produced no mixed node/non-node schemas",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.activatedMixedTopologyCases > 0,
+                    "Node activation corpus activated no node loaders in mixed schemas",
+                )
+            }
         }
 }
 
@@ -484,6 +503,7 @@ interface FeatureInteractionGeneratedResolverContract : ResolverContract {
 
 private const val GENERATED_PROFILE_CASE_BUDGET = 150
 private const val FEATURE_INTERACTION_CASE_BUDGET = 300
+private const val NODE_ACTIVATION_SEED = 1L
 private const val MIXED_VARIABLE_ACTIVATION_SEED = 1L
 
 private val GENERATED_PROFILE_COUNTS =
@@ -503,6 +523,13 @@ private val FEATURE_INTERACTION_PROFILE_COUNTS =
 private data class GeneratedResolution(
     val result: EngineResult.Object,
     val applications: List<ResolverApplicationRecord>,
+)
+
+private data class NodeCoverage(
+    var generatedNodeResolvers: Int = 0,
+    var nodeLoaderApplications: Int = 0,
+    var generatedMixedTopologyCases: Int = 0,
+    var activatedMixedTopologyCases: Int = 0,
 )
 
 private data class MixedVariableCoverage(

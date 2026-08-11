@@ -2,17 +2,18 @@
 
 ## Verdict
 
-Resolver25 is not yet correct over its canonically accepted domain. The audit found four deterministic failure modes and records them as seven static regression tests. The four premature from-path termination tests are now fixed; the other three tests remain intentionally red.
+Resolver25 is not yet correct over its canonically accepted domain. The audit found four deterministic failure modes and records them as seven static regression tests. The four premature from-path termination tests and the descendant-owner test are now fixed; the other two tests remain intentionally red.
 
 ## Fixed
 
 A nested `FromObjectField` provider now propagates `null` or `Value.Error` when the provider path terminates at an active or passive intermediate component. Every provider-path component carries the stamped variable marker, and OER-aware demand merging reports completed binding values at either the terminal field or an earlier null/error. All four `AdversarialRegressionTest` cases and the two directed stress profiles pass.
 
+A `FromObjectField` variable owned by a resolver in a descendant list element is now stamped only after the exact descendant occurrence path exists. Resolver25's successor-demand closure defers unstamped template branches while preserving ordinary and stamped-variable closure; `DescendantVariableOwnerRegressionTest` and its directed stress profile pass.
+
 ## Remaining Failures
 
-1. A `FromObjectField` variable owned by a resolver in a descendant list element reaches demand expansion as an unstamped template. `DescendantVariableOwnerRegressionTest` currently fails with `IllegalStateException` from `OpenValue.kt`.
-2. A variable used below a sibling object branch can be expanded before its provider value completes. `NestedVariableUseRegressionTest` currently fails with `UncompletedPromiseException`.
-3. Resolver25's two-phase field graph can reject a canonical registry whose branch order is acyclic. `PhasePlanRegressionTest` uses two path-variable owners with canonical order `source -> sink -> middle -> outer`; Resolver25 manufactures a prepare/launch cycle and throws `IllegalArgumentException`.
+1. A variable used below a sibling object branch can be expanded before its provider value completes. `NestedVariableUseRegressionTest` currently fails with `UncompletedPromiseException`.
+2. Resolver25's two-phase field graph can reject a canonical registry whose branch order is acyclic. `PhasePlanRegressionTest` uses two path-variable owners with canonical order `source -> sink -> middle -> outer`; Resolver25 manufactures a prepare/launch cycle and throws `IllegalArgumentException`.
 
 The audit also observed that a consumer whose path variable grounds to `Value.Error` may cause resolver-input dependencies to execute even though the consumer itself is skipped. This overexecution is acceptable for Resolver25 and is not a correctness bug or regression requirement.
 
@@ -22,7 +23,7 @@ The audit also observed that a consumer whose path variable grounds to `Value.Er
 
 The shared arbitrary framework gained default-neutral controls for Query scalar fields, provider-path length, variable-use depth, non-`Query` owners, and owner-to-owner variable use. It also reports nested-use owners, null/error intermediate owners, and owner dependency edges. Only Resolver25 enables the new scenarios; other resolvers retain their existing distributions.
 
-Every successful directed case checks `correctResolution`, resolver witness identity, and `validateObjectPathBindings()`. Seed `250025` originally reproduced all failures with a 10,000-case total budget: null intermediate at `S=15 R=1 Q=1`, error intermediate at `S=3 R=1 Q=1`, descendant list owner at `S=34 R=2 Q=2`, nested variable use at `S=1 R=1 Q=2`, and the multiple-owner phase cycle at `S=84 R=1 Q=1`. The first two coordinates now pass.
+Every successful directed case checks `correctResolution`, resolver witness identity, and `validateObjectPathBindings()`. Seed `250025` originally reproduced all failures with a 10,000-case total budget: null intermediate at `S=15 R=1 Q=1`, error intermediate at `S=3 R=1 Q=1`, descendant list owner at `S=34 R=2 Q=2`, nested variable use at `S=1 R=1 Q=2`, and the multiple-owner phase cycle at `S=84 R=1 Q=1`. The first three coordinates now pass.
 
 ## Regression Tests
 
@@ -39,7 +40,7 @@ Run them with:
 ./gradlew :semantics:test --tests 'semantics.resolver25.*RegressionTest'
 ```
 
-All seven tests compile. The four tests in `AdversarialRegressionTest` pass; the remaining tests fail for their predicted reasons: one unstamped-template exception, one incomplete-promise exception, and one false phase-cycle rejection.
+All seven tests compile. The four tests in `AdversarialRegressionTest` and `DescendantVariableOwnerRegressionTest` pass; the remaining tests fail for their predicted reasons: one incomplete-promise exception and one false phase-cycle rejection.
 
 Run the generated reproductions with:
 
@@ -47,8 +48,8 @@ Run the generated reproductions with:
 ./gradlew :semantics:resolver25Stress -Presolver25StressSeed=250025
 ```
 
-The full task remains intentionally red until Resolver25 is corrected. At seed `250025`, the null- and error-intermediate profiles pass with the default 10,000-case total budget. `RESOLVER25_STRESS_CASES` is the total budget and must be a multiple of 50; the default gives each profile 2,000 cases.
+The full task remains intentionally red until Resolver25 is corrected. At seed `250025`, the null-intermediate, error-intermediate, and descendant-list-owner profiles pass with the default 10,000-case total budget. `RESOLVER25_STRESS_CASES` is the total budget and must be a multiple of 50; the default gives each profile 2,000 cases.
 
 ## Next Work
 
-Fix the descendant-owner, nested-use, and false phase-cycle failures next. Treat their static and generated regressions as the minimum correctness boundary; each directed profile must finish with nonzero shape, query-activation, runtime-activation, and completion counts.
+Fix the nested-use and false phase-cycle failures next. Treat their static and generated regressions as the minimum correctness boundary; each directed profile must finish with nonzero shape, query-activation, runtime-activation, and completion counts.

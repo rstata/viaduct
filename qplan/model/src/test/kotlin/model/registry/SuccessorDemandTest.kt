@@ -7,8 +7,11 @@ import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class SuccessorDemandTest {
     @Test
@@ -118,6 +121,81 @@ class SuccessorDemandTest {
                     .groundKeys()
                     .fieldNames()
             },
+        )
+    }
+
+    @Test
+    fun `template deferral preserves fixed demand until a descendant occurrence can stamp variables`() {
+        val resultFragment =
+            """
+            fragment Result on Item {
+              source
+              consume(value: ${'$'}value)
+            }
+            """.trimIndent()
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Item {
+                      source: Int!
+                      consume(value: Int!): Int!
+                      result: Int!
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.objectField("Query", "item") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Error
+                            },
+                        schema.objectField("Item", "consume") to
+                            fieldResolverOf(schema.emptyFragmentOf("Item")) { _, _ ->
+                                Value.Error
+                            },
+                        schema.objectField("Item", "result") to
+                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
+                                Value.Error
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.objectField("Item", "result")
+                    mapOf(
+                        Value.Variable.of(result, "value") to
+                            schema.fromObjectField(resultFragment, listOf("source")),
+                    )
+                },
+            ).assumptions
+        val selections =
+            world.schema
+                .fragmentFrom("fragment ignored on Query { item { result } }")
+                .subselections
+
+        assertFailsWith<IllegalStateException> {
+            context(world) {
+                selections.successorDemand()
+            }
+        }
+        val deferred =
+            context(world) {
+                selections.successorDemandDeferringTemplates()
+            }
+        val itemType = world.schema.type("Item") as Schema.ObjectType
+        val itemSelections =
+            deferred
+                .merge(world.schema.query)
+                .single()
+                .subselections
+                .merge(itemType)
+
+        assertEquals(
+            setOf("result", "source"),
+            itemSelections.groundKeys().fieldNames(),
         )
     }
 

@@ -19,8 +19,33 @@ import model.usedVariables
  */
 context(world: Assumptions)
 fun SelectionForest.successorDemand(): SelectionForest =
+    successorDemand(deferTemplates = false)
+
+/**
+ * Extends output demand while deferring branches whose keys contain unstamped variable templates.
+ *
+ * Such a branch belongs to a resolver occurrence whose exact path is not yet available. Ground and
+ * stamped-variable branches retain ordinary full successor closure.
+ */
+context(world: Assumptions)
+fun SelectionForest.successorDemandDeferringTemplates(): SelectionForest =
+    successorDemand(deferTemplates = true)
+
+context(world: Assumptions)
+private fun SelectionForest.successorDemand(
+    deferTemplates: Boolean,
+): SelectionForest =
     flatMap { selection ->
-        val nestedDemand = selection.subselections.successorDemand()
+        if (
+            deferTemplates &&
+            selection.key.arguments.usedVariables().any { variable ->
+                variable is Value.Variable.Template
+            }
+        ) {
+            return@flatMap selectionForestOf()
+        }
+
+        val nestedDemand = selection.subselections.successorDemand(deferTemplates)
         val rootedSelection =
             Selection.of(
                 key = selection.key,
@@ -44,7 +69,7 @@ fun SelectionForest.successorDemand(): SelectionForest =
                     world.resolverRegistry
                         .resolver(key.field)
                         .objectFragmentWithFromArguments(key.arguments)
-                        .successorDemand()
+                        .successorDemand(deferTemplates)
                 }
             }
         selectionForestOf(rootedSelection) + resolverInputDemand

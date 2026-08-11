@@ -29,7 +29,7 @@ import model.selectionForestOf
 import model.toSelectionForest
 import model.usedVariables
 import model.registry.VariableDefinition
-import model.registry.successorDemand
+import model.registry.successorDemandDeferringTemplates
 import semantics.RuntimeSupport
 import semantics.bindFromArguments
 import semantics.correctresolution.argumentsContainErrorValue
@@ -328,7 +328,7 @@ private class ObjectResultOrchestrator(
                 valuePromise.complete(Value.String.of(source.type.typeName))
             else -> {
                 val resolutionSelections: SelectionForest =
-                    selection.subselections.successorDemand()
+                    selection.subselections.successorDemandDeferringTemplates()
                 val fieldValue: Value.Output? =
                     if (key.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(key.field)

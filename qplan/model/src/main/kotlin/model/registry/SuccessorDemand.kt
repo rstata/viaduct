@@ -71,6 +71,18 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
                 variable is Value.Variable.Template
             }
         ) {
+            selection.possibleTypes
+                .flatMapToSelectionForest { possibleType ->
+                    val field = selection.objectKey(possibleType).field
+                    if (field !in world.resolverRegistry) {
+                        selectionForestOf()
+                    } else {
+                        world.resolverRegistry
+                            .resolver(field)
+                            .objectFragment
+                    }
+                }.fetchSuccessorDemandDeferringTemplates()
+                .forEach(result::add)
             continue
         }
 

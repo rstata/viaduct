@@ -10,6 +10,7 @@ import model.testing.fromArgument
 import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class StampedObjectPathDefinitionTest {
     @Test
@@ -82,6 +83,15 @@ class StampedObjectPathDefinitionTest {
         assertEquals(
             setOf(seed, definition.variable),
             resolver.stampedObjectFragment(sitePath).stampedVariables(),
+        )
+        val marker =
+            resolver
+                .stampedObjectFragment(sitePath)
+                .filter { selection -> selection.key is Value.VariableKey }
+                .single()
+        assertEquals(
+            definition.variable,
+            assertIs<Value.VariableKey>(marker.key).variableDefinedByThisKey,
         )
     }
 }

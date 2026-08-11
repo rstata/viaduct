@@ -364,6 +364,28 @@ sealed interface Value {
     }
 
     /**
+     * A selection-only key marking the terminal field that defines one stamped path-variable.
+     *
+     * The marker remains distinct from [ObjectKey] even when [field] belongs to a concrete object
+     * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key.
+     */
+    sealed interface VariableKey : Key {
+        val variableDefinedByThisKey: Variable.Stamped
+
+        companion object {
+            fun of(
+                key: Key,
+                variableDefinedByThisKey: Variable.Stamped,
+            ): VariableKey =
+                VariableKeyImpl(
+                    field = key.field,
+                    arguments = key.arguments,
+                    variableDefinedByThisKey = variableDefinedByThisKey,
+                )
+        }
+    }
+
+    /**
      * A key whose field belongs to a concrete object type.
      *
      * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Equality remains the
@@ -726,6 +748,12 @@ private data class KeyImpl(
     override val field: Schema.OutputField,
     override val arguments: OpenArguments,
 ) : Value.Key
+
+private data class VariableKeyImpl(
+    override val field: Schema.OutputField,
+    override val arguments: OpenArguments,
+    override val variableDefinedByThisKey: Value.Variable.Stamped,
+) : Value.VariableKey
 
 private data class ObjectKeyImpl(
     override val field: Schema.ObjectField,

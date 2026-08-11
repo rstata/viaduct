@@ -56,6 +56,9 @@ class DescendantVariableOwnerRegressionTest {
                                         schema.objectOf("Item") {
                                             "source" setTo 3
                                         },
+                                        schema.objectOf("Item") {
+                                            "source" setTo 5
+                                        },
                                     ),
                                 )
                             },
@@ -105,17 +108,18 @@ class DescendantVariableOwnerRegressionTest {
                         emptyMap(),
                     ),
                 ).get() as EngineResult.List
-        val item = items[0] as EngineResult.Object
-
         assertEquals(
-            Value.Int.of(3),
-            item
-                .getValue(
-                    Value.GroundKey.of(
-                        world.schema.objectField("Item", "result"),
-                        emptyMap(),
-                    ),
-                ).get(),
+            listOf(Value.Int.of(3), Value.Int.of(5)),
+            items.map { value ->
+                val item = value as EngineResult.Object
+                item
+                    .getValue(
+                        Value.GroundKey.of(
+                            world.schema.objectField("Item", "result"),
+                            emptyMap(),
+                        ),
+                    ).get()
+            },
         )
     }
 }

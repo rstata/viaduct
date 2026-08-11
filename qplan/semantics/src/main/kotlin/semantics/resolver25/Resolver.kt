@@ -72,8 +72,8 @@ private class ResolverRuntime(
     private val orchestratedTargets: MutableSet<EngineResult.Object> =
         Collections.newSetFromMap(IdentityHashMap())
 
-    // Creates and starts the sole orchestrator for one object-result occurrence. The returned latch
-    // opens after every demanded promise on that occurrence has been installed.
+    // Creates and starts the sole orchestrator for one object-result instance. The returned latch
+    // opens after every demanded promise on that instance has been installed.
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     fun createOrchestrator(
         path: List<PathComponent>,
@@ -99,7 +99,7 @@ private class ResolverRuntime(
 }
 
 /**
- * Resolves one object-result occurrence through per-field preparation latches.
+ * Resolves one object-result instance through per-field preparation latches.
  *
  * A field's demand is sealed only after every resolver field that can contribute a selection to
  * it has completed preparation and every direct provider needed by one of its open keys has

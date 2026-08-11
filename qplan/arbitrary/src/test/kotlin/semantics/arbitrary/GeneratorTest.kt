@@ -102,6 +102,27 @@ class GeneratorTest {
     }
 
     @Test
+    fun `query scalar field weight can add scalar provider sites`() {
+        val config =
+            Config.default +
+                (QueryFieldCount to 6..6) +
+                (QueryScalarFieldWeight to 1.0)
+        val random = RandomSource.seeded(5679L)
+
+        repeat(20) {
+            val schema = Arb.schema(config).next(random)
+            val scalarQueryFields =
+                schema.query.fields.filter { field ->
+                    ScalarKind.entries.any { scalar ->
+                        scalar.graphQLName == field.type.namedType
+                    }
+                }
+
+            assertTrue(scalarQueryFields.isNotEmpty())
+        }
+    }
+
+    @Test
     fun `queries generate distinct literal tuples for one argument field`() {
         val config =
             Config.default +
@@ -398,6 +419,101 @@ class GeneratorTest {
             registriesWithNestedProviders >= 10,
             "Expected nested providers regularly, found $registriesWithNestedProviders/100",
         )
+    }
+
+    @Test
+    fun `object path variable shape constraints remain generative`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 0.7) +
+                (ExplicitFieldResolverWeight to 0.9) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverFromObjectFieldProviderPathLength to 1..3) +
+                (ResolverFromObjectFieldVariableUseDepth to 1..3)
+        val random = RandomSource.seeded(86422L)
+        var generatedVariables = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val providers =
+                registry.variableProviders
+                    .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+
+            generatedVariables += providers.size
+            assertTrue(providers.all { provider -> provider.responsePath().size in 1..3 })
+            assertTrue(providers.all { provider -> provider.useDepth in 1..3 })
+        }
+
+        assertTrue(generatedVariables > 0)
+    }
+
+    @Test
+    fun `object path variables can be restricted to non Query owners`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 0.7) +
+                (ExplicitFieldResolverWeight to 0.9) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 2) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariablesOnNonQueryFieldsOnly to true)
+        val random = RandomSource.seeded(86423L)
+        var generatedVariables = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val providers =
+                registry.variableProviders
+                    .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+
+            generatedVariables += providers.size
+            assertTrue(providers.all { provider -> provider.owner.typeName != "Query" })
+        }
+
+        assertTrue(generatedVariables > 0)
+    }
+
+    @Test
+    fun `object path variable owners can be biased toward an owner dependency`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 4..6) +
+                (QueryFieldCount to 6..8) +
+                (QueryScalarFieldWeight to 0.45) +
+                (FieldArgumentWeight to 0.65) +
+                (ExplicitFieldResolverWeight to 0.9) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 1) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 1..1) +
+                (ResolverFromObjectFieldProviderPathLength to 1..1) +
+                (ResolverFromObjectFieldVariableUseDepth to 1..1) +
+                (ResolverFromObjectFieldVariableOwnerLimit to 4) +
+                (ResolverFromObjectFieldVariableOwnerUseWeight to 1.0) +
+                (ResolverVariablesOnQueryFieldsOnly to true)
+        val random = RandomSource.seeded(86424L)
+        var ownerDependencies = 0
+
+        repeat(1_000) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            ownerDependencies += registry.fromObjectFieldVariableOwnerDependencies.size
+        }
+
+        assertTrue(ownerDependencies > 0)
     }
 
     @Test

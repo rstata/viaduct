@@ -369,6 +369,9 @@ private class SchemaGenerator(
                     recursiveObjectTargets = emptyList(),
                     inputObjectNames = inputObjects.map(InputObjectDefinitionSpec::name),
                     preferObject = true,
+                    forceScalar =
+                        config[QueryScalarFieldWeight] > 0.0 &&
+                            chance(config[QueryScalarFieldWeight]),
                 )
             }
         val query =
@@ -464,6 +467,7 @@ private class SchemaGenerator(
         recursiveObjectTargets: List<String>,
         inputObjectNames: List<String>,
         preferObject: Boolean = false,
+        forceScalar: Boolean = false,
     ): FieldDefinitionSpec {
         val useRecursiveTarget =
             recursiveObjectTargets.isNotEmpty() &&
@@ -475,7 +479,8 @@ private class SchemaGenerator(
                 objectTargets
             }
         val useObject =
-            availableObjectTargets.isNotEmpty() &&
+            !forceScalar &&
+                availableObjectTargets.isNotEmpty() &&
                 (preferObject || chance(0.45))
         val namedType =
             if (useObject) {

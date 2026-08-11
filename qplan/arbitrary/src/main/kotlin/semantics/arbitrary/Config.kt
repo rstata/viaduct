@@ -46,6 +46,7 @@ object SchemaObjectCount : ConfigKey<IntRange>(1..4, ::range)
 object ObjectFieldCount : ConfigKey<IntRange>(1..4, ::range)
 object QueryFieldCount : ConfigKey<IntRange>(1..3, ::range)
 object RootQueryFieldCount : ConfigKey<IntRange>(0..0, ::range)
+object QueryScalarFieldWeight : ConfigKey<Double>(0.0, ::weight)
 object FieldArgumentWeight : ConfigKey<Double>(0.3, ::weight)
 object ImplementationArgumentDefaultWeight : ConfigKey<Double>(0.3, ::weight)
 object InputObjectCount : ConfigKey<IntRange>(0..2, ::range)
@@ -83,7 +84,13 @@ object ResolverFromArgumentVariablesEnabled : ConfigKey<Boolean>(false, { null }
 object ResolverVariableWeight : ConfigKey<Double>(0.5, ::weight)
 object ResolverVariableCount : ConfigKey<IntRange>(1..3, ::range)
 object ResolverNestedProviderPathWeight : ConfigKey<Double>(0.5, ::weight)
+object ResolverFromObjectFieldProviderPathLength :
+    ConfigKey<IntRange>(1..Int.MAX_VALUE, ::range)
+object ResolverFromObjectFieldVariableUseDepth :
+    ConfigKey<IntRange>(1..Int.MAX_VALUE, ::range)
+object ResolverFromObjectFieldVariableOwnerUseWeight : ConfigKey<Double>(0.0, ::weight)
 object ResolverVariablesOnQueryFieldsOnly : ConfigKey<Boolean>(false, { null })
+object ResolverVariablesOnNonQueryFieldsOnly : ConfigKey<Boolean>(false, { null })
 object ResolverFromObjectFieldVariableOwnerLimit :
     ConfigKey<Int>(Int.MAX_VALUE, ::positive)
 

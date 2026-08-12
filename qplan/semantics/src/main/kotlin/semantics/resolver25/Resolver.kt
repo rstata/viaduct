@@ -29,7 +29,6 @@ import model.merge
 import model.mergeWithVariables
 import model.objectKey
 import model.selectionForestOf
-import model.usedVariables
 import model.registry.StampedObjectPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
 import semantics.RuntimeSupport
@@ -171,27 +170,6 @@ private fun Schema.ObjectType.closeStructuralDemand(
                 }
     }
 }
-
-// Retains conservative output shape only where the occurrence key is already stamped or ground.
-// A template-bearing resolver boundary is added later by its exact defining occurrence.
-private fun SelectionForest.withoutTemplateKeyDemand(): SelectionForest =
-    flatMap { selection ->
-        if (
-            selection.key.arguments.usedVariables().any { variable ->
-                variable is Value.Variable.Template
-            }
-        ) {
-            selectionForestOf()
-        } else {
-            selectionForestOf(
-                Selection.of(
-                    key = selection.key,
-                    possibleTypes = selection.possibleTypes,
-                    subselections = selection.subselections.withoutTemplateKeyDemand(),
-                ),
-            )
-        }
-    }
 
 /**
  * Resolves one object-result instance through per-grounded-key activation.
@@ -808,7 +786,8 @@ private class ObjectResultOrchestrator(
                         possibleTypes = groundedSelection.possibleTypes,
                         subselections =
                             groundedSelection.subselections +
-                                potentialSubselections.withoutTemplateKeyDemand(),
+                                potentialSubselections
+                                    .projectionDemandDeferringTemplates(),
                     ),
                 ).merge(concreteType)
                     .byGroundKey()

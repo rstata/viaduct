@@ -522,7 +522,7 @@ private class QueryGenerator(
         }
 
     private fun scalarValue(scalar: ScalarKind): Value<*> {
-        val salt = Arb.int(0..10_000).next(random)
+        val salt = Arb.int(config[InputScalarValueRange]).next(random)
         return when (scalar) {
                 ScalarKind.BOOLEAN -> BooleanValue.newBooleanValue(salt % 2 == 0).build()
                 ScalarKind.FLOAT -> FloatValue.newFloatValue(BigDecimal("$salt.5")).build()

@@ -3,9 +3,12 @@ package semantics.contract
 import model.Assumptions
 import model.EngineResult
 import model.Fragment
+import model.SelectionForest
+import model.Value
+import model.applicableGroundSelections
 import model.fragmentFrom
+import model.groundKey
 import model.objectOf
-import model.sameCompletedResultAs
 import model.testing.TestWorld
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverTestCase
@@ -17,8 +20,11 @@ import kotlin.test.assertTrue
 data class GeneratedResolutionObservation(
     val world: Assumptions,
     val fragment: Fragment,
-    val result: EngineResult.Object,
-)
+    val subject: ResolverResolutionObservation,
+) {
+    val result: EngineResult.Object
+        get() = subject.result
+}
 
 /** Both executions of one generated case and the ordinary execution's application witness. */
 data class GeneratedCaseObservation(
@@ -52,9 +58,12 @@ object GeneratedCaseAssertions {
     val permutationEquivalentResult =
         GeneratedCaseAssertion { observation ->
             assertTrue(
-                observation.ordinary.result.sameCompletedResultAs(
-                    observation.permutationEquivalent.result,
-                ),
+                context(observation.ordinary.world) {
+                    observation.ordinary.result.sameSelectedResultAs(
+                        other = observation.permutationEquivalent.result,
+                        selections = observation.ordinary.fragment.subselections,
+                    )
+                },
             )
         }
 
@@ -134,8 +143,8 @@ private fun ResolverContract.observeGeneratedResolution(
 ): GeneratedResolutionObservation {
     val world = testWorld.newAssumptions(selectiveResolvers)
     val fragment = world.fragmentFrom(querySource)
-    val result =
-        resolve(
+    val subject =
+        observeResolution(
             world,
             world.objectOf("Query"),
             fragment.subselections,
@@ -143,6 +152,42 @@ private fun ResolverContract.observeGeneratedResolution(
     return GeneratedResolutionObservation(
         world = world,
         fragment = fragment,
-        result = result,
+        subject = subject,
     )
+}
+
+context(world: Assumptions)
+private fun EngineResult?.sameSelectedResultAs(
+    other: EngineResult?,
+    selections: SelectionForest,
+): Boolean {
+    if (this == null || other == null) return this == other
+    return when (this) {
+        is Value.Simple -> other is Value.Simple && this == other
+        is EngineResult.List ->
+            other is EngineResult.List &&
+                typeExpr == other.typeExpr &&
+                size == other.size &&
+                indices.all { index ->
+                    this[index].sameSelectedResultAs(other[index], selections)
+                }
+        is EngineResult.Object ->
+            other is EngineResult.Object &&
+                type == other.type &&
+                selections
+                    .applicableGroundSelections(type)
+                    .byGroundKey()
+                    .values
+                    .all { selection ->
+                        val key = selection.groundKey()
+                        key in keys &&
+                            key in other.keys &&
+                            getValue(key)
+                                .get()
+                                .sameSelectedResultAs(
+                                    other = other.getValue(key).get(),
+                                    selections = selection.subselections,
+                                )
+                    }
+    }
 }

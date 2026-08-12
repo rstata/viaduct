@@ -8,7 +8,10 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
+import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class MixedVariablePhaseRegressionTest {
@@ -106,14 +109,25 @@ class MixedVariablePhaseRegressionTest {
                 },
             )
         val world = testWorld.assumptions
-        val result =
-            context(world) {
-                world.objectOf("Query").resolve(
+        val observation =
+            observeWithLifecycleValidation(
+                world = world,
+                root = world.objectOf("Query"),
+                selections =
                     world.fragmentFrom(
                         "fragment ignored on Query { result }",
                     ).subselections,
-                )
-            }
+            )
+        val result = observation.result
+        val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.MIXED_BINDING_SOURCES_COACTIVATED,
+        )
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.NESTED_VARIABLE_USE,
+        )
 
         assertEquals(
             Value.Int.of(1),
@@ -216,14 +230,25 @@ class MixedVariablePhaseRegressionTest {
                 },
             )
         val world = testWorld.assumptions
-        val result =
-            context(world) {
-                world.objectOf("Query").resolve(
+        val observation =
+            observeWithLifecycleValidation(
+                world = world,
+                root = world.objectOf("Query"),
+                selections =
                     world.fragmentFrom(
                         "fragment ignored on Query { result }",
                     ).subselections,
-                )
-            }
+            )
+        val result = observation.result
+        val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.MIXED_BINDING_SOURCES_COACTIVATED,
+        )
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.STAGGERED_DISTINCT_KEYS,
+        )
 
         assertEquals(
             Value.Int.of(2),

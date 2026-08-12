@@ -7,7 +7,10 @@ import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
+import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class PhasePlanRegressionTest {
@@ -92,15 +95,21 @@ class PhasePlanRegressionTest {
                 emptyMap(),
             )
 
-        val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
+        val observation =
+            observeWithLifecycleValidation(
+                world = world,
+                root = world.objectOf("Query"),
+                selections =
                     world.fragmentFrom(
                         "fragment ignored on Query { outer }",
                     ).subselections,
-                )
-            }
+            )
+        val resolved = observation.result
 
+        assertContains(
+            observation.lifecycleEvents.resolver25StructuralSignatures(),
+            Resolver25StructuralSignature.MULTIPLE_OBJECT_PATH_OWNERS,
+        )
         assertEquals(Value.Int.of(7), resolved.getValue(outerKey).get())
     }
 }

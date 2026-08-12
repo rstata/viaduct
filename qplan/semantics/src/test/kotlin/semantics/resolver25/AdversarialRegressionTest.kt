@@ -11,6 +11,9 @@ import model.testing.fieldResolverOf
 import model.testing.fromObjectField
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertTimeoutPreemptively
+import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.resolver25StructuralSignatures
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class AdversarialRegressionTest {
@@ -123,14 +126,26 @@ class AdversarialRegressionTest {
                     emptyMap(),
                 )
 
-            val resolved: EngineResult.Object =
-                context(world) {
-                    world.objectOf("Query").resolve(
+            val observation =
+                observeWithLifecycleValidation(
+                    world = world,
+                    root = world.objectOf("Query"),
+                    selections =
                         world.fragmentFrom(
                             "fragment ignored on Query { result }",
                         ).subselections,
-                    )
-                }
+                )
+            val resolved: EngineResult.Object = observation.result
+            val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
+            assertContains(signatures, Resolver25StructuralSignature.NESTED_PROVIDER_PATH)
+            assertContains(
+                signatures,
+                if (provided == null) {
+                    Resolver25StructuralSignature.PROVIDER_NULL_SHORT_CIRCUIT
+                } else {
+                    Resolver25StructuralSignature.PROVIDER_ERROR_SHORT_CIRCUIT
+                },
+            )
 
             assertEquals<EngineResult?>(expectedResult, resolved.getValue(resultKey).get())
             assertEquals(

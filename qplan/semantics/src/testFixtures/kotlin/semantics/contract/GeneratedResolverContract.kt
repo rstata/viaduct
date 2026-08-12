@@ -1,10 +1,6 @@
 package semantics.contract
 
 import kotlinx.coroutines.runBlocking
-import model.EngineResult
-import model.fragmentFrom
-import model.objectOf
-import model.sameCompletedResultAs
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.ArbitraryRegistry
@@ -29,14 +25,13 @@ import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
-import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * Generated contract for user-declared resolvers with empty object fragments and no variables.
  */
-interface EmptyObjectFragmentGeneratedResolverContract : ResolverContract {
+interface EmptyObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     @Test
     fun `generated empty object fragment worlds resolve correctly`(): Unit =
         runBlocking {
@@ -51,7 +46,7 @@ interface EmptyObjectFragmentGeneratedResolverContract : ResolverContract {
                 assertTrue(testCase.registry.nodeResolverTypes.isEmpty())
                 assertTrue(testCase.registry.objectFragmentSources.values.all(String::isEmpty))
                 assertEquals(0, testCase.registry.features.variableCount)
-                assertGeneratedResolutionParity(testWorld, testCase)
+                observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
             }
         }
 }
@@ -59,7 +54,7 @@ interface EmptyObjectFragmentGeneratedResolverContract : ResolverContract {
 /**
  * Generated contract for source-level node resolution through fixture-lowered loaders.
  */
-interface NodeGeneratedResolverContract : ResolverContract {
+interface NodeGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     @Test
     fun `generated node worlds resolve correctly`(): Unit =
         runBlocking {
@@ -90,9 +85,10 @@ interface NodeGeneratedResolverContract : ResolverContract {
                         coverage.generatedMixedTopologyCases += 1
                     }
 
-                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                     val activatedNodeLoader =
-                        resolution.applications.any { application ->
+                        observation.ordinaryApplications.any { application ->
                             testCase.registry
                                 .nodeLoaderPossibleTypes(
                                     testCase.schema,
@@ -153,7 +149,7 @@ interface NodeGeneratedResolverContract : ResolverContract {
 /**
  * Generated contract for nonempty object fragments without variables.
  */
-interface ObjectFragmentGeneratedResolverContract : ResolverContract {
+interface ObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     @Test
     fun `generated object fragment worlds without variables resolve correctly`(): Unit =
         runBlocking {
@@ -175,9 +171,10 @@ interface ObjectFragmentGeneratedResolverContract : ResolverContract {
                 generatedNonemptyFragments +=
                     testCase.registry.objectFragmentSources.values.count(String::isNotEmpty)
 
-                val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                val observation =
+                    observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                 activatedNonemptyFragments +=
-                    resolution.applications.count { application ->
+                    observation.ordinaryApplications.count { application ->
                         testCase.registry.hasNonemptyObjectFragment(application)
                     }
             }
@@ -196,7 +193,7 @@ interface ObjectFragmentGeneratedResolverContract : ResolverContract {
 /**
  * Generated contract for nonempty object fragments with variables bound from resolver arguments.
  */
-interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract {
+interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     @Test
     fun `generated object fragment worlds with fromArgument resolve correctly`(): Unit =
         runBlocking {
@@ -226,9 +223,10 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
                     generatedFromArgumentVariables +=
                         testCase.registry.features.fromArgumentVariableCount
 
-                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                     activatedFromArgumentApplications +=
-                        resolution.applications.count { application ->
+                        observation.ordinaryApplications.count { application ->
                             testCase.registry.sourceResolverHasFromArgumentVariables(
                                 application.key.field,
                             )
@@ -247,7 +245,7 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : ResolverContract
 }
 
 /** Generated contract isolating variables read from object-fragment paths. */
-interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContract {
+interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     val objectPathGeneratorConfigOverrides: Config
         get() = Config.default
 
@@ -289,15 +287,16 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContra
                     if (features.maximumFromObjectFieldPathLength > 1) {
                         generatedNestedProviderPaths += 1
                     }
-                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                     activatedApplications +=
-                        resolution.applications.count { application ->
+                        observation.ordinaryApplications.count { application ->
                             testCase.registry.sourceResolverHasFromObjectFieldVariables(
                                 application.key.field,
                             )
                         }
                     activatedNestedProviderApplications +=
-                        resolution.applications.count { application ->
+                        observation.ordinaryApplications.count { application ->
                             testCase.registry.sourceResolverHasNestedFromObjectFieldVariable(
                                 application.key.field,
                             )
@@ -324,7 +323,7 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : ResolverContra
 }
 
 /** Generated contract for interactions between both resolver-variable sources. */
-interface MixedVariableGeneratedResolverContract : ResolverContract {
+interface MixedVariableGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     @Test
     fun `generated mixed resolver variable worlds resolve correctly`(): Unit =
         runBlocking {
@@ -351,15 +350,16 @@ interface MixedVariableGeneratedResolverContract : ResolverContract {
                         testCase.registry.features.fromArgumentVariableCount
                     coverage.generatedFromObjectField +=
                         testCase.registry.features.fromObjectFieldVariableCount
-                    val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                     val fromArgument =
-                        resolution.applications.any { application ->
+                        observation.ordinaryApplications.any { application ->
                             testCase.registry.sourceResolverHasFromArgumentVariables(
                                 application.key.field,
                             )
                         }
                     val fromObjectField =
-                        resolution.applications.any { application ->
+                        observation.ordinaryApplications.any { application ->
                             testCase.registry.sourceResolverHasFromObjectFieldVariables(
                                 application.key.field,
                             )
@@ -412,7 +412,7 @@ interface MixedVariableGeneratedResolverContract : ResolverContract {
  * The narrower contracts isolate failures by capability. This contract preserves broad randomized
  * pressure across nodes, object fragments, arguments, and `FromArgument` variables together.
  */
-interface FeatureInteractionGeneratedResolverContract : ResolverContract {
+interface FeatureInteractionGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     @Test
     fun `generated full feature interactions resolve correctly`(): Unit =
         runBlocking {
@@ -450,9 +450,10 @@ interface FeatureInteractionGeneratedResolverContract : ResolverContract {
                     activatedImplementationDefaults += 1
                 }
 
-                val resolution = assertGeneratedResolutionParity(testWorld, testCase)
+                val observation =
+                    observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                 val activatedNodeLoader =
-                    resolution.applications.any { application ->
+                    observation.ordinaryApplications.any { application ->
                         registry
                             .nodeLoaderPossibleTypes(
                                 testCase.schema,
@@ -460,13 +461,13 @@ interface FeatureInteractionGeneratedResolverContract : ResolverContract {
                             ).isNotEmpty()
                     }
                 val activatedFromArgument =
-                    resolution.applications.any { application ->
+                    observation.ordinaryApplications.any { application ->
                         registry.sourceResolverHasFromArgumentVariables(
                             application.key.field,
                         )
                     }
                 val activatedNonNodeObject =
-                    resolution.applications.any { application ->
+                    observation.ordinaryApplications.any { application ->
                         application.key.field.typeName in nonNodeTypes
                     }
 
@@ -519,11 +520,6 @@ private val FEATURE_INTERACTION_PROFILE_COUNTS =
         registriesPerSchema = 3,
         queriesPerSchema = 5,
     )
-
-private data class GeneratedResolution(
-    val result: EngineResult.Object,
-    val applications: List<ResolverApplicationRecord>,
-)
 
 private data class NodeCoverage(
     var generatedNodeResolvers: Int = 0,
@@ -593,55 +589,12 @@ private suspend fun checkGeneratedCases(
         )
     }
 
-private fun ResolverContract.assertGeneratedResolutionParity(
+private fun GeneratedCaseAssertionPolicy.observeGeneratedCaseWithCurrentAssertions(
     testWorld: TestWorld,
     testCase: ResolverTestCase,
-): GeneratedResolution {
-    val ordinary =
-        generatedResolution(
-            testWorld,
-            testCase.registry,
-            testCase.query.source,
-        )
-    val permuted =
-        testCase.registry.withoutResolutionWitnessCapture {
-            generatedResult(
-                testWorld,
-                testCase.registry,
-                testCase.query.permutationEquivalentSource,
-            )
-        }
-    assertTrue(ordinary.result.sameCompletedResultAs(permuted))
-    return ordinary
-}
-
-private fun ResolverContract.generatedResolution(
-    testWorld: TestWorld,
-    registry: ArbitraryRegistry,
-    querySource: String,
-): GeneratedResolution {
-    registry.clearResolutionWitness()
-    val result = generatedResult(testWorld, registry, querySource)
-    val applications = registry.resolutionWitness().applications
-    return GeneratedResolution(result, applications)
-}
-
-private fun ResolverContract.generatedResult(
-    testWorld: TestWorld,
-    registry: ArbitraryRegistry,
-    querySource: String,
-): EngineResult.Object {
-    val world = testWorld.newAssumptions(selectiveResolvers)
-    val fragment = world.fragmentFrom(querySource)
-    val result =
-        resolve(
-            world,
-            world.objectOf("Query"),
-            fragment.subselections,
-        )
-    assertTrue(context(world) { result.correctResolution(fragment) })
-    return result
-}
+): GeneratedCaseObservation =
+    observeGeneratedCase(testWorld, testCase)
+        .assertAll(generatedCaseAssertions)
 
 private fun ArbitraryRegistry.hasNonemptyObjectFragment(
     application: ResolverApplicationRecord,

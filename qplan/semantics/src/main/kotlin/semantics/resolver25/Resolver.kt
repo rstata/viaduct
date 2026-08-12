@@ -559,7 +559,10 @@ private class ObjectResultOrchestrator(
                     arguments = specializedKey.arguments.fetchBindings(),
                 )
             if (index == 0) {
-                fields.getValue(groundedKey.field).awaitGroundedKey(groundedKey)
+                fields.getValue(groundedKey.field).awaitGroundedKey(
+                    groundedKey = groundedKey,
+                    requireNestedFringe = definition.path.size > 1,
+                )
             }
             check(current.isValueSet(groundedKey)) {
                 "Provider reader $reader cannot find installed value promise for $groundedKey"
@@ -827,7 +830,10 @@ private class ObjectResultOrchestrator(
             )
         }
 
-        suspend fun awaitGroundedKey(groundedKey: Value.GroundKey) {
+        suspend fun awaitGroundedKey(
+            groundedKey: Value.GroundKey,
+            requireNestedFringe: Boolean,
+        ) {
             val available =
                 synchronized(this) {
                     groundedKeys[groundedKey]?.let { keyState ->
@@ -837,7 +843,11 @@ private class ObjectResultOrchestrator(
                         ::CompletableDeferred,
                     )
                 }
-            available.await().promiseInstalled.await()
+            val keyState = available.await()
+            keyState.promiseInstalled.await()
+            if (requireNestedFringe) {
+                keyState.fringeInstalled.await()
+            }
         }
     }
 

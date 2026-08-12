@@ -297,6 +297,33 @@ class FromObjectFieldTest {
     }
 
     @Test
+    fun `nullable traversal can supply a nullable list with non-null elements`() {
+        val schemaSDL =
+            """
+            type Box {
+              values: [Int!]!
+            }
+
+            type Query {
+              result: Int!
+              box: Box
+              consume(values: [Int!]): Int!
+            }
+            """.trimIndent()
+        val fragment =
+            """
+            fragment Provider on Query {
+              box {
+                values
+              }
+              consume(values: ${'$'}value)
+            }
+            """.trimIndent()
+
+        variableWorld(schemaSDL, fragment, listOf("box", "values"))
+    }
+
+    @Test
     fun `allows singleton coercion into nested input lists`() {
         variableWorld(
             schemaSDL =

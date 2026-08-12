@@ -253,6 +253,7 @@ private tailrec fun compatibleTypes(
             val unwrappedLocation = locationType.withNullable(true)
             val unwrappedSource = sourceType.withNullable(true)
             when {
+                sourceEffectivelyNullable -> false
                 unwrappedLocation is TypeExpr.List ->
                     compatibleTypes(
                         locationType = unwrappedLocation,
@@ -265,7 +266,6 @@ private tailrec fun compatibleTypes(
                         nullableTraversal = nullableTraversal,
                         locationHasDefault = false,
                     )
-                sourceEffectivelyNullable -> false
                 else ->
                     compatibleTypes(
                         locationType = unwrappedLocation,
@@ -281,12 +281,12 @@ private tailrec fun compatibleTypes(
                 if (sourceType is TypeExpr.List) {
                     sourceType.elementType
                 } else {
-                    sourceType
+                    sourceType.withNullable(false)
                 }
             compatibleTypes(
                 locationType = locationType.elementType,
                 sourceType = sourceElement,
-                nullableTraversal = nullableTraversal,
+                nullableTraversal = false,
                 locationHasDefault = false,
             )
         }

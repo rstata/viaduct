@@ -1568,7 +1568,7 @@ internal data class ListVariableTarget(
     val elementNullable: Boolean,
 ) : VariableTarget {
     override val acceptsNullableTraversal: Boolean
-        get() = elementNullable
+        get() = nullable
 
     override fun matches(type: OutputTypeSpec): Boolean =
         type.list &&

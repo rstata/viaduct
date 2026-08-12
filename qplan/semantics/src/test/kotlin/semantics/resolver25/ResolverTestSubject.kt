@@ -66,6 +66,10 @@ private fun Resolver25LifecycleEvent.debugSummary(): String =
             "$sequence merge ${coordinate.debugSummary()} before=$beforeLaunch"
         is Resolver25LifecycleEvent.DemandSealed ->
             "$sequence seal ${coordinate.debugSummary()} sub=${demand.subselections.debugFields()}"
+        is Resolver25LifecycleEvent.BindingDeclared ->
+            "$sequence bind ${ownerCoordinate.debugSummary()} $variable source=$source"
+        is Resolver25LifecycleEvent.BindingCompleted ->
+            "$sequence bound ${ownerCoordinate.debugSummary()} $variable value=$value"
         is Resolver25LifecycleEvent.ResolverStarted ->
             "$sequence start ${coordinate.debugSummary()}"
         is Resolver25LifecycleEvent.OutputAvailable ->

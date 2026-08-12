@@ -4,12 +4,13 @@ import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
 import model.Value
+import semantics.contract.ResolverResolutionObservation
 import semantics.contract.assertValidResolver25LifecycleTrace
 
 internal data class Resolver25ResolutionObservation(
-    val result: EngineResult.Object,
+    override val result: EngineResult.Object,
     val lifecycleEvents: List<Resolver25LifecycleEvent>,
-)
+) : ResolverResolutionObservation
 
 internal fun resolveWithLifecycleValidation(
     world: Assumptions,

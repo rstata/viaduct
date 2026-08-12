@@ -94,6 +94,10 @@ val resolverPropertyProfiles =
             "generated object fragment worlds with fromObjectField resolve correctly",
         "mixed-variables" to
             "generated mixed resolver variable worlds resolve correctly",
+        "resolver25-literal-variable-convergence" to
+            "generated literal and variable selections converge at runtime",
+        "resolver25-passive-variable-use" to
+            "generated path variables activate below passive branches",
         "feature-interaction" to "generated full feature interactions resolve correctly",
         "resolver03-construction-witness" to
             "generated construction witness is exact minimal and permutation invariant",

@@ -547,6 +547,72 @@ class GeneratorTest {
     }
 
     @Test
+    fun `resolver fragments generate literal and variable convergence`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 5..7) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (InputScalarValueRange to 0..2) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 1..1) +
+                (ResolverLiteralVariableConvergenceWeight to 1.0)
+        val random = RandomSource.seeded(97532L)
+        var generatedConvergences = 0
+
+        repeat(300) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            generatedConvergences += registry.features.literalVariableConvergenceCount
+        }
+
+        assertTrue(generatedConvergences > 0)
+    }
+
+    @Test
+    fun `object path variables can be used below passive top-level branches`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 5..7) +
+                (FieldArgumentWeight to 0.8) +
+                (ExplicitFieldResolverWeight to 0.35) +
+                (InterfacesEnabled to false) +
+                (NodeResolversEnabled to false) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 1..1) +
+                (ResolverFromObjectFieldProviderPathLength to 1..1) +
+                (ResolverFromObjectFieldVariableOwnerLimit to 1) +
+                (ResolverFromObjectFieldVariableUseDepth to 2..3) +
+                (ResolverFromObjectFieldPassiveUseWeight to 1.0) +
+                (UnionsEnabled to false)
+        val random = RandomSource.seeded(97533L)
+        var generatedPassiveUses = 0
+
+        repeat(300) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            generatedPassiveUses +=
+                registry.features.passiveTopLevelFromObjectFieldVariableUseCount
+        }
+
+        assertTrue(generatedPassiveUses > 0)
+    }
+
+    @Test
     fun `list variable providers preserve required element nullability`() {
         val target =
             ListVariableTarget(

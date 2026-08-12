@@ -46,6 +46,8 @@ data class RegistryFeatures(
     val variableCount: Int,
     val fromArgumentVariableCount: Int,
     val fromObjectFieldVariableCount: Int,
+    val literalVariableConvergenceCount: Int,
+    val passiveTopLevelFromObjectFieldVariableUseCount: Int,
     val maximumFromObjectFieldPathLength: Int,
     val maximumFromObjectFieldVariableUseDepth: Int,
     val maximumVariablesPerOwner: Int,
@@ -87,6 +89,13 @@ class ArbitraryRegistry internal constructor(
     val fromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    /** Source resolver fields whose path variable is used below a passive top-level branch. */
+    val passiveTopLevelFromObjectFieldVariableUseOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .filter { provider -> provider.topLevelUseField !in fieldResolverCoordinates }
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated fragments consume a nested FromObjectField path. */
@@ -572,6 +581,12 @@ private class RegistryGenerator(
                         variableProviders.count {
                             it is FromObjectFieldVariableProviderPlan
                         },
+                    literalVariableConvergenceCount =
+                        variableProviders.count(VariableProviderPlan::literalConvergence),
+                    passiveTopLevelFromObjectFieldVariableUseCount =
+                        variableProviders
+                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                            .count { provider -> provider.topLevelUseField !in fieldSites },
                     maximumFromObjectFieldPathLength =
                         variableProviders
                             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
@@ -736,17 +751,30 @@ private class RegistryGenerator(
         val resolverArguments = field(consumer).arguments
         val variableCount = Arb.int(config[ResolverVariableCount]).next(random)
         return (0 until variableCount).fold(this) { fragment, variableIndex ->
-            val candidate =
+            val candidates =
                 fragment.argumentOccurrences()
                     .shuffled(random)
-                    .firstNotNullOfOrNull { occurrence ->
+                    .mapNotNull { occurrence ->
                         occurrence.target?.let { target ->
                             resolverArguments
                                 .shuffled(random)
                                 .firstOrNull { argument -> target.accepts(argument.type) }
                                 ?.let { argument -> occurrence to argument }
                         }
-                    } ?: return@fold fragment
+                    }
+            val convergenceCandidate =
+                candidates.firstOrNull { (occurrence, _) ->
+                    fragment.selectionAt(occurrence).subselections.size >= 2
+                }
+            val literalConvergence =
+                convergenceCandidate != null &&
+                    chance(config[ResolverLiteralVariableConvergenceWeight])
+            val candidate =
+                if (literalConvergence) {
+                    requireNotNull(convergenceCandidate)
+                } else {
+                    candidates.firstOrNull() ?: return@fold fragment
+                }
             val variableName = "resolverArgVar${ranks.getValue(consumer)}_$variableIndex"
             variableProviders +=
                 FromArgumentVariableProviderPlan(
@@ -756,15 +784,25 @@ private class RegistryGenerator(
                     nestedInput = candidate.first.valuePath.isNotEmpty(),
                     listValue = candidate.second.type is ListInputTypeSpec,
                     nullable = candidate.second.type.nullable,
+                    literalConvergence = literalConvergence,
                 )
             fragment.copy(
                 selections =
-                    fragment.selections.replaceArgument(
-                        selectionPath = candidate.first.selectionPath,
-                        argumentName = candidate.first.argument.name,
-                        valuePath = candidate.first.valuePath,
-                        value = VariableInputPlan(variableName),
-                    ),
+                    if (literalConvergence) {
+                        fragment.selections.replaceArgumentWithLiteralConvergence(
+                            selectionPath = candidate.first.selectionPath,
+                            argumentName = candidate.first.argument.name,
+                            valuePath = candidate.first.valuePath,
+                            variableName = variableName,
+                        )
+                    } else {
+                        fragment.selections.replaceArgument(
+                            selectionPath = candidate.first.selectionPath,
+                            argumentName = candidate.first.argument.name,
+                            valuePath = candidate.first.valuePath,
+                            value = VariableInputPlan(variableName),
+                        )
+                    },
             )
         }
     }
@@ -800,29 +838,53 @@ private class RegistryGenerator(
                         occurrence.selectionPath.size in
                             config[ResolverFromObjectFieldVariableUseDepth]
                     }
+            val passiveUseOccurrences =
+                occurrences.filter { occurrence ->
+                    fragment.topLevelField(occurrence) !in fieldSites
+                }
             val ownerUseOccurrences =
                 occurrences.filter { occurrence ->
                     fragment.topLevelField(occurrence) in existingOwners
                 }
-            val orderedOccurrences =
-                if (
+            var orderedOccurrences = occurrences
+            if (
+                passiveUseOccurrences.isNotEmpty() &&
+                config[ResolverFromObjectFieldPassiveUseWeight] > 0.0 &&
+                chance(config[ResolverFromObjectFieldPassiveUseWeight])
+            ) {
+                orderedOccurrences =
+                    passiveUseOccurrences +
+                        orderedOccurrences.filterNot(passiveUseOccurrences::contains)
+            }
+            if (
                     ownerUseOccurrences.isNotEmpty() &&
                     config[ResolverFromObjectFieldVariableOwnerUseWeight] > 0.0 &&
                     chance(config[ResolverFromObjectFieldVariableOwnerUseWeight])
-                ) {
-                    ownerUseOccurrences + occurrences.filterNot(ownerUseOccurrences::contains)
-                } else {
-                    occurrences
-                }
+            ) {
+                orderedOccurrences =
+                    ownerUseOccurrences +
+                        orderedOccurrences.filterNot(ownerUseOccurrences::contains)
+            }
             val candidate =
                 orderedOccurrences.firstNotNullOfOrNull { occurrence ->
                     val useBranch =
                         fragment.selections[occurrence.selectionPath.first()]
+                    val useField = fragment.topLevelField(occurrence)
+                    val passiveUse = useField !in fieldSites
                     val useRank =
                         structuralBranchRank(
                             ownerName = ownerName,
                             selection = useBranch,
                             ranks = ranks,
+                            passiveRank =
+                                if (
+                                    passiveUse &&
+                                    config[ResolverFromObjectFieldPassiveUseWeight] > 0.0
+                                ) {
+                                    ranks.getValue(consumer)
+                                } else {
+                                    -1
+                                },
                         )
                     occurrence.target
                         ?.let { target ->
@@ -836,6 +898,15 @@ private class RegistryGenerator(
                         .filter { provider ->
                             provider.pathLength() in
                                 config[ResolverFromObjectFieldProviderPathLength]
+                        }
+                        .filter { provider ->
+                            if (!passiveUse) {
+                                true
+                            } else {
+                                val providerField =
+                                    provider.topLevelField(ownerName)
+                                providerField !in fieldSites && providerField != useField
+                            }
                         }
                         .filter { provider ->
                             structuralBranchRank(ownerName, provider, ranks) < useRank
@@ -857,6 +928,7 @@ private class RegistryGenerator(
                     abstractPath = candidate.second.hasAbstractPath(ownerName),
                     useDepth = candidate.first.selectionPath.size,
                     topLevelUseField = fragment.topLevelField(candidate.first),
+                    literalConvergence = false,
                 )
             fragment.copy(
                 selections =
@@ -878,6 +950,24 @@ private class RegistryGenerator(
         )
     }
 
+    private fun FragmentPlan.selectionAt(
+        occurrence: ArgumentOccurrence,
+    ): FragmentSelectionPlan {
+        var selections = selections
+        lateinit var selected: FragmentSelectionPlan
+        occurrence.selectionPath.forEach { index ->
+            selected = selections[index]
+            selections = selected.subselections
+        }
+        return selected
+    }
+
+    private fun FragmentSelectionPlan.topLevelField(ownerName: String): FieldCoordinate =
+        FieldCoordinate(
+            typeName = typeCondition ?: ownerName,
+            fieldName = fieldName,
+        )
+
     /** Splits direct and nested providers so configured profiles can exercise nested paths deliberately instead of relying on their share of one shuffled candidate pool. */
     private fun List<FragmentSelectionPlan>.chooseProviderPath(): FragmentSelectionPlan? {
         if (isEmpty()) return null
@@ -890,19 +980,21 @@ private class RegistryGenerator(
     }
 
     /**
-     * Passive branches precede every resolver branch. Registered branches use the same rank that
-     * makes ordinary generated resolver demand acyclic.
+     * Registered branches use the rank that makes ordinary generated resolver demand acyclic.
+     * A passive use branch belongs to the consuming resolver's demand, while a passive provider
+     * branch is already available and retains the default rank before every resolver.
      */
     private fun structuralBranchRank(
         ownerName: String,
         selection: FragmentSelectionPlan,
         ranks: Map<FieldCoordinate, Int>,
+        passiveRank: Int = -1,
     ): Int {
         val field =
             schema
                 .fieldsOn(ownerName)
                 .single { candidate -> candidate.name == selection.fieldName }
-        return ranks[field.coordinate] ?: -1
+        return ranks[field.coordinate] ?: passiveRank
     }
 
     private fun FragmentPlan.argumentOccurrences(): List<ArgumentOccurrence> =
@@ -1091,7 +1183,7 @@ private class RegistryGenerator(
         }
 
     private fun scalarInputLiteral(type: ScalarInputTypeSpec): InputLiteralPlan {
-        val salt = Arb.int(0..10_000).next(random)
+        val salt = Arb.int(config[InputScalarValueRange]).next(random)
         val value: Any =
             when (type.scalar) {
                 ScalarKind.BOOLEAN -> salt % 2 == 0
@@ -1498,6 +1590,7 @@ internal sealed interface VariableProviderPlan {
     val nestedInput: Boolean
     val listValue: Boolean
     val nullable: Boolean
+    val literalConvergence: Boolean
 }
 
 internal data class FromArgumentVariableProviderPlan(
@@ -1507,6 +1600,7 @@ internal data class FromArgumentVariableProviderPlan(
     override val nestedInput: Boolean,
     override val listValue: Boolean,
     override val nullable: Boolean,
+    override val literalConvergence: Boolean,
 ) : VariableProviderPlan
 
 internal data class FromObjectFieldVariableProviderPlan(
@@ -1519,6 +1613,7 @@ internal data class FromObjectFieldVariableProviderPlan(
     val abstractPath: Boolean,
     val useDepth: Int,
     val topLevelUseField: FieldCoordinate,
+    override val literalConvergence: Boolean,
 ) : VariableProviderPlan {
     fun source(): String =
         FragmentPlan(owner.typeName, listOf(selection)).source()
@@ -1645,6 +1740,54 @@ private fun List<FragmentSelectionPlan>.replaceArgument(
                             value = value,
                         ),
                 )
+        }
+    }
+}
+
+private fun List<FragmentSelectionPlan>.replaceArgumentWithLiteralConvergence(
+    selectionPath: List<Int>,
+    argumentName: String,
+    valuePath: List<InputValueStep>,
+    variableName: String,
+): List<FragmentSelectionPlan> {
+    val selectedIndex = selectionPath.first()
+    return flatMapIndexed { index, selection ->
+        when {
+            index != selectedIndex -> listOf(selection)
+            selectionPath.size > 1 ->
+                listOf(
+                    selection.copy(
+                        subselections =
+                            selection.subselections.replaceArgumentWithLiteralConvergence(
+                                selectionPath = selectionPath.drop(1),
+                                argumentName = argumentName,
+                                valuePath = valuePath,
+                                variableName = variableName,
+                            ),
+                    ),
+                )
+            else -> {
+                require(selection.subselections.size >= 2)
+                val symbolicArguments =
+                    selection.arguments +
+                        (
+                            argumentName to
+                                selection.arguments
+                                    .getValue(argumentName)
+                                    .replace(valuePath, VariableInputPlan(variableName))
+                        )
+                listOf(
+                    selection.copy(
+                        alias = "${variableName}Literal",
+                        subselections = selection.subselections.take(1),
+                    ),
+                    selection.copy(
+                        alias = "${variableName}Symbolic",
+                        arguments = symbolicArguments,
+                        subselections = selection.subselections.drop(1),
+                    ),
+                )
+            }
         }
     }
 }

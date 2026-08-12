@@ -14,7 +14,18 @@ import model.registry.VariableDefinition
  * completed exactly once.
  */
 context(world: Assumptions)
-internal fun Iterable<Value.GroundKey>.bindFromArguments(path: List<PathComponent>) {
+internal fun Iterable<Value.GroundKey>.bindFromArguments(
+    path: List<PathComponent>,
+    onDeclared: (
+        Value.Variable.Stamped,
+        VariableDefinition.FromArgument,
+    ) -> Unit = { _, _ -> },
+    onCompleted: (
+        Value.Variable.Stamped,
+        VariableDefinition.FromArgument,
+        Value.Input?,
+    ) -> Unit = { _, _, _ -> },
+) {
     forEach { key ->
         if (key.field !in world.resolverRegistry) return@forEach
 
@@ -28,7 +39,9 @@ internal fun Iterable<Value.GroundKey>.bindFromArguments(path: List<PathComponen
                         key.arguments.fieldValues.getValue(
                             definition.argument.argumentName,
                         )
+                    onDeclared(stamped, definition)
                     world.declareBinding(stamped)
+                    onCompleted(stamped, definition, value)
                     world.completeBinding(stamped, value)
                 }
             }

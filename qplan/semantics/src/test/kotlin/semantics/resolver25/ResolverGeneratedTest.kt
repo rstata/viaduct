@@ -42,7 +42,5 @@ class ResolverGeneratedTest :
         root: Value.Object,
         selections: SelectionForest,
     ): EngineResult.Object =
-        context(world) {
-            root.resolve(selections)
-        }
+        resolveWithLifecycleValidation(world, root, selections)
 }

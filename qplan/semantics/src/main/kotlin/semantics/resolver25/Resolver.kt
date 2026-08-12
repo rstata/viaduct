@@ -42,6 +42,21 @@ import semantics.materialize
  */
 context(world: Assumptions)
 fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
+    return resolveWithLifecycleInstrumentation(selections)
+}
+
+context(world: Assumptions)
+internal fun Value.Object.resolveObserved(
+    selections: SelectionForest,
+    eventObserver: Resolver25LifecycleEventObserver,
+): EngineResult.Object =
+    resolveWithLifecycleInstrumentation(selections, eventObserver)
+
+context(world: Assumptions)
+private fun Value.Object.resolveWithLifecycleInstrumentation(
+    selections: SelectionForest,
+    eventObserver: Resolver25LifecycleEventObserver? = null,
+): EngineResult.Object {
     require(world.selectiveResolvers) {
         "Resolver25 requires selective resolvers"
     }
@@ -55,10 +70,15 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
                         mutable = true,
                     )
                 coroutineScope {
-                    val runtime = ResolverRuntime(this)
+                    val runtime =
+                        ResolverRuntime(
+                            scope = this,
+                            instrumentation =
+                                Resolver25LifecycleInstrumentation(eventObserver),
+                        )
                     runtime.createOrchestrator(
                         path = emptyList(),
-                        source = this@resolve,
+                        source = this@resolveWithLifecycleInstrumentation,
                         target = result,
                         initialDemand = selections,
                     )
@@ -71,6 +91,7 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
 
 private class ResolverRuntime(
     val scope: CoroutineScope,
+    val instrumentation: Resolver25LifecycleInstrumentation,
 ) {
     private val orchestratorsByTarget:
         MutableMap<EngineResult.Object, ObjectResultOrchestrator> =
@@ -100,6 +121,7 @@ private class ResolverRuntime(
             check(orchestratorsByTarget.put(target, orchestrator) == null) {
                 "Resolver25 concurrently created two orchestrators at $path"
             }
+            instrumentation.orchestratorCreated(path, source.type)
             orchestrator.addPotentialDemand(
                 source.type.closeStructuralDemand(potentialDemand),
             )
@@ -220,31 +242,50 @@ private class ObjectResultOrchestrator(
         }
         runtime.scope.launch {
             activationsComplete.await()
+            runtime.instrumentation.orchestratorReady(path)
             orchestrationReady.complete(Unit)
         }
     }
 
     // Submits applicable selections as independently groundable activation work.
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-    fun addDemand(demand: SelectionForest): List<Deferred<Unit>> {
+    fun addDemand(
+        demand: SelectionForest,
+        consumerCoordinate: List<PathComponent>? = null,
+    ): List<Deferred<Unit>> {
         val activations = mutableListOf<Deferred<Unit>>()
         demand.forEach { selection ->
             if (source.type in selection.possibleTypes) {
-                activations += submitActivation(selection)
+                activations += submitActivation(selection, consumerCoordinate)
             }
         }
         return activations
     }
 
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-    private fun submitActivation(selection: Selection): Deferred<Unit> {
+    private fun submitActivation(
+        selection: Selection,
+        consumerCoordinate: List<PathComponent>?,
+    ): Deferred<Unit> {
         synchronized(activationLock) {
             pendingActivations += 1
         }
+        val contributionId =
+            runtime.instrumentation.demandSubmitted(
+                path,
+                consumerCoordinate,
+                selection,
+            )
         val activationComplete = CompletableDeferred<Unit>()
         runtime.scope.launch {
             try {
-                activateSelection(selection)
+                val coordinates = activateSelection(selection, contributionId)
+                coordinates.forEach { coordinate ->
+                    runtime.instrumentation.contributionInstalled(
+                        contributionId,
+                        coordinate,
+                    )
+                }
                 activationComplete.complete(Unit)
             } finally {
                 finishActivation()
@@ -267,21 +308,29 @@ private class ObjectResultOrchestrator(
 
     // Grounds one occurrence, interns it by grounded key, and waits for its promise/fringe to exist.
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-    private suspend fun activateSelection(selection: Selection) {
+    private suspend fun activateSelection(
+        selection: Selection,
+        contributionId: DemandContributionId,
+    ): List<List<PathComponent>> {
         val groundedSelections: ObjectSelectionForest =
             selectionForestOf(selection)
                 .mergeWithVariables(target)
                 .first
-        groundedSelections.byGroundKey().values.forEach { groundedSelection ->
-            activateGroundedSelection(groundedSelection).await()
+        return groundedSelections.byGroundKey().values.map { groundedSelection ->
+            val coordinate = path + groundedSelection.groundKey()
+            runtime.instrumentation.demandGrounded(contributionId, coordinate)
+            activateGroundedSelection(groundedSelection, contributionId).await()
+            coordinate
         }
     }
 
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     private fun activateGroundedSelection(
         groundedSelection: ObjectSelection,
+        contributionId: DemandContributionId,
     ): Deferred<Unit> {
         val groundedKey = groundedSelection.groundKey()
+        val coordinate = path + groundedKey
         val fieldState = fields.getValue(groundedKey.field)
         val activation =
             fieldState.activate(
@@ -290,12 +339,17 @@ private class ObjectResultOrchestrator(
                 concreteType = source.type,
             )
         if (!activation.created) {
+            runtime.instrumentation.groundedDemandMerged(
+                contributionId = contributionId,
+                coordinate = coordinate,
+                beforeLaunch = activation.mergedBeforeLaunch,
+            )
             if (groundedKey in source.fieldValues.keys) {
                 return source.fieldValues
                     .getValue(groundedKey)
                     .launchNestedFringe(
                         result = target.getValue(groundedKey).get(),
-                        path = path + groundedKey,
+                        path = coordinate,
                         demand = groundedSelection.subselections,
                         potentialDemand = activation.keyState.potentialDemand,
                     ).asLatch()
@@ -311,6 +365,20 @@ private class ObjectResultOrchestrator(
 
         val keyState = activation.keyState
         val existing = target.isValueSet(groundedKey)
+        val keyKind =
+            when {
+                existing -> Resolver25KeyKind.PREEXISTING
+                groundedKey.arguments.argumentsContainErrorValue() ->
+                    Resolver25KeyKind.ERROR
+                groundedKey.field.fieldName == "__typename" ->
+                    Resolver25KeyKind.TYPENAME
+                else -> Resolver25KeyKind.FIELD_RESOLVER
+            }
+        runtime.instrumentation.groundedKeyInterned(
+            contributionId,
+            coordinate,
+            keyKind,
+        )
         if (!existing) {
             target.createValuePromise(groundedKey)
             diagnosticInstrumentation.registerWriter(
@@ -318,6 +386,7 @@ private class ObjectResultOrchestrator(
                 key = groundedKey,
                 writer = path + groundedKey,
             )
+            runtime.instrumentation.valuePromiseInstalled(coordinate)
         }
         keyState.promiseInstalled.complete(Unit)
 
@@ -331,19 +400,21 @@ private class ObjectResultOrchestrator(
                             .getValue(groundedKey)
                             .launchNestedFringe(
                                 result = target.getValue(groundedKey).get(),
-                                path = path + groundedKey,
+                                path = coordinate,
                                 demand = keyState.demandSnapshot().subselections,
                                 potentialDemand = keyState.potentialDemand,
                             )
                     }
                 runtime.scope.launch {
                     nestedFringe.awaitAll()
+                    runtime.instrumentation.keyActivationReady(coordinate)
                     keyState.fringeInstalled.complete(Unit)
                 }
             }
 
             groundedKey.field in world.resolverRegistry -> {
                 val resolverInputs = prepareResolverInstance(groundedKey)
+                runtime.instrumentation.keyActivationReady(coordinate)
                 keyState.fringeInstalled.complete(Unit)
                 runtime.scope.launch {
                     resolverInputs.awaitAll()
@@ -355,6 +426,7 @@ private class ObjectResultOrchestrator(
             }
 
             groundedKey.field.fieldName == "__typename" -> {
+                runtime.instrumentation.keyActivationReady(coordinate)
                 keyState.fringeInstalled.complete(Unit)
                 runtime.scope.launch {
                     resolveKey(
@@ -380,12 +452,13 @@ private class ObjectResultOrchestrator(
         demand: SelectionForest,
     ): Deferred<Unit> {
         val installed = CompletableDeferred<Unit>()
+        val coordinate = path + keyState.groundedKey
         runtime.scope.launch {
             val output = keyState.outputAvailable.await()
             output.source
                 .launchNestedFringe(
                     result = output.result,
-                    path = path + keyState.groundedKey,
+                    path = coordinate,
                     demand = demand,
                     potentialDemand = keyState.potentialDemand,
                 ).awaitAll()
@@ -411,22 +484,56 @@ private class ObjectResultOrchestrator(
             return emptyList()
         }
 
-        listOf(groundedKey).bindFromArguments(path)
         val resolver = world.resolverRegistry.resolver(groundedKey.field)
         val coordinate = path + groundedKey
+        listOf(groundedKey).bindFromArguments(
+            path = path,
+            onDeclared = { variable, definition ->
+                runtime.instrumentation.bindingDeclared(
+                    ownerCoordinate = coordinate,
+                    variable = variable,
+                    source =
+                        Resolver25BindingSource.FromArgument(
+                            definition.argument.argumentName,
+                        ),
+                )
+            },
+            onCompleted = { variable, _, value ->
+                runtime.instrumentation.bindingCompleted(
+                    ownerCoordinate = coordinate,
+                    variable = variable,
+                    value = value,
+                )
+            },
+        )
         val definitions = resolver.stampedPathVarDefinitions(coordinate)
         definitions.forEach { definition ->
+            runtime.instrumentation.bindingDeclared(
+                ownerCoordinate = coordinate,
+                variable = definition.variable,
+                source =
+                    Resolver25BindingSource.FromObjectField(
+                        definition.path.toList(),
+                    ),
+            )
             world.declareBinding(definition.variable)
         }
         val resolverInputs =
             addDemand(
                 resolver.stampedObjectFragment(coordinate),
+                consumerCoordinate = coordinate,
             )
         definitions.forEach { definition ->
             runtime.scope.launch {
+                val value = readProvider(definition, coordinate)
+                runtime.instrumentation.bindingCompleted(
+                    ownerCoordinate = coordinate,
+                    variable = definition.variable,
+                    value = value,
+                )
                 world.completeBinding(
                     definition.variable,
-                    readProvider(definition, coordinate),
+                    value,
                 )
             }
         }
@@ -579,18 +686,24 @@ private class ObjectResultOrchestrator(
     ) {
         val selection = keyState.sealDemandForLaunch()
         val groundedKey = keyState.groundedKey
+        val coordinate = path + groundedKey
+        runtime.instrumentation.demandSealed(coordinate, selection)
         when {
             groundedKey.arguments.argumentsContainErrorValue() -> {
+                runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
                     AvailableKeyOutput(Value.Error, Value.Error),
                 )
+                runtime.instrumentation.valuePublished(coordinate)
                 valuePromise.complete(Value.Error)
             }
             groundedKey.field.fieldName == "__typename" -> {
                 val value = Value.String.of(source.type.typeName)
+                runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
                     AvailableKeyOutput(value, value),
                 )
+                runtime.instrumentation.valuePublished(coordinate)
                 valuePromise.complete(Value.String.of(source.type.typeName))
             }
             else -> {
@@ -599,17 +712,19 @@ private class ObjectResultOrchestrator(
                 val fieldValue: Value.Output? =
                     if (groundedKey.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(groundedKey.field)
-                        val coordinate = path + groundedKey
                         val input: Value.Object =
                             target.materialize(
                                 selections = resolver.objectFragmentAt(coordinate),
                                 reader = coordinate,
                             )
+                        runtime.instrumentation.resolverStarted(coordinate)
                         resolver(
                             input = input,
                             arguments = groundedKey.arguments,
                             selections = resolutionSelections,
-                        )
+                        ).also {
+                            runtime.instrumentation.resolverFinished(coordinate)
+                        }
                     } else {
                         error(
                             "Resolver25 cannot resolve passive key " +
@@ -622,12 +737,17 @@ private class ObjectResultOrchestrator(
                         path = path + groundedKey,
                         resolverDemand = resolutionSelections,
                     )
+                runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
                     AvailableKeyOutput(fieldValue, resolvedValue.engineResult),
                 )
 
                 val descendantsNeedingResolution: List<Deferred<Unit>> =
                     resolvedValue.objectsNeedingResolution.map { child ->
+                        runtime.instrumentation.childOrchestratorRequired(
+                            parentCoordinate = coordinate,
+                            childPath = child.path,
+                        )
                         runtime.createOrchestrator(
                             path = child.path,
                             source = child.source,
@@ -636,6 +756,7 @@ private class ObjectResultOrchestrator(
                         )
                     }
                 descendantsNeedingResolution.awaitAll()
+                runtime.instrumentation.valuePublished(coordinate)
                 valuePromise.complete(resolvedValue.engineResult)
             }
         }

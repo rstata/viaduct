@@ -243,15 +243,19 @@ class ResolverStressTest {
                         if (preemptiveTimeout) {
                             assertTimeoutPreemptively(RESOLUTION_TIMEOUT) {
                                 completedResult =
-                                    context(world) {
-                                        world.objectOf("Query").resolve(fragment.subselections)
-                                    }
+                                    resolveWithLifecycleValidation(
+                                        world = world,
+                                        root = world.objectOf("Query"),
+                                        selections = fragment.subselections,
+                                    )
                             }
                         } else {
                             completedResult =
-                                context(world) {
-                                    world.objectOf("Query").resolve(fragment.subselections)
-                                }
+                                resolveWithLifecycleValidation(
+                                    world = world,
+                                    root = world.objectOf("Query"),
+                                    selections = fragment.subselections,
+                                )
                         }
                         val result = requireNotNull(completedResult)
                         val witness = testCase.registry.resolutionWitness()

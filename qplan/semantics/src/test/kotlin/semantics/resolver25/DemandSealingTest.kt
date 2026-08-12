@@ -556,12 +556,13 @@ class DemandSealingTest {
 
     private fun resolveResult(testWorld: TestWorld): EngineResult.Object {
         val world = testWorld.assumptions
-        return context(world) {
-            world.objectOf("Query").resolve(
+        return resolveWithLifecycleValidation(
+            world = world,
+            root = world.objectOf("Query"),
+            selections =
                 world.fragmentFrom(
                     "fragment ignored on Query { result }",
                 ).subselections,
-            )
-        }
+        )
     }
 }

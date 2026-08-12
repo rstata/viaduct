@@ -67,6 +67,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, readiness, 
 | `mixed-variables` | Both variable sources | Resolver10, Resolver24 | fixed aggregate corpus |
 | `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-10, Resolver22-24 | `20:3:5` |
 | `resolver03-construction-witness` | Construction witness | Resolver03, Resolver09 | `12:2:4` |
+| `resolver25-broad-stress` | Unfiltered full Resolver25 validation | Resolver25 | opt-in `10:20:50` |
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated `$node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
 
@@ -109,6 +110,14 @@ For cross-profile debugging, run the concrete class with only the seed:
 ```
 
 Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver09, Resolver10, Resolver23, Resolver24, Resolver24i, and Resolver25 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
+
+Resolver25 also has an independent unfiltered broad product. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings:
+
+```shell
+./gradlew :semantics:resolver25BroadStress \
+  -Presolver25BroadStressSeed=424242 \
+  -Presolver25BroadStressSize=10:20:50
+```
 
 ## Adding Tests
 

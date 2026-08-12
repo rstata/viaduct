@@ -52,6 +52,7 @@ tasks.test {
         stressResolverNames.forEach { resolverName ->
             excludeTestsMatching("semantics.$resolverName.ResolverStressTest")
         }
+        excludeTestsMatching("semantics.resolver25.ResolverBroadStressTest")
     }
 }
 
@@ -98,6 +99,8 @@ val resolverPropertyProfiles =
             "generated literal and variable selections converge at runtime",
         "resolver25-passive-variable-use" to
             "generated path variables activate below passive branches",
+        "resolver25-broad-stress" to
+            "balanced full-feature worlds resolve correctly",
         "feature-interaction" to "generated full feature interactions resolve correctly",
         "resolver03-construction-witness" to
             "generated construction witness is exact minimal and permutation invariant",
@@ -255,3 +258,56 @@ fun registerResolverStressTask(resolverName: String) {
 }
 
 stressResolverNames.forEach(::registerResolverStressTask)
+
+val resolver25BroadStressSize =
+    providers
+        .gradleProperty("resolver25BroadStressSize")
+        .orElse(providers.systemProperty("resolver25.broad.stress.size"))
+        .orElse(providers.environmentVariable("RESOLVER25_BROAD_STRESS_SIZE"))
+        .orElse("10:20:50")
+val resolver25BroadStressSeed =
+    providers
+        .gradleProperty("resolver25BroadStressSeed")
+        .orElse(providers.systemProperty("resolver25.broad.stress.seed"))
+        .orElse(providers.environmentVariable("RESOLVER25_BROAD_STRESS_SEED"))
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver25BroadStress") {
+    group = "verification"
+    description = "Runs every case in a seeded broad Resolver25 generated product."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver25.ResolverBroadStressTest")
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val size = resolver25BroadStressSize.get()
+        require(size.matches(Regex("""[1-9][0-9]*:[1-9][0-9]*:[1-9][0-9]*"""))) {
+            "resolver25BroadStressSize must have S:R:Q form with positive integers: $size"
+        }
+        val seed =
+            resolver25BroadStressSeed.orNull
+                ?: throw GradleException(
+                    "Set -Presolver25BroadStressSeed=<long>, " +
+                        "-Dresolver25.broad.stress.seed=<long>, or " +
+                        "RESOLVER25_BROAD_STRESS_SEED=<long>",
+                )
+        seed.toLongOrNull()
+            ?: throw GradleException("resolver25BroadStressSeed must be a Long: $seed")
+
+        systemProperty("resolver25.broad.stress.size", size)
+        systemProperty("resolver25.broad.stress.seed", seed)
+        systemProperty("resolver.property.size", size)
+        systemProperty("resolver.property.seed", seed)
+        systemProperty("resolver.property.case", "all")
+        systemProperty("resolver.property.profile", "resolver25-broad-stress")
+        systemProperty("kotest.proptest.default.seed", seed)
+    }
+}

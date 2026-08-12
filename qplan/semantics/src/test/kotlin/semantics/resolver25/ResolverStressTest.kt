@@ -144,6 +144,7 @@ class ResolverStressTest {
             profile = "multiple-variable-owners",
             config =
                 directUseConfig +
+                    (RootQueryFieldCount to 6..8) +
                     (ResolverVariableCount to 1..1) +
                     (ResolverFromObjectFieldVariableOwnerLimit to 4) +
                     (ResolverFromObjectFieldVariableOwnerUseWeight to 1.0),
@@ -179,11 +180,15 @@ class ResolverStressTest {
                     queriesPerSchema = QUERIES_PER_SCHEMA,
                 )
             val seed = configuredSeed()
+            var generatedArgumentVariables = 0
             var generatedObjectPathVariables = 0
+            var generatedMixedVariableOwnerCases = 0
             var maximumProviderPathLength = 0
             var maximumVariableUseDepth = 0
             var shapeQualifiedCases = 0
             var queryActivatedCases = 0
+            var argumentVariableActivatedCases = 0
+            var mixedVariableOwnerActivatedCases = 0
             var runtimeActivatedCases = 0
             var completedCases = 0
 
@@ -195,8 +200,17 @@ class ResolverStressTest {
                         profile = "resolver25-stress-$profile",
                         seed = seed,
                     ) { testWorld, testCase ->
+                        generatedArgumentVariables +=
+                            testCase.registry.features.fromArgumentVariableCount
                         generatedObjectPathVariables +=
                             testCase.registry.features.fromObjectFieldVariableCount
+                        val mixedVariableOwners =
+                            testCase.registry.fromArgumentVariableOwnerFields.intersect(
+                                testCase.registry.fromObjectFieldVariableOwnerFields,
+                            )
+                        if (mixedVariableOwners.isNotEmpty()) {
+                            generatedMixedVariableOwnerCases += 1
+                        }
                         maximumProviderPathLength =
                             maxOf(
                                 maximumProviderPathLength,
@@ -241,12 +255,23 @@ class ResolverStressTest {
                         }
                         val result = requireNotNull(completedResult)
                         val witness = testCase.registry.resolutionWitness()
-                        val activatedTargets =
+                        val activatedFields =
                             witness.applications.mapTo(linkedSetOf()) { application ->
                                 testCase.registry.sourceResolverCoordinate(application.key.field)
-                            }.intersect(queryTargets)
+                            }
+                        val activatedTargets = activatedFields.intersect(queryTargets)
                         if (activatedTargets.isNotEmpty()) {
                             runtimeActivatedCases += 1
+                        }
+                        if (
+                            activatedFields.any(
+                                testCase.registry.fromArgumentVariableOwnerFields::contains,
+                            )
+                        ) {
+                            argumentVariableActivatedCases += 1
+                        }
+                        if (activatedFields.any(mixedVariableOwners::contains)) {
+                            mixedVariableOwnerActivatedCases += 1
                         }
 
                         assertEquals(
@@ -269,8 +294,16 @@ class ResolverStressTest {
                     "Resolver25 $profile stress generated no qualifying shape",
                 )
                 run.assertAggregate(
+                    generatedArgumentVariables > 0,
+                    "Resolver25 $profile stress generated no argument variables",
+                )
+                run.assertAggregate(
                     queryActivatedCases > 0,
                     "Resolver25 $profile stress activated no qualifying shape from a query",
+                )
+                run.assertAggregate(
+                    argumentVariableActivatedCases > 0,
+                    "Resolver25 $profile stress activated no argument-variable resolver",
                 )
                 run.assertAggregate(
                     runtimeActivatedCases > 0,
@@ -283,11 +316,15 @@ class ResolverStressTest {
             } finally {
                 println(
                     "Resolver25 $profile stress: seed=$seed, requestedCases=$casesPerProfile, " +
+                        "generatedArgumentVariables=$generatedArgumentVariables, " +
                         "generatedObjectPathVariables=$generatedObjectPathVariables, " +
+                        "generatedMixedVariableOwnerCases=$generatedMixedVariableOwnerCases, " +
                         "maximumProviderPathLength=$maximumProviderPathLength, " +
                         "maximumVariableUseDepth=$maximumVariableUseDepth, " +
                         "shapeQualifiedCases=$shapeQualifiedCases, " +
                         "queryActivatedCases=$queryActivatedCases, " +
+                        "argumentVariableActivatedCases=$argumentVariableActivatedCases, " +
+                        "mixedVariableOwnerActivatedCases=$mixedVariableOwnerActivatedCases, " +
                         "runtimeActivatedCases=$runtimeActivatedCases, " +
                         "completedCases=$completedCases",
                 )
@@ -342,7 +379,7 @@ class ResolverStressTest {
                 (NodeResolversEnabled to false) +
                 (ResolverFragmentsEnabled to true) +
                 (ResolverFragmentWeight to 1.0) +
-                (ResolverFromArgumentVariablesEnabled to false) +
+                (ResolverFromArgumentVariablesEnabled to true) +
                 (ResolverVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
                 (ResolverVariableCount to 2..4)

@@ -641,6 +641,20 @@ class GeneratorTest {
                 ),
             ),
         )
+        assertFalse(
+            ListVariableTarget(
+                scalar = ScalarKind.ID,
+                nullable = false,
+                elementNullable = true,
+            ).acceptsNullableTraversal,
+        )
+        assertTrue(
+            ListVariableTarget(
+                scalar = ScalarKind.ID,
+                nullable = true,
+                elementNullable = false,
+            ).acceptsNullableTraversal,
+        )
     }
 
     @Test

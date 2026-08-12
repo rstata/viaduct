@@ -147,6 +147,18 @@ A `fromObjectField` variable can feed an argument elsewhere in the defining reso
 
 The canonical registry restricts provider/use shapes with one argument-insensitive branch order combining ordinary dependencies and provider-production-before-use edges. This rejects cycles and overlaps conservatively; it is a domain restriction, not a runtime provider algorithm.
 
+The August 2026 production survey in
+[`from-object-field-production.md`](./from-object-field-production.md) found
+11 modern declarations in four PDP Stays resolvers. Eight use a direct sibling
+field resolver; the other three comprise two unique nested node-backed paths.
+No declaration ends at `id`, traverses a list, uses a variable below a list,
+or forms a provider chain. One direct provider is argument-bearing, with its
+argument grounded immediately from `FromArgument`; no intermediate provider
+field has arguments. Two helper fields would make the entire modern sample
+direct-provider-only. Classic DFP/component composition is imperative and
+broader, so it supports the list ban and rejects an ID-only compatibility
+rule but should not define the modern declarative contract.
+
 ### Query Re-entrancy And Parent Targets
 
 Nested work may target Query, an explicit scope, or an ancestor through `@parent`. These dependencies can move outside ordinary descendant traversal and must retain occurrence-specific target identity, especially through lists.

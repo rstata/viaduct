@@ -12,7 +12,10 @@ import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
+import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -162,10 +165,20 @@ class DemandSealingTest {
                 },
             )
 
-        val resolved = resolveResult(testWorld)
+        val observation = observeResult(testWorld)
+        val resolved = observation.result
         val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
+        val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
 
         assertEquals(1, producerApplications)
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.PRELAUNCH_DEMAND_AGGREGATION,
+        )
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.OBJECT_PATH_KEY_GROUNDING,
+        )
         assertEquals(
             setOf("early", "late"),
             context(testWorld.assumptions) {
@@ -264,10 +277,15 @@ class DemandSealingTest {
                 },
             )
 
-        val resolved = resolveResult(testWorld)
+        val observation = observeResult(testWorld)
+        val resolved = observation.result
         val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
 
         assertEquals(1, producerApplications)
+        assertContains(
+            observation.lifecycleEvents.resolver25StructuralSignatures(),
+            Resolver25StructuralSignature.LITERAL_VARIABLE_KEY_CONVERGENCE,
+        )
         assertEquals(
             setOf("one", "two"),
             context(testWorld.assumptions) {
@@ -352,7 +370,8 @@ class DemandSealingTest {
                 },
             )
 
-        val resolved = resolveResult(testWorld)
+        val observation = observeResult(testWorld)
+        val resolved = observation.result
         val resultKey =
             Value.GroundKey.of(
                 testWorld.schema.objectField("Query", "result"),
@@ -360,6 +379,10 @@ class DemandSealingTest {
             )
 
         assertEquals(Value.Int.of(11), resolved.getValue(resultKey).get())
+        assertContains(
+            observation.lifecycleEvents.resolver25StructuralSignatures(),
+            Resolver25StructuralSignature.NESTED_PROVIDER_PATH,
+        )
         assertEquals(
             Value.Int.of(11),
             testWorld.assumptions.getBinding(
@@ -555,8 +578,12 @@ class DemandSealingTest {
     }
 
     private fun resolveResult(testWorld: TestWorld): EngineResult.Object {
+        return observeResult(testWorld).result
+    }
+
+    private fun observeResult(testWorld: TestWorld): Resolver25ResolutionObservation {
         val world = testWorld.assumptions
-        return resolveWithLifecycleValidation(
+        return observeWithLifecycleValidation(
             world = world,
             root = world.objectOf("Query"),
             selections =

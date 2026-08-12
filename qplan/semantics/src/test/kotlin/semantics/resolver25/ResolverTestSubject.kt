@@ -16,10 +16,17 @@ internal fun resolveWithLifecycleValidation(
     root: Value.Object,
     selections: SelectionForest,
 ): EngineResult.Object =
+    observeWithLifecycleValidation(world, root, selections).result
+
+internal fun observeWithLifecycleValidation(
+    world: Assumptions,
+    root: Value.Object,
+    selections: SelectionForest,
+): Resolver25ResolutionObservation =
     observeResolver25Resolution(world, root, selections)
         .also { observation ->
             observation.lifecycleEvents.assertValidResolver25LifecycleTrace()
-        }.result
+        }
 
 internal fun observeResolver25Resolution(
     world: Assumptions,

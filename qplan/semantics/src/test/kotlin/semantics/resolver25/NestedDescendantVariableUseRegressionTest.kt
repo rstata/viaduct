@@ -12,7 +12,10 @@ import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
+import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class NestedDescendantVariableUseRegressionTest {
@@ -209,25 +212,41 @@ class NestedDescendantVariableUseRegressionTest {
                 emptyMap(),
             )
 
-        val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
+        val observation =
+            observeWithLifecycleValidation(
+                world = world,
+                root = world.objectOf("Query"),
+                selections =
                     world.fragmentFrom(
                         """
-                        fragment ignored on Query {
-                          item {
-                            holder {
-                              consume(value: 7) {
-                                one
+                            fragment ignored on Query {
+                              item {
+                                holder {
+                                  consume(value: 7) {
+                                    one
+                                  }
+                                }
+                                result
                               }
                             }
-                            result
-                          }
-                        }
                         """.trimIndent(),
                     ).subselections,
-                )
-            }
+            )
+        val resolved = observation.result
+        val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
+
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.POSTLAUNCH_DEMAND_DEEPENING,
+        )
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.NESTED_VARIABLE_USE,
+        )
+        assertContains(
+            signatures,
+            Resolver25StructuralSignature.DESCENDANT_VARIABLE_OWNER,
+        )
         val item = resolved.getValue(itemKey).get() as EngineResult.Object
         val payloadType = world.schema.type("Payload") as Schema.ObjectType
 

@@ -265,6 +265,38 @@ class FromObjectFieldTest {
     }
 
     @Test
+    fun `nullable traversal cannot supply a non-null list location`() {
+        val schemaSDL =
+            """
+            type Box {
+              values: [Int!]!
+            }
+
+            type Query {
+              result: Int!
+              box: Box
+              consume(values: [Int]!): Int!
+            }
+            """.trimIndent()
+        val fragment =
+            """
+            fragment Provider on Query {
+              box {
+                values
+              }
+              consume(values: ${'$'}value)
+            }
+            """.trimIndent()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                variableWorld(schemaSDL, fragment, listOf("box", "values"))
+            }
+
+        assertTrue(failure.message!!.contains("incompatible"))
+    }
+
+    @Test
     fun `allows singleton coercion into nested input lists`() {
         variableWorld(
             schemaSDL =

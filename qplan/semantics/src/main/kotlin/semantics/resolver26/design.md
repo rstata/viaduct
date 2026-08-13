@@ -6,6 +6,8 @@ Resolver26 is an experimental selective resolver based primarily on Resolver23. 
 selective invocation per resolver instance while defining a distinct instance for every
 variable-bearing selection in a resolver object fragment.
 
+The exercise assumes that every field resolver completes normally and throws no exception, including `CancellationException`. Resolver26's behavior after any resolver exception is outside the modeled domain; request-scope cancellation and failure propagation do not establish recovery of partially claimed promises.
+
 ## Resolver Identity
 
 Every variable-bearing source selection receives a nonempty `SelectionStamp`:
@@ -97,9 +99,7 @@ from a pre-grounded resolver argument bind immediately. Variables inherited by a
 stamp use an explicit binding alias. `FromObjectField` provider coroutines read OER promises and
 complete their declared bindings.
 
-Known ground argument errors skip object-fragment expansion and resolve directly to `Value.Error`.
-Speculative object-fragment demand may execute when an open argument later grounds to an error.
-This iteration intentionally permits that imprecision.
+Known ground argument errors skip object-fragment expansion and resolve directly to `Value.Error`. An open key, however, contributes its object-fragment demand before its arguments ground, so dependencies from that fragment may execute even when the key later grounds to `Value.Error`. This speculative execution of doomed dependencies is a deliberate and currently accepted imprecision: no harmful result behavior is known, and it is not considered a Resolver26 correctness defect for this exercise.
 
 Resolver26 currently requires argument-free `FromObjectField` provider paths. Each provider
 component is specialized to the concrete OER type before lookup.
@@ -138,6 +138,8 @@ Field resolution launches orchestration for the returned root objects or list el
 immediately publishes the result. A later materializer may descend through that passive result tree
 without waiting for descendant orchestration because it grounds selections from its resolver's
 already-declared source bindings before localizing their storage-key stamps.
+
+This is a sharp sequencing choice: child orchestration is launched before the parent value is published, but parent publication does not wait for child orchestration. Correctness therefore depends on every later reader independently deriving and reserving exactly the localized child key that child orchestration will eventually claim. That agreement is especially difficult for variable-bearing arguments because the reader must derive the same occurrence-specific `SelectionStamp`, use the matching variable-instance bindings to ground the arguments, and localize the resulting key to the same child path.
 
 Every OER synthesizes its concrete `__typename` at creation. `__typename` never participates in
 field launch.

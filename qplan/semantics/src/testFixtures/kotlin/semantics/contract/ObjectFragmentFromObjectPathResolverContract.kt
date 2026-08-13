@@ -14,7 +14,13 @@ import kotlin.test.assertEquals
 /**
  * Contract for resolver variables read from exact paths in the defining object fragment.
  */
-interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
+interface ObjectFragmentFromObjectPathResolverContract :
+    ResolverContract,
+    DeferredNestedObjectPathDemandResolverContract,
+    PassiveObjectPathProviderResolverContract,
+    NestedObjectPathUseResolverContract,
+    ObjectPathNodeInteractionResolverContract,
+    AcyclicVariableDependencyResolverContract {
     @Test
     fun `binds a variable from a direct active scalar provider`() {
         val objectFragment =

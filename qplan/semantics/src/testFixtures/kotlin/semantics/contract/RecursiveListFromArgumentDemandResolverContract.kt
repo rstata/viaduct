@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Schema
 import model.TypeExpr
@@ -12,7 +12,7 @@ import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class RecursiveListDescendantDemandRegressionTest {
+interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `deepens an already launched recursive list with typename demand`() {
         val applications = linkedMapOf<String, Int>()
@@ -26,6 +26,7 @@ class RecursiveListDescendantDemandRegressionTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item {
@@ -113,20 +114,20 @@ class RecursiveListDescendantDemandRegressionTest {
         val world = testWorld.assumptions
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        """
-                        fragment ignored on Query {
-                          item {
-                            children { common }
-                          }
-                          result(value: 7)
-                        }
-                        """.trimIndent(),
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    """
+                    fragment ignored on Query {
+                      item {
+                        children { common }
+                      }
+                      result(value: 7)
+                    }
+                    """.trimIndent(),
+                ),
+            )
 
         assertEquals(
             Value.Int.of(1),

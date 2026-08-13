@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Schema
 import model.TypeExpr
@@ -11,12 +11,13 @@ import model.testing.fieldResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class CrossKeyRecursiveDemandRegressionTest {
+interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
     @Test
     fun `does not copy recursive demand between different grounded keys`() {
         var childrenApplications = 0
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item {
@@ -52,24 +53,24 @@ class CrossKeyRecursiveDemandRegressionTest {
             )
         val world = testWorld.assumptions
 
-        context(world) {
-            world.objectOf("Query").resolve(
-                world.fragmentFrom(
-                    """
-                    fragment ignored on Query {
-                      item {
-                        children(depth: 1) {
-                          children(depth: 2) { __typename }
-                        }
-                        children(depth: 2) {
-                          children(depth: 1) { __typename }
-                        }
-                      }
+        resolveAndValidate(
+            world,
+            world.objectOf("Query"),
+            world.fragmentFrom(
+                """
+                fragment ignored on Query {
+                  item {
+                    children(depth: 1) {
+                      children(depth: 2) { __typename }
                     }
-                    """.trimIndent(),
-                ).subselections,
-            )
-        }
+                    children(depth: 2) {
+                      children(depth: 1) { __typename }
+                    }
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
 
         assertEquals(4, childrenApplications)
     }

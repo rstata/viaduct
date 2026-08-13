@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.EngineResult
 import model.Value
@@ -11,7 +11,7 @@ import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class NestedPassiveProviderRegressionTest {
+interface PassiveObjectPathProviderResolverContract : ResolverContract {
     @Test
     fun `installs a resolver promise below a passive provider field`() {
         val resultFragment =
@@ -23,6 +23,7 @@ class NestedPassiveProviderRegressionTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Provider {
@@ -90,13 +91,13 @@ class NestedPassiveProviderRegressionTest {
         val world = testWorld.assumptions
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment ignored on Query { item { result } }",
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    "fragment ignored on Query { item { result } }",
+                ),
+            )
         val item =
             resolved.getValue(
                 Value.GroundKey.of(

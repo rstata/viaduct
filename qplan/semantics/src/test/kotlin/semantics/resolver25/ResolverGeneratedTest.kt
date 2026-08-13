@@ -65,13 +65,10 @@ class ResolverGeneratedTest :
     override val selectiveResolvers: Boolean
         get() = true
 
-    override val objectPathGeneratorConfigOverrides: Config =
-        Config.default +
-            (ErrorValueWeight to 0.0) +
-            (NullableTypeWeight to 0.0) +
-            (ResolverFromObjectFieldVariableOwnerLimit to 1) +
-            (ResolverFragmentDepth to 1) +
-            (ResolverVariablesOnQueryFieldsOnly to true)
+    override val generatedCaseAssertions =
+        GeneratedCaseAssertions.defaultGeneratedContract +
+            GeneratedCaseAssertions.exactOrdinaryApplicationCounts +
+            GeneratedCaseAssertions.objectPathBindings
 
     @Test
     fun `generated literal and variable selections converge at runtime`(): Unit =

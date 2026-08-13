@@ -12,7 +12,11 @@ import kotlin.test.assertEquals
 /**
  * Contract for nonempty object fragments with variables bound from resolver arguments.
  */
-interface ObjectFragmentFromArgumentResolverContract : ResolverContract {
+interface ObjectFragmentFromArgumentResolverContract :
+    ResolverContract,
+    NestedFromArgumentDemandResolverContract,
+    PassiveFromArgumentDemandResolverContract,
+    RecursiveListFromArgumentDemandResolverContract {
     @Test
     fun `resolves input selected with a fromArgument variable`() {
         val consumeArguments = mutableListOf<Value.Arguments>()

@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Value
 import model.emptyFragmentOf
@@ -10,7 +10,7 @@ import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class DeferredNestedPotentialDemandRegressionTest {
+interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
     @Test
     fun `retains potential demand beyond a deferred nested resolver`() {
         val driverFragment =
@@ -24,6 +24,7 @@ class DeferredNestedPotentialDemandRegressionTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item {
@@ -101,20 +102,20 @@ class DeferredNestedPotentialDemandRegressionTest {
         val world = testWorld.assumptions
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        """
-                        fragment ignored on Query {
-                          item {
-                            step { __typename }
-                          }
-                          driver
-                        }
-                        """.trimIndent(),
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    """
+                    fragment ignored on Query {
+                      item {
+                        step { __typename }
+                      }
+                      driver
+                    }
+                    """.trimIndent(),
+                ),
+            )
 
         assertEquals(
             Value.Int.of(7),

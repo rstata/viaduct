@@ -99,7 +99,9 @@ data class ResolverApplicationRecord(
 class ResolutionApplicationLog(
     private val bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ) {
+    private val lock = Any()
     private val records = mutableListOf<ResolverApplicationRecord>()
+    @Volatile
     private var recording = true
 
     fun record(
@@ -109,31 +111,49 @@ class ResolutionApplicationLog(
         suppliedDemand: SelectionForest? = null,
     ) {
         if (!recording) return
-        if (records.size >= bounds.maxApplications) {
-            throw ResolutionWitnessBoundExceededException(
-                "application",
-                bounds.maxApplications,
+        val record =
+            ResolverApplicationRecord.capture(
+                field,
+                arguments,
+                input,
+                suppliedDemand,
+                bounds,
             )
+        synchronized(lock) {
+            if (!recording) return
+            if (records.size >= bounds.maxApplications) {
+                throw ResolutionWitnessBoundExceededException(
+                    "application",
+                    bounds.maxApplications,
+                )
+            }
+            records += record
         }
-        ResolverApplicationRecord
-            .capture(field, arguments, input, suppliedDemand, bounds)
-            .also(records::add)
     }
 
     fun <T> withoutRecording(block: () -> T): T {
-        val previous = recording
-        recording = false
+        val previous: Boolean =
+            synchronized(lock) {
+                recording.also { recording = false }
+            }
         return try {
             block()
         } finally {
-            recording = previous
+            synchronized(lock) {
+                recording = previous
+            }
         }
     }
 
-    fun snapshot(): ResolutionWitness = ResolutionWitness(records.toList())
+    fun snapshot(): ResolutionWitness =
+        synchronized(lock) {
+            ResolutionWitness(records.toList())
+        }
 
     fun clear() {
-        records.clear()
+        synchronized(lock) {
+            records.clear()
+        }
     }
 }
 
@@ -207,7 +227,11 @@ fun EngineResult?.registeredResolverOccurrences(
                                     applicationKey =
                                         ResolverApplicationKey(
                                             field = key.field.fieldCoordinate(),
-                                            arguments = key.arguments,
+                                            arguments =
+                                                Value.Arguments.of(
+                                                    field = key.field,
+                                                    fields = key.arguments.fieldValues,
+                                                ),
                                         ),
                                     canonicalField = canonicalField,
                                     occurrencePath = fieldPath,

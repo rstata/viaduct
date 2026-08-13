@@ -16,12 +16,15 @@ import model.Value
 import model.fragmentFrom
 import model.objectOf
 import model.toSelectionForest
+import model.testing.CanonicalFieldResolverApplicationObserver
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
 import model.testing.nodeResolverOf
 import model.testing.withErrorArguments
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 enum class ResolverProgramKind {
     CONSTANT,
@@ -77,7 +80,7 @@ class ArbitraryRegistry internal constructor(
     val features: RegistryFeatures,
 ) {
     private val applicationLog = ResolutionApplicationLog()
-    private val applicationCounts = mutableMapOf<FieldCoordinate, Long>()
+    private val applicationCounts = ConcurrentHashMap<FieldCoordinate, Long>()
 
     /** Source resolver fields whose generated fragments consume a `FromArgument` variable. */
     val fromArgumentVariableOwnerFields: Set<FieldCoordinate> =
@@ -235,13 +238,17 @@ class ArbitraryRegistry internal constructor(
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
         captureSuppliedDemand: Boolean = false,
         captureResolutionWitness: Boolean = true,
+        captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
     ): TestWorld {
         require(captureResolutionWitness || !captureSuppliedDemand) {
             "Supplied demand can only be retained in a resolution witness"
         }
-        val firstInputs = mutableMapOf<FieldCoordinate, Value.Object>()
-        val firstArguments = mutableMapOf<FieldCoordinate, Value.Arguments>()
-        val applicationOrdinals = mutableMapOf<FieldCoordinate, Int>()
+        require(!(captureResolutionWitness && captureResolutionApplicationCounts)) {
+            "Resolution witness and application-count capture are mutually exclusive"
+        }
+        val firstInputs = ConcurrentHashMap<FieldCoordinate, Value.Object>()
+        val firstArguments = ConcurrentHashMap<FieldCoordinate, Value.Arguments>()
+        val applicationOrdinals = ConcurrentHashMap<FieldCoordinate, AtomicInteger>()
         fun recordApplication(
             coordinate: FieldCoordinate,
             arguments: Value.Arguments,
@@ -255,11 +262,31 @@ class ArbitraryRegistry internal constructor(
                     input = input,
                     suppliedDemand = suppliedDemand.takeIf { captureSuppliedDemand },
                 )
-            } else {
-                applicationCounts[coordinate] =
-                    Math.addExact(applicationCounts.getOrDefault(coordinate, 0L), 1L)
+            } else if (captureResolutionApplicationCounts) {
+                applicationCounts.compute(coordinate) { _, previous ->
+                    Math.addExact(previous ?: 0L, 1L)
+                }
             }
         }
+        val applicationObserver: CanonicalFieldResolverApplicationObserver? =
+            if (captureResolutionWitness || captureResolutionApplicationCounts) {
+                { field, input, arguments, suppliedDemand ->
+                    val coordinate =
+                        FieldCoordinate(
+                            field.containingType.typeName,
+                            field.fieldName,
+                        )
+                    recordApplication(coordinate, arguments, input, suppliedDemand)
+                    if (
+                        resolverProgramMutation ==
+                        ResolverProgramMutation.DUPLICATE_APPLICATION
+                    ) {
+                        recordApplication(coordinate, arguments, input, suppliedDemand)
+                    }
+                }
+            } else {
+                null
+            }
         val world =
             TestWorld.fromSDL(
             schemaSDL = schema.sdl,
@@ -277,20 +304,7 @@ class ArbitraryRegistry internal constructor(
                         }
                 }.toMap()
             },
-            applicationObserver = { field, input, arguments, suppliedDemand ->
-                val coordinate =
-                    FieldCoordinate(
-                        field.containingType.typeName,
-                        field.fieldName,
-                    )
-                recordApplication(coordinate, arguments, input, suppliedDemand)
-                if (
-                    resolverProgramMutation ==
-                    ResolverProgramMutation.DUPLICATE_APPLICATION
-                ) {
-                    recordApplication(coordinate, arguments, input, suppliedDemand)
-                }
-            },
+            applicationObserver = applicationObserver,
             fieldResolvers = { canonicalSchema ->
                 fieldValues.map { (coordinate, plan) ->
                     val field =
@@ -326,7 +340,7 @@ class ArbitraryRegistry internal constructor(
                                         resolverProgramMutation ==
                                         ResolverProgramMutation.CACHE_FIRST_INPUT
                                     ) {
-                                        firstInputs.getOrPut(coordinate) { input }
+                                        firstInputs.computeIfAbsent(coordinate) { input }
                                     } else {
                                         input
                                     }
@@ -335,13 +349,20 @@ class ArbitraryRegistry internal constructor(
                                         resolverProgramMutation ==
                                         ResolverProgramMutation.CACHE_FIRST_ARGUMENTS
                                     ) {
-                                        firstArguments.getOrPut(coordinate) { arguments }
+                                        firstArguments.computeIfAbsent(coordinate) { arguments }
                                     } else {
                                         arguments
                                     }
-                                val ordinal =
-                                    applicationOrdinals.getOrDefault(coordinate, 0).also {
-                                        applicationOrdinals[coordinate] = it + 1
+                                val ordinal: Int? =
+                                    if (
+                                        resolverProgramMutation ==
+                                        ResolverProgramMutation.APPLICATION_ORDINAL_CONTAMINATION
+                                    ) {
+                                        applicationOrdinals
+                                            .computeIfAbsent(coordinate) { AtomicInteger() }
+                                            .getAndIncrement()
+                                    } else {
+                                        null
                                     }
                                 val generatedHashSeed =
                                     stableGeneratedHash(
@@ -363,12 +384,7 @@ class ArbitraryRegistry internal constructor(
                                                     },
                                                 input = effectiveInput,
                                                 arguments = effectiveArguments,
-                                                applicationOrdinal =
-                                                    ordinal.takeIf {
-                                                        resolverProgramMutation ==
-                                                            ResolverProgramMutation
-                                                                .APPLICATION_ORDINAL_CONTAMINATION
-                                                    },
+                                                applicationOrdinal = ordinal,
                                             )
                                         } else {
                                             plan.materialize(
@@ -876,15 +892,6 @@ private class RegistryGenerator(
                             ownerName = ownerName,
                             selection = useBranch,
                             ranks = ranks,
-                            passiveRank =
-                                if (
-                                    passiveUse &&
-                                    config[ResolverFromObjectFieldPassiveUseWeight] > 0.0
-                                ) {
-                                    ranks.getValue(consumer)
-                                } else {
-                                    -1
-                                },
                         )
                     occurrence.target
                         ?.let { target ->
@@ -981,20 +988,23 @@ private class RegistryGenerator(
 
     /**
      * Registered branches use the rank that makes ordinary generated resolver demand acyclic.
-     * A passive use branch belongs to the consuming resolver's demand, while a passive provider
-     * branch is already available and retains the default rank before every resolver.
+     * Passive branches have a stable schema order below every registered branch. Variable
+     * production therefore always advances through one total order, including between two passive
+     * branches generated for different resolver owners.
      */
     private fun structuralBranchRank(
         ownerName: String,
         selection: FragmentSelectionPlan,
         ranks: Map<FieldCoordinate, Int>,
-        passiveRank: Int = -1,
     ): Int {
-        val field =
-            schema
-                .fieldsOn(ownerName)
-                .single { candidate -> candidate.name == selection.fieldName }
-        return ranks[field.coordinate] ?: passiveRank
+        val fields: List<FieldDefinitionSpec> = schema.fieldsOn(ownerName)
+        val fieldIndex: Int =
+            fields.indexOfFirst { candidate -> candidate.name == selection.fieldName }
+        check(fieldIndex >= 0) {
+            "Generated branch ${selection.fieldName} does not belong to $ownerName"
+        }
+        val field: FieldDefinitionSpec = fields[fieldIndex]
+        return ranks[field.coordinate] ?: fieldIndex - fields.size
     }
 
     private fun FragmentPlan.argumentOccurrences(): List<ArgumentOccurrence> =

@@ -169,6 +169,7 @@ suspend fun checkResolverTestCases(
     seed: Long? = null,
     captureSuppliedDemand: Boolean = false,
     captureResolutionWitness: Boolean = true,
+    captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun {
     require(profile.isNotBlank())
@@ -203,6 +204,8 @@ suspend fun checkResolverTestCases(
                     schema = batch.schema,
                     captureSuppliedDemand = captureSuppliedDemand,
                     captureResolutionWitness = captureResolutionWitness,
+                    captureResolutionApplicationCounts =
+                        captureResolutionApplicationCounts,
                 )
             batch.queries.forEachIndexed { queryOffset, query ->
                 val queryIndex = queryOffset + 1

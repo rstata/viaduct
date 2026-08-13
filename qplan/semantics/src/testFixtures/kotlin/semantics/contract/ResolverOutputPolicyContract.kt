@@ -161,7 +161,7 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
                         model.testing.fieldResolverOf(
                             schema.emptyFragmentOf("Query"),
                         ) { input, _ ->
-                            require(input.fieldValues.isEmpty())
+                            require(input.hasExactlyFields())
                             schema.objectOf("Chain") {
                                 "label" setTo "first"
                                 "next" setTo

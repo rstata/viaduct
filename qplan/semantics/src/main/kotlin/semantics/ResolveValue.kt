@@ -91,7 +91,9 @@ private fun Value.Object.resolveObjectValue(
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     val selectOutput = world.selectiveResolvers && !retainCompleteOutput
     if (selectOutput) {
-        val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
+        val unselectedKeys =
+            fieldValues.keys.filterNot { key -> key.field.fieldName == "__typename" } -
+                resolverDemandByKey.keys
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${type.typeName} contains unselected fields: " +
                 unselectedKeys.joinToString { key -> key.field.fieldName }
@@ -117,38 +119,28 @@ private fun Value.Object.resolveObjectValue(
                 objectOccurrences = emptyList(),
             ),
         ) { result, key ->
-            if (key.field.fieldName == "__typename") {
-                ResolvedObject(
-                    values =
-                        result.values +
-                            (key to Value.String.of(type.typeName)),
-                    objectsNeedingResolution = result.objectsNeedingResolution,
-                    objectOccurrences = result.objectOccurrences,
-                )
-            } else {
-                val fieldValue =
-                    fieldValues
-                        .getValue(key)
-                        .resolveValue(
-                            path = path + key,
-                            resolverDemand =
-                                resolverDemandByKey[key]
-                                    ?.subselections
-                                    ?: selectionForestOf(),
-                            retainCompleteOutput = retainCompleteOutput,
-                        )
-                ResolvedObject(
-                    values =
-                        result.values +
-                            (key to fieldValue.engineResult),
-                    objectsNeedingResolution =
-                        result.objectsNeedingResolution +
-                            fieldValue.objectsNeedingResolution,
-                    objectOccurrences =
-                        result.objectOccurrences +
-                            fieldValue.objectOccurrences,
-                )
-            }
+            val fieldValue =
+                fieldValues
+                    .getValue(key)
+                    .resolveValue(
+                        path = path + key,
+                        resolverDemand =
+                            resolverDemandByKey[key]
+                                ?.subselections
+                                ?: selectionForestOf(),
+                        retainCompleteOutput = retainCompleteOutput,
+                    )
+            ResolvedObject(
+                values =
+                    result.values +
+                        (key to fieldValue.engineResult),
+                objectsNeedingResolution =
+                    result.objectsNeedingResolution +
+                        fieldValue.objectsNeedingResolution,
+                objectOccurrences =
+                    result.objectOccurrences +
+                        fieldValue.objectOccurrences,
+            )
         }
     val engineResult = EngineResult.Object.of(type, resolved.values, mutable = true)
     val localOccurrence =

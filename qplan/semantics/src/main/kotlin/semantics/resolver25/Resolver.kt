@@ -322,7 +322,10 @@ private class ObjectResultOrchestrator(
                 coordinate = coordinate,
                 beforeLaunch = activation.mergedBeforeLaunch,
             )
-            if (groundedKey in source.fieldValues.keys) {
+            if (
+                groundedKey.field.fieldName != "__typename" &&
+                groundedKey in source.fieldValues.keys
+            ) {
                 return source.fieldValues
                     .getValue(groundedKey)
                     .launchNestedFringe(
@@ -941,7 +944,10 @@ private suspend fun Value.Object.resolveObjectValue(
     val resolverDemandByGroundedKey: Map<Value.GroundKey, ObjectSelection> =
         mergedDemand.byGroundKey()
     val unselectedGroundedKeys: Set<Value.GroundKey> =
-        fieldValues.keys - resolverDemandByGroundedKey.keys
+        fieldValues.keys.filterNotTo(linkedSetOf()) { key ->
+            key.field.fieldName == "__typename"
+        } -
+            resolverDemandByGroundedKey.keys
     require(unselectedGroundedKeys.isEmpty()) {
         "Selective resolver output ${type.typeName} contains unselected fields: " +
             unselectedGroundedKeys.joinToString { groundedKey ->

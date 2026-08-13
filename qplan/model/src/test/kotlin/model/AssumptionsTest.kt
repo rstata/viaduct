@@ -436,7 +436,14 @@ class AssumptionsTest {
                 field("friend", "limit" to 2) setTo null
             }
 
-        assertEquals(setOf(firstKey, secondKey), value.fieldValues.keys)
+        assertEquals(
+            setOf(
+                Value.GroundKey.of(schema.objectField("User", "__typename"), emptyMap()),
+                firstKey,
+                secondKey,
+            ),
+            value.fieldValues.keys,
+        )
         assertEquals(friendValue, value.fieldValues[firstKey])
         assertEquals(null, value.fieldValues[secondKey])
 

@@ -43,7 +43,7 @@ interface NodeResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, arguments ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 schema.objectOf("User") {
                                     "id" setTo arguments.fieldValues.getValue("id")
                                 }
@@ -52,7 +52,7 @@ interface NodeResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
                             ) { input, arguments ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 val prefix =
                                     arguments.fieldValues.getValue("prefix") as Value.String
                                 Value.String.of("${prefix.stringValue}, Ada")
@@ -107,7 +107,7 @@ interface NodeResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 schema.objectOf("Viewer") {
                                     "card" setTo
                                         objectOf("Card") {
@@ -204,7 +204,7 @@ interface NodeResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, arguments ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 val group =
                                     arguments.fieldValues.getValue("group") as Value.String
                                 Value.OutputList.of(

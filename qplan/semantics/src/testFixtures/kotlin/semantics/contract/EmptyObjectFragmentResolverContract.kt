@@ -54,7 +54,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 Value.OutputList.of(
                                     elementType,
                                     listOf(
@@ -100,7 +100,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 Value.OutputList.of(
                                     elementType,
                                     listOf(schema.objectOf("A"), schema.objectOf("B")),
@@ -110,7 +110,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("A"),
                             ) { input, arguments ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 applications += "A"
                                 arguments.fieldValues.getValue("factor") as Value.Int
                             },
@@ -118,7 +118,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("B"),
                             ) { input, _ ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 applications += "B"
                                 Value.Int.of(3)
                             },
@@ -171,14 +171,14 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 schema.objectOf("ConcreteItem")
                             },
                         schema.field("ConcreteItem", "computed") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("ConcreteItem"),
                             ) { input, arguments ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 arguments.fieldValues.getValue("factor") as Value.Int
                             },
                     )

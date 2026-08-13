@@ -59,8 +59,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 ),
                             ) { input, _ ->
                                 require(
-                                    input.fieldValues.keys ==
-                                        setOf(firstName, lastName),
+                                    input.hasExactlyFields(firstName, lastName),
                                 )
                                 val first = input.fieldValues.getValue(firstName) as Value.String
                                 val last = input.fieldValues.getValue(lastName) as Value.String
@@ -72,7 +71,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     "fragment ignored on User { displayName }",
                                 ),
                             ) { input, _ ->
-                                require(input.fieldValues.keys == setOf(displayName))
+                                require(input.hasExactlyFields(displayName))
                                 val display =
                                     input.fieldValues.getValue(displayName) as Value.String
                                 Value.String.of("Hello, ${display.stringValue}")
@@ -129,7 +128,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     "fragment ignored on Profile { raw }",
                                 ),
                             ) { input, _ ->
-                                require(input.fieldValues.keys == setOf(rawKey))
+                                require(input.hasExactlyFields(rawKey))
                                 val raw = input.fieldValues.getValue(rawKey) as Value.String
                                 Value.String.of("Role: ${raw.stringValue}")
                             },
@@ -139,10 +138,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     "fragment ignored on User { profile { rendered } }",
                                 ),
                             ) { input, _ ->
-                                require(input.fieldValues.keys == setOf(profileKey))
+                                require(input.hasExactlyFields(profileKey))
                                 val profile =
                                     input.fieldValues.getValue(profileKey) as Value.Object
-                                require(profile.fieldValues.keys == setOf(renderedKey))
+                                require(profile.hasExactlyFields(renderedKey))
                                 profile.fieldValues.getValue(renderedKey) as Value.String
                             },
                     )
@@ -313,7 +312,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
-                                require(input.fieldValues.isEmpty())
+                                require(input.hasExactlyFields())
                                 itemsApplications += 1
                                 Value.OutputList.of(
                                     elementType,

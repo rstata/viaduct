@@ -36,3 +36,19 @@ interface ResolverContract {
             resolve(world, root, selections),
         )
 }
+
+internal fun Value.Object.hasExactlyFields(
+    vararg expectedFields: Value.GroundKey,
+): Boolean = hasExactlyFields(expectedFields.toSet())
+
+internal fun Value.Object.hasExactlyFields(
+    expectedFields: Set<Value.GroundKey>,
+): Boolean {
+    val typenameKey =
+        Value.GroundKey.of(
+            field = type.fields.getValue("__typename"),
+            arguments = emptyMap(),
+        )
+    return fieldValues.keys == expectedFields + typenameKey &&
+        fieldValues.getValue(typenameKey) == Value.String.of(type.typeName)
+}

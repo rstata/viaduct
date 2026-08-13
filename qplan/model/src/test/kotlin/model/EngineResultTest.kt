@@ -1,5 +1,7 @@
 package model
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
@@ -95,6 +97,16 @@ class EngineResultTest {
     }
 
     @Test
+    fun `strict read does not reserve a missing mutable value`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = EngineResult.Object.of(schema.query, mutable = true)
+
+        assertFailsWith<MissingFieldException> { result.getValue(key) }
+        assertFalse(result.isValueSet(key))
+    }
+
+    @Test
     fun `mutable object publishes each value once`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val key = schema.key("Query", "first")
@@ -102,11 +114,12 @@ class EngineResultTest {
         val result = EngineResult.Object.of(schema.query, emptyMap(), mutable = true)
 
         assertFalse(result.isValueSet(key))
-        assertFailsWith<MissingFieldException> {
-            result.getValue(key)
-        }
+        val readerPlaceholder = result.reserveValue(key)
+        assertFalse(readerPlaceholder.isCompleted)
 
-        result.setValue(key, firstValue)
+        val writerPromise = result.createValuePromise(key)
+        assertSame(readerPlaceholder, writerPromise)
+        writerPromise.complete(firstValue)
 
         assertTrue(result.isValueSet(key))
         assertSame(firstValue, result.getValue(key).get())
@@ -116,6 +129,70 @@ class EngineResultTest {
             result.setValue(key, Value.String.of("second"))
         }
         assertSame(firstValue, result.getValue(key).get())
+    }
+
+    @Test
+    fun `freeze fails unclaimed reader placeholders and rejects new values`() =
+        runBlocking {
+            val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+            val firstKey = schema.key("Query", "first")
+            val secondKey = schema.key("Query", "second")
+            val result = EngineResult.Object.of(schema.query, mutable = true)
+            val missing = result.reserveValue(firstKey)
+            val awaitingMissing = async { missing.await() }
+
+            result.freeze()
+
+            assertFailsWith<MissingFieldException> { awaitingMissing.await() }
+            assertFailsWith<MissingFieldException> { result.reserveValue(secondKey) }
+            assertFailsWith<IllegalStateException> {
+                result.createValuePromise(secondKey)
+            }
+            assertFailsWith<IllegalStateException> {
+                result.setValue(secondKey, Value.String.of("late"))
+            }
+            assertFailsWith<IllegalStateException> { result.freeze() }
+        }
+
+    @Test
+    fun `claimed value promise may complete after freeze`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = EngineResult.Object.of(schema.query, mutable = true)
+        val readerPlaceholder = result.reserveValue(key)
+        val writerPromise = result.createValuePromise(key)
+
+        result.freeze()
+        writerPromise.complete(Value.String.of("ready"))
+
+        assertSame(readerPlaceholder, writerPromise)
+        assertEquals(Value.String.of("ready"), result.getValue(key).get())
+    }
+
+    @Test
+    fun `concurrent reader and writer share one value promise`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = EngineResult.Object.of(schema.query, mutable = true)
+        val start = CountDownLatch(1)
+        val promises = ConcurrentLinkedQueue<Promise<EngineResult?>>()
+        val reader =
+            thread {
+                start.await()
+                promises += result.reserveValue(key)
+            }
+        val writer =
+            thread {
+                start.await()
+                promises += result.createValuePromise(key)
+            }
+
+        start.countDown()
+        reader.join()
+        writer.join()
+
+        assertEquals(2, promises.size)
+        assertSame(promises.first(), promises.last())
     }
 
     @Test

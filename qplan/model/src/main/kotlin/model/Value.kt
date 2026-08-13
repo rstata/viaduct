@@ -27,7 +27,7 @@ fun kotlin.collections.List<PathComponent>?.toSelectionPath():
  * by the interface. No implementation contains a [Variable]. Variables are nested here for
  * namespacing but inhabit [OpenValue] rather than [Value]. [Variable.Template] equality is
  * structural over its name and defining field; [Variable.Stamped] equality additionally
- * distinguishes its occurrence path.
+ * distinguishes its occurrence.
  *
  * ### Invariant: schema-value-canonicality
  *
@@ -272,11 +272,13 @@ sealed interface Value {
      * The values supplied for one output field's complete argument definition.
      *
      * This tuple is ground and inspectable. [OpenArguments] represents a tuple that may contain
-     * variables.
+     * variables. Equality is structural over its field values. Occurrence identity belongs to
+     * [GroundKey.Stamped], not the grounded argument value.
      */
     sealed interface Arguments : InputObjectLike, OpenArguments {
         override val type: Schema.FieldArguments
         override val fieldValues: Fields<Schema.FieldArguments, Input>
+
         companion object {
             /**
              * ### Invariant: arguments-value-factory-schema-conformance
@@ -308,7 +310,9 @@ sealed interface Value {
      *
      * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
      *
-     * Equality is structural over [field] and [arguments], using canonical schema equality.
+     * Ordinary-key equality is structural over [field] and [arguments], using canonical schema
+     * equality. [GroundKey.Stamped] additionally includes its opaque selection occurrence stamp;
+     * callers that need resolver-visible identity must explicitly project it to an ordinary key.
      */
     sealed interface Key {
         val field: Schema.OutputField
@@ -389,8 +393,8 @@ sealed interface Value {
     /**
      * A key whose field belongs to a concrete object type.
      *
-     * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Equality remains the
-     * structural [Key] equality over those properties.
+     * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Ordinary instances use
+     * structural key equality; [GroundKey.Stamped] additionally retains occurrence identity.
      */
     sealed interface ObjectKey : Key {
         override val field: Schema.ObjectField
@@ -423,6 +427,33 @@ sealed interface Value {
      */
     sealed interface GroundKey : ObjectKey, PathComponent {
         override val arguments: Arguments
+
+        /**
+         * A ground key produced from a variable-bearing source selection.
+         *
+         * [selectionStamp] identifies the variable-bearing source selection that was grounded. It
+         * distinguishes different source selections even when their grounded arguments agree.
+         */
+        sealed interface Stamped : GroundKey {
+            val selectionStamp: SelectionStamp
+
+            companion object {
+                fun of(
+                    selectionStamp: SelectionStamp,
+                    field: Schema.ObjectField,
+                    arguments: Arguments,
+                ): Stamped {
+                    require(arguments.type == field.arguments) {
+                        "Ground arguments do not belong to the stamped selection field"
+                    }
+                    return StampedGroundKeyImpl(
+                        field = field,
+                        arguments = arguments,
+                        selectionStamp = selectionStamp,
+                    )
+                }
+            }
+        }
 
         companion object {
             fun of(
@@ -579,10 +610,18 @@ sealed interface Value {
              * result satisfies `result.conformsToSchema()` in that world.
              */
             fun stamp(path: kotlin.collections.List<PathComponent>): Stamped
+
+            /** Returns this variable template at one variable-bearing source selection. */
+            fun stamp(selectionStamp: SelectionStamp): SelectionStamped
         }
 
         /** An opaque occurrence-specific variable created by stamping a [Template]. */
         sealed interface Stamped : Variable
+
+        /** A variable use identified by its source selection and defining resolver occurrence. */
+        sealed interface SelectionStamped : Stamped {
+            val selectionStamp: SelectionStamp
+        }
 
         companion object {
             /**
@@ -668,6 +707,67 @@ sealed interface Value {
     }
 }
 
+/**
+ * Returns the structural union of two nullable output values.
+ *
+ * The union is defined only for equal leaves, equal list shapes, and objects of the same type.
+ */
+fun Value.Output?.unionOutput(other: Value.Output?): Value.Output? {
+    if (this == null) {
+        require(other == null) { "Cannot union null and non-null output values" }
+        return null
+    }
+    require(other != null) { "Cannot union null and non-null output values" }
+
+    return when (this) {
+        Value.Error -> {
+            require(other == Value.Error) { "Cannot union error and non-error output values" }
+            Value.Error
+        }
+
+        is Value.Simple -> {
+            require(other is Value.Simple && this == other) {
+                "Cannot union unequal simple output values"
+            }
+            this
+        }
+
+        is Value.Object -> {
+            require(other is Value.Object && type == other.type) {
+                "Cannot union object output values of different types"
+            }
+            val fields =
+                (fieldValues.keys + other.fieldValues.keys).associateWith { groundKey ->
+                    when {
+                        groundKey !in fieldValues -> other.fieldValues.getValue(groundKey)
+                        groundKey !in other.fieldValues -> fieldValues.getValue(groundKey)
+                        else ->
+                            fieldValues
+                                .getValue(groundKey)
+                                .unionOutput(other.fieldValues.getValue(groundKey))
+                    }
+                }
+            Value.Object.of(type = type, fields = fields)
+        }
+
+        is Value.OutputList -> {
+            require(other is Value.OutputList && typeExpr == other.typeExpr) {
+                "Cannot union output lists of different types"
+            }
+            require(values.size == other.values.size) {
+                "Cannot union output lists of different lengths"
+            }
+            Value.OutputList.of(
+                typeExpr = typeExpr,
+                values =
+                    values.indices.map { index ->
+                        values[index].unionOutput(other.values[index])
+                    },
+            )
+        }
+    }
+}
+
 private data class IntValueImpl(
     override val intValue: Int,
 ) : Value.Int
@@ -727,6 +827,11 @@ private data class TemplateVariableValueImpl(
     ): Value.Variable.Stamped =
         StampedVariableValueImpl(variableName, field, path)
 
+    override fun stamp(
+        selectionStamp: SelectionStamp,
+    ): Value.Variable.SelectionStamped =
+        SelectionStampedVariableValueImpl(variableName, field, selectionStamp)
+
     override fun toString(): String =
         "Variable.Template(" +
             "name=$variableName, " +
@@ -744,6 +849,19 @@ private data class StampedVariableValueImpl(
             "name=$variableName, " +
             "field=${field.containingType.typeName}/${field.fieldName}, " +
             "path=${path.renderVariablePath()}" +
+            ")"
+}
+
+private data class SelectionStampedVariableValueImpl(
+    override val variableName: String,
+    override val field: Schema.ObjectField,
+    override val selectionStamp: SelectionStamp,
+) : Value.Variable.SelectionStamped {
+    override fun toString(): String =
+        "Variable.SelectionStamped(" +
+            "name=$variableName, " +
+            "field=${field.containingType.typeName}/${field.fieldName}, " +
+            "resolverPath=${selectionStamp.resolverPath.renderVariablePath()}" +
             ")"
 }
 
@@ -780,6 +898,12 @@ private data class GroundKeyImpl(
     override val field: Schema.ObjectField,
     override val arguments: Value.Arguments,
 ) : Value.GroundKey
+
+private data class StampedGroundKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: Value.Arguments,
+    override val selectionStamp: SelectionStamp,
+) : Value.GroundKey.Stamped
 
 private data class ListIndexImpl(
     override val index: Int,
@@ -876,14 +1000,6 @@ private fun coerceInputLikeFields(
         putAll(suppliedFields)
     }
 }
-
-internal fun Value.Arguments.withFieldValues(
-    fields: Map<String, Value.Input?>,
-): Value.Arguments =
-    ArgumentsValueImpl(
-        type = type,
-        fieldValues = FieldValuesImpl(type, fields),
-    )
 
 internal fun argumentsOfGround(
     type: Schema.FieldArguments,

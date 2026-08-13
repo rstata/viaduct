@@ -1,8 +1,10 @@
 package model.registry
 
+import model.OpenArguments
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.merge
 import model.stampedVariables
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -10,9 +12,96 @@ import model.testing.fromArgument
 import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 
 class StampedObjectPathDefinitionTest {
+    @Test
+    fun `selection stamping distinguishes variables while ground arguments remain compatible`() {
+        val fragment =
+            """
+            fragment Result on Query {
+              consume(value: 3)
+              consume(value: ${'$'}seed)
+            }
+            """.trimIndent()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      result(seed: Int): Int!
+                      consume(value: Int): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        result to
+                            fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                        schema.objectField("Query", "consume") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        Value.Variable.of(result, "seed") to
+                            schema.fromArgument(result, "seed"),
+                    )
+                },
+            )
+        val result = testWorld.schema.objectField("Query", "result")
+        val resolver = testWorld.resolverRegistry.resolver(result)
+        val firstPath =
+            listOf(
+                Value.GroundKey.of(result, mapOf("seed" to 3)),
+            )
+        val secondPath =
+            listOf(
+                Value.GroundKey.of(result, mapOf("seed" to 4)),
+            )
+
+        val compatibilityFragment = resolver.stampVars(firstPath)
+        val fullyStampedFragment = resolver.stamp(firstPath)
+        val equalFullyStampedFragment = resolver.stamp(firstPath)
+        val otherFullyStampedFragment = resolver.stamp(secondPath)
+
+        compatibilityFragment.forEach { selection ->
+            assertFalse(selection.key.arguments is OpenArguments.Stamped)
+        }
+        fullyStampedFragment.forEach { selection ->
+            if (selection.key.stampedVariables().isEmpty()) {
+                assertIs<Value.Arguments>(selection.key.arguments)
+            } else {
+                assertIs<OpenArguments.Stamped>(selection.key.arguments)
+            }
+        }
+        assertEquals(
+            fullyStampedFragment.merge(testWorld.schema.query).keys(),
+            equalFullyStampedFragment.merge(testWorld.schema.query).keys(),
+        )
+        assertNotEquals(
+            fullyStampedFragment.merge(testWorld.schema.query).keys(),
+            otherFullyStampedFragment.merge(testWorld.schema.query).keys(),
+        )
+        assertEquals(
+            fullyStampedFragment
+                .filter { selection -> selection.key.stampedVariables().isEmpty() }
+                .merge(testWorld.schema.query)
+                .keys(),
+            otherFullyStampedFragment
+                .filter { selection -> selection.key.stampedVariables().isEmpty() }
+                .merge(testWorld.schema.query)
+                .keys(),
+        )
+    }
+
     @Test
     fun `stamps definition fragment and provider path at one occurrence`() {
         val source =
@@ -82,16 +171,34 @@ class StampedObjectPathDefinitionTest {
         )
         assertEquals(
             setOf(seed, definition.variable),
-            resolver.stampedObjectFragment(sitePath).stampedVariables(),
+            resolver.stampVars(sitePath).stampedVariables(),
         )
         val marker =
             resolver
-                .stampedObjectFragment(sitePath)
+                .stampVars(sitePath)
                 .filter { selection -> selection.key is Value.VariableKey }
                 .single()
         assertEquals(
             definition.variable,
             assertIs<Value.VariableKey>(marker.key).variableDefinedByThisKey,
+        )
+        val fullyStampedMarker =
+            resolver
+                .stamp(sitePath)
+                .filter { selection -> selection.key is Value.VariableKey }
+                .single()
+        val selectionStampedValue =
+            resolver
+                .selectionStampedVariableDefinitions(sitePath)
+                .single { stampedDefinition ->
+                    stampedDefinition.variable.variableName == "value"
+                }.variable
+        assertIs<OpenArguments.Stamped>(fullyStampedMarker.key.arguments)
+        assertEquals(
+            selectionStampedValue,
+            assertIs<Value.VariableKey>(
+                fullyStampedMarker.key,
+            ).variableDefinedByThisKey,
         )
     }
 
@@ -155,7 +262,7 @@ class StampedObjectPathDefinitionTest {
         val definition = resolver.stampedPathVarDefinitions(listOf(resultKey)).single()
         val markedBox =
             resolver
-                .stampedObjectFragment(listOf(resultKey))
+                .stampVars(listOf(resultKey))
                 .filter { selection ->
                     selection.key is Value.VariableKey &&
                         selection.key.field.fieldName == "box"
@@ -171,5 +278,92 @@ class StampedObjectPathDefinitionTest {
             definition.variable,
             assertIs<Value.VariableKey>(markedValue.key).variableDefinedByThisKey,
         )
+    }
+
+    @Test
+    fun `does not mark a repeated prefix that lacks the provider suffix`() {
+        val fragment =
+            """
+            fragment Provider on Query {
+              container {
+                box { other }
+              }
+              provider: container {
+                complete: box { value }
+              }
+              consume(value: ${'$'}value)
+            }
+            """.trimIndent()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Box {
+                      value: Int
+                      other: Int
+                    }
+
+                    type Container {
+                      box: Box
+                    }
+
+                    type Query {
+                      result: Int
+                      container: Container
+                      consume(value: Int): Int
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        result to
+                            fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                        schema.objectField("Query", "container") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                null
+                            },
+                        schema.objectField("Query", "consume") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Int.of(1)
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        Value.Variable.of(result, "value") to
+                            schema.fromObjectField(
+                                fragment,
+                                listOf("provider", "complete", "value"),
+                            ),
+                    )
+                },
+            )
+        val resolver =
+            testWorld.resolverRegistry.resolver(
+                testWorld.schema.objectField("Query", "result"),
+            )
+        val resultKey =
+            Value.GroundKey.of(
+                testWorld.schema.objectField("Query", "result"),
+                emptyMap(),
+            )
+        val markedContainer =
+            resolver
+                .stampedObjectFragment(listOf(resultKey))
+                .filter { selection ->
+                    selection.key is Value.VariableKey &&
+                        selection.key.field.fieldName == "container"
+                }.single()
+        val markedBoxes =
+            markedContainer.subselections.filter { selection ->
+                selection.key is Value.VariableKey &&
+                    selection.key.field.fieldName == "box"
+            }
+
+        val markedBox = markedBoxes.single()
+        assertEquals("value", markedBox.subselections.single().key.field.fieldName)
     }
 }

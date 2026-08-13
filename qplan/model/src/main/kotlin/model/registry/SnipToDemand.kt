@@ -6,6 +6,7 @@ import model.SelectionForest
 import model.Value
 import model.instantiateBindings
 import model.merge
+import model.objectKey
 
 /**
  * Supplies the selection input of a field resolver by projecting this selection-independent result
@@ -62,10 +63,10 @@ private fun Value.Object.snipObjectToDemand(
     val selectedFields =
         demand
             .merge(type)
+            .filter { selection -> !world.behavioral(selection.objectKey(type).field) }
             .instantiateBindings()
             .byGroundKey()
-            .mapNotNull { (key, selection) ->
-                if (world.behavioral(key.field)) return@mapNotNull null
+            .map { (key, selection) ->
                 val concreteField = key.field
                 val value = fieldValues.getValue(key)
                 val selectedValue =

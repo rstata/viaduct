@@ -33,6 +33,55 @@ sealed interface OpenValue {
 sealed interface OpenArguments {
     val type: Schema.FieldArguments
 
+    /**
+     * An argument tuple in a resolver-registry template.
+     *
+     * Every variable recursively contained by a template is a [Value.Variable.Template].
+     * Stamping creates one occurrence-specific tuple and stamps every contained variable with the
+     * same [SelectionStamp].
+     */
+    sealed interface Template : OpenArguments {
+        /**
+         * Returns this argument template stamped at [selectionStamp].
+         *
+         * Equal templates stamped with equal selection stamps yield equal results. The resulting
+         * tuple contains only ground values and selection-stamped variables.
+         */
+        fun stamp(selectionStamp: SelectionStamp): Stamped
+
+        companion object {
+            /**
+             * Wraps [arguments] as a registry argument template.
+             *
+             * [arguments] may contain only variable templates, never stamped variables.
+             */
+            fun of(arguments: OpenArguments): Template {
+                if (arguments is Template) return arguments
+                require(arguments !is Stamped) {
+                    "A stamped argument tuple cannot become a registry template"
+                }
+                require(arguments.usedVariables().all { it is Value.Variable.Template }) {
+                    "A registry argument template cannot contain stamped variables"
+                }
+                return OpenArgumentsTemplateImpl(
+                    type = arguments.type,
+                    fieldValues = arguments.fieldExpressions(),
+                )
+            }
+        }
+    }
+
+    /**
+     * An occurrence-specific argument tuple.
+     *
+     * [selectionStamp] participates in structural equality, and every recursively contained
+     * variable carries that same stamp. Grounding preserves the selection stamp through
+     * [Value.GroundKey.Stamped].
+     */
+    sealed interface Stamped : OpenArguments {
+        val selectionStamp: SelectionStamp
+    }
+
     companion object {
         /**
          * Constructs the schema-checked open argument tuple for [field].
@@ -57,6 +106,22 @@ sealed interface OpenArguments {
     }
 }
 
+/**
+ * Returns this occurrence-specific tuple under [selectionStamp], replacing the stamp on every
+ * recursively contained selection-stamped variable.
+ */
+fun OpenArguments.Stamped.restamp(
+    selectionStamp: SelectionStamp,
+): OpenArguments.Stamped =
+    stampedArgumentsOf(
+        type = type,
+        fields =
+            fieldExpressions().mapValues { (_, value) ->
+                value.restampVariables(selectionStamp)
+            },
+        selectionStamp = selectionStamp,
+    )
+
 private data class OpenListValueImpl(
     val elementType: TypeExpr<Schema.InputType>,
     val values: List<OpenValue?>,
@@ -71,6 +136,27 @@ private data class OpenArgumentsImpl(
     override val type: Schema.FieldArguments,
     val fieldValues: Map<String, OpenValue?>,
 ) : OpenArguments
+
+private data class OpenArgumentsTemplateImpl(
+    override val type: Schema.FieldArguments,
+    val fieldValues: Map<String, OpenValue?>,
+) : OpenArguments.Template {
+    override fun stamp(selectionStamp: SelectionStamp): OpenArguments.Stamped =
+        stampedArgumentsOf(
+            type = type,
+            fields =
+                fieldValues.mapValues { (_, value) ->
+                    value.stampVariables(selectionStamp)
+                },
+            selectionStamp = selectionStamp,
+        )
+}
+
+private data class OpenArgumentsStampedImpl(
+    override val type: Schema.FieldArguments,
+    val fieldValues: Map<String, OpenValue?>,
+    override val selectionStamp: SelectionStamp,
+) : OpenArguments.Stamped
 
 private fun coerceOpenInputLikeFields(
     type: Schema.InputObjectLike,
@@ -207,12 +293,14 @@ internal fun OpenArguments.fieldExpressions(): Map<String, OpenValue?> =
     when (this) {
         is Value.Arguments -> fieldValues
         is OpenArgumentsImpl -> fieldValues
+        is OpenArgumentsTemplateImpl -> fieldValues
+        is OpenArgumentsStampedImpl -> fieldValues
     }
 
-internal fun OpenArguments.stamp(
+internal fun OpenArguments.stampVars(
     path: List<PathComponent>,
 ): OpenArguments {
-    val stamped = fieldExpressions().mapValues { (_, value) -> value.stamp(path) }
+    val stamped = fieldExpressions().mapValues { (_, value) -> value.stampVars(path) }
     return if (stamped.values.all { it == null || it is Value.Input }) {
         argumentsOfGround(
             type,
@@ -223,12 +311,58 @@ internal fun OpenArguments.stamp(
     }
 }
 
-private fun OpenValue?.stamp(path: List<PathComponent>): OpenValue? =
+private fun stampedArgumentsOf(
+    type: Schema.FieldArguments,
+    fields: Map<String, OpenValue?>,
+    selectionStamp: SelectionStamp,
+): OpenArguments.Stamped =
+    OpenArgumentsStampedImpl(
+        type = type,
+        fieldValues = fields,
+        selectionStamp = selectionStamp,
+    )
+
+private fun OpenValue?.stampVars(path: List<PathComponent>): OpenValue? =
     when (this) {
         is Value.Variable.Template -> stamp(path)
-        is OpenListValueImpl -> copy(values = values.map { it.stamp(path) })
+        is OpenListValueImpl -> copy(values = values.map { it.stampVars(path) })
         is OpenInputObjectValueImpl ->
-            copy(fieldValues = fieldValues.mapValues { (_, value) -> value.stamp(path) })
+            copy(fieldValues = fieldValues.mapValues { (_, value) -> value.stampVars(path) })
+        else -> this
+    }
+
+private fun OpenValue?.stampVariables(selectionStamp: SelectionStamp): OpenValue? =
+    when (this) {
+        is Value.Variable.Template -> stamp(selectionStamp)
+        is OpenListValueImpl ->
+            copy(values = values.map { value -> value.stampVariables(selectionStamp) })
+        is OpenInputObjectValueImpl ->
+            copy(
+                fieldValues =
+                    fieldValues.mapValues { (_, value) ->
+                        value.stampVariables(selectionStamp)
+                    },
+            )
+        else -> this
+    }
+
+private fun OpenValue?.restampVariables(selectionStamp: SelectionStamp): OpenValue? =
+    when (this) {
+        is Value.Variable.SelectionStamped ->
+            Value.Variable
+                .of(
+                    field = field,
+                    variableName = variableName,
+                ).stamp(selectionStamp)
+        is OpenListValueImpl ->
+            copy(values = values.map { value -> value.restampVariables(selectionStamp) })
+        is OpenInputObjectValueImpl ->
+            copy(
+                fieldValues =
+                    fieldValues.mapValues { (_, value) ->
+                        value.restampVariables(selectionStamp)
+                    },
+            )
         else -> this
     }
 
@@ -303,8 +437,19 @@ private fun OpenValue?.variables(): Set<Value.Variable> =
 internal fun OpenArguments.variableTemplates(): Set<Value.Variable.Template> =
     variables().filterIsInstanceTo(linkedSetOf())
 
-internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments =
-    OpenArguments.of(field, fieldExpressions())
+internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments {
+    val retargeted = OpenArguments.of(field, fieldExpressions())
+    return when (this) {
+        is OpenArguments.Template -> OpenArguments.Template.of(retargeted)
+        is OpenArguments.Stamped ->
+            stampedArgumentsOf(
+                type = field.arguments,
+                fields = retargeted.fieldExpressions(),
+                selectionStamp = selectionStamp,
+            )
+        else -> retargeted
+    }
+}
 
 internal fun OpenValue?.matchingVariableTypes(
     variable: Value.Variable.Template,
@@ -379,18 +524,21 @@ private fun OpenValue?.substituteTemplates(
  */
 context(world: Assumptions)
 internal fun OpenArguments.instantiateBindings(): Value.Arguments =
-    argumentsOfGround(
-        type,
+    groundedArguments(
         fieldExpressions().mapValues { (_, value) -> value.instantiateBindings() },
     )
 
 /** Grounds this argument tuple, suspending until every stamped variable is complete. */
 context(world: Assumptions)
 suspend fun OpenArguments.fetchBindings(): Value.Arguments =
-    argumentsOfGround(
-        type,
+    groundedArguments(
         fieldExpressions().mapValues { (_, value) -> value.fetchBindings() },
     )
+
+private fun OpenArguments.groundedArguments(
+    fields: Map<String, Value.Input?>,
+): Value.Arguments =
+    argumentsOfGround(type, fields)
 
 context(world: Assumptions)
 private fun OpenValue?.instantiateBindings(): Value.Input? =

@@ -362,6 +362,40 @@ class AssumptionsTest {
     }
 
     @Test
+    fun `variables can be bound immediately exactly once`(): Unit =
+        runBlocking {
+            val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+            val field = assumptions.schema.objectField("Query", "node")
+            val variable = Value.Variable.of(field, "value").stamp(emptyList())
+            val value = Value.Int.of(1)
+
+            assumptions.bindVariable(variable, value)
+
+            assertTrue(assumptions.isBound(variable))
+            assertEquals(value, assumptions.getBinding(variable))
+            assertEquals(value, assumptions.fetchBinding(variable))
+            assertFailsWith<IllegalStateException> {
+                assumptions.bindVariable(variable, Value.Int.of(2))
+            }
+            assertFailsWith<IllegalStateException> {
+                assumptions.declareBinding(variable)
+            }
+        }
+
+    @Test
+    fun `immediate binding rejects a previously declared variable`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val field = assumptions.schema.objectField("Query", "node")
+        val variable = Value.Variable.of(field, "value").stamp(emptyList())
+
+        assumptions.declareBinding(variable)
+
+        assertFailsWith<IllegalStateException> {
+            assumptions.bindVariable(variable, null)
+        }
+    }
+
+    @Test
     fun `binding values are ground by type`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val field = assumptions.schema.objectField("Query", "node")

@@ -1,5 +1,43 @@
 package model
 
+/** An opaque identity assigned once to a selection occurrence in a resolver registry. */
+class SelectionOccurrenceId internal constructor(
+    internal val sourceKey: Value.Key,
+)
+
+/**
+ * The concrete resolver occurrence and opaque lineage of one variable-bearing selection.
+ *
+ * [resolverPath] anchors the stamp at a concrete resolver occurrence. [occurrenceLineage] contains
+ * registry-assigned identities crossed through ungrounded resolver boundaries. Selection equality
+ * is undefined, so stamps compare only these stable opaque identities.
+ */
+class SelectionStamp internal constructor(
+    val resolverPath: List<PathComponent>,
+    internal val occurrenceLineage: List<SelectionOccurrenceId>,
+) {
+    /** The original registry key represented by the final occurrence in this lineage. */
+    val sourceKey: Value.Key
+        get() = occurrenceLineage.last().sourceKey
+
+    init {
+        require(occurrenceLineage.isNotEmpty()) {
+            "Selection-stamp occurrence lineage must be nonempty"
+        }
+    }
+
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            other is SelectionStamp &&
+            resolverPath == other.resolverPath &&
+            occurrenceLineage == other.occurrenceLineage
+
+    override fun hashCode(): Int = 31 * resolverPath.hashCode() + occurrenceLineage.hashCode()
+
+    override fun toString(): String =
+        "SelectionStamp(resolverPath=$resolverPath, occurrences=${occurrenceLineage.size})"
+}
+
 /**
  * A free commutative collection of opaque [Selection] members.
  *
@@ -179,10 +217,7 @@ suspend fun SelectionForest.mergeWithVariables(
             (selection.key as? Value.VariableKey)?.variableDefinedByThisKey
         val specializedKey: Value.ObjectKey = selection.objectKey(type)
         val groundKey: Value.GroundKey =
-            Value.GroundKey.of(
-                field = specializedKey.field,
-                arguments = specializedKey.arguments.fetchBindings(),
-            )
+            specializedKey.ground(specializedKey.arguments.fetchBindings())
         childrenByKey
             .getOrPut(groundKey, ::mutableListOf)
             .add(selection.subselections)
@@ -252,8 +287,8 @@ private fun EngineResult.List.toPathVariableInputList(): Value.InputList {
 /**
  * Instantiates this normalized forest's current bindings and normalizes by the resulting exact key.
  *
- * Every result key is a [Value.GroundKey]. Occurrences whose open keys converge after substitution
- * are replaced by one selection with concatenated subselections.
+ * Every result key is a [Value.GroundKey]. Equal unstamped keys coalesce after substitution.
+ * Distinct selection-stamped keys remain distinct even when their grounded argument values agree.
  *
  * @throws IllegalStateException when a key contains an unbound stamped variable or an unstamped
  * template
@@ -263,15 +298,51 @@ fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
     val childrenByKey =
         buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
             byKey().values.forEach { selection ->
-                val key =
-                    Value.GroundKey.of(
-                        field = selection.key.field,
-                        arguments = selection.key.arguments.instantiateBindings(),
-                    )
+                val key = selection.key.ground(selection.key.arguments.instantiateBindings())
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
             }
         }
     return normalizedObjectSelectionForest(type, childrenByKey)
+}
+
+/**
+ * Awaits this normalized forest's bindings and normalizes by the resulting exact key.
+ *
+ * Descendant selections remain open until materialization reaches their concrete parent OER.
+ */
+context(world: Assumptions)
+suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
+    val childrenByKey =
+        buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
+            byKey().values.forEach { selection ->
+                val key = selection.key.ground(selection.key.arguments.fetchBindings())
+                getOrPut(key, ::mutableListOf).add(selection.subselections)
+            }
+        }
+    return normalizedObjectSelectionForest(type, childrenByKey)
+}
+
+private fun Value.ObjectKey.ground(arguments: Value.Arguments): Value.GroundKey {
+    val openArguments = this.arguments
+    return when {
+        this is Value.GroundKey.Stamped ->
+            Value.GroundKey.Stamped.of(
+                selectionStamp = selectionStamp,
+                field = field,
+                arguments = arguments,
+            )
+        openArguments is OpenArguments.Stamped ->
+            Value.GroundKey.Stamped.of(
+                selectionStamp = openArguments.selectionStamp,
+                field = field,
+                arguments = arguments,
+            )
+        else ->
+            Value.GroundKey.of(
+                field = field,
+                arguments = arguments,
+            )
+    }
 }
 
 private fun normalizedObjectSelectionForest(
@@ -306,6 +377,83 @@ fun SelectionForest.applicableGroundSelections(
     type: Schema.ObjectType,
 ): ObjectSelectionForest =
     merge(type).instantiateBindings()
+
+/**
+ * Extends every top-level selection-stamped key and provider marker through one concrete OER path.
+ *
+ * Descendant selections remain unchanged until traversal reaches their concrete parent OER.
+ */
+fun SelectionForest.localizeTopLevelSelectionStamps(
+    path: List<PathComponent>,
+): SelectionForest {
+    if (path.isEmpty()) return this
+    return flatMap { selection ->
+        selectionForestOf(
+            Selection.of(
+                key = selection.key.localizeSelectionStamps(path),
+                possibleTypes = selection.possibleTypes,
+                subselections = selection.subselections,
+            ),
+        )
+    }
+}
+
+// Returns this key with each occurrence stamp extended through the concrete OER path.
+private fun Value.Key.localizeSelectionStamps(
+    path: List<PathComponent>,
+): Value.Key {
+    val stampedArguments = arguments as? OpenArguments.Stamped
+    val localizedArguments =
+        stampedArguments?.restamp(
+            stampedArguments.selectionStamp.extendThrough(path),
+        )
+    val baseKey =
+        when (this) {
+            is Value.GroundKey.Stamped ->
+                Value.GroundKey.Stamped.of(
+                    selectionStamp = selectionStamp.extendThrough(path),
+                    field = field,
+                    arguments = arguments,
+                )
+
+            else ->
+                Value.Key.of(
+                    field = field,
+                    arguments = localizedArguments ?: arguments,
+                )
+        }
+    val marker = (this as? Value.VariableKey)?.variableDefinedByThisKey
+    return if (marker == null) {
+        baseKey
+    } else {
+        Value.VariableKey.of(
+            key = baseKey,
+            variableDefinedByThisKey = marker.localizeSelectionStamp(path),
+        )
+    }
+}
+
+// Returns this variable with its selection stamp extended through the concrete OER path.
+private fun Value.Variable.Stamped.localizeSelectionStamp(
+    path: List<PathComponent>,
+): Value.Variable.Stamped =
+    when (this) {
+        is Value.Variable.SelectionStamped ->
+            Value.Variable
+                .of(field = field, variableName = variableName)
+                .stamp(selectionStamp.extendThrough(path))
+
+        else -> this
+    }
+
+// Appends one concrete OER path to this resolver-instance identity.
+private fun SelectionStamp.extendThrough(
+    path: List<PathComponent>,
+): SelectionStamp =
+    SelectionStamp(
+        resolverPath = resolverPath + path,
+        occurrenceLineage = occurrenceLineage,
+    )
 
 /** Returns this selection's ground key. */
 fun ObjectSelection.groundKey(): Value.GroundKey =
@@ -346,13 +494,19 @@ fun SelectionForest.usedVariables(): Set<Value.Variable> {
  */
 fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey {
     val concreteField = type.fields.getValue(key.field.fieldName)
+    val sourceKey = key
+    if (sourceKey is Value.GroundKey.Stamped) {
+        val groundedArguments = sourceKey.arguments.retarget(concreteField)
+        check(groundedArguments is Value.Arguments)
+        return Value.GroundKey.Stamped.of(
+            selectionStamp = sourceKey.selectionStamp,
+            field = concreteField,
+            arguments = groundedArguments,
+        )
+    }
     return Value.ObjectKey.of(
         field = concreteField,
-        arguments =
-            OpenArguments.of(
-                concreteField,
-                key.arguments.fieldExpressions(),
-            ),
+        arguments = key.arguments.retarget(concreteField),
     )
 }
 

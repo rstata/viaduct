@@ -46,6 +46,20 @@ class PromiseTest {
         }
 
     @Test
+    fun `failed promise throws its cause from get and await`() =
+        runBlocking {
+            val promise = Promise.ofDeferred<String>()
+            val failure = MissingFieldException("Query", "missing")
+
+            promise.fail(failure)
+
+            assertFailsWith<MissingFieldException> { promise.get() }
+            assertFailsWith<MissingFieldException> { promise.await() }
+            assertFailsWith<IllegalStateException> { promise.complete("late") }
+            assertFailsWith<IllegalStateException> { promise.fail(failure) }
+        }
+
+    @Test
     fun `field promise validates before completion`() {
         val schema =
             TestWorld

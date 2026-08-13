@@ -15,9 +15,13 @@ sealed interface EngineResult {
      * A finite object result whose value, field-check, and type-check promises are write-once.
      *
      * Every present value key belongs to [type], contains no variables, and completes only with a
-     * value conforming to the field's type expression. A mutable object may gain absent promises,
-     * but a present promise is never replaced. Objects use reference equality and stable identity
-     * hashing, so they may be used as map keys while promises are installed or completed.
+     * value conforming to the field's type expression. [getValue] is a strict read.
+     * [reserveValue] explicitly installs an unclaimed reader placeholder on a mutable object. A
+     * writer claims that placeholder through [createValuePromise] or [setValue]. [freeze] seals the
+     * key set and fails every unclaimed placeholder. A claimed promise may complete after freezing.
+     *
+     * Objects use reference equality and stable identity hashing, so they may be used as map keys
+     * while promises are installed or completed.
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
@@ -28,6 +32,14 @@ sealed interface EngineResult {
 
         /** @throws MissingFieldException when [field] has no value promise */
         fun getValue(field: Value.GroundKey): Promise<EngineResult?>
+
+        /**
+         * Returns the field promise, explicitly creating an unclaimed reader placeholder when this
+         * mutable object is not frozen.
+         *
+         * @throws MissingFieldException when this object is immutable or frozen and has no promise
+         */
+        fun reserveValue(field: Value.GroundKey): Promise<EngineResult?>
 
         /** @throws MissingFieldException when [field] has no field-check promise */
         fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean>
@@ -54,6 +66,12 @@ sealed interface EngineResult {
         fun createFieldCheckPromise(field: Value.GroundKey): Promise<Value.Boolean>
 
         fun createTypeCheckPromise(): Promise<Value.Boolean>
+
+        /**
+         * Seals this object's value-key set and fails every reader-created placeholder that no
+         * writer claimed. Claimed promises may still complete.
+         */
+        fun freeze()
 
         companion object {
             /**
@@ -269,18 +287,30 @@ private class ObjectResultImpl(
     typeCheck: Value.Boolean?,
     private val mutable: Boolean,
 ) : EngineResult.Object {
-    private val valueStore = promiseStore(values)
+    private val valueStore =
+        ObjectValueStore(
+            type = type,
+            values = values,
+            mutable = mutable,
+        )
     private val fieldCheckStore = promiseStore(fieldChecks)
     private val typeCheckStore = promiseStore(typeCheck?.let { mapOf(Unit to it) }.orEmpty())
 
     override val keys: Set<Value.GroundKey>
-        get() = valueStore.snapshot().keys
+        get() = valueStore.keys
 
     override fun isValueSet(field: Value.GroundKey): Boolean = valueStore.isSet(field)
 
-    override fun getValue(field: Value.GroundKey): Promise<EngineResult?> =
-        valueStore.readOrNull(field)
+    override fun getValue(field: Value.GroundKey): Promise<EngineResult?> {
+        validateObjectField(type, field)
+        return valueStore.readOrNull(field)
             ?: throw MissingFieldException(type.typeName, field.field.fieldName)
+    }
+
+    override fun reserveValue(field: Value.GroundKey): Promise<EngineResult?> {
+        validateObjectField(type, field)
+        return valueStore.reserve(field)
+    }
 
     override fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean> =
         fieldCheckStore.readOrNull(field)
@@ -295,9 +325,9 @@ private class ObjectResultImpl(
         field: Value.GroundKey,
         value: EngineResult?,
     ) {
-        checkWritable(field)
+        validateObjectField(type, field)
         validateObjectValue(field, value)
-        valueStore.set(field, value)
+        valueStore.claimAndComplete(field, value)
     }
 
     override fun setFieldCheck(
@@ -314,10 +344,8 @@ private class ObjectResultImpl(
     }
 
     override fun createValuePromise(field: Value.GroundKey): Promise<EngineResult?> {
-        checkWritable(field)
-        return valueStore.create(field) { value ->
-            validateObjectValue(field, value)
-        }
+        validateObjectField(type, field)
+        return valueStore.claim(field)
     }
 
     override fun createFieldCheckPromise(field: Value.GroundKey): Promise<Value.Boolean> {
@@ -328,6 +356,10 @@ private class ObjectResultImpl(
     override fun createTypeCheckPromise(): Promise<Value.Boolean> {
         checkMutable()
         return typeCheckStore.create(Unit)
+    }
+
+    override fun freeze() {
+        valueStore.freeze()
     }
 
     val completedValues: Map<Value.GroundKey, EngineResult?> get() = valueStore.completedValues()
@@ -345,12 +377,113 @@ private class ObjectResultImpl(
     private fun checkMutable() = check(mutable) { "${type.typeName} result is immutable" }
 
     fun requireCompleted() {
-        valueStore.snapshot().values.forEach { promise ->
+        valueStore.promises.forEach { promise ->
             promise.get().requireCompleted()
         }
         fieldCheckStore.snapshot().values.forEach { promise -> promise.get() }
         typeCheckStore.snapshot().values.forEach { promise -> promise.get() }
     }
+}
+
+private class ObjectValueStore(
+    private val type: Schema.ObjectType,
+    values: Map<Value.GroundKey, EngineResult?>,
+    private val mutable: Boolean,
+) {
+    private val lock = Any()
+    private val slots =
+        values
+            .mapValuesTo(linkedMapOf()) { (_, value) ->
+                ValueSlot(
+                    promise = Promise.of(value),
+                    claimed = true,
+                )
+            }
+    private var frozen = !mutable
+
+    val keys: Set<Value.GroundKey>
+        get() = synchronized(lock) { slots.keys.toSet() }
+
+    val promises: List<Promise<EngineResult?>>
+        get() = synchronized(lock) { slots.values.map { slot -> slot.promise } }
+
+    fun isSet(field: Value.GroundKey): Boolean = synchronized(lock) { field in slots }
+
+    fun readOrNull(field: Value.GroundKey): Promise<EngineResult?>? =
+        synchronized(lock) { slots[field]?.promise }
+
+    fun reserve(field: Value.GroundKey): Promise<EngineResult?> =
+        synchronized(lock) {
+            slots[field]?.promise
+                ?: if (frozen) {
+                    throw MissingFieldException(type.typeName, field.field.fieldName)
+                } else {
+                    Promise
+                        .ofDeferred<EngineResult?> { value ->
+                            validateObjectValue(field, value)
+                        }.also { promise ->
+                            slots[field] =
+                                ValueSlot(
+                                    promise = promise,
+                                    claimed = false,
+                                )
+                        }
+                }
+        }
+
+    fun claim(field: Value.GroundKey): Promise<EngineResult?> =
+        synchronized(lock) {
+            check(!frozen) { "${type.typeName} result is frozen" }
+            val existing = slots[field]
+            if (existing != null) {
+                check(!existing.claimed) { "$field already has a writer" }
+                existing.claimed = true
+                existing.promise
+            } else {
+                Promise
+                    .ofDeferred<EngineResult?> { value ->
+                        validateObjectValue(field, value)
+                    }.also { promise ->
+                        slots[field] =
+                            ValueSlot(
+                                promise = promise,
+                                claimed = true,
+                            )
+                    }
+            }
+        }
+
+    fun claimAndComplete(
+        field: Value.GroundKey,
+        value: EngineResult?,
+    ) {
+        claim(field).complete(value)
+    }
+
+    fun freeze() {
+        val unclaimed =
+            synchronized(lock) {
+                check(mutable) { "${type.typeName} result is immutable" }
+                check(!frozen) { "${type.typeName} result is already frozen" }
+                frozen = true
+                slots
+                    .filterValues { slot -> !slot.claimed }
+                    .map { (field, slot) -> field to slot.promise }
+            }
+        unclaimed.forEach { (field, promise) ->
+            promise.fail(MissingFieldException(type.typeName, field.field.fieldName))
+        }
+    }
+
+    fun completedValues(): Map<Value.GroundKey, EngineResult?> =
+        synchronized(lock) {
+            slots.mapValues { (_, slot) -> slot.promise.get() }
+        }
+
+    private data class ValueSlot(
+        val promise: Promise<EngineResult?>,
+        var claimed: Boolean,
+    )
 }
 
 private data class ListResultImpl(

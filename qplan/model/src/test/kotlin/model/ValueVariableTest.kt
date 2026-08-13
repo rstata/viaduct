@@ -6,6 +6,7 @@ import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
@@ -80,7 +81,7 @@ class ValueVariableTest {
     }
 
     @Test
-    fun `open arguments recursively stamp and instantiate variable templates`() {
+    fun `variable-only stamping recursively stamps and instantiates variable templates`() {
         val world =
             TestWorld.fromSDL(
                 """
@@ -113,7 +114,7 @@ class ValueVariableTest {
             )
         val path = listOf(Value.ListIndex.of(2))
 
-        val stamped = arguments.stamp(path)
+        val stamped = arguments.stampVars(path)
         val stampedVariable = template.stamp(path)
         world.declareBinding(stampedVariable)
         world.completeBinding(stampedVariable, Value.Int.of(9))
@@ -133,6 +134,103 @@ class ValueVariableTest {
         assertEquals(Value.Int.of(1), nested.values[1])
         assertEquals(Value.Int.of(9), values.values.single())
         assertEquals(setOf(template), arguments.variableTemplates())
+        assertFalse(stamped is OpenArguments.Stamped)
+    }
+
+    @Test
+    fun `open key survives grounding as stamped ground-key identity`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).assumptions
+        val source = world.schema.objectField("Query", "source")
+        val consume = world.schema.objectField("Query", "consume")
+        val template = Value.Variable.of(source, "value")
+        val arguments =
+            OpenArguments.Template.of(
+                OpenArguments.of(consume, mapOf("value" to template)),
+            )
+        val sourceSelection =
+            Selection.of(
+                key = Value.Key.of(consume, arguments),
+                possibleTypes = setOf(world.schema.query),
+                subselections = selectionForestOf(),
+            )
+        val firstPath = listOf(Value.ListIndex.of(1))
+        val secondPath = listOf(Value.ListIndex.of(2))
+        val occurrenceId = SelectionOccurrenceId(sourceSelection.key)
+        val firstStamp = SelectionStamp(firstPath, listOf(occurrenceId))
+        val secondStamp = SelectionStamp(secondPath, listOf(occurrenceId))
+        val firstVariable = template.stamp(firstStamp)
+        val secondVariable = template.stamp(secondStamp)
+        world.declareBinding(firstVariable)
+        world.declareBinding(secondVariable)
+        world.completeBinding(firstVariable, Value.Int.of(9))
+        world.completeBinding(secondVariable, Value.Int.of(9))
+
+        fun ground(arguments: OpenArguments): Value.GroundKey =
+            context(world) {
+                selectionForestOf(
+                    Selection.of(
+                        key = Value.Key.of(consume, arguments),
+                        possibleTypes = setOf(world.schema.query),
+                        subselections = selectionForestOf(),
+                    ),
+                ).merge(world.schema.query)
+                    .instantiateBindings()
+                    .groundKeys()
+                    .single()
+            }
+
+        val first = ground(arguments.stamp(firstStamp))
+        val equalFirst = ground(arguments.stamp(firstStamp))
+        val second = ground(arguments.stamp(secondStamp))
+        val unstamped = Value.GroundKey.of(consume, mapOf("value" to 9))
+        val reapplied =
+            context(world) {
+                selectionForestOf(
+                    Selection.of(
+                        key = first,
+                        possibleTypes = setOf(world.schema.query),
+                        subselections = selectionForestOf(),
+                    ),
+                ).applicableGroundSelections(world.schema.query)
+                    .groundKeys()
+                    .single()
+            }
+
+        assertIs<Value.GroundKey.Stamped>(first)
+        assertEquals(first, equalFirst)
+        assertEquals(first, reapplied)
+        assertNotEquals(first, second)
+        assertNotEquals<Value.GroundKey>(first, unstamped)
+        assertEquals(Value.Int.of(9), first.arguments.fieldValues.getValue("value"))
+    }
+
+    @Test
+    fun `argument template rejects an existing stamped variable`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.objectField("Query", "source")
+        val consume = schema.objectField("Query", "consume")
+        val stampedVariable = Value.Variable.of(source, "value").stamp(emptyList())
+        val arguments = OpenArguments.of(consume, mapOf("value" to stampedVariable))
+
+        assertFailsWith<IllegalArgumentException> {
+            OpenArguments.Template.of(arguments)
+        }
     }
 
     @Test
@@ -153,17 +251,32 @@ class ValueVariableTest {
                 ).assumptions
             val source = world.schema.objectField("Query", "source")
             val consume = world.schema.objectField("Query", "consume")
-            val variable = Value.Variable.of(source, "value").stamp(emptyList())
-            val arguments =
+            val stamp = listOf(Value.ListIndex.of(1))
+            val variableTemplate = Value.Variable.of(source, "value")
+            val openArguments =
                 OpenArguments.of(
                     consume,
                     mapOf(
                         "filter" to
                             mapOf(
-                                "values" to listOf(variable),
+                                "values" to listOf(variableTemplate),
                             ),
                     ),
                 )
+            val sourceSelection =
+                Selection.of(
+                    key = Value.Key.of(consume, openArguments),
+                    possibleTypes = setOf(world.schema.query),
+                    subselections = selectionForestOf(),
+                )
+            val selectionStamp =
+                SelectionStamp(
+                    stamp,
+                    listOf(SelectionOccurrenceId(sourceSelection.key)),
+                )
+            val variable = variableTemplate.stamp(selectionStamp)
+            val arguments =
+                OpenArguments.Template.of(openArguments).stamp(selectionStamp)
             world.declareBinding(variable)
 
             val fetched =
@@ -175,9 +288,10 @@ class ValueVariableTest {
 
             assertFalse(fetched.isCompleted)
             world.completeBinding(variable, Value.Int.of(9))
+            val grounded = fetched.await()
             val filter =
                 assertIs<Value.InputObject>(
-                    fetched.await().fieldValues.getValue("filter"),
+                    grounded.fieldValues.getValue("filter"),
                 )
             val values =
                 assertIs<Value.InputList>(

@@ -62,39 +62,59 @@ fun SelectionForest.successorDemand(): SelectionForest =
  */
 context(world: Assumptions)
 suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionForest {
-    val selections = mutableListOf<Selection>()
-    coalesceEquivalentSelections().forEach(selections::add)
-    val result = mutableListOf<Selection>()
-    for (selection in selections) {
+    val childrenBySelection =
+        linkedMapOf<SelectionIdentity, MutableList<SelectionForest>>()
+    val pendingSelections = mutableListOf<SelectionIdentity>()
+
+    fun addDemand(demand: SelectionForest) {
+        demand.forEach { selection ->
+            val identity =
+                SelectionIdentity(
+                    key = selection.key,
+                    possibleTypes = selection.possibleTypes,
+                )
+            val children = childrenBySelection[identity]
+            if (children == null) {
+                childrenBySelection[identity] = mutableListOf(selection.subselections)
+                pendingSelections += identity
+            } else {
+                children += selection.subselections
+            }
+        }
+    }
+
+    addDemand(this)
+    val deferredSelections = mutableSetOf<SelectionIdentity>()
+    val expandedTemplateFields = mutableSetOf<Schema.ObjectField>()
+    val expandedGroundedKeys = mutableSetOf<Value.GroundKey>()
+    var pendingIndex = 0
+    while (pendingIndex < pendingSelections.size) {
+        val identity = pendingSelections[pendingIndex++]
+        val selection =
+            Selection.of(
+                key = identity.key,
+                possibleTypes = identity.possibleTypes,
+                subselections = selectionForestOf(),
+            )
         if (
             selection.key.arguments.usedVariables().any { variable ->
                 variable is Value.Variable.Template
             }
         ) {
+            deferredSelections += identity
             selection.possibleTypes
-                .flatMapToSelectionForest { possibleType ->
+                .forEach { possibleType ->
                     val field = selection.objectKey(possibleType).field
-                    if (field !in world.resolverRegistry) {
-                        selectionForestOf()
-                    } else {
-                        world.resolverRegistry
-                            .resolver(field)
-                            .objectFragment
+                    if (
+                        field in world.resolverRegistry &&
+                        expandedTemplateFields.add(field)
+                    ) {
+                        addDemand(world.resolverRegistry.resolver(field).objectFragment)
                     }
-                }.fetchSuccessorDemandDeferringTemplates()
-                .forEach(result::add)
+                }
             continue
         }
 
-        val nestedDemand: SelectionForest =
-            selection.subselections.fetchSuccessorDemandDeferringTemplates()
-        val rootedSelection =
-            Selection.of(
-                key = selection.key,
-                possibleTypes = selection.possibleTypes,
-                subselections = nestedDemand,
-            )
-        result += rootedSelection
         for (possibleType in selection.possibleTypes) {
             val specializedKey = selection.objectKey(possibleType)
             val key =
@@ -104,39 +124,28 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
                 )
             if (
                 !key.arguments.containsErrorValue() &&
-                key.field in world.resolverRegistry
+                key.field in world.resolverRegistry &&
+                expandedGroundedKeys.add(key)
             ) {
-                world.resolverRegistry
-                    .resolver(key.field)
-                    .objectFragmentWithFromArguments(key.arguments)
-                    .fetchSuccessorDemandDeferringTemplates()
-                    .forEach(result::add)
+                addDemand(
+                    world.resolverRegistry
+                        .resolver(key.field)
+                        .objectFragmentWithFromArguments(key.arguments),
+                )
             }
         }
     }
-    return result.toSelectionForest().coalesceEquivalentSelections()
-}
 
-private fun SelectionForest.coalesceEquivalentSelections(): SelectionForest {
-    val childrenBySelection:
-        MutableMap<
-            SelectionIdentity,
-            MutableList<SelectionForest>,
-        > = linkedMapOf()
-    forEach { selection ->
-        childrenBySelection
-            .getOrPut(
-                SelectionIdentity(selection.key, selection.possibleTypes),
-                ::mutableListOf,
-            )
-            .add(selection.subselections)
-    }
     return childrenBySelection
-        .map { (identity, children) ->
+        .mapNotNull { (identity, children) ->
+            if (identity in deferredSelections) return@mapNotNull null
             Selection.of(
                 key = identity.key,
                 possibleTypes = identity.possibleTypes,
-                subselections = children.concatenateSelectionForests(),
+                subselections =
+                    children
+                        .concatenateSelectionForests()
+                        .fetchSuccessorDemandDeferringTemplates(),
             )
         }.toSelectionForest()
 }

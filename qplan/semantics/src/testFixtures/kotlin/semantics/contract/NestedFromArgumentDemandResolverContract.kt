@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Value
 import model.emptyFragmentOf
@@ -10,7 +10,7 @@ import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class NestedFromArgumentPassiveDemandRegressionTest {
+interface NestedFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `retains passive demand below an ungrounded nested resolver key`() {
         val resultFragment =
@@ -24,6 +24,7 @@ class NestedFromArgumentPassiveDemandRegressionTest {
         val applications = linkedMapOf<String, Int>()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Item {
@@ -88,18 +89,18 @@ class NestedFromArgumentPassiveDemandRegressionTest {
         val world = testWorld.assumptions
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        """
-                        fragment ignored on Query {
-                          holder { __typename }
-                          result(value: 7)
-                        }
-                        """.trimIndent(),
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    """
+                    fragment ignored on Query {
+                      holder { __typename }
+                      result(value: 7)
+                    }
+                    """.trimIndent(),
+                ),
+            )
 
         assertEquals(
             Value.Int.of(7),

@@ -15,7 +15,9 @@ import kotlin.test.assertIs
 /**
  * Contract for resolvers whose user-declared object fragments are empty.
  */
-interface EmptyObjectFragmentResolverContract : ResolverContract {
+interface EmptyObjectFragmentResolverContract :
+    ResolverContract,
+    CrossKeyRecursiveDemandResolverContract {
     @Test
     fun `resolves typename as the concrete object type`() {
         val world =

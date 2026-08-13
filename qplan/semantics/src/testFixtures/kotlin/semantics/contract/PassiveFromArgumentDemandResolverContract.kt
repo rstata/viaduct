@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Value
 import model.emptyFragmentOf
@@ -10,7 +10,7 @@ import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class PassiveDescendantPotentialDemandRegressionTest {
+interface PassiveFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `closes potential demand before descending through a passive object`() {
         val applications = linkedMapOf<String, Int>()
@@ -24,6 +24,7 @@ class PassiveDescendantPotentialDemandRegressionTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Entity {
@@ -113,22 +114,22 @@ class PassiveDescendantPotentialDemandRegressionTest {
         val world = testWorld.assumptions
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        """
-                        fragment ignored on Query {
-                          container {
-                            bridge {
-                              load { name }
-                            }
-                          }
-                          result(value: 7)
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    """
+                    fragment ignored on Query {
+                      container {
+                        bridge {
+                          load { name }
                         }
-                        """.trimIndent(),
-                    ).subselections,
-                )
-            }
+                      }
+                      result(value: 7)
+                    }
+                    """.trimIndent(),
+                ),
+            )
 
         assertEquals(
             Value.Int.of(1),

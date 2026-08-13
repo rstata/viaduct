@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Value
 import model.emptyFragmentOf
@@ -10,7 +10,7 @@ import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class NestedVariableUseRegressionTest {
+interface NestedObjectPathUseResolverContract : ResolverContract {
     @Test
     fun `waits for a provider value before expanding a nested variable use`() {
         val resultFragment =
@@ -24,6 +24,7 @@ class NestedVariableUseRegressionTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Holder {
@@ -101,13 +102,13 @@ class NestedVariableUseRegressionTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment ignored on Query { result }",
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    "fragment ignored on Query { result }",
+                ),
+            )
 
         assertEquals(Value.Int.of(7), resolved.getValue(resultKey).get())
     }

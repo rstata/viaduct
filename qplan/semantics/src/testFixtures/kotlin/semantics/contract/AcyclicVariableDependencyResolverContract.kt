@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.EngineResult
 import model.Value
@@ -12,7 +12,7 @@ import model.testing.fromObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class PhasePlanFalsePositiveRegressionTest {
+interface AcyclicVariableDependencyResolverContract : ResolverContract {
     @Test
     fun `accepts an acyclic path-variable dependency chain`() {
         val aFragment =
@@ -25,6 +25,7 @@ class PhasePlanFalsePositiveRegressionTest {
             "fragment C on Query { q d(seed: ${'$'}fromQ) }"
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Query {
@@ -102,11 +103,11 @@ class PhasePlanFalsePositiveRegressionTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom("fragment ignored on Query { c }").subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom("fragment ignored on Query { c }"),
+            )
 
         assertEquals(Value.Int.of(1), resolved.getValue(cKey).get())
     }
@@ -126,6 +127,7 @@ class PhasePlanFalsePositiveRegressionTest {
             "fragment Q7 on Query { q1(value: ${'$'}fromQ7Arg) }"
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Query {
@@ -190,11 +192,11 @@ class PhasePlanFalsePositiveRegressionTest {
             )
 
         val resolved: EngineResult.Object =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom("fragment ignored on Query { outer }").subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom("fragment ignored on Query { outer }"),
+            )
 
         assertEquals(Value.Int.of(1), resolved.getValue(outerKey).get())
     }

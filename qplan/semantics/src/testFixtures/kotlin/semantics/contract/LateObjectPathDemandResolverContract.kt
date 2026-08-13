@@ -1,4 +1,4 @@
-package semantics.resolver26
+package semantics.contract
 
 import model.EngineResult
 import model.Schema
@@ -15,12 +15,21 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class LateStampedDemandTest {
+enum class LateAncestorDemandPolicy {
+    RETAIN_OPEN_VARIABLE_BOUNDARY,
+    CONTRIBUTE_PASSIVE_PREDECESSORS,
+}
+
+interface LateObjectPathDemandResolverContract : ResolverContract {
+    val variableSelectionIdentityPolicy: VariableSelectionIdentityPolicy
+    val lateAncestorDemandPolicy: LateAncestorDemandPolicy
+
     @Test
     fun `successor passive demand is materialized from selective resolver output`() {
         var payloadDemandFields: Set<String>? = null
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Payload {
@@ -89,9 +98,11 @@ class LateStampedDemandTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                fragment,
+            )
         val payload = resolved.getValue(payloadKey).get() as EngineResult.Object
 
         assertEquals(Value.Int.of(7), payload.getValue(computedKey).get())
@@ -117,6 +128,7 @@ class LateStampedDemandTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Leaf {
@@ -214,13 +226,13 @@ class LateStampedDemandTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment Query on Query { trigger }",
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    "fragment Query on Query { trigger }",
+                ),
+            )
 
         assertEquals(Value.Int.of(2), resolved.getValue(triggerKey).get())
         assertEquals(1, nodeApplications)
@@ -242,6 +254,7 @@ class LateStampedDemandTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Payload {
@@ -288,12 +301,11 @@ class LateStampedDemandTest {
                                 if (demand != null) {
                                     parentApplications += 1
                                     parentDemandFields =
-                                        demand
-                                            .merge(payloadType)
-                                            .groundKeys()
-                                            .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.fieldName
+                                        linkedSetOf<String>().also { fields ->
+                                            demand.merge(payloadType).forEach { selection ->
+                                                fields += selection.key.field.fieldName
                                             }
+                                        }
                                 }
                             },
                         computed to
@@ -322,17 +334,25 @@ class LateStampedDemandTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment Query on Query { late }",
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    "fragment Query on Query { late }",
+                ),
+            )
 
         assertEquals(Value.Int.of(7), resolved.getValue(lateKey).get())
         assertEquals(1, parentApplications)
-        assertEquals(setOf("source"), parentDemandFields)
+        assertEquals(
+            when (lateAncestorDemandPolicy) {
+                LateAncestorDemandPolicy.RETAIN_OPEN_VARIABLE_BOUNDARY ->
+                    setOf("source", "computed")
+                LateAncestorDemandPolicy.CONTRIBUTE_PASSIVE_PREDECESSORS ->
+                    setOf("source")
+            },
+            parentDemandFields,
+        )
     }
 
     @Test
@@ -352,6 +372,7 @@ class LateStampedDemandTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Nested {
@@ -428,13 +449,13 @@ class LateStampedDemandTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment Query on Query { result }",
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    "fragment Query on Query { result }",
+                ),
+            )
 
         assertEquals(Value.Int.of(7), resolved.getValue(resultKey).get())
         assertEquals(1, holderApplications)
@@ -442,7 +463,7 @@ class LateStampedDemandTest {
     }
 
     @Test
-    fun `late equal child call stays separate below a published argumentless parent`() {
+    fun `late equal child call follows the configured identity policy`() {
         var parentApplications = 0
         var childApplications = 0
         val outerFragment =
@@ -456,6 +477,7 @@ class LateStampedDemandTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Parent {
@@ -545,20 +567,25 @@ class LateStampedDemandTest {
             )
 
         val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment ignored on Query { early outer }",
-                    ).subselections,
-                )
-            }
+            resolveAndValidate(
+                world,
+                world.objectOf("Query"),
+                world.fragmentFrom(
+                    "fragment ignored on Query { early outer }",
+                ),
+            )
         val parent = resolved.getValue(parentKey).get() as EngineResult.Object
 
         assertEquals(Value.Int.of(1), resolved.getValue(outerKey).get())
         assertEquals(1, parentApplications)
-        assertEquals(2, childApplications)
+        val expectedChildApplications =
+            when (variableSelectionIdentityPolicy) {
+                VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> 1
+                VariableSelectionIdentityPolicy.PRESERVE_SELECTION_OCCURRENCES -> 2
+            }
+        assertEquals(expectedChildApplications, childApplications)
         assertEquals(
-            2,
+            expectedChildApplications,
             parent.keys.count { groundKey -> groundKey.field.fieldName == "child" },
         )
     }

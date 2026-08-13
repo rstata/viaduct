@@ -1,4 +1,4 @@
-package semantics.resolver25
+package semantics.contract
 
 import model.Value
 import model.emptyFragmentOf
@@ -11,7 +11,7 @@ import model.testing.nodeResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class DeferredNodePotentialDemandRegressionTest {
+interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
     fun `retains potential demand through a passive node bridge`() {
         var driverApplications = 0
@@ -26,6 +26,7 @@ class DeferredNodePotentialDemandRegressionTest {
             """.trimIndent()
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     interface Node {
@@ -119,22 +120,22 @@ class DeferredNodePotentialDemandRegressionTest {
             )
         val world = testWorld.assumptions
 
-        context(world) {
-            world.objectOf("Query").resolve(
-                world.fragmentFrom(
-                    """
-                        fragment ignored on Query {
-                          item {
-                            profile {
-                              details { __typename }
-                            }
-                          }
-                          driver { id }
+        resolveAndValidate(
+            world,
+            world.objectOf("Query"),
+            world.fragmentFrom(
+                """
+                    fragment ignored on Query {
+                      item {
+                        profile {
+                          details { __typename }
                         }
-                    """.trimIndent(),
-                ).subselections,
-            )
-        }
+                      }
+                      driver { id }
+                    }
+                """.trimIndent(),
+            ),
+        )
 
         assertEquals(1, driverApplications)
     }

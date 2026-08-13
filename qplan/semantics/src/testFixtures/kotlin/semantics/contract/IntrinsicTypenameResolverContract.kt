@@ -1,4 +1,4 @@
-package semantics.resolver26
+package semantics.contract
 
 import model.EngineResult
 import model.Value
@@ -9,12 +9,15 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
-class TypenameSynthesisTest {
+/** Contract for resolvers that synthesize `__typename` in every created object result. */
+interface IntrinsicTypenameResolverContract : ResolverContract {
     @Test
-    fun `every created object result contains its concrete typename`() {
+    fun `synthesizes typename for every created object result`() {
         val testWorld =
             TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     type Parent {
@@ -28,7 +31,9 @@ class TypenameSynthesisTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.objectField("Query", "parent") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                            fieldResolverOf(
+                                schema.emptyFragmentOf("Query"),
+                            ) { _, _ ->
                                 schema.objectOf("Parent") {
                                     "value" setTo 1
                                 }
@@ -37,39 +42,21 @@ class TypenameSynthesisTest {
                 },
             )
         val world = testWorld.assumptions
-        val resolved =
-            context(world) {
-                world.objectOf("Query").resolve(
-                    world.fragmentFrom(
-                        "fragment ignored on Query { parent { value } }",
-                    ).subselections,
-                )
-            }
+        val fragment = world.fragmentFrom("fragment ignored on Query { parent { value } }")
+
+        val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val parent =
-            resolved.getValue(
-                Value.GroundKey.of(
-                    world.schema.objectField("Query", "parent"),
-                    emptyMap(),
-                ),
-            ).get() as EngineResult.Object
+            assertIs<EngineResult.Object>(
+                resolved.getValue(world.schema.contractKey("Query", "parent")).get(),
+            )
 
         assertEquals(
             Value.String.of("Query"),
-            resolved.getValue(
-                Value.GroundKey.of(
-                    world.schema.objectField("Query", "__typename"),
-                    emptyMap(),
-                ),
-            ).get(),
+            resolved.getValue(world.schema.contractKey("Query", "__typename")).get(),
         )
         assertEquals(
             Value.String.of("Parent"),
-            parent.getValue(
-                Value.GroundKey.of(
-                    world.schema.objectField("Parent", "__typename"),
-                    emptyMap(),
-                ),
-            ).get(),
+            parent.getValue(world.schema.contractKey("Parent", "__typename")).get(),
         )
     }
 }

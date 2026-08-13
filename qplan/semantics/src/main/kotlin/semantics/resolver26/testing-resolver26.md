@@ -124,3 +124,36 @@ Metamorphic variants can preserve a world while permuting selections, aliases, d
 Record generated and activated feature vectors separately, then retain seeds that reach rare intersections or unusually deep paths. Stratify budgets over breadth, depth, registry count, query count, resolver density, and list fanout rather than maximizing one scalar size.
 
 Scheduling perturbations such as deliberate yields may eventually expose additional races, but add them only with a reproducible seed and a reliable coordinate replay. A corpus whose failures cannot be localized is less useful than a slightly smaller one with exact forensic evidence.
+
+## Appendix: Testing TODO Handoff
+
+This appendix records known weaknesses in Resolver26's test infrastructure. They are not established Resolver26 implementation defects, but they limit what the current green suites prove and should be addressed before treating a large campaign as strong concurrency or interaction evidence.
+
+### Restore Witness Coverage In Multithreaded Stress
+
+- [ ] Run multithreaded stress with resolution-witness capture, plus a separate pass with count-only capture because those modes are intentionally mutually exclusive. Both recorders are already thread-safe, but `runResolver26MultithreadedStress` currently disables both, so the instrumented campaign checks only extensional correctness and object-path bindings.
+- [ ] Audit and replace unsynchronized mutable application counters and lists throughout deterministic resolver contracts, including `EmptyObjectFragmentResolverContract.kt`, `ObjectFragmentResolverContract.kt`, `VariableSelectionIdentityResolverContract.kt`, `ObjectFragmentFromArgumentResolverContract.kt`, and `NodeResolverContract.kt`; multiple Resolver26 workers may invoke fixture resolvers concurrently, and assertions that depend on append order or ordinary integer increments are harness races rather than valid resolver checks.
+- [ ] Add a focused concurrency regression for the fixture instrumentation itself, then rerun representative deterministic contracts at several thread counts to prove that recorded counts and observations are stable without imposing execution order.
+
+### Make Structural Coverage Interaction-Local
+
+- [ ] Make each structural signature application-local where its name claims an interaction; for example, `MIXED_BINDING_SOURCES` in `Resolver26StructuralCoverage.kt` can currently combine `FromArgument` and `FromObjectField` evidence from unrelated applications in one case.
+- [ ] Replace the corpus-wide union in `ResolverBroadStressTest.kt` with per-case interaction records or explicit activation counts, so required signatures cannot be satisfied by unrelated cases distributed across the generated product.
+- [ ] Give each directed profile an activation predicate tied to the exact resolver application, occurrence path, binding source, and result structure that constitute the intended interaction; retain aggregate signature counts only as diagnostics.
+
+### Preserve Occurrence Identity In The Exact-Application Oracle
+
+- [ ] Introduce occurrence-aware execution observation that propagates the exact resolver path into each application record; changing `ResolverApplicationIdentity` alone is insufficient because the current resolver-application observer receives no path. The recorder retains only canonical field, grounded arguments, and materialized-input fingerprint, while `RegisteredResolverOccurrence.occurrencePath` is discarded when expected identities are constructed. For two list positions with equal field, arguments, and input, executing position 0 twice and position 1 zero times therefore produces the same identity multiset as executing each position once. If both result cells contain conforming values, `correctResolution` also cannot identify which occurrence's resolver produced them because it is an extensional result judgment. The disabled `ResolutionWitnessTest.application count oracle distinguishes equal-input list occurrences` is the minimal adversarial regression to enable when occurrence paths are recorded.
+- [ ] Reconstruct expected demanded occurrences independently of the completed Resolver26 result. `registeredResolverApplicationIdentityCounts` currently discovers expected applications from resolver-bearing cells already present in that result, so an extra valid cell accompanied by an extra matching invocation can increase both expected and actual counts together and pass.
+- [ ] Restore an independent supplied-demand oracle or replace the disabled `ResolverWitnessContract.generated supplied demand matches independently reconstructed successor demand` check with a narrower reconstruction that handles list-transparent continuation paths.
+
+### Fill Generator Reachability Holes
+
+- [ ] Generate genuinely nested output-list types; `SchemaGenerator.kt` currently models output list wrapping with one Boolean, leaving the disabled nested-list adversarial case in `ResolverCoverageAdversarialTest.kt` unreachable.
+- [ ] Generate GraphQL singleton coercion from scalar `FromObjectField` providers into one or more input-list layers. `ListVariableTarget` currently requires a list-valued provider and nested lists cannot become whole variable targets, so the property corpus cannot generate the scalar-to-`[[Int!]!]!` regression recorded by `FromObjectFieldSingletonCoercionRegressionTest`.
+- [ ] Make passive polymorphic deepening reachable and enable its adversarial coverage test; the current generation path does not produce the required passive abstract-type continuation.
+- [ ] Generate fields with multiple arguments so grounding, defaults, errors, and variable sources can interact within one resolver key; generated fields currently have at most one argument.
+- [ ] Deliberately reuse one variable across multiple selection occurrences and preserve `VariableInputPlan` as a replacement candidate, so occurrence-stamping behavior is exercised instead of relying on accidental variable layouts.
+- [ ] Generate convergence between a `FromObjectField` variable value and a literal argument; the registry generator currently reports this convergence feature as always false.
+- [ ] Enable object-path variables in the default deep-stress configuration, or add a separate required deep profile that cannot silently run with them disabled.
+- [ ] Require activated abstract provider paths in Resolver26 structural coverage, not merely registry metadata that records their availability.

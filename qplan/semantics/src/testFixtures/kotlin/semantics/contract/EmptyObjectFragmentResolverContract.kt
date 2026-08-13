@@ -200,7 +200,7 @@ interface EmptyObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(Value.Int.of(7), item.getValue(concreteDefaultKey).get())
-        assertEquals(setOf(concreteDefaultKey), item.keys)
+        assertEquals(expectedResultKeys(item.type, setOf(concreteDefaultKey)), item.keys)
     }
 }
 

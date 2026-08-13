@@ -44,6 +44,16 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
             .associateBy { event -> event.contributionId to event.coordinate }
     val resolverStarts =
         filterIsInstance<Resolver25LifecycleEvent.ResolverStarted>()
+    val resolverStartCountByCoordinate =
+        resolverStarts
+            .groupingBy(Resolver25LifecycleEvent.ResolverStarted::coordinate)
+            .eachCount()
+    val earliestResolverStartByCoordinate =
+        resolverStarts
+            .groupBy(Resolver25LifecycleEvent.ResolverStarted::coordinate)
+            .mapValues { (_, starts) ->
+                starts.minOf(Resolver25LifecycleEvent.ResolverStarted::sequence)
+            }
     val sealed =
         filterIsInstance<Resolver25LifecycleEvent.DemandSealed>()
             .associateBy(Resolver25LifecycleEvent.DemandSealed::coordinate)
@@ -96,9 +106,7 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
                             symbolicFields.isNotEmpty() &&
                             literalFields.intersect(symbolicFields).isEmpty() &&
                             sealedFields.containsAll(literalFields + symbolicFields) &&
-                            resolverStarts.count { event ->
-                                event.coordinate == coordinate
-                            } == 1
+                            resolverStartCountByCoordinate[coordinate] == 1
                     }
                 }
             }
@@ -124,12 +132,23 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
         internedResolverKeys.groupBy { event -> event.coordinate.fieldOccurrence() }
             .values
             .any { occurrences ->
+                val earliestStarts =
+                    occurrences
+                        .mapNotNull { event ->
+                            earliestResolverStartByCoordinate[event.coordinate]
+                                ?.let { sequence -> event.coordinate to sequence }
+                        }.distinctBy { (coordinate, _) -> coordinate }
+                        .sortedBy { (_, sequence) -> sequence }
+                val firstStart = earliestStarts.getOrNull(0)
+                val secondStart = earliestStarts.getOrNull(1)
                 occurrences.any { later ->
-                    resolverStarts.any { started ->
-                        started.coordinate in occurrences.map { event -> event.coordinate } &&
-                            started.coordinate != later.coordinate &&
-                            started.sequence < later.sequence
-                    }
+                    val otherStart =
+                        if (firstStart?.first != later.coordinate) {
+                            firstStart
+                        } else {
+                            secondStart
+                        }
+                    otherStart?.second?.let { sequence -> sequence < later.sequence } == true
                 }
             }
     ) {

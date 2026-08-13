@@ -67,7 +67,8 @@ Extended trace, mutation, witness, list-deepening, selective-demand, readiness, 
 | `mixed-variables` | Both variable sources | Resolver10, Resolver24 | fixed aggregate corpus |
 | `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-10, Resolver22-24 | `20:3:5` |
 | `resolver03-construction-witness` | Construction witness | Resolver03, Resolver09 | `12:2:4` |
-| `resolver25-broad-stress` | Unfiltered full Resolver25 validation | Resolver25 | opt-in `10:20:50` |
+| `resolver25-broad-*` | Unfiltered balanced, list-descendant, nullable/error, mixed-variable, and multiple-owner pressure | Resolver25 | opt-in |
+| `resolver26-broad-*` | Heterogeneous stamped-resolution profiles | Resolver26 | opt-in profile-specific products |
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated `$node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
 
@@ -111,13 +112,74 @@ For cross-profile debugging, run the concrete class with only the seed:
 
 Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver09, Resolver10, Resolver23, Resolver24, Resolver24i, and Resolver25 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
 
-Resolver25 also has an independent unfiltered broad product. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings:
+Resolver25 also has independent unfiltered broad profiles. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings:
 
 ```shell
 ./gradlew :semantics:resolver25BroadStress \
+  -Presolver25BroadStressProfile=mixed-variables \
   -Presolver25BroadStressSeed=424242 \
   -Presolver25BroadStressSize=10:20:50
 ```
+
+The recorded broad campaign runs five profiles per round and 2,000 cases per profile. Rounds 1-20 use `200:2:5`, rounds 21-45 use `40:25:2`, rounds 46-80 use `10:4:50` for the four common profiles while multiple-owner remains `40:25:2`, and rounds 81-100 use `20:10:10` with large/deep worlds while multiple-owner remains `40:25:2`. The checked-in manifest records 100 distinct base seeds; profile salts produce 500 distinct effective seeds and exactly 1,000,000 Resolver25 calls.
+
+```shell
+./run-resolver25-broad-campaign.sh
+./run-resolver25-broad-campaign.sh 1 21 46 81
+```
+
+Replay one failed campaign coordinate through its recorded round and profile:
+
+```shell
+./gradlew :semantics:resolver25BroadStressCampaign \
+  -Presolver25BroadStressCampaignRound=47 \
+  -Presolver25BroadStressCampaignProfile=mixed-variables \
+  -PresolverPropertyCase=8:3:41
+```
+
+## Resolver26 Broad Campaign
+
+Resolver26's broad tests use five directed distributions: balanced worlds, localized descendants,
+nullable and error providers, stamp collisions, and multiple object-path owners. Their structural
+coverage is classified only from completed OER paths and stamped keys, resolver-application
+witnesses, and generated registry metadata. Separate request-local binding validation checks every
+activated object-path variable. No test observes scheduler events, coroutine ordering, demand
+phases, or Resolver25 lifecycle concepts.
+
+Every generated case checks exact attempted/resolved/completed accounting, exact application
+identity counts, `correctResolution`, and independently reconstructed object-path bindings. A
+profile's aggregate run must also observe its required Resolver26 structural signatures.
+
+The checked-in campaign contains 100 fresh-JVM rounds and one million total cases. Its phases put
+the same 2,000-case budget into different dimensions:
+
+| Phase | `S:R:Q` |
+| --- | --- |
+| Schema breadth | `200:2:5` |
+| Registry diversity | `40:25:2` |
+| Query interactions | `10:4:50` |
+| Large/deep worlds | `20:10:10` |
+
+Large/deep worlds fix generated list fanout at one so the budget explores depth instead of
+combinatorial list multiplication. Run persisted rounds with:
+
+```shell
+./run-resolver26-broad-campaign.sh 21
+```
+
+Replay one profile or exact coordinate from that round with:
+
+```shell
+./gradlew :semantics:resolver26BroadStressCampaign \
+  -Presolver26BroadStressCampaignRound=21 \
+  -Presolver26BroadStressCampaignProfile=multiple-owners \
+  -PresolverPropertyCase=18:4:1
+```
+
+Coordinate replay suppresses aggregate structural-coverage requirements while preserving the
+recorded profile, seed, and generator dimensions. A failing generated case should be reduced to a
+small deterministic regression test after determining whether the defect belongs to the generator,
+an independent oracle, or Resolver26.
 
 ## Adding Tests
 

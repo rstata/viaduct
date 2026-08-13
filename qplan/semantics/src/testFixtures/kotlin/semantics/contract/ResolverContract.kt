@@ -2,6 +2,7 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.Schema
 import model.SelectionForest
 import model.Value
 
@@ -21,6 +22,9 @@ interface ResolverContract {
     val selectiveResolvers: Boolean
         get() = true
 
+    val alwaysGeneratesTypename: Boolean
+        get() = false
+
     fun resolve(
         world: Assumptions,
         root: Value.Object,
@@ -35,6 +39,26 @@ interface ResolverContract {
         ResultOnlyResolverResolutionObservation(
             resolve(world, root, selections),
         )
+
+    fun expectedResultFieldNames(vararg fieldNames: String): Set<String> =
+        fieldNames.toSet() +
+            if (alwaysGeneratesTypename) setOf("__typename") else emptySet()
+
+    fun expectedResultKeys(
+        type: Schema.ObjectType,
+        keys: Set<Value.GroundKey>,
+    ): Set<Value.GroundKey> =
+        keys +
+            if (alwaysGeneratesTypename) {
+                setOf(
+                    Value.GroundKey.of(
+                        field = type.fields.getValue("__typename"),
+                        arguments = emptyMap(),
+                    ),
+                )
+            } else {
+                emptySet()
+            }
 }
 
 internal fun Value.Object.hasExactlyFields(

@@ -144,7 +144,7 @@ interface NodeResolverContract : ResolverContract {
                 bridge.getValue(schema.contractKey("Profile\$Bridge", "\$node")).get(),
             )
 
-        assertEquals(setOf(bridgeKey), card.keys)
+        assertEquals(expectedResultKeys(card.type, setOf(bridgeKey)), card.keys)
         assertEquals(
             "\$node:7:Profileprofile-1",
             assertIs<Value.ID>(
@@ -246,7 +246,7 @@ interface NodeResolverContract : ResolverContract {
         val secondKey = Value.GroundKey.of(bridgeField, mapOf("group" to "second"))
 
         assertEquals(
-            setOf(firstKey, secondKey),
+            expectedResultKeys(result.type, setOf(firstKey, secondKey)),
             result.keys,
         )
         val first = assertIs<EngineResult.List>(result.getValue(firstKey).get())

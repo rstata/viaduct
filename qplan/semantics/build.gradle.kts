@@ -43,7 +43,27 @@ val stressResolverNames =
         "resolver24",
         "resolver24i",
         "resolver25",
+        "resolver26",
     )
+
+val resolver26ThreadCount =
+    providers
+        .gradleProperty("resolver26ThreadCount")
+        .orElse(providers.systemProperty("resolver26.thread.count"))
+        .orElse(providers.environmentVariable("RESOLVER26_THREAD_COUNT"))
+        .orElse("1")
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    inputs.property("resolver26ThreadCount", resolver26ThreadCount)
+
+    doFirst {
+        val configured = resolver26ThreadCount.get()
+        require(configured.toIntOrNull()?.let { threadCount -> threadCount > 0 } == true) {
+            "resolver26ThreadCount must be a positive integer: $configured"
+        }
+        systemProperty("resolver26.thread.count", configured)
+    }
+}
 
 tasks.test {
     useJUnitPlatform()
@@ -53,6 +73,10 @@ tasks.test {
             excludeTestsMatching("semantics.$resolverName.ResolverStressTest")
         }
         excludeTestsMatching("semantics.resolver25.ResolverBroadStressTest")
+        excludeTestsMatching("semantics.resolver25.ResolverBroadStressCampaignTest")
+        excludeTestsMatching("semantics.resolver26.ResolverBroadStressTest")
+        excludeTestsMatching("semantics.resolver26.ResolverBroadStressCampaignTest")
+        excludeTestsMatching("semantics.resolver26.ResolverMultithreadedStressTest")
     }
 }
 
@@ -100,7 +124,25 @@ val resolverPropertyProfiles =
         "resolver25-passive-variable-use" to
             "generated path variables activate below passive branches",
         "resolver25-broad-stress" to
-            "balanced full-feature worlds resolve correctly",
+            "broad full-feature worlds resolve correctly",
+        "resolver25-broad-list-descendants" to
+            "broad full-feature worlds resolve correctly",
+        "resolver25-broad-nullable-errors" to
+            "broad full-feature worlds resolve correctly",
+        "resolver25-broad-mixed-variables" to
+            "broad full-feature worlds resolve correctly",
+        "resolver25-broad-multiple-owners" to
+            "broad full-feature worlds resolve correctly",
+        "resolver26-broad-stress" to
+            "broad full-feature worlds resolve correctly",
+        "resolver26-broad-localized-descendants" to
+            "broad full-feature worlds resolve correctly",
+        "resolver26-broad-nullable-errors" to
+            "broad full-feature worlds resolve correctly",
+        "resolver26-broad-stamp-collisions" to
+            "broad full-feature worlds resolve correctly",
+        "resolver26-broad-multiple-owners" to
+            "broad full-feature worlds resolve correctly",
         "feature-interaction" to "generated full feature interactions resolve correctly",
         "resolver03-construction-witness" to
             "generated construction witness is exact minimal and permutation invariant",
@@ -264,12 +306,25 @@ val resolver25BroadStressSize =
         .gradleProperty("resolver25BroadStressSize")
         .orElse(providers.systemProperty("resolver25.broad.stress.size"))
         .orElse(providers.environmentVariable("RESOLVER25_BROAD_STRESS_SIZE"))
-        .orElse("10:20:50")
 val resolver25BroadStressSeed =
     providers
         .gradleProperty("resolver25BroadStressSeed")
         .orElse(providers.systemProperty("resolver25.broad.stress.seed"))
         .orElse(providers.environmentVariable("RESOLVER25_BROAD_STRESS_SEED"))
+val resolver25BroadStressProfile =
+    providers
+        .gradleProperty("resolver25BroadStressProfile")
+        .orElse(providers.systemProperty("resolver25.broad.stress.profile"))
+        .orElse(providers.environmentVariable("RESOLVER25_BROAD_STRESS_PROFILE"))
+        .orElse("balanced")
+val resolver25BroadStressProfiles =
+    mapOf(
+        "balanced" to Pair("resolver25-broad-stress", "10:20:50"),
+        "list-descendants" to Pair("resolver25-broad-list-descendants", "10:20:50"),
+        "nullable-errors" to Pair("resolver25-broad-nullable-errors", "10:20:50"),
+        "mixed-variables" to Pair("resolver25-broad-mixed-variables", "10:20:50"),
+        "multiple-owners" to Pair("resolver25-broad-multiple-owners", "10:50:20"),
+    )
 
 tasks.register<org.gradle.api.tasks.testing.Test>("resolver25BroadStress") {
     group = "verification"
@@ -288,7 +343,14 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolver25BroadStress") {
     }
 
     doFirst {
-        val size = resolver25BroadStressSize.get()
+        val profile = resolver25BroadStressProfile.get()
+        val profileConfiguration =
+            resolver25BroadStressProfiles[profile]
+                ?: throw GradleException(
+                    "Unknown resolver25BroadStressProfile $profile; profiles=" +
+                        resolver25BroadStressProfiles.keys.sorted().joinToString(),
+                )
+        val size = resolver25BroadStressSize.orNull ?: profileConfiguration.second
         require(size.matches(Regex("""[1-9][0-9]*:[1-9][0-9]*:[1-9][0-9]*"""))) {
             "resolver25BroadStressSize must have S:R:Q form with positive integers: $size"
         }
@@ -302,12 +364,253 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolver25BroadStress") {
         seed.toLongOrNull()
             ?: throw GradleException("resolver25BroadStressSeed must be a Long: $seed")
 
+        systemProperty("resolver25.broad.stress.profile", profile)
         systemProperty("resolver25.broad.stress.size", size)
         systemProperty("resolver25.broad.stress.seed", seed)
         systemProperty("resolver.property.size", size)
         systemProperty("resolver.property.seed", seed)
         systemProperty("resolver.property.case", "all")
-        systemProperty("resolver.property.profile", "resolver25-broad-stress")
+        systemProperty("resolver.property.profile", profileConfiguration.first)
         systemProperty("kotest.proptest.default.seed", seed)
+    }
+}
+
+val resolver25BroadStressCampaignRound =
+    providers
+        .gradleProperty("resolver25BroadStressCampaignRound")
+        .orElse(providers.systemProperty("resolver25.broad.campaign.round"))
+val resolver25BroadStressCampaignProfile =
+    providers
+        .gradleProperty("resolver25BroadStressCampaignProfile")
+        .orElse(providers.systemProperty("resolver25.broad.campaign.profile"))
+val resolver25BroadStressCampaignProfiles = resolver25BroadStressProfiles.keys
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver25BroadStressCampaign") {
+    group = "verification"
+    description = "Runs one recorded five-profile Resolver25 broad-stress campaign round."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver25.ResolverBroadStressCampaignTest")
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val round =
+            resolver25BroadStressCampaignRound.orNull
+                ?: throw GradleException(
+                    "Set -Presolver25BroadStressCampaignRound=<1..100>",
+                )
+        val roundNumber =
+            round.toIntOrNull()
+                ?: throw GradleException(
+                    "resolver25BroadStressCampaignRound must be an integer: $round",
+                )
+        require(roundNumber in 1..100) {
+            "resolver25BroadStressCampaignRound must be in 1..100: $round"
+        }
+        val profile = resolver25BroadStressCampaignProfile.orNull
+        require(profile == null || profile in resolver25BroadStressCampaignProfiles) {
+            "Unknown resolver25BroadStressCampaignProfile $profile; profiles=" +
+                resolver25BroadStressCampaignProfiles.sorted().joinToString()
+        }
+        val case = resolverPropertyReplayCase.get()
+        require(
+            case.equals("all", ignoreCase = true) ||
+                case.matches(Regex("""[1-9][0-9]*:[1-9][0-9]*:[1-9][0-9]*""")),
+        ) {
+            "resolverPropertyCase must be all or S:R:Q with positive integers: $case"
+        }
+        require(case.equals("all", ignoreCase = true) || profile != null) {
+            "Set -Presolver25BroadStressCampaignProfile=<profile> for coordinate replay"
+        }
+
+        systemProperty("resolver25.broad.campaign.round", round)
+        profile?.let {
+            systemProperty("resolver25.broad.campaign.profile", it)
+        }
+        systemProperty("resolver.property.case", case)
+    }
+}
+
+val resolver26BroadStressSize =
+    providers
+        .gradleProperty("resolver26BroadStressSize")
+        .orElse(providers.systemProperty("resolver26.broad.stress.size"))
+        .orElse(providers.environmentVariable("RESOLVER26_BROAD_STRESS_SIZE"))
+val resolver26BroadStressSeed =
+    providers
+        .gradleProperty("resolver26BroadStressSeed")
+        .orElse(providers.systemProperty("resolver26.broad.stress.seed"))
+        .orElse(providers.environmentVariable("RESOLVER26_BROAD_STRESS_SEED"))
+val resolver26BroadStressProfile =
+    providers
+        .gradleProperty("resolver26BroadStressProfile")
+        .orElse(providers.systemProperty("resolver26.broad.stress.profile"))
+        .orElse(providers.environmentVariable("RESOLVER26_BROAD_STRESS_PROFILE"))
+        .orElse("balanced")
+val resolver26BroadStressProfiles =
+    mapOf(
+        "balanced" to Pair("resolver26-broad-stress", "10:20:50"),
+        "localized-descendants" to
+            Pair("resolver26-broad-localized-descendants", "10:20:50"),
+        "nullable-errors" to Pair("resolver26-broad-nullable-errors", "10:20:50"),
+        "stamp-collisions" to Pair("resolver26-broad-stamp-collisions", "10:20:50"),
+        "multiple-owners" to Pair("resolver26-broad-multiple-owners", "10:50:20"),
+    )
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver26BroadStress") {
+    group = "verification"
+    description = "Runs every case in a seeded broad Resolver26 generated product."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver26.ResolverBroadStressTest")
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val profile = resolver26BroadStressProfile.get()
+        val profileConfiguration =
+            resolver26BroadStressProfiles[profile]
+                ?: throw GradleException(
+                    "Unknown resolver26BroadStressProfile $profile; profiles=" +
+                        resolver26BroadStressProfiles.keys.sorted().joinToString(),
+                )
+        val size = resolver26BroadStressSize.orNull ?: profileConfiguration.second
+        require(size.matches(Regex("""[1-9][0-9]*:[1-9][0-9]*:[1-9][0-9]*"""))) {
+            "resolver26BroadStressSize must have S:R:Q form with positive integers: $size"
+        }
+        val seed =
+            resolver26BroadStressSeed.orNull
+                ?: throw GradleException(
+                    "Set -Presolver26BroadStressSeed=<long>, " +
+                        "-Dresolver26.broad.stress.seed=<long>, or " +
+                        "RESOLVER26_BROAD_STRESS_SEED=<long>",
+                )
+        seed.toLongOrNull()
+            ?: throw GradleException("resolver26BroadStressSeed must be a Long: $seed")
+
+        systemProperty("resolver26.broad.stress.profile", profile)
+        systemProperty("resolver26.broad.stress.size", size)
+        systemProperty("resolver26.broad.stress.seed", seed)
+        systemProperty("resolver.property.size", size)
+        systemProperty("resolver.property.seed", seed)
+        systemProperty("resolver.property.case", "all")
+        systemProperty("resolver.property.profile", profileConfiguration.first)
+        systemProperty("kotest.proptest.default.seed", seed)
+    }
+}
+
+val resolver26BroadStressCampaignRound =
+    providers
+        .gradleProperty("resolver26BroadStressCampaignRound")
+        .orElse(providers.systemProperty("resolver26.broad.campaign.round"))
+val resolver26BroadStressCampaignProfile =
+    providers
+        .gradleProperty("resolver26BroadStressCampaignProfile")
+        .orElse(providers.systemProperty("resolver26.broad.campaign.profile"))
+val resolver26BroadStressCampaignProfiles = resolver26BroadStressProfiles.keys
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver26BroadStressCampaign") {
+    group = "verification"
+    description = "Runs one recorded five-profile Resolver26 broad-stress campaign round."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver26.ResolverBroadStressCampaignTest")
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val round =
+            resolver26BroadStressCampaignRound.orNull
+                ?: throw GradleException(
+                    "Set -Presolver26BroadStressCampaignRound=<1..100>",
+                )
+        val roundNumber =
+            round.toIntOrNull()
+                ?: throw GradleException(
+                    "resolver26BroadStressCampaignRound must be an integer: $round",
+                )
+        require(roundNumber in 1..100) {
+            "resolver26BroadStressCampaignRound must be in 1..100: $round"
+        }
+        val profile = resolver26BroadStressCampaignProfile.orNull
+        require(profile == null || profile in resolver26BroadStressCampaignProfiles) {
+            "Unknown resolver26BroadStressCampaignProfile $profile; profiles=" +
+                resolver26BroadStressCampaignProfiles.sorted().joinToString()
+        }
+        val case = resolverPropertyReplayCase.get()
+        require(
+            case.equals("all", ignoreCase = true) ||
+                case.matches(Regex("""[1-9][0-9]*:[1-9][0-9]*:[1-9][0-9]*""")),
+        ) {
+            "resolverPropertyCase must be all or S:R:Q with positive integers: $case"
+        }
+        require(case.equals("all", ignoreCase = true) || profile != null) {
+            "Set -Presolver26BroadStressCampaignProfile=<profile> for coordinate replay"
+        }
+
+        systemProperty("resolver26.broad.campaign.round", round)
+        profile?.let {
+            systemProperty("resolver26.broad.campaign.profile", it)
+        }
+        systemProperty("resolver.property.case", case)
+    }
+}
+
+val resolver26MultithreadedStressSize =
+    providers
+        .gradleProperty("resolver26MultithreadedStressSize")
+        .orElse("2:2:5")
+val resolver26MultithreadedStressRounds =
+    providers
+        .gradleProperty("resolver26MultithreadedStressRounds")
+        .orElse("1")
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver26MultithreadedStress") {
+    group = "verification"
+    description = "Runs each Resolver26 request on a fixed multithreaded dispatcher."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("semantics.resolver26.ResolverMultithreadedStressTest")
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        systemProperty(
+            "resolver26.multithreaded.size",
+            resolver26MultithreadedStressSize.get(),
+        )
+        systemProperty(
+            "resolver26.multithreaded.rounds",
+            resolver26MultithreadedStressRounds.get(),
+        )
     }
 }

@@ -59,6 +59,9 @@ class ResolverGeneratedTest :
     ObjectFragmentFromObjectPathGeneratedResolverContract,
     MixedVariableGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
+    override val alwaysGeneratesTypename: Boolean
+        get() = true
+
     override val selectiveResolvers: Boolean
         get() = true
 
@@ -214,11 +217,11 @@ class ResolverGeneratedTest :
             val sampledRun = runProfile(sampledCoverage)
             if (sampledRun.selectedCase != null) return@runBlocking
             val (activationRun, activationCoverage) =
-                if (sampledRun.seed == STRUCTURAL_ACTIVATION_SEED) {
+                if (sampledRun.seed == PASSIVE_USE_ACTIVATION_SEED) {
                     sampledRun to sampledCoverage
                 } else {
                     val coverage = PassiveUseCoverage()
-                    runProfile(coverage, STRUCTURAL_ACTIVATION_SEED) to coverage
+                    runProfile(coverage, PASSIVE_USE_ACTIVATION_SEED) to coverage
                 }
             activationRun.assertAggregate(
                 activationCoverage.generated > 0,
@@ -251,6 +254,7 @@ class ResolverGeneratedTest :
 
     private companion object {
         const val STRUCTURAL_ACTIVATION_SEED = 1L
+        const val PASSIVE_USE_ACTIVATION_SEED = 3L
 
         val CONVERGENCE_COVERAGE_COUNTS =
             TestCaseCount(

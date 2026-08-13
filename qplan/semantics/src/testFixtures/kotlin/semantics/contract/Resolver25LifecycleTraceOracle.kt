@@ -39,14 +39,14 @@ internal object Resolver25LifecycleTraceValidators {
                 mutableSetOf<Pair<DemandContributionId, List<PathComponent>>>()
             val interned =
                 mutableMapOf<List<PathComponent>, Resolver25KeyKind>()
-            val installedContributions =
-                mutableSetOf<Pair<DemandContributionId, List<PathComponent>>>()
             val promises = mutableSetOf<List<PathComponent>>()
             val sealed = mutableSetOf<List<PathComponent>>()
             val declaredBindings =
                 mutableSetOf<Pair<List<PathComponent>, Value.Variable.Stamped>>()
-            val completedBindings =
-                mutableSetOf<Pair<List<PathComponent>, Value.Variable.Stamped>>()
+            val completedBindingVariables = mutableSetOf<Value.Variable.Stamped>()
+            val contributionsByConsumer =
+                mutableMapOf<List<PathComponent>, MutableSet<DemandContributionId>>()
+            val installedContributionIds = mutableSetOf<DemandContributionId>()
             val startedResolvers = mutableSetOf<List<PathComponent>>()
             val finishedResolvers = mutableSetOf<List<PathComponent>>()
             val availableOutputs = mutableSetOf<List<PathComponent>>()
@@ -86,6 +86,11 @@ internal object Resolver25LifecycleTraceValidators {
                                 )
                         }
                         contributions[event.contributionId] = event
+                        event.consumerCoordinate?.let { consumer ->
+                            contributionsByConsumer
+                                .getOrPut(consumer, ::linkedSetOf)
+                                .add(event.contributionId)
+                        }
                     }
                     is Resolver25LifecycleEvent.DemandGrounded -> {
                         val submission = contributions[event.contributionId]
@@ -110,12 +115,7 @@ internal object Resolver25LifecycleTraceValidators {
                                 submission.selection.key.arguments
                                     .usedVariables()
                                     .filterIsInstance<Value.Variable.Stamped>()
-                                    .filter { variable ->
-                                        declaredBindings
-                                            .filter { binding ->
-                                                binding.second == variable
-                                            }.none(completedBindings::contains)
-                                    }
+                                    .filterNot(completedBindingVariables::contains)
                             if (unboundVariables.isNotEmpty()) {
                                 violations +=
                                     violation(
@@ -219,7 +219,7 @@ internal object Resolver25LifecycleTraceValidators {
                                     "Binding completed before declaration: ${event.variable}",
                                 )
                         }
-                        completedBindings += binding
+                        completedBindingVariables += event.variable
                     }
                     is Resolver25LifecycleEvent.ResolverStarted -> {
                         if (event.coordinate !in sealed) {
@@ -240,15 +240,9 @@ internal object Resolver25LifecycleTraceValidators {
                                 )
                         }
                         val uninstalledInputs =
-                            contributions.values
-                                .filter { submission ->
-                                    submission.consumerCoordinate == event.coordinate
-                                }.map { submission -> submission.contributionId }
-                                .filter { contribution ->
-                                    installedContributions.none { installed ->
-                                        installed.first == contribution
-                                    }
-                                }
+                            contributionsByConsumer[event.coordinate]
+                                .orEmpty()
+                                .filterNot(installedContributionIds::contains)
                         if (uninstalledInputs.isNotEmpty()) {
                             violations +=
                                 violation(
@@ -329,7 +323,7 @@ internal object Resolver25LifecycleTraceValidators {
                                     "Contribution installed before grounding: $contribution",
                                 )
                         }
-                        installedContributions += contribution
+                        installedContributionIds += event.contributionId
                     }
                     is Resolver25LifecycleEvent.ValuePublished -> {
                         if (event.coordinate !in availableOutputs) {

@@ -131,6 +131,17 @@ class LifecycleInstrumentationTest {
     }
 
     @Test
+    fun `reference validator rejects grounding before binding completion`() {
+        val trace =
+            fromArgumentTrace()
+                .filterNot { event ->
+                    event is Resolver25LifecycleEvent.BindingCompleted
+                }
+
+        assertViolation("binding.grounded-before-completion", trace)
+    }
+
+    @Test
     fun `publication validator rejects value publication before output`() {
         val trace = fromArgumentTrace().toMutableList()
         val publicationIndex =

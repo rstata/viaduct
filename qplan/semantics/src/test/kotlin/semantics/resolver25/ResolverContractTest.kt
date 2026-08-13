@@ -22,6 +22,9 @@ class ResolverContractTest :
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
+    override val alwaysGeneratesTypename: Boolean
+        get() = true
+
     override fun resolve(
         world: Assumptions,
         root: Value.Object,

@@ -521,7 +521,12 @@ class ResolverRegistryTest {
             )
 
         assertEquals(
-            setOf(fixture.key("id"), fixture.key("friend"), fixture.key("peers")),
+            setOf(
+                fixture.key("__typename"),
+                fixture.key("id"),
+                fixture.key("friend"),
+                fixture.key("peers"),
+            ),
             result.fieldValues.keys,
         )
         assertEquals(
@@ -530,10 +535,16 @@ class ResolverRegistryTest {
         )
         val snippedFriend =
             assertIs<Value.Object>(result.fieldValues[fixture.key("friend")])
-        assertEquals(setOf(fixture.key("id")), snippedFriend.fieldValues.keys)
+        assertEquals(
+            setOf(fixture.key("__typename"), fixture.key("id")),
+            snippedFriend.fieldValues.keys,
+        )
         val peers = assertIs<Value.OutputList>(result.fieldValues[fixture.key("peers")])
         val snippedPeer = assertIs<Value.Object>(peers.values.first())
-        assertEquals(setOf(fixture.key("name")), snippedPeer.fieldValues.keys)
+        assertEquals(
+            setOf(fixture.key("__typename"), fixture.key("name")),
+            snippedPeer.fieldValues.keys,
+        )
         assertEquals(null, peers.values.last())
     }
 
@@ -560,7 +571,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.fieldValues.keys)
+        assertEquals(setOf(fixture.key("__typename")), result.fieldValues.keys)
     }
 
     @Test
@@ -588,7 +599,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.fieldValues.keys)
+        assertEquals(setOf(fixture.key("__typename")), result.fieldValues.keys)
     }
 
     @Test
@@ -652,7 +663,12 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.fieldValues.keys)
+        val typenameKey =
+            Value.GroundKey.of(
+                testWorld.schema.objectField("User", "__typename"),
+                emptyMap(),
+            )
+        assertEquals(setOf(typenameKey), result.fieldValues.keys)
     }
 
     @Test
@@ -727,7 +743,10 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(setOf(fixture.key("name")), result.fieldValues.keys)
+        assertEquals(
+            setOf(fixture.key("__typename"), fixture.key("name")),
+            result.fieldValues.keys,
+        )
     }
 
     @Test

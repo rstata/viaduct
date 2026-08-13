@@ -12,9 +12,10 @@ import model.registry.ResolverRegistry
  *
  * ### Invariant: assumptions-monotonic-variable-bindings
  *
- * The binding domain grows only through [declareBinding]. Every declared variable has exactly one
- * [Promise] of a ground [Value.Input] value, including a possible null value. Each promise completes
- * once, and [getBinding] and [fetchBinding] are defined exactly on declared bindings.
+ * The binding domain grows only through [declareBinding] or [bindVariable]. Every declared variable
+ * has exactly one [Promise] of a ground [Value.Input] value, including a possible null value. Each
+ * promise completes once, and [getBinding] and [fetchBinding] are defined exactly on declared
+ * bindings.
  */
 sealed interface Assumptions {
     val schema: Schema
@@ -32,6 +33,18 @@ sealed interface Assumptions {
      * @throws IllegalStateException when [variable] has already been declared
      */
     fun declareBinding(variable: Value.Variable.Stamped)
+
+    /**
+     * Binds [variable] immediately to [value].
+     *
+     * [value] may be null. Its ground type excludes [Value.Variable] by construction.
+     *
+     * @throws IllegalStateException when [variable] has already been declared or bound
+     */
+    fun bindVariable(
+        variable: Value.Variable.Stamped,
+        value: Value.Input?,
+    )
 
     /**
      * Completes the declared binding for [variable].
@@ -96,6 +109,13 @@ private class AssumptionsImpl(
 
     override fun declareBinding(variable: Value.Variable.Stamped) {
         bindings.write(variable, Promise.ofDeferred())
+    }
+
+    override fun bindVariable(
+        variable: Value.Variable.Stamped,
+        value: Value.Input?,
+    ) {
+        bindings.write(variable, Promise.of(value))
     }
 
     override fun completeBinding(

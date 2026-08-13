@@ -9,6 +9,8 @@ import model.registry.FieldResolverApplicationObserver
 import model.registry.FieldResolverFunction
 import model.registry.VariableDefinition
 import model.merge
+import model.selectionForestOf
+import model.variableTemplates
 
 /**
  * A raw field-resolver definition accepted only by test-fixture composition.
@@ -75,7 +77,18 @@ class FieldResolverDefinition private constructor(
             require(fragment.nominalType == objectType) {
                 "$role type ${fragment.nominalType.typeName} does not match ${objectType.typeName}"
             }
-            return fragment.subselections.merge(objectType)
+            val preGroundedSelections =
+                fragment.subselections.filter { selection ->
+                    selection.key.arguments.variableTemplates().isEmpty()
+                }
+            val variableSelections =
+                fragment.subselections.filter { selection ->
+                    selection.key.arguments.variableTemplates().isNotEmpty()
+                }
+            return preGroundedSelections.merge(objectType) +
+                variableSelections.flatMap { selection ->
+                    selectionForestOf(selection).merge(objectType)
+                }
         }
 
         validateObjectFragment(objectFragment)

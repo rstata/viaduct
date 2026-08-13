@@ -18,6 +18,9 @@ sealed interface Promise<T> {
     /** @throws IllegalStateException when this promise has already been completed */
     fun complete(value: T)
 
+    /** @throws IllegalStateException when this promise has already been completed */
+    fun fail(cause: Throwable)
+
     companion object {
         fun <T> of(value: T): Promise<T> = CompletedPromiseImpl(value)
 
@@ -39,6 +42,9 @@ private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
 
     override fun complete(value: T): Nothing =
         throw IllegalStateException("Promise has already been completed")
+
+    override fun fail(cause: Throwable): Nothing =
+        throw IllegalStateException("Promise has already been completed")
 }
 
 private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : Promise<T> {
@@ -59,5 +65,10 @@ private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : P
         check(!deferred.isCompleted) { "Promise has already been completed" }
         validate(value)
         check(deferred.complete(value)) { "Promise has already been completed" }
+    }
+
+    override fun fail(cause: Throwable) {
+        check(!deferred.isCompleted) { "Promise has already been completed" }
+        check(deferred.completeExceptionally(cause)) { "Promise has already been completed" }
     }
 }

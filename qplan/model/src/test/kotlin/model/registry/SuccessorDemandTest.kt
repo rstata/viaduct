@@ -1,6 +1,7 @@
 package model.registry
 
 import kotlinx.coroutines.runBlocking
+import model.Assumptions
 import model.Schema
 import model.Value
 import model.emptyFragmentOf
@@ -207,6 +208,94 @@ class SuccessorDemandTest {
         )
     }
 
+    @Test
+    fun `deferred successor closure expands each grounded resolver key once`() {
+        val layers = 10
+        val layerFields =
+            (0..layers).flatMap { layer ->
+                listOf("a$layer", "b$layer")
+            }
+        val originalWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Item {
+                      ${layerFields.joinToString("\n  ") { field -> "$field: Int!" }}
+                      sink: Int!
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    buildMap {
+                        put(
+                            schema.objectField("Query", "item"),
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Error
+                            },
+                        )
+                        layerFields.forEach { field ->
+                            val layer = field.drop(1).toInt()
+                            val objectFragment =
+                                if (layer == 0) {
+                                    schema.emptyFragmentOf("Item")
+                                } else {
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment Layer on Item {
+                                          a${layer - 1}
+                                          b${layer - 1}
+                                        }
+                                        """.trimIndent(),
+                                    )
+                                }
+                            put(
+                                schema.objectField("Item", field),
+                                fieldResolverOf(objectFragment) { _, _ ->
+                                    Value.Int.of(0)
+                                },
+                            )
+                        }
+                        put(
+                            schema.objectField("Item", "sink"),
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment Sink on Item {
+                                      a$layers
+                                      b$layers
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ) { _, _ ->
+                                Value.Int.of(0)
+                            },
+                        )
+                    }
+                },
+            ).assumptions
+        val registry = CountingResolverRegistry(originalWorld.resolverRegistry)
+        val world =
+            Assumptions.of(
+                schema = originalWorld.schema,
+                resolverRegistry = registry,
+            )
+        val selections =
+            world.schema
+                .fragmentFrom("fragment Demand on Item { sink }")
+                .subselections
+
+        runBlocking {
+            context(world) {
+                selections.fetchSuccessorDemandDeferringTemplates()
+            }
+        }
+
+        assertEquals(layerFields.size + 1, registry.resolverLookups)
+    }
+
     private fun Set<Value.GroundKey>.fieldNames(): Set<String> =
         mapTo(mutableSetOf()) { key -> key.field.fieldName }
 
@@ -218,4 +307,21 @@ class SuccessorDemandTest {
             field = objectField(type.typeName, fieldName),
             arguments = emptyMap(),
         )
+}
+
+private class CountingResolverRegistry(
+    private val delegate: ResolverRegistry,
+) : ResolverRegistry {
+    var resolverLookups: Int = 0
+        private set
+
+    override fun contains(field: Schema.ObjectField): Boolean = field in delegate
+
+    override fun resolver(field: Schema.ObjectField): FieldResolver {
+        resolverLookups += 1
+        return delegate.resolver(field)
+    }
+
+    override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> =
+        delegate.mayDemandFrom(field)
 }

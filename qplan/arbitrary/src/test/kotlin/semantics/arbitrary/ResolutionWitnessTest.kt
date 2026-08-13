@@ -10,6 +10,7 @@ import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Disabled
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -193,6 +194,31 @@ class ResolutionWitnessTest {
 
         log.record(coordinate, arguments, input)
         assertEquals(1, log.snapshot().applications.size)
+    }
+
+    @Test
+    fun `application log records concurrent resolver applications exactly`() {
+        val world = fingerprintWorld()
+        val field = world.schema.field("Query", "search")
+        val arguments = arguments(field, limit = 3, rank = 7, tags = listOf(1, 2))
+        val input = world.schema.objectOf("Query")
+        val coordinate = FieldCoordinate("Query", "search")
+        val log = ResolutionApplicationLog()
+        val executor = Executors.newFixedThreadPool(8)
+
+        try {
+            val applications =
+                (1..1_000).map {
+                    executor.submit {
+                        log.record(coordinate, arguments, input)
+                    }
+                }
+            applications.forEach { application -> application.get() }
+        } finally {
+            executor.shutdownNow()
+        }
+
+        assertEquals(1_000, log.snapshot().applications.size)
     }
 
     @Test

@@ -591,14 +591,15 @@ class GeneratorTest {
                 (ResolverFragmentDepth to 3) +
                 (ResolverVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
-                (ResolverVariableCount to 1..1) +
-                (ResolverFromObjectFieldProviderPathLength to 1..1) +
+                (ResolverVariableCount to 2..3) +
+                (ResolverFromObjectFieldProviderPathLength to 1..3) +
                 (ResolverFromObjectFieldVariableOwnerLimit to 1) +
                 (ResolverFromObjectFieldVariableUseDepth to 2..3) +
                 (ResolverFromObjectFieldPassiveUseWeight to 1.0) +
                 (UnionsEnabled to false)
         val random = RandomSource.seeded(97533L)
         var generatedPassiveUses = 0
+        var maximumVariablesPerOwner = 0
 
         repeat(300) {
             val schema = Arb.schema(config).next(random)
@@ -607,9 +608,12 @@ class GeneratorTest {
             registry.world(schema)
             generatedPassiveUses +=
                 registry.features.passiveTopLevelFromObjectFieldVariableUseCount
+            maximumVariablesPerOwner =
+                maxOf(maximumVariablesPerOwner, registry.features.maximumVariablesPerOwner)
         }
 
         assertTrue(generatedPassiveUses > 0)
+        assertTrue(maximumVariablesPerOwner > 1)
     }
 
     @Test

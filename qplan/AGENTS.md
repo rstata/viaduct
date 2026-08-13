@@ -32,6 +32,12 @@ Keep each prose paragraph and list item on one physical line. Put durable proble
 
 Document factory-established carrier invariants on the factory using `### Invariant: kebab-case-label`; labels share one namespace with claims and are checked by `checkDocumentationLabels`. Keep KDoc local to the declaration and avoid restating type-established invariants.
 
+## Resolver Examples
+
+Present every concrete resolver/control-flow example as a complete GraphQL schema followed by the triggering query. Order schema types top-down: `Query` first, then each type used by `Query`, then the types used by those types. Put a comment beside every field saying whether it is passive or has a resolver; for every resolver field, state its object fragment, variable definitions and their sources, and the value it returns or produces. For passive fields, state which ancestor resolver produces the value. Use concrete domain names rather than abstract placeholders, and explain the execution only after presenting the complete schema and query.
+
 ## Validation
 
 Run `./gradlew check` from this directory.
+
+Resolver26 tests, thread-count configuration, CPU-parallelism probes, and large-campaign guidance are documented in [`testing-resolver26.md`](./semantics/src/main/kotlin/semantics/resolver26/testing-resolver26.md).

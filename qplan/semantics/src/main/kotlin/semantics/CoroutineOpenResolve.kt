@@ -301,7 +301,7 @@ private class OpenObjectOrchestrator(
         definitions.forEach { definition ->
             world.declareBinding(definition.variable)
         }
-        addDemand(resolver.stampedObjectFragment(coordinate))
+        addDemand(resolver.stampVars(coordinate))
         definitions.forEach { definition ->
             runtime.scope.launch(start = CoroutineStart.DEFAULT) {
                 val value = readProvider(definition, coordinate)
@@ -372,7 +372,7 @@ private class OpenObjectOrchestrator(
                         val coordinate = path + key
                         val input =
                             materialize(
-                                selections = resolver.stampedObjectFragment(coordinate),
+                                selections = resolver.stampVars(coordinate),
                                 reader = coordinate,
                             )
                         when {

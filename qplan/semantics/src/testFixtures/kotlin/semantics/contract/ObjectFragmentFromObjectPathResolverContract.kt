@@ -66,16 +66,22 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Query", "result")
         val resultKey = Value.GroundKey.of(resultField, emptyMap())
+        val resolver = world.resolverRegistry.resolver(resultField)
         val fragment = world.fragmentFrom("fragment ignored on Query { result }")
 
         val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val boundVariable =
+            context(world) {
+                resolver
+                    .boundObjectPathDefinitions(listOf(resultKey))
+                    .single()
+                    .variable
+            }
 
         assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
         assertEquals(
             Value.Int.of(7),
-            world.getBinding(
-                Value.Variable.of(resultField, "value").stamp(listOf(resultKey)),
-            ),
+            world.getBinding(boundVariable),
         )
     }
 
@@ -139,9 +145,17 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
             val world = testWorld.assumptions
             val resultField = world.schema.objectField("Query", "result")
             val resultKey = Value.GroundKey.of(resultField, emptyMap())
+            val resolver = world.resolverRegistry.resolver(resultField)
             val fragment = world.fragmentFrom("fragment ignored on Query { result }")
 
             val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
+            val boundVariable =
+                context(world) {
+                    resolver
+                        .boundObjectPathDefinitions(listOf(resultKey))
+                        .single()
+                        .variable
+                }
 
             assertEquals<Value.Input?>(
                 provided,
@@ -149,9 +163,7 @@ interface ObjectFragmentFromObjectPathResolverContract : ResolverContract {
             )
             assertEquals(
                 provided,
-                world.getBinding(
-                    Value.Variable.of(resultField, "value").stamp(listOf(resultKey)),
-                ),
+                world.getBinding(boundVariable),
             )
         }
     }

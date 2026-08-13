@@ -48,7 +48,7 @@ private fun Schema.ObjectType.closeResolverDemand(
         unexpandedResolverKeys.flatMapToSelectionForest { key ->
             world.resolverRegistry
                 .resolver(key.field)
-                .stampedObjectFragment(path + key)
+                .stampVars(path + key)
         }
     return closeResolverDemand(
         path = path,

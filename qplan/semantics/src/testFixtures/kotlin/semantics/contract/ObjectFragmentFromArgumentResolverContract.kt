@@ -99,8 +99,25 @@ interface ObjectFragmentFromArgumentResolverContract : ResolverContract {
             ),
             consumeArguments,
         )
-        assertEquals(Value.Int.of(7), world.getBinding(variable.stamp(listOf(firstKey))))
-        assertEquals(Value.Int.of(8), world.getBinding(variable.stamp(listOf(secondKey))))
+        val resolver = world.resolverRegistry.resolver(resultField)
+        listOf(
+            firstKey to Value.Int.of(7),
+            secondKey to Value.Int.of(8),
+        ).forEach { (groundKey, expectedValue) ->
+            val path = listOf(groundKey)
+            val selectionStampedVariables =
+                resolver
+                    .selectionStampedVariableDefinitions(path)
+                    .map { definition -> definition.variable }
+            val boundVariables =
+                selectionStampedVariables
+                    .takeIf { variables ->
+                        variables.isNotEmpty() && variables.all(world::isBound)
+                    } ?: listOf(variable.stamp(path))
+            boundVariables.forEach { boundVariable ->
+                assertEquals(expectedValue, world.getBinding(boundVariable))
+            }
+        }
     }
 
     @Test

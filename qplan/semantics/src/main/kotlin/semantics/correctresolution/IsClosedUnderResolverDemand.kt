@@ -4,6 +4,8 @@ import model.Assumptions
 import model.EngineResult
 import model.PathComponent
 import model.Value
+import model.applicableGroundSelections
+import model.usedVariables
 
 /**
  * Whether every resolver activated by this result has its required input in the same result tree.
@@ -25,18 +27,42 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
 ): Boolean {
     val registry = world.resolverRegistry
 
-    return keys.all { key ->
+    return keys.all { groundKey ->
         val fieldResolverDemandIsClosed =
-            key.arguments.argumentsContainErrorValue() ||
-                key.field !in registry ||
-                conformsToSelections(
-                    registry
-                        .resolver(key.field)
-                        .objectFragmentAt(path + key),
-                )
+            groundKey.arguments.argumentsContainErrorValue() ||
+                groundKey.field !in registry ||
+                registry
+                    .resolver(groundKey.field)
+                    .let { resolver ->
+                        val coordinate = path + groundKey
+                        val selectionStamped =
+                            if (groundKey is Value.GroundKey.Stamped) {
+                                resolver.stampFrom(groundKey.selectionStamp)
+                            } else {
+                                resolver.stamp(coordinate)
+                            }
+                        if (
+                            selectionStamped.usedVariables().all { variable ->
+                                variable is Value.Variable.Stamped && world.isBound(variable)
+                            }
+                        ) {
+                            conformsToSelectionsAt(
+                                selections =
+                                    selectionStamped.applicableGroundSelections(
+                                        groundKey.field.containingType,
+                                    ),
+                                path = path,
+                            )
+                        } else {
+                            val variableStamped = resolver.objectFragmentAt(coordinate)
+                            conformsToSelectionsAt(variableStamped, path)
+                        }
+                    }
 
         fieldResolverDemandIsClosed &&
-            getValue(key).get().engineResultIsClosedUnderResolverDemand(path + key)
+            getValue(groundKey)
+                .get()
+                .engineResultIsClosedUnderResolverDemand(path + groundKey)
     }
 }
 

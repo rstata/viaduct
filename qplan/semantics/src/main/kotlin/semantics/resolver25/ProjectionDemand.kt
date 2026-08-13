@@ -18,12 +18,17 @@ import model.usedVariables
 context(world: Assumptions)
 internal fun SelectionForest.projectionDemandDeferringTemplates(): SelectionForest {
     val passiveDemandByResolverField = mutableMapOf<Schema.ObjectField, SelectionForest>()
-    return projectionDemandDeferringTemplates(passiveDemandByResolverField)
+    val groundedDemandByResolverField = mutableMapOf<Schema.ObjectField, SelectionForest>()
+    return projectionDemandDeferringTemplates(
+        passiveDemandByResolverField,
+        groundedDemandByResolverField,
+    )
 }
 
 context(world: Assumptions)
 private fun SelectionForest.projectionDemandDeferringTemplates(
     passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+    groundedDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
 ): SelectionForest =
     coalesceEquivalentSelections()
         .flatMap { selection ->
@@ -40,6 +45,18 @@ private fun SelectionForest.projectionDemandDeferringTemplates(
                     field.fixedPassivePredecessorDemand(passiveDemandByResolverField)
                 }
             } else {
+                val groundedResolverDemand =
+                    selection.possibleTypes.flatMapToSelectionForest { possibleType ->
+                        val field = selection.objectKey(possibleType).field
+                        if (field in world.resolverRegistry) {
+                            field.fixedGroundedProjectionDemand(
+                                passiveDemandByResolverField,
+                                groundedDemandByResolverField,
+                            )
+                        } else {
+                            selectionForestOf()
+                        }
+                    }
                 selectionForestOf(
                     Selection.of(
                         key = selection.key,
@@ -47,11 +64,26 @@ private fun SelectionForest.projectionDemandDeferringTemplates(
                         subselections =
                             selection.subselections.projectionDemandDeferringTemplates(
                                 passiveDemandByResolverField,
+                                groundedDemandByResolverField,
                             ),
                     ),
-                )
+                ) + groundedResolverDemand
             }
         }.coalesceEquivalentSelections()
+
+context(world: Assumptions)
+private fun Schema.ObjectField.fixedGroundedProjectionDemand(
+    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+    groundedDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+): SelectionForest =
+    groundedDemandByResolverField[this]
+        ?: world.resolverRegistry
+            .resolver(this)
+            .objectFragment
+            .projectionDemandDeferringTemplates(
+                passiveDemandByResolverField,
+                groundedDemandByResolverField,
+            ).also { demand -> groundedDemandByResolverField[this] = demand }
 
 context(world: Assumptions)
 private fun Schema.ObjectField.fixedPassivePredecessorDemand(

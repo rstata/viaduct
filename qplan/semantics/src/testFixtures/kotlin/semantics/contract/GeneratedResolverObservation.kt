@@ -13,6 +13,11 @@ import model.testing.TestWorld
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverTestCase
 import semantics.correctresolution.correctResolution
+import semantics.correctresolution.conformsToResolvers
+import semantics.correctresolution.conformsToSelections
+import semantics.correctresolution.conformsToTypename
+import semantics.correctresolution.isClosedUnderResolverDemand
+import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -47,11 +52,48 @@ object GeneratedCaseAssertions {
     val correctResolution =
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
-                assertTrue(
-                    context(execution.world) {
-                        execution.result.correctResolution(execution.fragment)
-                    },
-                )
+                context(execution.world) {
+                    val correct = execution.result.correctResolution(execution.fragment)
+                    if (!correct) {
+                        fun diagnostic(
+                            name: String,
+                            value: () -> Any?,
+                        ): String =
+                            "$name=" +
+                                runCatching(value).fold(
+                                    onSuccess = Any?::toString,
+                                    onFailure = { failure ->
+                                        "${failure::class.simpleName}: ${failure.message}"
+                                    },
+                                )
+
+                        listOf(
+                            diagnostic("rootedAndWellTyped") {
+                                execution.result.rootedAndWellTyped()
+                            },
+                            diagnostic("conformsToSelections") {
+                                execution.result.conformsToSelections(
+                                    execution.fragment.subselections,
+                                )
+                            },
+                            diagnostic("isClosedUnderResolverDemand") {
+                                execution.result.isClosedUnderResolverDemand()
+                            },
+                            diagnostic("unclosedResolverOccurrences") {
+                                execution.result.unclosedRegisteredResolverOccurrences()
+                            },
+                            diagnostic("conformsToResolvers") {
+                                execution.result.conformsToResolvers()
+                            },
+                            diagnostic("conformsToTypename") {
+                                execution.result.conformsToTypename()
+                            },
+                        ).joinToString(separator = "\n")
+                            .let { diagnostics ->
+                                assertTrue(actual = false, message = diagnostics)
+                            }
+                    }
+                }
             }
         }
 

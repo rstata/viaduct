@@ -90,7 +90,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(
-            setOf("firstName", "lastName", "displayName", "greeting"),
+            expectedResultFieldNames("firstName", "lastName", "displayName", "greeting"),
             viewer.keys.map { it.field.fieldName }.toSet(),
         )
     }
@@ -161,7 +161,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 viewer.getValue(world.schema.contractKey("User", "profile")).get(),
             )
 
-        assertEquals(setOf("raw", "rendered"), profile.keys.map { it.field.fieldName }.toSet())
+        assertEquals(
+            expectedResultFieldNames("raw", "rendered"),
+            profile.keys.map { it.field.fieldName }.toSet(),
+        )
     }
 
     @Test
@@ -433,13 +436,22 @@ interface ObjectFragmentResolverContract : ResolverContract {
             }
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
-        assertEquals(expected.keys, result.keys)
-        expected.keys.forEach { key ->
+        assertEquals(
+            expectedResultKeys(result.type, expected.keys)
+                .mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
+            result.keys
+                .mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
+        )
+        expected.keys.forEach { expectedKey ->
+            val resultKey =
+                result.keys.single { key ->
+                    key.visibleIdentity() == expectedKey.visibleIdentity()
+                }
             assertTrue(
                 expected
-                    .getValue(key)
+                    .getValue(expectedKey)
                     .get()
-                    .sameCompletedResultAs(result.getValue(key).get()),
+                    .sameCompletedResultAs(result.getValue(resultKey).get()),
             )
         }
         assertEquals(
@@ -447,6 +459,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
             result.getValue(world.schema.contractKey("Query", "result")).get(),
         )
     }
+
+    private fun Value.GroundKey.visibleIdentity() =
+        field to arguments.fieldValues
 
     @Test
     fun `object outputs vary by input and arguments at equal-key list occurrences`() {

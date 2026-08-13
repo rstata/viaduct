@@ -4,6 +4,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
+import model.PathComponent
 import model.Schema
 import model.Selection
 import model.TypeExpr
@@ -11,6 +12,9 @@ import model.Value
 import model.instantiateBindings
 import model.objectKey
 import model.selectionForestOf
+import model.registry.FieldResolver
+import model.registry.StampedObjectPathDefinition
+import model.registry.VariableDefinition
 import semantics.arbitrary.registeredResolverOccurrences
 import kotlin.test.assertEquals
 
@@ -28,13 +32,41 @@ fun EngineResult.Object.validateObjectPathBindings() {
                 ),
             )
         resolver
-            .stampedPathVarDefinitions(cell.occurrencePath)
+            .boundObjectPathDefinitions(cell.occurrencePath)
             .forEach { definition ->
                 val expected =
                     cell.containingObject.readCompletedProvider(definition.path)
                 assertEquals(expected, world.getBinding(definition.variable))
             }
     }
+}
+
+context(world: Assumptions)
+internal fun FieldResolver.boundObjectPathDefinitions(
+    path: List<PathComponent>,
+): List<StampedObjectPathDefinition> {
+    val groundKey = path.lastOrNull() as? Value.GroundKey
+    val selectionStampedDefinitions =
+        if (groundKey is Value.GroundKey.Stamped) {
+            selectionStampedVariableDefinitionsFrom(groundKey.selectionStamp)
+        } else {
+            selectionStampedVariableDefinitions(path)
+        }
+    val boundDefinitions =
+        selectionStampedDefinitions
+            .mapNotNull { stampedDefinition ->
+                (stampedDefinition.definition as? VariableDefinition.FromObjectField)?.let {
+                    StampedObjectPathDefinition(
+                        variable = stampedDefinition.variable,
+                        path = it.path,
+                    )
+                }
+            }
+    return boundDefinitions
+        .takeIf { definitions ->
+            definitions.isNotEmpty() &&
+                definitions.all { definition -> world.isBound(definition.variable) }
+        } ?: stampedPathVarDefinitions(path)
 }
 
 context(world: Assumptions)

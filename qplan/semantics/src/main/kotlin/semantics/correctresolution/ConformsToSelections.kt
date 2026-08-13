@@ -3,10 +3,12 @@ package semantics.correctresolution
 import model.Assumptions
 import model.EngineResult
 import model.ObjectSelectionForest
+import model.PathComponent
 import model.SelectionForest
 import model.Value
 import model.applicableGroundSelections
 import model.groundKey
+import model.localizeTopLevelSelectionStamps
 
 /**
  * Whether this result contains every value required by [selections].
@@ -23,27 +25,41 @@ import model.groundKey
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToSelections(selections: SelectionForest): Boolean =
-    objectConformsToSelections(selections)
+    conformsToSelectionsAt(selections, emptyList())
 
 context(world: Assumptions)
 fun EngineResult.Object.conformsToSelections(selections: ObjectSelectionForest): Boolean {
     selections.byGroundKey()
-    return type == selections.type && objectConformsToSelections(selections)
+    return type == selections.type && conformsToSelectionsAt(selections, emptyList())
 }
+
+// Checks selections rooted at an OER whose exact absolute path is supplied by the caller.
+context(world: Assumptions)
+fun EngineResult.Object.conformsToSelectionsAt(
+    selections: SelectionForest,
+    path: List<PathComponent>,
+): Boolean = objectConformsToSelections(selections, path)
 
 context(world: Assumptions)
 private fun EngineResult.Object.objectConformsToSelections(
     selections: SelectionForest,
+    path: List<PathComponent>,
 ): Boolean =
     selections.applicableGroundSelections(type).byGroundKey().values.all { selection ->
         val key = selection.groundKey()
         key in keys &&
-            getValue(key).get().engineResultConformsToSelections(selection.subselections)
+            getValue(key)
+                .get()
+                .engineResultConformsToSelections(
+                    selections = selection.subselections,
+                    path = path + key,
+                )
     }
 
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToSelections(
     selections: SelectionForest,
+    path: List<PathComponent>,
 ): Boolean =
     when (this) {
         null,
@@ -51,7 +67,16 @@ private fun EngineResult?.engineResultConformsToSelections(
         is Value.Simple,
         -> true
 
-        is EngineResult.Object -> objectConformsToSelections(selections)
+        is EngineResult.Object ->
+            objectConformsToSelections(
+                selections = selections.localizeTopLevelSelectionStamps(path),
+                path = path,
+            )
         is EngineResult.List ->
-            all { value -> value.engineResultConformsToSelections(selections) }
+            indices.all { index ->
+                get(index).engineResultConformsToSelections(
+                    selections = selections,
+                    path = path + Value.ListIndex.of(index),
+                )
+            }
     }

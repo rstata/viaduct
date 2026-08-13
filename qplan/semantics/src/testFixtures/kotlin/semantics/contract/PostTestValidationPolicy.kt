@@ -5,7 +5,12 @@ import model.EngineResult
 import model.Fragment
 import model.Value
 import org.junit.jupiter.api.AfterEach
+import semantics.correctresolution.conformsToResolvers
+import semantics.correctresolution.conformsToSelections
+import semantics.correctresolution.conformsToTypename
 import semantics.correctresolution.correctResolution
+import semantics.correctresolution.isClosedUnderResolverDemand
+import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.assertTrue
 
 /**
@@ -41,6 +46,14 @@ private object ContractPostTestState {
             assertTrue(
                 context(validation.world) {
                     validation.result.correctResolution(validation.fragment)
+                },
+                context(validation.world) {
+                    "rooted=${validation.result.rootedAndWellTyped()}, " +
+                        "selections=" +
+                        validation.result.conformsToSelections(validation.fragment.subselections) +
+                        ", closed=${validation.result.isClosedUnderResolverDemand()}, " +
+                        "resolvers=${validation.result.conformsToResolvers()}, " +
+                        "typename=${validation.result.conformsToTypename()}"
                 },
             )
         }

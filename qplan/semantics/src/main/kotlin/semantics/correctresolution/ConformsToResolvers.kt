@@ -3,9 +3,13 @@ package semantics.correctresolution
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
 import model.Value
+import model.applicableGroundSelections
+import model.usedVariables
+import model.registry.FieldResolver
 import semantics.RuntimeSupport
 import semantics.materialize
 
@@ -32,30 +36,68 @@ private fun EngineResult.Object.objectConformsToResolvers(
     path: List<PathComponent>,
 ): Boolean {
     val registry = world.resolverRegistry
-    return keys.all { key ->
-        val value = getValue(key).get()
+    return keys.all { groundKey ->
+        val value = getValue(groundKey).get()
         val fieldResolverConforms =
             if (
-                key.arguments.argumentsContainErrorValue() ||
-                key.field !in registry
+                groundKey.arguments.argumentsContainErrorValue() ||
+                groundKey.field !in registry
             ) {
                 true
             } else {
-                val resolver = registry.resolver(key.field)
+                val resolver = registry.resolver(groundKey.field)
+                val coordinate = path + groundKey
+                val objectFragment =
+                    resolver.objectFragmentSatisfiedBy(
+                        result = this,
+                        path = coordinate,
+                    ) ?: return false
                 val input =
                     runBlocking {
                         materialize(
-                            selections =
-                                resolver
-                                    .objectFragmentAt(path + key),
-                            reader = path + key,
+                            selections = objectFragment,
+                            reader = coordinate,
                         )
                     }
-                val resolverValue = resolver(input, key.arguments)
+                val resolverArguments =
+                    Value.Arguments.of(
+                        field = groundKey.field,
+                        fields = groundKey.arguments.fieldValues,
+                    )
+                val resolverValue = resolver(input, resolverArguments)
                 value.engineResultConformsToResolverValue(resolverValue)
             }
 
-        fieldResolverConforms && value.engineResultConformsToResolvers(path + key)
+        fieldResolverConforms && value.engineResultConformsToResolvers(path + groundKey)
+    }
+}
+
+context(world: Assumptions)
+private fun FieldResolver.objectFragmentSatisfiedBy(
+    result: EngineResult.Object,
+    path: List<PathComponent>,
+): ObjectSelectionForest? {
+    val groundKey = path.lastOrNull() as? Value.GroundKey
+    val selectionStamped =
+        if (groundKey is Value.GroundKey.Stamped) {
+            stampFrom(groundKey.selectionStamp)
+        } else {
+            stamp(path)
+        }
+    if (
+        selectionStamped.usedVariables().all { variable ->
+            variable is Value.Variable.Stamped && world.isBound(variable)
+        }
+    ) {
+        val fullyStamped = selectionStamped.applicableGroundSelections(field.containingType)
+        return fullyStamped.takeIf { demand ->
+            result.conformsToSelectionsAt(demand, path.dropLast(1))
+        }
+    }
+
+    val variableStamped = objectFragmentAt(path)
+    return variableStamped.takeIf { demand ->
+        result.conformsToSelectionsAt(demand, path.dropLast(1))
     }
 }
 
@@ -113,14 +155,14 @@ private fun EngineResult.Object.objectFieldsConformToResolverValue(
 ): Boolean {
     if (type != resolverValue.type) return false
 
-    return keys.all { key ->
-        if (!fieldBelongsToResolver(key.field)) {
+    return keys.all { groundKey ->
+        if (!fieldBelongsToResolver(groundKey.field)) {
             true
-        } else if (!resolverValue.fieldValues.containsKey(key)) {
+        } else if (!resolverValue.fieldValues.containsKey(groundKey)) {
             false
         } else {
-            getValue(key).get().engineResultConformsToResolverValue(
-                resolverValue.fieldValues.getValue(key),
+            getValue(groundKey).get().engineResultConformsToResolverValue(
+                resolverValue.fieldValues.getValue(groundKey),
             )
         }
     }

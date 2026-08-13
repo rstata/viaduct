@@ -290,7 +290,7 @@ internal class Reactor private constructor(
                             definition = definition,
                         )
                 }
-                addDemand(resolver.stampedObjectFragment(coordinate))
+                addDemand(resolver.stampVars(coordinate))
                 progressed()
             }
         }
@@ -583,7 +583,7 @@ internal class Reactor private constructor(
             key.reactorSlotKind() != ReactorSlotKind.FIELD_RESOLVER ||
                 world.resolverRegistry
                     .resolver(key.field)
-                    .stampedObjectFragment(coordinate)
+                    .stampVars(coordinate)
                     .stampedVariables()
                     .all(world::isBound)
 

@@ -29,7 +29,7 @@ internal fun EngineResult.Object.resolverDependencies(
                     selections =
                         world.resolverRegistry
                             .resolver(key.field)
-                            .stampedObjectFragment(path + key),
+                            .stampVars(path + key),
                 )
         } else {
             emptySet()

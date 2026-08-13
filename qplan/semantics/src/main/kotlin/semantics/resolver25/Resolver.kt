@@ -3,6 +3,7 @@ package semantics.resolver25
 import java.util.Collections
 import java.util.IdentityHashMap
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.awaitAll
@@ -63,11 +64,7 @@ private fun Value.Object.resolveWithLifecycleInstrumentation(
         withTimeout(90_000) {
             context(RuntimeSupport.cycleChecking()) {
                 val result: EngineResult.Object =
-                    EngineResult.Object.of(
-                        type = type,
-                        values = emptyMap(),
-                        mutable = true,
-                    )
+                    type.newObjectResult()
                 coroutineScope {
                     val runtime =
                         ResolverRuntime(
@@ -171,6 +168,19 @@ private fun Schema.ObjectType.closeStructuralDemand(
     }
 }
 
+private fun Schema.ObjectType.newObjectResult(): EngineResult.Object {
+    val typenameKey =
+        Value.GroundKey.of(
+            field = fields.getValue("__typename"),
+            arguments = emptyMap(),
+        )
+    return EngineResult.Object.of(
+        type = this,
+        values = mapOf(typenameKey to Value.String.of(typeName)),
+        mutable = true,
+    )
+}
+
 /**
  * Resolves one object-result instance through per-grounded-key activation.
  *
@@ -201,7 +211,7 @@ private class ObjectResultOrchestrator(
             if (source.type in selection.possibleTypes) {
                 val field =
                     source.type.fields.getValue(selection.key.field.fieldName)
-                fields.getValue(field).addPotentialSubselections(selection.subselections)
+                fields.getValue(field).addPotentialSelection(selection)
             }
         }
     }
@@ -255,7 +265,8 @@ private class ObjectResultOrchestrator(
                 selection,
             )
         val activationComplete = CompletableDeferred<Unit>()
-        runtime.scope.launch {
+        // Merge immediately groundable demand before an existing key can seal; bindings still yield.
+        runtime.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 val coordinates = activateSelection(selection, contributionId)
                 coordinates.forEach { coordinate ->
@@ -626,8 +637,18 @@ private class ObjectResultOrchestrator(
                             emptyList()
                         } else {
                             check(resultObject.isValueSet(groundedKey)) {
-                                "Passive object at $path has no demanded value promise for " +
-                                    groundedKey
+                                "Passive object at " +
+                                    path.joinToString("/") { component ->
+                                        when (component) {
+                                            is Value.GroundKey ->
+                                                "${component.field.containingType.typeName}/" +
+                                                    component.field.fieldName
+                                            is Value.ListIndex -> "[${component.index}]"
+                                        }
+                                    } +
+                                    " has no demanded value promise for " +
+                                    "${groundedKey.field.containingType.typeName}/" +
+                                    groundedKey.field.fieldName
                             }
                             fieldValues
                                 .getValue(groundedKey)
@@ -720,6 +741,8 @@ private class ObjectResultOrchestrator(
                     fieldValue.resolveValue(
                         path = path + groundedKey,
                         resolverDemand = resolutionSelections,
+                        potentialDemand =
+                            keyState.potentialDemand + selection.subselections,
                     )
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
@@ -737,6 +760,7 @@ private class ObjectResultOrchestrator(
                             source = child.source,
                             target = child.target,
                             initialDemand = child.selections,
+                            potentialDemand = child.potentialSelections,
                         )
                     }
                 descendantsNeedingResolution.awaitAll()
@@ -749,18 +773,18 @@ private class ObjectResultOrchestrator(
     private class FieldState(
         val field: Schema.ObjectField,
     ) {
-        private var potentialSubselections: SelectionForest = selectionForestOf()
+        private var potentialSelections: SelectionForest = selectionForestOf()
         val groundedKeys: MutableMap<Value.GroundKey, KeyState> = linkedMapOf()
         private val groundedKeyAvailable:
             MutableMap<Value.GroundKey, CompletableDeferred<KeyState>> =
             linkedMapOf()
 
         @Synchronized
-        fun addPotentialSubselections(subselections: SelectionForest) {
+        fun addPotentialSelection(selection: Selection) {
             check(groundedKeys.isEmpty()) {
                 "Potential demand arrived after grounded-key activation for $field"
             }
-            potentialSubselections += subselections
+            potentialSelections += selectionForestOf(selection)
         }
 
         context(world: Assumptions)
@@ -782,6 +806,24 @@ private class ObjectResultOrchestrator(
                 )
             }
             check(groundedKey.field == field)
+            // Open keys may still converge here; already-ground keys cannot contribute across keys.
+            val keyPotentialSubselections: SelectionForest =
+                potentialSelections
+                    .flatMap { potentialSelection ->
+                        val potentialKey = potentialSelection.objectKey(concreteType)
+                        val potentialArguments = potentialKey.arguments
+                        if (
+                            potentialArguments !is Value.Arguments ||
+                            Value.GroundKey.of(
+                                potentialKey.field,
+                                potentialArguments,
+                            ) == groundedKey
+                        ) {
+                            potentialSelection.subselections
+                        } else {
+                            selectionForestOf()
+                        }
+                    }
             val initialDemand: ObjectSelection =
                 selectionForestOf(
                     Selection.of(
@@ -789,7 +831,7 @@ private class ObjectResultOrchestrator(
                         possibleTypes = groundedSelection.possibleTypes,
                         subselections =
                             groundedSelection.subselections +
-                                potentialSubselections
+                                keyPotentialSubselections
                                     .projectionDemandDeferringTemplates(),
                     ),
                 ).merge(concreteType)
@@ -799,7 +841,7 @@ private class ObjectResultOrchestrator(
                 KeyState(
                     groundedKey = groundedKey,
                     initialDemand = initialDemand,
-                    potentialDemand = potentialSubselections,
+                    potentialDemand = keyPotentialSubselections,
                 )
             groundedKeys[groundedKey] = keyState
             groundedKeyAvailable
@@ -900,18 +942,25 @@ context(world: Assumptions)
 private suspend fun Value.Output?.resolveValue(
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
+    potentialDemand: SelectionForest,
 ): ResolvedValue =
     when (this) {
         null -> ResolvedValue(null, emptyList())
         Value.Error -> ResolvedValue(Value.Error, emptyList())
         is Value.Simple -> ResolvedValue(this, emptyList())
-        is Value.Object -> resolveObjectValue(path, resolverDemand)
+        is Value.Object ->
+            resolveObjectValue(
+                path = path,
+                resolverDemand = resolverDemand,
+                potentialDemand = potentialDemand,
+            )
         is Value.OutputList -> {
             val resolvedElements: List<ResolvedValue> =
                 values.mapIndexed { index, value ->
                     value.resolveValue(
                         path = path + Value.ListIndex.of(index),
                         resolverDemand = resolverDemand,
+                        potentialDemand = potentialDemand,
                     )
                 }
             ResolvedValue(
@@ -932,17 +981,26 @@ context(world: Assumptions)
 private suspend fun Value.Object.resolveObjectValue(
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
+    potentialDemand: SelectionForest,
 ): ResolvedValue {
     val engineResult: EngineResult.Object =
-        EngineResult.Object.of(
-            type = type,
-            values = emptyMap(),
-            mutable = true,
-        )
+        type.newObjectResult()
     val mergedDemand: ObjectSelectionForest =
         resolverDemand.mergeWithVariables(engineResult).first
     val resolverDemandByGroundedKey: Map<Value.GroundKey, ObjectSelection> =
         mergedDemand.byGroundKey()
+    val closedPotentialDemand: ObjectSelectionForest =
+        type.closeStructuralDemand(potentialDemand)
+    val potentialSubselectionsByField: Map<Schema.ObjectField, SelectionForest> =
+        closedPotentialDemand
+            .byKey()
+            .values
+            .groupBy { selection -> selection.key.field }
+            .mapValues { (_, selections) ->
+                selections.flatMapToSelectionForest { selection ->
+                    selection.subselections
+                }
+            }
     val unselectedGroundedKeys: Set<Value.GroundKey> =
         fieldValues.keys.filterNotTo(linkedSetOf()) { key ->
             key.field.fieldName == "__typename"
@@ -958,24 +1016,24 @@ private suspend fun Value.Object.resolveObjectValue(
     val selectedGroundedKeys: Set<Value.GroundKey> =
         resolverDemandByGroundedKey.keys
             .filterTo(linkedSetOf()) { groundedKey ->
-                groundedKey.field !in world.resolverRegistry
+                groundedKey.field !in world.resolverRegistry &&
+                    groundedKey.field.fieldName != "__typename"
             }
     val resolvedFields: List<ResolvedField> =
         selectedGroundedKeys.map { groundedKey ->
             val resolvedValue: ResolvedValue =
-                if (groundedKey.field.fieldName == "__typename") {
-                    ResolvedValue(Value.String.of(type.typeName), emptyList())
-                } else {
-                    fieldValues
-                        .getValue(groundedKey)
-                        .resolveValue(
-                            path = path + groundedKey,
-                            resolverDemand =
-                                resolverDemandByGroundedKey
-                                    .getValue(groundedKey)
-                                    .subselections,
-                        )
-                }
+                fieldValues
+                    .getValue(groundedKey)
+                    .resolveValue(
+                        path = path + groundedKey,
+                        resolverDemand =
+                            resolverDemandByGroundedKey
+                                .getValue(groundedKey)
+                                .subselections,
+                        potentialDemand =
+                            potentialSubselectionsByField[groundedKey.field]
+                                ?: selectionForestOf(),
+                    )
             ResolvedField(groundedKey, resolvedValue)
         }
     resolvedFields.forEach { resolvedField ->
@@ -994,6 +1052,7 @@ private suspend fun Value.Object.resolveObjectValue(
                 path = path,
                 source = this,
                 selections = resolverDemand,
+                potentialSelections = closedPotentialDemand,
                 target = engineResult,
             )
         } else {
@@ -1019,6 +1078,7 @@ private class ObjectResolution(
     val path: List<PathComponent>,
     val source: Value.Object,
     val selections: SelectionForest,
+    val potentialSelections: SelectionForest,
     val target: EngineResult.Object,
 )
 

@@ -5,6 +5,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
+import model.SelectionStamp
 import model.Value
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -21,6 +22,9 @@ internal data class Resolver26ApplicationObservation(
     val input: Value.Object,
     val arguments: Value.Arguments,
     val suppliedDemand: SelectionForest,
+    val variableArgumentCount: Int,
+    val occurrenceStamp: SelectionStamp?,
+    val variableSourceSelectionStamps: Set<SelectionStamp>,
 )
 
 internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit

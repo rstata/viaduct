@@ -239,6 +239,21 @@ class ArbitraryRegistry internal constructor(
         captureSuppliedDemand: Boolean = false,
         captureResolutionWitness: Boolean = true,
         captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
+    ): TestWorld =
+        world(
+            schemaSDL = schema.sdl,
+            resolverProgramMutation = resolverProgramMutation,
+            captureSuppliedDemand = captureSuppliedDemand,
+            captureResolutionWitness = captureResolutionWitness,
+            captureResolutionApplicationCounts = captureResolutionApplicationCounts,
+        )
+
+    fun world(
+        schemaSDL: String,
+        resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
+        captureSuppliedDemand: Boolean = false,
+        captureResolutionWitness: Boolean = true,
+        captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
     ): TestWorld {
         require(captureResolutionWitness || !captureSuppliedDemand) {
             "Supplied demand can only be retained in a resolution witness"
@@ -289,7 +304,7 @@ class ArbitraryRegistry internal constructor(
             }
         val world =
             TestWorld.fromSDL(
-            schemaSDL = schema.sdl,
+            schemaSDL = schemaSDL,
             nodeResolvers = { canonicalSchema ->
                 nodeValues.map { (typeName, plan) ->
                     val type = canonicalSchema.type(typeName) as Schema.ObjectType
@@ -659,6 +674,12 @@ private class RegistryGenerator(
                     consumerRank = ranks.getValue(consumer),
                     ranks = ranks,
                     depth = 0,
+                    preferredTopLevelFields =
+                        variableProviders
+                            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+                            .filterTo(linkedSetOf()) { owner ->
+                                owner.typeName == consumer.typeName
+                            },
                 ),
         )
         return fragment
@@ -671,6 +692,7 @@ private class RegistryGenerator(
         consumerRank: Int,
         ranks: Map<FieldCoordinate, Int>,
         depth: Int,
+        preferredTopLevelFields: Set<FieldCoordinate> = emptySet(),
     ): List<FragmentSelectionPlan> {
         if (depth >= config[ResolverFragmentDepth]) {
             return listOf(
@@ -723,9 +745,24 @@ private class RegistryGenerator(
             )
         }
         val count = Arb.int(1..minOf(2, candidates.size)).next(random)
-        return candidates
-            .shuffled(random)
-            .take(count)
+        val preferredField =
+            candidates
+                .filter { field ->
+                    field.coordinate in preferredTopLevelFields &&
+                        field.arguments.isNotEmpty()
+                }.shuffled(random)
+                .firstOrNull()
+                ?.takeIf {
+                    depth == 0 &&
+                        chance(config[ResolverFromObjectFieldVariableOwnerUseWeight])
+                }
+        return (
+            listOfNotNull(preferredField) +
+                candidates
+                    .filterNot { field -> field == preferredField }
+                    .shuffled(random)
+                    .take(count - if (preferredField == null) 0 else 1)
+        )
             .map { field ->
                 FragmentSelectionPlan(
                     fieldName = field.name,
@@ -874,7 +911,6 @@ private class RegistryGenerator(
         return (0 until variableCount).fold(this) { fragment, variableIndex ->
             val existingOwners =
                 variableProviders
-                    .filterIsInstance<FromObjectFieldVariableProviderPlan>()
                     .mapTo(linkedSetOf(), VariableProviderPlan::owner)
             val occurrences =
                 fragment.argumentOccurrences()

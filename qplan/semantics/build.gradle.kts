@@ -26,6 +26,99 @@ configurations.named("jmhImplementation") {
     extendsFrom(configurations["testFixturesImplementation"])
 }
 
+val resolverBenchmarkQueryCount =
+    providers.gradleProperty("resolverBenchmarkQueryCount").orElse("100")
+val resolverBenchmarkQuerySeed =
+    providers.gradleProperty("resolverBenchmarkQuerySeed").orElse("1")
+val resolverBenchmarkLoopCount =
+    providers.gradleProperty("resolverBenchmarkLoopCount").orElse("1")
+val resolverBenchmarkCorpusSeed =
+    providers.gradleProperty("resolverBenchmarkCorpusSeed").orElse("1")
+val resolverBenchmarkCorpusSize =
+    providers.gradleProperty("resolverBenchmarkCorpusSize").orElse("20:10:100")
+val resolverBenchmarkCorpusDirectory =
+    layout.projectDirectory.dir("src/jmh/resources/semantics/benchmark/current-profile")
+
+tasks.register<JavaExec>("generateResolverBenchmarkCorpus") {
+    group = "benchmark"
+    description = "Searches generated schema/registry pairs and writes the overhead benchmark corpus."
+    dependsOn("testFixturesClasses")
+    classpath = sourceSets["testFixtures"].runtimeClasspath
+    mainClass.set("semantics.benchmark.ResolverBenchmarkCorpusSearch")
+    maxHeapSize = "4g"
+    inputs.property("seed", resolverBenchmarkCorpusSeed)
+    inputs.property("size", resolverBenchmarkCorpusSize)
+    outputs.dir(resolverBenchmarkCorpusDirectory)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        args =
+            listOf(
+                resolverBenchmarkCorpusDirectory.asFile.absolutePath,
+                resolverBenchmarkCorpusSeed.get(),
+                resolverBenchmarkCorpusSize.get(),
+            )
+    }
+}
+
+fun registerResolverBenchmarkTask(
+    resolver: String,
+    benchmark: String,
+) {
+    val taskName = "${resolver}${benchmark.replaceFirstChar(Char::uppercaseChar)}Benchmark"
+    tasks.register<JavaExec>(taskName) {
+        group = "benchmark"
+        description = "Runs the $benchmark JMH benchmark for $resolver."
+        val benchmarkJar = tasks.named<org.gradle.jvm.tasks.Jar>("jmhJar")
+        dependsOn(benchmarkJar)
+        classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
+        mainClass.set("org.openjdk.jmh.Main")
+        inputs.property("queryCount", resolverBenchmarkQueryCount)
+        inputs.property("querySeed", resolverBenchmarkQuerySeed)
+        inputs.property("loopCount", resolverBenchmarkLoopCount)
+        outputs.upToDateWhen { false }
+        val statisticsFile =
+            layout.buildDirectory.file(
+                "reports/resolver-benchmarks/$taskName-statistics.txt",
+            )
+
+        doFirst {
+            val reportArguments =
+                if (benchmark == "overhead") {
+                    val reportFile = statisticsFile.get().asFile
+                    reportFile.delete()
+                    listOf(
+                        "-jvmArgsAppend",
+                        "-DresolverBenchmarkReportFile=${reportFile.absolutePath}",
+                    )
+                } else {
+                    emptyList()
+                }
+            args =
+                listOf(
+                    "semantics\\.$resolver\\.ResolverBenchmark\\.$benchmark",
+                    "-p",
+                    "queryCount=${resolverBenchmarkQueryCount.get()}",
+                    "-p",
+                    "querySeed=${resolverBenchmarkQuerySeed.get()}",
+                    "-p",
+                    "loopCount=${resolverBenchmarkLoopCount.get()}",
+                ) + reportArguments
+        }
+        doLast {
+            if (benchmark == "overhead") {
+                println()
+                print(statisticsFile.get().asFile.readText())
+            }
+        }
+    }
+}
+
+listOf("resolver25", "resolver26").forEach { resolver ->
+    registerResolverBenchmarkTask(resolver, "full")
+    registerResolverBenchmarkTask(resolver, "overhead")
+}
+
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xcontext-parameters")

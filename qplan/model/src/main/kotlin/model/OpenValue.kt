@@ -425,6 +425,18 @@ fun OpenArguments.stampedVariables(): Set<Value.Variable.Stamped> =
 /** Returns every variable expression used anywhere in this argument tuple. */
 fun OpenArguments.usedVariables(): Set<Value.Variable> = variables()
 
+/** Returns the argument names whose values recursively contain at least one variable expression. */
+fun OpenArguments.variableArgumentNames(): Set<String> =
+    fieldExpressions()
+        .filterValues { value -> value.variables().isNotEmpty() }
+        .keys
+
+/** Returns the source-selection identities carried by variables in this tuple. */
+fun OpenArguments.variableSourceSelectionStamps(): Set<SelectionStamp> =
+    variables()
+        .filterIsInstance<Value.Variable.SelectionStamped>()
+        .mapTo(linkedSetOf()) { variable -> variable.selectionStamp }
+
 private fun OpenValue?.variables(): Set<Value.Variable> =
     when (this) {
         is Value.Variable -> setOf(this)

@@ -39,6 +39,21 @@ class SelectionStamp internal constructor(
 }
 
 /**
+ * Returns the stamped resolver occurrence that owns this source selection, or null when the owner
+ * is the ordinary resolver occurrence identified directly by [SelectionStamp.resolverPath].
+ */
+fun SelectionStamp.ownerResolverStamp(): SelectionStamp? =
+    occurrenceLineage
+        .dropLast(1)
+        .takeIf { lineage -> lineage.isNotEmpty() }
+        ?.let { lineage ->
+            SelectionStamp(
+                resolverPath = resolverPath,
+                occurrenceLineage = lineage,
+            )
+        }
+
+/**
  * A free commutative collection of opaque [Selection] members.
  *
  * ### Member Count

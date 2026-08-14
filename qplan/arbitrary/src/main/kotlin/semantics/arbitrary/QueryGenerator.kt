@@ -121,7 +121,10 @@ private class QueryGenerator(
             if (typeName == "Query" && rootOverride != 0..0) {
                 Arb.int(rootOverride).next(random).coerceIn(1, candidates.size)
             } else {
-                Arb.int(1..minOf(3, candidates.size)).next(random)
+                val configured = config[NestedQueryFieldCount]
+                val maximum = minOf(configured.last, candidates.size)
+                val minimum = minOf(configured.first, maximum)
+                Arb.int(minimum..maximum).next(random)
             }
         val requiredField =
             schema.deepFields[typeName]

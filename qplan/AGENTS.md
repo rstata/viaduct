@@ -41,3 +41,13 @@ Present every concrete resolver/control-flow example as a complete GraphQL schem
 Run `./gradlew check` from this directory.
 
 Resolver26 tests, thread-count configuration, CPU-parallelism probes, and large-campaign guidance are documented in [`testing-resolver26.md`](./semantics/src/main/kotlin/semantics/resolver26/testing-resolver26.md).
+
+## Resolver Benchmarks
+
+When asked to "run the full benchmark against resolver25" or "run the full benchmark against resolver26", run `./gradlew :semantics:resolver25FullBenchmark --console=plain` or `./gradlew :semantics:resolver26FullBenchmark --console=plain`, respectively.
+
+When asked to run an overhead benchmark, use the corresponding `resolver25OverheadBenchmark` or `resolver26OverheadBenchmark` task and pass any requested controls as `-PresolverBenchmarkQueryCount=N -PresolverBenchmarkQuerySeed=S -PresolverBenchmarkLoopCount=M`.
+
+After every benchmark run, report each measured `Iteration N` result, the final JMH score and error, the units, and how many resolver calls constitute one JMH operation. For an overhead benchmark, also report the emitted corpus statistics: fields returned, resolvers executed, resolver executions with any variable-bearing arguments, variable-bearing arguments per such resolver execution, maximum variable stack depth, and result depth. Preserve each metric's emitted percentile label (`p50` or `p90`) rather than describing all of them as P90. Do not report only the aggregate score or Gradle status.
+
+The full benchmark operation contains 1,000 generated and independently validated resolutions. The overhead benchmark operation contains `resolverBenchmarkQueryCount * resolverBenchmarkLoopCount` resolutions over queries generated from the fixed schema/registry corpus during untimed invocation setup.

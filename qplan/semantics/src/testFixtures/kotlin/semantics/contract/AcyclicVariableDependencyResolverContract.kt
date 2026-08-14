@@ -109,7 +109,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
                 world.fragmentFrom("fragment ignored on Query { c }"),
             )
 
-        assertEquals(Value.Int.of(1), resolved.getValue(cKey).get())
+        assertEquals(Value.Int.of(1), resolved.getCell(cKey).get())
     }
 
     @Test
@@ -198,6 +198,6 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
                 world.fragmentFrom("fragment ignored on Query { outer }"),
             )
 
-        assertEquals(Value.Int.of(1), resolved.getValue(outerKey).get())
+        assertEquals(Value.Int.of(1), resolved.getCell(outerKey).get())
     }
 }

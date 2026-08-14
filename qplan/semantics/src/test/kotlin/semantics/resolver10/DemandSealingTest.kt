@@ -131,12 +131,12 @@ interface DemandSealingContract : ResolverContract {
         assertEquals(listOf(2, 1), branchLaunches)
         assertEquals(
             Value.Int.of(11),
-            result.getValue(
+            result.getCell(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).get(),
+            ).getValue().get(),
         )
     }
 
@@ -232,12 +232,12 @@ interface DemandSealingContract : ResolverContract {
         )
         assertEquals(
             Value.Int.of(9),
-            result.getValue(
+            result.getCell(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).get(),
+            ).getValue().get(),
         )
     }
 
@@ -332,12 +332,12 @@ interface DemandSealingContract : ResolverContract {
             },
         )
         assertTrue(
-            result.getValue(
+            result.getCell(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).get() == Value.Int.of(8),
+            ).getValue().get() == Value.Int.of(8),
         )
     }
 
@@ -436,12 +436,12 @@ interface DemandSealingContract : ResolverContract {
         assertEquals(listOf("parent", "provider", "activate", "trigger"), applications)
         assertEquals(
             Value.Int.of(9),
-            result.getValue(
+            result.getCell(
                 Value.GroundKey.of(
                     testWorld.schema.objectField("Query", "trigger"),
                     emptyMap(),
                 ),
-            ).get(),
+            ).getValue().get(),
         )
     }
 

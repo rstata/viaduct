@@ -46,7 +46,7 @@ class EngineResultScope internal constructor(
     private val type: Schema.ObjectType,
 ) {
     private val values = linkedMapOf<Value.GroundKey, EngineResult?>()
-    private val fieldChecks = linkedMapOf<Value.GroundKey, Value.Boolean>()
+    private val accessAccepted = linkedMapOf<Value.GroundKey, Value.Boolean>()
 
     /** Selects a field coordinate on this scope's object type. */
     fun field(
@@ -92,7 +92,7 @@ class EngineResultScope internal constructor(
             "Duplicate engine-result field ${type.typeName}/${key.field.fieldName}"
         }
         values[key] = coerceEngineResult(key.field.typeExpr, value)
-        fieldChecks[key] = accept
+        accessAccepted[key] = accept
     }
 
     /** Constructs a nested object engine result using the same schema. */
@@ -105,7 +105,7 @@ class EngineResultScope internal constructor(
         EngineResult.Object.of(
             type = type,
             values = values.toMap(),
-            fieldChecks = fieldChecks.toMap(),
+            accessAccepted = accessAccepted.toMap(),
         )
 }
 

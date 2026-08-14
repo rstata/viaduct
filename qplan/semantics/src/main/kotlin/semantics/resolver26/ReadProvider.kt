@@ -32,8 +32,9 @@ internal suspend fun EngineResult.Object.readProvider(
                 field = specializedKey.field,
                 arguments = specializedKey.arguments.fetchBindings(),
             )
-        diagnosticInstrumentation.cycleCheck(reader, current, groundKey)
-        val value = current.reserveValue(groundKey).await()
+        val cell = current.reserveCell(groundKey)
+        diagnosticInstrumentation.cycleCheck(reader, cell)
+        val value = cell.reserveValue().await()
         if (index == definition.path.lastIndex) {
             return value.toProviderInput()
         }
@@ -66,6 +67,6 @@ private fun EngineResult.List.toProviderInputList(): Value.InputList {
     }
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { value -> value.toProviderInput() },
+        values = map { cell -> cell.getValue().get().toProviderInput() },
     )
 }

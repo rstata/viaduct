@@ -99,7 +99,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
                 ),
             )
         val item =
-            resolved.getValue(
+            resolved.getCell(
                 Value.GroundKey.of(
                     world.schema.objectField("Query", "item"),
                     emptyMap(),
@@ -108,7 +108,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
 
         assertEquals(
             Value.Int.of(11),
-            item.getValue(
+            item.getCell(
                 Value.GroundKey.of(
                     world.schema.objectField("Item", "result"),
                     emptyMap(),

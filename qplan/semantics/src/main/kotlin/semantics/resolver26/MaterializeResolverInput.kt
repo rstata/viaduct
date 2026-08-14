@@ -39,9 +39,11 @@ private suspend fun EngineResult.Object.materializeSelectedObject(
                 field = storedGroundKey.field,
                 arguments = storedGroundKey.arguments.fieldValues,
             )
-        diagnosticInstrumentation.cycleCheck(reader, this, storedGroundKey)
+        val cell = reserveCell(storedGroundKey)
+        diagnosticInstrumentation.cycleCheck(reader, cell)
         val selectedValue: Value.Output? =
-            reserveValue(storedGroundKey)
+            cell
+                .reserveValue()
                 .await()
                 .materializeSelectedValue(
                     selections = selection.subselections,
@@ -91,7 +93,7 @@ private suspend fun EngineResult?.materializeSelectedValue(
                 typeExpr = typeExpr,
                 values =
                     indices.map { index ->
-                        get(index).materializeSelectedValue(
+                        get(index).getValue().await().materializeSelectedValue(
                             selections = selections,
                             reader = reader,
                             resultPath = resultPath + Value.ListIndex.of(index),

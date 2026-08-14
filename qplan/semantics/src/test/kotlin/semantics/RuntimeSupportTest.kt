@@ -36,13 +36,11 @@ class RuntimeSupportTest {
         fixture.register("third")
         fixture.support.cycleCheck(
             reader = fixture.path("first"),
-            target = fixture.target,
-            key = fixture.key("second"),
+            cell = fixture.cell("second"),
         )
         fixture.support.cycleCheck(
             reader = fixture.path("second"),
-            target = fixture.target,
-            key = fixture.key("third"),
+            cell = fixture.cell("third"),
         )
     }
 
@@ -55,8 +53,7 @@ class RuntimeSupportTest {
             assertFailsWith<ResolverReadCycleException> {
                 fixture.support.cycleCheck(
                     reader = fixture.path("first"),
-                    target = fixture.target,
-                    key = fixture.key("first"),
+                    cell = fixture.cell("first"),
                 )
             }
 
@@ -74,21 +71,18 @@ class RuntimeSupportTest {
         fixture.register("third")
         fixture.support.cycleCheck(
             reader = fixture.path("first"),
-            target = fixture.target,
-            key = fixture.key("second"),
+            cell = fixture.cell("second"),
         )
         fixture.support.cycleCheck(
             reader = fixture.path("second"),
-            target = fixture.target,
-            key = fixture.key("third"),
+            cell = fixture.cell("third"),
         )
 
         val failure =
             assertFailsWith<ResolverReadCycleException> {
                 fixture.support.cycleCheck(
                     reader = fixture.path("third"),
-                    target = fixture.target,
-                    key = fixture.key("first"),
+                    cell = fixture.cell("first"),
                 )
             }
 
@@ -108,15 +102,15 @@ class RuntimeSupportTest {
         val fixture = Fixture()
         val key = fixture.key("first")
         fixture.target
-            .createValuePromise(key)
+            .reserveCell(key)
+            .createValuePromise()
             .complete(Value.String.of("complete"))
         fixture.register("first")
 
         assertFailsWith<ResolverReadCycleException> {
             fixture.support.cycleCheck(
                 reader = fixture.path("first"),
-                target = fixture.target,
-                key = key,
+                cell = fixture.target.getCell(key),
             )
         }
     }
@@ -129,8 +123,7 @@ class RuntimeSupportTest {
         repeat(2) {
             fixture.support.cycleCheck(
                 reader = fixture.path("first"),
-                target = fixture.target,
-                key = fixture.key("second"),
+                cell = fixture.cell("second"),
             )
         }
     }
@@ -155,16 +148,16 @@ class RuntimeSupportTest {
         val failures = ConcurrentLinkedQueue<Throwable>()
         val checks =
             listOf(
-                fixture.path("first") to fixture.key("second"),
-                fixture.path("second") to fixture.key("first"),
+                fixture.path("first") to fixture.cell("second"),
+                fixture.path("second") to fixture.cell("first"),
             )
         val workers =
-            checks.map { (reader, key) ->
+            checks.map { (reader, cell) ->
                 thread {
                     ready.countDown()
                     start.await()
                     try {
-                        fixture.support.cycleCheck(reader, fixture.target, key)
+                        fixture.support.cycleCheck(reader, cell)
                     } catch (throwable: Throwable) {
                         failures += throwable
                     }
@@ -195,14 +188,12 @@ class RuntimeSupportTest {
             }
 
         support.registerWriter(
-            target = fixture.target,
-            key = fixture.key("first"),
+            cell = fixture.cell("first"),
             writer = fixture.path("first"),
         )
         support.cycleCheck(
             reader = fixture.path("first"),
-            target = fixture.target,
-            key = fixture.key("first"),
+            cell = fixture.cell("first"),
         )
     }
 
@@ -232,10 +223,11 @@ class RuntimeSupportTest {
 
         fun path(name: String): List<PathComponent> = listOf(key(name))
 
+        fun cell(name: String): EngineResult.Cell = target.reserveCell(key(name))
+
         fun register(name: String) {
             support.registerWriter(
-                target = target,
-                key = key(name),
+                cell = cell(name),
                 writer = path(name),
             )
         }

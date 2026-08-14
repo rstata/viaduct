@@ -132,12 +132,12 @@ class MixedVariablePhaseRegressionTest {
         assertEquals(
             Value.Int.of(1),
             result
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         world.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).get(),
+                ).getValue().get(),
         )
     }
 
@@ -253,12 +253,12 @@ class MixedVariablePhaseRegressionTest {
         assertEquals(
             Value.Int.of(2),
             result
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         world.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).get(),
+                ).getValue().get(),
         )
     }
 }

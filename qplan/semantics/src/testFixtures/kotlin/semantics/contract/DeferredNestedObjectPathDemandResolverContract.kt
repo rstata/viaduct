@@ -120,7 +120,7 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
         assertEquals(
             Value.Int.of(7),
             resolved
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         world.schema.objectField("Query", "driver"),
                         emptyMap(),

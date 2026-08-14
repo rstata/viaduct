@@ -76,7 +76,8 @@ class PromiseTest {
         val promise =
             EngineResult.Object
                 .of(schema.query, mutable = true)
-                .createValuePromise(field)
+                .reserveCell(field)
+                .createValuePromise()
 
         assertFailsWith<IllegalArgumentException> {
             promise.complete(null)

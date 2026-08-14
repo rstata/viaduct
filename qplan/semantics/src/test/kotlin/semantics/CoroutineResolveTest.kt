@@ -19,8 +19,8 @@ import semantics.resolver21.resolve
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class CoroutineResolveTest {
@@ -49,7 +49,6 @@ class CoroutineResolveTest {
                 world.schema.groundKey("Query", "first"),
                 world.schema.groundKey("Query", "second"),
             )
-        var rootTarget: EngineResult.Object? = null
         val registeredKeys = linkedSetOf<Value.GroundKey>()
         var producerStarts = 0
         val runtimeSupport =
@@ -57,18 +56,15 @@ class CoroutineResolveTest {
                 context(world: Assumptions)
                 override fun complete(selections: SelectionForest): SelectionCompletion {
                     producerStarts += 1
-                    assertEquals(expectedKeys, assertNotNull(rootTarget).keys)
                     assertEquals(expectedKeys, registeredKeys)
                     return SelectionCompletion(selections)
                 }
 
                 override fun registerWriter(
-                    target: EngineResult.Object,
-                    key: Value.GroundKey,
+                    cell: EngineResult.Cell,
                     writer: List<PathComponent>,
                 ) {
-                    rootTarget = rootTarget?.also { assertSame(it, target) } ?: target
-                    registeredKeys += key
+                    registeredKeys += writer.last() as Value.GroundKey
                 }
             }
         val selections =
@@ -117,8 +113,7 @@ class CoroutineResolveTest {
                 world.schema.groundKey("Child", "first"),
                 world.schema.groundKey("Child", "second"),
             )
-        var rootTarget: EngineResult.Object? = null
-        var childTarget: EngineResult.Object? = null
+        var rootCell: EngineResult.Cell? = null
         val childRegistrations = linkedSetOf<Value.GroundKey>()
         val runtimeSupport =
             object : RuntimeSupport {
@@ -127,18 +122,16 @@ class CoroutineResolveTest {
                     SelectionCompletion(selections)
 
                 override fun registerWriter(
-                    target: EngineResult.Object,
-                    key: Value.GroundKey,
+                    cell: EngineResult.Cell,
                     writer: List<PathComponent>,
                 ) {
                     if (writer.size == 1) {
-                        rootTarget = target
+                        rootCell = cell
                     } else {
                         assertFailsWith<UncompletedPromiseException> {
-                            assertNotNull(rootTarget).getValue(childKey).get()
+                            assertNotNull(rootCell).getValue().get()
                         }
-                        childTarget = childTarget?.also { assertSame(it, target) } ?: target
-                        childRegistrations += key
+                        childRegistrations += writer.last() as Value.GroundKey
                     }
                 }
             }
@@ -155,8 +148,8 @@ class CoroutineResolveTest {
             }
 
         assertEquals(expectedChildKeys, childRegistrations)
-        assertEquals(expectedChildKeys, assertNotNull(childTarget).keys)
-        assertNotNull(result.getValue(childKey).get())
+        val child = assertIs<EngineResult.Object>(result.getCell(childKey).getValue().get())
+        assertEquals(expectedChildKeys, child.keys)
     }
 
     @Test
@@ -306,11 +299,11 @@ private fun assertCompletedAndWriteOnce(result: EngineResult?) {
         -> Unit
         is EngineResult.List ->
             result.indices.forEach { index ->
-                assertCompletedAndWriteOnce(result[index])
+                assertCompletedAndWriteOnce(result[index].getValue().get())
             }
         is EngineResult.Object ->
             result.keys.forEach { key ->
-                val promise = result.getValue(key)
+                val promise = result.getCell(key).getValue()
                 val value = promise.get()
                 assertFailsWith<IllegalStateException> {
                     promise.complete(value)

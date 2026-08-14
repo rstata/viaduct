@@ -110,6 +110,6 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
                 ),
             )
 
-        assertEquals(Value.Int.of(7), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
     }
 }

@@ -440,7 +440,7 @@ class SelectionMergeTest {
                     selectionForestOf(marker).mergeWithVariables(result)
                 }
             }
-        result.createValuePromise(ordinary.key as Value.GroundKey)
+        result.reserveCell(ordinary.key as Value.GroundKey).createValuePromise()
         val incomplete =
             runBlocking {
                 context(fixture.world) {

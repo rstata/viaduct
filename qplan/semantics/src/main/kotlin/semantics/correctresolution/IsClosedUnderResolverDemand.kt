@@ -15,7 +15,7 @@ import model.usedVariables
  * through every present value makes these requirements transitive while preserving the type guards
  * interpreted by [conformsToSelections].
  *
- * This predicate observes value presence and content, but never field or type checks.
+ * This predicate observes cell-value presence and content, but never access-acceptance results.
  */
 context(world: Assumptions)
 fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
@@ -60,7 +60,8 @@ private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
                     }
 
         fieldResolverDemandIsClosed &&
-            getValue(groundKey)
+            getCell(groundKey)
+                .getValue()
                 .get()
                 .engineResultIsClosedUnderResolverDemand(path + groundKey)
     }
@@ -79,7 +80,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
         is EngineResult.Object -> objectIsClosedUnderResolverDemand(path)
         is EngineResult.List ->
             indices.all { index ->
-                get(index).engineResultIsClosedUnderResolverDemand(
+                get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
                     path + Value.ListIndex.of(index),
                 )
             }

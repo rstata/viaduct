@@ -53,7 +53,6 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
             val result =
                 EngineResult.Object.of(
                     type = type,
-                    values = emptyMap(),
                     mutable = true,
                 )
             context(RuntimeSupport.cycleChecking()) {
@@ -200,7 +199,7 @@ private class ObjectOrchestrator(
                     selection = selection,
                     propagateExisting = false,
                 )
-            diagnosticInstrumentation.cycleCheck(reader, target, key)
+            diagnosticInstrumentation.cycleCheck(reader, slot.cell)
             fields[key] =
                 slot.promise.await().materialize(
                     selections = selection.subselections,
@@ -274,19 +273,19 @@ private class ObjectOrchestrator(
             return existing
         }
 
+        val cell = target.reserveCell(key)
         val promise =
-            if (target.isValueSet(key)) {
-                target.getValue(key)
+            if (cell.isValueSet()) {
+                cell.getValue()
             } else {
-                target.createValuePromise(key)
+                cell.createValuePromise()
                 diagnosticInstrumentation.registerWriter(
-                    target = target,
-                    key = key,
+                    cell = cell,
                     writer = path + key,
                 )
-                target.getValue(key)
+                cell.getValue()
             }
-        val slot = Slot(key, promise)
+        val slot = Slot(key, cell)
         slots[key] = slot
 
         if (!promise.isCompleted) {
@@ -396,7 +395,7 @@ private class ObjectOrchestrator(
                 selection = selection,
                 propagateExisting = false,
             )
-        diagnosticInstrumentation.cycleCheck(reader, target, key)
+        diagnosticInstrumentation.cycleCheck(reader, slot.cell)
         return slot.promise.await()
     }
 
@@ -406,9 +405,12 @@ private class ObjectOrchestrator(
         val key = slot.key
         when {
             key.arguments.containsErrorValue() ->
-                slot.promise.complete(Value.Error)
+                slot.complete(Value.Error, Value.Error)
             key.field.fieldName == "__typename" ->
-                slot.promise.complete(Value.String.of(source.type.typeName))
+                slot.complete(
+                    Value.String.of(source.type.typeName),
+                    Value.Boolean.of(true),
+                )
             else -> {
                 val resolver = world.resolverRegistry.resolver(key.field)
                 val selection = selectionForLaunch(key)
@@ -440,7 +442,10 @@ private class ObjectOrchestrator(
                         initialDemand = occurrence.selections,
                     )
                 }
-                slot.promise.complete(resolvedValue.engineResult)
+                slot.complete(
+                    resolvedValue.engineResult,
+                    Value.Boolean.of(true),
+                )
             }
         }
     }
@@ -478,8 +483,8 @@ private class ObjectOrchestrator(
             is EngineResult.Object ->
                 runtime.orchestrator(value).addDemand(demand)
             is EngineResult.List ->
-                value.forEachIndexed { _, element ->
-                    propagateDemand(element, demand)
+                value.forEachIndexed { _, cell ->
+                    propagateDemand(cell.getValue().get(), demand)
                 }
         }
     }
@@ -535,7 +540,11 @@ private class ObjectOrchestrator(
             is EngineResult.List -> {
                 val materialized = mutableListOf<Value.Output?>()
                 for (index in indices) {
-                    materialized += get(index).materialize(selections, reader)
+                    materialized +=
+                        get(index)
+                            .getValue()
+                            .await()
+                            .materialize(selections, reader)
                 }
                 Value.OutputList.of(typeExpr, materialized)
             }
@@ -544,8 +553,19 @@ private class ObjectOrchestrator(
 
 private class Slot(
     val key: Value.GroundKey,
-    val promise: Promise<EngineResult?>,
-)
+    val cell: EngineResult.Cell,
+) {
+    val promise: Promise<EngineResult?>
+        get() = cell.getValue()
+
+    fun complete(
+        value: EngineResult?,
+        accessAccepted: Value.Boolean,
+    ) {
+        promise.complete(value)
+        cell.setAccessAccepted(accessAccepted)
+    }
+}
 
 /* Passive result construction, specialized from ResolveValue.kt for selective Resolver24i. */
 
@@ -565,16 +585,24 @@ context(world: Assumptions)
 private fun EngineResult.Object.selectOutput(
     runtime: ResolutionRuntime,
 ): EngineResult.Object {
-    val values =
+    val selected =
         runtime
             .orchestrator(this)
             .outputDemand()
             .applicableGroundSelections(type)
             .byGroundKey()
             .mapValues { (key, _) ->
-                getValue(key).get().selectOutput(runtime)
+                val cell = getCell(key)
+                Pair(
+                    cell.getValue().get().selectOutput(runtime),
+                    cell.getAccessAccepted().get(),
+                )
             }
-    return EngineResult.Object.of(type, values)
+    return EngineResult.Object.of(
+        type = type,
+        values = selected.mapValues { (_, slots) -> slots.first },
+        accessAccepted = selected.mapValues { (_, slots) -> slots.second },
+    )
 }
 
 context(world: Assumptions)
@@ -590,7 +618,8 @@ private fun EngineResult?.selectOutput(
         is EngineResult.List ->
             EngineResult.List.of(
                 typeExpr = typeExpr,
-                values = map { value -> value.selectOutput(runtime) },
+                values = map { cell -> cell.getValue().get().selectOutput(runtime) },
+                accessAccepted = map { cell -> cell.getAccessAccepted().get() },
             )
     }
 
@@ -814,8 +843,8 @@ private fun EngineResult.List.toProviderInputList(): Value.InputList {
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
         values =
-            map { value ->
-                value?.toProviderInput()
+            map { cell ->
+                cell.getValue().get()?.toProviderInput()
             },
     )
 }

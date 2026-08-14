@@ -75,7 +75,7 @@ class DemandSealingTest {
 
         val resolved = resolveResult(testWorld)
 
-        assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).getValue().get())
         assertEquals(
             Value.Int.of(7),
             testWorld.assumptions.getBinding(
@@ -192,12 +192,12 @@ class DemandSealingTest {
         assertEquals(
             Value.Int.of(9),
             resolved
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).get(),
+                ).getValue().get(),
         )
     }
 
@@ -298,12 +298,12 @@ class DemandSealingTest {
         )
         assertTrue(
             resolved
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).get() == Value.Int.of(8),
+                ).getValue().get() == Value.Int.of(8),
         )
     }
 
@@ -378,7 +378,7 @@ class DemandSealingTest {
                 emptyMap(),
             )
 
-        assertEquals(Value.Int.of(11), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(11), resolved.getCell(resultKey).getValue().get())
         assertContains(
             observation.lifecycleEvents.resolver25StructuralSignatures(),
             Resolver25StructuralSignature.NESTED_PROVIDER_PATH,
@@ -568,12 +568,12 @@ class DemandSealingTest {
         assertEquals(
             Value.Int.of(9),
             resolved
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).get(),
+                ).getValue().get(),
         )
     }
 

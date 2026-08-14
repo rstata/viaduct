@@ -131,9 +131,7 @@ private fun Value.Object.resolveObjectValue(
                         retainCompleteOutput = retainCompleteOutput,
                     )
             ResolvedObject(
-                values =
-                    result.values +
-                        (key to fieldValue.engineResult),
+                values = result.values + (key to fieldValue.engineResult),
                 objectsNeedingResolution =
                     result.objectsNeedingResolution +
                         fieldValue.objectsNeedingResolution,

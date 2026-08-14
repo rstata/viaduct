@@ -227,8 +227,8 @@ suspend fun SelectionForest.mergeWithVariables(
                 "Path-variable $variable is defined by conflicting keys: $previous and $groundKey"
             }
         }
-        if (variable != null && result.isValueSet(groundKey)) {
-            val promise = result.getValue(groundKey)
+        if (variable != null && result.isCellSet(groundKey)) {
+            val promise = result.getCell(groundKey).getValue()
             if (!promise.isCompleted) return@forEach
 
             val value: EngineResult? = promise.get()
@@ -280,7 +280,7 @@ private fun EngineResult.List.toPathVariableInputList(): Value.InputList {
     }
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { value -> value.toPathVariableInput() },
+        values = map { cell -> cell.getValue().get().toPathVariableInput() },
     )
 }
 

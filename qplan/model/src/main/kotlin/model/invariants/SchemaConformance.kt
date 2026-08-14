@@ -96,14 +96,15 @@ fun EngineResult.conformsToSchema(): Boolean =
         is Value.Simple -> (this as Value).conformsToSchema()
         is EngineResult.Object ->
             keys.all { key ->
-                val value = getValue(key).get()
+                val value = getCell(key).getValue().get()
                 key.field.containingType == type &&
                     key.conformsToSchema() &&
                     value.conformsToSchemaType(key.field.typeExpr) &&
                     (value?.conformsToSchema() ?: true)
             }
         is EngineResult.List ->
-            all { value ->
+            all { cell ->
+                val value = cell.getValue().get()
                 value.conformsToSchemaType(typeExpr) &&
                     (value?.conformsToSchema() ?: true)
             }

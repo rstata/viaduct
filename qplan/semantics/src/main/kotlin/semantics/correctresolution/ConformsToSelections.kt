@@ -48,7 +48,8 @@ private fun EngineResult.Object.objectConformsToSelections(
     selections.applicableGroundSelections(type).byGroundKey().values.all { selection ->
         val key = selection.groundKey()
         key in keys &&
-            getValue(key)
+            getCell(key)
+                .getValue()
                 .get()
                 .engineResultConformsToSelections(
                     selections = selection.subselections,
@@ -74,7 +75,7 @@ private fun EngineResult?.engineResultConformsToSelections(
             )
         is EngineResult.List ->
             indices.all { index ->
-                get(index).engineResultConformsToSelections(
+                get(index).getValue().get().engineResultConformsToSelections(
                     selections = selections,
                     path = path + Value.ListIndex.of(index),
                 )

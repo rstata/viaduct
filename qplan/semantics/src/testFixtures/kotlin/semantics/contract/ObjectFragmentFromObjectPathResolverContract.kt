@@ -84,7 +84,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                     .variable
             }
 
-        assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).get())
         assertEquals(
             Value.Int.of(7),
             world.getBinding(boundVariable),
@@ -165,7 +165,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
             assertEquals<Value.Input?>(
                 provided,
-                resolved.getValue(resultKey).get() as Value.Input?,
+                resolved.getCell(resultKey).get() as Value.Input?,
             )
             assertEquals(
                 provided,
@@ -243,7 +243,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 world.fragmentFrom("fragment ignored on Query { result }"),
             )
 
-        assertEquals(Value.Int.of(9), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(9), resolved.getCell(resultKey).get())
     }
 
     @Test
@@ -324,6 +324,6 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 world.fragmentFrom("fragment ignored on Query { result }"),
             )
 
-        assertEquals(Value.Int.of(10), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(10), resolved.getCell(resultKey).get())
     }
 }

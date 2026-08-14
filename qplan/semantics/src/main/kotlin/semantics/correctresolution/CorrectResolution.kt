@@ -7,7 +7,7 @@ import model.ObjectSelectionForest
 /**
  * Whether this Query-rooted result is a correct field-resolution result for [selections].
  *
- * The judgment is plan-independent and does not observe field or type checks. Also,
+ * The judgment is plan-independent and does not observe access-acceptance results. Also,
  * this judgment is purposefully permissive: as long as the [EngineResult.Object] conforms
  * to our world assumptions (e.g., regarding schema conformance and resolver conformance),
  * this predicate allows the [EngineResult.Object] to contain more values than the input

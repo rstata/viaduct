@@ -59,8 +59,9 @@ private suspend fun EngineResult.Object.materializeSelectedObjectValue(
                 field = storedKey.field,
                 arguments = storedKey.arguments.fieldValues,
             )
-        val promise = getValue(storedKey)
-        runtimeSupport.cycleCheck(reader, this, storedKey)
+        val cell = getCell(storedKey)
+        val promise = cell.getValue()
+        runtimeSupport.cycleCheck(reader, cell)
         val selectedValue =
             promise
                 .await()
@@ -118,7 +119,7 @@ private suspend fun EngineResult.List.materializeValues(
     val materialized = mutableListOf<Value.Output?>()
     indices.forEach { index ->
         materialized +=
-            get(index).materializeEngineResultValue(
+            get(index).getValue().await().materializeEngineResultValue(
                 selections = selections,
                 reader = reader,
                 resultPath = resultPath + Value.ListIndex.of(index),

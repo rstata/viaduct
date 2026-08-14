@@ -1,0 +1,413 @@
+package semantics.benchmark
+
+import kotlinx.coroutines.runBlocking
+import model.EngineResult
+import model.Fragment
+import model.Value
+import model.fragmentFrom
+import model.objectOf
+import model.ownerResolverStamp
+import semantics.arbitrary.ArbitraryQuery
+import semantics.arbitrary.ArbitraryRegistry
+import semantics.arbitrary.ArbitrarySchema
+import semantics.arbitrary.FieldCoordinate
+import semantics.arbitrary.ResolverTestCase
+import semantics.arbitrary.TestCaseCount
+import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.encodeResolverBenchmarkCorpus
+import semantics.arbitrary.resolverBenchmarkCorpusSearchConfig
+import semantics.resolver26.Resolver26ApplicationObservation
+import semantics.resolver26.resolveObserved
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.createDirectories
+
+object ResolverBenchmarkCorpusSearch {
+    @JvmStatic
+    fun main(arguments: Array<String>) {
+        require(arguments.size == 3) {
+            "Expected arguments: <output-directory> <seed> <schemas:registries:queries>"
+        }
+        val outputDirectory = Path.of(arguments[0])
+        val seed = arguments[1].toLong()
+        val counts = parseCounts(arguments[2])
+        val winner =
+            runBlocking {
+                search(seed, counts)
+            }
+        outputDirectory.createDirectories()
+        Files.writeString(outputDirectory.resolve("schema.graphqls"), winner.schema.sdl)
+        Files.writeString(
+            outputDirectory.resolve("registry.json"),
+            winner.registry.encodeResolverBenchmarkCorpus(
+                schema = winner.schema,
+                metrics = winner.metrics(seed, counts),
+            ),
+        )
+        println(winner.summary(seed, counts))
+        println("Wrote resolver benchmark corpus to $outputDirectory")
+    }
+
+    private suspend fun search(
+        seed: Long,
+        counts: TestCaseCount,
+    ): Candidate {
+        val candidates = linkedMapOf<Pair<Int, Int>, Candidate>()
+        checkResolverTestCases(
+            counts = counts,
+            config = resolverBenchmarkCorpusSearchConfig(),
+            profile = "resolver-benchmark-corpus-search",
+            seed = seed,
+            captureSuppliedDemand = false,
+            captureResolutionWitness = true,
+            captureResolutionApplicationCounts = false,
+        ) { testWorld, testCase ->
+            val coordinates = requireNotNull(testCase.coordinates)
+            val key = coordinates.schemaIndex to coordinates.registryIndex
+            val candidate =
+                candidates.getOrPut(key) {
+                    Candidate(testCase.schema, testCase.registry)
+                }
+            candidate.observe(testWorld.newAssumptions(selectiveResolvers = true), testCase)
+        }
+        require(candidates.isNotEmpty()) {
+            "Resolver benchmark corpus search produced no candidates"
+        }
+        return candidates.values.maxBy(Candidate::score)
+    }
+
+    private fun Candidate.observe(
+        world: model.Assumptions,
+        testCase: ResolverTestCase,
+    ) {
+        val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+        registry.clearResolutionWitness()
+        val applicationObservations =
+            java.util.Collections.synchronizedList(
+                mutableListOf<Resolver26ApplicationObservation>(),
+            )
+        val result =
+            context(world) {
+                world.objectOf("Query").resolveObserved(fragment.subselections) { observation ->
+                    applicationObservations += observation
+                }
+            }
+        val witness = registry.resolutionWitness()
+        check(applicationObservations.size == witness.applications.size)
+        val shape = result.shape()
+        queryCount += 1
+        totalResultFields += shape.fields
+        maximumResultFields = maxOf(maximumResultFields, shape.fields)
+        maximumNonListFields = maxOf(maximumNonListFields, shape.nonListFields)
+        maximumListDerivedFields =
+            maxOf(maximumListDerivedFields, shape.listDerivedFields)
+        maximumResultDepth = maxOf(maximumResultDepth, shape.depth)
+        maximumQueryDepth = maxOf(maximumQueryDepth, testCase.query.selectionDepth)
+        resolverApplications += witness.applications.size
+        resolverApplicationsPerQuery += witness.applications.size.toLong()
+        val variableBearingApplications =
+            applicationObservations.filter { observation ->
+                observation.variableArgumentCount > 0
+            }
+        variableBearingResolverApplicationsPerQuery +=
+            variableBearingApplications.size.toLong()
+        variableArgumentCounts +=
+            variableBearingApplications.map { observation ->
+                observation.variableArgumentCount.toLong()
+            }
+        maximumVariableStackDepth =
+            maxOf(
+                maximumVariableStackDepth,
+                applicationObservations.maximumVariableStackDepth(),
+            )
+        distinctResolverFields +=
+            witness.applications.mapTo(linkedSetOf()) { application ->
+                application.key.field
+            }
+        activatedFromArgumentApplications +=
+            witness.applications.count { application ->
+                registry.sourceResolverHasFromArgumentVariables(application.key.field)
+            }
+        activatedFromPathApplications +=
+            witness.applications.count { application ->
+                registry.sourceResolverHasFromObjectFieldVariables(application.key.field)
+            }
+        observeQueryFeatures(testCase.query)
+    }
+
+    private fun Candidate.observeQueryFeatures(query: ArbitraryQuery) {
+        if (query.features.hasAliases) queriesWithAliases += 1
+        if (query.features.hasDuplicateSelections) queriesWithDuplicates += 1
+        if (query.features.hasDistinctArgumentSelections) {
+            queriesWithDistinctArguments += 1
+        }
+        if (query.features.hasExactKeyAliasConvergence) {
+            queriesWithAliasConvergence += 1
+        }
+    }
+
+    private fun EngineResult?.shape(
+        depth: Int = 0,
+        beneathList: Boolean = false,
+    ): ResultShape =
+        when (this) {
+            null, is Value.Simple -> ResultShape()
+            is EngineResult.List ->
+                indices
+                    .map { index ->
+                        get(index).getValue().get().shape(depth, beneathList = true)
+                    }
+                    .fold(ResultShape(), ResultShape::plus)
+            is EngineResult.Object -> {
+                val childShapes =
+                    keys.map { key ->
+                        val value = getCell(key).getValue().get()
+                        val child = value.shape(depth + 1, beneathList)
+                        child.copy(
+                            fields = child.fields + 1,
+                            nonListFields =
+                                child.nonListFields +
+                                    if (beneathList) 0 else 1,
+                            listDerivedFields =
+                                child.listDerivedFields +
+                                    if (beneathList) 1 else 0,
+                            depth = maxOf(child.depth, depth + 1),
+                        )
+                    }
+                childShapes.fold(ResultShape(), ResultShape::plus)
+            }
+        }
+
+    private fun parseCounts(value: String): TestCaseCount {
+        val dimensions = value.split(':').map(String::toInt)
+        require(dimensions.size == 3 && dimensions.all { dimension -> dimension > 0 }) {
+            "Corpus search size must have positive S:R:Q form: $value"
+        }
+        return TestCaseCount(
+            schemas = dimensions[0],
+            registriesPerSchema = dimensions[1],
+            queriesPerSchema = dimensions[2],
+        )
+    }
+
+    private data class ResultShape(
+        val fields: Long = 0,
+        val nonListFields: Long = 0,
+        val listDerivedFields: Long = 0,
+        val depth: Int = 0,
+    ) {
+        operator fun plus(other: ResultShape): ResultShape =
+            ResultShape(
+                fields = fields + other.fields,
+                nonListFields = nonListFields + other.nonListFields,
+                listDerivedFields =
+                    listDerivedFields + other.listDerivedFields,
+                depth = maxOf(depth, other.depth),
+            )
+    }
+
+    private fun List<Resolver26ApplicationObservation>.maximumVariableStackDepth(): Long {
+        val executedOccurrences = mapTo(linkedSetOf()) { observation -> observation.identity() }
+        val childrenBySource =
+            buildMap<ResolverOccurrenceIdentity, MutableSet<ResolverOccurrenceIdentity>> {
+                this@maximumVariableStackDepth.forEach { observation ->
+                    observation
+                        .sourceIdentities()
+                        .filter(executedOccurrences::contains)
+                        .forEach { sourceIdentity ->
+                            getOrPut(sourceIdentity) { linkedSetOf() }
+                                .add(observation.identity())
+                        }
+                }
+            }
+        val depthByOccurrence = mutableMapOf<ResolverOccurrenceIdentity, Long>()
+        val visiting = mutableSetOf<ResolverOccurrenceIdentity>()
+        fun depth(identity: ResolverOccurrenceIdentity): Long {
+            depthByOccurrence[identity]?.let { return it }
+            check(visiting.add(identity)) {
+                "Variable resolver dependency cycle at $identity"
+            }
+            val depth =
+                childrenBySource[identity]
+                    .orEmpty()
+                    .maxOfOrNull { child -> 1L + depth(child) }
+                    ?: 0
+            visiting.remove(identity)
+            depthByOccurrence[identity] = depth
+            return depth
+        }
+        return executedOccurrences.maxOfOrNull(::depth) ?: 0
+    }
+
+    private sealed interface ResolverOccurrenceIdentity {
+        data class Ordinary(
+            val path: List<model.PathComponent>,
+        ) : ResolverOccurrenceIdentity
+
+        data class Stamped(
+            val stamp: model.SelectionStamp,
+        ) : ResolverOccurrenceIdentity
+    }
+
+    private fun Resolver26ApplicationObservation.identity(): ResolverOccurrenceIdentity =
+        occurrenceStamp
+            ?.let(ResolverOccurrenceIdentity::Stamped)
+            ?: ResolverOccurrenceIdentity.Ordinary(occurrencePath)
+
+    private fun Resolver26ApplicationObservation.sourceIdentities():
+        Set<ResolverOccurrenceIdentity> =
+        variableSourceSelectionStamps.mapTo(linkedSetOf()) { sourceStamp ->
+            sourceStamp.ownerResolverStamp()
+                ?.let(ResolverOccurrenceIdentity::Stamped)
+                ?: ResolverOccurrenceIdentity.Ordinary(sourceStamp.resolverPath)
+        }
+
+    private class Candidate(
+        val schema: ArbitrarySchema,
+        val registry: ArbitraryRegistry,
+    ) {
+        var queryCount: Int = 0
+        var totalResultFields: Long = 0
+        var maximumResultFields: Long = 0
+        var maximumNonListFields: Long = 0
+        var maximumListDerivedFields: Long = 0
+        var maximumResultDepth: Int = 0
+        var maximumQueryDepth: Int = 0
+        var resolverApplications: Int = 0
+        val resolverApplicationsPerQuery: MutableList<Long> = mutableListOf()
+        val variableBearingResolverApplicationsPerQuery: MutableList<Long> =
+            mutableListOf()
+        val variableArgumentCounts: MutableList<Long> = mutableListOf()
+        var maximumVariableStackDepth: Long = 0
+        var activatedFromArgumentApplications: Int = 0
+        var activatedFromPathApplications: Int = 0
+        var queriesWithAliases: Int = 0
+        var queriesWithDuplicates: Int = 0
+        var queriesWithDistinctArguments: Int = 0
+        var queriesWithAliasConvergence: Int = 0
+        val distinctResolverFields: MutableSet<FieldCoordinate> = linkedSetOf()
+
+        fun score(): Long {
+            val averageResultFields =
+                if (queryCount == 0) 0 else totalResultFields / queryCount
+            val averageResolverApplications = resolverApplicationsPerQuery.average().toLong()
+            val medianVariableBearingApplications =
+                variableBearingResolverApplicationsPerQuery.percentile(0.5)
+            val workloadScore =
+                closeness(averageResultFields, target = 10_000, radius = 25_000) * 10_000L +
+                    closeness(maximumResultFields, target = 20_000, radius = 80_000) * 1_000L +
+                    closeness(maximumNonListFields, target = 75, radius = 500) * 10_000L +
+                    closeness(
+                        averageResolverApplications,
+                        target = 2_000,
+                        radius = 5_000,
+                    ) * 100_000L
+            val variableWorkloadScore =
+                medianVariableBearingApplications.coerceAtMost(10) * 40_000_000L +
+                    (medianVariableBearingApplications - 10)
+                        .coerceAtLeast(0) * 2_000_000L +
+                    maximumVariableStackDepth * 100_000_000L +
+                    (variableArgumentCounts.maxOrNull() ?: 0) * 1_000_000L
+            val featureScore =
+                registry.features.fromArgumentVariableCount * 50L +
+                    registry.features.fromObjectFieldVariableCount * 100L +
+                    registry.features.maximumFromObjectFieldPathLength * 500L +
+                    registry.features.maximumFromObjectFieldVariableUseDepth * 500L +
+                    registry.features.maximumVariablesPerOwner * 1_000L +
+                    registry.fromObjectFieldVariableOwnerDependencies.size * 2_000L +
+                    registry.nodeResolverTypes.size * 500L +
+                    distinctResolverFields.size * 100L +
+                    activatedFromArgumentApplications +
+                    activatedFromPathApplications * 2L
+            val diversityScore =
+                queriesWithAliases * 10L +
+                    queriesWithDuplicates * 10L +
+                    queriesWithDistinctArguments * 20L +
+                    queriesWithAliasConvergence * 20L
+            return workloadScore +
+                variableWorkloadScore +
+                maximumQueryDepth * 100_000L +
+                featureScore +
+                diversityScore -
+                kotlin.math.abs(averageResolverApplications - 2_000L) * 3_000_000L
+        }
+
+        fun metrics(
+            seed: Long,
+            counts: TestCaseCount,
+        ): Map<String, Long> =
+            sortedMapOf(
+                "searchSeed" to seed,
+                "searchSchemas" to counts.schemas.toLong(),
+                "searchRegistriesPerSchema" to counts.registriesPerSchema.toLong(),
+                "sampledQueries" to queryCount.toLong(),
+                "score" to score(),
+                "averageResultFields" to
+                    if (queryCount == 0) 0 else totalResultFields / queryCount,
+                "maximumResultFields" to maximumResultFields,
+                "maximumNonListFields" to maximumNonListFields,
+                "maximumListDerivedFields" to maximumListDerivedFields,
+                "maximumResultDepth" to maximumResultDepth.toLong(),
+                "maximumQueryDepth" to maximumQueryDepth.toLong(),
+                "resolverApplications" to resolverApplications.toLong(),
+                "averageResolverApplications" to
+                    resolverApplicationsPerQuery.average().toLong(),
+                "medianVariableBearingResolverApplications" to
+                    variableBearingResolverApplicationsPerQuery.percentile(0.5),
+                "maximumVariableBearingResolverApplications" to
+                    (variableBearingResolverApplicationsPerQuery.maxOrNull() ?: 0),
+                "averageVariableArgumentsPerVariableBearingApplicationTimes100" to
+                    (
+                        if (variableArgumentCounts.isEmpty()) {
+                            0
+                        } else {
+                            (variableArgumentCounts.average() * 100).toLong()
+                        }
+                    ),
+                "maximumVariableArgumentsPerVariableBearingApplication" to
+                    (variableArgumentCounts.maxOrNull() ?: 0),
+                "maximumVariableStackDepth" to maximumVariableStackDepth,
+                "distinctResolverFields" to distinctResolverFields.size.toLong(),
+                "activatedFromArgumentApplications" to
+                    activatedFromArgumentApplications.toLong(),
+                "activatedFromPathApplications" to
+                    activatedFromPathApplications.toLong(),
+                "fromArgumentVariables" to
+                    registry.features.fromArgumentVariableCount.toLong(),
+                "fromPathVariables" to
+                    registry.features.fromObjectFieldVariableCount.toLong(),
+                "maximumVariablesPerOwner" to
+                    registry.features.maximumVariablesPerOwner.toLong(),
+                "maximumProviderPathLength" to
+                    registry.features.maximumFromObjectFieldPathLength.toLong(),
+                "maximumVariableUseDepth" to
+                    registry.features.maximumFromObjectFieldVariableUseDepth.toLong(),
+                "ownerDependencies" to
+                    registry.fromObjectFieldVariableOwnerDependencies.size.toLong(),
+            )
+
+        private fun closeness(
+            value: Long,
+            target: Long,
+            radius: Long,
+        ): Long = (radius - kotlin.math.abs(value - target)).coerceAtLeast(0)
+
+        private fun List<Long>.percentile(percentile: Double): Long {
+            if (isEmpty()) return 0
+            val sorted = sorted()
+            val index =
+                kotlin.math
+                    .ceil(sorted.size * percentile)
+                    .toInt()
+                    .coerceAtLeast(1) - 1
+            return sorted[index]
+        }
+
+        fun summary(
+            seed: Long,
+            counts: TestCaseCount,
+        ): String =
+            "Resolver benchmark corpus winner: " +
+                metrics(seed, counts).entries.joinToString { (name, value) -> "$name=$value" }
+    }
+}

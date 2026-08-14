@@ -1,0 +1,287 @@
+input InputObject0 {
+  input0: InputObject1!
+}
+
+input InputObject1 {
+  input0: Int!
+  input1: Float
+  input2: Boolean!
+}
+
+interface Node {
+  id: ID!
+}
+
+interface GeneratedInterface {
+  common: String!
+}
+
+type Hash {
+  nested: Hash
+  hash: Int!
+}
+
+type Object0 implements Node {
+  id: ID!
+  field0: Object1!
+  field1(arg: InputObject0!): ID
+  field2(arg: String!): Object8!
+  field3(arg: String): Int!
+  field4(arg: Int!): ID!
+  field5(arg: ID!): String!
+  field6(arg: Boolean): [Int!]!
+  field7(arg: Boolean!): Boolean
+  field8(arg: InputObject0!): Float!
+  field9(arg: ID!): Object3!
+  field10(arg: InputObject0!): Object13!
+  field11(arg: Int!): Float
+  field12(arg: [InputObject1!]!): Int!
+  field13(arg: InputObject0!): Float!
+  hash: Hash!
+}
+
+type Object1 {
+  field0: Object2!
+  field1(arg: ID!): Boolean!
+  field2(arg: [[String!]]!): Int
+  field3(arg: Boolean!): Float!
+  field4(arg: [InputObject0!]): Object11!
+  field5(arg: String!): Object9!
+  field6(arg: ID!): Boolean!
+  field7: Object11!
+  field8(arg: ID!): [Boolean!]
+  field9(arg: Int): Object0
+  hash: Hash!
+}
+
+type Object2 implements GeneratedInterface {
+  field0: Object3!
+  field1(arg: [String!]!): Boolean
+  field2(arg: ID): Object10!
+  field3(arg: String!): Int!
+  field4(arg: Boolean!): Object2
+  field5(arg: ID!): Object9!
+  field6(arg: Boolean!): [Int]!
+  field7(arg: [Int!]!): Object3!
+  field8(arg: Int): Float!
+  field9(arg: ID!): Object13!
+  field10(arg: InputObject0): Object6!
+  field11(arg: Boolean!): Object9!
+  common: String!
+  hash: Hash!
+}
+
+type Object3 implements Node {
+  id: ID!
+  field0: Object4!
+  field1(arg: Int!): Object0
+  field2(arg: [Float!]): Object0
+  field3(arg: InputObject1!): Int!
+  field4: Object5
+  field5(arg: Int): Int
+  field6(arg: String): Boolean!
+  field7(arg: Int!): [Float!]!
+  field8(arg: Boolean!): String!
+  field9(arg: [Int!]): Object11
+  field10(arg: String): Object13!
+  field11: Float
+  hash: Hash!
+}
+
+type Object4 implements GeneratedInterface {
+  field0: Object5!
+  field1(arg: ID!): String!
+  field2(arg: Float!): String!
+  field3(arg: [Float]!): Object13!
+  field4(arg: Boolean!): Object15!
+  field5(arg: String!): Int!
+  field6(arg: InputObject1!): Object12
+  field7(arg: [InputObject0]!): Object6!
+  field8: [Object10!]!
+  field9(arg: Int!): Float!
+  field10(arg: InputObject1!): Boolean!
+  field11(arg: InputObject1!): Int!
+  common: String!
+  hash: Hash!
+}
+
+type Object5 implements GeneratedInterface {
+  field0: Object6!
+  field1(arg: [ID!]): ID!
+  field2(arg: [String!]!): Int!
+  field3(arg: [[Int!]!]!): ID!
+  field4(arg: InputObject1!): Object0
+  field5(arg: InputObject0!): Float!
+  field6(arg: InputObject1!): Object7
+  field7(arg: [ID!]!): ID!
+  field8(arg: [String!]!): [Object13!]!
+  field9: [Object13!]!
+  field10(arg: Int!): String!
+  common: String!
+  hash: Hash!
+}
+
+type Object6 {
+  field0: Object7!
+  field1(arg: InputObject0): [String!]!
+  field2(arg: ID!): Object13!
+  field3(arg: ID!): Boolean!
+  field4(arg: [InputObject1!]!): Object11!
+  field5(arg: Int!): Object7!
+  field6(arg: [[Int!]!]!): Int!
+  field7(arg: InputObject0!): Object8!
+  hash: Hash!
+}
+
+type Object7 {
+  field0(arg: Boolean!): Object4
+  field1(arg: String): Object11!
+  field2(arg: InputObject1!): String!
+  field3(arg: Int!): Boolean!
+  field4(arg: ID): Boolean
+  field5(arg: String!): Int!
+  field6(arg: Float!): Object6
+  field7(arg: [InputObject0!]!): Object2
+  field8(arg: Int!): Object5
+  field9(arg: ID!): [Object13]!
+  field10(arg: Boolean!): Int!
+  hash: Hash!
+}
+
+type Object8 implements GeneratedInterface {
+  field0(arg: ID): String
+  field1(arg: Float!): ID!
+  field2(arg: [[ID!]!]!): String!
+  field3(arg: InputObject0): Float!
+  field4(arg: String!): Object8
+  field5: Object12!
+  field6: Object11
+  field7(arg: String!): Object6
+  field8(arg: Boolean): Object4
+  field9: Boolean
+  field10(arg: Boolean): Object13!
+  field11: Boolean!
+  field12(arg: Boolean!): Int!
+  field13: Object14!
+  common: String!
+  hash: Hash!
+}
+
+type Object9 implements GeneratedInterface {
+  field0(arg: Int!): Int
+  field1(arg: ID!): Object11!
+  field2(arg: Float!): Object11!
+  field3: Int!
+  field4(arg: [InputObject0!]!): Int!
+  field5(arg: Boolean!): Boolean!
+  field6(arg: Boolean!): Object6
+  field7(arg: Boolean!): Object10!
+  field8(arg: [[Float!]!]!): ID!
+  field9(arg: Boolean!): Object13!
+  field10(arg: String): String!
+  field11(arg: [Int!]): String
+  common: String!
+  hash: Hash!
+}
+
+type Object10 implements GeneratedInterface {
+  field0(arg: [[ID!]!]!): Object12!
+  field1(arg: String!): ID!
+  field2(arg: Int): Boolean
+  field3(arg: ID!): Object14!
+  field4(arg: Boolean!): ID!
+  field5(arg: InputObject1!): [Int]!
+  field6(arg: Boolean!): String!
+  field7(arg: ID!): Object12
+  common: String!
+  hash: Hash!
+}
+
+type Object11 {
+  field0(arg: Boolean!): String!
+  field1(arg: Int!): String
+  field2(arg: Float!): Boolean
+  field3: [ID!]
+  field4(arg: InputObject1): Object13!
+  field5(arg: [[Int!]]!): Object12!
+  field6(arg: Boolean!): Object15!
+  field7(arg: String!): Int
+  hash: Hash!
+}
+
+type Object12 {
+  field0(arg: Int): Int!
+  field1(arg: ID!): Object14!
+  field2(arg: String!): Object5
+  field3(arg: InputObject1!): ID!
+  field4(arg: String!): ID!
+  field5(arg: String): String!
+  field6: Int!
+  field7(arg: Float!): Object15!
+  field8(arg: InputObject1): ID
+  hash: Hash!
+}
+
+type Object13 implements GeneratedInterface {
+  field0(arg: InputObject0!): String
+  field1(arg: Boolean!): ID!
+  field2(arg: [InputObject0]!): Int!
+  field3(arg: Float): Object15!
+  field4(arg: Boolean!): Object15!
+  field5(arg: InputObject1!): Boolean!
+  field6(arg: Boolean): Object14
+  field7(arg: ID!): [Float]!
+  common(implementationDefault: Int = 7): String!
+  hash: Hash!
+}
+
+type Object14 implements GeneratedInterface {
+  field0(arg: [[String!]!]!): Int!
+  field1(arg: InputObject1!): Object15!
+  field2(arg: [Int!]!): Int!
+  field3(arg: InputObject0): Float!
+  field4(arg: Boolean!): [Boolean!]!
+  field5(arg: InputObject0!): Object15
+  field6(arg: Int!): Object15!
+  field7(arg: ID!): Int!
+  field8(arg: Boolean!): Object0
+  common: String!
+  hash: Hash!
+}
+
+type Object15 implements GeneratedInterface {
+  field0(arg: Boolean): Boolean!
+  field1(arg: String!): Float!
+  field2: Boolean!
+  field3(arg: Boolean): Int!
+  field4(arg: Float!): Float
+  field5(arg: String!): Boolean!
+  field6(arg: Int!): ID!
+  field7(arg: String!): Int!
+  field8(arg: Boolean!): Boolean!
+  field9(arg: Boolean): [ID!]!
+  field10(arg: ID!): Object14
+  field11(arg: Float!): Float!
+  field12(arg: InputObject1): String!
+  common: String!
+  hash: Hash!
+}
+
+union GeneratedUnion = Object1 | Object2 | Object4 | Object5 | Object6 | Object9 | Object14
+
+type Query {
+  query0: Object0!
+  query1(arg: Boolean!): Object1
+  query2(arg: InputObject1!): [Object11!]!
+  query3(arg: Boolean!): Object15!
+  query4(arg: Float!): Object15!
+  query5(arg: ID!): Object1!
+  query6(arg: ID): Object13!
+  query7(arg: Float): Object1!
+  query8(arg: InputObject1!): Object10
+  query9(arg: InputObject1!): String!
+  query10(arg: String!): Object7
+  query11(arg: [String!]!): Object14!
+  query12(arg: InputObject1): Object8!
+  query13(arg: Float!): Object2!
+}

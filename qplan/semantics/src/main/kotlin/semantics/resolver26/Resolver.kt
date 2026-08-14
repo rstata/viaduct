@@ -23,6 +23,8 @@ import model.localizeTopLevelSelectionStamps
 import model.merge
 import model.selectionForestOf
 import model.usedVariables
+import model.variableArgumentNames
+import model.variableSourceSelectionStamps
 import model.registry.FieldResolver
 import model.registry.SelectionStampedVariableDefinition
 import model.registry.StampedObjectPathDefinition
@@ -84,6 +86,17 @@ internal fun Value.Object.resolve(
         }
     }
 }
+
+context(world: Assumptions)
+internal fun Value.Object.resolveObserved(
+    selections: SelectionForest,
+    applicationObserver: Resolver26ApplicationObserver,
+): EngineResult.Object =
+    resolve(
+        selections = selections,
+        coroutineContext = resolver26CoroutineContext(),
+        applicationObserver = applicationObserver,
+    )
 
 /** Owns request lifetime without using task completion as cross-task readiness. */
 private class ResolverRuntime(
@@ -322,6 +335,9 @@ private suspend fun installAndLaunchFieldResolver(
     target: EngineResult.Object,
     runtime: ResolverRuntime,
 ) {
+    val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
+    val variableSourceSelectionStamps =
+        selection.key.arguments.variableSourceSelectionStamps()
     val groundedSelection: ObjectSelection =
         selectionForestOf(selection)
             .merge(target.type)
@@ -348,6 +364,8 @@ private suspend fun installAndLaunchFieldResolver(
             expansion = expansion,
             target = target,
             cell = cell,
+            variableArgumentCount = variableArgumentCount,
+            variableSourceSelectionStamps = variableSourceSelectionStamps,
             runtime = runtime,
         )
     }
@@ -466,6 +484,8 @@ private suspend fun resolveField(
     expansion: ResolverExpansion,
     target: EngineResult.Object,
     cell: EngineResult.Cell,
+    variableArgumentCount: Int,
+    variableSourceSelectionStamps: Set<SelectionStamp>,
     runtime: ResolverRuntime,
 ) {
     val groundKey = selection.groundKey()
@@ -499,6 +519,10 @@ private suspend fun resolveField(
             input = input,
             arguments = resolverArguments,
             suppliedDemand = invocationDemand,
+            variableArgumentCount = variableArgumentCount,
+            occurrenceStamp =
+                (groundKey as? Value.GroundKey.Stamped)?.selectionStamp,
+            variableSourceSelectionStamps = variableSourceSelectionStamps,
         ),
     )
     val fieldValue: Value.Output? =

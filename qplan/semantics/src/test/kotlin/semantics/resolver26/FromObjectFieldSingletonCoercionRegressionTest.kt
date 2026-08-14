@@ -7,7 +7,6 @@ import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
-import org.junit.jupiter.api.Disabled
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,9 +14,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class FromObjectFieldSingletonCoercionRegressionTest {
-    @Disabled(
-        "Enable when Resolver26 applies GraphQL singleton coercion to FromObjectField values before grounding nested-list arguments.",
-    )
     @Test
     fun `singleton coerces a scalar object-field value through two input-list layers`() {
         val resultFragment =

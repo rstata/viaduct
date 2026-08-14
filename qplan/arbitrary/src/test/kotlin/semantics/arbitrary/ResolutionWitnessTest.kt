@@ -9,7 +9,6 @@ import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
-import org.junit.jupiter.api.Disabled
 import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -407,12 +406,21 @@ class ResolutionWitnessTest {
         )
     }
 
-    @Disabled("not currently worth the effort")
     @Test
     fun `application count oracle distinguishes equal-input list occurrences`() {
         val world = traversalWorld()
         val schema = world.schema
-        val computedField = schema.field("Payload", "computed")
+        val itemsKey =
+            Value.GroundKey.of(
+                schema.objectField("Query", "items"),
+                emptyMap(),
+            )
+        val computedField = schema.objectField("Payload", "computed")
+        val computedGroundKey =
+            Value.GroundKey.of(
+                computedField,
+                mapOf("scale" to 1),
+            )
         val computedKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
@@ -422,21 +430,41 @@ class ResolutionWitnessTest {
             schema.objectOf("Payload") {
                 "base" setTo 10
             }
+        val firstPath =
+            listOf(
+                itemsKey,
+                Value.ListIndex.of(0),
+                computedGroundKey,
+            )
+        val secondPath =
+            listOf(
+                itemsKey,
+                Value.ListIndex.of(1),
+                computedGroundKey,
+            )
+        val applicationIdentity =
+            ResolverApplicationIdentity(
+                computedKey,
+                input.resolutionFingerprint(),
+            )
         val expected =
             mapOf(
-                ResolverApplicationIdentity(
-                    computedKey,
-                    input.resolutionFingerprint(),
-                ) to 2,
+                ResolverOccurrenceApplicationIdentity(firstPath, applicationIdentity) to 1,
+                ResolverOccurrenceApplicationIdentity(secondPath, applicationIdentity) to 1,
             )
-        val malformedLog = ResolutionApplicationLog()
-        malformedLog.record(computedKey.field, computedKey.arguments, input)
-        malformedLog.record(computedKey.field, computedKey.arguments, input)
+        val validLog = ResolutionOccurrenceApplicationLog()
+        validLog.record(firstPath, computedKey.field, computedKey.arguments, input)
+        validLog.record(secondPath, computedKey.field, computedKey.arguments, input)
+        assertEquals(expected, validLog.snapshot().applicationIdentityCounts())
+
+        val malformedLog = ResolutionOccurrenceApplicationLog()
+        malformedLog.record(firstPath, computedKey.field, computedKey.arguments, input)
+        malformedLog.record(firstPath, computedKey.field, computedKey.arguments, input)
 
         assertNotEquals(
             expected,
             malformedLog.snapshot().applicationIdentityCounts(),
-            "An occurrence path is required to distinguish equal-input list positions",
+            "Duplicating one equal-input occurrence and omitting another must be rejected",
         )
     }
 

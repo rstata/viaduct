@@ -68,6 +68,18 @@ data class ResolverApplicationObservation(
     val suppliedDemandFingerprint: ResolutionFingerprint?,
 )
 
+/** One application identity qualified by its exact root-to-field OER path. */
+data class ResolverOccurrenceApplicationIdentity(
+    val occurrencePath: List<PathComponent>,
+    val applicationIdentity: ResolverApplicationIdentity,
+)
+
+/** One path-qualified application identity and its supplied-demand fingerprint. */
+data class ResolverOccurrenceApplicationObservation(
+    val identity: ResolverOccurrenceApplicationIdentity,
+    val suppliedDemandFingerprint: ResolutionFingerprint?,
+)
+
 data class ResolverApplicationRecord(
     val key: ResolverApplicationKey,
     val inputFingerprint: ResolutionFingerprint,
@@ -91,6 +103,43 @@ data class ResolverApplicationRecord(
                 key = ResolverApplicationKey(field, arguments),
                 inputFingerprint = input.resolutionFingerprint(bounds),
                 suppliedDemandFingerprint = suppliedDemand?.resolutionDigest(bounds),
+            )
+    }
+}
+
+data class ResolverOccurrenceApplicationRecord(
+    val occurrencePath: List<PathComponent>,
+    val application: ResolverApplicationRecord,
+) {
+    val identity: ResolverOccurrenceApplicationIdentity
+        get() = ResolverOccurrenceApplicationIdentity(occurrencePath, application.identity)
+
+    val observation: ResolverOccurrenceApplicationObservation
+        get() =
+            ResolverOccurrenceApplicationObservation(
+                identity,
+                application.suppliedDemandFingerprint,
+            )
+
+    companion object {
+        fun capture(
+            occurrencePath: List<PathComponent>,
+            field: FieldCoordinate,
+            arguments: Value.Arguments,
+            input: Value.Object,
+            suppliedDemand: SelectionForest? = null,
+            bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+        ): ResolverOccurrenceApplicationRecord =
+            ResolverOccurrenceApplicationRecord(
+                occurrencePath = occurrencePath.toList(),
+                application =
+                    ResolverApplicationRecord.capture(
+                        field = field,
+                        arguments = arguments,
+                        input = input,
+                        suppliedDemand = suppliedDemand,
+                        bounds = bounds,
+                    ),
             )
     }
 }
@@ -157,6 +206,46 @@ class ResolutionApplicationLog(
     }
 }
 
+/** Thread-safe bounded recorder for applications observed at exact OER occurrence paths. */
+class ResolutionOccurrenceApplicationLog(
+    private val bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+) {
+    private val lock = Any()
+    private val records = mutableListOf<ResolverOccurrenceApplicationRecord>()
+
+    fun record(
+        occurrencePath: List<PathComponent>,
+        field: FieldCoordinate,
+        arguments: Value.Arguments,
+        input: Value.Object,
+        suppliedDemand: SelectionForest? = null,
+    ) {
+        val record =
+            ResolverOccurrenceApplicationRecord.capture(
+                occurrencePath = occurrencePath,
+                field = field,
+                arguments = arguments,
+                input = input,
+                suppliedDemand = suppliedDemand,
+                bounds = bounds,
+            )
+        synchronized(lock) {
+            if (records.size >= bounds.maxApplications) {
+                throw ResolutionWitnessBoundExceededException(
+                    "application",
+                    bounds.maxApplications,
+                )
+            }
+            records += record
+        }
+    }
+
+    fun snapshot(): ResolutionOccurrenceWitness =
+        synchronized(lock) {
+            ResolutionOccurrenceWitness(records.toList())
+        }
+}
+
 data class ResolutionWitness(
     val applications: List<ResolverApplicationRecord>,
 ) {
@@ -179,6 +268,16 @@ data class ResolutionWitness(
         applications.filter { application ->
             application.key.field !in allowed.canonicalFields
         }
+}
+
+data class ResolutionOccurrenceWitness(
+    val applications: List<ResolverOccurrenceApplicationRecord>,
+) {
+    fun applicationIdentityCounts(): Map<ResolverOccurrenceApplicationIdentity, Int> =
+        applications.groupingBy(ResolverOccurrenceApplicationRecord::identity).eachCount()
+
+    fun applicationObservationCounts(): Map<ResolverOccurrenceApplicationObservation, Int> =
+        applications.groupingBy(ResolverOccurrenceApplicationRecord::observation).eachCount()
 }
 
 /**

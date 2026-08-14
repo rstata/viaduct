@@ -106,8 +106,10 @@ component is specialized to the concrete OER type before lookup.
 
 ## Orchestration
 
-Orchestration closes one OER's demand and declares its bindings. It launches orchestration for every
-passive child OER already materialized by `resolveValue` without waiting for those child tasks.
+Orchestration closes one OER's demand and declares its bindings. Every demanded passive value
+already materialized by `resolveValue` is reused; a missing value, as at the request root, is copied
+from the corresponding source `Value.Object` field through the same `resolveValue` path. It
+launches orchestration for every passive child OER without waiting for those child tasks.
 
 Within its structured task, orchestration starts binding aliases, provider readers, and one
 grounding coroutine per active resolver key. Each grounding coroutine awaits arguments, claims the
@@ -141,8 +143,9 @@ already-declared source bindings before localizing their storage-key stamps.
 
 This is a sharp sequencing choice: child orchestration is launched before the parent value is published, but parent publication does not wait for child orchestration. Correctness therefore depends on every later reader independently deriving and reserving exactly the localized child key that child orchestration will eventually claim. That agreement is especially difficult for variable-bearing arguments because the reader must derive the same occurrence-specific `SelectionStamp`, use the matching variable-instance bindings to ground the arguments, and localize the resulting key to the same child path.
 
-Every OER synthesizes its concrete `__typename` at creation. `__typename` never participates in
-field launch.
+Every source `Value.Object` intrinsically contains its concrete `__typename`. Resolver26 treats it
+as an ordinary passive value: `resolveValue` copies it into an OER when demand selects it and
+silently ignores it otherwise. `__typename` never participates in field launch.
 
 ## Strictness
 

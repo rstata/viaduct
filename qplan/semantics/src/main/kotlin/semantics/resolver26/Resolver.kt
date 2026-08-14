@@ -1,8 +1,6 @@
 package semantics.resolver26
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -18,17 +16,12 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SelectionStamp
-import model.TypeExpr
 import model.Value
-import model.containsErrorValue
 import model.fetchBindings
-import model.flatMapToSelectionForest
 import model.groundKey
 import model.localizeTopLevelSelectionStamps
 import model.merge
-import model.objectKey
 import model.selectionForestOf
-import model.unionOutput
 import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.SelectionStampedVariableDefinition
@@ -39,24 +32,7 @@ import semantics.ResolvedValue
 import semantics.RuntimeSupport
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolveValue
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.ThreadFactory
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
-
-internal const val RESOLVER26_THREAD_COUNT_PROPERTY = "resolver26.thread.count"
-internal const val RESOLVER26_THREAD_COUNT_ENVIRONMENT = "RESOLVER26_THREAD_COUNT"
-
-internal data class Resolver26ApplicationObservation(
-    val occurrencePath: List<PathComponent>,
-    val field: Schema.ObjectField,
-    val input: Value.Object,
-    val arguments: Value.Arguments,
-    val suppliedDemand: SelectionForest,
-)
-
-internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit
 
 /**
  * Resolves selective demand once per ordinary or provenance-stamped resolver instance.
@@ -87,7 +63,6 @@ internal fun Value.Object.resolve(
                 type = type,
                 mutable = true,
             )
-        result.synthesizeTypename()
         return runBlocking(coroutineContext) {
             withTimeout(15_000) {
                 coroutineScope {
@@ -108,55 +83,6 @@ internal fun Value.Object.resolve(
             }
         }
     }
-}
-
-// Returns the positive externally configured worker count, defaulting to one.
-internal fun configuredResolver26ThreadCount(): Int {
-    val configured: String =
-        System.getProperty(RESOLVER26_THREAD_COUNT_PROPERTY)
-            ?: System.getenv(RESOLVER26_THREAD_COUNT_ENVIRONMENT)
-            ?: "1"
-    return configured.toIntOrNull()
-        ?.takeIf { threadCount -> threadCount > 0 }
-        ?: error(
-            "$RESOLVER26_THREAD_COUNT_PROPERTY/$RESOLVER26_THREAD_COUNT_ENVIRONMENT " +
-                "must be a positive integer: $configured",
-        )
-}
-
-// Returns the process-scoped fixed dispatcher selected for Resolver26 requests.
-private fun resolver26CoroutineContext(): CoroutineContext =
-    Resolver26Dispatchers.dispatcher(configuredResolver26ThreadCount())
-
-// Retains one daemon-backed dispatcher for each configured worker count used in this JVM.
-private object Resolver26Dispatchers {
-    private val dispatchers = ConcurrentHashMap<Int, CoroutineDispatcher>()
-
-    // Returns the existing dispatcher for this count or creates it exactly once.
-    fun dispatcher(threadCount: Int): CoroutineDispatcher =
-        dispatchers.computeIfAbsent(threadCount) { configuredThreadCount ->
-            Executors
-                .newFixedThreadPool(
-                    configuredThreadCount,
-                    Resolver26ThreadFactory(configuredThreadCount),
-                ).asCoroutineDispatcher()
-        }
-}
-
-// Names daemon workers so profilers can isolate Resolver26 execution.
-private class Resolver26ThreadFactory(
-    private val threadCount: Int,
-) : ThreadFactory {
-    private val nextThread = AtomicInteger()
-
-    // Creates one daemon worker with a stable pool-specific name.
-    override fun newThread(runnable: Runnable): Thread =
-        Thread(
-            runnable,
-            "resolver26-$threadCount-${nextThread.incrementAndGet()}",
-        ).apply {
-            isDaemon = true
-        }
 }
 
 /** Owns request lifetime without using task completion as cross-task readiness. */
@@ -315,16 +241,22 @@ private suspend fun orchestrateObject(
     val closed: CloseInputDemandResult = closeInputDemand()
     closed.prepareBindings()
     closed.demand.byKey().forEach { (objectKey, selection) ->
-        if (
-            objectKey.field.fieldName != "__typename" &&
-            objectKey.field !in world.resolverRegistry
-        ) {
+        if (objectKey.field !in world.resolverRegistry) {
             val groundKey: Value.GroundKey =
                 objectKey as? Value.GroundKey
                     ?: error("Resolver26 found open arguments on passive key $objectKey")
+            val sourceValue: Value.Output? = source.fieldValues.getValue(groundKey)
+            if (!target.isValueSet(groundKey)) {
+                val resolvedValue: ResolvedValue =
+                    sourceValue.resolveValue(
+                        path = path + groundKey,
+                        resolverDemand = selection.subselections,
+                    )
+                target.setValue(groundKey, resolvedValue.engineResult)
+            }
             launchPassiveChildOrchestrations(
                 path = path + groundKey,
-                source = source.fieldValues.getValue(groundKey),
+                source = sourceValue,
                 target = target.getValue(groundKey).get(),
                 initialDemand = selection.subselections,
                 runtime = runtime,
@@ -357,11 +289,6 @@ private suspend fun orchestrateObject(
         }
         closed.demand.byKey().forEach { (objectKey, selection) ->
             when {
-                objectKey.field.fieldName == "__typename" ->
-                    check(target.isValueSet(objectKey as Value.GroundKey)) {
-                        "Resolver26 failed to synthesize __typename at $path"
-                    }
-
                 objectKey.field in world.resolverRegistry ->
                     launch {
                         installAndLaunchFieldResolver(
@@ -582,9 +509,6 @@ private suspend fun resolveField(
             resolverDemand = invocationDemand,
         )
 
-    resolvedValue.objectOccurrences.forEach { occurrence ->
-        occurrence.target.synthesizeTypename()
-    }
     resolvedValue.objectOccurrences
         .filter { occurrence -> occurrence.isRootOfOutputAt(coordinate) }
         .forEach { child ->
@@ -667,259 +591,6 @@ private fun launchPassiveChildOrchestrations(
             }
         }
     }
-}
-
-// Returns ground output demand, crossing open resolver boundaries without binding their arguments.
-context(world: Assumptions)
-private fun SelectionForest.successorDemand(): SelectionForest =
-    successorDemand(mutableMapOf())
-
-// Retains requested ground boundaries and adds each active boundary's fixed passive OF demand.
-context(world: Assumptions)
-private fun SelectionForest.successorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
-): SelectionForest =
-    flatMap { selection ->
-        selection.possibleTypes.flatMapToSelectionForest { possibleType ->
-            val objectKey: Value.ObjectKey = selection.objectKey(possibleType)
-            val requestedDemand: SelectionForest =
-                if (
-                    objectKey.field in world.resolverRegistry &&
-                    objectKey !is Value.GroundKey
-                ) {
-                    selectionForestOf()
-                } else {
-                    check(
-                        objectKey is Value.GroundKey ||
-                            objectKey.field in world.resolverRegistry,
-                    ) {
-                        "Resolver26 found open arguments on passive key $objectKey"
-                    }
-                    selectionForestOf(
-                        Selection.of(
-                            key = objectKey,
-                            possibleTypes = setOf(possibleType),
-                            subselections =
-                                selection.subselections.successorDemand(
-                                    passiveDemandByResolverField,
-                                ),
-                        ),
-                    )
-                }
-            val successorInputDemand: SelectionForest =
-                when {
-                    objectKey.arguments.containsErrorValue() ->
-                        selectionForestOf()
-
-                    objectKey.field in world.resolverRegistry ->
-                        objectKey.field.fixedPassivePredecessorDemand(
-                            passiveDemandByResolverField,
-                        )
-
-                    else -> selectionForestOf()
-                }
-            requestedDemand + successorInputDemand
-        }
-    }
-
-// Memoizes passive demand reachable from one resolver OF before another resolver boundary.
-context(world: Assumptions)
-private fun Schema.ObjectField.fixedPassivePredecessorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
-): SelectionForest =
-    passiveDemandByResolverField[this]
-        ?: world.resolverRegistry
-            .resolver(this)
-            .objectFragment
-            .passivePredecessorDemand(passiveDemandByResolverField)
-            .also { demand -> passiveDemandByResolverField[this] = demand }
-
-// Retains passive OF selections and replaces active selections with their own passive OF demand.
-context(world: Assumptions)
-private fun SelectionForest.passivePredecessorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
-): SelectionForest =
-    flatMap { selection ->
-        selection.possibleTypes.flatMapToSelectionForest { possibleType ->
-            val objectKey: Value.ObjectKey = selection.objectKey(possibleType)
-            if (objectKey.field in world.resolverRegistry) {
-                objectKey.field.fixedPassivePredecessorDemand(
-                    passiveDemandByResolverField,
-                )
-            } else {
-                check(objectKey is Value.GroundKey) {
-                    "Resolver26 found open arguments on passive key $objectKey"
-                }
-                selectionForestOf(
-                    Selection.of(
-                        key = objectKey,
-                        possibleTypes = setOf(possibleType),
-                        subselections =
-                            selection.subselections.passivePredecessorDemand(
-                                passiveDemandByResolverField,
-                            ),
-                    ),
-                )
-            }
-        }
-    }
-
-// Installs this OER's concrete __typename value before orchestration can freeze it.
-private fun EngineResult.Object.synthesizeTypename() {
-    val groundKey: Value.GroundKey =
-        Value.GroundKey.of(
-            field = type.fields.getValue("__typename"),
-            arguments = emptyMap(),
-        )
-    if (!isValueSet(groundKey)) {
-        setValue(groundKey, Value.String.of(type.typeName))
-    }
-}
-
-// Returns a resolver-visible input object, projecting stamped storage keys to ordinary keys.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-private suspend fun EngineResult.Object.materializeResolverInput(
-    selections: SelectionForest,
-    reader: List<PathComponent>,
-    resultPath: List<PathComponent>,
-): Value.Object =
-    materializeSelectedObject(
-        selections = selections.merge(type).fetchBindings(),
-        reader = reader,
-        resultPath = resultPath,
-    )
-
-// Materializes selected OER values at their stored paths, then unions them under visible keys.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-private suspend fun EngineResult.Object.materializeSelectedObject(
-    selections: ObjectSelectionForest,
-    reader: List<PathComponent>,
-    resultPath: List<PathComponent>,
-): Value.Object {
-    val selectedValues = linkedMapOf<Value.GroundKey, Value.Output?>()
-    selections.byGroundKey().forEach { (storedGroundKey, selection) ->
-        val visibleGroundKey: Value.GroundKey =
-            Value.GroundKey.of(
-                field = storedGroundKey.field,
-                arguments = storedGroundKey.arguments.fieldValues,
-            )
-        diagnosticInstrumentation.cycleCheck(reader, this, storedGroundKey)
-        val selectedValue: Value.Output? =
-            reserveValue(storedGroundKey)
-                .await()
-                .materializeSelectedValue(
-                    selections = selection.subselections,
-                    reader = reader,
-                    resultPath = resultPath + storedGroundKey,
-                )
-        selectedValues[visibleGroundKey] =
-            if (visibleGroundKey !in selectedValues) {
-                selectedValue
-            } else {
-                selectedValues.getValue(visibleGroundKey).unionOutput(selectedValue)
-            }
-    }
-    return Value.Object.of(
-        type = type,
-        fields = selectedValues,
-    )
-}
-
-// Recursively materializes one selected engine result while preserving null, error, and list shape.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-private suspend fun EngineResult?.materializeSelectedValue(
-    selections: SelectionForest,
-    reader: List<PathComponent>,
-    resultPath: List<PathComponent>,
-): Value.Output? {
-    return when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.Object -> {
-            // Bind through the owner's declared variables before restamping the ground child keys.
-            val groundedDemand: ObjectSelectionForest =
-                selections.merge(type).fetchBindings()
-            val localizedGroundDemand: ObjectSelectionForest =
-                groundedDemand
-                    .localizeTopLevelSelectionStamps(resultPath)
-                    .merge(type)
-            materializeSelectedObject(
-                selections = localizedGroundDemand,
-                reader = reader,
-                resultPath = resultPath,
-            )
-        }
-        is EngineResult.List ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values =
-                    indices.map { index ->
-                        get(index).materializeSelectedValue(
-                            selections = selections,
-                            reader = reader,
-                            resultPath = resultPath + Value.ListIndex.of(index),
-                        )
-                    },
-            )
-    }
-}
-
-// Traverses a provider path through OER promises and returns its terminal input-compatible value.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-private suspend fun EngineResult.Object.readProvider(
-    definition: StampedObjectPathDefinition,
-    reader: List<PathComponent>,
-): Value.Input? {
-    var current = this
-    definition.path.forEachIndexed { index, openKey ->
-        val specializedKey: Value.ObjectKey =
-            Selection.of(
-                key = openKey,
-                possibleTypes = setOf(current.type),
-                subselections = selectionForestOf(),
-            ).objectKey(current.type)
-        val groundKey: Value.GroundKey =
-            Value.GroundKey.of(
-                field = specializedKey.field,
-                arguments = specializedKey.arguments.fetchBindings(),
-            )
-        diagnosticInstrumentation.cycleCheck(reader, current, groundKey)
-        val value = current.reserveValue(groundKey).await()
-        if (index == definition.path.lastIndex) {
-            return value.toProviderInput()
-        }
-        when (value) {
-            null -> return null
-            Value.Error -> return Value.Error
-            is EngineResult.Object -> current = value
-            else -> error("Resolver26 provider path crossed a non-object at $groundKey")
-        }
-    }
-    error("Resolver26 provider path must be nonempty")
-}
-
-// Converts a provider result to an input value and rejects object-valued terminals.
-private fun EngineResult?.toProviderInput(): Value.Input? =
-    when (this) {
-        null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.List -> toProviderInputList()
-        is EngineResult.Object ->
-            error("A path-variable provider cannot terminate at an object")
-    }
-
-// Converts a provider list to an input list after checking its element type.
-@Suppress("UNCHECKED_CAST")
-private fun EngineResult.List.toProviderInputList(): Value.InputList {
-    require(typeExpr.baseType is Schema.InputType) {
-        "A path-variable provider list must contain input-compatible simple values"
-    }
-    return Value.InputList.of(
-        typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { value -> value.toProviderInput() },
-    )
 }
 
 private data class ResolverExpansion(

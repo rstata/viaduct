@@ -24,9 +24,6 @@ class ResolverGeneratedTest :
     override val selectiveResolvers: Boolean
         get() = true
 
-    override val alwaysGeneratesTypename: Boolean
-        get() = true
-
     override val generatedCaseAssertions =
         GeneratedCaseAssertions.defaultGeneratedContract +
             GeneratedCaseAssertions.exactOrdinaryApplicationCounts +

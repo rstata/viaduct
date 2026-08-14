@@ -162,7 +162,32 @@ internal data class OutputTypeSpec(
     val nullable: Boolean,
     val list: Boolean,
     val elementNullable: Boolean,
-)
+    val nestedElementNullabilities: List<Boolean> = emptyList(),
+) {
+    init {
+        require(list || nestedElementNullabilities.isEmpty())
+    }
+
+    val listDepth: Int
+        get() = if (list) nestedElementNullabilities.size + 1 else 0
+
+    fun elementType(): OutputTypeSpec {
+        require(list)
+        return if (nestedElementNullabilities.isEmpty()) {
+            copy(
+                nullable = elementNullable,
+                list = false,
+                nestedElementNullabilities = emptyList(),
+            )
+        } else {
+            copy(
+                nullable = elementNullable,
+                elementNullable = nestedElementNullabilities.first(),
+                nestedElementNullabilities = nestedElementNullabilities.drop(1),
+            )
+        }
+    }
+}
 
 internal enum class ScalarKind(
     val graphQLName: String,
@@ -281,10 +306,6 @@ private class SchemaGenerator(
                     )
                 }
             }
-        val objects =
-            domainObjects.map { objectType ->
-                objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
-            }
         val hashType =
             ObjectDefinition(
                 name = GENERATED_HASH_TYPE,
@@ -327,6 +348,14 @@ private class SchemaGenerator(
             } else {
                 null
             }
+        val objects =
+            domainObjects
+                .withAbstractOutputTargets(
+                    interfaces = listOfNotNull(generatedInterface),
+                    unions = listOfNotNull(generatedUnion),
+                ).map { objectType ->
+                    objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
+                }
         val interfaces =
             buildList {
                 if (nodeNames.isNotEmpty()) {
@@ -504,6 +533,22 @@ private class SchemaGenerator(
             } else {
                 emptyList()
             }
+        val listDepth =
+            if (isList) {
+                generateSequence(1) { depth ->
+                    (depth + 1).takeIf {
+                        it <= config[MaxOutputListDepth] &&
+                            chance(config[ListTypeWeight])
+                    }
+                }.last()
+            } else {
+                0
+            }
+        val elementNullable = chance(config[NullableTypeWeight])
+        val nestedElementNullabilities =
+            List((listDepth - 1).coerceAtLeast(0)) {
+                chance(config[NullableTypeWeight])
+            }
         return FieldDefinitionSpec(
             ownerName = ownerName,
             name = name,
@@ -512,7 +557,8 @@ private class SchemaGenerator(
                     namedType = namedType,
                     nullable = nullable,
                     list = isList,
-                    elementNullable = chance(config[NullableTypeWeight]),
+                    elementNullable = elementNullable,
+                    nestedElementNullabilities = nestedElementNullabilities,
                 ),
             arguments = arguments,
         )
@@ -686,13 +732,15 @@ private class SchemaGenerator(
 
     private fun fieldDefinition(field: FieldDefinitionSpec): FieldDefinition {
         val named = TypeName(field.type.namedType)
-        val wrapped: Type<*> =
+        val elementNullabilities =
             if (field.type.list) {
-                val element: Type<*> =
-                    if (field.type.elementNullable) named else nonNull(named)
-                ListType(element)
+                listOf(field.type.elementNullable) + field.type.nestedElementNullabilities
             } else {
-                named
+                emptyList()
+            }
+        val wrapped =
+            elementNullabilities.asReversed().fold(named as Type<*>) { element, nullable ->
+                ListType(if (nullable) element else nonNull(element))
             }
         val outputType =
             if (field.type.nullable) wrapped else nonNull(wrapped)
@@ -821,6 +869,52 @@ private class SchemaGenerator(
 
     private fun nonNull(type: Type<*>): NonNullType =
         NonNullType(type)
+
+    private fun List<ObjectDefinition>.withAbstractOutputTargets(
+        interfaces: List<InterfaceDefinitionSpec>,
+        unions: List<UnionDefinitionSpec>,
+    ): List<ObjectDefinition> {
+        val objectIndices = mapIndexed { index, objectType -> objectType.name to index }.toMap()
+        val abstractMembers =
+            interfaces.associate { it.name to it.members } +
+                unions.associate { it.name to it.members }
+        if (
+            abstractMembers.isEmpty() ||
+            config[PassiveAbstractOutputTypeWeight] == 0.0 ||
+            config[MinimumSelectionDepth] > 0
+        ) {
+            return this
+        }
+
+        return map { objectType ->
+            val ownerIndex = objectIndices.getValue(objectType.name)
+            objectType.copy(
+                fields =
+                    objectType.fields.map { field ->
+                        val targetIndex = objectIndices[field.type.namedType] ?: return@map field
+                        if (targetIndex <= ownerIndex) return@map field
+                        if (!chance(config[PassiveAbstractOutputTypeWeight])) return@map field
+                        val candidates =
+                            abstractMembers
+                                .filterValues { members ->
+                                    members.all { objectIndices.getValue(it) > ownerIndex }
+                                }.keys
+                                .toList()
+                        candidates
+                            .takeIf(List<String>::isNotEmpty)
+                            ?.let { candidateNames ->
+                                field.copy(
+                                    type =
+                                        field.type.copy(
+                                            namedType = Arb.element(candidateNames).next(random),
+                                        ),
+                                )
+                            }
+                            ?: field
+                    },
+            )
+        }
+    }
 
     private fun chance(weight: Double): Boolean =
         Arb.double(0.0, 1.0).next(random) < weight

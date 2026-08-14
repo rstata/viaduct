@@ -494,6 +494,7 @@ private class RegistryGenerator(
                 .filter { field ->
                     field.ownerName != GENERATED_HASH_TYPE &&
                         !field.isGeneratedHashField() &&
+                        !field.isGeneratedPassiveAbstractOutput() &&
                         (
                             field.ownerName == "Query" ||
                                 field.arguments.isNotEmpty() ||
@@ -741,13 +742,41 @@ private class RegistryGenerator(
                     subselections =
                         field.type.namedType
                             .takeIf(schema::isComposite)
-                            ?.let {
-                            fragmentSelections(
-                                ownerName = it,
-                                consumerRank = consumerRank,
-                                ranks = ranks,
-                                depth = depth + 1,
-                            )
+                            ?.let { outputType ->
+                            if (
+                                field.ownerName != "Query" &&
+                                schema.allObjects.none { objectType ->
+                                    objectType.name == outputType
+                                } &&
+                                schema.possibleObjects(outputType).size > 1
+                            ) {
+                                schema
+                                    .possibleObjects(outputType)
+                                    .shuffled(random)
+                                    .take(2)
+                                    .map { concrete ->
+                                        FragmentSelectionPlan(
+                                            fieldName = GENERATED_HASH_FIELD,
+                                            arguments = emptyMap(),
+                                            subselections =
+                                                listOf(
+                                                    FragmentSelectionPlan(
+                                                        fieldName = GENERATED_HASH_FIELD,
+                                                        arguments = emptyMap(),
+                                                        subselections = emptyList(),
+                                                    ),
+                                                ),
+                                            typeCondition = concrete.name,
+                                        )
+                                    }
+                            } else {
+                                fragmentSelections(
+                                    ownerName = outputType,
+                                    consumerRank = consumerRank,
+                                    ranks = ranks,
+                                    depth = depth + 1,
+                                )
+                            }
                         }.orEmpty(),
                 )
             }
@@ -1231,11 +1260,7 @@ private class RegistryGenerator(
         }
         if (type.list) {
             val size = Arb.int(config[ListValueSize]).next(random)
-            val elementType =
-                type.copy(
-                    nullable = type.elementNullable,
-                    list = false,
-                )
+            val elementType = type.elementType()
             return ListPlan(
                 (0 until size).map { index ->
                     plan(elementType, "$path[$index]", objectPath = objectPath)
@@ -1324,6 +1349,12 @@ private class RegistryGenerator(
             .objectNamed(coordinate.typeName)
             .fields
             .single { it.name == coordinate.fieldName }
+
+    private fun FieldDefinitionSpec.isGeneratedPassiveAbstractOutput(): Boolean =
+        config[PassiveAbstractOutputTypeWeight] > 0.0 &&
+            ownerName != "Query" &&
+            schema.isComposite(type.namedType) &&
+            schema.allObjects.none { objectType -> objectType.name == type.namedType }
 
     private fun chance(weight: Double): Boolean =
         Arb.double(0.0, 1.0).next(random) < weight
@@ -1582,6 +1613,7 @@ internal data class ListVariableTarget(
 
     override fun matches(type: OutputTypeSpec): Boolean =
         type.list &&
+            type.nestedElementNullabilities.isEmpty() &&
             type.namedType == scalar.graphQLName &&
             (!type.elementNullable || elementNullable)
 

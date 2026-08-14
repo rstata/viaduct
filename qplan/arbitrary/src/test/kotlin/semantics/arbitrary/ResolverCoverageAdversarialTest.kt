@@ -5,16 +5,48 @@ import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.Value
 import model.objectOf
-import org.junit.jupiter.api.Disabled
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class ResolverCoverageAdversarialTest {
-    @Disabled("not currently worth the effort")
     @Test
     fun `generated schemas include nested output lists`() {
-        error("The generated output model cannot currently express nested lists.")
+        val config =
+            Config.default +
+                (ArgumentsEnabled to false) +
+                (InterfacesEnabled to false) +
+                (UnionsEnabled to false) +
+                (ListsEnabled to true) +
+                (ListTypeWeight to 1.0) +
+                (MaxOutputListDepth to 2) +
+                (ListValueSize to 1..1) +
+                (NullValueWeight to 0.0) +
+                (ErrorValueWeight to 0.0) +
+                (NodeResolversEnabled to false) +
+                (RecursiveOutputEdgesEnabled to false) +
+                (SchemaObjectCount to 1..1) +
+                (ObjectFieldCount to 1..1) +
+                (QueryFieldCount to 1..1)
+        val random = RandomSource.seeded(817_207L)
+        val schema = Arb.schema(config).next(random)
+        val field = schema.query.fields.single()
+
+        assertEquals(2, field.type.listDepth)
+        assertTrue(schema.sdl.contains("[[${field.type.namedType}"))
+
+        val registry = schema.registry(config).next(random)
+        val world = registry.world(schema).assumptions
+        val canonicalField = world.schema.objectField("Query", field.name)
+        val value =
+            world.resolverRegistry.resolver(canonicalField)(
+                world.schema.objectOf("Query"),
+                Value.Arguments.of(canonicalField, emptyMap()),
+            )
+        val outer = assertIs<Value.OutputList>(value)
+        val inner = assertIs<Value.OutputList>(outer.values.single())
+        assertIs<Value.Object>(inner.values.single())
     }
 
     @Test
@@ -26,6 +58,7 @@ class ResolverCoverageAdversarialTest {
                     (InterfacesEnabled to true) +
                     (ListsEnabled to listOutput) +
                     (ListTypeWeight to if (listOutput) 1.0 else 0.0) +
+                    (MaxOutputListDepth to 1) +
                     (NullValueWeight to 0.0) +
                     (ErrorValueWeight to 0.0) +
                     (NodeResolversEnabled to true) +
@@ -44,7 +77,7 @@ class ResolverCoverageAdversarialTest {
                                     .objectNamed(coordinate.typeName)
                                     .fields
                                     .single { candidate -> candidate.name == coordinate.fieldName }
-                            field.type.list == listOutput &&
+                            field.type.listDepth == (if (listOutput) 1 else 0) &&
                                 schema.isComposite(field.type.namedType) &&
                                 schema.possibleObjects(field.type.namedType)
                                     .all { possible ->
@@ -102,12 +135,77 @@ class ResolverCoverageAdversarialTest {
         }
     }
 
-    @Disabled("not currently worth the effort")
     @Test
     fun `Resolver03 witness profile activates polymorphic passive deepening`() {
-        error(
-            "Generated abstract outputs occur only on active Query fields, so passive " +
-                "polymorphic deepening is currently unreachable.",
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 0.8) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (DuplicateSelectionWeight to 0.8) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (PassiveAbstractOutputTypeWeight to 1.0) +
+                (NodeResolversEnabled to false)
+        val random = RandomSource.seeded(817_209L)
+        var passivePolymorphicDeepenings = 0
+
+        repeat(12) {
+            val schema = Arb.schema(config).next(random)
+            repeat(2) {
+                val registry = schema.registry(config).next(random)
+                registry.world(schema)
+                passivePolymorphicDeepenings +=
+                    registry.objectFragments.values.sumOf { fragment ->
+                        fragment.selections.sumOf { selection ->
+                            selection.countPassivePolymorphicDeepenings(
+                                schema = schema,
+                                ownerName = fragment.ownerName,
+                                resolverFields = registry.fieldResolverCoordinates,
+                            )
+                        }
+                    }
+            }
+        }
+
+        assertTrue(
+            passivePolymorphicDeepenings > 0,
+            "Resolver03 witness profile generated no passive abstract continuation with concrete branches",
         )
     }
+}
+
+private fun FragmentSelectionPlan.countPassivePolymorphicDeepenings(
+    schema: ArbitrarySchema,
+    ownerName: String,
+    resolverFields: Set<FieldCoordinate>,
+): Int {
+    val selectionOwner = typeCondition ?: ownerName
+    val field =
+        schema
+            .fieldsOn(selectionOwner)
+            .singleOrNull { candidate -> candidate.name == fieldName }
+            ?: return 0
+    val outputType = field.type.namedType
+    val isAbstract =
+        schema.isComposite(outputType) &&
+            schema.allObjects.none { objectType -> objectType.name == outputType }
+    val reachesConcreteBranches =
+        subselections.any { selection ->
+            selection.typeCondition != null &&
+                selection.fieldName == GENERATED_HASH_FIELD &&
+                selection.subselections.singleOrNull()?.fieldName == GENERATED_HASH_FIELD
+        }
+    val current =
+        if (field.coordinate !in resolverFields && isAbstract && reachesConcreteBranches) 1 else 0
+    return current +
+        subselections.sumOf { selection ->
+            selection.countPassivePolymorphicDeepenings(
+                schema = schema,
+                ownerName = outputType,
+                resolverFields = resolverFields,
+            )
+        }
 }

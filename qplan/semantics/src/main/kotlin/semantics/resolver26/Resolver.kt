@@ -48,6 +48,16 @@ import kotlin.coroutines.CoroutineContext
 internal const val RESOLVER26_THREAD_COUNT_PROPERTY = "resolver26.thread.count"
 internal const val RESOLVER26_THREAD_COUNT_ENVIRONMENT = "RESOLVER26_THREAD_COUNT"
 
+internal data class Resolver26ApplicationObservation(
+    val occurrencePath: List<PathComponent>,
+    val field: Schema.ObjectField,
+    val input: Value.Object,
+    val arguments: Value.Arguments,
+    val suppliedDemand: SelectionForest,
+)
+
+internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit
+
 /**
  * Resolves selective demand once per ordinary or provenance-stamped resolver instance.
  *
@@ -66,6 +76,7 @@ context(world: Assumptions)
 internal fun Value.Object.resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
+    applicationObserver: Resolver26ApplicationObserver = {},
 ): EngineResult.Object {
     require(world.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
@@ -80,7 +91,11 @@ internal fun Value.Object.resolve(
         return runBlocking(coroutineContext) {
             withTimeout(15_000) {
                 coroutineScope {
-                    val runtime = ResolverRuntime(requestScope = this)
+                    val runtime =
+                        ResolverRuntime(
+                            requestScope = this,
+                            applicationObserver = applicationObserver,
+                        )
                     orchestrateObject(
                         path = emptyList(),
                         source = this@resolve,
@@ -147,6 +162,7 @@ private class Resolver26ThreadFactory(
 /** Owns request lifetime without using task completion as cross-task readiness. */
 private class ResolverRuntime(
     private val requestScope: CoroutineScope,
+    private val applicationObserver: Resolver26ApplicationObserver,
 ) {
     // Launches an orchestration task as a direct child of the request.
     fun launchOrchestrationTask(block: suspend () -> Unit) {
@@ -160,6 +176,10 @@ private class ResolverRuntime(
         requestScope.launch {
             block()
         }
+    }
+
+    fun observeApplication(observation: Resolver26ApplicationObservation) {
+        applicationObserver(observation)
     }
 }
 
@@ -541,6 +561,15 @@ private suspend fun resolveField(
             field = groundKey.field,
             fields = groundKey.arguments.fieldValues,
         )
+    runtime.observeApplication(
+        Resolver26ApplicationObservation(
+            occurrencePath = coordinate,
+            field = groundKey.field,
+            input = input,
+            arguments = resolverArguments,
+            suppliedDemand = invocationDemand,
+        ),
+    )
     val fieldValue: Value.Output? =
         expansion.resolver(
             input = input,

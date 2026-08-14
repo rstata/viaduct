@@ -1019,7 +1019,7 @@ internal fun argumentsOfGround(
     )
 }
 
-private fun coerceInputValue(
+internal fun coerceInputValue(
     typeExpr: TypeExpr<Schema.InputType>,
     value: Any?,
 ): Value.Input? {
@@ -1036,7 +1036,7 @@ private fun coerceInputValue(
                 when (value) {
                     is Value.InputList -> value.values
                     is kotlin.collections.List<*> -> value
-                    else -> throw ClassCastException()
+                    else -> listOf(value)
                 }
             Value.InputList.of(
                 typeExpr = typeExpr.elementType,

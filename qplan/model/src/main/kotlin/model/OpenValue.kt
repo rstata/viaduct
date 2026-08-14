@@ -538,7 +538,12 @@ suspend fun OpenArguments.fetchBindings(): Value.Arguments =
 private fun OpenArguments.groundedArguments(
     fields: Map<String, Value.Input?>,
 ): Value.Arguments =
-    argumentsOfGround(type, fields)
+    argumentsOfGround(
+        type,
+        fields.mapValues { (name, value) ->
+            coerceInputValue(type.fields.getValue(name).typeExpr, value)
+        },
+    )
 
 context(world: Assumptions)
 private fun OpenValue?.instantiateBindings(): Value.Input? =

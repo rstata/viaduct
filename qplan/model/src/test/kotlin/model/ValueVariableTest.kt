@@ -138,6 +138,40 @@ class ValueVariableTest {
     }
 
     @Test
+    fun `grounding singleton coerces a variable binding through nested input lists`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int!
+                  consume(values: [[Int!]!]!): Int!
+                }
+                """.trimIndent(),
+            ).assumptions
+        val source = world.schema.objectField("Query", "source")
+        val consume = world.schema.objectField("Query", "consume")
+        val template = Value.Variable.of(source, "value")
+        val path = listOf(Value.ListIndex.of(2))
+        val variable = template.stamp(path)
+        val arguments =
+            OpenArguments.of(
+                consume,
+                mapOf("values" to template),
+            ).stampVars(path)
+        world.declareBinding(variable)
+        world.completeBinding(variable, Value.Int.of(9))
+
+        val grounded =
+            context(world) {
+                arguments.instantiateBindings()
+            }
+        val outer = assertIs<Value.InputList>(grounded.fieldValues.getValue("values"))
+        val inner = assertIs<Value.InputList>(outer.values.single())
+
+        assertEquals(listOf(Value.Int.of(9)), inner.values)
+    }
+
+    @Test
     fun `open key survives grounding as stamped ground-key identity`() {
         val world =
             TestWorld.fromSDL(

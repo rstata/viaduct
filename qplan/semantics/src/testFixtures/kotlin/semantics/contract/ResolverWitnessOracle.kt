@@ -11,6 +11,7 @@ import model.usedVariables
 import model.registry.FieldResolver
 import semantics.RuntimeSupport
 import semantics.arbitrary.ResolverApplicationIdentity
+import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
 import semantics.arbitrary.RegisteredResolverOccurrence
 import semantics.arbitrary.registeredResolverOccurrences
 import semantics.arbitrary.resolutionFingerprint
@@ -48,6 +49,43 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
                                     reader = cell.occurrencePath,
                                 ).resolutionFingerprint()
                         },
+                )
+            }.groupingBy { identity -> identity }
+            .eachCount()
+    }
+
+/** Expected deterministic resolver applications qualified by their exact result occurrence path. */
+context(world: Assumptions)
+fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
+    Map<ResolverOccurrenceApplicationIdentity, Int> =
+    context(RuntimeSupport.noCycleChecking()) {
+        registeredResolverOccurrences(world.resolverRegistry)
+            .map { cell ->
+                val field =
+                    world.schema.objectField(
+                        cell.canonicalField.typeName,
+                        cell.canonicalField.fieldName,
+                    )
+                val resolver = world.resolverRegistry.resolver(field)
+                val fragment =
+                    resolver.objectFragmentSatisfiedBy(
+                        result = cell.containingObject,
+                        path = cell.occurrencePath,
+                    ) ?: error("Registered resolver occurrence has no complete object fragment")
+                ResolverOccurrenceApplicationIdentity(
+                    occurrencePath = cell.occurrencePath,
+                    applicationIdentity =
+                        ResolverApplicationIdentity(
+                            key = cell.applicationKey,
+                            inputFingerprint =
+                                runBlocking {
+                                    cell.containingObject
+                                        .materialize(
+                                            selections = fragment,
+                                            reader = cell.occurrencePath,
+                                        ).resolutionFingerprint()
+                                },
+                        ),
                 )
             }.groupingBy { identity -> identity }
             .eachCount()

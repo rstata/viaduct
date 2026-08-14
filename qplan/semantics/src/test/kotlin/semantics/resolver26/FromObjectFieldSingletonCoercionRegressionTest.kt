@@ -86,7 +86,7 @@ class FromObjectFieldSingletonCoercionRegressionTest {
         val inner = assertIs<Value.InputList>(outer.values.single())
 
         assertEquals(listOf(Value.Int.of(7)), inner.values)
-        assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).getValue().get())
         assertTrue(context(world) { resolved.correctResolution(fragment) })
     }
 }

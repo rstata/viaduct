@@ -88,8 +88,8 @@ interface ObjectFragmentFromArgumentResolverContract :
 
         val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
-        assertEquals(Value.Int.of(14), resolved.getValue(firstKey).get())
-        assertEquals(Value.Int.of(16), resolved.getValue(secondKey).get())
+        assertEquals(Value.Int.of(14), resolved.getCell(firstKey).get())
+        assertEquals(Value.Int.of(16), resolved.getCell(secondKey).get())
         assertEquals(
             listOf(
                 Value.Arguments.of(
@@ -191,6 +191,6 @@ interface ObjectFragmentFromArgumentResolverContract :
 
         val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
-        assertEquals(Value.Int.of(8), resolved.getValue(oneKey).get())
+        assertEquals(Value.Int.of(8), resolved.getCell(oneKey).get())
     }
 }

@@ -43,7 +43,6 @@ internal suspend fun Value.Object.coroutineResolveOpen(
     val result =
         EngineResult.Object.of(
             type = type,
-            values = emptyMap(),
             mutable = true,
         )
 
@@ -174,7 +173,7 @@ private class OpenObjectOrchestrator(
                     selection = selection,
                     propagateExisting = false,
                 )
-            runtimeSupport.cycleCheck(reader, target, key)
+            runtimeSupport.cycleCheck(reader, slot.cell)
             fields[key] =
                 slot.promise.await().materialize(
                     selections = selection.subselections,
@@ -249,22 +248,22 @@ private class OpenObjectOrchestrator(
             return existing
         }
 
+        val cell = target.reserveCell(key)
         val promise =
-            if (target.isValueSet(key)) {
-                target.getValue(key)
+            if (cell.isValueSet()) {
+                cell.getValue()
             } else {
-                target.createValuePromise(key)
+                cell.createValuePromise()
                 runtimeSupport.registerWriter(
-                    target = target,
-                    key = key,
+                    cell = cell,
                     writer = path + key,
                 )
-                target.getValue(key)
+                cell.getValue()
             }
-        val slot = OpenSlot(key, promise)
+        val slot = OpenSlot(key, cell)
         slots[key] = slot
 
-        if (!target.isValueSet(key)) {
+        if (!target.isCellSet(key)) {
             error("Installed value promise is not visible for $key")
         }
         if (!promise.isCompleted) {
@@ -350,7 +349,7 @@ private class OpenObjectOrchestrator(
                 selection = selection,
                 propagateExisting = false,
             )
-        runtimeSupport.cycleCheck(reader, target, key)
+        runtimeSupport.cycleCheck(reader, slot.cell)
         return slot.promise.await()
     }
 
@@ -359,9 +358,11 @@ private class OpenObjectOrchestrator(
         val key = slot.key
         when {
             key.arguments.argumentsContainErrorValue() ->
-                slot.promise.complete(Value.Error)
-            key.field.fieldName == "__typename" ->
+                slot.complete(Value.Error, Value.Error)
+            key.field.fieldName == "__typename" -> {
                 slot.promise.complete(Value.String.of(source.type.typeName))
+                slot.cell.setAccessAccepted(Value.Boolean.of(true))
+            }
             else -> {
                 val selection = selectionForLaunch(key)
                 val completion = runtimeSupport.complete(selection.subselections)
@@ -415,7 +416,10 @@ private class OpenObjectOrchestrator(
                         initialDemand = occurrence.selections,
                     )
                 }
-                slot.promise.complete(resolvedValue.engineResult)
+                slot.complete(
+                    resolvedValue.engineResult,
+                    Value.Boolean.of(true),
+                )
             }
         }
     }
@@ -453,9 +457,9 @@ private class OpenObjectOrchestrator(
             is EngineResult.Object ->
                 runtime.orchestrator(value).addDemand(demand)
             is EngineResult.List ->
-                value.forEachIndexed { _, element ->
+                value.forEachIndexed { _, cell ->
                     propagateDemand(
-                        value = element,
+                        value = cell.getValue().get(),
                         demand = demand,
                     )
                 }
@@ -514,7 +518,11 @@ private class OpenObjectOrchestrator(
             is EngineResult.List -> {
                 val materialized = mutableListOf<Value.Output?>()
                 for (index in indices) {
-                    materialized += get(index).materialize(selections, reader)
+                    materialized +=
+                        get(index)
+                            .getValue()
+                            .await()
+                            .materialize(selections, reader)
                 }
                 Value.OutputList.of(
                     typeExpr = typeExpr,
@@ -526,8 +534,19 @@ private class OpenObjectOrchestrator(
 
 private class OpenSlot(
     val key: Value.GroundKey,
-    val promise: Promise<EngineResult?>,
-)
+    val cell: EngineResult.Cell,
+) {
+    val promise: Promise<EngineResult?>
+        get() = cell.getValue()
+
+    fun complete(
+        value: EngineResult?,
+        accessAccepted: Value.Boolean,
+    ) {
+        promise.complete(value)
+        cell.setAccessAccepted(accessAccepted)
+    }
+}
 
 private data class OpenSelectionSignature(
     val key: Value.Key,
@@ -654,8 +673,8 @@ private fun EngineResult.List.toProviderInputList(): Value.InputList {
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
         values =
-            map { value ->
-                value?.toProviderInput()
+            map { cell ->
+                cell.getValue().get()?.toProviderInput()
             },
     )
 }

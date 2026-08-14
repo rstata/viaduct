@@ -23,7 +23,7 @@ import semantics.materialize
  * their own resolvers.
  *
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
- * value is present. It observes values but never field or type checks.
+ * value is present. It observes cell values but never access-acceptance results.
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToResolvers(): Boolean =
@@ -37,7 +37,7 @@ private fun EngineResult.Object.objectConformsToResolvers(
 ): Boolean {
     val registry = world.resolverRegistry
     return keys.all { groundKey ->
-        val value = getValue(groundKey).get()
+        val value = getCell(groundKey).getValue().get()
         val fieldResolverConforms =
             if (
                 groundKey.arguments.argumentsContainErrorValue() ||
@@ -114,7 +114,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
         is EngineResult.Object -> objectConformsToResolvers(path)
         is EngineResult.List ->
             indices.all { index ->
-                get(index).engineResultConformsToResolvers(
+                get(index).getValue().get().engineResultConformsToResolvers(
                     path + Value.ListIndex.of(index),
                 )
             }
@@ -142,7 +142,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
             resolverValue is Value.OutputList &&
                 size == resolverValue.values.size &&
                 indices.all { index ->
-                    get(index).engineResultConformsToResolverValue(
+                    get(index).getValue().get().engineResultConformsToResolverValue(
                         resolverValue.values[index],
                     )
                 }
@@ -161,7 +161,7 @@ private fun EngineResult.Object.objectFieldsConformToResolverValue(
         } else if (!resolverValue.fieldValues.containsKey(groundKey)) {
             false
         } else {
-            getValue(groundKey).get().engineResultConformsToResolverValue(
+            getCell(groundKey).getValue().get().engineResultConformsToResolverValue(
                 resolverValue.fieldValues.getValue(groundKey),
             )
         }

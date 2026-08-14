@@ -103,10 +103,10 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 world.objectOf("Query"),
                 fragment,
             )
-        val payload = resolved.getValue(payloadKey).get() as EngineResult.Object
+        val payload = resolved.getCell(payloadKey).get() as EngineResult.Object
 
-        assertEquals(Value.Int.of(7), payload.getValue(computedKey).get())
-        assertEquals(Value.Int.of(7), payload.getValue(rawKey).get())
+        assertEquals(Value.Int.of(7), payload.getCell(computedKey).get())
+        assertEquals(Value.Int.of(7), payload.getCell(rawKey).get())
         assertEquals(setOf("computed", "raw"), payloadDemandFields)
         assertTrue(context(world) { resolved.correctResolution(fragment) })
     }
@@ -234,7 +234,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 ),
             )
 
-        assertEquals(Value.Int.of(2), resolved.getValue(triggerKey).get())
+        assertEquals(Value.Int.of(2), resolved.getCell(triggerKey).get())
         assertEquals(1, nodeApplications)
         assertEquals(setOf("first", "second"), nodeDemandFields)
     }
@@ -342,7 +342,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 ),
             )
 
-        assertEquals(Value.Int.of(7), resolved.getValue(lateKey).get())
+        assertEquals(Value.Int.of(7), resolved.getCell(lateKey).get())
         assertEquals(1, parentApplications)
         assertEquals(
             when (lateAncestorDemandPolicy) {
@@ -457,7 +457,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 ),
             )
 
-        assertEquals(Value.Int.of(7), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
         assertEquals(1, holderApplications)
         assertEquals(1, computedApplications)
     }
@@ -574,9 +574,9 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     "fragment ignored on Query { early outer }",
                 ),
             )
-        val parent = resolved.getValue(parentKey).get() as EngineResult.Object
+        val parent = resolved.getCell(parentKey).get() as EngineResult.Object
 
-        assertEquals(Value.Int.of(1), resolved.getValue(outerKey).get())
+        assertEquals(Value.Int.of(1), resolved.getCell(outerKey).get())
         assertEquals(1, parentApplications)
         val expectedChildApplications =
             when (variableSelectionIdentityPolicy) {

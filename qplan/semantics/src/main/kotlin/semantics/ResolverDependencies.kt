@@ -64,12 +64,12 @@ private class ResolverDependencyWalk(
                 ReactorSlotKind.ENGINE_OWNED,
                 ReactorSlotKind.PASSIVE,
                 -> {
-                    if (!target.isValueSet(key)) {
+                    if (!target.isCellSet(key)) {
                         dependencies += coordinate
                     } else {
                         walkValue(
                             path = coordinate,
-                            value = target.getValue(key).get(),
+                            value = target.getCell(key).getValue().get(),
                             selections = selection.subselections,
                         )
                     }
@@ -78,13 +78,13 @@ private class ResolverDependencyWalk(
                 ReactorSlotKind.FIELD_RESOLVER -> {
                     dependencies += coordinate
                     if (coordinate in completedResolverCoordinates) {
-                        check(target.isValueSet(key)) {
+                        check(target.isCellSet(key)) {
                             "Completed resolver has no published value: " +
                                 coordinate.renderReactorPath()
                         }
                         walkValue(
                             path = coordinate,
-                            value = target.getValue(key).get(),
+                            value = target.getCell(key).getValue().get(),
                             selections = selection.subselections,
                         )
                     }
@@ -113,10 +113,10 @@ private class ResolverDependencyWalk(
                 )
 
             is EngineResult.List ->
-                value.forEachIndexed { index, element ->
+                value.forEachIndexed { index, cell ->
                     walkValue(
                         path = path + Value.ListIndex.of(index),
-                        value = element,
+                        value = cell.getValue().get(),
                         selections = selections,
                     )
                 }

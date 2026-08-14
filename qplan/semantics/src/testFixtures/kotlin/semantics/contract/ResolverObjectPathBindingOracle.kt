@@ -94,7 +94,7 @@ private fun EngineResult.Object.readCompletedProvider(
             ).instantiateBindings()
                 .groundKeys()
                 .single()
-        val value = current.getValue(key).get()
+        val value = current.getCell(key).get()
         if (value == null) return null
         if (value == Value.Error) return Value.Error
         if (index == path.lastIndex) return value.toInputValue()
@@ -119,6 +119,6 @@ private fun EngineResult.List.toInputList(): Value.InputList {
     require(typeExpr.baseType is Schema.InputType)
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { value -> value?.toInputValue() },
+        values = map { cell -> cell.get()?.toInputValue() },
     )
 }

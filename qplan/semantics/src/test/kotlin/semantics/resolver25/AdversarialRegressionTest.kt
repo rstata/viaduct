@@ -147,7 +147,7 @@ class AdversarialRegressionTest {
                 },
             )
 
-            assertEquals<EngineResult?>(expectedResult, resolved.getValue(resultKey).get())
+            assertEquals<EngineResult?>(expectedResult, resolved.getCell(resultKey).getValue().get())
             assertEquals(
                 expectedInput,
                 world.getBinding(

@@ -337,14 +337,14 @@ fun EngineResult?.registeredResolverOccurrences(
                                     containingObject = value,
                                 )
                         }
-                        visit(value.getValue(key).get(), fieldPath)
+                        visit(value.getCell(key).getValue().get(), fieldPath)
                     }
             }
 
             is EngineResult.List ->
-                value.forEachIndexed { index, element ->
+                value.forEachIndexed { index, cell ->
                     visit(
-                        element,
+                        cell.getValue().get(),
                         path + Value.ListIndex.of(index),
                     )
                 }

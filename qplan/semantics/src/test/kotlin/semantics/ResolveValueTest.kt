@@ -98,12 +98,12 @@ class ResolveValueTest {
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
         val typeName =
             assertIs<Value.String>(
-                result.getValue(typeNameKey).get(),
+                result.getCell(typeNameKey).getValue().get(),
             )
         assertEquals("User", typeName.stringValue)
         assertTrue(computedKey !in result.keys)
 
-        val profile = assertIs<EngineResult.Object>(result.getValue(profileKey).get())
+        val profile = assertIs<EngineResult.Object>(result.getCell(profileKey).getValue().get())
         assertEquals(userType, result.type)
         assertEquals(profileType, profile.type)
         assertEquals(setOf(rawKey), profile.keys)
@@ -189,7 +189,7 @@ class ResolveValueTest {
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
         assertEquals(setOf(nameKey, profileKey), result.keys)
-        val profile = assertIs<EngineResult.Object>(result.getValue(profileKey).get())
+        val profile = assertIs<EngineResult.Object>(result.getCell(profileKey).getValue().get())
         assertEquals(setOf(rawKey), profile.keys)
         assertEquals(
             setOf(emptyList()),
@@ -373,10 +373,16 @@ class ResolveValueTest {
                 callbackPaths += objectResolution.path
                 when (objectResolution.target.type.typeName) {
                     "Item" ->
-                        objectResolution.target.setValue(computedKey, Value.Int.of(1))
+                        objectResolution.target.reserveCell(computedKey).also { cell ->
+                            cell.setValue(Value.Int.of(1))
+                            cell.setAccessAccepted(Value.Boolean.of(true))
+                        }
 
                     "Nested" ->
-                        objectResolution.target.setValue(renderedKey, Value.Int.of(2))
+                        objectResolution.target.reserveCell(renderedKey).also { cell ->
+                            cell.setValue(Value.Int.of(2))
+                            cell.setAccessAccepted(Value.Boolean.of(true))
+                        }
 
                     else -> error("Unexpected object type")
                 }
@@ -395,18 +401,18 @@ class ResolveValueTest {
         assertSame(resolvedValue.engineResult, replayed)
 
         val result = assertIs<EngineResult.List>(replayed)
-        result.forEachIndexed { index, value ->
-            val item = assertIs<EngineResult.Object>(value)
+        result.forEachIndexed { index, cell ->
+            val item = assertIs<EngineResult.Object>(cell.getValue().get())
             val itemPath = rootPath + Value.ListIndex.of(index)
             assertSame(item, resolutionsByPath.getValue(itemPath).target)
-            assertEquals(Value.Int.of(1), item.getValue(computedKey).get())
+            assertEquals(Value.Int.of(1), item.getCell(computedKey).getValue().get())
 
-            val nested = assertIs<EngineResult.Object>(item.getValue(nestedKey).get())
+            val nested = assertIs<EngineResult.Object>(item.getCell(nestedKey).getValue().get())
             assertSame(
                 nested,
                 resolutionsByPath.getValue(itemPath + nestedKey).target,
             )
-            assertEquals(Value.Int.of(2), nested.getValue(renderedKey).get())
+            assertEquals(Value.Int.of(2), nested.getCell(renderedKey).getValue().get())
         }
     }
 }

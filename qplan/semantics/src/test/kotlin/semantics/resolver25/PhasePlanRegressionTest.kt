@@ -110,6 +110,6 @@ class PhasePlanRegressionTest {
             observation.lifecycleEvents.resolver25StructuralSignatures(),
             Resolver25StructuralSignature.MULTIPLE_OBJECT_PATH_OWNERS,
         )
-        assertEquals(Value.Int.of(7), resolved.getValue(outerKey).get())
+        assertEquals(Value.Int.of(7), resolved.getCell(outerKey).getValue().get())
     }
 }

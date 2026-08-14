@@ -9,7 +9,7 @@ import model.Value
  * Whether every present `__typename` value names its containing object's concrete type.
  *
  * This predicate does not require a `__typename` value to be present. It observes values but never
- * field or type checks.
+ * access-acceptance results.
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToTypename(): Boolean =
@@ -18,7 +18,7 @@ fun EngineResult.Object.conformsToTypename(): Boolean =
 context(world: Assumptions)
 private fun EngineResult.Object.objectConformsToTypename(): Boolean =
     keys.all { key ->
-        val value = getValue(key).get()
+        val value = getCell(key).getValue().get()
         if (key.field.fieldName == "__typename") {
             value != Value.Error &&
                 value is Value.String &&
@@ -37,5 +37,6 @@ private fun EngineResult?.engineResultConformsToTypename(): Boolean =
         -> true
 
         is EngineResult.Object -> objectConformsToTypename()
-        is EngineResult.List -> all { value -> value.engineResultConformsToTypename() }
+        is EngineResult.List ->
+            all { cell -> cell.getValue().get().engineResultConformsToTypename() }
     }

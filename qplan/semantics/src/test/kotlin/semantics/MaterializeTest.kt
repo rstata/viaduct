@@ -48,7 +48,7 @@ class MaterializeTest {
                     type = world.schema.query,
                     mutable = true,
                 )
-            val promise = result.createValuePromise(field)
+            val promise = result.reserveCell(field).createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
                     context(world, runtimeSupport) {
@@ -122,7 +122,8 @@ class MaterializeTest {
             )
         val reader: List<PathComponent> = listOf(childKey, valueKey)
         val childResult = EngineResult.Object.of(childType, mutable = true)
-        childResult.createValuePromise(valueKey)
+        val valueCell = childResult.reserveCell(valueKey)
+        valueCell.createValuePromise()
         val result =
             EngineResult.Object.of(
                 type = world.schema.query,
@@ -141,8 +142,7 @@ class MaterializeTest {
                 SelectionCompletion(completedSelections)
             }
         cycleCheckingSupport.registerWriter(
-            target = childResult,
-            key = valueKey,
+            cell = valueCell,
             writer = reader,
         )
 

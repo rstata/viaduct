@@ -211,7 +211,9 @@ private fun EngineResult?.sameSelectedResultAs(
                 typeExpr == other.typeExpr &&
                 size == other.size &&
                 indices.all { index ->
-                    this[index].sameSelectedResultAs(other[index], selections)
+                    this[index]
+                        .get()
+                        .sameSelectedResultAs(other[index].get(), selections)
                 }
         is EngineResult.Object ->
             other is EngineResult.Object &&
@@ -224,10 +226,10 @@ private fun EngineResult?.sameSelectedResultAs(
                         val key = selection.groundKey()
                         key in keys &&
                             key in other.keys &&
-                            getValue(key)
+                            getCell(key)
                                 .get()
                                 .sameSelectedResultAs(
-                                    other = other.getValue(key).get(),
+                                    other = other.getCell(key).get(),
                                     selections = selection.subselections,
                                 )
                     }

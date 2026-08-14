@@ -20,15 +20,13 @@ internal fun interface RuntimeSupport {
     fun complete(selections: SelectionForest): SelectionCompletion
 
     fun registerWriter(
-        target: EngineResult.Object,
-        key: Value.GroundKey,
+        cell: EngineResult.Cell,
         writer: List<PathComponent>,
     ) {}
 
     fun cycleCheck(
         reader: List<PathComponent>,
-        target: EngineResult.Object,
-        key: Value.GroundKey,
+        cell: EngineResult.Cell,
     ) {}
 
     companion object {
@@ -51,16 +49,11 @@ internal class ResolverReadCycleException(
         "Resolver-read cycle: ${cycle.joinToString(separator = " -> ")}",
     )
 
-private data class ValueSlot(
-    val target: EngineResult.Object,
-    val key: Value.GroundKey,
-)
-
 private class CycleCheckingRuntimeSupport(
     private val completionSupport: RuntimeSupport,
 ) : RuntimeSupport {
-    private val writersBySlot =
-        ConcurrentHashMap<ValueSlot, List<PathComponent>>()
+    private val writersByCell =
+        ConcurrentHashMap<EngineResult.Cell, List<PathComponent>>()
     private val readsByReader =
         ConcurrentHashMap<List<PathComponent>, MutableSet<List<PathComponent>>>()
 
@@ -69,23 +62,20 @@ private class CycleCheckingRuntimeSupport(
         completionSupport.complete(selections)
 
     override fun registerWriter(
-        target: EngineResult.Object,
-        key: Value.GroundKey,
+        cell: EngineResult.Cell,
         writer: List<PathComponent>,
     ) {
-        val slot = ValueSlot(target, key)
-        val previous = writersBySlot.putIfAbsent(slot, writer.toList())
+        val previous = writersByCell.putIfAbsent(cell, writer.toList())
         check(previous == null) {
-            "Writer already registered for ${key.field.fieldName}: $previous"
+            "Writer already registered for cell: $previous"
         }
     }
 
     override fun cycleCheck(
         reader: List<PathComponent>,
-        target: EngineResult.Object,
-        key: Value.GroundKey,
+        cell: EngineResult.Cell,
     ) {
-        val writer = writersBySlot[ValueSlot(target, key)] ?: return
+        val writer = writersByCell[cell] ?: return
         val stableReader = reader.toList()
         readsByReader
             .computeIfAbsent(stableReader) {

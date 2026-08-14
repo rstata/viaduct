@@ -96,7 +96,7 @@ private fun Value.Object.dependenciesOf(
 }
 
 /**
- * Resolves and sets the value and field check for [fieldSelection], yielding its passive
+ * Resolves and sets the cell value and access result for [fieldSelection], yielding its passive
  * result-tree fringe.
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
@@ -106,16 +106,17 @@ internal fun Value.Object.resolveKey(
     resolved: EngineResult.Object,
 ): ResolvedValue? {
     val key = fieldSelection.groundKey()
+    val cell = resolved.reserveCell(key)
     return when {
         key.arguments.argumentsContainErrorValue() -> {
-            resolved.setValue(key, Value.Error)
-            resolved.setFieldCheck(key, Value.Error)
+            cell.setValue(Value.Error)
+            cell.setAccessAccepted(Value.Error)
             null
         }
 
         key.field.fieldName == "__typename" -> {
-            resolved.setValue(key, Value.String.of(type.typeName))
-            resolved.setFieldCheck(key, Value.Boolean.of(true))
+            cell.setValue(Value.String.of(type.typeName))
+            cell.setAccessAccepted(Value.Boolean.of(true))
             null
         }
 
@@ -165,8 +166,8 @@ internal fun Value.Object.resolveKey(
                     resolverDemand = resolutionSelections,
                     retainCompleteOutput = completion.retainCompleteOutput,
                 )
-            resolved.setValue(key, resolvedValue.engineResult)
-            resolved.setFieldCheck(key, Value.Boolean.of(true))
+            cell.setValue(resolvedValue.engineResult)
+            cell.setAccessAccepted(Value.Boolean.of(true))
             resolvedValue
         }
     }

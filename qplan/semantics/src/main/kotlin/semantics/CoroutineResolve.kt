@@ -27,7 +27,6 @@ internal suspend fun Value.Object.coroutineResolve(
     val result =
         EngineResult.Object.of(
             type = type,
-            values = emptyMap(),
             mutable = true,
         )
 
@@ -58,10 +57,10 @@ private fun CoroutineScope.orchestrateSlot(
     val unresolvedKeys = closedDemand.groundKeys() - target.keys
 
     unresolvedKeys.forEach { key ->
-        target.createValuePromise(key)
+        val cell = target.reserveCell(key)
+        cell.createValuePromise()
         runtimeSupport.registerWriter(
-            target = target,
-            key = key,
+            cell = cell,
             writer = path + key,
         )
     }
@@ -73,7 +72,7 @@ private fun CoroutineScope.orchestrateSlot(
                 source = source,
                 selection = closedDemand[key],
                 target = target,
-                valuePromise = target.getValue(key),
+                cell = target.getCell(key),
             )
         }
     }
@@ -85,13 +84,19 @@ private suspend fun resolveSlot(
     source: Value.Object,
     selection: ObjectSelection,
     target: EngineResult.Object,
-    valuePromise: Promise<EngineResult?>,
+    cell: EngineResult.Cell,
 ) {
     val key = selection.groundKey()
+    val valuePromise = cell.getValue()
     when {
-        key.arguments.argumentsContainErrorValue() -> valuePromise.complete(Value.Error)
-        key.field.fieldName == "__typename" ->
+        key.arguments.argumentsContainErrorValue() -> {
+            valuePromise.complete(Value.Error)
+            cell.setAccessAccepted(Value.Error)
+        }
+        key.field.fieldName == "__typename" -> {
             valuePromise.complete(Value.String.of(source.type.typeName))
+            cell.setAccessAccepted(Value.Boolean.of(true))
+        }
         else ->
             coroutineScope {
                 val completion = runtimeSupport.complete(selection.subselections)
@@ -146,6 +151,7 @@ private suspend fun resolveSlot(
                     )
                 }
                 valuePromise.complete(resolvedValue.engineResult)
+                cell.setAccessAccepted(Value.Boolean.of(true))
             }
     }
 }

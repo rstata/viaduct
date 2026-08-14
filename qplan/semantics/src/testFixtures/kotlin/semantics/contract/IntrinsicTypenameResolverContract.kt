@@ -47,16 +47,16 @@ interface IntrinsicTypenameResolverContract : ResolverContract {
         val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val parent =
             assertIs<EngineResult.Object>(
-                resolved.getValue(world.schema.contractKey("Query", "parent")).get(),
+                resolved.getCell(world.schema.contractKey("Query", "parent")).get(),
             )
 
         assertEquals(
             Value.String.of("Query"),
-            resolved.getValue(world.schema.contractKey("Query", "__typename")).get(),
+            resolved.getCell(world.schema.contractKey("Query", "__typename")).get(),
         )
         assertEquals(
             Value.String.of("Parent"),
-            parent.getValue(world.schema.contractKey("Parent", "__typename")).get(),
+            parent.getCell(world.schema.contractKey("Parent", "__typename")).get(),
         )
     }
 }

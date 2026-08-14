@@ -112,16 +112,16 @@ class ResolverContractTest {
             )
 
         assertEquals(setOf(resultKey, sourceKey, consumeKey), resolved.keys)
-        val payload = assertIs<EngineResult.Object>(resolved.getValue(resultKey).get())
+        val payload = assertIs<EngineResult.Object>(resolved.getCell(resultKey).getValue().get())
         assertEquals(setOf("requested"), payload.keys.map { it.field.fieldName }.toSet())
         assertEquals(
             Value.Int.of(12),
-            payload.getValue(
+            payload.getCell(
                 Value.GroundKey.of(
                     world.schema.objectField("Payload", "requested"),
                     emptyMap(),
                 ),
-            ).get(),
+            ).getValue().get(),
         )
         assertEquals(
             Value.Int.of(7),

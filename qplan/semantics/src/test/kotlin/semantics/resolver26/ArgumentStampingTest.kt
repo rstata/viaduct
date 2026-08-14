@@ -216,10 +216,11 @@ class ArgumentStampingTest {
             context(world) {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
-        val items = assertIs<EngineResult.List>(resolved.getValue(itemsKey).get())
+        val items = assertIs<EngineResult.List>(resolved.getCell(itemsKey).getValue().get())
         val stamps =
             items.indices.map { index ->
-                val item = assertIs<EngineResult.Object>(items.get(index))
+                val item =
+                    assertIs<EngineResult.Object>(items[index].getValue().get())
                 val childKey =
                     item.keys.single { groundKey ->
                         groundKey.field.fieldName == "child"
@@ -227,7 +228,7 @@ class ArgumentStampingTest {
                 assertIs<Value.GroundKey.Stamped>(childKey).selectionStamp
             }
 
-        assertEquals(Value.Int.of(14), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).getValue().get())
         assertEquals(
             listOf(
                 listOf(resultKey, itemsKey, Value.ListIndex.of(0)),
@@ -337,7 +338,7 @@ class ArgumentStampingTest {
                 world.objectOf("Query").resolve(fragment.subselections)
             }
 
-        assertEquals(Value.Int.of(8), resolved.getValue(resultKey).get())
+        assertEquals(Value.Int.of(8), resolved.getCell(resultKey).getValue().get())
         assertEquals(4, frankApplications)
         assertEquals(
             mapOf(
@@ -454,8 +455,8 @@ class ArgumentStampingTest {
         val frankKeys =
             resolved.keys.filter { groundKey -> groundKey.field.fieldName == "frank" }
 
-        assertEquals(Value.Int.of(3), resolved.getValue(leftKey).get())
-        assertEquals(Value.Int.of(5), resolved.getValue(rightKey).get())
+        assertEquals(Value.Int.of(3), resolved.getCell(leftKey).getValue().get())
+        assertEquals(Value.Int.of(5), resolved.getCell(rightKey).getValue().get())
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { groundKey ->
             val stampedKey = assertIs<Value.GroundKey.Stamped>(groundKey)

@@ -176,7 +176,10 @@ private fun Schema.ObjectType.newObjectResult(): EngineResult.Object {
         )
     return EngineResult.Object.of(
         type = this,
-        values = mapOf(typenameKey to Value.String.of(typeName)),
+        values =
+            mapOf(
+                typenameKey to Value.String.of(typeName),
+            ),
         mutable = true,
     )
 }
@@ -340,7 +343,7 @@ private class ObjectResultOrchestrator(
                 return source.fieldValues
                     .getValue(groundedKey)
                     .launchNestedFringe(
-                        result = target.getValue(groundedKey).get(),
+                        result = target.getCell(groundedKey).getValue().get(),
                         path = coordinate,
                         demand = groundedSelection.subselections,
                         potentialDemand = activation.keyState.potentialDemand,
@@ -356,7 +359,7 @@ private class ObjectResultOrchestrator(
         }
 
         val keyState = activation.keyState
-        val existing = target.isValueSet(groundedKey)
+        val existing = target.isCellSet(groundedKey)
         val keyKind =
             when {
                 existing -> Resolver25KeyKind.PREEXISTING
@@ -372,10 +375,10 @@ private class ObjectResultOrchestrator(
             keyKind,
         )
         if (!existing) {
-            target.createValuePromise(groundedKey)
+            val cell = target.reserveCell(groundedKey)
+            cell.createValuePromise()
             diagnosticInstrumentation.registerWriter(
-                target = target,
-                key = groundedKey,
+                cell = cell,
                 writer = path + groundedKey,
             )
             runtime.instrumentation.valuePromiseInstalled(coordinate)
@@ -391,7 +394,7 @@ private class ObjectResultOrchestrator(
                         source.fieldValues
                             .getValue(groundedKey)
                             .launchNestedFringe(
-                                result = target.getValue(groundedKey).get(),
+                                result = target.getCell(groundedKey).getValue().get(),
                                 path = coordinate,
                                 demand = keyState.demandSnapshot().subselections,
                                 potentialDemand = keyState.potentialDemand,
@@ -412,7 +415,7 @@ private class ObjectResultOrchestrator(
                     resolverInputs.awaitAll()
                     resolveKey(
                         keyState = keyState,
-                        valuePromise = target.getValue(groundedKey),
+                        cell = target.getCell(groundedKey),
                     )
                 }
             }
@@ -423,7 +426,7 @@ private class ObjectResultOrchestrator(
                 runtime.scope.launch {
                     resolveKey(
                         keyState = keyState,
-                        valuePromise = target.getValue(groundedKey),
+                        cell = target.getCell(groundedKey),
                     )
                 }
             }
@@ -556,11 +559,12 @@ private class ObjectResultOrchestrator(
                     requireNestedFringe = definition.path.size > 1,
                 )
             }
-            check(current.isValueSet(groundedKey)) {
+            check(current.isCellSet(groundedKey)) {
                 "Provider reader $reader cannot find installed value promise for $groundedKey"
             }
-            diagnosticInstrumentation.cycleCheck(reader, current, groundedKey)
-            val value = current.getValue(groundedKey).await()
+            val cell = current.getCell(groundedKey)
+            diagnosticInstrumentation.cycleCheck(reader, cell)
+            val value = cell.getValue().await()
             if (value == null) return null
             if (value == Value.Error) return Value.Error
             if (index == definition.path.lastIndex) {
@@ -597,7 +601,7 @@ private class ObjectResultOrchestrator(
                 }
                 values.indices.flatMap { index ->
                     values[index].launchNestedFringe(
-                        result = resultList[index],
+                        result = resultList[index].getValue().get(),
                         path = path + Value.ListIndex.of(index),
                         demand = demand,
                         potentialDemand = potentialDemand,
@@ -636,7 +640,7 @@ private class ObjectResultOrchestrator(
                         if (groundedKey.field.fieldName == "__typename") {
                             emptyList()
                         } else {
-                            check(resultObject.isValueSet(groundedKey)) {
+                            check(resultObject.isCellSet(groundedKey)) {
                                 "Passive object at " +
                                     path.joinToString("/") { component ->
                                         when (component) {
@@ -653,7 +657,7 @@ private class ObjectResultOrchestrator(
                             fieldValues
                                 .getValue(groundedKey)
                                 .launchNestedFringe(
-                                    result = resultObject.getValue(groundedKey).get(),
+                                    result = resultObject.getCell(groundedKey).getValue().get(),
                                     path = path + groundedKey,
                                     demand = selection.subselections,
                                     potentialDemand =
@@ -687,7 +691,7 @@ private class ObjectResultOrchestrator(
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     private suspend fun resolveKey(
         keyState: KeyState,
-        valuePromise: Promise<EngineResult?>,
+        cell: EngineResult.Cell,
     ) {
         val selection = keyState.sealDemandForLaunch()
         val groundedKey = keyState.groundedKey
@@ -700,7 +704,8 @@ private class ObjectResultOrchestrator(
                     AvailableKeyOutput(Value.Error, Value.Error),
                 )
                 runtime.instrumentation.valuePublished(coordinate)
-                valuePromise.complete(Value.Error)
+                cell.getValue().complete(Value.Error)
+                cell.setAccessAccepted(Value.Error)
             }
             groundedKey.field.fieldName == "__typename" -> {
                 val value = Value.String.of(source.type.typeName)
@@ -709,7 +714,8 @@ private class ObjectResultOrchestrator(
                     AvailableKeyOutput(value, value),
                 )
                 runtime.instrumentation.valuePublished(coordinate)
-                valuePromise.complete(Value.String.of(source.type.typeName))
+                cell.getValue().complete(Value.String.of(source.type.typeName))
+                cell.setAccessAccepted(Value.Boolean.of(true))
             }
             else -> {
                 val resolutionSelections: SelectionForest =
@@ -765,7 +771,8 @@ private class ObjectResultOrchestrator(
                     }
                 descendantsNeedingResolution.awaitAll()
                 runtime.instrumentation.valuePublished(coordinate)
-                valuePromise.complete(resolvedValue.engineResult)
+                cell.getValue().complete(resolvedValue.engineResult)
+                cell.setAccessAccepted(Value.Boolean.of(true))
             }
         }
     }
@@ -1037,10 +1044,10 @@ private suspend fun Value.Object.resolveObjectValue(
             ResolvedField(groundedKey, resolvedValue)
         }
     resolvedFields.forEach { resolvedField ->
-        engineResult.setValue(
-            resolvedField.groundedKey,
-            resolvedField.value.engineResult,
-        )
+        engineResult.reserveCell(resolvedField.groundedKey).also { cell ->
+            cell.setValue(resolvedField.value.engineResult)
+            cell.setAccessAccepted(Value.Boolean.of(true))
+        }
     }
     val localResolution: ObjectResolution? =
         if (
@@ -1103,6 +1110,6 @@ private fun EngineResult.List.toProviderInputList(): Value.InputList {
     }
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { value -> value?.toProviderInput() },
+        values = map { cell -> cell.getValue().get()?.toProviderInput() },
     )
 }

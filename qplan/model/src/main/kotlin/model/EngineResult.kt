@@ -5,71 +5,77 @@ import model.invariants.conformsToSchemaType
 /**
  * A finite, well-founded field-resolution result.
  *
- * Equality depends on the result variant. [Value.Simple] values use structural equality, [Object]
- * values use reference equality, and [List] values use structural equality over their type
- * expression and elements. Schema definitions within those properties use the canonical equality
- * documented by [Schema].
+ * Equality depends on the result variant. [Value.Simple] values use structural equality, [Cell]
+ * and [Object] values use reference equality, and [List] values use structural equality over their
+ * type expression and positional cell equality. Schema definitions within those properties use
+ * the canonical equality documented by [Schema].
  */
 sealed interface EngineResult {
     /**
-     * A finite object result whose value, field-check, and type-check promises are write-once.
+     * One result occurrence with independent write-once value and access-acceptance slots.
      *
-     * Every present value key belongs to [type], contains no variables, and completes only with a
-     * value conforming to the field's type expression. [getValue] is a strict read.
-     * [reserveValue] explicitly installs an unclaimed reader placeholder on a mutable object. A
-     * writer claims that placeholder through [createValuePromise] or [setValue]. [freeze] seals the
-     * key set and fails every unclaimed placeholder. A claimed promise may complete after freezing.
+     * A cell is used both for object fields and list elements. A completed `accessAccepted` value
+     * of `true` means access is accepted and `false` means access is rejected. Cells use reference
+     * equality and stable identity hashing because either slot may be completed after publication.
+     */
+    sealed interface Cell {
+        fun isValueSet(): Boolean
+
+        /** @throws IllegalStateException when this cell has no value promise */
+        fun getValue(): Promise<EngineResult?>
+
+        /**
+         * Returns the value promise, explicitly creating an unclaimed reader placeholder when this
+         * mutable cell has no promise.
+         */
+        fun reserveValue(): Promise<EngineResult?>
+
+        fun setValue(value: EngineResult?)
+
+        fun createValuePromise(): Promise<EngineResult?>
+
+        /** @throws IllegalStateException when this cell has no access-acceptance promise */
+        fun getAccessAccepted(): Promise<Value.Boolean>
+
+        fun setAccessAccepted(accept: Value.Boolean)
+
+        fun createAccessAcceptedPromise(): Promise<Value.Boolean>
+    }
+
+    /**
+     * A finite object result whose exact cells are installed once.
+     *
+     * Every present key belongs to [type], contains no variables, and its cell value completes only
+     * with a result conforming to the field's type expression. [getCell] is a strict read.
+     * [reserveCell] explicitly installs an unclaimed reader placeholder on a mutable object. A
+     * writer claims the value placeholder through [Cell.createValuePromise] or [Cell.setValue].
+     * [freeze] seals the key set and freezes every present cell's value slot. A claimed value
+     * promise may complete after freezing.
      *
      * Objects use reference equality and stable identity hashing, so they may be used as map keys
-     * while promises are installed or completed.
+     * while cells are installed or their slots are completed.
      */
     sealed interface Object : EngineResult {
         val type: Schema.ObjectType
 
         val keys: Set<Value.GroundKey>
 
-        fun isValueSet(field: Value.GroundKey): Boolean = field in keys
+        fun isCellSet(field: Value.GroundKey): Boolean = field in keys
 
-        /** @throws MissingFieldException when [field] has no value promise */
-        fun getValue(field: Value.GroundKey): Promise<EngineResult?>
+        /** @throws MissingFieldException when [field] has no cell */
+        fun getCell(field: Value.GroundKey): Cell
 
         /**
-         * Returns the field promise, explicitly creating an unclaimed reader placeholder when this
+         * Returns the field cell, explicitly creating an unclaimed reader placeholder when this
          * mutable object is not frozen.
          *
-         * @throws MissingFieldException when this object is immutable or frozen and has no promise
+         * @throws MissingFieldException when this object is immutable or frozen and has no cell
          */
-        fun reserveValue(field: Value.GroundKey): Promise<EngineResult?>
-
-        /** @throws MissingFieldException when [field] has no field-check promise */
-        fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean>
-
-        /** @throws IllegalStateException when this object has no type-check promise */
-        fun getTypeCheck(): Promise<Value.Boolean>
-
-        fun setValue(
-            field: Value.GroundKey,
-            value: EngineResult?,
-        )
-
-        /** Sets whether the field check accepts access. */
-        fun setFieldCheck(
-            field: Value.GroundKey,
-            accept: Value.Boolean,
-        )
-
-        /** Sets whether the type check accepts access. */
-        fun setTypeCheck(accept: Value.Boolean)
-
-        fun createValuePromise(field: Value.GroundKey): Promise<EngineResult?>
-
-        fun createFieldCheckPromise(field: Value.GroundKey): Promise<Value.Boolean>
-
-        fun createTypeCheckPromise(): Promise<Value.Boolean>
+        fun reserveCell(field: Value.GroundKey): Cell
 
         /**
-         * Seals this object's value-key set and fails every reader-created placeholder that no
-         * writer claimed. Claimed promises may still complete.
+         * Seals this object's cell-key set and freezes every present cell's value slot. Claimed
+         * value promises may still complete.
          */
         fun freeze()
 
@@ -77,30 +83,34 @@ sealed interface EngineResult {
             /**
              * ### Invariant: object-engine-result-factory-schema-conformance
              *
-             * Every initially present value satisfies its field's schema type. When [mutable] is
-             * false, every set and promise-creation operation throws. When it is true, each absent
-             * value, field check, and type check may be installed once.
+             * Every initially present cell value satisfies its field's schema type. When [mutable]
+             * is false, cell creation throws. When it is true, each absent exact cell may be
+             * installed once and each slot of that cell may be installed once.
              */
             fun of(
                 type: Schema.ObjectType,
                 values: Map<Value.GroundKey, EngineResult?> = emptyMap(),
-                fieldChecks: Map<Value.GroundKey, Value.Boolean> =
+                accessAccepted: Map<Value.GroundKey, Value.Boolean> =
                     values.keys.associateWith { Value.Boolean.of(true) },
-                typeCheck: Value.Boolean? = Value.Boolean.of(true),
                 mutable: Boolean = false,
             ): Object {
-                values.forEach { (field, value) ->
-                    validateObjectField(type, field)
-                    validateObjectValue(field, value)
-                }
-                fieldChecks.keys.forEach { field ->
+                val fields = values.keys + accessAccepted.keys
+                fields.forEach { field ->
                     validateObjectField(type, field)
                 }
+                values.forEach { (field, value) -> validateObjectValue(field, value) }
                 return ObjectResultImpl(
                     type = type,
-                    values = values,
-                    fieldChecks = fieldChecks,
-                    typeCheck = typeCheck,
+                    cells =
+                        fields.associateWith { field ->
+                            CellImpl(
+                                initialValue = values[field],
+                                initiallyValueSet = field in values,
+                                accessAccepted = accessAccepted[field],
+                                mutable = mutable,
+                                validateValue = { value -> validateObjectValue(field, value) },
+                            )
+                        },
                     mutable = mutable,
                 )
             }
@@ -108,18 +118,15 @@ sealed interface EngineResult {
     }
 
     /**
-     * A typed list result.
+     * A typed list result whose elements are cells.
      *
-     * [typeExpr] is the expected type of each element, including its nullability and nested lists.
-     * Type-check state belongs to each object element's [Object], while the containing field's
-     * field-check state belongs to its containing object. Lists use structural equality over
-     * [typeExpr] and positional element equality; object elements therefore compare by reference.
+     * [typeExpr] is the expected type of each cell value, including its nullability and nested
+     * lists. Lists use structural equality over [typeExpr] and positional cell equality; cells and
+     * object values therefore compare by reference.
      *
-     * Including [typeExpr] in equality is intentional. The factory validates every element against
-     * it, so it acts as a retained type witness: assigning a list to a compatible list position
-     * requires comparing type expressions, not recursively revalidating its contents. Content-only
-     * equality would equate lists with different assignability unless every assignment walked the
-     * elements again.
+     * Including [typeExpr] in equality is intentional. The factory validates every completed cell
+     * value against it, so it acts as a retained type witness: assigning a list to a compatible list
+     * position requires comparing type expressions, not recursively revalidating its contents.
      */
     sealed interface List : EngineResult {
         val typeExpr: TypeExpr<Schema.OutputType>
@@ -127,15 +134,15 @@ sealed interface EngineResult {
         val indices: IntRange
             get() = 0 until size
 
-        operator fun get(index: Int): EngineResult?
+        operator fun get(index: Int): Cell
 
-        fun <R> map(transform: (EngineResult?) -> R): kotlin.collections.List<R> =
+        fun <R> map(transform: (Cell) -> R): kotlin.collections.List<R> =
             indices.map { index -> transform(get(index)) }
 
-        fun all(predicate: (EngineResult?) -> Boolean): Boolean =
+        fun all(predicate: (Cell) -> Boolean): Boolean =
             indices.all { index -> predicate(get(index)) }
 
-        fun forEachIndexed(action: (index: Int, EngineResult?) -> Unit) {
+        fun forEachIndexed(action: (index: Int, Cell) -> Unit) {
             indices.forEach { index -> action(index, get(index)) }
         }
 
@@ -143,28 +150,51 @@ sealed interface EngineResult {
             /**
              * ### Invariant: list-engine-result-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Every cell value satisfies `value.conformsToSchemaType(typeExpr)` in its reasoning
+             * world.
              */
             fun of(
                 typeExpr: TypeExpr<Schema.OutputType>,
                 values: kotlin.collections.List<EngineResult?>,
+                accessAccepted: kotlin.collections.List<Value.Boolean?> =
+                    values.map { Value.Boolean.of(true) },
+                mutableCells: Boolean = false,
             ): List {
-                require(values.all { it.conformsToSchemaType(typeExpr) }) {
+                require(values.all { value -> value.conformsToSchemaType(typeExpr) }) {
                     "List engine result contains an element incompatible with $typeExpr"
                 }
-                return ListResultImpl(typeExpr, values)
+                require(accessAccepted.size == values.size) {
+                    "List engine result access results must match its value count"
+                }
+                val cells =
+                    values.mapIndexed { index, value ->
+                        CellImpl(
+                            initialValue = value,
+                            initiallyValueSet = true,
+                            accessAccepted = accessAccepted[index],
+                            mutable = mutableCells,
+                            validateValue = { updated ->
+                                require(updated.conformsToSchemaType(typeExpr)) {
+                                    "List engine result contains an element incompatible with " +
+                                        typeExpr
+                                }
+                            },
+                        )
+                    }
+                return ListResultImpl(typeExpr, cells)
             }
         }
     }
 }
 
 /**
- * Returns whether two completed result trees contain the same values and checks.
+ * Returns whether two completed result trees contain the same values and access results.
  *
- * This explicit extensional comparison is distinct from ordinary equality because [EngineResult.Object]
- * uses reference equality. Both trees must be finite and every present promise they contain must be
- * completed. Its result is meaningful only after both trees are quiescent; the comparison does not
- * take an atomic snapshot while promises or slots are being mutated concurrently.
+ * This explicit extensional comparison is distinct from ordinary equality because
+ * [EngineResult.Cell] and [EngineResult.Object] use reference equality. Both trees must be finite
+ * and every present promise they contain must be completed. Its result is meaningful only after
+ * both trees are quiescent; the comparison does not take an atomic snapshot while promises or
+ * cells are being mutated concurrently.
  *
  * @throws UncompletedPromiseException when either tree contains an uncompleted promise
  */
@@ -186,10 +216,17 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
             other is EngineResult.List &&
                 typeExpr == other.typeExpr &&
                 size == other.size &&
-                indices.all { index -> this[index].hasSameCompletedResultAs(other[index]) }
+                indices.all { index -> this[index].hasSameCompletedCellAs(other[index]) }
         is EngineResult.Object ->
             other is EngineResult.Object && sameCompletedObjectResultAs(other)
     }
+}
+
+private fun EngineResult.Cell.hasSameCompletedCellAs(other: EngineResult.Cell): Boolean {
+    val leftValue = completedValue
+    val rightValue = other.completedValue
+    return leftValue.hasSameCompletedResultAs(rightValue) &&
+        completedAccessAccepted == other.completedAccessAccepted
 }
 
 /**
@@ -233,29 +270,37 @@ fun EngineResult?.union(other: EngineResult?): EngineResult? {
 }
 
 /**
- * Returns the object result containing the union of every value and check present in either
- * operand.
+ * Returns the union of this completed cell and [other].
  *
- * @throws IllegalArgumentException when the object types differ or any shared fact has no union
+ * @throws IllegalArgumentException when their values have no union or their access results differ
+ */
+private fun CompletedCell.union(other: CompletedCell): CompletedCell =
+    CompletedCell(
+        value = value.union(other.value),
+        accessAccepted =
+            unionAccessAccepted(accessAccepted, other.accessAccepted),
+    )
+
+/**
+ * Returns the object result containing the union of every cell present in either operand.
+ *
+ * @throws IllegalArgumentException when the object types differ or any shared cell has no union
  */
 fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
     require(type == other.type) {
         "Cannot union object engine results of different types"
     }
 
-    val left = implementation
-    val right = other.implementation
+    val leftCells = implementation.completedCells.mapValues { (_, cell) -> cell.completed() }
+    val rightCells = other.implementation.completedCells.mapValues { (_, cell) -> cell.completed() }
+    val cells = unionMaps(leftCells, rightCells, CompletedCell::union)
     return EngineResult.Object.of(
         type = type,
-        values = unionMaps(left.completedValues, right.completedValues, EngineResult?::union),
-        fieldChecks =
-            unionMaps(left.completedFieldChecks, right.completedFieldChecks) { first, second ->
-                require(first == second) {
-                    "Cannot union object engine results with unequal field checks"
-                }
-                first
-            },
-        typeCheck = unionTypeChecks(left.completedTypeCheck, right.completedTypeCheck),
+        values = cells.mapValues { (_, cell) -> cell.value },
+        accessAccepted =
+            cells.mapNotNull { (key, cell) ->
+                cell.accessAccepted?.let { key to it }
+            }.toMap(),
     )
 }
 
@@ -265,7 +310,7 @@ fun EngineResult.Object.union(other: EngineResult.Object): EngineResult.Object {
  * The operands must have equal element type expressions and lengths.
  *
  * @throws IllegalArgumentException when the type expressions or lengths differ, or when any
- * corresponding values have no union
+ * corresponding cells have no union
  */
 fun EngineResult.List.union(other: EngineResult.List): EngineResult.List {
     require(typeExpr == other.typeExpr) {
@@ -274,252 +319,291 @@ fun EngineResult.List.union(other: EngineResult.List): EngineResult.List {
     require(size == other.size) {
         "Cannot union list engine results of different lengths"
     }
+    val cells = indices.map { index -> this[index].completed().union(other[index].completed()) }
     return EngineResult.List.of(
         typeExpr = typeExpr,
-        values = indices.map { index -> this[index].union(other[index]) },
+        values = cells.map(CompletedCell::value),
+        accessAccepted = cells.map(CompletedCell::accessAccepted),
     )
 }
 
-private class ObjectResultImpl(
-    override val type: Schema.ObjectType,
-    values: Map<Value.GroundKey, EngineResult?>,
-    fieldChecks: Map<Value.GroundKey, Value.Boolean>,
-    typeCheck: Value.Boolean?,
+private class CellImpl(
+    initialValue: EngineResult? = null,
+    initiallyValueSet: Boolean = false,
+    accessAccepted: Value.Boolean? = null,
     private val mutable: Boolean,
-) : EngineResult.Object {
+    private val validateValue: (EngineResult?) -> Unit = {},
+) : EngineResult.Cell {
     private val valueStore =
-        ObjectValueStore(
-            type = type,
-            values = values,
+        CellValueStore(
+            initialValue = initialValue,
+            initiallySet = initiallyValueSet,
             mutable = mutable,
+            validateValue = validateValue,
         )
-    private val fieldCheckStore = promiseStore(fieldChecks)
-    private val typeCheckStore = promiseStore(typeCheck?.let { mapOf(Unit to it) }.orEmpty())
+    private val accessAcceptedStore =
+        promiseStore(accessAccepted?.let { mapOf(Unit to it) }.orEmpty())
 
-    override val keys: Set<Value.GroundKey>
-        get() = valueStore.keys
+    override fun isValueSet(): Boolean = valueStore.isSet
 
-    override fun isValueSet(field: Value.GroundKey): Boolean = valueStore.isSet(field)
-
-    override fun getValue(field: Value.GroundKey): Promise<EngineResult?> {
-        validateObjectField(type, field)
-        return valueStore.readOrNull(field)
-            ?: throw MissingFieldException(type.typeName, field.field.fieldName)
-    }
-
-    override fun reserveValue(field: Value.GroundKey): Promise<EngineResult?> {
-        validateObjectField(type, field)
-        return valueStore.reserve(field)
-    }
-
-    override fun getFieldCheck(field: Value.GroundKey): Promise<Value.Boolean> =
-        fieldCheckStore.readOrNull(field)
-            ?: throw MissingFieldException(type.typeName, field.field.fieldName)
-
-    override fun getTypeCheck(): Promise<Value.Boolean> =
-        checkNotNull(typeCheckStore.readOrNull(Unit)) {
-            "${type.typeName} result has no type check"
+    override fun getValue(): Promise<EngineResult?> =
+        checkNotNull(valueStore.readOrNull()) {
+            "Cell has no value"
         }
 
-    override fun setValue(
-        field: Value.GroundKey,
-        value: EngineResult?,
-    ) {
-        validateObjectField(type, field)
-        validateObjectValue(field, value)
-        valueStore.claimAndComplete(field, value)
+    override fun reserveValue(): Promise<EngineResult?> = valueStore.reserve()
+
+    override fun setValue(value: EngineResult?) {
+        validateValue(value)
+        valueStore.claimAndComplete(value)
     }
 
-    override fun setFieldCheck(
-        field: Value.GroundKey,
-        accept: Value.Boolean,
-    ) {
-        checkWritable(field)
-        fieldCheckStore.set(field, accept)
-    }
+    override fun createValuePromise(): Promise<EngineResult?> = valueStore.claim()
 
-    override fun setTypeCheck(accept: Value.Boolean) {
+    override fun getAccessAccepted(): Promise<Value.Boolean> =
+        checkNotNull(accessAcceptedStore.readOrNull(Unit)) {
+            "Cell has no access-acceptance result"
+        }
+
+    override fun setAccessAccepted(accept: Value.Boolean) {
         checkMutable()
-        typeCheckStore.set(Unit, accept)
+        accessAcceptedStore.set(Unit, accept)
     }
 
-    override fun createValuePromise(field: Value.GroundKey): Promise<EngineResult?> {
-        validateObjectField(type, field)
-        return valueStore.claim(field)
-    }
-
-    override fun createFieldCheckPromise(field: Value.GroundKey): Promise<Value.Boolean> {
-        checkWritable(field)
-        return fieldCheckStore.create(field)
-    }
-
-    override fun createTypeCheckPromise(): Promise<Value.Boolean> {
+    override fun createAccessAcceptedPromise(): Promise<Value.Boolean> {
         checkMutable()
-        return typeCheckStore.create(Unit)
+        return accessAcceptedStore.create(Unit)
     }
 
-    override fun freeze() {
-        valueStore.freeze()
+    fun freezeValue(cause: Throwable) {
+        if (mutable) valueStore.freeze(cause)
     }
-
-    val completedValues: Map<Value.GroundKey, EngineResult?> get() = valueStore.completedValues()
-
-    val completedFieldChecks: Map<Value.GroundKey, Value.Boolean> get() =
-        fieldCheckStore.completedValues()
-
-    val completedTypeCheck: Value.Boolean? get() = typeCheckStore.readOrNull(Unit)?.get()
-
-    private fun checkWritable(field: Value.GroundKey) {
-        checkMutable()
-        validateObjectField(type, field)
-    }
-
-    private fun checkMutable() = check(mutable) { "${type.typeName} result is immutable" }
 
     fun requireCompleted() {
-        valueStore.promises.forEach { promise ->
-            promise.get().requireCompleted()
-        }
-        fieldCheckStore.snapshot().values.forEach { promise -> promise.get() }
-        typeCheckStore.snapshot().values.forEach { promise -> promise.get() }
+        valueStore.readOrNull()?.get().requireCompleted()
+        accessAcceptedStore.snapshot().values.forEach { promise -> promise.get() }
     }
+
+    val completedValue: EngineResult?
+        get() = checkNotNull(valueStore.readOrNull()) { "Cell has no value" }.get()
+
+    val completedAccessAccepted: Value.Boolean?
+        get() = accessAcceptedStore.readOrNull(Unit)?.get()
+
+    private fun checkMutable() = check(mutable) { "Cell is immutable" }
 }
 
-private class ObjectValueStore(
-    private val type: Schema.ObjectType,
-    values: Map<Value.GroundKey, EngineResult?>,
+private class CellValueStore(
+    initialValue: EngineResult?,
+    initiallySet: Boolean,
     private val mutable: Boolean,
+    private val validateValue: (EngineResult?) -> Unit,
 ) {
     private val lock = Any()
-    private val slots =
-        values
-            .mapValuesTo(linkedMapOf()) { (_, value) ->
-                ValueSlot(
-                    promise = Promise.of(value),
-                    claimed = true,
-                )
-            }
+    private var promise: Promise<EngineResult?>? =
+        if (initiallySet) Promise.of(initialValue) else null
+    private var claimed = initiallySet
     private var frozen = !mutable
 
-    val keys: Set<Value.GroundKey>
-        get() = synchronized(lock) { slots.keys.toSet() }
+    val isSet: Boolean
+        get() = synchronized(lock) { promise != null }
 
-    val promises: List<Promise<EngineResult?>>
-        get() = synchronized(lock) { slots.values.map { slot -> slot.promise } }
+    fun readOrNull(): Promise<EngineResult?>? = synchronized(lock) { promise }
 
-    fun isSet(field: Value.GroundKey): Boolean = synchronized(lock) { field in slots }
-
-    fun readOrNull(field: Value.GroundKey): Promise<EngineResult?>? =
-        synchronized(lock) { slots[field]?.promise }
-
-    fun reserve(field: Value.GroundKey): Promise<EngineResult?> =
+    fun reserve(): Promise<EngineResult?> =
         synchronized(lock) {
-            slots[field]?.promise
+            promise
                 ?: if (frozen) {
-                    throw MissingFieldException(type.typeName, field.field.fieldName)
+                    error("Cell is immutable")
                 } else {
                     Promise
-                        .ofDeferred<EngineResult?> { value ->
-                            validateObjectValue(field, value)
-                        }.also { promise ->
-                            slots[field] =
-                                ValueSlot(
-                                    promise = promise,
-                                    claimed = false,
-                                )
-                        }
+                        .ofDeferred(validateValue)
+                        .also { created -> promise = created }
                 }
         }
 
-    fun claim(field: Value.GroundKey): Promise<EngineResult?> =
+    fun claim(): Promise<EngineResult?> =
         synchronized(lock) {
-            check(!frozen) { "${type.typeName} result is frozen" }
-            val existing = slots[field]
+            check(!frozen) { "Cell value is frozen" }
+            val existing = promise
             if (existing != null) {
-                check(!existing.claimed) { "$field already has a writer" }
-                existing.claimed = true
-                existing.promise
+                check(!claimed) { "Cell value already has a writer" }
+                claimed = true
+                existing
             } else {
                 Promise
-                    .ofDeferred<EngineResult?> { value ->
-                        validateObjectValue(field, value)
-                    }.also { promise ->
-                        slots[field] =
-                            ValueSlot(
-                                promise = promise,
-                                claimed = true,
-                            )
+                    .ofDeferred(validateValue)
+                    .also { created ->
+                        promise = created
+                        claimed = true
                     }
             }
         }
 
-    fun claimAndComplete(
-        field: Value.GroundKey,
-        value: EngineResult?,
-    ) {
-        claim(field).complete(value)
+    fun claimAndComplete(value: EngineResult?) {
+        claim().complete(value)
     }
 
-    fun freeze() {
+    fun freeze(cause: Throwable) {
         val unclaimed =
+            synchronized(lock) {
+                check(mutable) { "Cell is immutable" }
+                check(!frozen) { "Cell value is already frozen" }
+                frozen = true
+                promise?.takeUnless { claimed }
+            }
+        unclaimed?.fail(cause)
+    }
+}
+
+private class ObjectResultImpl(
+    override val type: Schema.ObjectType,
+    cells: Map<Value.GroundKey, EngineResult.Cell>,
+    mutable: Boolean,
+) : EngineResult.Object {
+    private val cellStore =
+        ObjectCellStore(
+            type = type,
+            cells = cells,
+            mutable = mutable,
+        )
+
+    override val keys: Set<Value.GroundKey>
+        get() = cellStore.keys
+
+    override fun isCellSet(field: Value.GroundKey): Boolean = cellStore.isSet(field)
+
+    override fun getCell(field: Value.GroundKey): EngineResult.Cell {
+        validateObjectField(type, field)
+        return cellStore.readOrNull(field)
+            ?: throw MissingFieldException(type.typeName, field.field.fieldName)
+    }
+
+    override fun reserveCell(field: Value.GroundKey): EngineResult.Cell {
+        validateObjectField(type, field)
+        return cellStore.reserve(field)
+    }
+
+    override fun freeze() {
+        cellStore.freeze()
+    }
+
+    val completedCells: Map<Value.GroundKey, EngineResult.Cell>
+        get() = cellStore.completedCells()
+
+    fun requireCompleted() {
+        cellStore.cellValues.forEach { cell -> cell.implementation.requireCompleted() }
+    }
+}
+
+private class ObjectCellStore(
+    private val type: Schema.ObjectType,
+    cells: Map<Value.GroundKey, EngineResult.Cell>,
+    private val mutable: Boolean,
+) {
+    private val lock = Any()
+    private val cells = cells.toMutableMap()
+    private var frozen = !mutable
+
+    val keys: Set<Value.GroundKey>
+        get() = synchronized(lock) { cells.keys.toSet() }
+
+    val cellValues: kotlin.collections.List<EngineResult.Cell>
+        get() = synchronized(lock) { cells.values.toList() }
+
+    fun isSet(field: Value.GroundKey): Boolean = synchronized(lock) { field in cells }
+
+    fun readOrNull(field: Value.GroundKey): EngineResult.Cell? =
+        synchronized(lock) { cells[field] }
+
+    fun reserve(field: Value.GroundKey): EngineResult.Cell =
+        synchronized(lock) {
+            cells[field]
+                ?: if (frozen) {
+                    throw MissingFieldException(type.typeName, field.field.fieldName)
+                } else {
+                    mutableCell(field).also { cell ->
+                        cells[field] = cell
+                    }
+                }
+        }
+
+    fun freeze() {
+        val presentCells =
             synchronized(lock) {
                 check(mutable) { "${type.typeName} result is immutable" }
                 check(!frozen) { "${type.typeName} result is already frozen" }
                 frozen = true
-                slots
-                    .filterValues { slot -> !slot.claimed }
-                    .map { (field, slot) -> field to slot.promise }
+                cells.toMap()
             }
-        unclaimed.forEach { (field, promise) ->
-            promise.fail(MissingFieldException(type.typeName, field.field.fieldName))
+        presentCells.forEach { (field, cell) ->
+            cell.implementation.freezeValue(
+                MissingFieldException(type.typeName, field.field.fieldName),
+            )
         }
     }
 
-    fun completedValues(): Map<Value.GroundKey, EngineResult?> =
+    fun completedCells(): Map<Value.GroundKey, EngineResult.Cell> =
         synchronized(lock) {
-            slots.mapValues { (_, slot) -> slot.promise.get() }
+            cells.mapValues { (_, cell) ->
+                cell.also { it.implementation.requireCompleted() }
+            }
         }
 
-    private data class ValueSlot(
-        val promise: Promise<EngineResult?>,
-        var claimed: Boolean,
-    )
+    private fun mutableCell(field: Value.GroundKey): EngineResult.Cell =
+        CellImpl(
+            mutable = true,
+            validateValue = { value -> validateObjectValue(field, value) },
+        )
+
 }
 
 private data class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
-    private val values: kotlin.collections.List<EngineResult?>,
+    private val cells: kotlin.collections.List<EngineResult.Cell>,
 ) : EngineResult.List {
     override val size: Int
-        get() = values.size
+        get() = cells.size
 
-    override fun get(index: Int): EngineResult? = values[index]
+    override fun get(index: Int): EngineResult.Cell = cells[index]
 }
+
+private data class CompletedCell(
+    val value: EngineResult?,
+    val accessAccepted: Value.Boolean?,
+)
+
+private fun EngineResult.Cell.completed(): CompletedCell =
+    CompletedCell(
+        value = completedValue,
+        accessAccepted = completedAccessAccepted,
+    )
+
+private val EngineResult.Cell.implementation: CellImpl
+    get() = this as CellImpl
+
+private val EngineResult.Cell.completedValue: EngineResult?
+    get() = implementation.completedValue
+
+private val EngineResult.Cell.completedAccessAccepted: Value.Boolean?
+    get() = implementation.completedAccessAccepted
 
 private val EngineResult.Object.implementation: ObjectResultImpl
     get() = this as ObjectResultImpl
 
 /**
  * The result is meaningful only after both object trees are quiescent. Store snapshots and
- * recursive reads do not form one atomic snapshot while promises or slots are being mutated.
+ * recursive reads do not form one atomic snapshot while promises or cells are being mutated.
  */
 private fun EngineResult.Object.sameCompletedObjectResultAs(other: EngineResult.Object): Boolean {
-    val left = implementation
-    val right = other.implementation
-    val leftValues = left.completedValues
-    val rightValues = right.completedValues
-    val leftFieldChecks = left.completedFieldChecks
-    val rightFieldChecks = right.completedFieldChecks
-    val leftTypeCheck = left.completedTypeCheck
-    val rightTypeCheck = right.completedTypeCheck
+    val leftCells = implementation.completedCells
+    val rightCells = other.implementation.completedCells
 
     return type == other.type &&
-        leftValues.keys == rightValues.keys &&
-        leftValues.all { (key, value) ->
-            value.hasSameCompletedResultAs(rightValues.getValue(key))
-        } &&
-        leftFieldChecks == rightFieldChecks &&
-        leftTypeCheck == rightTypeCheck
+        leftCells.keys == rightCells.keys &&
+        leftCells.all { (key, cell) ->
+            cell.hasSameCompletedCellAs(rightCells.getValue(key))
+        }
 }
 
 private fun EngineResult?.requireCompleted() {
@@ -527,7 +611,8 @@ private fun EngineResult?.requireCompleted() {
         null,
         is Value.Simple,
         -> Unit
-        is EngineResult.List -> indices.forEach { index -> get(index).requireCompleted() }
+        is EngineResult.List ->
+            indices.forEach { index -> get(index).implementation.requireCompleted() }
         is EngineResult.Object -> implementation.requireCompleted()
     }
 }
@@ -545,7 +630,7 @@ private fun <K, V> unionMaps(
         }
     }
 
-private fun unionTypeChecks(
+private fun unionAccessAccepted(
     first: Value.Boolean?,
     second: Value.Boolean?,
 ): Value.Boolean? =
@@ -555,7 +640,7 @@ private fun unionTypeChecks(
         else ->
             first.also {
                 require(first == second) {
-                    "Cannot union object engine results with unequal type checks"
+                    "Cannot union cells with unequal access-acceptance results"
                 }
             }
     }
@@ -578,9 +663,6 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
     Promise
         .ofDeferred(validate)
         .also { write(key, it) }
-
-private fun <K : Any, V> OnceStore<K, Promise<V>>.completedValues(): Map<K, V> =
-    snapshot().mapValues { (_, promise) -> promise.get() }
 
 private fun validateObjectField(
     type: Schema.ObjectType,

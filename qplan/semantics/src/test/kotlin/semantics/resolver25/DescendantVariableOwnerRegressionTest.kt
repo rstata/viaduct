@@ -131,23 +131,23 @@ class DescendantVariableOwnerRegressionTest {
         )
         val items =
             resolved
-                .getValue(
+                .getCell(
                     Value.GroundKey.of(
                         world.schema.objectField("Query", "items"),
                         emptyMap(),
                     ),
-                ).get() as EngineResult.List
+                ).getValue().get() as EngineResult.List
         assertEquals(
             listOf(Value.Int.of(13), Value.Int.of(25)),
-            items.map { value ->
-                val item = value as EngineResult.Object
+            items.map { cell ->
+                val item = cell.getValue().get() as EngineResult.Object
                 item
-                    .getValue(
+                    .getCell(
                         Value.GroundKey.of(
                             world.schema.objectField("Item", "result"),
                             emptyMap(),
                         ),
-                    ).get()
+                    ).getValue().get()
             },
         )
     }

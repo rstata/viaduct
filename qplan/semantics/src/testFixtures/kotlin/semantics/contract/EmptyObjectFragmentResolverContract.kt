@@ -32,7 +32,7 @@ interface EmptyObjectFragmentResolverContract :
         assertEquals(
             "Query",
             assertIs<Value.String>(
-                result.getValue(world.schema.contractKey("Query", "__typename")).get(),
+                result.getCell(world.schema.contractKey("Query", "__typename")).get(),
             ).stringValue,
         )
     }
@@ -133,14 +133,14 @@ interface EmptyObjectFragmentResolverContract :
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val items =
             assertIs<EngineResult.List>(
-                result.getValue(world.schema.contractKey("Query", "items")).get(),
+                result.getCell(world.schema.contractKey("Query", "items")).get(),
             )
-        val a = assertIs<EngineResult.Object>(items[0])
-        val b = assertIs<EngineResult.Object>(items[1])
+        val a = assertIs<EngineResult.Object>(items[0].get())
+        val b = assertIs<EngineResult.Object>(items[1].get())
 
         assertEquals(
             Value.Int.of(2),
-            a.getValue(
+            a.getCell(
                 Value.GroundKey.of(
                     world.schema.objectField("A", "computed"),
                     mapOf("factor" to 2),
@@ -149,7 +149,7 @@ interface EmptyObjectFragmentResolverContract :
         )
         assertEquals(
             Value.Int.of(3),
-            b.getValue(world.schema.contractKey("B", "computed")).get(),
+            b.getCell(world.schema.contractKey("B", "computed")).get(),
         )
         assertEquals(listOf("A", "B"), applications)
     }
@@ -193,7 +193,7 @@ interface EmptyObjectFragmentResolverContract :
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val item =
             assertIs<EngineResult.Object>(
-                result.getValue(world.schema.contractKey("Query", "item")).get(),
+                result.getCell(world.schema.contractKey("Query", "item")).get(),
             )
         val concreteDefaultKey =
             Value.GroundKey.of(
@@ -201,7 +201,7 @@ interface EmptyObjectFragmentResolverContract :
                 mapOf("factor" to 7),
             )
 
-        assertEquals(Value.Int.of(7), item.getValue(concreteDefaultKey).get())
+        assertEquals(Value.Int.of(7), item.getCell(concreteDefaultKey).get())
         assertEquals(expectedResultKeys(item.type, setOf(concreteDefaultKey)), item.keys)
     }
 }

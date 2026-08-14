@@ -131,7 +131,7 @@ private fun ResolverContract.resolvePassiveOutputFixture(): PassiveOutputFixture
     val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
     val user =
         assertIs<EngineResult.Object>(
-            result.getValue(world.schema.contractKey("Query", "user")).get(),
+            result.getCell(world.schema.contractKey("Query", "user")).get(),
         )
     return PassiveOutputFixtureResult(
         fieldNames = user.keys.map { it.field.fieldName }.toSet(),
@@ -190,16 +190,16 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
     val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
     val chain =
         assertIs<EngineResult.Object>(
-            result.getValue(world.schema.contractKey("Query", "chain")).get(),
+            result.getCell(world.schema.contractKey("Query", "chain")).get(),
         )
     val next =
         assertIs<EngineResult.Object>(
-            chain.getValue(world.schema.contractKey("Chain", "next")).get(),
+            chain.getCell(world.schema.contractKey("Chain", "next")).get(),
         )
     val nextKey = world.schema.contractKey("Chain", "next")
     return RecursiveOutputFixtureResult(
         fieldNames = next.keys.map { it.field.fieldName }.toSet(),
         hasNext = nextKey in next.keys,
-        nextValue = next.keys.takeIf { nextKey in it }?.let { next.getValue(nextKey).get() },
+        nextValue = next.keys.takeIf { nextKey in it }?.let { next.getCell(nextKey).get() },
     )
 }

@@ -246,18 +246,21 @@ private suspend fun orchestrateObject(
                 objectKey as? Value.GroundKey
                     ?: error("Resolver26 found open arguments on passive key $objectKey")
             val sourceValue: Value.Output? = source.fieldValues.getValue(groundKey)
-            if (!target.isValueSet(groundKey)) {
+            if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(
                         path = path + groundKey,
                         resolverDemand = selection.subselections,
                     )
-                target.setValue(groundKey, resolvedValue.engineResult)
+                target.reserveCell(groundKey).also { cell ->
+                    cell.setValue(resolvedValue.engineResult)
+                    cell.setAccessAccepted(Value.Boolean.of(true))
+                }
             }
             launchPassiveChildOrchestrations(
                 path = path + groundKey,
                 source = sourceValue,
-                target = target.getValue(groundKey).get(),
+                target = target.getCell(groundKey).getValue().get(),
                 initialDemand = selection.subselections,
                 runtime = runtime,
             )
@@ -301,7 +304,7 @@ private suspend fun orchestrateObject(
                     }
 
                 else ->
-                    check(objectKey is Value.GroundKey && target.isValueSet(objectKey)) { // TODO: isValueSet should tolerate Value.Key as input
+                    check(objectKey is Value.GroundKey && target.isCellSet(objectKey)) { // TODO: isValueSet should tolerate Value.Key as input
                         "Resolver26 passive key $objectKey was not materialized by resolveValue"
                     }
             }
@@ -332,10 +335,10 @@ private suspend fun installAndLaunchFieldResolver(
     }
     expansion.completeFromArgumentBindings(groundKey)
 
-    val valuePromise = target.createValuePromise(groundKey)
+    val cell = target.reserveCell(groundKey)
+    cell.createValuePromise()
     diagnosticInstrumentation.registerWriter(
-        target = target,
-        key = groundKey,
+        cell = cell,
         writer = path + groundKey,
     )
     runtime.launchFieldResolutionTask {
@@ -344,7 +347,7 @@ private suspend fun installAndLaunchFieldResolver(
             selection = groundedSelection,
             expansion = expansion,
             target = target,
-            valuePromise = valuePromise,
+            cell = cell,
             runtime = runtime,
         )
     }
@@ -462,7 +465,7 @@ private suspend fun resolveField(
     selection: ObjectSelection,
     expansion: ResolverExpansion,
     target: EngineResult.Object,
-    valuePromise: Promise<EngineResult?>,
+    cell: EngineResult.Cell,
     runtime: ResolverRuntime,
 ) {
     val groundKey = selection.groundKey()
@@ -470,7 +473,8 @@ private suspend fun resolveField(
         "Resolver26 resolveField received passive key $groundKey"
     }
     if (groundKey.arguments.argumentsContainErrorValue()) {
-        valuePromise.complete(Value.Error)
+        cell.getValue().complete(Value.Error)
+        cell.setAccessAccepted(Value.Error)
         return
     }
 
@@ -522,7 +526,8 @@ private suspend fun resolveField(
                 )
             }
         }
-    valuePromise.complete(resolvedValue.engineResult)
+    cell.getValue().complete(resolvedValue.engineResult)
+    cell.setAccessAccepted(Value.Boolean.of(true))
 }
 
 // Returns whether this occurrence is a top-level object or list element in one resolver output.
@@ -584,7 +589,7 @@ private fun launchPassiveChildOrchestrations(
                 launchPassiveChildOrchestrations(
                     path = path + Value.ListIndex.of(index),
                     source = value,
-                    target = target[index],
+                    target = target[index].getValue().get(),
                     initialDemand = initialDemand,
                     runtime = runtime,
                 )

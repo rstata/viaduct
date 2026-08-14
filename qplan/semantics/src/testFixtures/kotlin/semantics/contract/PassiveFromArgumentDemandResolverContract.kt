@@ -133,7 +133,7 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
 
         assertEquals(
             Value.Int.of(1),
-            resolved.getValue(
+            resolved.getCell(
                 Value.GroundKey.of(
                     world.schema.objectField("Query", "result"),
                     mapOf("value" to 7),

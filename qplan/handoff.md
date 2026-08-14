@@ -62,15 +62,17 @@ preparation graph, or hierarchical phase plan. Symbolic descendant demand crosse
 outputs and passive values, so activation below an already published argumentless or passive
 ancestor does not reapply that ancestor's resolver.
 
-Each demand contribution requires every passive field already to have been materialized recursively
-by `resolveValue`; a missing passive field is an invariant failure. It synchronously descends closed
-demand through those existing passive values, then launches coroutines for newly demanded resolver
-and argument-error fields. `resolveField` handles argument errors directly and otherwise strictly
+Each demand contribution reuses passive fields already materialized recursively by `resolveValue`
+and copies missing demanded fields, as at the request root, from the corresponding source
+`Value.Object` through that same materialization path. It synchronously descends closed demand
+through those passive values, then launches coroutines for newly demanded resolver and
+argument-error fields. `resolveField` handles argument errors directly and otherwise strictly
 requires a registered resolver. Resolver fields publish their source output and initial result tree;
 later symbolic demand traverses passive fields through the containing source and
 already-materialized result subtree. Provider readers specialize each interface or union path
-component to the current concrete OER type before grounding it. Every created OER synthesizes its
-concrete `__typename` immediately.
+component to the current concrete OER type before grounding it. Every source `Value.Object`
+intrinsically contains its concrete `__typename`; Resolver26 copies it into an OER only when demand
+selects it.
 
 Resolver26 stores one request-root coroutine scope in its runtime. Every launched coroutine is a direct child of that root, and coroutine completion is not used as a cross-coroutine readiness signal. Cross-coroutine readiness flows only through named latches, promises, or value-bearing deferreds. The synchronous boundary uses a fixed dispatcher selected by the universal Resolver26 test thread count, while an internal validation entry can supply an instrumented dispatcher without changing task ownership. Resolution-time instrumentation is thread-safe; post-resolution validation remains serial. The current decisions are recorded in [`semantics/resolver26/design.md`](./semantics/src/main/kotlin/semantics/resolver26/design.md), and the testing workflow is recorded in [`semantics/resolver26/testing-resolver26.md`](./semantics/src/main/kotlin/semantics/resolver26/testing-resolver26.md).
 

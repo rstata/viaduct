@@ -5,6 +5,7 @@ plugins {
 }
 
 dependencies {
+    implementation(viaductLibs.viaduct.engine.api)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
     testFixturesImplementation("com.graphql-java:graphql-java:26.0")
@@ -19,7 +20,7 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xcontext-parameters")
     }
-    jvmToolchain(21)
+    jvmToolchain(17)
 }
 
 tasks.test {

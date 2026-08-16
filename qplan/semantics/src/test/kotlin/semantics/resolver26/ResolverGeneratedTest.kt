@@ -7,6 +7,7 @@ import model.Value
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
 import semantics.contract.GeneratedCaseAssertions
+import semantics.contract.ListPassiveDeepeningGeneratedResolverContract
 import semantics.contract.MixedVariableGeneratedResolverContract
 import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
@@ -16,6 +17,7 @@ import semantics.contract.ObjectFragmentGeneratedResolverContract
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
     NodeGeneratedResolverContract,
+    ListPassiveDeepeningGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,
     ObjectFragmentFromObjectPathGeneratedResolverContract,

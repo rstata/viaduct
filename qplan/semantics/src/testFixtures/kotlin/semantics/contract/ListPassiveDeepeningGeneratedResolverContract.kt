@@ -1,4 +1,4 @@
-package semantics.resolver03
+package semantics.contract
 
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
@@ -28,12 +28,12 @@ import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.resolverTestBatch
 import semantics.correctresolution.correctResolution
-import semantics.contract.registeredResolverApplicationIdentityCounts
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class ResolverListDeepeningGeneratedTest {
+/** Generated coverage for demand deepening through passive list-valued fields. */
+interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
     @Test
     fun `list-heavy passive deepening worlds resolve with exact witnessed applications`() {
         val counts = TestCaseCount(schemas = 12, registriesPerSchema = 2, queriesPerSchema = 4)
@@ -61,7 +61,7 @@ class ResolverListDeepeningGeneratedTest {
             batch.registries.forEach { registry ->
                 val testWorld = registry.world(batch.schema)
                 batch.queries.forEach { query ->
-                    val world = testWorld.newAssumptions()
+                    val world = testWorld.newAssumptions(selectiveResolvers)
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
                         context(world) {
@@ -72,9 +72,11 @@ class ResolverListDeepeningGeneratedTest {
                         }
                     registry.clearResolutionWitness()
                     val result =
-                        context(world) {
-                            world.objectOf("Query").resolve(fragment.subselections)
-                        }
+                        resolve(
+                            world = world,
+                            root = world.objectOf("Query"),
+                            selections = fragment.subselections,
+                        )
                     val witness = registry.resolutionWitness()
 
                     assertEquals(
@@ -103,7 +105,7 @@ private fun countListPassiveDeepening(
     val incomingByKey = incoming.byGroundKey()
     var count = 0
 
-    incoming.byGroundKey().forEach { (selectedKey, selectedResolver) ->
+    incoming.byGroundKey().forEach { (selectedKey, _) ->
         val field = selectedKey.field
         if (field !in world.resolverRegistry) return@forEach
 
@@ -160,17 +162,17 @@ private fun hasMissingDemand(
             .instantiateBindings()
             .byGroundKey()
             .all { (requirementKey, requirement) ->
-            val match = available[requirementKey]
-            if (match == null) {
-                false
-            } else {
-                val childType = requirementKey.field.typeExpr.baseType as? Schema.CompositeType
-                childType == null ||
-                    !hasMissingDemand(
-                        requirement.subselections,
-                        match.subselections,
-                        childType.possibleTypes,
-                    )
+                val match = available[requirementKey]
+                if (match == null) {
+                    false
+                } else {
+                    val childType = requirementKey.field.typeExpr.baseType as? Schema.CompositeType
+                    childType == null ||
+                        !hasMissingDemand(
+                            requirement.subselections,
+                            match.subselections,
+                            childType.possibleTypes,
+                        )
+                }
             }
-        }
     }

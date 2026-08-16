@@ -35,7 +35,7 @@ val resolverBenchmarkLoopCount =
 val resolverBenchmarkCorpusSeed =
     providers.gradleProperty("resolverBenchmarkCorpusSeed").orElse("1")
 val resolverBenchmarkCorpusSize =
-    providers.gradleProperty("resolverBenchmarkCorpusSize").orElse("20:10:100")
+    providers.gradleProperty("resolverBenchmarkCorpusSize").orElse("10:5:10")
 val resolverBenchmarkCorpusDirectory =
     layout.projectDirectory.dir("src/jmh/resources/semantics/benchmark/current-profile")
 

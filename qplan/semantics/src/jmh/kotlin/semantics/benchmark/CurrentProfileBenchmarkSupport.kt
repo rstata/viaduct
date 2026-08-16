@@ -150,9 +150,14 @@ internal class CurrentProfileBenchmarkSupport(
                         observation.variableArgumentCount.toLong()
                     }
                 variableArgumentCounts += queryVariableArgumentCounts.filter { count -> count > 0 }
-                val shape = result.shape()
+                val shape =
+                    context(world) {
+                        result.shape()
+                    }
                 OverheadSample(
                     fields = shape.fields,
+                    activeFields = shape.activeFields,
+                    passiveFields = shape.passiveFields,
                     resolverExecutions = witness.applications.size.toLong(),
                     variableBearingResolverExecutions =
                         queryVariableArgumentCounts.count { count -> count > 0 }.toLong(),
@@ -169,6 +174,21 @@ internal class CurrentProfileBenchmarkSupport(
                 appendLine(
                     "  fields returned: " +
                         samples.statistics(OverheadSample::fields),
+                )
+                appendLine(
+                    "  active fields returned: " +
+                        samples.statistics(OverheadSample::activeFields),
+                )
+                appendLine(
+                    "  passive fields returned: " +
+                        samples.statistics(OverheadSample::passiveFields),
+                )
+                appendLine(
+                    "  passive fields per active field: " +
+                        samples.ratioStatistics(
+                            numerator = OverheadSample::passiveFields,
+                            denominator = OverheadSample::activeFields,
+                        ),
                 )
                 appendLine(
                     "  resolvers executed: " +
@@ -196,10 +216,11 @@ internal class CurrentProfileBenchmarkSupport(
                             percentileName = "p50",
                         ),
                 )
-                append(
+                appendLine(
                     "  result depth: " +
                         samples.statistics(OverheadSample::depth),
                 )
+                appendRegistryStatistics()
             }
         val reportFile = System.getProperty(REPORT_FILE_PROPERTY)
         if (reportFile == null) {
@@ -265,32 +286,65 @@ internal class CurrentProfileBenchmarkSupport(
 
     private data class ResultShape(
         val fields: Long,
+        val activeFields: Long,
+        val passiveFields: Long,
         val depth: Int,
     )
 
     private data class OverheadSample(
         val fields: Long,
+        val activeFields: Long,
+        val passiveFields: Long,
         val resolverExecutions: Long,
         val variableBearingResolverExecutions: Long,
         val variableStackDepth: Long,
         val depth: Long,
     )
 
+    context(world: Assumptions)
     private fun EngineResult?.shape(depth: Int = 0): ResultShape =
         when (this) {
-            null, is Value.Simple -> ResultShape(fields = 0, depth = depth)
+            null, is Value.Simple ->
+                ResultShape(
+                    fields = 0,
+                    activeFields = 0,
+                    passiveFields = 0,
+                    depth = depth,
+                )
             is EngineResult.List ->
                 indices
                     .map { index -> get(index).getValue().get().shape(depth) }
-                    .fold(ResultShape(fields = 0, depth = depth)) { result, child ->
+                    .fold(
+                        ResultShape(
+                            fields = 0,
+                            activeFields = 0,
+                            passiveFields = 0,
+                            depth = depth,
+                        ),
+                    ) { result, child ->
                         result.combine(child)
                     }
             is EngineResult.Object ->
                 keys
                     .map { key ->
                         val child = getCell(key).getValue().get().shape(depth + 1)
-                        child.copy(fields = child.fields + 1)
-                    }.fold(ResultShape(fields = 0, depth = depth)) { result, child ->
+                        child.copy(
+                            fields = child.fields + 1,
+                            activeFields =
+                                child.activeFields +
+                                    if (key.field in world.resolverRegistry) 1 else 0,
+                            passiveFields =
+                                child.passiveFields +
+                                    if (key.field in world.resolverRegistry) 0 else 1,
+                        )
+                    }.fold(
+                        ResultShape(
+                            fields = 0,
+                            activeFields = 0,
+                            passiveFields = 0,
+                            depth = depth,
+                        ),
+                    ) { result, child ->
                         result.combine(child)
                     }
         }
@@ -298,8 +352,42 @@ internal class CurrentProfileBenchmarkSupport(
     private fun ResultShape.combine(other: ResultShape): ResultShape =
         ResultShape(
             fields = fields + other.fields,
+            activeFields = activeFields + other.activeFields,
+            passiveFields = passiveFields + other.passiveFields,
             depth = maxOf(depth, other.depth),
         )
+
+    private fun StringBuilder.appendRegistryStatistics() {
+        val activeFieldsPerObject =
+            corpus.schema.sourceFieldCoordinatesByObject.values.map { fields ->
+                fields.count(corpus.registry.fieldResolverCoordinates::contains).toLong()
+            }
+        val passiveFieldsPerObject =
+            corpus.schema.sourceFieldCoordinatesByObject.values.map { fields ->
+                fields.count { field -> field !in corpus.registry.fieldResolverCoordinates }.toLong()
+            }
+        val objectFragmentSelections =
+            corpus.registry.objectFragmentSelectionCounts().map(Int::toLong)
+        val objectFragmentDepths =
+            corpus.registry.objectFragmentDepths().map(Int::toLong)
+        appendLine("Resolver benchmark registry statistics:")
+        appendLine(
+            "  active fields per non-Query object: " +
+                activeFieldsPerObject.statistics(value = { it }),
+        )
+        appendLine(
+            "  passive fields per non-Query object: " +
+                passiveFieldsPerObject.statistics(value = { it }),
+        )
+        appendLine(
+            "  selections per object fragment: " +
+                objectFragmentSelections.statistics(value = { it }),
+        )
+        append(
+            "  object fragment depth: " +
+                objectFragmentDepths.statistics(value = { it }),
+        )
+    }
 
     private fun <T> List<T>.statistics(
         value: (T) -> Long,
@@ -313,6 +401,23 @@ internal class CurrentProfileBenchmarkSupport(
         return "average=%.2f, $percentileName=%d, max=%d".format(
             Locale.ROOT,
             average,
+            values[percentileIndex],
+            values.last(),
+        )
+    }
+
+    private fun <T> List<T>.ratioStatistics(
+        numerator: (T) -> Long,
+        denominator: (T) -> Long,
+    ): String {
+        val values =
+            map { sample ->
+                numerator(sample).toDouble() / denominator(sample).coerceAtLeast(1)
+            }.sorted()
+        val percentileIndex = ceil(values.size * 0.9).toInt().coerceAtLeast(1) - 1
+        return "average=%.2f, p90=%.2f, max=%.2f".format(
+            Locale.ROOT,
+            values.average(),
             values[percentileIndex],
             values.last(),
         )

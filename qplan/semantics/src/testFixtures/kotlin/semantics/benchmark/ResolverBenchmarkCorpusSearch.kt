@@ -1,6 +1,7 @@
 package semantics.benchmark
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.TimeoutCancellationException
 import model.EngineResult
 import model.Fragment
 import model.Value
@@ -12,6 +13,7 @@ import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.ArbitrarySchema
 import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.ResolverTestCase
+import semantics.arbitrary.ResolutionWitnessBoundExceededException
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.encodeResolverBenchmarkCorpus
@@ -68,12 +70,29 @@ object ResolverBenchmarkCorpusSearch {
                 candidates.getOrPut(key) {
                     Candidate(testCase.schema, testCase.registry)
                 }
-            candidate.observe(testWorld.newAssumptions(selectiveResolvers = true), testCase)
+            if (!candidate.disqualified) {
+                try {
+                    candidate.observe(
+                        testWorld.newAssumptions(selectiveResolvers = true),
+                        testCase,
+                    )
+                } catch (_: TimeoutCancellationException) {
+                    candidate.disqualified = true
+                } catch (_: ResolutionWitnessBoundExceededException) {
+                    candidate.disqualified = true
+                }
+            }
         }
         require(candidates.isNotEmpty()) {
             "Resolver benchmark corpus search produced no candidates"
         }
-        return candidates.values.maxBy(Candidate::score)
+        val shapeEligible = candidates.values.filter(Candidate::meetsRegistryShapeTargets)
+        val workloadEligible = shapeEligible.filter(Candidate::meetsWorkloadTargets)
+        return (
+            workloadEligible.ifEmpty {
+                shapeEligible.ifEmpty { candidates.values }
+            }
+        ).maxBy(Candidate::score)
     }
 
     private fun Candidate.observe(
@@ -266,6 +285,47 @@ object ResolverBenchmarkCorpusSearch {
         val schema: ArbitrarySchema,
         val registry: ArbitraryRegistry,
     ) {
+        var disqualified: Boolean = false
+        private val objectFragmentSelectionCounts =
+            registry.objectFragmentSelectionCounts().map(Int::toLong)
+        private val objectFragmentDepths =
+            registry.objectFragmentDepths().map(Int::toLong)
+        private val activeFieldCount = registry.fieldResolverCoordinates.size.toLong()
+        private val passiveFieldCount =
+            (schema.sourceFieldCoordinates.size - registry.fieldResolverCoordinates.size)
+                .toLong()
+        private val passiveFieldsPerActiveFieldTimes100 =
+            if (activeFieldCount == 0L) 0 else passiveFieldCount * 100 / activeFieldCount
+        private val averageActiveFieldsPerObjectTimes100 =
+            (
+                schema.sourceFieldCoordinatesByObject.values
+                    .map { fields -> fields.count(registry.fieldResolverCoordinates::contains) }
+                    .average() * 100
+            ).toLong()
+        private val averagePassiveFieldsPerObjectTimes100 =
+            (
+                schema.sourceFieldCoordinatesByObject.values
+                    .map { fields -> fields.count { field -> field !in registry.fieldResolverCoordinates } }
+                    .average() * 100
+            ).toLong()
+        private val averageObjectFragmentSelectionsTimes100 =
+            (objectFragmentSelectionCounts.average() * 100).toLong()
+        private val p90ObjectFragmentSelections =
+            objectFragmentSelectionCounts.percentile(0.9)
+        private val maximumObjectFragmentSelections =
+            objectFragmentSelectionCounts.maxOrNull() ?: 0
+
+        fun meetsRegistryShapeTargets(): Boolean =
+            !disqualified &&
+                passiveFieldsPerActiveFieldTimes100 in 400..700 &&
+                averageActiveFieldsPerObjectTimes100 in 150..250 &&
+                averagePassiveFieldsPerObjectTimes100 in 1_200..1_600 &&
+                averageObjectFragmentSelectionsTimes100 in 350..500 &&
+                p90ObjectFragmentSelections >= 10 &&
+                maximumObjectFragmentSelections >= 30 &&
+                registry.features.fromArgumentVariableCount > 0 &&
+                registry.features.fromObjectFieldVariableCount > 0
+
         var queryCount: Int = 0
         var totalResultFields: Long = 0
         var maximumResultFields: Long = 0
@@ -287,27 +347,68 @@ object ResolverBenchmarkCorpusSearch {
         var queriesWithAliasConvergence: Int = 0
         val distinctResolverFields: MutableSet<FieldCoordinate> = linkedSetOf()
 
+        fun meetsWorkloadTargets(): Boolean =
+            queryCount > 0 &&
+                totalResultFields / queryCount >= 1_000 &&
+                resolverApplicationsPerQuery.average() >= 100 &&
+                activatedFromArgumentApplications > 0 &&
+                activatedFromPathApplications > 0 &&
+                maximumVariableStackDepth > 0
+
         fun score(): Long {
+            if (disqualified) return Long.MIN_VALUE
             val averageResultFields =
                 if (queryCount == 0) 0 else totalResultFields / queryCount
             val averageResolverApplications = resolverApplicationsPerQuery.average().toLong()
             val medianVariableBearingApplications =
                 variableBearingResolverApplicationsPerQuery.percentile(0.5)
             val workloadScore =
-                closeness(averageResultFields, target = 10_000, radius = 25_000) * 10_000L +
-                    closeness(maximumResultFields, target = 20_000, radius = 80_000) * 1_000L +
+                closeness(averageResultFields, target = 2_500, radius = 5_000) * 100_000L +
+                    closeness(maximumResultFields, target = 5_000, radius = 20_000) * 10_000L +
                     closeness(maximumNonListFields, target = 75, radius = 500) * 10_000L +
                     closeness(
                         averageResolverApplications,
-                        target = 2_000,
-                        radius = 5_000,
-                    ) * 100_000L
+                        target = 300,
+                        radius = 1_000,
+                    ) * 500_000L
             val variableWorkloadScore =
                 medianVariableBearingApplications.coerceAtMost(10) * 40_000_000L +
                     (medianVariableBearingApplications - 10)
-                        .coerceAtLeast(0) * 2_000_000L +
+                        .coerceAtLeast(0) * 100_000L +
                     maximumVariableStackDepth * 100_000_000L +
                     (variableArgumentCounts.maxOrNull() ?: 0) * 1_000_000L
+            val registryShapeScore =
+                if (meetsRegistryShapeTargets()) {
+                    0
+                } else {
+                    closeness(
+                        passiveFieldsPerActiveFieldTimes100,
+                        target = 500,
+                        radius = 700,
+                    ) * 2_000_000L +
+                        closeness(
+                            averageActiveFieldsPerObjectTimes100,
+                            target = 200,
+                            radius = 200,
+                        ) * 1_000_000L +
+                        closeness(
+                            averagePassiveFieldsPerObjectTimes100,
+                            target = 1_400,
+                            radius = 1_000,
+                        ) * 500_000L +
+                        closeness(
+                            averageObjectFragmentSelectionsTimes100,
+                            target = 400,
+                            radius = 400,
+                        ) * 2_000_000L +
+                        p90ObjectFragmentSelections.coerceAtMost(10) * 30_000_000L +
+                        (p90ObjectFragmentSelections - 10).coerceAtLeast(0) * 1_000_000L +
+                        closeness(
+                            maximumObjectFragmentSelections,
+                            target = 35,
+                            radius = 35,
+                        ) * 10_000_000L
+                }
             val featureScore =
                 registry.features.fromArgumentVariableCount * 50L +
                     registry.features.fromObjectFieldVariableCount * 100L +
@@ -326,10 +427,10 @@ object ResolverBenchmarkCorpusSearch {
                     queriesWithAliasConvergence * 20L
             return workloadScore +
                 variableWorkloadScore +
+                registryShapeScore +
                 maximumQueryDepth * 100_000L +
                 featureScore +
-                diversityScore -
-                kotlin.math.abs(averageResolverApplications - 2_000L) * 3_000_000L
+                diversityScore
         }
 
         fun metrics(
@@ -384,6 +485,26 @@ object ResolverBenchmarkCorpusSearch {
                     registry.features.maximumFromObjectFieldVariableUseDepth.toLong(),
                 "ownerDependencies" to
                     registry.fromObjectFieldVariableOwnerDependencies.size.toLong(),
+                "activeSchemaFields" to activeFieldCount,
+                "passiveSchemaFields" to passiveFieldCount,
+                "passiveFieldsPerActiveFieldTimes100" to
+                    passiveFieldsPerActiveFieldTimes100,
+                "averageActiveFieldsPerObjectTimes100" to
+                    averageActiveFieldsPerObjectTimes100,
+                "averagePassiveFieldsPerObjectTimes100" to
+                    averagePassiveFieldsPerObjectTimes100,
+                "objectFragmentSelections" to objectFragmentSelectionCounts.sum(),
+                "averageObjectFragmentSelectionsTimes100" to
+                    averageObjectFragmentSelectionsTimes100,
+                "p90ObjectFragmentSelections" to
+                    p90ObjectFragmentSelections,
+                "maximumObjectFragmentSelections" to
+                    maximumObjectFragmentSelections,
+                "averageObjectFragmentDepthTimes100" to
+                    (objectFragmentDepths.average() * 100).toLong(),
+                "p90ObjectFragmentDepth" to objectFragmentDepths.percentile(0.9),
+                "maximumObjectFragmentDepth" to
+                    (objectFragmentDepths.maxOrNull() ?: 0),
             )
 
         private fun closeness(

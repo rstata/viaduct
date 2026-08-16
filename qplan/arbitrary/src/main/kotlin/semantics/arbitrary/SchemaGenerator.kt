@@ -40,6 +40,22 @@ class ArbitrarySchema internal constructor(
     val domainObjectTypeNames: Set<String> =
         objects.mapTo(linkedSetOf(), ObjectDefinition::name)
 
+    /** User-domain fields eligible to be active or passive, excluding generated hash fields. */
+    val sourceFieldCoordinates: Set<FieldCoordinate> =
+        (listOf(query) + objects)
+            .flatMap(ObjectDefinition::fields)
+            .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+            .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate)
+
+    /** User-domain fields by non-Query object type, excluding generated hash fields. */
+    val sourceFieldCoordinatesByObject: Map<String, Set<FieldCoordinate>> =
+        objects.associate { objectType ->
+            objectType.name to
+                objectType.fields
+                    .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+                    .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate)
+        }
+
     internal val allObjects: List<ObjectDefinition>
         get() = listOf(query) + objects + hashType
 
@@ -510,7 +526,7 @@ private class SchemaGenerator(
         val useObject =
             !forceScalar &&
                 availableObjectTargets.isNotEmpty() &&
-                (preferObject || chance(0.45))
+                (preferObject || chance(config[ObjectOutputFieldWeight]))
         val namedType =
             if (useObject) {
                 Arb.element(availableObjectTargets).next(random)

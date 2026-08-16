@@ -187,6 +187,35 @@ class GeneratorTest {
     }
 
     @Test
+    fun `resolver fragment selection targets produce a long tail`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 12..12) +
+                (ObjectFieldCount to 10..10) +
+                (QueryFieldCount to 12..12) +
+                (FieldArgumentWeight to 0.05) +
+                (ExplicitFieldResolverWeight to 0.05) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 8) +
+                (ResolverFragmentSelectionCount to 1..2) +
+                (ResolverFragmentLongTailWeight to 0.2) +
+                (ResolverFragmentLongTailSelectionCount to 10..35)
+        val random = RandomSource.seeded(8675309L)
+        val counts =
+            buildList {
+                repeat(5) {
+                    val schema = Arb.schema(config).next(random)
+                    val registry = schema.registry(config).next(random)
+                    addAll(registry.objectFragmentSelectionCounts())
+                }
+            }.sorted()
+
+        assertTrue(counts.average() >= 4.0)
+        assertTrue(counts[(counts.size * 0.9).toInt()] >= 10)
+        assertTrue(counts.max() >= 30)
+    }
+
+    @Test
     fun `abstract selections can omit concrete implementation defaults`() {
         val config =
             Config.default +

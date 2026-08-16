@@ -196,6 +196,14 @@ class ArbitraryRegistry internal constructor(
         canonicalField.isNodeLoader(schema) ||
             objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
 
+    /** Recursive selection counts for every generated field-resolver object fragment. */
+    fun objectFragmentSelectionCounts(): List<Int> =
+        objectFragments.values.map(FragmentPlan::selectionCount)
+
+    /** Longest selection-path depths for every generated field-resolver object fragment. */
+    fun objectFragmentDepths(): List<Int> =
+        objectFragments.values.map(FragmentPlan::selectionDepth)
+
     fun nodeLoaderPossibleTypes(
         schema: ArbitrarySchema,
         canonicalField: FieldCoordinate,
@@ -680,6 +688,7 @@ private class RegistryGenerator(
                             .filterTo(linkedSetOf()) { owner ->
                                 owner.typeName == consumer.typeName
                             },
+                    targetSelectionCount = resolverFragmentSelectionCount(),
                 ),
         )
         return fragment
@@ -693,6 +702,7 @@ private class RegistryGenerator(
         ranks: Map<FieldCoordinate, Int>,
         depth: Int,
         preferredTopLevelFields: Set<FieldCoordinate> = emptySet(),
+        targetSelectionCount: Int? = null,
     ): List<FragmentSelectionPlan> {
         if (depth >= config[ResolverFragmentDepth]) {
             return listOf(
@@ -715,6 +725,7 @@ private class RegistryGenerator(
                         consumerRank = consumerRank,
                         ranks = ranks,
                         depth = depth,
+                        targetSelectionCount = targetSelectionCount,
                     ).take(1)
                         .map { selection -> selection.copy(typeCondition = concrete.name) }
                 }.ifEmpty {
@@ -744,7 +755,12 @@ private class RegistryGenerator(
                 ),
             )
         }
-        val count = Arb.int(1..minOf(2, candidates.size)).next(random)
+        val untargetedSelectionCount =
+            if (targetSelectionCount == null) {
+                Arb.int(1..minOf(2, candidates.size)).next(random)
+            } else {
+                null
+            }
         val preferredField =
             candidates
                 .filter { field ->
@@ -756,13 +772,51 @@ private class RegistryGenerator(
                     depth == 0 &&
                         chance(config[ResolverFromObjectFieldVariableOwnerUseWeight])
                 }
-        return (
-            listOfNotNull(preferredField) +
+        val preferredArgumentField =
+            if (config[ResolverFragmentArgumentFieldWeight] > 0.0) {
                 candidates
-                    .filterNot { field -> field == preferredField }
-                    .shuffled(random)
-                    .take(count - if (preferredField == null) 0 else 1)
-        )
+                    .filter { field ->
+                        field != preferredField && field.arguments.isNotEmpty()
+                    }.shuffled(random)
+                    .firstOrNull()
+                    ?.takeIf {
+                        chance(config[ResolverFragmentArgumentFieldWeight])
+                    }
+            } else {
+                null
+            }
+        val preferredFields =
+            listOfNotNull(preferredField, preferredArgumentField)
+        val selectedFields =
+            if (targetSelectionCount == null) {
+                val count = requireNotNull(untargetedSelectionCount)
+                preferredFields.take(count) +
+                    candidates
+                        .filterNot { field -> field in preferredFields }
+                        .shuffled(random)
+                        .take((count - preferredFields.size).coerceAtLeast(0))
+            } else {
+                targetedFragmentFields(
+                    candidates = candidates,
+                    preferredFields = preferredFields,
+                    targetSelectionCount = targetSelectionCount,
+                )
+            }
+        if (selectedFields.isEmpty()) {
+            return listOf(
+                FragmentSelectionPlan(
+                    fieldName = "__typename",
+                    arguments = emptyMap(),
+                    subselections = emptyList(),
+                ),
+            )
+        }
+        val childSelectionCounts =
+            targetedChildSelectionCounts(
+                selectedFields = selectedFields,
+                targetSelectionCount = targetSelectionCount,
+            )
+        return selectedFields
             .map { field ->
                 FragmentSelectionPlan(
                     fieldName = field.name,
@@ -812,11 +866,75 @@ private class RegistryGenerator(
                                     consumerRank = consumerRank,
                                     ranks = ranks,
                                     depth = depth + 1,
+                                    targetSelectionCount = childSelectionCounts[field],
                                 )
                             }
                         }.orEmpty(),
                 )
             }
+    }
+
+    private fun resolverFragmentSelectionCount(): Int? {
+        val ordinary = config[ResolverFragmentSelectionCount]
+        val longTail = config[ResolverFragmentLongTailSelectionCount]
+        val selectedRange =
+            if (
+                longTail != 0..0 &&
+                chance(config[ResolverFragmentLongTailWeight])
+            ) {
+                longTail
+            } else {
+                ordinary
+            }
+        return selectedRange
+            .takeUnless { range -> range == 0..0 }
+            ?.let { range -> Arb.int(range).next(random).coerceAtLeast(1) }
+    }
+
+    private fun targetedFragmentFields(
+        candidates: List<FieldDefinitionSpec>,
+        preferredFields: List<FieldDefinitionSpec>,
+        targetSelectionCount: Int,
+    ): List<FieldDefinitionSpec> {
+        val ordered =
+            (
+                preferredFields +
+                    candidates
+                        .filterNot { field -> field in preferredFields }
+                        .shuffled(random)
+                        .sortedByDescending { field -> schema.isComposite(field.type.namedType) }
+            ).distinct()
+        val selected = mutableListOf<FieldDefinitionSpec>()
+        var minimumSelectionCount = 0
+        ordered.forEach { field ->
+            if (selected.size == 2) return@forEach
+            val fieldMinimum =
+                if (schema.isComposite(field.type.namedType)) 2 else 1
+            if (minimumSelectionCount + fieldMinimum <= targetSelectionCount) {
+                selected += field
+                minimumSelectionCount += fieldMinimum
+            }
+        }
+        return selected
+    }
+
+    private fun targetedChildSelectionCounts(
+        selectedFields: List<FieldDefinitionSpec>,
+        targetSelectionCount: Int?,
+    ): Map<FieldDefinitionSpec, Int> {
+        if (targetSelectionCount == null) return emptyMap()
+        val compositeFields =
+            selectedFields.filter { field -> schema.isComposite(field.type.namedType) }
+        if (compositeFields.isEmpty()) return emptyMap()
+        val minimumSelectionCount = selectedFields.size + compositeFields.size
+        var extras = (targetSelectionCount - minimumSelectionCount).coerceAtLeast(0)
+        val childCounts = compositeFields.associateWith { 1 }.toMutableMap()
+        while (extras > 0) {
+            val field = compositeFields[Arb.int(compositeFields.indices).next(random)]
+            childCounts[field] = childCounts.getValue(field) + 1
+            extras -= 1
+        }
+        return childCounts
     }
 
     private fun FragmentPlan.withFromArgumentVariableProvider(
@@ -1124,8 +1242,10 @@ private class RegistryGenerator(
         consumerRank: Int,
         ranks: Map<FieldCoordinate, Int>,
         visitedTypes: Set<String> = emptySet(),
+        maximumPathLength: Int =
+            config[ResolverFromObjectFieldProviderPathLength].last,
     ): List<FragmentSelectionPlan> =
-        if (ownerName in visitedTypes) {
+        if (ownerName in visitedTypes || maximumPathLength <= 0) {
             emptyList()
         } else {
         schema
@@ -1150,6 +1270,7 @@ private class RegistryGenerator(
                         )
 
                     !field.type.list &&
+                        maximumPathLength > 1 &&
                         schema.isComposite(field.type.namedType) &&
                         (!field.type.nullable || target.acceptsNullableTraversal) ->
                         variableProviderPaths(
@@ -1158,6 +1279,7 @@ private class RegistryGenerator(
                             consumerRank = consumerRank,
                             ranks = ranks,
                             visitedTypes = visitedTypes + ownerName,
+                            maximumPathLength = maximumPathLength - 1,
                         ).map { nested ->
                             FragmentSelectionPlan(
                                 fieldName = field.name,
@@ -1429,6 +1551,12 @@ internal data class FragmentPlan(
     fun errorArgumentCount(): Int =
         selections.sumOf(FragmentSelectionPlan::errorArgumentCount)
 
+    fun selectionCount(): Int =
+        selections.sumOf(FragmentSelectionPlan::selectionCount)
+
+    fun selectionDepth(): Int =
+        selections.maxOfOrNull(FragmentSelectionPlan::selectionDepth) ?: 0
+
     fun source(): String =
         if (selections.isEmpty()) {
             ""
@@ -1489,6 +1617,12 @@ internal data class FragmentSelectionPlan(
     fun errorArgumentCount(): Int =
         arguments.values.count { value -> value is ErrorInputPlan } +
             subselections.sumOf(FragmentSelectionPlan::errorArgumentCount)
+
+    fun selectionCount(): Int =
+        1 + subselections.sumOf(FragmentSelectionPlan::selectionCount)
+
+    fun selectionDepth(): Int =
+        1 + (subselections.maxOfOrNull(FragmentSelectionPlan::selectionDepth) ?: 0)
 }
 
 private fun List<FragmentSelectionPlan>.materialize(

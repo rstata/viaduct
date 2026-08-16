@@ -5,7 +5,6 @@ import model.EngineResult
 import model.SelectionForest
 import semantics.DepthFirstReactor
 import semantics.ReactorEventObserver
-import semantics.SelectionCompletion
 import semantics.RuntimeSupport
 
 /**
@@ -27,9 +26,7 @@ internal fun resolve(
     }
     val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
-        RuntimeSupport { selections ->
-            SelectionCompletion(selections)
-        }
+        RuntimeSupport { selections -> selections }
     return context(runtimeSupport) {
         DepthFirstReactor(
             source = source,

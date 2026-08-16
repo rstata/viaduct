@@ -25,7 +25,7 @@ class RuntimeSupportTest {
                 fixture.support.complete(selections)
             }
 
-        assertEquals(selections, completion.selections)
+        assertEquals(selections, completion)
     }
 
     @Test
@@ -183,9 +183,7 @@ class RuntimeSupportTest {
     fun `default support ignores writer registration and cycle checks`() {
         val fixture = Fixture()
         val support =
-            RuntimeSupport { selections ->
-                SelectionCompletion(selections)
-            }
+            RuntimeSupport { selections -> selections }
 
         support.registerWriter(
             cell = fixture.cell("first"),
@@ -211,9 +209,7 @@ class RuntimeSupportTest {
                 ).assumptions
         val target = EngineResult.Object.of(world.schema.query, mutable = true)
         val support =
-            RuntimeSupport.cycleChecking { selections ->
-                SelectionCompletion(selections)
-            }
+            RuntimeSupport.cycleChecking { selections -> selections }
 
         fun key(name: String): Value.GroundKey =
             Value.GroundKey.of(

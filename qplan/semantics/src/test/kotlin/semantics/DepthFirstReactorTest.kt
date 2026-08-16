@@ -31,9 +31,7 @@ class DepthFirstReactorTest {
         val coordinate = listOf<PathComponent>(selection.groundKey())
         val events = mutableListOf<ReactorEvent>()
         val runtimeSupport =
-            RuntimeSupport { demand ->
-                SelectionCompletion(demand)
-            }
+            RuntimeSupport { demand -> demand }
 
         context(world, runtimeSupport) {
             DepthFirstReactor(
@@ -109,9 +107,7 @@ class DepthFirstReactorTest {
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
         val runtimeSupport =
-            RuntimeSupport { demand ->
-                SelectionCompletion(demand)
-            }
+            RuntimeSupport { demand -> demand }
         val reactor =
             context(world, runtimeSupport) {
                 DepthFirstReactor(

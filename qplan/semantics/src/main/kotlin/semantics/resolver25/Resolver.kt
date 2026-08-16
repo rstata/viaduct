@@ -516,7 +516,7 @@ private class ObjectResultOrchestrator(
         }
         val resolverInputs =
             addDemand(
-                resolver.stampedObjectFragment(coordinate),
+                resolver.stampVars(coordinate),
                 consumerCoordinate = coordinate,
             )
         definitions.forEach { definition ->

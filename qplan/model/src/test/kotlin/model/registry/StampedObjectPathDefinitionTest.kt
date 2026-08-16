@@ -352,7 +352,7 @@ class StampedObjectPathDefinitionTest {
             )
         val markedContainer =
             resolver
-                .stampedObjectFragment(listOf(resultKey))
+                .stampVars(listOf(resultKey))
                 .filter { selection ->
                     selection.key is Value.VariableKey &&
                         selection.key.field.fieldName == "container"

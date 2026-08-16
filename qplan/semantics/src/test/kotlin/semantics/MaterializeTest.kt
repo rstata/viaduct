@@ -139,7 +139,7 @@ class MaterializeTest {
             }
         val cycleCheckingSupport =
             RuntimeSupport.cycleChecking { completedSelections ->
-                SelectionCompletion(completedSelections)
+                completedSelections
             }
         cycleCheckingSupport.registerWriter(
             cell = valueCell,

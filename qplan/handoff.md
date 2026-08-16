@@ -28,7 +28,7 @@ The recursive resolvers share this constructor and differ only at output boundar
 | Resolver02 | Nonempty fragments, including `FromArgument` | Complete output with `successorBoundaryDemand()` |
 | Resolver03 | Nonempty fragments, including `FromArgument` | Selective output with full `successorDemand()` |
 
-Resolver01/02 require non-selective worlds, while Resolver03 requires a selective world. Their queue and coroutine counterparts enforce the corresponding mode through `Assumptions.selectiveResolvers`; selection completion carries only boundary-dependent demand and complete-output retention.
+Resolver01/02 require non-selective worlds, while Resolver03 requires a selective world. Their queue and coroutine counterparts enforce the corresponding mode through `Assumptions.selectiveResolvers`; runtime selection completion computes only boundary-dependent demand, while the world mode determines complete versus selective resolver invocation and output construction.
 
 Resolver06-08 mirror Resolver01-03 through a single-threaded `DepthFirstReactor`. `SlotOrchestrator` tasks close local demand and enqueue dependency-ordered slots; `SlotResolver` tasks execute one slot, publish its passive result tree, and enqueue its fringe. A stable priority queue orders tasks by longest containing-OER path, resolver-before-orchestrator task kind, and insertion order, reproducing the recursive constructor's depth-first traversal without recursive scheduling. Resolver08 uses selective output with full `successorDemand()`.
 

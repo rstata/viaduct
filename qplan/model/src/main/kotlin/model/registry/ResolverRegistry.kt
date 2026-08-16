@@ -70,15 +70,6 @@ class FieldResolver private constructor(
     private val selectionOccurrenceIds: Map<Selection, SelectionOccurrenceId> =
         objectFragment.selectionOccurrenceIds()
 
-    private val objectFragmentTemplate: SelectionForest =
-        objectFragment.templateArguments()
-
-    /**
-     * Returns this resolver's fixed object-fragment shape with every variable-bearing selection
-     * represented as an uninstantiated argument template. Pre-grounded arguments remain ordinary.
-     */
-    fun template(): SelectionForest = objectFragmentTemplate
-
     /**
      * Returns the exact object fragment with every variable template stamped at [path], while
      * retaining ordinary unstamped arguments for compatibility with existing resolvers.
@@ -107,11 +98,6 @@ class FieldResolver private constructor(
                 }.concatenateSelectionForests()
         return stampedFragment + pathVarSelections
     }
-
-    /** Legacy name for path-stamped resolver fragments. */
-    fun stampedObjectFragment(
-        path: List<PathComponent>,
-    ): SelectionForest = stampVars(path)
 
     /**
      * Returns the object fragment with each variable-bearing source selection stamped at [path].
@@ -240,18 +226,6 @@ class FieldResolver private constructor(
     }
 
     /**
-     * Applies this field resolver with an observed demand while retaining its complete output.
-     */
-    fun completeOutput(
-        input: Value.Object,
-        arguments: Value.Arguments,
-        selections: SelectionForest,
-    ): Value.Output? {
-        applicationObserver(input, arguments, selections)
-        return function(input, arguments).synthesizeTypenames()
-    }
-
-    /**
      * Applies this field resolver and returns its complete finite selection-independent output.
      */
     operator fun invoke(
@@ -375,26 +349,6 @@ private fun SelectionForest.stampVariables(
                     ),
                 possibleTypes = selection.possibleTypes,
                 subselections = selection.subselections.stampVariables(path),
-            ),
-        )
-    }
-
-private fun SelectionForest.templateArguments(): SelectionForest =
-    flatMap { selection ->
-        selectionForestOf(
-            Selection.of(
-                key =
-                    Value.Key.of(
-                        field = selection.key.field,
-                        arguments =
-                            if (selection.key.arguments.variableTemplates().isEmpty()) {
-                                selection.key.arguments
-                            } else {
-                                OpenArguments.Template.of(selection.key.arguments)
-                            },
-                    ),
-                possibleTypes = selection.possibleTypes,
-                subselections = selection.subselections.templateArguments(),
             ),
         )
     }

@@ -11,11 +11,6 @@ import model.groundKey
 import model.registry.demandsFromSibling
 import semantics.correctresolution.argumentsContainErrorValue
 
-internal data class SelectionCompletion(
-    val selections: SelectionForest,
-    val retainCompleteOutput: Boolean = false,
-)
-
 /**
  * Resolves [selections] at this exact object occurrence, extending [resolved].
  *
@@ -115,8 +110,7 @@ internal fun Value.Object.resolveKey(
         }
 
         else -> {
-            val completion = runtimeSupport.complete(fieldSelection.subselections)
-            val resolutionSelections = completion.selections
+            val resolutionSelections = runtimeSupport.complete(fieldSelection.subselections)
             val fieldValue =
                 if (key.field in world.resolverRegistry) {
                     val resolver = world.resolverRegistry.resolver(key.field)
@@ -130,13 +124,7 @@ internal fun Value.Object.resolveKey(
                                 reader = path + key,
                             )
                         }
-                    if (completion.retainCompleteOutput) {
-                        resolver.completeOutput(
-                            input = input,
-                            arguments = key.arguments,
-                            selections = resolutionSelections,
-                        )
-                    } else if (world.selectiveResolvers) {
+                    if (world.selectiveResolvers) {
                         resolver(
                             input = input,
                             arguments = key.arguments,
@@ -155,7 +143,6 @@ internal fun Value.Object.resolveKey(
                 fieldValue.resolveValue(
                     path = path + key,
                     resolverDemand = resolutionSelections,
-                    retainCompleteOutput = completion.retainCompleteOutput,
                 )
             cell.setValue(resolvedValue.engineResult)
             cell.setAccessAccepted(Value.Boolean.of(true))

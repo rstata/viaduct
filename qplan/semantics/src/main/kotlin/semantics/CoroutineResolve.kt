@@ -95,8 +95,7 @@ private suspend fun resolveSlot(
         }
         else ->
             coroutineScope {
-                val completion = runtimeSupport.complete(selection.subselections)
-                val resolutionSelections = completion.selections
+                val resolutionSelections = runtimeSupport.complete(selection.subselections)
                 val fieldValue =
                     if (key.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(key.field)
@@ -106,24 +105,17 @@ private suspend fun resolveSlot(
                                 selections = resolver.objectFragmentAt(coordinate),
                                 reader = coordinate,
                             )
-                        when {
-                            completion.retainCompleteOutput ->
-                                resolver.completeOutput(
-                                    input = input,
-                                    arguments = key.arguments,
-                                    selections = resolutionSelections,
-                                )
-                            world.selectiveResolvers ->
-                                resolver(
-                                    input = input,
-                                    arguments = key.arguments,
-                                    selections = resolutionSelections,
-                                )
-                            else ->
-                                resolver(
-                                    input = input,
-                                    arguments = key.arguments,
-                                )
+                        if (world.selectiveResolvers) {
+                            resolver(
+                                input = input,
+                                arguments = key.arguments,
+                                selections = resolutionSelections,
+                            )
+                        } else {
+                            resolver(
+                                input = input,
+                                arguments = key.arguments,
+                            )
                         }
                     } else {
                         source.fieldValues.getValue(key)
@@ -132,7 +124,6 @@ private suspend fun resolveSlot(
                     fieldValue.resolveValue(
                         path = path + key,
                         resolverDemand = resolutionSelections,
-                        retainCompleteOutput = completion.retainCompleteOutput,
                     )
 
                 resolvedValue.objectsNeedingResolution.forEach { child ->

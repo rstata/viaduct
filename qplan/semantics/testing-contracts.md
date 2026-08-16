@@ -27,30 +27,26 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including a transitive chain.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
-- The advanced demand contracts cover recursive-key isolation, deferred demand through passive
-  objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and
-  acyclic mixed-variable dependency chains.
-- `LateObjectPathDemandResolverContract` covers late symbolic demand across already-published
-  active and passive objects.
+- The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
+- `LateObjectPathDemandResolverContract` covers late symbolic demand across already-published active and passive objects.
 - `GeneratedResolverContract.kt` applies those scopes to generated correctness and permutation properties and adds a full-feature interaction contract.
+- `ListPassiveDeepeningGeneratedResolverContract` biases toward list-valued passive fields and verifies exact witnessed applications when resolver input demand deepens those lists.
 
 Current support is:
 
-| Contract | Resolver01/06/21 | Resolver02/07/22 | Resolver03/08/09/23 | Resolver10/24 | Resolver25/26 |
-| --- | --- | --- | --- | --- | --- |
-| Empty object fragments | yes | yes | yes | yes | yes |
-| Source-level node resolution | yes | yes | yes | yes | yes |
-| Nonempty object fragments | no | yes | yes | yes | yes |
-| Nonempty fragments with `FromArgument` | no | yes | yes | yes | yes |
-| Nonempty fragments with `FromObjectField` | no | no | no | yes | yes |
-| Advanced `FromArgument` demand | no | yes | yes | yes | yes |
-| Advanced `FromObjectField` demand | no | no | no | yes | yes |
-| Late symbolic object-path demand | no | no | no | no | yes |
+| Contract | Resolver01/06/21 | Resolver02/07/22 | Resolver03/08/23 | Resolver25/26 |
+| --- | --- | --- | --- | --- |
+| Empty object fragments | yes | yes | yes | yes |
+| Source-level node resolution | yes | yes | yes | yes |
+| Nonempty object fragments | no | yes | yes | yes |
+| Nonempty fragments with `FromArgument` | no | yes | yes | yes |
+| Nonempty fragments with `FromObjectField` | no | no | no | yes |
+| Advanced `FromArgument` demand | no | yes | yes | yes |
+| Advanced `FromObjectField` demand | no | no | no | yes |
+| Late symbolic object-path demand | no | no | no | yes |
+| List-passive deepening generated coverage | no | no | yes | yes |
 
-Runtime `FromObjectField` binding is supported by Resolver10, Resolver24, Resolver25, and
-Resolver26. Every resolver that claims a base feature contract inherits its advanced deterministic
-regressions. Resolver25 and Resolver26 additionally implement late symbolic-demand contracts even
-though their equal-key identity and late-ancestor-demand policies differ.
+Runtime `FromObjectField` binding is supported by Resolver25 and Resolver26. Every resolver that claims a base feature contract inherits its advanced deterministic regressions. Resolver25 and Resolver26 additionally implement late symbolic-demand contracts even though their equal-key identity and late-ancestor-demand policies differ.
 
 ## Policy Mixins
 
@@ -58,35 +54,28 @@ Policies describe implementation choices that cut across feature scopes:
 
 - `CompleteResolverOutputPolicyContract` and `SelectiveResolverOutputPolicyContract` check unselected passive fields.
 - `CompleteObjectFragmentOutputPolicyContract` and `SelectiveObjectFragmentOutputPolicyContract` check recursive passive subtrees reached while satisfying object-fragment demand.
-- `VariableSelectionIdentityResolverContract` runs one equal-grounded-key fixture under an explicit
-  policy: Resolver25 merges equal grounded keys, while Resolver26 preserves variable-selection
-  occurrences.
-- `LateObjectPathDemandResolverContract` separately records whether an ancestor resolver retains an
-  open variable boundary or receives only its passive predecessors; this policy is independent of
-  equal-key identity.
+- `VariableSelectionIdentityResolverContract` runs one equal-grounded-key fixture under an explicit policy: Resolver25 merges equal grounded keys, while Resolver26 preserves variable-selection occurrences.
+- `LateObjectPathDemandResolverContract` separately records whether an ancestor resolver retains an open variable boundary or receives only its passive predecessors; this policy is independent of equal-key identity.
 - `CorrectResolutionPostTestPolicy` records results produced through `resolveAndValidate` and validates them in `@AfterEach`.
 
-Resolver01/02/06/07/21/22 use complete-output policies; Resolver03/08/09/23 use selective-output policies. Every contract implementation uses post-test `correctResolution` validation.
+Resolver01/02/06/07/21/22 use complete-output policies; Resolver03/08/23/25/26 use selective-output policies. Every contract implementation uses post-test `correctResolution` validation.
 
 Deferred validation keeps replayed resolver functions from changing fixture application counters before explicit assertions run. Every policy mixin must contain an executable guard.
 
-Extended trace, mutation, witness, list-deepening, selective-demand, readiness, and stress tests stay separate from ordinary feature acceptance. Mutation, witness, selective-demand, and deep-stress bodies use shared contracts when their assertions are implementation-independent.
-Resolver25 and Resolver26 both opt into the shared mutation, construction-witness, and
-selective-demand-witness contracts; lifecycle tracing and multithreaded execution remain
-implementation-specific.
+Extended trace, mutation, witness, list-deepening, selective-demand, and stress tests stay separate from ordinary feature acceptance. Mutation, witness, selective-demand, list-deepening, and deep-stress bodies use shared contracts when their assertions are implementation-independent. Resolver25 and Resolver26 both opt into the shared mutation, construction-witness, and selective-demand-witness contracts; lifecycle tracing and multithreaded execution remain implementation-specific.
 
 ## Generated Profiles
 
 | Profile ID | Scope | Resolvers | Normal `S:R:Q` |
 | --- | --- | --- | --- |
-| `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-10, Resolver21-26 | `10:3:5` |
-| `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-10, Resolver21-26 | `10:3:5` |
-| `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-10, Resolver22-26 | `10:3:5` |
-| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03, Resolver07-10, Resolver22-26 | `10:3:5` |
-| `object-fragment-from-object-field` | `FromObjectField` variables | Resolver10, Resolver24-26 | `10:3:5` |
-| `mixed-variables` | Both variable sources | Resolver10, Resolver24-26 | fixed aggregate corpus |
-| `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-10, Resolver22-26 | `20:3:5` |
-| `resolver03-construction-witness` | Construction witness | Resolver03, Resolver09 | `12:2:4` |
+| `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
+| `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
+| `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
+| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
+| `object-fragment-from-object-field` | `FromObjectField` variables | Resolver25-26 | `10:3:5` |
+| `mixed-variables` | Both variable sources | Resolver25-26 | fixed aggregate corpus |
+| `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `20:3:5` |
+| `resolver03-construction-witness` | Construction witness | Resolver03, Resolver25-26 | `12:2:4` |
 | `resolver25-broad-*` | Unfiltered balanced, list-descendant, nullable/error, mixed-variable, and multiple-owner pressure | Resolver25 | opt-in |
 | `resolver26-broad-*` | Heterogeneous stamped-resolution profiles | Resolver26 | opt-in profile-specific products |
 
@@ -130,7 +119,7 @@ For cross-profile debugging, run the concrete class with only the seed:
   -PresolverPropertySeed=424242
 ```
 
-Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver09, Resolver10, Resolver23, Resolver24, Resolver24i, and Resolver25 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
+Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
 
 Resolver25 also has independent unfiltered broad profiles. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings:
 

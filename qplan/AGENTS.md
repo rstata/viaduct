@@ -22,6 +22,8 @@ Compilation and tests are finite consistency evidence, not proof of mathematical
 
 [`model`](./model/AGENTS.md) defines carriers and invariants. [`semantics`](./semantics/AGENTS.md) defines transformations and judgments. [`arbitrary`](./arbitrary/AGENTS.md) is pre-reasoning property-test infrastructure. Follow the nearest guidance file.
 
+[`resolver-versions.md`](./resolver-versions.md) defines the maintained resolver portfolio, proof progressions, testing policy, and debugging roles.
+
 ## Claims
 
 Record important propositions in [`claims.md`](./claims.md) as stable kebab-case labels with one-sentence statements. Put supporting reasoning in `arguments/<claim-label>.md`, state its assumptions and exclusions, and distinguish proof from finite test evidence. Update a claim and argument together.

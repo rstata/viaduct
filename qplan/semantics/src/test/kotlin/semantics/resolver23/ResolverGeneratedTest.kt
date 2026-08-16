@@ -6,6 +6,7 @@ import model.SelectionForest
 import model.Value
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
+import semantics.contract.ListPassiveDeepeningGeneratedResolverContract
 import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
@@ -13,6 +14,7 @@ import semantics.contract.ObjectFragmentGeneratedResolverContract
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
     NodeGeneratedResolverContract,
+    ListPassiveDeepeningGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {

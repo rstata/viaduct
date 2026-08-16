@@ -6,7 +6,6 @@ import model.SelectionForest
 import model.Value
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
-import semantics.contract.IntrinsicTypenameResolverContract
 import semantics.contract.LateObjectPathDemandResolverContract
 import semantics.contract.LateAncestorDemandPolicy
 import semantics.contract.NodeResolverContract
@@ -20,7 +19,6 @@ import semantics.contract.VariableSelectionIdentityResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
-    IntrinsicTypenameResolverContract,
     NodeResolverContract,
     ObjectFragmentResolverContract,
     ObjectFragmentFromArgumentResolverContract,
@@ -30,9 +28,6 @@ class ResolverContractTest :
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
-    override val alwaysGeneratesTypename: Boolean
-        get() = true
-
     override val variableSelectionIdentityPolicy: VariableSelectionIdentityPolicy
         get() = VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS
 

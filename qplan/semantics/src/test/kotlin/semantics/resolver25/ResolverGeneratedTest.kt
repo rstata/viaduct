@@ -59,9 +59,6 @@ class ResolverGeneratedTest :
     ObjectFragmentFromObjectPathGeneratedResolverContract,
     MixedVariableGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
-    override val alwaysGeneratesTypename: Boolean
-        get() = true
-
     override val selectiveResolvers: Boolean
         get() = true
 

@@ -168,21 +168,11 @@ private fun Schema.ObjectType.closeStructuralDemand(
     }
 }
 
-private fun Schema.ObjectType.newObjectResult(): EngineResult.Object {
-    val typenameKey =
-        Value.GroundKey.of(
-            field = fields.getValue("__typename"),
-            arguments = emptyMap(),
-        )
-    return EngineResult.Object.of(
+private fun Schema.ObjectType.newObjectResult(): EngineResult.Object =
+    EngineResult.Object.of(
         type = this,
-        values =
-            mapOf(
-                typenameKey to Value.String.of(typeName),
-            ),
         mutable = true,
     )
-}
 
 /**
  * Resolves one object-result instance through per-grounded-key activation.
@@ -708,13 +698,15 @@ private class ObjectResultOrchestrator(
                 cell.setAccessAccepted(Value.Error)
             }
             groundedKey.field.fieldName == "__typename" -> {
-                val value = Value.String.of(source.type.typeName)
+                val value =
+                    source.fieldValues.getValue(groundedKey) as? Value.String
+                        ?: error("Source ${source.type.typeName} has no concrete __typename")
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
                     AvailableKeyOutput(value, value),
                 )
                 runtime.instrumentation.valuePublished(coordinate)
-                cell.getValue().complete(Value.String.of(source.type.typeName))
+                cell.getValue().complete(value)
                 cell.setAccessAccepted(Value.Boolean.of(true))
             }
             else -> {
@@ -1023,8 +1015,7 @@ private suspend fun Value.Object.resolveObjectValue(
     val selectedGroundedKeys: Set<Value.GroundKey> =
         resolverDemandByGroundedKey.keys
             .filterTo(linkedSetOf()) { groundedKey ->
-                groundedKey.field !in world.resolverRegistry &&
-                    groundedKey.field.fieldName != "__typename"
+                groundedKey.field !in world.resolverRegistry
             }
     val resolvedFields: List<ResolvedField> =
         selectedGroundedKeys.map { groundedKey ->

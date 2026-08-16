@@ -34,23 +34,29 @@ fun resolverBenchmarkCorpusSearchConfig(): Config =
         (MinimumSelectionDepth to 8) +
         (MaxSelectionDepth to 10) +
         (SchemaObjectCount to 12..18) +
-        (ObjectFieldCount to 8..14) +
+        (ObjectFieldCount to 14..18) +
         (QueryFieldCount to 12..18) +
-        (RootQueryFieldCount to 4..6) +
-        (NestedQueryFieldCount to 1..1) +
+        (RootQueryFieldCount to 6..8) +
+        (NestedQueryFieldCount to 8..10) +
+        (NestedQueryScalarFieldWeight to 1.0) +
         (QueryScalarFieldWeight to 0.15) +
-        (FieldArgumentWeight to 0.9) +
-        (ExplicitFieldResolverWeight to 0.8) +
-        (ListTypeWeight to 0.05) +
-        (ListValueSize to 2..2) +
+        (ObjectOutputFieldWeight to 0.15) +
+        (FieldArgumentWeight to 0.1) +
+        (ExplicitFieldResolverWeight to 0.025) +
+        (ListTypeWeight to 0.4) +
+        (ListValueSize to 3..3) +
         (NullableTypeWeight to 0.2) +
         (NullValueWeight to 0.05) +
         (ErrorValueWeight to 0.02) +
-        (DuplicateSelectionWeight to 0.25) +
+        (DuplicateSelectionWeight to 0.1) +
         (AliasWeight to 0.25) +
         (ResolverFragmentsEnabled to true) +
-        (ResolverFragmentWeight to 0.95) +
+        (ResolverFragmentWeight to 0.9) +
         (ResolverFragmentDepth to 8) +
+        (ResolverFragmentSelectionCount to 1..1) +
+        (ResolverFragmentLongTailWeight to 0.1) +
+        (ResolverFragmentLongTailSelectionCount to 10..35) +
+        (ResolverFragmentArgumentFieldWeight to 1.0) +
         (NodeResolversEnabled to true) +
         (NodeObjectWeight to 0.3) +
         (ResolverFromArgumentVariablesEnabled to true) +
@@ -71,4 +77,4 @@ fun resolverBenchmarkOverheadQueryConfig(): Config =
     resolverBenchmarkCorpusSearchConfig() +
         (MinimumSelectionDepth to 8) +
         (MaxSelectionDepth to 10) +
-        (RootQueryFieldCount to 4..6)
+        (RootQueryFieldCount to 6..8)

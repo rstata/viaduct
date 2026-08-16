@@ -130,11 +130,26 @@ private class QueryGenerator(
             schema.deepFields[typeName]
                 ?.takeIf { depth < config[MinimumSelectionDepth] }
                 ?.let { fieldName -> candidates.single { it.name == fieldName } }
+        val remainingCandidates =
+            candidates
+                .filterNot { it == requiredField }
+                .shuffled(random)
+                .let { fields ->
+                    if (
+                        typeName != "Query" &&
+                        config[NestedQueryScalarFieldWeight] > 0.0 &&
+                        chance(config[NestedQueryScalarFieldWeight])
+                    ) {
+                        fields.sortedBy { field ->
+                            schema.isComposite(field.type.namedType)
+                        }
+                    } else {
+                        fields
+                    }
+                }
         val selectedFields =
             listOfNotNull(requiredField) +
-                candidates
-                    .filterNot { it == requiredField }
-                    .shuffled(random)
+                remainingCandidates
                     .take(count - if (requiredField == null) 0 else 1)
         val directSelections =
             selectedFields

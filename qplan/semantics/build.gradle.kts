@@ -123,7 +123,7 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xcontext-parameters")
     }
-    jvmToolchain(21)
+    jvmToolchain(17)
 }
 
 val stressResolverNames =

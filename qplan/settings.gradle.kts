@@ -9,8 +9,15 @@ dependencyResolutionManagement {
     repositories {
         mavenCentral()
     }
+    versionCatalogs {
+        create("viaductLibs") {
+            from(files("../gradle/libs.versions.toml"))
+        }
+    }
 }
 
 rootProject.name = "qplanning"
+
+includeBuild("../core")
 
 include("arbitrary", "model", "semantics")

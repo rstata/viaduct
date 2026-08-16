@@ -19,7 +19,7 @@ internal sealed interface Resolver25BindingSource {
 internal enum class Resolver25KeyKind {
     FIELD_RESOLVER,
     ERROR,
-    TYPENAME,
+    PASSIVE,
     PREEXISTING,
 }
 

@@ -202,7 +202,10 @@ interface EmptyObjectFragmentResolverContract :
             )
 
         assertEquals(Value.Int.of(7), item.getCell(concreteDefaultKey).get())
-        assertEquals(expectedResultKeys(item.type, setOf(concreteDefaultKey)), item.keys)
+        assertEquals(
+            expectedPassiveResultKeys(item.type, setOf(concreteDefaultKey)),
+            item.keys,
+        )
     }
 }
 

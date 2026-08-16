@@ -13,6 +13,6 @@ class ResolverWitnessTest : ResolverWitnessContract {
         selections: SelectionForest,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(selections)
+            semantics.resolver03.resolve(selections)
         }
 }

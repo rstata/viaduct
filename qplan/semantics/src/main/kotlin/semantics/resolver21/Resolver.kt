@@ -5,7 +5,6 @@ import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
-import model.Value
 import semantics.RuntimeSupport
 import semantics.SelectionCompletion
 import semantics.coroutineResolve
@@ -15,10 +14,11 @@ import semantics.coroutineResolve
  * empty, except for generated `T$Bridge.$node` fragments that select passive sibling `$id`.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
+fun resolve(selections: SelectionForest): EngineResult.Object {
     require(!world.selectiveResolvers) {
         "Resolver21 requires non-selective resolvers"
     }
+    val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport.cycleChecking { completedSelections ->
             SelectionCompletion(completedSelections)
@@ -26,7 +26,7 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
     return runBlocking {
         withTimeout(90_000) {
             context(runtimeSupport) {
-                this@resolve.coroutineResolve(selections)
+                source.coroutineResolve(selections)
             }
         }
     }

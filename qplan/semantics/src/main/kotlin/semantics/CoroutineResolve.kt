@@ -93,10 +93,6 @@ private suspend fun resolveSlot(
             valuePromise.complete(Value.Error)
             cell.setAccessAccepted(Value.Error)
         }
-        key.field.fieldName == "__typename" -> {
-            valuePromise.complete(Value.String.of(source.type.typeName))
-            cell.setAccessAccepted(Value.Boolean.of(true))
-        }
         else ->
             coroutineScope {
                 val completion = runtimeSupport.complete(selection.subselections)
@@ -130,9 +126,6 @@ private suspend fun resolveSlot(
                                 )
                         }
                     } else {
-                        require(!world.selectiveResolvers) {
-                            "Passive key found ($key)."
-                        }
                         source.fieldValues.getValue(key)
                     }
                 val resolvedValue =

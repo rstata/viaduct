@@ -27,7 +27,7 @@ The compiler supplies both calls from the existing context. No nested context bl
 
 ## Access
 
-A context parameter is not an implicit receiver. Qualify members as `world.schema`, `world.resolverRegistry`, `world.selectiveResolvers`, `world.behavioral(...)`, and `world.selectionsFrom(...)`.
+A context parameter is not an implicit receiver. Qualify members as `world.schema`, `world.resolverRegistry`, `world.selectiveResolvers`, and `world.selectionsFrom(...)`.
 
 Prefer qualification when a body uses only a few world members.
 

@@ -33,8 +33,8 @@ internal class ObjectResolution(
  *
  * Selective worlds include only fields in [resolverDemand]. Non-selective worlds, and boundaries
  * where [retainCompleteOutput] is true, include every passive field actually present in the output,
- * recursively stopping at registered resolver boundaries. Null, error, and simple values terminate
- * traversal.
+ * including resolver-supplied `__typename`, and recursively stop at registered resolver boundaries.
+ * Null, error, and simple values terminate traversal.
  */
 context(world: Assumptions)
 internal fun Value.Output?.resolveValue(
@@ -91,9 +91,7 @@ private fun Value.Object.resolveObjectValue(
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     val selectOutput = world.selectiveResolvers && !retainCompleteOutput
     if (selectOutput) {
-        val unselectedKeys =
-            fieldValues.keys.filterNot { key -> key.field.fieldName == "__typename" } -
-                resolverDemandByKey.keys
+        val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${type.typeName} contains unselected fields: " +
                 unselectedKeys.joinToString { key -> key.field.fieldName }
@@ -106,10 +104,9 @@ private fun Value.Object.resolveObjectValue(
                 .filter { key -> key.field !in world.resolverRegistry }
                 .toSet()
         } else {
-            fieldValues.keys.filter { key -> !world.behavioral(key.field) }.toSet() +
-                resolverDemandByKey.keys.filter { key ->
-                    key.field.fieldName == "__typename"
-                }
+            fieldValues.keys.filter { key ->
+                key.field !in world.resolverRegistry
+            }.toSet()
         }
     val resolved =
         selectedKeys.fold(

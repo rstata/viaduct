@@ -90,7 +90,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(
-            expectedResultFieldNames("firstName", "lastName", "displayName", "greeting"),
+            expectedPassiveResultFieldNames("firstName", "lastName", "displayName", "greeting"),
             viewer.keys.map { it.field.fieldName }.toSet(),
         )
     }
@@ -162,7 +162,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(
-            expectedResultFieldNames("raw", "rendered"),
+            expectedPassiveResultFieldNames("raw", "rendered"),
             profile.keys.map { it.field.fieldName }.toSet(),
         )
     }
@@ -432,13 +432,12 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val expected =
             context(completeWorld) {
-                completeWorld.objectOf("Query").resolveWithResolver01(fragment.subselections)
+                resolveWithResolver01(fragment.subselections)
             }
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
 
         assertEquals(
-            expectedResultKeys(result.type, expected.keys)
-                .mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
+            expected.keys.mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
             result.keys
                 .mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
         )

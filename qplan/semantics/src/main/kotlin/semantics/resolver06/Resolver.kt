@@ -3,7 +3,6 @@ package semantics.resolver06
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
-import model.Value
 import semantics.DepthFirstReactor
 import semantics.ReactorEventObserver
 import semantics.SelectionCompletion
@@ -15,24 +14,25 @@ import semantics.RuntimeSupport
  * non-selective and may contain more OER nodes than are strictly necessary to resolve the query.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
+fun resolve(selections: SelectionForest): EngineResult.Object =
     resolve(selections, eventObserver = {})
 
 context(world: Assumptions)
-internal fun Value.Object.resolve(
+internal fun resolve(
     selections: SelectionForest,
     eventObserver: ReactorEventObserver,
 ): EngineResult.Object {
     require(!world.selectiveResolvers) {
         "Resolver06 requires non-selective resolvers"
     }
+    val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport { selections ->
             SelectionCompletion(selections)
         }
     return context(runtimeSupport) {
         DepthFirstReactor(
-            source = this@resolve,
+            source = source,
             selections = selections,
             eventObserver = eventObserver,
         ).resolve()

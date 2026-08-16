@@ -491,8 +491,8 @@ sealed interface Value {
      * ### Invariant: object-value-owner
      *
      * `fieldValues.containingType == type`. Every present [GroundKey] carries a field owned by
-     * [type]. Every object contains exactly one ordinary, argumentless `__typename` key whose
-     * value is [type]'s name.
+     * [type]. Object values are partial; resolver behavior is responsible for supplying passive
+     * fields, including canonical `__typename`.
      */
     sealed interface Object : Output, Typed {
         override val type: Schema.ObjectType
@@ -508,21 +508,7 @@ sealed interface Value {
                 type: Schema.ObjectType,
                 fields: Map<GroundKey, Output?> = emptyMap(),
             ): Object {
-                val typenameKey =
-                    GroundKey.of(
-                        field = type.fields.getValue("__typename"),
-                        arguments = emptyMap(),
-                    )
-                val typenameValue = String.of(type.typeName)
-                fields
-                    .filterKeys { key -> key.field.fieldName == "__typename" }
-                    .forEach { (key, value) ->
-                        require(key == typenameKey && value == typenameValue) {
-                            "${type.typeName}/__typename must equal ${type.typeName}"
-                        }
-                    }
-                val completeFields = fields + (typenameKey to typenameValue)
-                completeFields.forEach { (key, value) ->
+                fields.forEach { (key, value) ->
                     require(value.conformsToSchemaType(key.field.typeExpr)) {
                         "${type.typeName}/${key.field.fieldName} value does not conform to " +
                             key.field.typeExpr
@@ -530,7 +516,7 @@ sealed interface Value {
                 }
                 return ObjectValueImpl(
                     type = type,
-                    fieldValues = ObjectFieldValuesImpl(type, completeFields),
+                    fieldValues = ObjectFieldValuesImpl(type, fields),
                 )
             }
         }

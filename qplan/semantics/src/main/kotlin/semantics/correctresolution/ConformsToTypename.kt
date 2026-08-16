@@ -6,10 +6,12 @@ import model.Schema
 import model.Value
 
 /**
- * Whether every present `__typename` value names its containing object's concrete type.
+ * Whether every retained `__typename` value names its containing object's concrete type.
  *
- * This predicate does not require a `__typename` value to be present. It observes values but never
- * access-acceptance results.
+ * Resolver behavior recursively supplies this ordinary passive field, and the registry supplies it
+ * on the root Query object. Selective resolution may omit it when undemanded; complete-output
+ * resolution retains it with the other passive fields. This predicate observes retained values but
+ * never access-acceptance results.
  */
 context(world: Assumptions)
 fun EngineResult.Object.conformsToTypename(): Boolean =

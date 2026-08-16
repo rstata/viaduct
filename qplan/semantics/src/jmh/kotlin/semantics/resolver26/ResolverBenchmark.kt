@@ -47,20 +47,20 @@ open class ResolverBenchmark {
 
     private val support =
         CurrentProfileBenchmarkSupport(
-            subject = ResolverBenchmarkSubject { world, root, selections ->
+            subject = ResolverBenchmarkSubject { world, _, selections ->
                 context(world) {
-                    root.resolve(selections)
+                    resolve(selections)
                 }
             },
             observedSubject =
                 ObservedResolverBenchmarkSubject {
                         world,
-                        root,
+                        _,
                         selections,
                         applicationObserver,
                     ->
                     context(world) {
-                        root.resolveObserved(selections) { observation ->
+                        resolveObserved(selections) { observation ->
                             applicationObserver(
                                 ResolverBenchmarkApplicationObservation(
                                     occurrencePath = observation.occurrencePath,

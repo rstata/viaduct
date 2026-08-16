@@ -80,7 +80,7 @@ class FromObjectFieldSingletonCoercionRegressionTest {
 
         val resolved =
             context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                resolve(fragment.subselections)
             }
         val outer = assertIs<Value.InputList>(consumedArgument)
         val inner = assertIs<Value.InputList>(outer.values.single())

@@ -529,14 +529,12 @@ class DemandSealingTest {
 
         val resolved: EngineResult.Object =
             context(testWorld.assumptions) {
-                testWorld.assumptions
-                    .objectOf("Query")
-                    .resolve(
-                        testWorld.assumptions
-                            .fragmentFrom(
-                                "fragment ignored on Query { result c(value: 7) }",
-                            ).subselections,
-                    )
+                resolve(
+                    testWorld.assumptions
+                        .fragmentFrom(
+                            "fragment ignored on Query { result c(value: 7) }",
+                        ).subselections,
+                )
             }
         val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
         val seedsType = testWorld.schema.type("Seeds") as Schema.ObjectType

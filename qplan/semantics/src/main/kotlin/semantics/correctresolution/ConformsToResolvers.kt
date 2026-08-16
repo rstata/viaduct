@@ -134,7 +134,9 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                 resolverValue is Value.Object &&
                 objectFieldsConformToResolverValue(
                     resolverValue = resolverValue,
-                    fieldBelongsToResolver = { field -> !world.behavioral(field) },
+                    fieldBelongsToResolver = { field ->
+                        field !in world.resolverRegistry
+                    },
                 )
 
         is EngineResult.List ->

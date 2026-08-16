@@ -31,7 +31,7 @@ THEOREM Resolver01ValueConstructionIsCorrect ==
     Resolver01ValueConstruction => ValueConstructionCorrect
 BY ProjectionAlignmentImpliesResolverConformance
    DEF Resolver01ValueConstruction, ValueConstructionCorrect,
-       GeneratedTypenames, ConformsToTypename
+       ConformsToTypename
 
 THEOREM Resolver01FullConstructionRefinesPostcondition ==
     Resolver01FullConstruction => Resolver01Constructed

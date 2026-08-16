@@ -119,6 +119,21 @@ class ResolverRegistryTest {
     }
 
     @Test
+    fun `root resolver supplies only canonical query typename`() {
+        val fixture = Fixture()
+        val root = fixture.assumptions.resolverRegistry.resolveRootQuery()
+        val typenameKey =
+            Value.GroundKey.of(
+                fixture.schema.objectField("Query", "__typename"),
+                emptyMap(),
+            )
+
+        assertEquals(fixture.schema.query, root.type)
+        assertEquals(setOf(typenameKey), root.fieldValues.keys)
+        assertEquals(Value.String.of("Query"), root.fieldValues.getValue(typenameKey))
+    }
+
+    @Test
     fun `reuses one bridge type while preserving every source list layer`() {
         val schema =
             TestWorld.fromSDL(
@@ -444,7 +459,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `rejects field resolvers for node id and typename engine fields`() {
+    fun `rejects field resolvers for node id and generated typename fields`() {
         listOf("id", "__typename").forEach { fieldName ->
             assertFailsWith<IllegalArgumentException> {
                 TestWorld.fromSDL(
@@ -522,7 +537,6 @@ class ResolverRegistryTest {
 
         assertEquals(
             setOf(
-                fixture.key("__typename"),
                 fixture.key("id"),
                 fixture.key("friend"),
                 fixture.key("peers"),
@@ -536,13 +550,13 @@ class ResolverRegistryTest {
         val snippedFriend =
             assertIs<Value.Object>(result.fieldValues[fixture.key("friend")])
         assertEquals(
-            setOf(fixture.key("__typename"), fixture.key("id")),
+            setOf(fixture.key("id")),
             snippedFriend.fieldValues.keys,
         )
         val peers = assertIs<Value.OutputList>(result.fieldValues[fixture.key("peers")])
         val snippedPeer = assertIs<Value.Object>(peers.values.first())
         assertEquals(
-            setOf(fixture.key("__typename"), fixture.key("name")),
+            setOf(fixture.key("name")),
             snippedPeer.fieldValues.keys,
         )
         assertEquals(null, peers.values.last())
@@ -571,7 +585,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(setOf(fixture.key("__typename")), result.fieldValues.keys)
+        assertEquals(emptySet(), result.fieldValues.keys)
     }
 
     @Test
@@ -599,7 +613,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(setOf(fixture.key("__typename")), result.fieldValues.keys)
+        assertEquals(emptySet(), result.fieldValues.keys)
     }
 
     @Test
@@ -663,60 +677,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        val typenameKey =
-            Value.GroundKey.of(
-                testWorld.schema.objectField("User", "__typename"),
-                emptyMap(),
-            )
-        assertEquals(setOf(typenameKey), result.fieldValues.keys)
-    }
-
-    @Test
-    fun `behavioral is defined only by concrete field resolvers`() {
-        val fieldFixture = Fixture()
-        val nodeFixture = Fixture(withNodeResolver = true)
-
-        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "id")))
-        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "name")))
-        assertFalse(fieldFixture.assumptions.behavioral(fieldFixture.schema.objectField("User", "search")))
-        assertTrue(
-            fieldFixture.assumptions.behavioral(
-                fieldFixture.schema.objectField("User", "search\$bridge"),
-            ),
-        )
-        assertTrue(
-            fieldFixture.assumptions.behavioral(
-                fieldFixture.schema.objectField("User", "__typename"),
-            ),
-        )
-        assertFalse(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "id")),
-        )
-        assertTrue(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "__typename")),
-        )
-        assertFalse(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "name")),
-        )
-        assertFalse(
-            nodeFixture.assumptions.behavioral(nodeFixture.schema.objectField("User", "search")),
-        )
-        assertTrue(
-            nodeFixture.assumptions.behavioral(
-                nodeFixture.schema.objectField("User", "search\$bridge"),
-            ),
-        )
-        assertTrue(
-            nodeFixture.assumptions.behavioral(
-                nodeFixture.schema.objectField("User\$Bridge", "\$node"),
-            ),
-        )
-
-        assertFailsWith<IllegalArgumentException> {
-            nodeFixture.assumptions.behavioral(
-                fieldFixture.schema.objectField("User", "name"),
-            )
-        }
+        assertEquals(emptySet(), result.fieldValues.keys)
     }
 
     @Test
@@ -744,7 +705,7 @@ class ResolverRegistryTest {
             )
 
         assertEquals(
-            setOf(fixture.key("__typename"), fixture.key("name")),
+            setOf(fixture.key("name")),
             result.fieldValues.keys,
         )
     }

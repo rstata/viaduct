@@ -53,15 +53,15 @@ open class ResolverBenchmark {
 
     private val support =
         CurrentProfileBenchmarkSupport(
-            subject = ResolverBenchmarkSubject { world, root, selections ->
+            subject = ResolverBenchmarkSubject { world, _, selections ->
                 context(world) {
-                    root.resolve(selections)
+                    resolve(selections)
                 }
             },
             observedSubject =
                 ObservedResolverBenchmarkSubject {
                         world,
-                        root,
+                        _,
                         selections,
                         applicationObserver,
                     ->
@@ -70,7 +70,7 @@ open class ResolverBenchmark {
                     val variableUseByCoordinate =
                         ConcurrentHashMap<List<PathComponent>, VariableUse>()
                     context(world) {
-                        root.resolveObserved(selections) { event ->
+                        resolveObserved(selections) { event ->
                             when (event) {
                                 is Resolver25LifecycleEvent.DemandSubmitted -> {
                                     val argumentNames =

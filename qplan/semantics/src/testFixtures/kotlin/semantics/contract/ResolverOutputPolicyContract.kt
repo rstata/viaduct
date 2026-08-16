@@ -23,7 +23,10 @@ interface CompleteResolverOutputPolicyContract : ResolverContract {
     fun `retains unselected passive fields from complete resolver outputs`() {
         val resolved = resolvePassiveOutputFixture()
 
-        assertEquals(expectedResultFieldNames("requested", "extra"), resolved.fieldNames)
+        assertEquals(
+            setOf("requested", "extra", "__typename"),
+            resolved.fieldNames,
+        )
     }
 
     @Test
@@ -43,7 +46,7 @@ interface SelectiveResolverOutputPolicyContract : ResolverContract {
     fun `omits unselected passive fields from selective resolver outputs`() {
         val resolved = resolvePassiveOutputFixture()
 
-        assertEquals(expectedResultFieldNames("requested"), resolved.fieldNames)
+        assertEquals(setOf("requested"), resolved.fieldNames)
     }
 
     @Test
@@ -60,7 +63,7 @@ interface CompleteObjectFragmentOutputPolicyContract : ResolverContract {
     fun `retains complete passive recursive output`() {
         val resolved = resolveRecursiveOutputFixture()
 
-        assertEquals(expectedResultFieldNames("label", "next"), resolved.fieldNames)
+        assertEquals(setOf("label", "next", "__typename"), resolved.fieldNames)
         assertTrue(resolved.hasNext)
         assertEquals(null, resolved.nextValue)
     }
@@ -74,7 +77,7 @@ interface SelectiveObjectFragmentOutputPolicyContract : ResolverContract {
     fun `projects passive recursive output to required demand`() {
         val resolved = resolveRecursiveOutputFixture()
 
-        assertEquals(expectedResultFieldNames("label"), resolved.fieldNames)
+        assertEquals(setOf("label"), resolved.fieldNames)
         assertTrue(!resolved.hasNext)
     }
 }

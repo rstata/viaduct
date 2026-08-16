@@ -113,6 +113,8 @@ class CoroutineResolveTest {
                 world.schema.groundKey("Child", "first"),
                 world.schema.groundKey("Child", "second"),
             )
+        val expectedChildResultKeys =
+            expectedChildKeys + world.schema.groundKey("Child", "__typename")
         var rootCell: EngineResult.Cell? = null
         val childRegistrations = linkedSetOf<Value.GroundKey>()
         val runtimeSupport =
@@ -149,7 +151,7 @@ class CoroutineResolveTest {
 
         assertEquals(expectedChildKeys, childRegistrations)
         val child = assertIs<EngineResult.Object>(result.getCell(childKey).getValue().get())
-        assertEquals(expectedChildKeys, child.keys)
+        assertEquals(expectedChildResultKeys, child.keys)
     }
 
     @Test
@@ -195,7 +197,7 @@ class CoroutineResolveTest {
         val failure =
             assertFailsWith<ResolverReadCycleException> {
                 context(world) {
-                    world.objectOf("Query").resolve(selections)
+                    resolve(selections)
                 }
             }
 
@@ -236,7 +238,7 @@ class CoroutineResolveTest {
         val thrown =
             assertFailsWith<IllegalStateException> {
                 context(world) {
-                    world.objectOf("Query").resolve(selections)
+                    resolve(selections)
                 }
             }
 
@@ -284,7 +286,7 @@ class CoroutineResolveTest {
 
         val result =
             context(world) {
-                world.objectOf("Query").resolve(selections)
+                resolve(selections)
             }
 
         assertCompletedAndWriteOnce(result)
@@ -318,6 +320,8 @@ private fun registryOverride(
     resolver: (Schema.ObjectField, ResolverRegistry) -> FieldResolver?,
 ): ResolverRegistry =
     object : ResolverRegistry {
+        override fun resolveRootQuery(): Value.Object = delegate.resolveRootQuery()
+
         override fun contains(field: Schema.ObjectField): Boolean =
             resolver(field, delegate) != null
 

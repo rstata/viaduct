@@ -40,6 +40,6 @@ class ResolverContractTest :
         selections: SelectionForest,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(selections)
+            semantics.resolver25.resolve(selections)
         }
 }

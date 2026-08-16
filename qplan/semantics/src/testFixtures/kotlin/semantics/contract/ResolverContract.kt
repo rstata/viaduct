@@ -22,9 +22,6 @@ interface ResolverContract {
     val selectiveResolvers: Boolean
         get() = true
 
-    val alwaysGeneratesTypename: Boolean
-        get() = false
-
     fun resolve(
         world: Assumptions,
         root: Value.Object,
@@ -40,24 +37,26 @@ interface ResolverContract {
             resolve(world, root, selections),
         )
 
-    fun expectedResultFieldNames(vararg fieldNames: String): Set<String> =
-        fieldNames.toSet() +
-            if (alwaysGeneratesTypename) setOf("__typename") else emptySet()
+    fun expectedPassiveResultFieldNames(vararg fieldNames: String): Set<String> =
+        fieldNames.filterNotTo(linkedSetOf()) { it == "__typename" } +
+            if (selectiveResolvers) emptySet() else setOf("__typename")
 
-    fun expectedResultKeys(
+    fun expectedPassiveResultKeys(
         type: Schema.ObjectType,
         keys: Set<Value.GroundKey>,
     ): Set<Value.GroundKey> =
-        keys +
-            if (alwaysGeneratesTypename) {
+        keys.filterNotTo(linkedSetOf()) { key ->
+            key.field.fieldName == "__typename"
+        } +
+            if (selectiveResolvers) {
+                emptySet()
+            } else {
                 setOf(
                     Value.GroundKey.of(
                         field = type.fields.getValue("__typename"),
                         arguments = emptyMap(),
                     ),
                 )
-            } else {
-                emptySet()
             }
 }
 
@@ -67,12 +66,4 @@ internal fun Value.Object.hasExactlyFields(
 
 internal fun Value.Object.hasExactlyFields(
     expectedFields: Set<Value.GroundKey>,
-): Boolean {
-    val typenameKey =
-        Value.GroundKey.of(
-            field = type.fields.getValue("__typename"),
-            arguments = emptyMap(),
-        )
-    return fieldValues.keys == expectedFields + typenameKey &&
-        fieldValues.getValue(typenameKey) == Value.String.of(type.typeName)
-}
+): Boolean = fieldValues.keys == expectedFields

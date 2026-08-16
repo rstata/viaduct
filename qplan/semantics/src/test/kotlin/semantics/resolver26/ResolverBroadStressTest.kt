@@ -152,7 +152,7 @@ internal suspend fun runResolver26BroadStress(
                 resolutionCalls += 1
                 val result: EngineResult.Object =
                     context(world) {
-                        world.objectOf("Query").resolve(fragment.subselections)
+                        resolve(fragment.subselections)
                     }
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                 val occurrences: List<RegisteredResolverOccurrence> =

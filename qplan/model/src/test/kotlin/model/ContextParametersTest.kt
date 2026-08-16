@@ -48,15 +48,8 @@ class ContextParametersTest {
             )
 
         assertEquals(world.schema.query, result.type)
-        val expected: Map<Value.GroundKey, Value.Output?> =
-            mapOf(
-                Value.GroundKey.of(
-                    world.schema.objectField("Query", "__typename"),
-                    emptyMap(),
-                ) to Value.String.of("Query"),
-            )
         assertEquals(
-            expected,
+            emptyMap<Value.GroundKey, Value.Output?>(),
             result.fieldValues,
         )
     }

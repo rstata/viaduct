@@ -32,14 +32,10 @@ ProjectionAlignment ==
             /\ ExpectedObservation[observation] =
                    RawObservationValue[outputObservation]
 
-GeneratedTypenames ==
-    \A cell \in PresentCells \cap TypenameCells :
-        ActualCellValue[cell] = TypeNameValue[CellObject[cell]]
-
 Resolver01ValueConstruction ==
     /\ RootedAndWellTyped
     /\ ProjectionAlignment
-    /\ GeneratedTypenames
+    /\ ConformsToTypename
 
 Resolver01FullConstruction ==
     /\ FoldCompleted

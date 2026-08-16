@@ -102,7 +102,7 @@ class NestedDescendantVariableUseRegressionTest {
 
         val resolved =
             context(world) {
-                world.objectOf("Query").resolve(
+                resolve(
                     world.fragmentFrom(
                         "fragment ignored on Query { item { result } }",
                     ).subselections,

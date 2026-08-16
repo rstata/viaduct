@@ -76,13 +76,13 @@ class ObjectConstructionTest {
 
         val first = key(schema, "friend", "limit" to 1)
         val second = key(schema, "friend", "limit" to 2)
-        assertEquals(setOf(key(schema, "__typename"), first, second), user.fieldValues.keys)
+        assertEquals(setOf(first, second), user.fieldValues.keys)
         assertEquals(friend, user.fieldValues[first])
         assertEquals(null, user.fieldValues[second])
     }
 
     @Test
-    fun `object values contain exactly one canonical typename`() {
+    fun `object values retain only explicitly supplied fields`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
         val typenameKey = key(schema, "__typename")
@@ -90,16 +90,12 @@ class ObjectConstructionTest {
 
         val implicit = Value.Object.of(userType)
         val explicit = Value.Object.of(userType, mapOf(typenameKey to typenameValue))
-        val expected: Map<Value.GroundKey, Value.Output?> = mapOf(typenameKey to typenameValue)
 
-        assertEquals(expected, implicit.fieldValues)
-        assertEquals(expected, explicit.fieldValues)
-        assertFailsWith<IllegalArgumentException> {
-            Value.Object.of(userType, mapOf(typenameKey to Value.String.of("Admin")))
-        }
-        assertFailsWith<IllegalArgumentException> {
-            Value.Object.of(userType, mapOf(typenameKey to null))
-        }
+        assertEquals(emptyMap<Value.GroundKey, Value.Output?>(), implicit.fieldValues)
+        assertEquals(
+            mapOf<Value.GroundKey, Value.Output?>(typenameKey to typenameValue),
+            explicit.fieldValues,
+        )
     }
 
     @Test
@@ -178,7 +174,7 @@ class ObjectConstructionTest {
             }
         }
         assertEquals(
-            setOf(key(schema, "__typename"), key(schema, "name")),
+            setOf(key(schema, "name")),
             user.fieldValues.keys,
         )
     }

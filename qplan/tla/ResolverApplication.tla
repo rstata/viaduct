@@ -38,8 +38,7 @@ AppliedTree ==
     INSTANCE ResultTree
         WITH PresentCells <- BuiltCells,
              ActualObservation <- ProjectedActualObservation,
-             ExpectedObservation <- FinalExpectedObservation,
-             ActualCellValue <- GeneratedCellValue
+             ExpectedObservation <- FinalExpectedObservation
 
 ResolverApplicationBaseWorld ==
     /\ ReturnedResultBaseWorld

@@ -73,15 +73,6 @@ sealed interface Assumptions {
      */
     suspend fun fetchBinding(variable: Value.Variable.Stamped): Value.Input?
 
-    /**
-     * Whether resolution of [field] crosses a resolver behavior boundary.
-     *
-     * This function is defined only for a canonical field on a concrete object type and is true
-     * exactly for engine-supplied `__typename` or a registered field resolver. Synthetic fixture
-     * bridges have no implicit special status.
-     */
-    fun behavioral(field: Schema.ObjectField): Boolean
-
     companion object {
         fun of(
             schema: Schema,
@@ -130,15 +121,6 @@ private class AssumptionsImpl(
 
     override suspend fun fetchBinding(variable: Value.Variable.Stamped): Value.Input? =
         bindingPromise(variable).await()
-
-    override fun behavioral(field: Schema.ObjectField): Boolean {
-        val containingType = field.containingType
-        require(schema.field(containingType.typeName, field.fieldName) == field) {
-            "${containingType.typeName}/${field.fieldName} is not canonical in this world"
-        }
-        return field.fieldName == "__typename" ||
-            field in resolverRegistry
-    }
 
     private fun bindingPromise(
         variable: Value.Variable.Stamped,

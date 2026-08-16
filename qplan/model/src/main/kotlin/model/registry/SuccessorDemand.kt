@@ -158,11 +158,11 @@ private data class SelectionIdentity(
 )
 
 /**
- * Extends this output demand with the paths needed to find every successor behavioral boundary.
+ * Extends this output demand with the paths needed to find every successor resolver boundary.
  *
  * Unlike [successorDemand], this operation assumes that passive traversal copies the complete
- * finite resolver output. It therefore omits passive input leaves while retaining resolver and
- * `__typename` selections, their passive ancestor paths, and transitive successor boundaries.
+ * finite resolver output. It therefore omits passive input leaves while retaining resolver
+ * selections, their passive ancestor paths, and transitive successor boundaries.
  */
 context(world: Assumptions)
 fun SelectionForest.successorBoundaryDemand(): SelectionForest =
@@ -263,13 +263,13 @@ context(world: Assumptions)
 private fun SelectionForest.boundarySkeleton(): SelectionForest =
     flatMap { selection ->
         val nested = selection.subselections.boundarySkeleton()
-        val isBehavioral =
+        val isResolverBoundary =
             selection.possibleTypes.any { possibleType ->
                 val field = possibleType.fields.getValue(selection.key.field.fieldName)
-                world.behavioral(field)
+                field in world.resolverRegistry
             }
 
-        if (isBehavioral || !nested.isEmpty()) {
+        if (isResolverBoundary || !nested.isEmpty()) {
             selectionForestOf(
                 Selection.of(
                     key = selection.key,

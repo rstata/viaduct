@@ -43,15 +43,14 @@ import kotlin.coroutines.CoroutineContext
  * resolver object fragment retains its nonempty provenance and therefore resolves independently.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object =
+fun resolve(selections: SelectionForest): EngineResult.Object =
     resolve(
         selections = selections,
         coroutineContext = resolver26CoroutineContext(),
     )
 
-// Resolves one request with every Resolver26 coroutine inheriting the supplied context.
 context(world: Assumptions)
-internal fun Value.Object.resolve(
+internal fun resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
     applicationObserver: Resolver26ApplicationObserver = {},
@@ -59,10 +58,11 @@ internal fun Value.Object.resolve(
     require(world.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
     }
+    val source = world.resolverRegistry.resolveRootQuery()
     context(RuntimeSupport.cycleChecking()) {
         val result: EngineResult.Object =
             EngineResult.Object.of(
-                type = type,
+                type = source.type,
                 mutable = true,
             )
         return runBlocking(coroutineContext) {
@@ -75,7 +75,7 @@ internal fun Value.Object.resolve(
                         )
                     orchestrateObject(
                         path = emptyList(),
-                        source = this@resolve,
+                        source = source,
                         initialDemand = selections,
                         target = result,
                         runtime = runtime,
@@ -88,7 +88,7 @@ internal fun Value.Object.resolve(
 }
 
 context(world: Assumptions)
-internal fun Value.Object.resolveObserved(
+internal fun resolveObserved(
     selections: SelectionForest,
     applicationObserver: Resolver26ApplicationObserver,
 ): EngineResult.Object =

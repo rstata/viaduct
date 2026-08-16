@@ -107,7 +107,7 @@ object ResolverBenchmarkCorpusSearch {
             )
         val result =
             context(world) {
-                world.objectOf("Query").resolveObserved(fragment.subselections) { observation ->
+                resolveObserved(fragment.subselections) { observation ->
                     applicationObservations += observation
                 }
             }

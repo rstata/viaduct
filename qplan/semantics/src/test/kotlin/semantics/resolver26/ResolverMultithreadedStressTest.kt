@@ -198,12 +198,10 @@ private suspend fun runResolver26MultithreadedStress(
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
             val result: EngineResult.Object =
                 context(world) {
-                    world
-                        .objectOf("Query")
-                        .resolve(
-                            selections = fragment.subselections,
-                            coroutineContext = dispatcher,
-                        )
+                    resolve(
+                        selections = fragment.subselections,
+                        coroutineContext = dispatcher,
+                    )
                 }
             // Resolution has quiesced; all post-resolution oracle work remains serial here.
             assertTrue(context(world) { result.correctResolution(fragment) })

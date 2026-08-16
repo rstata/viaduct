@@ -14,7 +14,7 @@ The proof is factored at the same boundaries as the Kotlin model:
 - `ResultTree.tla` gives finite OER object, cell, list-position, and resolver-observation occurrences an extensional carrier and states the five conjuncts of `correctResolution`.
 - `TreeConstruction.tla` indexes least exact-key demand closure by every reachable object occurrence and lifts completed Resolver01/02 folds to whole-tree selection and resolver-demand conformance.
 - `Projection.tla` proves a finite observation semantics for `snipToDemand`, including behavioral boundaries and overlap coherence.
-- `ValueConstruction.tla` combines projection and typename generation with tree construction to derive conditional Resolver01 and Resolver02 `CorrectResolution` theorems.
+- `ValueConstruction.tla` combines projection and the resolver-output typename contract with tree construction to derive conditional Resolver01 and Resolver02 `CorrectResolution` theorems.
 - `OccurrenceFolds.tla` takes the product of every reachable occurrence's construction order and proves that arbitrary fair interleaving terminates with all local folds complete.
 - `Materialization.tla` identifies each resolver application with one dependency-first work item and proves that its prefix-materialized input equals its final-result input.
 - `ReturnedResult.tla` and `ResolverApplication.tla` separate structural result assumptions from projection coverage, then derive the result conjuncts once coverage is supplied.
@@ -65,7 +65,7 @@ The Kotlin registry's depth-first provider/use branch-order invariant is pre-rea
 
 ## Proof Boundary
 
-This is a machine-checked proof of the resolver construction calculus and a finite extensional model of the five `correctResolution` conjuncts, not a complete refinement proof from the structural Kotlin carriers. Result-tree recursion, occurrence-indexed demand closure, simultaneous product-fold completion, projection coherence, prefix/final materialization equality, guarded projection coverage, and typename generation are represented and proved.
+This is a machine-checked proof of the resolver construction calculus and a finite extensional model of the five `correctResolution` conjuncts, not a complete refinement proof from the structural Kotlin carriers. Result-tree recursion, occurrence-indexed demand closure, simultaneous product-fold completion, projection coherence, prefix/final materialization equality, guarded projection coverage, and the resolver-output typename contract are represented and proved.
 
 Structural extraction of schemas, selection forests, objects, lists, materialized resolver inputs, observed demand, object/list union, and resolver-value comparison into those atoms remains explicit, as does alignment between terminal product-fold built keys and returned Kotlin OER cells. The composed Resolver01 through Resolver03 theorems therefore must not be quoted as unconditional proofs of the Kotlin functions.
 

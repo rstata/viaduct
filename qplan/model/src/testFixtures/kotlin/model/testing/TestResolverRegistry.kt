@@ -265,7 +265,7 @@ private class NodeResolverLowering(
                 "Node id field $typeName/${field.fieldName} cannot have a field resolver"
             }
             require(field.fieldName != "__typename") {
-                "Engine field $typeName/__typename cannot have a field resolver"
+                "Generated field $typeName/__typename cannot have a field resolver"
             }
             val fragmentType = resolver.objectFragment.nominalType
             require(schema.type(fragmentType.typeName) == fragmentType) {
@@ -530,7 +530,7 @@ private class TestResolverRegistry(
                 "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
             }
             require(field.fieldName != "__typename") {
-                "Engine field $typeName/__typename cannot have a field resolver"
+                "Generated field $typeName/__typename cannot have a field resolver"
             }
             val fragmentType = resolver.objectFragment.nominalType
             require(schema.type(fragmentType.typeName) == fragmentType) {
@@ -647,6 +647,19 @@ private class TestResolverRegistry(
     override fun contains(field: Schema.ObjectField): Boolean {
         validateCanonicalField(field)
         return field in fieldResolvers
+    }
+
+    override fun resolveRootQuery(): Value.Object {
+        val query = schema.query
+        val typename =
+            Value.GroundKey.of(
+                field = query.fields.getValue("__typename"),
+                arguments = emptyMap(),
+            )
+        return Value.Object.of(
+            type = query,
+            fields = mapOf(typename to Value.String.of(query.typeName)),
+        )
     }
 
     override fun resolver(field: Schema.ObjectField): FieldResolver {

@@ -17,7 +17,7 @@ import kotlin.test.assertFailsWith
 
 class SuccessorDemandTest {
     @Test
-    fun `boundary demand retains behavioral paths but omits passive leaves`() {
+    fun `boundary demand retains resolver paths but omits passive leaves`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -115,7 +115,7 @@ class SuccessorDemandTest {
             },
         )
         assertEquals(
-            setOf("computed", "__typename"),
+            setOf("computed"),
             context(world) {
                 boundaryBox.subselections
                     .merge(boxType)
@@ -314,6 +314,8 @@ private class CountingResolverRegistry(
 ) : ResolverRegistry {
     var resolverLookups: Int = 0
         private set
+
+    override fun resolveRootQuery(): Value.Object = delegate.resolveRootQuery()
 
     override fun contains(field: Schema.ObjectField): Boolean = field in delegate
 

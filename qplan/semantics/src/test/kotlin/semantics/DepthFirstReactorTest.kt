@@ -22,7 +22,7 @@ class DepthFirstReactorTest {
                 schemaSDL = "type Query { value: Int }",
                 selectiveResolvers = false,
             ).assumptions
-        val source = world.objectOf("Query")
+        val source = world.resolverRegistry.resolveRootQuery()
         val selections =
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
@@ -49,16 +49,16 @@ class DepthFirstReactorTest {
                 ReactorEvent.OrchestratorStarted(emptyList(), "Query"),
                 ReactorEvent.ResolverLaunched(
                     coordinate,
-                    ReactorSlotKind.ENGINE_OWNED,
+                    ReactorSlotKind.PASSIVE,
                 ),
                 ReactorEvent.OrchestratorFinished(emptyList(), "Query"),
                 ReactorEvent.ResolverStarted(
                     coordinate,
-                    ReactorSlotKind.ENGINE_OWNED,
+                    ReactorSlotKind.PASSIVE,
                 ),
                 ReactorEvent.ResolverFinished(
                     coordinate,
-                    ReactorSlotKind.ENGINE_OWNED,
+                    ReactorSlotKind.PASSIVE,
                 ),
             ),
             events,
@@ -72,7 +72,7 @@ class DepthFirstReactorTest {
                 schemaSDL = "type Query { value: Int }",
                 selectiveResolvers = false,
             ).assumptions
-        val source = world.objectOf("Query")
+        val source = world.resolverRegistry.resolveRootQuery()
         val selections =
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
@@ -115,7 +115,7 @@ class DepthFirstReactorTest {
         val reactor =
             context(world, runtimeSupport) {
                 DepthFirstReactor(
-                    source = world.objectOf("Query"),
+                    source = world.resolverRegistry.resolveRootQuery(),
                     selections = selections,
                 )
             }

@@ -36,7 +36,7 @@ Resolver21-23 use the shared structured-coroutine constructor in `CoroutineResol
 
 Resolver25 is an experimental strict one-shot alternative based on Resolver23 rather than Resolver24. Its constructor and wrapper are colocated in `semantics/resolver25/Resolver.kt` because the phase planner and restrictions are specific to this experiment. Each OER has one value-bearing `sealedDemand: Deferred<Map<GroundKey, ObjectSelection>>` per canonical object field. A static two-phase field graph distinguishes resolver-instance preparation from launch: demand contributors prepare before the fields they may contribute to, reader-source promises are installed before variable-bearing demand is grounded, and resolver input promises are installed before their consumers launch. Preparation grounds and merges equal keys, prepares each resulting resolver instance exactly once, and completes `sealedDemand` with the immutable exact-key map. Launch eagerly installs every promise before starting one coroutine per map entry. The exact value promise acts as that resolver instance's completion latch and is awaited by provider reads and materialization. The OER-level `orchestrationReady` latch preserves Resolver23's install-before-parent-publication discipline without conflating promise visibility with preparation.
 
-Every Resolver25 OER is born with its concrete `__typename` value, independent of explicit demand. This intrinsic field remains available when later grounded demand reaches an already-published passive descendant without requiring another resolver application or a speculative potential-demand traversal.
+Canonical field-resolver behavior recursively adds concrete `__typename` values before applying selective projection. `ResolverRegistry.resolveRootQuery()` supplies the initial `Query.__typename`. Resolver25 treats each retained typename as ordinary passive source data: complete resolver output retains it, selective output retains it only when demanded, and later grounded demand traverses it through the same passive path as any other field.
 
 Resolver25 treats each stamped `FromObjectField` variable as a reader of its provider path and as a demand contributor only to branches whose keys use it. An occurrence-owned reader coroutine waits for the root provider promise to be installed, traverses active or passive values without contributing provider demand, and completes the binding at the terminal value or an earlier null/error. Variable-bearing branches wait for their true demand contributors and reader-source promise installation before grounding and merging exact keys.
 
@@ -59,9 +59,9 @@ argument-error fields. `resolveField` handles argument errors directly and other
 requires a registered resolver. Resolver fields publish their source output and initial result tree;
 later symbolic demand traverses passive fields through the containing source and
 already-materialized result subtree. Provider readers specialize each interface or union path
-component to the current concrete OER type before grounding it. Every source `Value.Object`
-intrinsically contains its concrete `__typename`; Resolver26 copies it into an OER only when demand
-selects it.
+component to the current concrete OER type before grounding it. Canonical resolver behavior
+recursively supplies concrete `__typename` values, while the registry supplies the root Query
+typename. Resolver26 copies retained typename into an OER only when demand selects it.
 
 Resolver26 stores one request-root coroutine scope in its runtime. Every launched coroutine is a direct child of that root, and coroutine completion is not used as a cross-coroutine readiness signal. Cross-coroutine readiness flows only through named latches, promises, or value-bearing deferreds. The synchronous boundary uses a fixed dispatcher selected by the universal Resolver26 test thread count, while an internal validation entry can supply an instrumented dispatcher without changing task ownership. Resolution-time instrumentation is thread-safe; post-resolution validation remains serial. The current decisions are recorded in [`semantics/resolver26/design.md`](./semantics/src/main/kotlin/semantics/resolver26/design.md), and the testing workflow is recorded in [`semantics/resolver26/testing-resolver26.md`](./semantics/src/main/kotlin/semantics/resolver26/testing-resolver26.md).
 

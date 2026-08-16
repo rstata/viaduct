@@ -3,7 +3,6 @@ package semantics.resolver01
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
-import model.Value
 import semantics.SelectionCompletion
 import semantics.RuntimeSupport
 import semantics.orchestrateKeys
@@ -14,19 +13,20 @@ import semantics.orchestrateKeys
  * contain more OER nodes than are strictly necessary to resolve the query.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
+fun resolve(selections: SelectionForest): EngineResult.Object {
     require(!world.selectiveResolvers) {
         "Resolver01 requires non-selective resolvers"
     }
+    val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport { selections ->
             SelectionCompletion(selections)
         }
     return context(runtimeSupport) {
-        orchestrateKeys(
+        source.orchestrateKeys(
             path = emptyList(),
             selections = selections,
-            resolved = EngineResult.Object.of(type, emptyMap(), mutable = true),
+            resolved = EngineResult.Object.of(source.type, emptyMap(), mutable = true),
         )
     }
 }

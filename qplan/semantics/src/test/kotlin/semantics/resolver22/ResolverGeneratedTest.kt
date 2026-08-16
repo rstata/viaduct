@@ -25,6 +25,6 @@ class ResolverGeneratedTest :
         selections: SelectionForest,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(selections)
+            semantics.resolver22.resolve(selections)
         }
 }

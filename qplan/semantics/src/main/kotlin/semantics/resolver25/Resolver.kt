@@ -41,30 +41,30 @@ import semantics.materialize
  * Resolves selective demand once per grounded resolver instance.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
-    return resolveWithLifecycleInstrumentation(selections)
-}
+fun resolve(selections: SelectionForest): EngineResult.Object =
+    resolveWithLifecycleInstrumentation(selections)
 
 context(world: Assumptions)
-internal fun Value.Object.resolveObserved(
+internal fun resolveObserved(
     selections: SelectionForest,
     eventObserver: Resolver25LifecycleEventObserver,
 ): EngineResult.Object =
     resolveWithLifecycleInstrumentation(selections, eventObserver)
 
 context(world: Assumptions)
-private fun Value.Object.resolveWithLifecycleInstrumentation(
+private fun resolveWithLifecycleInstrumentation(
     selections: SelectionForest,
     eventObserver: Resolver25LifecycleEventObserver? = null,
 ): EngineResult.Object {
     require(world.selectiveResolvers) {
         "Resolver25 requires selective resolvers"
     }
+    val source = world.resolverRegistry.resolveRootQuery()
     return runBlocking {
         withTimeout(90_000) {
             context(RuntimeSupport.cycleChecking()) {
                 val result: EngineResult.Object =
-                    type.newObjectResult()
+                    source.type.newObjectResult()
                 coroutineScope {
                     val runtime =
                         ResolverRuntime(
@@ -74,7 +74,7 @@ private fun Value.Object.resolveWithLifecycleInstrumentation(
                         )
                     runtime.createOrchestrator(
                         path = emptyList(),
-                        source = this@resolveWithLifecycleInstrumentation,
+                        source = source,
                         target = result,
                         initialDemand = selections,
                     )
@@ -326,18 +326,11 @@ private class ObjectResultOrchestrator(
                 coordinate = coordinate,
                 beforeLaunch = activation.mergedBeforeLaunch,
             )
-            if (
-                groundedKey.field.fieldName != "__typename" &&
-                groundedKey in source.fieldValues.keys
-            ) {
-                return source.fieldValues
-                    .getValue(groundedKey)
-                    .launchNestedFringe(
-                        result = target.getCell(groundedKey).getValue().get(),
-                        path = coordinate,
-                        demand = groundedSelection.subselections,
-                        potentialDemand = activation.keyState.potentialDemand,
-                    ).asLatch()
+            if (groundedKey in source.fieldValues.keys) {
+                return launchMergedPassiveDemand(
+                    keyState = activation.keyState,
+                    demand = groundedSelection.subselections,
+                )
             }
             if (activation.mergedBeforeLaunch) {
                 return activation.keyState.fringeInstalled
@@ -355,8 +348,8 @@ private class ObjectResultOrchestrator(
                 existing -> Resolver25KeyKind.PREEXISTING
                 groundedKey.arguments.argumentsContainErrorValue() ->
                     Resolver25KeyKind.ERROR
-                groundedKey.field.fieldName == "__typename" ->
-                    Resolver25KeyKind.TYPENAME
+                groundedKey in source.fieldValues.keys ->
+                    Resolver25KeyKind.PASSIVE
                 else -> Resolver25KeyKind.FIELD_RESOLVER
             }
         runtime.instrumentation.groundedKeyInterned(
@@ -378,18 +371,14 @@ private class ObjectResultOrchestrator(
         when {
             existing -> {
                 val nestedFringe: List<Deferred<Unit>> =
-                    if (groundedKey.field.fieldName == "__typename") {
-                        emptyList()
-                    } else {
-                        source.fieldValues
-                            .getValue(groundedKey)
-                            .launchNestedFringe(
-                                result = target.getCell(groundedKey).getValue().get(),
-                                path = coordinate,
-                                demand = keyState.demandSnapshot().subselections,
-                                potentialDemand = keyState.potentialDemand,
-                            )
-                    }
+                    source.fieldValues
+                        .getValue(groundedKey)
+                        .launchNestedFringe(
+                            result = target.getCell(groundedKey).getValue().get(),
+                            path = coordinate,
+                            demand = keyState.demandSnapshot().subselections,
+                            potentialDemand = keyState.potentialDemand,
+                        )
                 runtime.scope.launch {
                     nestedFringe.awaitAll()
                     runtime.instrumentation.keyActivationReady(coordinate)
@@ -410,7 +399,7 @@ private class ObjectResultOrchestrator(
                 }
             }
 
-            groundedKey.field.fieldName == "__typename" -> {
+            groundedKey in source.fieldValues.keys -> {
                 runtime.instrumentation.keyActivationReady(coordinate)
                 keyState.fringeInstalled.complete(Unit)
                 runtime.scope.launch {
@@ -429,6 +418,28 @@ private class ObjectResultOrchestrator(
                 )
         }
         return keyState.fringeInstalled
+    }
+
+    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    private fun launchMergedPassiveDemand(
+        keyState: KeyState,
+        demand: SelectionForest,
+    ): Deferred<Unit> {
+        val installed = CompletableDeferred<Unit>()
+        val groundedKey = keyState.groundedKey
+        runtime.scope.launch {
+            keyState.promiseInstalled.await()
+            source.fieldValues
+                .getValue(groundedKey)
+                .launchNestedFringe(
+                    result = target.getCell(groundedKey).getValue().await(),
+                    path = path + groundedKey,
+                    demand = demand,
+                    potentialDemand = keyState.potentialDemand,
+                ).awaitAll()
+            installed.complete(Unit)
+        }
+        return installed
     }
 
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
@@ -627,40 +638,36 @@ private class ObjectResultOrchestrator(
                             "Passive fringe traversal crossed argument-bearing field $field"
                         }
                         val groundedKey = Value.GroundKey.of(field, emptyMap())
-                        if (groundedKey.field.fieldName == "__typename") {
-                            emptyList()
-                        } else {
-                            check(resultObject.isCellSet(groundedKey)) {
-                                "Passive object at " +
-                                    path.joinToString("/") { component ->
-                                        when (component) {
-                                            is Value.GroundKey ->
-                                                "${component.field.containingType.typeName}/" +
-                                                    component.field.fieldName
-                                            is Value.ListIndex -> "[${component.index}]"
-                                        }
-                                    } +
-                                    " has no demanded value promise for " +
-                                    "${groundedKey.field.containingType.typeName}/" +
-                                    groundedKey.field.fieldName
-                            }
-                            fieldValues
-                                .getValue(groundedKey)
-                                .launchNestedFringe(
-                                    result = resultObject.getCell(groundedKey).getValue().get(),
-                                    path = path + groundedKey,
-                                    demand = selection.subselections,
-                                    potentialDemand =
-                                        mergedPotentialDemand
-                                            .byKey()
-                                            .values
-                                            .filter { potential ->
-                                                potential.key.field == field
-                                            }.flatMapToSelectionForest { potential ->
-                                                potential.subselections
-                                            },
-                                )
+                        check(resultObject.isCellSet(groundedKey)) {
+                            "Passive object at " +
+                                path.joinToString("/") { component ->
+                                    when (component) {
+                                        is Value.GroundKey ->
+                                            "${component.field.containingType.typeName}/" +
+                                                component.field.fieldName
+                                        is Value.ListIndex -> "[${component.index}]"
+                                    }
+                                } +
+                                " has no demanded value promise for " +
+                                "${groundedKey.field.containingType.typeName}/" +
+                                groundedKey.field.fieldName
                         }
+                        fieldValues
+                            .getValue(groundedKey)
+                            .launchNestedFringe(
+                                result = resultObject.getCell(groundedKey).getValue().get(),
+                                path = path + groundedKey,
+                                demand = selection.subselections,
+                                potentialDemand =
+                                    mergedPotentialDemand
+                                        .byKey()
+                                        .values
+                                        .filter { potential ->
+                                            potential.key.field == field
+                                        }.flatMapToSelectionForest { potential ->
+                                            potential.subselections
+                                        },
+                            )
                     }
                 }
             }
@@ -697,18 +704,6 @@ private class ObjectResultOrchestrator(
                 cell.getValue().complete(Value.Error)
                 cell.setAccessAccepted(Value.Error)
             }
-            groundedKey.field.fieldName == "__typename" -> {
-                val value =
-                    source.fieldValues.getValue(groundedKey) as? Value.String
-                        ?: error("Source ${source.type.typeName} has no concrete __typename")
-                runtime.instrumentation.outputAvailable(coordinate)
-                keyState.outputAvailable.complete(
-                    AvailableKeyOutput(value, value),
-                )
-                runtime.instrumentation.valuePublished(coordinate)
-                cell.getValue().complete(value)
-                cell.setAccessAccepted(Value.Boolean.of(true))
-            }
             else -> {
                 val resolutionSelections: SelectionForest =
                     selection.subselections.fetchSuccessorDemandDeferringTemplates()
@@ -729,11 +724,7 @@ private class ObjectResultOrchestrator(
                             runtime.instrumentation.resolverFinished(coordinate)
                         }
                     } else {
-                        error(
-                            "Resolver25 cannot resolve passive key " +
-                                "${groundedKey.field.containingType.typeName}/" +
-                                groundedKey.field.fieldName,
-                        )
+                        source.fieldValues.getValue(groundedKey)
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(
@@ -1001,10 +992,7 @@ private suspend fun Value.Object.resolveObjectValue(
                 }
             }
     val unselectedGroundedKeys: Set<Value.GroundKey> =
-        fieldValues.keys.filterNotTo(linkedSetOf()) { key ->
-            key.field.fieldName == "__typename"
-        } -
-            resolverDemandByGroundedKey.keys
+        fieldValues.keys - resolverDemandByGroundedKey.keys
     require(unselectedGroundedKeys.isEmpty()) {
         "Selective resolver output ${type.typeName} contains unselected fields: " +
             unselectedGroundedKeys.joinToString { groundedKey ->

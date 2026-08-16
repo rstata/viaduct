@@ -26,23 +26,12 @@ fun Value.conformsToSchema(): Boolean =
         is Value.InputObject -> inputLikeConformsToSchema()
         is Value.Object ->
             fieldValues.containingType == type &&
-                hasCanonicalTypename() &&
                 fieldValues.all { (key, value) ->
                     key.field.containingType == type &&
                         key.conformsToSchema() &&
                         value.conformsToSchema(key.field.typeExpr)
                 }
     }
-
-private fun Value.Object.hasCanonicalTypename(): Boolean {
-    val typenameKey =
-        Value.GroundKey.of(
-            field = type.fields.getValue("__typename"),
-            arguments = emptyMap(),
-        )
-    return typenameKey in fieldValues &&
-        fieldValues.getValue(typenameKey) == Value.String.of(type.typeName)
-}
 
 /**
  * Whether this input value recursively conforms to [typeExpr].

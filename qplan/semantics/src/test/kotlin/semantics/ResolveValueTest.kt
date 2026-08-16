@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 class ResolveValueTest {
     @Test
-    fun `constructs typename directly and retains exact resolver objects`() {
+    fun `copies demanded passive typename and retains exact resolver objects`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -65,6 +65,7 @@ class ResolveValueTest {
         val rawKey = Value.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
+                "__typename" setTo "User"
                 "name" setTo "Ada"
                 "profile" setTo
                     objectOf("Profile") {
@@ -162,14 +163,19 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
+        val typeNameKey = Value.GroundKey.of(schema.objectField("User", "__typename"), emptyMap())
         val nameKey = Value.GroundKey.of(schema.objectField("User", "name"), emptyMap())
         val profileKey = Value.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
+        val profileTypeNameKey =
+            Value.GroundKey.of(schema.objectField("Profile", "__typename"), emptyMap())
         val rawKey = Value.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
+                "__typename" setTo "User"
                 "name" setTo "Ada"
                 "profile" setTo
                     objectOf("Profile") {
+                        "__typename" setTo "Profile"
                         "raw" setTo "engineer"
                     }
             }
@@ -188,9 +194,9 @@ class ResolveValueTest {
             }
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
-        assertEquals(setOf(nameKey, profileKey), result.keys)
+        assertEquals(setOf(typeNameKey, nameKey, profileKey), result.keys)
         val profile = assertIs<EngineResult.Object>(result.getCell(profileKey).getValue().get())
-        assertEquals(setOf(rawKey), profile.keys)
+        assertEquals(setOf(profileTypeNameKey, rawKey), profile.keys)
         assertEquals(
             setOf(emptyList()),
             resolved.objectsNeedingResolution.map { it.path }.toSet(),
@@ -216,6 +222,7 @@ class ResolveValueTest {
         val world = testWorld.assumptions
         val value =
             world.schema.objectOf("User") {
+                "__typename" setTo "User"
                 "selected" setTo "kept"
                 "extra" setTo "rejected"
             }
@@ -253,10 +260,13 @@ class ResolveValueTest {
                 selectiveResolvers = false,
             )
         val world = testWorld.assumptions
+        val typeNameKey =
+            Value.GroundKey.of(world.schema.objectField("User", "__typename"), emptyMap())
         val selectedKey = Value.GroundKey.of(world.schema.objectField("User", "selected"), emptyMap())
         val extraKey = Value.GroundKey.of(world.schema.objectField("User", "extra"), emptyMap())
         val value =
             world.schema.objectOf("User") {
+                "__typename" setTo "User"
                 "selected" setTo "kept"
                 "extra" setTo "ignored"
             }
@@ -275,7 +285,7 @@ class ResolveValueTest {
             }
 
         val result = assertIs<EngineResult.Object>(resolved.engineResult)
-        assertEquals(setOf(selectedKey, extraKey), result.keys)
+        assertEquals(setOf(typeNameKey, selectedKey, extraKey), result.keys)
     }
 
     @Test

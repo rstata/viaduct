@@ -80,12 +80,10 @@ class ResolverOccurrenceWitnessTest {
 
         val result: EngineResult.Object =
             context(world) {
-                world
-                    .objectOf("Query")
-                    .resolve(
-                        selections = fragment.subselections,
-                        coroutineContext = EmptyCoroutineContext,
-                        applicationObserver = { application ->
+                resolve(
+                    selections = fragment.subselections,
+                    coroutineContext = EmptyCoroutineContext,
+                    applicationObserver = { application ->
                             log.record(
                                 occurrencePath = application.occurrencePath,
                                 field =

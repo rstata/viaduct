@@ -48,7 +48,7 @@ The refinement needs explicit structural carriers or injective preservation obli
 
 ### Classifications And Attribution
 
-Resolver cells, argument-error cells, typename cells, behavioral boundaries, and cell producers are caller-classified. These sets should instead be derived from exact keys, registry membership, and construction transitions.
+Resolver cells, argument-error cells, typename cells, resolver boundaries, and cell producers are caller-classified. These sets should instead be derived from exact keys, registry membership, resolver-output guarantees, and construction transitions.
 
 ### One Application
 
@@ -69,7 +69,7 @@ Create TLC fixtures that initially admit and expose:
 - a nonempty fragment mapped to empty demand;
 - returned-cell and `CellValue` disagreement;
 - collapsed argument tuples or list occurrences;
-- wrong resolver, typename, error, behavioral, or producer classification;
+- wrong resolver, typename, error, boundary, or producer classification;
 - a false local one-application fact.
 
 Each repaired relation should make its fixture pass for the intended reason. Keep validity predicates as invariants so malformed or vacuous worlds fail visibly.

@@ -57,16 +57,9 @@ LEMMA ReturnedConformsToResolvers ==
 
 LEMMA ReturnedConformsToTypename ==
     ReturnedTree!ConformsToTypename
-<1>. SUFFICES
-        ASSUME NEW cell \in BuiltCells \cap TypenameCells
-        PROVE GeneratedCellValue[cell] =
-                  TypeNameValue[CellObject[cell]]
-    BY DEF ReturnedTree!ConformsToTypename
-<1>1. cell \in Cells
-    BY ReturnedResultAssumptions
-       DEF ReturnedResultBaseWorld, FoldWorld, ConstructionWorld,
-           World, WorldCarriers, BuiltCells, CompletedWork
-<1>. QED BY <1>1 DEF GeneratedCellValue
+BY ReturnedResultAssumptions
+   DEF ReturnedResultBaseWorld, ReturnedTree!ConformsToTypename,
+       ConformsToTypename
 
 THEOREM CompletedReturnedResultIsCorrect ==
     AllFoldsCompleted /\ ReturnedProjectionCoverage =>

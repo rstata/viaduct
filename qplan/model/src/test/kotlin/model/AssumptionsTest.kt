@@ -472,7 +472,6 @@ class AssumptionsTest {
 
         assertEquals(
             setOf(
-                Value.GroundKey.of(schema.objectField("User", "__typename"), emptyMap()),
                 firstKey,
                 secondKey,
             ),

@@ -30,7 +30,7 @@ class ResolverContractTest :
         selections: SelectionForest,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(selections)
+            semantics.resolver07.resolve(selections)
         }
 
     override fun resolveAndObserveTasks(
@@ -40,7 +40,7 @@ class ResolverContractTest :
         taskObserver: (ResolverTaskObservation) -> Unit,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(
+            semantics.resolver07.resolve(
                 selections = selections,
                 eventObserver = { event ->
                     event.toContractObservation()?.let(taskObserver)

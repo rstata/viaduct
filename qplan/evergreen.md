@@ -24,7 +24,7 @@ The project models field resolution rather than GraphQL field completion. Respon
 
 Selections may carry open `Value.Key` values. Concrete-parent selections use `Value.ObjectKey`, whose arguments may still contain variables. Exact OER and `Value.Object` cells use `Value.GroundKey`: one canonical concrete object field plus fully coerced ground arguments.
 
-Every argument-bearing output field is assumed to have an explicit resolver. Production namespace exceptions are outside the model. A canonical field is behavioral exactly when it is engine-supplied `__typename` or has a registered field resolver.
+Every argument-bearing output field is assumed to have an explicit resolver. Production namespace exceptions are outside the model. Resolver behavior recursively supplies canonical `__typename` as ordinary passive output. Complete-output resolvers retain it even when undemanded, while selective projection retains it only when demanded. All other `Query` fields are active; `ResolverRegistry.resolveRootQuery()` supplies the initial Query object and its typename. A canonical field is behavioral exactly when it has a registered field resolver.
 
 Source node resolvers are lowered before semantic reasoning. A source `foo(args): W<T>` becomes `foo$bridge(args): W<T$Bridge>`; every non-null bridge object passively contains `$id`, and the generated argumentless `T$Bridge.$node` resolver loads the node from `{ $id }`. Lists retain separate bridge and loader occurrences at every position. The canonical registry consequently contains field resolvers only.
 

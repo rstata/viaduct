@@ -214,7 +214,7 @@ class ArgumentStampingTest {
 
         val resolved =
             context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                resolve(fragment.subselections)
             }
         val items = assertIs<EngineResult.List>(resolved.getCell(itemsKey).getValue().get())
         val stamps =
@@ -335,7 +335,7 @@ class ArgumentStampingTest {
 
         val resolved =
             context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                resolve(fragment.subselections)
             }
 
         assertEquals(Value.Int.of(8), resolved.getCell(resultKey).getValue().get())
@@ -450,7 +450,7 @@ class ArgumentStampingTest {
 
         val resolved =
             context(world) {
-                world.objectOf("Query").resolve(fragment.subselections)
+                resolve(fragment.subselections)
             }
         val frankKeys =
             resolved.keys.filter { groundKey -> groundKey.field.fieldName == "frank" }

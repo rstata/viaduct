@@ -114,12 +114,6 @@ internal fun Value.Object.resolveKey(
             null
         }
 
-        key.field.fieldName == "__typename" -> {
-            cell.setValue(Value.String.of(type.typeName))
-            cell.setAccessAccepted(Value.Boolean.of(true))
-            null
-        }
-
         else -> {
             val completion = runtimeSupport.complete(fieldSelection.subselections)
             val resolutionSelections = completion.selections
@@ -155,9 +149,6 @@ internal fun Value.Object.resolveKey(
                         )
                     }
                 } else {
-                    require(!world.selectiveResolvers) {
-                        "Passive key found ($key)."
-                    }
                     fieldValues.getValue(key)
                 }
             val resolvedValue =

@@ -5,7 +5,6 @@ import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
-import model.Value
 import model.registry.successorDemand
 import semantics.RuntimeSupport
 import semantics.SelectionCompletion
@@ -16,10 +15,11 @@ import semantics.coroutineResolve
  * the results contain only the necessary OER nodes has not been proved.
  */
 context(world: Assumptions)
-fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
+fun resolve(selections: SelectionForest): EngineResult.Object {
     require(world.selectiveResolvers) {
         "Resolver23 requires selective resolvers"
     }
+    val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport.cycleChecking { completedSelections ->
             SelectionCompletion(
@@ -29,7 +29,7 @@ fun Value.Object.resolve(selections: SelectionForest): EngineResult.Object {
     return runBlocking {
         withTimeout(90_000) {
             context(runtimeSupport) {
-                this@resolve.coroutineResolve(selections)
+                source.coroutineResolve(selections)
             }
         }
     }

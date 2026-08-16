@@ -234,7 +234,9 @@ class FieldResolver private constructor(
         selections: SelectionForest,
     ): Value.Output? {
         applicationObserver(input, arguments, selections)
-        return function(input, arguments).snipToDemand(projectionDemand(selections))
+        return function(input, arguments)
+            .synthesizeTypenames()
+            .snipToDemand(projectionDemand(selections))
     }
 
     /**
@@ -246,7 +248,7 @@ class FieldResolver private constructor(
         selections: SelectionForest,
     ): Value.Output? {
         applicationObserver(input, arguments, selections)
-        return function(input, arguments)
+        return function(input, arguments).synthesizeTypenames()
     }
 
     /**
@@ -257,7 +259,7 @@ class FieldResolver private constructor(
         arguments: Value.Arguments,
     ): Value.Output? {
         applicationObserver(input, arguments, null)
-        return function(input, arguments)
+        return function(input, arguments).synthesizeTypenames()
     }
 
     companion object {
@@ -320,6 +322,45 @@ class FieldResolver private constructor(
         }
     }
 }
+
+/**
+ * Recursively supplies the canonical passive `__typename` field of every resolver-produced object.
+ */
+private fun Value.Output?.synthesizeTypenames(): Value.Output? =
+    when (this) {
+        null,
+        Value.Error,
+        is Value.Simple,
+        -> this
+
+        is Value.OutputList ->
+            Value.OutputList.of(
+                typeExpr = typeExpr,
+                values = values.map { value -> value.synthesizeTypenames() },
+            )
+
+        is Value.Object -> {
+            val typenameKey =
+                Value.GroundKey.of(
+                    field = type.fields.getValue("__typename"),
+                    arguments = emptyMap(),
+                )
+            val typenameValue = Value.String.of(type.typeName)
+            if (typenameKey in fieldValues) {
+                val supplied = fieldValues.getValue(typenameKey)
+                require(supplied == typenameValue) {
+                    "Resolver supplied invalid ${type.typeName}/__typename: $supplied"
+                }
+            }
+            Value.Object.of(
+                type = type,
+                fields =
+                    fieldValues.mapValues { (_, value) ->
+                        value.synthesizeTypenames()
+                    } + (typenameKey to typenameValue),
+            )
+        }
+    }
 
 private fun SelectionForest.stampVariables(
     path: List<PathComponent>,
@@ -565,6 +606,13 @@ private fun SelectionForest.containsPath(path: List<Value.Key>): Boolean {
  * enters that branch.
  */
 interface ResolverRegistry {
+    /**
+     * Creates the root resolver input with its canonical passive `Query.__typename`.
+     *
+     * Every other Query field is active and supplied by a registered field resolver.
+     */
+    fun resolveRootQuery(): Value.Object
+
     operator fun contains(field: Schema.ObjectField): Boolean
 
     /** Defined only when [field] is registered. */

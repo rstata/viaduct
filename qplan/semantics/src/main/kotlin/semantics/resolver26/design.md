@@ -143,9 +143,10 @@ already-declared source bindings before localizing their storage-key stamps.
 
 This is a sharp sequencing choice: child orchestration is launched before the parent value is published, but parent publication does not wait for child orchestration. Correctness therefore depends on every later reader independently deriving and reserving exactly the localized child key that child orchestration will eventually claim. That agreement is especially difficult for variable-bearing arguments because the reader must derive the same occurrence-specific `SelectionStamp`, use the matching variable-instance bindings to ground the arguments, and localize the resulting key to the same child path.
 
-Every source `Value.Object` intrinsically contains its concrete `__typename`. Resolver26 treats it
-as an ordinary passive value: `resolveValue` copies it into an OER when demand selects it and
-silently ignores it otherwise. `__typename` never participates in field launch.
+Resolver behavior recursively adds canonical `__typename` before selective output projection, and
+`ResolverRegistry.resolveRootQuery()` supplies it on the initial Query object. Resolver26 otherwise
+treats it as an ordinary passive value: `resolveValue` copies it into an OER when demand selects it
+and silently ignores it otherwise. `__typename` never participates in field launch.
 
 ## Strictness
 

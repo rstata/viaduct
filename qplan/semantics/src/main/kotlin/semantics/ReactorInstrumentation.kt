@@ -52,8 +52,7 @@ internal typealias ReactorEventObserver = (ReactorEvent) -> Unit
 context(world: model.Assumptions)
 internal fun Value.GroundKey.reactorSlotKind(): ReactorSlotKind =
     when {
-        arguments.argumentsContainErrorValue() ||
-            field.fieldName == "__typename" ->
+        arguments.argumentsContainErrorValue() ->
             ReactorSlotKind.ENGINE_OWNED
         field in world.resolverRegistry -> ReactorSlotKind.FIELD_RESOLVER
         else -> ReactorSlotKind.PASSIVE

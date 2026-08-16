@@ -39,7 +39,7 @@ internal fun observeResolver25Resolution(
     val result =
         try {
             context(world) {
-                root.resolveObserved(selections, events::add)
+                resolveObserved(selections, events::add)
             }
         } catch (failure: Throwable) {
             events.forEach { event ->

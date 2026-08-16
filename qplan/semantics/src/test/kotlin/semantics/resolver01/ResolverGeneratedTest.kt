@@ -19,6 +19,6 @@ class ResolverGeneratedTest :
         selections: SelectionForest,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(selections)
+            semantics.resolver01.resolve(selections)
         }
 }

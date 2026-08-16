@@ -227,7 +227,7 @@ class LifecycleInstrumentationTest {
         val trace = mutableListOf<Resolver25LifecycleEvent>()
 
         context(world) {
-            world.objectOf("Query").resolveObserved(
+            resolveObserved(
                 fragment.subselections,
                 trace::add,
             )

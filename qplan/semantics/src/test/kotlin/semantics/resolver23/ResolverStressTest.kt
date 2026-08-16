@@ -15,6 +15,6 @@ class ResolverStressTest : DeepResolverStressContract {
         selections: SelectionForest,
     ): EngineResult.Object =
         context(world) {
-            root.resolve(selections)
+            semantics.resolver23.resolve(selections)
         }
 }

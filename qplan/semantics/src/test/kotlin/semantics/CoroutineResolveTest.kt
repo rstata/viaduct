@@ -54,10 +54,10 @@ class CoroutineResolveTest {
         val runtimeSupport =
             object : RuntimeSupport {
                 context(world: Assumptions)
-                override fun complete(selections: SelectionForest): SelectionCompletion {
+                override fun complete(selections: SelectionForest): SelectionForest {
                     producerStarts += 1
                     assertEquals(expectedKeys, registeredKeys)
-                    return SelectionCompletion(selections)
+                    return selections
                 }
 
                 override fun registerWriter(
@@ -120,8 +120,7 @@ class CoroutineResolveTest {
         val runtimeSupport =
             object : RuntimeSupport {
                 context(world: Assumptions)
-                override fun complete(selections: SelectionForest): SelectionCompletion =
-                    SelectionCompletion(selections)
+                override fun complete(selections: SelectionForest): SelectionForest = selections
 
                 override fun registerWriter(
                     cell: EngineResult.Cell,

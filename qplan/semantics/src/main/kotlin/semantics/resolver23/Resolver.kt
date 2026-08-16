@@ -7,7 +7,6 @@ import model.EngineResult
 import model.SelectionForest
 import model.registry.successorDemand
 import semantics.RuntimeSupport
-import semantics.SelectionCompletion
 import semantics.coroutineResolve
 
 /**
@@ -22,9 +21,7 @@ fun resolve(selections: SelectionForest): EngineResult.Object {
     val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport.cycleChecking { completedSelections ->
-            SelectionCompletion(
-                selections = completedSelections.successorDemand(),
-            )
+            completedSelections.successorDemand()
         }
     return runBlocking {
         withTimeout(90_000) {

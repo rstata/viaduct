@@ -4,7 +4,6 @@ import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
 import model.registry.successorDemand
-import semantics.SelectionCompletion
 import semantics.RuntimeSupport
 import semantics.orchestrateKeys
 
@@ -20,9 +19,7 @@ fun resolve(selections: SelectionForest): EngineResult.Object {
     val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport { selections ->
-            SelectionCompletion(
-                selections = selections.successorDemand(),
-            )
+            selections.successorDemand()
         }
     return context(runtimeSupport) {
         source.orchestrateKeys(

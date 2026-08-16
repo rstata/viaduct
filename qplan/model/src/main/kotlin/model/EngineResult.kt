@@ -19,8 +19,6 @@ sealed interface EngineResult {
      * equality and stable identity hashing because either slot may be completed after publication.
      */
     sealed interface Cell {
-        fun isValueSet(): Boolean
-
         /** @throws IllegalStateException when this cell has no value promise */
         fun getValue(): Promise<EngineResult?>
 
@@ -343,8 +341,6 @@ private class CellImpl(
         )
     private val accessAcceptedStore =
         promiseStore(accessAccepted?.let { mapOf(Unit to it) }.orEmpty())
-
-    override fun isValueSet(): Boolean = valueStore.isSet
 
     override fun getValue(): Promise<EngineResult?> =
         checkNotNull(valueStore.readOrNull()) {

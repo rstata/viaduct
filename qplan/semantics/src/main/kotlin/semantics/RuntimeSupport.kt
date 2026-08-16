@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 internal fun interface RuntimeSupport {
     context(world: Assumptions)
-    fun complete(selections: SelectionForest): SelectionCompletion
+    fun complete(selections: SelectionForest): SelectionForest
 
     fun registerWriter(
         cell: EngineResult.Cell,
@@ -31,12 +31,12 @@ internal fun interface RuntimeSupport {
 
     companion object {
         fun noCycleChecking(): RuntimeSupport =
-            RuntimeSupport { selections -> SelectionCompletion(selections) }
+            RuntimeSupport { selections -> selections }
 
         fun cycleChecking(
             complete: RuntimeSupport =
                 RuntimeSupport { selections ->
-                    SelectionCompletion(selections.successorDemand())
+                    selections.successorDemand()
                 },
         ): RuntimeSupport =
             CycleCheckingRuntimeSupport(complete)
@@ -58,7 +58,7 @@ private class CycleCheckingRuntimeSupport(
         ConcurrentHashMap<List<PathComponent>, MutableSet<List<PathComponent>>>()
 
     context(world: Assumptions)
-    override fun complete(selections: SelectionForest): SelectionCompletion =
+    override fun complete(selections: SelectionForest): SelectionForest =
         completionSupport.complete(selections)
 
     override fun registerWriter(

@@ -6,7 +6,6 @@ import model.SelectionForest
 import model.registry.successorDemand
 import semantics.DepthFirstReactor
 import semantics.ReactorEventObserver
-import semantics.SelectionCompletion
 import semantics.RuntimeSupport
 
 /**
@@ -28,9 +27,7 @@ internal fun resolve(
     val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
         RuntimeSupport { selections ->
-            SelectionCompletion(
-                selections = selections.successorDemand(),
-            )
+            selections.successorDemand()
         }
     return context(runtimeSupport) {
         DepthFirstReactor(

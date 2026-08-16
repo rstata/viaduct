@@ -3,7 +3,6 @@ package semantics.resolver01
 import model.Assumptions
 import model.EngineResult
 import model.SelectionForest
-import semantics.SelectionCompletion
 import semantics.RuntimeSupport
 import semantics.orchestrateKeys
 
@@ -19,9 +18,7 @@ fun resolve(selections: SelectionForest): EngineResult.Object {
     }
     val source = world.resolverRegistry.resolveRootQuery()
     val runtimeSupport =
-        RuntimeSupport { selections ->
-            SelectionCompletion(selections)
-        }
+        RuntimeSupport { selections -> selections }
     return context(runtimeSupport) {
         source.orchestrateKeys(
             path = emptyList(),

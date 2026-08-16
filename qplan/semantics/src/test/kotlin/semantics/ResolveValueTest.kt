@@ -92,7 +92,6 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = selections,
-                    retainCompleteOutput = false,
                 )
             }
 
@@ -189,7 +188,6 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = resolverDemand,
-                    retainCompleteOutput = false,
                 )
             }
 
@@ -236,7 +234,6 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = selections,
-                    retainCompleteOutput = false,
                 )
             }
         }
@@ -280,7 +277,6 @@ class ResolveValueTest {
                 value.resolveValue(
                     path = emptyList(),
                     resolverDemand = selections,
-                    retainCompleteOutput = false,
                 )
             }
 
@@ -374,7 +370,6 @@ class ResolveValueTest {
                 output.resolveValue(
                     path = rootPath,
                     resolverDemand = selections,
-                    retainCompleteOutput = false,
                 )
             }
         val callbackPaths = mutableListOf<List<PathComponent>>()

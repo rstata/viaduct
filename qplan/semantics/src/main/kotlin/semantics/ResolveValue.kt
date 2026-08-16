@@ -31,22 +31,21 @@ internal class ObjectResolution(
  * Returns this output as a passive result tree together with every object path requiring registered
  * field resolution for [resolverDemand].
  *
- * Selective worlds include only fields in [resolverDemand]. Non-selective worlds, and boundaries
- * where [retainCompleteOutput] is true, include every passive field actually present in the output,
- * including resolver-supplied `__typename`, and recursively stop at registered resolver boundaries.
- * Null, error, and simple values terminate traversal.
+ * Selective worlds include only fields in [resolverDemand]. Non-selective worlds include every
+ * passive field actually present in the output, including resolver-supplied `__typename`, and
+ * recursively stop at registered resolver boundaries. Null, error, and simple values terminate
+ * traversal.
  */
 context(world: Assumptions)
 internal fun Value.Output?.resolveValue(
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
-    retainCompleteOutput: Boolean = false,
 ): ResolvedValue =
     when (this) {
         null -> ResolvedValue(null, emptyList(), emptyList())
         Value.Error -> ResolvedValue(Value.Error, emptyList(), emptyList())
         is Value.Simple -> ResolvedValue(this, emptyList(), emptyList())
-        is Value.Object -> resolveObjectValue(resolverDemand, retainCompleteOutput, path)
+        is Value.Object -> resolveObjectValue(resolverDemand, path)
         is Value.OutputList ->
             values
                 .withIndex()
@@ -61,7 +60,6 @@ internal fun Value.Output?.resolveValue(
                         value.resolveValue(
                             path = path + Value.ListIndex.of(index),
                             resolverDemand = resolverDemand,
-                            retainCompleteOutput = retainCompleteOutput,
                         )
                     ResolvedList(
                         values = resolved.values + element.engineResult,
@@ -84,13 +82,11 @@ internal fun Value.Output?.resolveValue(
 context(world: Assumptions)
 private fun Value.Object.resolveObjectValue(
     resolverDemand: SelectionForest,
-    retainCompleteOutput: Boolean,
     path: List<PathComponent>,
 ): ResolvedValue {
     val mergedResolverDemand = resolverDemand.applicableGroundSelections(type)
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
-    val selectOutput = world.selectiveResolvers && !retainCompleteOutput
-    if (selectOutput) {
+    if (world.selectiveResolvers) {
         val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${type.typeName} contains unselected fields: " +
@@ -99,7 +95,7 @@ private fun Value.Object.resolveObjectValue(
     }
 
     val selectedKeys =
-        if (selectOutput) {
+        if (world.selectiveResolvers) {
             resolverDemandByKey.keys
                 .filter { key -> key.field !in world.resolverRegistry }
                 .toSet()
@@ -125,7 +121,6 @@ private fun Value.Object.resolveObjectValue(
                             resolverDemandByKey[key]
                                 ?.subselections
                                 ?: selectionForestOf(),
-                        retainCompleteOutput = retainCompleteOutput,
                     )
             ResolvedObject(
                 values = result.values + (key to fieldValue.engineResult),

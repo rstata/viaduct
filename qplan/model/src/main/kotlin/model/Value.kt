@@ -210,24 +210,15 @@ sealed interface Value {
     /**
      * A value shaped like a GraphQL input object.
      *
-     * ### Invariant: input-object-like-value-coherence
-     *
-     * [type] is the canonical input-object-like definition whose fields [fieldValues] inhabit.
-     * `fieldValues.containingType == type`.
-     *
-     * Implementations narrow [type] to match their corresponding definition category. This common
-     * interface is not itself a GraphQL [Value], because [Arguments] is a schema-synthetic tuple.
+     * This common interface is not itself a GraphQL [Value], because [Arguments] is a
+     * schema-synthetic tuple.
      */
     sealed interface InputObjectLike : InputLike {
-        val type: Schema.InputObjectLike
-        val fieldValues: Fields<Schema.InputObjectLike, Input>
-
+        val fieldValues: Fields<Input>
     }
 
     /** A ground input object. */
-    sealed interface InputObject : Input, Typed, InputObjectLike {
-        override val type: Schema.InputObjectType
-        override val fieldValues: Fields<Schema.InputObjectType, Input>
+    sealed interface InputObject : Input, InputObjectLike {
         companion object {
             /**
              * ### Invariant: input-object-value-factory-schema-conformance
@@ -240,12 +231,7 @@ sealed interface Value {
                 fields: Map<kotlin.String, Any?>,
             ): InputObject =
                 InputObjectValueImpl(
-                    type = type,
-                    fieldValues =
-                        FieldValuesImpl(
-                            type,
-                            coerceInputLikeFields(type, fields),
-                        ),
+                    fieldValues = FieldValuesImpl(coerceInputLikeFields(type, fields)),
                 )
         }
     }
@@ -258,9 +244,6 @@ sealed interface Value {
      * [ObjectEngineResult.GroundKey.Stamped], not the grounded argument value.
      */
     sealed interface Arguments : InputObjectLike, OpenArguments {
-        override val type: Schema.FieldArguments
-        override val fieldValues: Fields<Schema.FieldArguments, Input>
-
         companion object {
             /**
              * ### Invariant: arguments-value-factory-schema-conformance
@@ -339,17 +322,10 @@ sealed interface Value {
     /**
      * A map from field names to values.
      *
-     * ### Invariant: field-values-owner
-     *
-     * [containingType] is the canonical [Schema.Type] or [Schema.FieldArguments] definition whose
-     * fields these values inhabit, and every present key names one of its fields.
-     *
      * Unlike an ordinary [Map], [get] and [getValue] throw [MissingFieldException] when the
      * requested field does not exist or has not been set.
      */
-    sealed interface Fields<out T : Any, out V : Value> : Map<kotlin.String, V?> {
-        val containingType: T
-
+    sealed interface Fields<out V : Value> : Map<kotlin.String, V?> {
         /** @throws MissingFieldException when [key] is not present */
         override operator fun get(key: kotlin.String): V?
 
@@ -591,13 +567,11 @@ private data class ObjectValueImpl(
 ) : Value.Object
 
 private data class InputObjectValueImpl(
-    override val type: Schema.InputObjectType,
-    override val fieldValues: Value.Fields<Schema.InputObjectType, Value.Input>,
+    override val fieldValues: Value.Fields<Value.Input>,
 ) : Value.InputObject
 
 private data class ArgumentsValueImpl(
-    override val type: Schema.FieldArguments,
-    override val fieldValues: Value.Fields<Schema.FieldArguments, Value.Input>,
+    override val fieldValues: Value.Fields<Value.Input>,
 ) : Value.Arguments
 
 private data class TemplateVariableValueImpl(
@@ -699,32 +673,23 @@ private class ObjectFieldValuesImpl(
     override fun toString(): String = backingMap.toString()
 }
 
-private class FieldValuesImpl<out T : Any, out V : Value>(
-    override val containingType: T,
+private class FieldValuesImpl<out V : Value>(
     private val backingMap: Map<String, V?>,
-) : Value.Fields<T, V>,
+) : Value.Fields<V>,
     Map<String, V?> by backingMap {
     override operator fun get(key: String): V? = getValue(key)
 
     override fun getValue(key: String): V? {
         if (!backingMap.containsKey(key)) {
-            val typeName =
-                when (containingType) {
-                    is Schema.Type -> containingType.typeName
-                    is Schema.FieldArguments -> "\$ARGUMENTS"
-                    else -> error("Unexpected field-value definition: $containingType")
-                }
-            throw MissingFieldException(typeName, key)
+            throw MissingFieldException("\$INPUT", key)
         }
         return backingMap[key]
     }
 
     override fun equals(other: Any?): Boolean =
-        other is Value.Fields<*, *> &&
-            containingType == other.containingType &&
-            entries == other.entries
+        other is Value.Fields<*> && entries == other.entries
 
-    override fun hashCode(): Int = 31 * containingType.hashCode() + backingMap.hashCode()
+    override fun hashCode(): Int = backingMap.hashCode()
 
     override fun toString(): String = backingMap.toString()
 }
@@ -765,8 +730,7 @@ internal fun argumentsOfGround(
         "Ground argument values do not conform to their field definition"
     }
     return ArgumentsValueImpl(
-        type = type,
-        fieldValues = FieldValuesImpl(type, fields),
+        fieldValues = FieldValuesImpl(fields),
     )
 }
 

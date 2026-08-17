@@ -67,7 +67,6 @@ class AssumptionsTest {
             assertIs<Value.InputObject>(
                 node.key.arguments.fieldExpressions().getValue("filter"),
             )
-        assertEquals(assumptions.schema.type("Filter"), filter.type)
         val role = assertIs<Value.Enum>(filter.fieldValues["role"])
         assertEquals(assumptions.schema.type("Role"), role.type)
         assertEquals("ADMIN", role.enumValue)
@@ -213,8 +212,6 @@ class AssumptionsTest {
         val emptyArguments = Value.Arguments.of(actors, emptyMap())
         val otherEmptyArguments = Value.Arguments.of(typeName, emptyMap())
         assertEquals(emptyArguments, otherEmptyArguments)
-        assertEquals(Schema.NoArguments, emptyArguments.type)
-        assertEquals(emptyArguments.type, emptyArguments.fieldValues.containingType)
         assertEquals(
             TypeExpr.List.of(
                 elementType = TypeExpr.Named.of(actor, isNullable = false),
@@ -238,10 +235,7 @@ class AssumptionsTest {
                 field = nodeField,
                 fields = mapOf("filter" to filterValue),
             )
-        assertEquals(nodeField.arguments, nodeArguments.type)
-        assertEquals(nodeArguments.type, nodeArguments.fieldValues.containingType)
         assertEquals(filterValue, nodeArguments.fieldValues["filter"])
-        assertEquals(schema.type("Filter"), filterValue.type)
         val defaultRole = assertIs<Value.Enum>(filterValue.fieldValues["role"])
         assertEquals(schema.type("Role"), defaultRole.type)
         assertEquals("MEMBER", defaultRole.enumValue)
@@ -265,7 +259,6 @@ class AssumptionsTest {
                 arguments = mapOf("filter" to filterValue),
             )
         assertEquals(nodeField, nodeKey.field)
-        assertEquals(nodeField.arguments, nodeKey.arguments.type)
         assertEquals(filterValue, nodeKey.arguments.fieldExpressions()["filter"])
         assertEquals(
             nodeKey,
@@ -542,7 +535,6 @@ class AssumptionsTest {
             )
         val nestedFilter =
             assertIs<Value.InputObject>(arguments.fieldValues["filter"])
-        assertEquals(filterType, nestedFilter.type)
         assertEquals(
             30,
             assertIs<Value.Int>(nestedFilter.fieldValues["limit"]).intValue,

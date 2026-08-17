@@ -4,13 +4,13 @@ package model
 fun Assumptions.engineResultOf(
     typeName: String,
     block: EngineResultScope.() -> Unit = {},
-): EngineResult.Object = schema.engineResultOf(typeName, block)
+): ObjectEngineResult = schema.engineResultOf(typeName, block)
 
 /** Constructs an object engine result by resolving type and field names in this schema. */
 fun Schema.engineResultOf(
     typeName: String,
     block: EngineResultScope.() -> Unit = {},
-): EngineResult.Object {
+): ObjectEngineResult {
     val type = type(typeName)
     require(type is Schema.ObjectType) {
         "$typeName is not an object type"
@@ -24,14 +24,14 @@ fun Schema.engineResultOf(
 fun Assumptions.listResultOf(
     typeExpr: TypeExpr<Schema.OutputType>,
     vararg values: Any?,
-): EngineResult.List = schema.listResultOf(typeExpr, *values)
+): ListEngineResult = schema.listResultOf(typeExpr, *values)
 
 /** Constructs a list engine result whose elements have [typeExpr]. */
 fun Schema.listResultOf(
     typeExpr: TypeExpr<Schema.OutputType>,
     vararg values: Any?,
-): EngineResult.List =
-    EngineResult.List.of(
+): ListEngineResult =
+    ListEngineResult.of(
         typeExpr = typeExpr,
         values = values.map { value -> coerceEngineResult(typeExpr, value) },
     )
@@ -99,10 +99,10 @@ class EngineResultScope internal constructor(
     fun engineResultOf(
         typeName: String,
         block: EngineResultScope.() -> Unit = {},
-    ): EngineResult.Object = schema.engineResultOf(typeName, block)
+    ): ObjectEngineResult = schema.engineResultOf(typeName, block)
 
-    internal fun build(): EngineResult.Object =
-        EngineResult.Object.of(
+    internal fun build(): ObjectEngineResult =
+        ObjectEngineResult.of(
             type = type,
             values = values.toMap(),
             accessAccepted = accessAccepted.toMap(),
@@ -125,7 +125,7 @@ private fun coerceEngineResult(
             require(value is List<*>) {
                 "Expected a list result for $typeExpr"
             }
-            EngineResult.List.of(
+            ListEngineResult.of(
                 typeExpr = typeExpr.elementType,
                 values =
                     value.map { element ->
@@ -136,7 +136,7 @@ private fun coerceEngineResult(
 
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
-                is Schema.SimpleType -> coerceSimpleValue(type, value)
+                is Schema.SimpleType -> coerceSimpleValue(type, value).toEngineResult()
                 is Schema.CompositeType ->
                     throw IllegalArgumentException(
                         "Expected an object engine result for ${type.typeName}",

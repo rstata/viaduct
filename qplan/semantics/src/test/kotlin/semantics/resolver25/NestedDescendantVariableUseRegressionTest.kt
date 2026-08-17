@@ -1,6 +1,8 @@
 package semantics.resolver25
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -67,9 +69,9 @@ class NestedDescendantVariableUseRegressionTest {
                     ).subselections,
                 )
             }
-        val item = resolved.getCell(itemKey).getValue().get() as EngineResult.Object
+        val item = resolved.getCell(itemKey).getValue().get() as ObjectEngineResult
 
-        assertEquals(Value.Int.of(7), item.getCell(resultKey).getValue().get())
+        assertEquals(IntEngineResult.of(7), item.getCell(resultKey).getValue().get())
     }
 
     @Test
@@ -206,10 +208,10 @@ class NestedDescendantVariableUseRegressionTest {
             signatures,
             Resolver25StructuralSignature.DESCENDANT_VARIABLE_OWNER,
         )
-        val item = resolved.getCell(itemKey).getValue().get() as EngineResult.Object
+        val item = resolved.getCell(itemKey).getValue().get() as ObjectEngineResult
         val payloadType = world.schema.type("Payload") as Schema.ObjectType
 
-        assertEquals(Value.Int.of(5), item.getCell(resultKey).getValue().get())
+        assertEquals(IntEngineResult.of(5), item.getCell(resultKey).getValue().get())
         assertEquals(1, consumeApplications)
         assertEquals(
             setOf("one", "two"),

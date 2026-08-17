@@ -1,6 +1,9 @@
 package semantics.resolver25
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.Value
 import model.fragmentFrom
 import model.objectOf
@@ -73,11 +76,11 @@ class DescendantVariableOwnerRegressionTest {
                         world.schema.objectField("Query", "items"),
                         emptyMap(),
                     ),
-                ).getValue().get() as EngineResult.List
+                ).getValue().get() as ListEngineResult
         assertEquals(
-            listOf(Value.Int.of(13), Value.Int.of(25)),
+            listOf(IntEngineResult.of(13), IntEngineResult.of(25)),
             items.map { cell ->
-                val item = cell.getValue().get() as EngineResult.Object
+                val item = cell.getValue().get() as ObjectEngineResult
                 item
                     .getCell(
                         Value.GroundKey.of(

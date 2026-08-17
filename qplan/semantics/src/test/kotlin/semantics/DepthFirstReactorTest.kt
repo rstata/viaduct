@@ -1,6 +1,7 @@
 package semantics
 
 import model.EngineResult
+import model.ObjectEngineResult
 import model.PathComponent
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -76,7 +77,7 @@ class DepthFirstReactorTest {
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
         val selection = selections.merge(source.type).byGroundKey().values.single()
-        val target = EngineResult.Object.of(source.type, emptyMap(), mutable = true)
+        val target = ObjectEngineResult.of(source.type, emptyMap(), mutable = true)
         val path = emptyList<PathComponent>()
         val firstResolver =
             DepthFirstReactor.SlotResolver(path, source, selection, target)

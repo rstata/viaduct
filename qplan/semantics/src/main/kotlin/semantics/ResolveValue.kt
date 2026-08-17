@@ -2,11 +2,15 @@ package semantics
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.PathComponent
 import model.SelectionForest
 import model.Value
 import model.applicableGroundSelections
 import model.selectionForestOf
+import model.toEngineResult
 
 /**
  * A passive result tree and the object occurrences requiring registered resolver work within it.
@@ -24,7 +28,7 @@ internal class ObjectResolution(
     val path: List<PathComponent>,
     val source: Value.Object,
     val selections: SelectionForest,
-    val target: EngineResult.Object,
+    val target: ObjectEngineResult,
 )
 
 /**
@@ -43,8 +47,8 @@ internal fun Value.Output?.resolveValue(
 ): ResolvedValue =
     when (this) {
         null -> ResolvedValue(null, emptyList(), emptyList())
-        Value.Error -> ResolvedValue(Value.Error, emptyList(), emptyList())
-        is Value.Simple -> ResolvedValue(this, emptyList(), emptyList())
+        Value.Error -> ResolvedValue(ErrorEngineResult, emptyList(), emptyList())
+        is Value.Simple -> ResolvedValue(toEngineResult(), emptyList(), emptyList())
         is Value.Object -> resolveObjectValue(resolverDemand, path)
         is Value.OutputList ->
             values
@@ -72,7 +76,7 @@ internal fun Value.Output?.resolveValue(
                     )
                 }.let { resolved ->
                     ResolvedValue(
-                        engineResult = EngineResult.List.of(typeExpr, resolved.values),
+                        engineResult = ListEngineResult.of(typeExpr, resolved.values),
                         objectsNeedingResolution = resolved.objectsNeedingResolution,
                         objectOccurrences = resolved.objectOccurrences,
                     )
@@ -132,7 +136,7 @@ private fun Value.Object.resolveObjectValue(
                         fieldValue.objectOccurrences,
             )
         }
-    val engineResult = EngineResult.Object.of(type, resolved.values, mutable = true)
+    val engineResult = ObjectEngineResult.of(type, resolved.values, mutable = true)
     val localOccurrence =
         ObjectResolution(
             path = path,

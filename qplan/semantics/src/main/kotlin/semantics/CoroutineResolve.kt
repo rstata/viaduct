@@ -6,6 +6,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
 import model.Promise
@@ -23,9 +25,9 @@ import semantics.correctresolution.argumentsContainErrorValue
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal suspend fun Value.Object.coroutineResolve(
     selections: SelectionForest,
-): EngineResult.Object {
+): ObjectEngineResult {
     val result =
-        EngineResult.Object.of(
+        ObjectEngineResult.of(
             type = type,
             mutable = true,
         )
@@ -47,7 +49,7 @@ private fun CoroutineScope.orchestrateSlot(
     path: List<PathComponent>,
     source: Value.Object,
     selections: SelectionForest,
-    target: EngineResult.Object,
+    target: ObjectEngineResult,
 ) {
     require(source.type == target.type) {
         "Source type ${source.type.typeName} does not match result type ${target.type.typeName}"
@@ -83,14 +85,14 @@ private suspend fun resolveSlot(
     path: List<PathComponent>,
     source: Value.Object,
     selection: ObjectSelection,
-    target: EngineResult.Object,
+    target: ObjectEngineResult,
     cell: EngineResult.Cell,
 ) {
     val key = selection.groundKey()
     val valuePromise = cell.getValue()
     when {
         key.arguments.argumentsContainErrorValue() -> {
-            valuePromise.complete(Value.Error)
+            valuePromise.complete(ErrorEngineResult)
             cell.setAccessAccepted(Value.Error)
         }
         else ->

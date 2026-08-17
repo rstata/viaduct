@@ -54,4 +54,4 @@ The dependency-prefix and recursive-result inductions are mutually supporting bu
 
 ## Conclusion
 
-Resolver02's Query result contains every activated resolver's complete fixed input demand at the corresponding OER occurrence, and the property holds recursively through all object and list results. Therefore the returned `EngineResult.Object` satisfies `isClosedUnderResolverDemand()` within the stated finite, acyclic, `FromArgument`-only domain.
+Resolver02's Query result contains every activated resolver's complete fixed input demand at the corresponding OER occurrence, and the property holds recursively through all object and list results. Therefore the returned `ObjectEngineResult` satisfies `isClosedUnderResolverDemand()` within the stated finite, acyclic, `FromArgument`-only domain.

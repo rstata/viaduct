@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import model.IntEngineResult
 import model.Value
 import model.fragmentFrom
 import model.objectOf
@@ -49,7 +50,7 @@ class FromObjectFieldSingletonCoercionRegressionTest {
             world.schema.objectField("Query", "consume"),
             mapOf("value" to listOf(listOf(7))),
         )
-        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).getValue().get())
+        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
         assertTrue(context(world) { resolved.correctResolution(fragment) })
     }
 }

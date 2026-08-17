@@ -3,6 +3,8 @@ package semantics
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
 import model.SelectionForest
@@ -21,8 +23,8 @@ context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal fun Value.Object.orchestrateKeys(
     path: List<PathComponent>,
     selections: SelectionForest,
-    resolved: EngineResult.Object,
-): EngineResult.Object {
+    resolved: ObjectEngineResult,
+): ObjectEngineResult {
     require(resolved.type == type) {
         "Initial result type ${resolved.type.typeName} does not match $type"
     }
@@ -98,13 +100,13 @@ context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal fun Value.Object.resolveKey(
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
-    resolved: EngineResult.Object,
+    resolved: ObjectEngineResult,
 ): ResolvedValue? {
     val key = fieldSelection.groundKey()
     val cell = resolved.reserveCell(key)
     return when {
         key.arguments.argumentsContainErrorValue() -> {
-            cell.setValue(Value.Error)
+            cell.setValue(ErrorEngineResult)
             cell.setAccessAccepted(Value.Error)
             null
         }

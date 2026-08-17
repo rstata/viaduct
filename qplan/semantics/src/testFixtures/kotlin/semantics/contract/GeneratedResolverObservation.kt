@@ -2,6 +2,10 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
+import model.SimpleEngineResult
 import model.Fragment
 import model.SelectionForest
 import model.Value
@@ -27,7 +31,7 @@ data class GeneratedResolutionObservation(
     val fragment: Fragment,
     val subject: ResolverResolutionObservation,
 ) {
-    val result: EngineResult.Object
+    val result: ObjectEngineResult
         get() = subject.result
 }
 
@@ -205,9 +209,10 @@ private fun EngineResult?.sameSelectedResultAs(
 ): Boolean {
     if (this == null || other == null) return this == other
     return when (this) {
-        is Value.Simple -> other is Value.Simple && this == other
-        is EngineResult.List ->
-            other is EngineResult.List &&
+        ErrorEngineResult -> other == ErrorEngineResult
+        is SimpleEngineResult -> other is SimpleEngineResult && this == other
+        is ListEngineResult ->
+            other is ListEngineResult &&
                 typeExpr == other.typeExpr &&
                 size == other.size &&
                 indices.all { index ->
@@ -215,8 +220,8 @@ private fun EngineResult?.sameSelectedResultAs(
                         .get()
                         .sameSelectedResultAs(other[index].get(), selections)
                 }
-        is EngineResult.Object ->
-            other is EngineResult.Object &&
+        is ObjectEngineResult ->
+            other is ObjectEngineResult &&
                 type == other.type &&
                 selections
                     .applicableGroundSelections(type)

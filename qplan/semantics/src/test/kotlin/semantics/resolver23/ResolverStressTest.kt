@@ -2,6 +2,7 @@ package semantics.resolver23
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import semantics.contract.DeepResolverStressContract
@@ -13,7 +14,7 @@ class ResolverStressTest : DeepResolverStressContract {
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         context(world) {
             semantics.resolver23.resolve(selections)
         }

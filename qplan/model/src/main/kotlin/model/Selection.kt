@@ -216,7 +216,7 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
  */
 context(world: Assumptions)
 suspend fun SelectionForest.mergeWithVariables(
-    result: EngineResult.Object,
+    result: ObjectEngineResult,
 ): Pair<ObjectSelectionForest, Map<Value.Variable.Stamped, Value.Input?>> {
     val type: Schema.ObjectType = result.type
     val childrenByKey: MutableMap<Value.ObjectKey, MutableList<SelectionForest>> =
@@ -255,8 +255,8 @@ suspend fun SelectionForest.mergeWithVariables(
                 if (continues) {
                     when (value) {
                         null -> null
-                        Value.Error -> Value.Error
-                        is EngineResult.Object -> return@forEach
+                        ErrorEngineResult -> Value.Error
+                        is ObjectEngineResult -> return@forEach
                         else ->
                             error(
                                 "Path-variable $variable cannot continue through a non-object value",
@@ -281,15 +281,15 @@ suspend fun SelectionForest.mergeWithVariables(
 private fun EngineResult?.toPathVariableInput(): Value.Input? =
     when (this) {
         null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.List -> toPathVariableInputList()
-        is EngineResult.Object ->
+        ErrorEngineResult -> Value.Error
+        is SimpleEngineResult -> toValue()
+        is ListEngineResult -> toPathVariableInputList()
+        is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun EngineResult.List.toPathVariableInputList(): Value.InputList {
+private fun ListEngineResult.toPathVariableInputList(): Value.InputList {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }

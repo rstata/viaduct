@@ -1,11 +1,15 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.OpenArguments
 import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.registry.ResolverRegistry
@@ -290,7 +294,7 @@ data class RegisteredResolverOccurrence(
     val applicationKey: ResolverApplicationKey,
     val canonicalField: FieldCoordinate,
     val occurrencePath: List<PathComponent>,
-    val containingObject: EngineResult.Object,
+    val containingObject: ObjectEngineResult,
 )
 
 fun EngineResult?.registeredResolverOccurrences(
@@ -311,10 +315,10 @@ fun EngineResult?.registeredResolverOccurrences(
                 bounds.maxResultNodes,
             )
         }
-        if (value == null || value == Value.Error || value is Value.Simple) return
+        if (value == null || value == ErrorEngineResult || value is SimpleEngineResult) return
 
         when (value) {
-            is EngineResult.Object -> {
+            is ObjectEngineResult -> {
                 value.keys
                     .sortedBy { key -> key.canonicalFingerprint(bounds).value }
                     .forEach { key ->
@@ -341,7 +345,7 @@ fun EngineResult?.registeredResolverOccurrences(
                     }
             }
 
-            is EngineResult.List ->
+            is ListEngineResult ->
                 value.forEachIndexed { index, cell ->
                     visit(
                         cell.getValue().get(),
@@ -349,8 +353,8 @@ fun EngineResult?.registeredResolverOccurrences(
                     )
                 }
 
-            Value.Error,
-            is Value.Simple,
+            ErrorEngineResult,
+            is SimpleEngineResult,
             -> Unit
         }
     }

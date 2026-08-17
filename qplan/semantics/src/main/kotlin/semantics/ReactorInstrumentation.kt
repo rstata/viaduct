@@ -1,6 +1,7 @@
 package semantics
 
 import model.EngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.Value
@@ -94,7 +95,7 @@ internal class ReactorInstrumentation(
 
     fun orchestratorFinished(
         path: List<PathComponent>,
-        target: EngineResult.Object,
+        target: ObjectEngineResult,
         closedDemand: ObjectSelectionForest,
     ) {
         val objectType = launchedOrchestrators.getValue(path)
@@ -164,7 +165,7 @@ internal class ReactorInstrumentation(
 
 private data class OrchestratorResult(
     val path: List<PathComponent>,
-    val target: EngineResult.Object,
+    val target: ObjectEngineResult,
     val closedDemand: ObjectSelectionForest,
 )
 

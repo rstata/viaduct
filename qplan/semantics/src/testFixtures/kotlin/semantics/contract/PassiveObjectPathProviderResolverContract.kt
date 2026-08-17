@@ -1,6 +1,8 @@
 package semantics.contract
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ObjectEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -45,10 +47,10 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
                     world.schema.objectField("Query", "item"),
                     emptyMap(),
                 ),
-            ).get() as EngineResult.Object
+            ).get() as ObjectEngineResult
 
         assertEquals(
-            Value.Int.of(11),
+            IntEngineResult.of(11),
             item.getCell(
                 Value.GroundKey.of(
                     world.schema.objectField("Item", "result"),

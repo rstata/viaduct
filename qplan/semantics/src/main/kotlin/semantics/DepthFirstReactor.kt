@@ -2,6 +2,7 @@ package semantics
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
 import model.SelectionForest
@@ -16,7 +17,7 @@ import java.util.PriorityQueue
  */
 internal interface DepthFirstReactor {
     context(world: Assumptions, runtimeSupport: RuntimeSupport)
-    fun resolve(): EngineResult.Object
+    fun resolve(): ObjectEngineResult
 
     sealed interface Task {
         val path: List<PathComponent>
@@ -26,14 +27,14 @@ internal interface DepthFirstReactor {
         override val path: List<PathComponent>,
         val source: Value.Object,
         val selections: SelectionForest,
-        val target: EngineResult.Object,
+        val target: ObjectEngineResult,
     ) : Task
 
     class SlotResolver(
         override val path: List<PathComponent>,
         val source: Value.Object,
         val selection: ObjectSelection,
-        val target: EngineResult.Object,
+        val target: ObjectEngineResult,
     ) : Task
 
     companion object {
@@ -61,7 +62,7 @@ private class PriorityQueueDepthFirstReactor(
     source: Value.Object,
     eventObserver: ReactorEventObserver,
 ) : DepthFirstReactor {
-    private val result = EngineResult.Object.of(source.type, emptyMap(), mutable = true)
+    private val result = ObjectEngineResult.of(source.type, emptyMap(), mutable = true)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
     private val instrumentation = ReactorInstrumentation(eventObserver)
     private var nextSequence = 0L
@@ -83,7 +84,7 @@ private class PriorityQueueDepthFirstReactor(
     }
 
     context(world: Assumptions, runtimeSupport: RuntimeSupport)
-    override fun resolve(): EngineResult.Object {
+    override fun resolve(): ObjectEngineResult {
         check(!started) { "DepthFirstReactor.resolve() may only be called once" }
         started = true
 

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.registry.successorDemand
 import semantics.RuntimeSupport
@@ -14,7 +15,7 @@ import semantics.coroutineResolve
  * the results contain only the necessary OER nodes has not been proved.
  */
 context(world: Assumptions)
-fun resolve(selections: SelectionForest): EngineResult.Object {
+fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(world.selectiveResolvers) {
         "Resolver23 requires selective resolvers"
     }

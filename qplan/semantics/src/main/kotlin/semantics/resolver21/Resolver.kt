@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.RuntimeSupport
 import semantics.coroutineResolve
@@ -13,7 +14,7 @@ import semantics.coroutineResolve
  * empty, except for generated `T_V_A_Bridge.node` fragments that select passive sibling `id`.
  */
 context(world: Assumptions)
-fun resolve(selections: SelectionForest): EngineResult.Object {
+fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(!world.selectiveResolvers) {
         "Resolver21 requires non-selective resolvers"
     }

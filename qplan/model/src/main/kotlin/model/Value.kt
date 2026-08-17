@@ -51,7 +51,7 @@ sealed interface Value {
         val type: Schema.Type
     }
 
-    sealed interface Simple : Input, Output, EngineResult {
+    sealed interface Simple : Input, Output {
         val type: Schema.SimpleType
     }
 
@@ -579,7 +579,7 @@ sealed interface Value {
          * A variable in the [ResolverRegistry]. A template is stamped during resolution to create
          * a distinct variable for one occurrence of its defining resolver.
          *
-         * Exact [EngineResult.Object] paths stamp templates. Stamps are otherwise opaque and
+         * Exact [ObjectEngineResult] paths stamp templates. Stamps are otherwise opaque and
          * uninterpreted except for equality; paths provide uniqueness and useful diagnostics
          * without becoming an observable dimension of [Stamped].
          */

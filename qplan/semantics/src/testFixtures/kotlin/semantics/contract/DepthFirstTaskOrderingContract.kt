@@ -2,6 +2,7 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import model.emptyFragmentOf
@@ -34,7 +35,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
         root: Value.Object,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
-    ): EngineResult.Object
+    ): ObjectEngineResult
 
     @Test
     fun `executes the exact recursive task order across equal-depth siblings`() {

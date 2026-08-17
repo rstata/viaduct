@@ -4,6 +4,7 @@ import java.time.Duration
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Value
 import model.fragmentFrom
 import model.objectOf
@@ -165,7 +166,7 @@ class ResolverStressTest {
         preemptiveTimeout: Boolean = false,
         successfulActivation: (
             Assumptions,
-            EngineResult.Object,
+            ObjectEngineResult,
             ResolverTestCase,
             Set<FieldCoordinate>,
         ) -> Boolean = { _, _, _, _ -> true },
@@ -239,7 +240,7 @@ class ResolverStressTest {
                         queryActivatedCases += 1
 
                         testCase.registry.clearResolutionWitness()
-                        var completedResult: EngineResult.Object? = null
+                        var completedResult: ObjectEngineResult? = null
                         if (preemptiveTimeout) {
                             assertTimeoutPreemptively(RESOLUTION_TIMEOUT) {
                                 completedResult =

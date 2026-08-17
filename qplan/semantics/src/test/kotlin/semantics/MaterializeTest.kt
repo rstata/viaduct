@@ -4,9 +4,11 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
+import model.ObjectEngineResult
 import model.MissingFieldException
 import model.PathComponent
 import model.Schema
+import model.StringEngineResult
 import model.Value
 import model.fragmentFrom
 import model.instantiateBindings
@@ -44,7 +46,7 @@ class MaterializeTest {
                         .instantiateBindings()
                 }
             val result =
-                EngineResult.Object.of(
+                ObjectEngineResult.of(
                     type = world.schema.query,
                     mutable = true,
                 )
@@ -60,7 +62,7 @@ class MaterializeTest {
                 }
 
             assertFalse(materialized.isCompleted)
-            promise.complete(Value.String.of("ready"))
+            promise.complete(StringEngineResult.of("ready"))
 
             assertEquals(
                 Value.String.of("ready"),
@@ -85,7 +87,7 @@ class MaterializeTest {
                     .merge(world.schema.query)
                     .instantiateBindings()
             }
-        val result = EngineResult.Object.of(world.schema.query)
+        val result = ObjectEngineResult.of(world.schema.query)
 
         assertFailsWith<MissingFieldException> {
             runBlocking {
@@ -121,11 +123,11 @@ class MaterializeTest {
                 emptyMap(),
             )
         val reader: List<PathComponent> = listOf(childKey, valueKey)
-        val childResult = EngineResult.Object.of(childType, mutable = true)
+        val childResult = ObjectEngineResult.of(childType, mutable = true)
         val valueCell = childResult.reserveCell(valueKey)
         valueCell.createValuePromise()
         val result =
-            EngineResult.Object.of(
+            ObjectEngineResult.of(
                 type = world.schema.query,
                 values = mapOf(childKey to childResult),
             )

@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -40,6 +41,6 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(7), resolved.getCell(resultKey).get())
     }
 }

@@ -1,7 +1,11 @@
 package semantics.contract
 
 import model.EngineResult
+import model.IDEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.Schema
+import model.StringEngineResult
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
@@ -122,36 +126,36 @@ interface NodeResolverContract : ResolverContract {
                 "fragment ignored on Query { viewer { card { profile { id name } } } }",
             )
         val viewer =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 result.getCell(schema.contractKey("Query", "viewer")).get(),
             )
         val card =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 viewer.getCell(schema.contractKey("Viewer", "card")).get(),
             )
         val bridgeKey = schema.contractKey("Card", "profile_V_A_node")
-        val bridge = assertIs<EngineResult.Object>(card.getCell(bridgeKey).get())
+        val bridge = assertIs<ObjectEngineResult>(card.getCell(bridgeKey).get())
         val profile =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "node")).get(),
             )
 
         assertEquals(expectedPassiveResultKeys(card.type, setOf(bridgeKey)), card.keys)
         assertEquals(
             "\$node:7:Profileprofile-1",
-            assertIs<Value.ID>(
+            assertIs<IDEngineResult>(
                 bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "id")).get(),
             ).idValue,
         )
         assertEquals(
             "profile-1",
-            assertIs<Value.ID>(
+            assertIs<IDEngineResult>(
                 profile.getCell(schema.contractKey("Profile", "id")).get(),
             ).idValue,
         )
         assertEquals(
             "Ada",
-            assertIs<Value.String>(
+            assertIs<StringEngineResult>(
                 profile.getCell(schema.contractKey("Profile", "name")).get(),
             ).stringValue,
         )
@@ -246,13 +250,13 @@ interface NodeResolverContract : ResolverContract {
             setOf(firstKey, secondKey),
             result.keys,
         )
-        val first = assertIs<EngineResult.List>(result.getCell(firstKey).get())
+        val first = assertIs<ListEngineResult>(result.getCell(firstKey).get())
         assertEquals(
             listOf("User", "Admin"),
             first.map { cell ->
-                val bridge = assertIs<EngineResult.Object>(cell.get())
+                val bridge = assertIs<ObjectEngineResult>(cell.get())
                 assertEquals(bridgeType, bridge.type)
-                assertIs<EngineResult.Object>(
+                assertIs<ObjectEngineResult>(
                     bridge.getCell(payloadKey).get(),
                 ).type.typeName
             },
@@ -328,14 +332,14 @@ interface NodeResolverContract : ResolverContract {
         val result =
             resolveAndValidate(world, "fragment ignored on Query { matrix { id name } }")
         val matrix =
-            assertIs<EngineResult.List>(
+            assertIs<ListEngineResult>(
                 result.getCell(schema.contractKey("Query", "matrix_V_A_node")).get(),
             )
         val payloadTypes =
             matrix.map { row ->
-                assertIs<EngineResult.List>(row.get()).map { bridgeCell ->
-                    val bridge = assertIs<EngineResult.Object>(bridgeCell.get())
-                    assertIs<EngineResult.Object>(
+                assertIs<ListEngineResult>(row.get()).map { bridgeCell ->
+                    val bridge = assertIs<ObjectEngineResult>(bridgeCell.get())
+                    assertIs<ObjectEngineResult>(
                         bridge.getCell(schema.contractKey("User_V_A_Bridge", "node")).get(),
                     ).type.typeName
                 }

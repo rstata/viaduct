@@ -6,7 +6,7 @@
 
 **[resolver03-one-shot-construction]** Within Resolver03's acyclic domain with argument-defined variables, every resolver-bearing OER occurrence is constructed by one field-resolver application after all guarded transitive demand for that occurrence has been aggregated.
 
-**[resolver02-demand-closed-result]** Within Resolver02's finite acyclic domain with only `FromArgument` variables, resolving a Query selection forest produces an `EngineResult.Object` closed under every activated resolver's fixed input demand.
+**[resolver02-demand-closed-result]** Within Resolver02's finite acyclic domain with only `FromArgument` variables, resolving a Query selection forest produces an `ObjectEngineResult` closed under every activated resolver's fixed input demand.
 
 **[resolver-provider-containment-construction]** Pre-reasoning construction of every canonical Kotlin registry built by `TestWorld` contains each field-relative variable provider path in its defining resolver's fixed object fragment.
 

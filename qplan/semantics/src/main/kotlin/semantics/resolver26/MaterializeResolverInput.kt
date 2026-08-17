@@ -2,19 +2,24 @@ package semantics.resolver26
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
+import model.SimpleEngineResult
 import model.Value
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
 import model.merge
+import model.toValue
 import model.unionOutput
 import semantics.RuntimeSupport
 
 // Returns a resolver-visible input object, projecting stamped storage keys to ordinary keys.
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-internal suspend fun EngineResult.Object.materializeResolverInput(
+internal suspend fun ObjectEngineResult.materializeResolverInput(
     selections: SelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -27,7 +32,7 @@ internal suspend fun EngineResult.Object.materializeResolverInput(
 
 // Materializes selected OER values at their stored paths, then unions them under visible keys.
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-private suspend fun EngineResult.Object.materializeSelectedObject(
+private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections: ObjectSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -72,9 +77,9 @@ private suspend fun EngineResult?.materializeSelectedValue(
 ): Value.Output? {
     return when (this) {
         null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.Object -> {
+        ErrorEngineResult -> Value.Error
+        is SimpleEngineResult -> toValue()
+        is ObjectEngineResult -> {
             // Bind through the owner's declared variables before restamping the ground child keys.
             val groundedDemand: ObjectSelectionForest =
                 selections.merge(type).fetchBindings()
@@ -88,7 +93,7 @@ private suspend fun EngineResult?.materializeSelectedValue(
                 resultPath = resultPath,
             )
         }
-        is EngineResult.List ->
+        is ListEngineResult ->
             Value.OutputList.of(
                 typeExpr = typeExpr,
                 values =

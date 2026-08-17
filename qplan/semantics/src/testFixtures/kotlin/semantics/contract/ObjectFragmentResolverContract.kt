@@ -2,7 +2,12 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.IntEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.Schema
+import model.StringEngineResult
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
@@ -57,7 +62,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result =
             resolveAndValidate(world, "fragment ignored on Query { viewer { greeting } }")
         val viewer =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
             )
 
@@ -121,11 +126,11 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result =
             resolveAndValidate(world, "fragment ignored on Query { viewer { message } }")
         val viewer =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
             )
         val profile =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 viewer.getCell(world.schema.contractKey("User", "profile")).get(),
             )
 
@@ -167,17 +172,17 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result =
             resolveAndValidate(world, "fragment ignored on Query { chain { computed } }")
         val chain =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "chain")).get(),
             )
         val next =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 chain.getCell(world.schema.contractKey("Chain", "next")).get(),
             )
 
         assertTrue("label" in next.keys.map { it.field.fieldName })
         assertEquals(
-            Value.Int.of(2),
+            IntEngineResult.of(2),
             chain.getCell(world.schema.contractKey("Chain", "computed")).get(),
         )
     }
@@ -213,12 +218,12 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result =
             resolveAndValidate(world, "fragment ignored on Query { holder { result } }")
         val holder =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "holder")).get(),
             )
 
         assertEquals(
-            Value.Int.of(7),
+            IntEngineResult.of(7),
             holder.getCell(world.schema.contractKey("Holder", "result")).get(),
         )
     }
@@ -257,16 +262,16 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val result =
             resolveAndValidate(world, "fragment ignored on Query { items { computed } }")
         val items =
-            assertIs<EngineResult.List>(
+            assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
             )
 
         assertEquals(3, items.size)
         assertEquals(null, items[0].get())
-        assertEquals(Value.Error, items[1].get())
-        val item = assertIs<EngineResult.Object>(items[2].get())
+        assertEquals(ErrorEngineResult, items[1].get())
+        val item = assertIs<ObjectEngineResult>(items[2].get())
         assertEquals(
-            Value.Int.of(6),
+            IntEngineResult.of(6),
             item.getCell(world.schema.contractKey("Item", "computed")).get(),
         )
         assertEquals(1, itemsApplications)
@@ -332,7 +337,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         }
         assertEquals(
-            Value.Int.of(1),
+            IntEngineResult.of(1),
             result.getCell(world.schema.contractKey("Query", "result")).get(),
         )
         testWorld.applicationArguments.assertApplicationCount(
@@ -458,15 +463,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 """.trimIndent(),
             )
         val groups =
-            assertIs<EngineResult.List>(
+            assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "groups")).get(),
             )
 
         listOf(1, 2).forEachIndexed { groupIndex, seed ->
-            val group = assertIs<EngineResult.Object>(groups[groupIndex].get())
+            val group = assertIs<ObjectEngineResult>(groups[groupIndex].get())
             listOf(2, 3).forEach { factor ->
                 val product =
-                    assertIs<EngineResult.Object>(
+                    assertIs<ObjectEngineResult>(
                         group.getCell(
                             Value.GroundKey.of(
                                 world.schema.objectField("Group", "product"),
@@ -479,11 +484,11 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     if (base % 2 == 0) "EvenProduct" else "OddProduct"
                 assertEquals(typeName, product.type.typeName)
                 assertEquals(
-                    Value.String.of("${seed}x$factor"),
+                    StringEngineResult.of("${seed}x$factor"),
                     product.getCell(world.schema.contractKey(typeName, "label")).get(),
                 )
                 assertEquals(
-                    Value.Int.of(base * if (typeName == "EvenProduct") 10 else 100),
+                    IntEngineResult.of(base * if (typeName == "EvenProduct") 10 else 100),
                     product.getCell(world.schema.contractKey(typeName, "computed")).get(),
                 )
             }
@@ -587,15 +592,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 """.trimIndent(),
             )
         val groups =
-            assertIs<EngineResult.List>(
+            assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "groups")).get(),
             )
 
         listOf(10, 20).forEachIndexed { groupIndex, seed ->
-            val group = assertIs<EngineResult.Object>(groups[groupIndex].get())
+            val group = assertIs<ObjectEngineResult>(groups[groupIndex].get())
             listOf(1, 3).forEach { count ->
                 val entries =
-                    assertIs<EngineResult.List>(
+                    assertIs<ListEngineResult>(
                         group.getCell(
                             Value.GroundKey.of(
                                 world.schema.objectField("Group", "entries"),
@@ -605,9 +610,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     )
                 assertEquals(count, entries.size)
                 entries.forEachIndexed { offset, cell ->
-                    val entry = assertIs<EngineResult.Object>(cell.get())
+                    val entry = assertIs<ObjectEngineResult>(cell.get())
                     assertEquals(
-                        Value.String.of("entry-${seed + offset}"),
+                        StringEngineResult.of("entry-${seed + offset}"),
                         entry.getCell(world.schema.contractKey("Entry", "rendered")).get(),
                     )
                 }

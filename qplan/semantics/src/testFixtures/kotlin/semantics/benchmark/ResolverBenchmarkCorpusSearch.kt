@@ -3,6 +3,10 @@ package semantics.benchmark
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.TimeoutCancellationException
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
+import model.SimpleEngineResult
 import model.Fragment
 import model.Value
 import model.fragmentFrom
@@ -170,14 +174,14 @@ object ResolverBenchmarkCorpusSearch {
         beneathList: Boolean = false,
     ): ResultShape =
         when (this) {
-            null, is Value.Simple -> ResultShape()
-            is EngineResult.List ->
+            null, ErrorEngineResult, is SimpleEngineResult -> ResultShape()
+            is ListEngineResult ->
                 indices
                     .map { index ->
                         get(index).getValue().get().shape(depth, beneathList = true)
                     }
                     .fold(ResultShape(), ResultShape::plus)
-            is EngineResult.Object -> {
+            is ObjectEngineResult -> {
                 val childShapes =
                     keys.map { key ->
                         val value = getCell(key).getValue().get()

@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -43,7 +44,7 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
             )
 
         assertEquals(
-            Value.Int.of(7),
+            IntEngineResult.of(7),
             resolved
                 .getCell(
                     Value.GroundKey.of(

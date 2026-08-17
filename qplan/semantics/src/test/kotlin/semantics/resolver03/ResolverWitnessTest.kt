@@ -2,6 +2,7 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import semantics.contract.ResolverWitnessContract
@@ -11,7 +12,7 @@ class ResolverWitnessTest : ResolverWitnessContract {
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         context(world) {
             semantics.resolver03.resolve(selections)
         }

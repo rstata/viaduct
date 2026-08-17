@@ -1,5 +1,8 @@
 package semantics.contract
 
+import model.EngineResult
+import model.ErrorEngineResult
+import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -48,7 +51,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                     .variable
             }
 
-        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).get())
         assertEquals(
             Value.Int.of(7),
             world.getBinding(boundVariable),
@@ -105,9 +108,9 @@ interface ObjectFragmentFromObjectPathResolverContract :
                         .variable
                 }
 
-            assertEquals<Value.Input?>(
-                provided,
-                resolved.getCell(resultKey).get() as Value.Input?,
+            assertEquals<EngineResult?>(
+                if (provided == Value.Error) ErrorEngineResult else null,
+                resolved.getCell(resultKey).get(),
             )
             assertEquals(
                 provided,
@@ -158,7 +161,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(Value.Int.of(9), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(9), resolved.getCell(resultKey).get())
     }
 
     @Test
@@ -189,7 +192,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(Value.Int.of(10), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(10), resolved.getCell(resultKey).get())
         testWorld.applicationArguments.assertArguments(
             world.schema.objectField("Query", "consume"),
             mapOf("values" to listOf(2, 3, 5)),

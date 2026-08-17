@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.Value
 import model.emptyFragmentOf
@@ -228,7 +229,7 @@ class ResolutionWitnessTest {
         fun payload(
             scale: Int,
             value: Int,
-        ): EngineResult.Object =
+        ): ObjectEngineResult =
             schema.engineResultOf("Payload") {
                 field("computed", "scale" to scale) resolvesTo value
                 "base" resolvesTo value
@@ -359,7 +360,7 @@ class ResolutionWitnessTest {
                 Value.Arguments.of(computedField, mapOf("scale" to 1)),
             )
 
-        fun payload(value: Int): EngineResult.Object =
+        fun payload(value: Int): ObjectEngineResult =
             schema.engineResultOf("Payload") {
                 field("computed", "scale" to 1) resolvesTo value
                 "base" resolvesTo value

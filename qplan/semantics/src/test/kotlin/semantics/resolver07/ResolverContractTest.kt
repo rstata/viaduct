@@ -2,6 +2,7 @@ package semantics.resolver07
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import semantics.contract.CompleteObjectFragmentOutputPolicyContract
@@ -28,7 +29,7 @@ class ResolverContractTest :
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         context(world) {
             semantics.resolver07.resolve(selections)
         }
@@ -38,7 +39,7 @@ class ResolverContractTest :
         root: Value.Object,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         context(world) {
             semantics.resolver07.resolve(
                 selections = selections,

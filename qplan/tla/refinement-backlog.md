@@ -22,7 +22,7 @@ The main issue is that several relations the implementation should derive are ca
 
 ### Returned Cells
 
-`OccurrenceFolds.tla` removes abstract work and maps it to stipulated `WorkCell` values. It does not construct returned cells through counterparts of `resolveKey`, recursive `resolveValue`, and write-once `EngineResult.Object.write`.
+`OccurrenceFolds.tla` removes abstract work and maps it to stipulated `WorkCell` values. It does not construct returned cells through counterparts of `resolveKey`, recursive `resolveValue`, and write-once `ObjectEngineResult.write`.
 
 Terminal built keys therefore align with returned OER cells only by assumption. The refinement must derive both cell presence and cell values from the fold transitions.
 

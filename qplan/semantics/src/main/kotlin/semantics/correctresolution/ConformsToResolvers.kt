@@ -3,11 +3,16 @@ package semantics.correctresolution
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
+import model.SimpleEngineResult
 import model.Value
 import model.applicableGroundSelections
+import model.toValue
 import model.usedVariables
 import model.registry.FieldResolver
 import semantics.RuntimeSupport
@@ -26,13 +31,13 @@ import semantics.materialize
  * value is present. It observes cell values but never access-acceptance results.
  */
 context(world: Assumptions)
-fun EngineResult.Object.conformsToResolvers(): Boolean =
+fun ObjectEngineResult.conformsToResolvers(): Boolean =
     context(RuntimeSupport.noCycleChecking()) {
         objectConformsToResolvers(emptyList())
     }
 
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-private fun EngineResult.Object.objectConformsToResolvers(
+private fun ObjectEngineResult.objectConformsToResolvers(
     path: List<PathComponent>,
 ): Boolean {
     val registry = world.resolverRegistry
@@ -74,7 +79,7 @@ private fun EngineResult.Object.objectConformsToResolvers(
 
 context(world: Assumptions)
 private fun FieldResolver.objectFragmentSatisfiedBy(
-    result: EngineResult.Object,
+    result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ObjectSelectionForest? {
     val groundKey = path.lastOrNull() as? Value.GroundKey
@@ -107,12 +112,12 @@ private fun EngineResult?.engineResultConformsToResolvers(
 ): Boolean =
     when (this) {
         null,
-        Value.Error,
-        is Value.Simple,
+        ErrorEngineResult,
+        is SimpleEngineResult,
         -> true
 
-        is EngineResult.Object -> objectConformsToResolvers(path)
-        is EngineResult.List ->
+        is ObjectEngineResult -> objectConformsToResolvers(path)
+        is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultConformsToResolvers(
                     path + Value.ListIndex.of(index),
@@ -126,10 +131,10 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 ): Boolean =
     when (this) {
         null -> resolverValue == null
-        Value.Error -> resolverValue == Value.Error
-        is Value.Simple -> this == resolverValue
+        ErrorEngineResult -> resolverValue == Value.Error
+        is SimpleEngineResult -> toValue() == resolverValue
 
-        is EngineResult.Object ->
+        is ObjectEngineResult ->
             resolverValue != Value.Error &&
                 resolverValue is Value.Object &&
                 objectFieldsConformToResolverValue(
@@ -139,7 +144,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                     },
                 )
 
-        is EngineResult.List ->
+        is ListEngineResult ->
             resolverValue != Value.Error &&
             resolverValue is Value.OutputList &&
                 size == resolverValue.values.size &&
@@ -151,7 +156,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
     }
 
 context(world: Assumptions)
-private fun EngineResult.Object.objectFieldsConformToResolverValue(
+private fun ObjectEngineResult.objectFieldsConformToResolverValue(
     resolverValue: Value.Object,
     fieldBelongsToResolver: (Schema.ObjectField) -> Boolean,
 ): Boolean {

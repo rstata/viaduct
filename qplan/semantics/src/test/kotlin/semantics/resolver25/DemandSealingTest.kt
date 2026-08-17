@@ -1,6 +1,8 @@
 package semantics.resolver25
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -47,7 +49,7 @@ class DemandSealingTest {
 
         val resolved = resolveResult(testWorld)
 
-        assertEquals(Value.Int.of(14), resolved.getCell(resultKey).getValue().get())
+        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
         assertEquals(
             Value.Int.of(7),
             testWorld.assumptions.getBinding(
@@ -162,7 +164,7 @@ class DemandSealingTest {
             },
         )
         assertEquals(
-            Value.Int.of(9),
+            IntEngineResult.of(9),
             resolved
                 .getCell(
                     Value.GroundKey.of(
@@ -275,7 +277,7 @@ class DemandSealingTest {
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).getValue().get() == Value.Int.of(8),
+                ).getValue().get() == IntEngineResult.of(8),
         )
     }
 
@@ -317,7 +319,7 @@ class DemandSealingTest {
                 emptyMap(),
             )
 
-        assertEquals(Value.Int.of(11), resolved.getCell(resultKey).getValue().get())
+        assertEquals(IntEngineResult.of(11), resolved.getCell(resultKey).getValue().get())
         assertContains(
             observation.lifecycleEvents.resolver25StructuralSignatures(),
             Resolver25StructuralSignature.NESTED_PROVIDER_PATH,
@@ -466,7 +468,7 @@ class DemandSealingTest {
                 },
             )
 
-        val resolved: EngineResult.Object =
+        val resolved: ObjectEngineResult =
             context(testWorld.assumptions) {
                 resolve(
                     testWorld.assumptions
@@ -503,7 +505,7 @@ class DemandSealingTest {
             },
         )
         assertEquals(
-            Value.Int.of(9),
+            IntEngineResult.of(9),
             resolved
                 .getCell(
                     Value.GroundKey.of(
@@ -514,7 +516,7 @@ class DemandSealingTest {
         )
     }
 
-    private fun resolveResult(testWorld: TestWorld): EngineResult.Object {
+    private fun resolveResult(testWorld: TestWorld): ObjectEngineResult {
         return observeResult(testWorld).result
     }
 

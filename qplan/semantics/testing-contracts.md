@@ -10,7 +10,7 @@ interface ResolverContract {
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object
+    ): ObjectEngineResult
 }
 ```
 

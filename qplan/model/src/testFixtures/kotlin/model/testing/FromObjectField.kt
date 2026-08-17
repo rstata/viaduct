@@ -50,6 +50,7 @@ class FromObjectField private constructor(
             objectFragmentSource: String,
             responsePath: List<String>,
             variableField: Schema.ObjectField?,
+            bindings: Map<String, Value.Input?>,
         ): FromObjectField {
             require(responsePath.isNotEmpty()) {
                 "fromObjectField path must contain at least one response key"
@@ -61,7 +62,7 @@ class FromObjectField private constructor(
             val parsed =
                 GJSelectionParser(
                     schema = schema,
-                    variableValues = emptyMap(),
+                    variableValues = bindings,
                     variableField = variableField,
                 ).specSelectionsFrom(objectFragmentSource)
             val compiled =
@@ -90,12 +91,14 @@ fun Schema.fromObjectField(
     objectFragmentSource: String,
     responsePath: List<String>,
     variableField: Schema.ObjectField? = null,
+    bindings: Map<String, Value.Input?> = emptyMap(),
 ): FromObjectField =
     FromObjectField.compile(
         schema = this as GJSchema,
         objectFragmentSource = objectFragmentSource,
         responsePath = responsePath,
         variableField = variableField,
+        bindings = bindings,
     )
 
 private data class CompiledPath(

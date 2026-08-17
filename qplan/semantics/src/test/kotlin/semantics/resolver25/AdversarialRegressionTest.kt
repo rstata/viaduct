@@ -3,12 +3,9 @@ package semantics.resolver25
 import java.time.Duration
 import model.EngineResult
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromObjectField
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertTimeoutPreemptively
 import semantics.contract.Resolver25StructuralSignature
@@ -50,19 +47,33 @@ class AdversarialRegressionTest {
                 } else {
                     "box { value }"
                 }
-            val resultFragment =
-                """
-                fragment Result on Query {
-                  $providerSelection
-                  consume(value: ${'$'}value)
+            val providedResult = if (provided == Value.Error) "\"ERROR\"" else "null"
+            val boxResult =
+                if (passiveIntermediate) {
+                    "{nested: $providedResult}"
+                } else {
+                    providedResult
                 }
-                """.trimIndent()
+            val providerPath =
+                if (passiveIntermediate) {
+                    """["box", "nested", "value"]"""
+                } else {
+                    """["box", "value"]"""
+                }
             val testWorld =
-                TestWorld.fromSDL(
+                TestWorld.fromDSL(
                     schemaSDL =
                         """
-                        type Nested {
-                          value: Int
+                        extend type Query {
+                          result: Int
+                            @resolver(
+                              of: "$providerSelection consume(value: ${'$'}value)"
+                              pathVars: [{name: "value", path: $providerPath}]
+                              result: "value(consume)"
+                            )
+                          box: Box @resolver(result: $boxResult)
+                          consume(value: Int): Int
+                            @resolver(result: "value(${'$'}value)")
                         }
 
                         type Box {
@@ -70,54 +81,10 @@ class AdversarialRegressionTest {
                           nested: Nested
                         }
 
-                        type Query {
-                          result: Int
-                          box: Box
-                          consume(value: Int): Int
+                        type Nested {
+                          value: Int
                         }
                         """.trimIndent(),
-                    fieldResolvers = { schema ->
-                        val consume = schema.objectField("Query", "consume")
-                        val consumeKey =
-                            Value.GroundKey.of(
-                                consume,
-                                mapOf("value" to expectedInput),
-                            )
-                        mapOf(
-                            schema.objectField("Query", "result") to
-                                fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                    input.fieldValues.getValue(consumeKey)
-                                },
-                            schema.objectField("Query", "box") to
-                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                    if (passiveIntermediate) {
-                                        schema.objectOf("Box") {
-                                            "nested" setTo provided
-                                        }
-                                    } else {
-                                        provided
-                                    }
-                                },
-                            consume to
-                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                    arguments.fieldValues.getValue("value") as Value.Output?
-                                },
-                        )
-                    },
-                    variableProviders = { schema ->
-                        val result = schema.objectField("Query", "result")
-                        mapOf(
-                            Value.Variable.of(result, "value") to
-                                schema.fromObjectField(
-                                    resultFragment,
-                                    if (passiveIntermediate) {
-                                        listOf("box", "nested", "value")
-                                    } else {
-                                        listOf("box", "value")
-                                    },
-                                ),
-                        )
-                    },
                 )
             val world = testWorld.assumptions
             val resultKey =

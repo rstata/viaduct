@@ -69,6 +69,8 @@ metadata.
 
 `of` is an optional selection-set string relative to the field's parent object type. An absent or
 empty `of` denotes an empty object fragment. Response-key aliases are not supported.
+The string literal `"ERROR"` in an argument position produces `Value.Error`; it is fixture syntax,
+not a schema-defined string value or resolver variable.
 
 ```graphql
 extend type Query {
@@ -80,9 +82,12 @@ type Item {
   source: Int!
   computed: Int!
     @resolver(
-      of: "source"
+      of: "source dependency(arg: \"ERROR\")"
       result: "sumplus1(source)"
     )
+
+  dependency(arg: Int!): Int!
+    @resolver(result: 1)
 }
 ```
 
@@ -131,14 +136,18 @@ objects. They are interpreted against the resolver field's declared output type.
 Supported expressions are:
 
 ```text
+value(v)
 sum(v1, v2, ..., vn)
 sumplus1(v1, v2, ..., vn)
 ```
 
 Each value is either `$argumentName` or a dot-separated path from the resolver's materialized
-`of` input. A path may cross lists; all reachable integer leaves contribute to the sum. Null
-objects, lists, and elements contribute zero. An error reached by any term makes the complete
-expression an error.
+`of` input. `value(v)` requires exactly one reachable integer, null, or error and returns it
+unchanged. It therefore preserves nulls and errors instead of treating null as zero.
+
+For the sum expressions, a path may cross lists; all reachable integer leaves contribute to the
+sum. Null objects, lists, and elements contribute zero. An error reached by any term makes the
+complete expression an error.
 
 ```graphql
 extend type Query {

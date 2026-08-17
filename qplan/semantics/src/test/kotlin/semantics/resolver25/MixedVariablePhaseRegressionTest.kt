@@ -1,13 +1,9 @@
 package semantics.resolver25
 
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromArgument
-import model.testing.fromObjectField
 import semantics.contract.Resolver25StructuralSignature
 import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
@@ -17,95 +13,44 @@ import kotlin.test.assertEquals
 class MixedVariablePhaseRegressionTest {
     @Test
     fun `binds a known resolver argument before its nested path variable`() {
-        val resultFragment =
-            """
-            fragment Result on Query {
-              bridge(value: 7) {
-                consume(value: ${'$'}pathValue)
-              }
-              source
-            }
-            """.trimIndent()
-        val bridgeFragment =
-            """
-            fragment Bridge on Query {
-              seed(value: ${'$'}argumentValue)
-            }
-            """.trimIndent()
+        var bridgeSeed: Value.Output? = null
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 schemaSDL =
                     """
-                    type Item {
-                      consume(value: Int!): Int!
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "bridge(value: 7) { consume(value: ${'$'}pathValue) } source"
+                          pathVars: [{name: "pathValue", path: ["source"]}]
+                          result: "sum(bridge.consume)"
+                        )
+                      source: Int!
+                        @resolver(of: "seed(value: 1)", result: "sum(seed)")
+                      bridge(value: Int!): Item!
+                        @resolver(
+                          of: "seed(value: ${'$'}value)"
+                          result: {}
+                        )
+                      seed(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
                     }
 
-                    type Query {
-                      result: Int!
-                      source: Int!
-                      bridge(value: Int!): Item!
-                      seed(value: Int!): Int!
+                    type Item {
+                      consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val bridge =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "bridge"),
-                            mapOf("value" to 7),
-                        )
-                    val consume =
-                        Value.GroundKey.of(
-                            schema.objectField("Item", "consume"),
-                            mapOf("value" to 1),
-                        )
-                    val seedOne =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "seed"),
-                            mapOf("value" to 1),
-                        )
-                    val seedSeven =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "seed"),
-                            mapOf("value" to 7),
-                        )
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val item = input.fieldValues.getValue(bridge) as Value.Object
-                                item.fieldValues.getValue(consume)
-                            },
-                        schema.objectField("Query", "source") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Source on Query { seed(value: 1) }",
-                                ),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(seedOne)
-                            },
-                        schema.objectField("Query", "bridge") to
-                            fieldResolverOf(schema.fragmentFrom(bridgeFragment)) { input, _ ->
-                                check(input.fieldValues.getValue(seedSeven) == Value.Int.of(7))
-                                schema.objectOf("Item")
-                            },
-                        schema.objectField("Query", "seed") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
-                            },
-                        schema.objectField("Item", "consume") to
-                            fieldResolverOf(schema.emptyFragmentOf("Item")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    val bridge = schema.objectField("Query", "bridge")
-                    mapOf(
-                        Value.Variable.of(result, "pathValue") to
-                            schema.fromObjectField(resultFragment, listOf("source")),
-                        Value.Variable.of(bridge, "argumentValue") to
-                            schema.fromArgument(bridge, "value"),
-                    )
+                applicationObserver = { field, input, _, _ ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "bridge"
+                    ) {
+                        bridgeSeed =
+                            input.fieldValues.entries
+                                .single { (key, _) -> key.field.fieldName == "seed" }
+                                .value
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -139,94 +84,44 @@ class MixedVariablePhaseRegressionTest {
                     ),
                 ).getValue().get(),
         )
+        assertEquals(Value.Int.of(7), bridgeSeed)
     }
 
     @Test
     fun `does not let a future distinct key block a ready resolver instance`() {
-        val resultFragment =
-            """
-            fragment Result on Query {
-              source
-              dependent(value: ${'$'}pathValue)
-            }
-            """.trimIndent()
-        val dependentFragment =
-            """
-            fragment Dependent on Query {
-              producer(key: ${'$'}argumentValue)
-            }
-            """.trimIndent()
+        var earlyProducer: Value.Output? = null
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 schemaSDL =
                     """
-                    type Query {
+                    extend type Query {
                       result: Int!
-                      source: String!
-                      dependent(value: String!): Int!
-                      producer(key: String!): Int!
+                        @resolver(
+                          of: "source dependent(value: ${'$'}pathValue)"
+                          pathVars: [{name: "pathValue", path: ["source"]}]
+                          result: "sum(dependent)"
+                        )
+                      source: Int!
+                        @resolver(of: "producer(key: 1)", result: 2)
+                      dependent(value: Int!): Int!
+                        @resolver(
+                          of: "producer(key: ${'$'}value)"
+                          result: "sum(producer)"
+                        )
+                      producer(key: Int!): Int!
+                        @resolver(result: "sum(${'$'}key)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val dependent =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "dependent"),
-                            mapOf("value" to "late"),
-                        )
-                    val earlyProducer =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "producer"),
-                            mapOf("key" to "early"),
-                        )
-                    val lateProducer =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "producer"),
-                            mapOf("key" to "late"),
-                        )
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(dependent)
-                            },
-                        schema.objectField("Query", "source") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    """
-                                    fragment Source on Query {
-                                      producer(key: "early")
-                                    }
-                                    """.trimIndent(),
-                                ),
-                            ) { input, _ ->
-                                check(input.fieldValues.getValue(earlyProducer) == Value.Int.of(1))
-                                Value.String.of("late")
-                            },
-                        schema.objectField("Query", "dependent") to
-                            fieldResolverOf(schema.fragmentFrom(dependentFragment)) { input, _ ->
-                                input.fieldValues.getValue(lateProducer)
-                            },
-                        schema.objectField("Query", "producer") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                when (
-                                    (arguments.fieldValues.getValue("key") as Value.String)
-                                        .stringValue
-                                ) {
-                                    "early" -> Value.Int.of(1)
-                                    "late" -> Value.Int.of(2)
-                                    else -> error("Unexpected producer key")
-                                }
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    val dependent = schema.objectField("Query", "dependent")
-                    mapOf(
-                        Value.Variable.of(result, "pathValue") to
-                            schema.fromObjectField(resultFragment, listOf("source")),
-                        Value.Variable.of(dependent, "argumentValue") to
-                            schema.fromArgument(dependent, "value"),
-                    )
+                applicationObserver = { field, input, _, _ ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "source"
+                    ) {
+                        earlyProducer =
+                            input.fieldValues.entries
+                                .single { (key, _) -> key.field.fieldName == "producer" }
+                                .value
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -260,5 +155,6 @@ class MixedVariablePhaseRegressionTest {
                     ),
                 ).getValue().get(),
         )
+        assertEquals(Value.Int.of(1), earlyProducer)
     }
 }

@@ -1,12 +1,9 @@
 package semantics.contract
 
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -14,101 +11,42 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `closes potential demand before descending through a passive object`() {
         val applications = linkedMapOf<String, Int>()
-        val resultFragment =
-            """
-            fragment Result on Query {
-              container {
-                trigger(value: ${'$'}argumentValue)
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Entity {
-                      name: String!
-                    }
-
-                    type Bridge {
-                      id: ID!
-                      load: Entity!
+                    extend type Query {
+                      container: Container!
+                        @resolver(result: {bridge: {id: 1}})
+                      result(value: Int!): Int!
+                        @resolver(
+                          of: "container { trigger(value: ${'$'}value) }"
+                          result: "sum(container.trigger)"
+                        )
                     }
 
                     type Container {
                       bridge: Bridge!
                       trigger(value: Int!): Int!
+                        @resolver(
+                          of: "bridge { load { __typename } }"
+                          result: 1
+                        )
                     }
 
-                    type Query {
-                      container: Container!
-                      result(value: Int!): Int!
+                    type Bridge {
+                      id: Int!
+                      load: Entity!
+                        @resolver(of: "id", result: {name: 2})
+                    }
+
+                    type Entity {
+                      name: Int!
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val containerKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "container"),
-                            emptyMap(),
-                        )
-                    val triggerKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Container", "trigger"),
-                            mapOf("value" to 7),
-                        )
-                    mapOf(
-                        schema.objectField("Query", "container") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                applications.merge("container", 1, Int::plus)
-                                schema.objectOf("Container") {
-                                    "bridge" setTo
-                                        schema.objectOf("Bridge") {
-                                            "id" setTo "entity"
-                                        }
-                                }
-                            },
-                        schema.objectField("Bridge", "load") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Load on Bridge { id }",
-                                ),
-                            ) { _, _ ->
-                                applications.merge("load", 1, Int::plus)
-                                schema.objectOf("Entity") {
-                                    "name" setTo "Ada"
-                                }
-                            },
-                        schema.objectField("Container", "trigger") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    """
-                                    fragment Trigger on Container {
-                                      bridge {
-                                        load { __typename }
-                                      }
-                                    }
-                                    """.trimIndent(),
-                                ),
-                            ) { _, _ ->
-                                applications.merge("trigger", 1, Int::plus)
-                                Value.Int.of(1)
-                            },
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                applications.merge("result", 1, Int::plus)
-                                val container =
-                                    input.fieldValues.getValue(containerKey) as Value.Object
-                                container.fieldValues.getValue(triggerKey)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "argumentValue") to
-                            schema.fromArgument(result, "value"),
-                    )
+                applicationObserver = { field, _, _, _ ->
+                    applications.merge(field.fieldName, 1, Int::plus)
                 },
             )
         val world = testWorld.assumptions

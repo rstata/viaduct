@@ -26,57 +26,34 @@ interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `closes and orders transitive sibling resolver demand`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type User {
-                      firstName: String!
-                      lastName: String!
-                      displayName: String!
-                      greeting: String!
+                    extend type Query {
+                      viewer: User! @resolver(result: {first: 2, last: 3})
                     }
-                    type Query { viewer: User! }
+
+                    type User {
+                      first: Int!
+                      last: Int!
+                      display: Int!
+                        @resolver(of: "first last", result: "sum(first, last)")
+                      greeting: Int!
+                        @resolver(of: "display", result: "sumplus1(display)")
+                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val firstName = schema.contractKey("User", "firstName")
-                    val lastName = schema.contractKey("User", "lastName")
-                    val displayName = schema.contractKey("User", "displayName")
-                    mapOf(
-                        schema.field("Query", "viewer") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                schema.objectOf("User") {
-                                    "firstName" setTo "Ada"
-                                    "lastName" setTo "Lovelace"
-                                }
-                            },
-                        schema.field("User", "displayName") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on User { firstName lastName }",
-                                ),
-                            ) { input, _ ->
-                                require(
-                                    input.hasExactlyFields(firstName, lastName),
-                                )
-                                val first = input.fieldValues.getValue(firstName) as Value.String
-                                val last = input.fieldValues.getValue(lastName) as Value.String
-                                Value.String.of("${first.stringValue} ${last.stringValue}")
-                            },
-                        schema.field("User", "greeting") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on User { displayName }",
-                                ),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields(displayName))
-                                val display =
-                                    input.fieldValues.getValue(displayName) as Value.String
-                                Value.String.of("Hello, ${display.stringValue}")
-                            },
-                    )
+                applicationObserver = { field, input, _, _ ->
+                    val actualFields =
+                        input.fieldValues.keys.mapTo(linkedSetOf()) { key ->
+                            key.field.fieldName
+                        }
+                    when (field.containingType.typeName to field.fieldName) {
+                        "User" to "display" ->
+                            require(actualFields == setOf("first", "last"))
+                        "User" to "greeting" ->
+                            require(actualFields == setOf("display"))
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -90,7 +67,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(
-            expectedPassiveResultFieldNames("firstName", "lastName", "displayName", "greeting"),
+            expectedPassiveResultFieldNames("first", "last", "display", "greeting"),
             viewer.keys.map { it.field.fieldName }.toSet(),
         )
     }
@@ -98,53 +75,51 @@ interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `resolves descendant demand before its consuming sibling`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Profile { raw: String!, rendered: String! }
-                    type User { profile: Profile!, message: String! }
-                    type Query { viewer: User! }
+                    extend type Query {
+                      viewer: User! @resolver(result: {profile: {raw: 2}})
+                    }
+
+                    type User {
+                      profile: Profile!
+                      message: Int!
+                        @resolver(
+                          of: "profile { rendered }"
+                          result: "sum(profile.rendered)"
+                        )
+                    }
+
+                    type Profile {
+                      raw: Int!
+                      rendered: Int!
+                        @resolver(of: "raw", result: "sumplus1(raw)")
+                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val profileKey = schema.contractKey("User", "profile")
-                    val rawKey = schema.contractKey("Profile", "raw")
-                    val renderedKey = schema.contractKey("Profile", "rendered")
-                    mapOf(
-                        schema.field("Query", "viewer") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                schema.objectOf("User") {
-                                    "profile" setTo
-                                        objectOf("Profile") {
-                                            "raw" setTo "engineer"
-                                        }
-                                }
-                            },
-                        schema.field("Profile", "rendered") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Profile { raw }",
-                                ),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields(rawKey))
-                                val raw = input.fieldValues.getValue(rawKey) as Value.String
-                                Value.String.of("Role: ${raw.stringValue}")
-                            },
-                        schema.field("User", "message") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on User { profile { rendered } }",
-                                ),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields(profileKey))
-                                val profile =
-                                    input.fieldValues.getValue(profileKey) as Value.Object
-                                require(profile.hasExactlyFields(renderedKey))
-                                profile.fieldValues.getValue(renderedKey) as Value.String
-                            },
-                    )
+                applicationObserver = { field, input, _, _ ->
+                    when (field.containingType.typeName to field.fieldName) {
+                        "Profile" to "rendered" ->
+                            require(
+                                input.fieldValues.keys
+                                    .mapTo(linkedSetOf()) { key -> key.field.fieldName } ==
+                                    setOf("raw"),
+                            )
+                        "User" to "message" -> {
+                            require(
+                                input.fieldValues.keys
+                                    .mapTo(linkedSetOf()) { key -> key.field.fieldName } ==
+                                    setOf("profile"),
+                            )
+                            val profile = input.fieldValues.values.single() as Value.Object
+                            require(
+                                profile.fieldValues.keys
+                                    .mapTo(linkedSetOf()) { key -> key.field.fieldName } ==
+                                    setOf("rendered"),
+                            )
+                        }
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -170,42 +145,30 @@ interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `resolves recursive demand introduced by an object fragment`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Chain { label: String!, next: Chain, computed: String! }
-                    type Query { chain: Chain! }
+                    extend type Query {
+                      chain: Chain!
+                        @resolver(
+                          result: {
+                            label: 1
+                            next: {label: 2, next: null}
+                          }
+                        )
+                    }
+
+                    type Chain {
+                      label: Int!
+                      next: Chain
+                      computed: Int!
+                        @resolver(
+                          of: "next { label }"
+                          result: "sum(next.label)"
+                        )
+                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val nextKey = schema.contractKey("Chain", "next")
-                    val labelKey = schema.contractKey("Chain", "label")
-                    mapOf(
-                        schema.field("Query", "chain") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                schema.objectOf("Chain") {
-                                    "label" setTo "first"
-                                    "next" setTo
-                                        objectOf("Chain") {
-                                            "label" setTo "second"
-                                            "next" setTo null
-                                        }
-                                }
-                            },
-                        schema.field("Chain", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Chain { next { label } }",
-                                ),
-                            ) { input, _ ->
-                                val next =
-                                    input.fieldValues.getValue(nextKey) as Value.Object
-                                next.fieldValues.getValue(labelKey) as Value.String
-                            },
-                    )
-                },
             )
         val world = testWorld.assumptions
         val fragment =
@@ -223,7 +186,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
         assertTrue("label" in next.keys.map { it.field.fieldName })
         assertEquals(
-            Value.String.of("second"),
+            Value.Int.of(2),
             chain.getCell(world.schema.contractKey("Chain", "computed")).get(),
         )
     }
@@ -231,51 +194,29 @@ interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `applies concrete implementation defaults in transitive demand`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    interface Item { computed: Int! }
+                    extend type Query {
+                      holder: Holder! @resolver(result: {item: {__typename: "ConcreteItem"}})
+                    }
+
+                    type Holder {
+                      item: Item!
+                      result: Int!
+                        @resolver(of: "item { computed }", result: "sum(item.computed)")
+                    }
+
+                    interface Item {
+                      computed: Int!
+                    }
+
                     type ConcreteItem implements Item {
                       computed(factor: Int = 7): Int!
+                        @resolver(result: "sum(${'$'}factor)")
                     }
-                    type Holder { item: Item!, result: Int! }
-                    type Query { holder: Holder! }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val itemKey = schema.contractKey("Holder", "item")
-                    val computedKey =
-                        Value.GroundKey.of(
-                            schema.objectField("ConcreteItem", "computed"),
-                            mapOf("factor" to 7),
-                        )
-                    mapOf(
-                        schema.field("Query", "holder") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                schema.objectOf("Holder") {
-                                    "item" setTo schema.objectOf("ConcreteItem")
-                                }
-                            },
-                        schema.field("Holder", "result") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Holder { item { computed } }",
-                                ),
-                            ) { input, _ ->
-                                val item =
-                                    input.fieldValues.getValue(itemKey) as Value.Object
-                                item.fieldValues.getValue(computedKey) as Value.Int
-                            },
-                        schema.field("ConcreteItem", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("ConcreteItem"),
-                            ) { _, arguments ->
-                                arguments.fieldValues.getValue("factor") as Value.Int
-                            },
-                    )
-                },
             )
         val world = testWorld.assumptions
         val fragment =
@@ -298,48 +239,29 @@ interface ObjectFragmentResolverContract : ResolverContract {
         var itemsApplications = 0
         var computedApplications = 0
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Item { seed: Int!, computed: Int! }
-                    type Query { items: [Item] }
+                    extend type Query {
+                      items: [Item]
+                        @resolver(result: [null, "ERROR", {seed: 3}])
+                    }
+
+                    type Item {
+                      seed: Int!
+                      computed: Int!
+                        @resolver(of: "seed", result: "sum(seed, seed)")
+                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val items = schema.field("Query", "items")
-                    val elementType =
-                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    val seedKey = schema.contractKey("Item", "seed")
-                    mapOf(
-                        items to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields())
-                                itemsApplications += 1
-                                Value.OutputList.of(
-                                    elementType,
-                                    listOf(
-                                        null,
-                                        Value.Error,
-                                        schema.objectOf("Item") {
-                                            "seed" setTo 3
-                                        },
-                                    ),
-                                )
-                            },
-                        schema.field("Item", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Item { seed }",
-                                ),
-                            ) { input, _ ->
-                                computedApplications += 1
-                                val seed =
-                                    input.fieldValues.getValue(seedKey) as Value.Int
-                                Value.Int.of(seed.intValue * 2)
-                            },
-                    )
+                applicationObserver = { field, input, _, _ ->
+                    when (field.containingType.typeName to field.fieldName) {
+                        "Query" to "items" -> {
+                            require(input.hasExactlyFields())
+                            itemsApplications += 1
+                        }
+                        "Item" to "computed" -> computedApplications += 1
+                    }
                 },
             )
         val world = testWorld.assumptions

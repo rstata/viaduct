@@ -19,45 +19,38 @@ import kotlin.test.assertIs
 interface NodeResolverContract : ResolverContract {
     @Test
     fun `resolves an empty query through field and node resolvers`() {
+        var viewerId: Value.Input? = null
+        var greetingPrefix: Value.Input? = null
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
-                schemaSDL = FIELD_AND_NODE_SCHEMA,
-                nodeResolvers = { schema ->
-                    val user = schema.contractObjectType("User")
-                    mapOf(
-                        user to
-                            model.testing.nodeResolverOf { id ->
-                                schema.objectOf("User") {
-                                    "id" setTo id
-                                    "name" setTo "Ada"
-                                }
-                            },
-                    )
-                },
-                fieldResolvers = { schema ->
-                    val viewer = schema.field("Query", "viewer_V_A_node")
-                    val greeting = schema.field("User", "greeting")
-                    mapOf<Schema.OutputField, FieldResolverDefinition>(
-                        viewer to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { input, arguments ->
-                                require(input.hasExactlyFields())
-                                schema.objectOf("User") {
-                                    "id" setTo arguments.fieldValues.getValue("id")
-                                }
-                            },
-                        greeting to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("User"),
-                            ) { input, arguments ->
-                                require(input.hasExactlyFields())
-                                val prefix =
-                                    arguments.fieldValues.getValue("prefix") as Value.String
-                                Value.String.of("${prefix.stringValue}, Ada")
-                            },
-                    )
+                schemaSDL =
+                    """
+                    extend type Query {
+                      viewer(id: ID!): User! @resolver(result: {id: "1"})
+                    }
+
+                    type User implements Node
+                      @nodeResolver(result: [{id: "1", result: {name: 7}}]) {
+                      id: ID!
+                      name: Int!
+                      greeting(prefix: Int!): Int!
+                        @resolver(result: "sumplus1(${'$'}prefix)")
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, input, arguments, _ ->
+                    when {
+                        field.containingType.typeName == "Query" &&
+                            field.fieldName.startsWith("viewer") -> {
+                            require(input.hasExactlyFields())
+                            viewerId = arguments.fieldValues.getValue("id")
+                        }
+                        field.containingType.typeName == "User" &&
+                            field.fieldName == "greeting" -> {
+                            require(input.hasExactlyFields())
+                            greetingPrefix = arguments.fieldValues.getValue("prefix")
+                        }
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -68,13 +61,15 @@ interface NodeResolverContract : ResolverContract {
                   viewer(id: "1") {
                     id
                     name
-                    greeting(prefix: "Hello")
+                    greeting(prefix: 5)
                   }
                 }
                 """.trimIndent(),
             )
 
         resolveAndValidate(world, world.objectOf("Query"), fragment)
+        assertEquals(Value.ID.of("1"), viewerId)
+        assertEquals(Value.Int.of(5), greetingPrefix)
     }
 
     @Test
@@ -356,18 +351,5 @@ interface NodeResolverContract : ResolverContract {
 
         assertEquals(listOf("User", "User", "User"), payloadTypes)
         assertEquals(3, observedFields.count { it == "node" })
-    }
-
-    private companion object {
-        val FIELD_AND_NODE_SCHEMA =
-            """
-            interface Node { id: ID! }
-            type User implements Node {
-              id: ID!
-              name: String!
-              greeting(prefix: String!): String!
-            }
-            type Query { viewer(id: ID!): User! }
-            """.trimIndent()
     }
 }

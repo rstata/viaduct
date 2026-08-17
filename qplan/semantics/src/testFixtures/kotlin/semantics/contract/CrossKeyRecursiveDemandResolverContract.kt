@@ -1,13 +1,8 @@
 package semantics.contract
 
-import model.Schema
-import model.TypeExpr
-import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -16,39 +11,27 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
     fun `does not copy recursive demand between different grounded keys`() {
         var childrenApplications = 0
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Item {
-                      children(depth: Int!): [Item!]!
+                    extend type Query {
+                      item: Item! @resolver(result: {})
                     }
 
-                    type Query {
-                      item: Item!
+                    type Item {
+                      children(depth: Int!): [Item!]! @resolver(result: [{}])
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val children = schema.objectField("Item", "children")
-                    val childType =
-                        (children.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    mapOf(
-                        schema.objectField("Query", "item") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Item")
-                            },
-                        children to
-                            fieldResolverOf(schema.emptyFragmentOf("Item")) { _, _ ->
-                                childrenApplications += 1
-                                check(childrenApplications <= 12) {
-                                    "recursive demand crossed grounded keys"
-                                }
-                                Value.OutputList.of(
-                                    typeExpr = childType,
-                                    values = listOf(schema.objectOf("Item")),
-                                )
-                            },
-                    )
+                applicationObserver = { field, _, _, _ ->
+                    if (field.containingType.typeName == "Item" &&
+                        field.fieldName == "children"
+                    ) {
+                        childrenApplications += 1
+                        check(childrenApplications <= 12) {
+                            "recursive demand crossed grounded keys"
+                        }
+                    }
                 },
             )
         val world = testWorld.assumptions

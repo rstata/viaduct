@@ -1,14 +1,9 @@
 package semantics.contract
 
-import model.Schema
-import model.TypeExpr
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -16,99 +11,36 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `deepens an already launched recursive list with typename demand`() {
         val applications = linkedMapOf<String, Int>()
-        val resultFragment =
-            """
-            fragment Result on Query {
-              item {
-                consume(value: ${'$'}argumentValue)
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Item {
-                      common: String!
-                      children: [Item!]!
-                      consume(value: Int!): Int!
+                    extend type Query {
+                      item: Item! @resolver(result: {common: 1})
+                      result(value: Int!): Int!
+                        @resolver(
+                          of: "item { consume(value: ${'$'}value) }"
+                          result: "sum(item.consume)"
+                        )
                     }
 
-                    type Query {
-                      item: Item!
-                      result(value: Int!): Int!
+                    type Item {
+                      common: Int!
+                      children: [Item!]!
+                        @resolver(
+                          of: "common"
+                          result: [{common: 2}, {common: 3}]
+                        )
+                      consume(value: Int!): Int!
+                        @resolver(
+                          of: "children { __typename }"
+                          result: 1
+                        )
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val children = schema.objectField("Item", "children")
-                    val childType =
-                        (children.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    mapOf(
-                        schema.objectField("Query", "item") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                applications.merge("item", 1, Int::plus)
-                                schema.objectOf("Item") {
-                                    "common" setTo "root"
-                                }
-                            },
-                        children to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Children on Item { common }",
-                                ),
-                            ) { _, _ ->
-                                applications.merge("children", 1, Int::plus)
-                                Value.OutputList.of(
-                                    childType,
-                                    listOf(
-                                        schema.objectOf("Item") {
-                                            "common" setTo "first"
-                                        },
-                                        schema.objectOf("Item") {
-                                            "common" setTo "second"
-                                        },
-                                    ),
-                                )
-                            },
-                        schema.objectField("Item", "consume") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    """
-                                    fragment Consume on Item {
-                                      children { __typename }
-                                    }
-                                    """.trimIndent(),
-                                ),
-                            ) { _, _ ->
-                                applications.merge("consume", 1, Int::plus)
-                                Value.Int.of(1)
-                            },
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                applications.merge("result", 1, Int::plus)
-                                val item =
-                                    input.fieldValues.getValue(
-                                        Value.GroundKey.of(
-                                            schema.objectField("Query", "item"),
-                                            emptyMap(),
-                                        ),
-                                    ) as Value.Object
-                                item.fieldValues.getValue(
-                                    Value.GroundKey.of(
-                                        schema.objectField("Item", "consume"),
-                                        mapOf("value" to 7),
-                                    ),
-                                )
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "argumentValue") to
-                            schema.fromArgument(result, "value"),
-                    )
+                applicationObserver = { field, _, _, _ ->
+                    applications.merge(field.fieldName, 1, Int::plus)
                 },
             )
         val world = testWorld.assumptions

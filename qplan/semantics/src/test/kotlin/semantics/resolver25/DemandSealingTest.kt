@@ -22,50 +22,22 @@ import kotlin.test.assertTrue
 class DemandSealingTest {
     @Test
     fun `binds a direct scalar sibling before grounding its consumer key`() {
-        val resultFragment =
-            """
-            fragment Result on Query {
-              source
-              consume(value: ${'$'}value)
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 schemaSDL =
                     """
-                    type Query {
+                    extend type Query {
                       result: Int!
-                      source: Int!
+                        @resolver(
+                          of: "source consume(value: ${'$'}value)"
+                          pathVars: [{name: "value", path: ["source"]}]
+                          result: "sum(consume)"
+                        )
+                      source: Int! @resolver(result: 7)
                       consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value, ${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val consume = schema.objectField("Query", "consume")
-                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 7))
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(consumeKey)
-                            },
-                        schema.objectField("Query", "source") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(7)
-                            },
-                        consume to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                val value =
-                                    arguments.fieldValues.getValue("value") as Value.Int
-                                Value.Int.of(value.intValue * 2)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "value") to
-                            schema.fromObjectField(resultFragment, listOf("source")),
-                    )
-                },
             )
         val resultKey =
             Value.GroundKey.of(
@@ -309,65 +281,32 @@ class DemandSealingTest {
 
     @Test
     fun `binds a three-component path variable at a resolver-backed terminal field`() {
-        val resultFragment =
-            """
-            fragment Result on Query {
-              box { nested { value } }
-              consume(value: ${'$'}value)
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 schemaSDL =
                     """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "box { nested { value } } consume(value: ${'$'}value)"
+                          pathVars: [
+                            {name: "value", path: ["box", "nested", "value"]}
+                          ]
+                          result: "sum(consume)"
+                        )
+                      box: Box! @resolver(result: {nested: {}})
+                      consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
+                    }
+
                     type Box {
                       nested: Nested!
                     }
 
                     type Nested {
-                      value: Int!
-                    }
-
-                    type Query {
-                      result: Int!
-                      box: Box!
-                      consume(value: Int!): Int!
+                      value: Int! @resolver(result: 11)
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val consume = schema.objectField("Query", "consume")
-                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 11))
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(consumeKey)
-                            },
-                        schema.objectField("Query", "box") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Box") {
-                                    "nested" setTo schema.objectOf("Nested")
-                                }
-                            },
-                        schema.objectField("Nested", "value") to
-                            fieldResolverOf(schema.emptyFragmentOf("Nested")) { _, _ ->
-                                Value.Int.of(11)
-                            },
-                        consume to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "value") to
-                            schema.fromObjectField(
-                                resultFragment,
-                                listOf("box", "nested", "value"),
-                            ),
-                    )
-                },
             )
 
         val observation = observeResult(testWorld)

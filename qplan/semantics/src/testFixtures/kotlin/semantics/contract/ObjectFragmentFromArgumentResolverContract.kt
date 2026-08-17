@@ -1,11 +1,9 @@
 package semantics.contract
 
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -21,50 +19,24 @@ interface ObjectFragmentFromArgumentResolverContract :
     fun `resolves input selected with a fromArgument variable`() {
         val consumeArguments = mutableListOf<Value.Arguments>()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Query {
+                    extend type Query {
                       result(seed: Int!): Int!
+                        @resolver(
+                          of: "consume(value: ${'$'}seed)"
+                          result: "sum(consume)"
+                        )
                       consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value, ${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val consume = schema.objectField("Query", "consume")
-                    mapOf(
-                        schema.field("Query", "result") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Query { consume(value: ${'$'}seed) }",
-                                ),
-                            ) { input, arguments ->
-                                val seed =
-                                    arguments.fieldValues.getValue("seed") as Value.Int
-                                val consumeKey =
-                                    Value.GroundKey.of(
-                                        consume,
-                                        mapOf("value" to seed.intValue),
-                                    )
-                                input.fieldValues.getValue(consumeKey)
-                            },
-                        consume to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, arguments ->
-                                consumeArguments += arguments
-                                val value =
-                                    arguments.fieldValues.getValue("value") as Value.Int
-                                Value.Int.of(value.intValue * 2)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "seed") to
-                            schema.fromArgument(result, "seed"),
-                    )
+                applicationObserver = { field, _, arguments, _ ->
+                    if (field.fieldName == "consume") {
+                        consumeArguments += arguments
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -127,59 +99,19 @@ interface ObjectFragmentFromArgumentResolverContract :
     @Test
     fun `resolves a transitive chain of fromArgument variables`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Query {
+                    extend type Query {
                       one(seed: Int!): Int!
+                        @resolver(of: "two(value: ${'$'}seed)", result: "sum(two)")
                       two(value: Int!): Int!
+                        @resolver(of: "three(value: ${'$'}value)", result: "sum(three)")
                       three(value: Int!): Int!
+                        @resolver(result: "sumplus1(${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val one = schema.objectField("Query", "one")
-                    val two = schema.objectField("Query", "two")
-                    val three = schema.objectField("Query", "three")
-                    val twoKey = Value.GroundKey.of(two, mapOf("value" to 7))
-                    val threeKey = Value.GroundKey.of(three, mapOf("value" to 7))
-                    mapOf(
-                        one to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Query { two(value: ${'$'}seed) }",
-                                ),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(twoKey)
-                            },
-                        two to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Query { three(value: ${'$'}value) }",
-                                ),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(threeKey)
-                            },
-                        three to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, arguments ->
-                                val value =
-                                    arguments.fieldValues.getValue("value") as Value.Int
-                                Value.Int.of(value.intValue + 1)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val one = schema.objectField("Query", "one")
-                    val two = schema.objectField("Query", "two")
-                    mapOf(
-                        Value.Variable.of(one, "seed") to
-                            schema.fromArgument(one, "seed"),
-                        Value.Variable.of(two, "value") to
-                            schema.fromArgument(two, "value"),
-                    )
-                },
             )
         val world = testWorld.assumptions
         val oneKey =

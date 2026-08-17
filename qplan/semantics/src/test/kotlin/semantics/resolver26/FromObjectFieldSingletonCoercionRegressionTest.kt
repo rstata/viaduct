@@ -1,12 +1,9 @@
 package semantics.resolver26
 
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromObjectField
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,57 +13,31 @@ import kotlin.test.assertTrue
 class FromObjectFieldSingletonCoercionRegressionTest {
     @Test
     fun `singleton coerces a scalar object-field value through two input-list layers`() {
-        val resultFragment =
-            """
-            fragment Result on Query {
-              source
-              consume(value: ${'$'}value)
-            }
-            """.trimIndent()
         var consumedArgument: Value.Input? = null
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = true,
                 schemaSDL =
                     """
-                    type Query {
+                    extend type Query {
                       result: Int!
-                      source: Int!
+                        @resolver(
+                          of: "source consume(value: ${'$'}value)"
+                          pathVars: [{name: "value", path: ["source"]}]
+                          result: "sum(consume)"
+                        )
+                      source: Int! @resolver(result: 7)
                       consume(value: [[Int!]!]!): Int!
+                        @resolver(result: 14)
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val consume = schema.objectField("Query", "consume")
-                    val consumeKey =
-                        Value.GroundKey.of(
-                            consume,
-                            mapOf("value" to listOf(listOf(7))),
-                        )
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(consumeKey)
-                            },
-                        schema.objectField("Query", "source") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(7)
-                            },
-                        consume to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                consumedArgument = arguments.fieldValues.getValue("value")
-                                val outer = consumedArgument as Value.InputList
-                                val inner = outer.values.single() as Value.InputList
-                                val value = inner.values.single() as Value.Int
-                                Value.Int.of(value.intValue * 2)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "value") to
-                            schema.fromObjectField(resultFragment, listOf("source")),
-                    )
+                applicationObserver = { field, _, arguments, _ ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "consume"
+                    ) {
+                        consumedArgument = arguments.fieldValues.getValue("value")
+                    }
                 },
             )
         val world = testWorld.assumptions

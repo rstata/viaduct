@@ -477,7 +477,8 @@ class ResolverDemandTest {
                             """.trimIndent(),
                         )
                     mapOf(
-                        schema.field("Query", "node") to resolver(schema.emptyFragmentOf("Query")),
+                        schema.field("Query", "node_V_A_node") to
+                            resolver(schema.emptyFragmentOf("Query")),
                         schema.field("Query", "consumer") to
                             resolver(consumerFragment),
                         schema.field("Query", "outer") to resolver(outerFragment),
@@ -492,8 +493,8 @@ class ResolverDemandTest {
         val registry = world.resolverRegistry
         val user = schema.type("User") as Schema.ObjectType
         val admin = schema.type("Admin") as Schema.ObjectType
-        val queryNodeBridge = schema.objectField("Query", "node\$bridge")
-        val nodePayload = schema.objectField("Node\$Bridge", "\$node")
+        val queryNodeBridge = schema.objectField("Query", "node_V_A_node")
+        val nodePayload = schema.objectField("Node_V_A_Bridge", "node")
         val consumer = schema.objectField("Query", "consumer")
         val outer = schema.objectField("Query", "outer")
         val userResolved = schema.objectField("User", "resolved")

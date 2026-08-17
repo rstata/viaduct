@@ -2,7 +2,7 @@
 
 **[flattened-equivalence]** Within qplan's post-validation field-resolution boundary, flattened selections preserve the same unordered field-resolution obligations as nested GraphQL selections.
 
-**[field-only-node-lowering]** Within the fixture-supported node domain, synthetic bridge-object types, source-field bridge coordinates, and `$node` field resolvers preserve the field-resolution obligations of external node-valued field and node-resolver inputs.
+**[field-only-node-lowering]** Within the fixture-supported node domain, a retained source GraphQL-Java schema plus a separate model-only schema with `foo_V_A_node` producers, concrete `T_V_A_Bridge` objects, and `node` loaders preserves the field-resolution obligations of external node-valued field and node-resolver inputs.
 
 **[resolver03-one-shot-construction]** Within Resolver03's acyclic domain with argument-defined variables, every resolver-bearing OER occurrence is constructed by one field-resolver application after all guarded transitive demand for that occurrence has been aggregated.
 

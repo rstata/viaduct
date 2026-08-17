@@ -95,11 +95,11 @@ class ResolverCoverageAdversarialTest {
                     .fields
                     .single { field -> field.name == sourceField.fieldName }
             val bridgeField =
-                world.schema.objectField(sourceField.typeName, sourceField.fieldName + "\$bridge")
+                world.schema.objectField(sourceField.typeName, sourceField.fieldName + "_V_A_node")
             val payloadField =
                 world.schema.objectField(
-                    sourceDefinition.type.namedType + "\$Bridge",
-                    "\$node",
+                    sourceDefinition.type.namedType + "_V_A_Bridge",
+                    "node",
                 )
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
@@ -125,8 +125,8 @@ class ResolverCoverageAdversarialTest {
 
             assertEquals(
                 listOf(
-                    FieldCoordinate(sourceField.typeName, sourceField.fieldName + "\$bridge"),
-                    FieldCoordinate(sourceDefinition.type.namedType + "\$Bridge", "\$node"),
+                    FieldCoordinate(sourceField.typeName, sourceField.fieldName + "_V_A_node"),
+                    FieldCoordinate(sourceDefinition.type.namedType + "_V_A_Bridge", "node"),
                 ),
                 registry.resolutionWitness().applications.map { application ->
                     application.key.field

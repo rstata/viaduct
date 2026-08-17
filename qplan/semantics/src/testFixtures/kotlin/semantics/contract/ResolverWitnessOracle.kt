@@ -7,8 +7,8 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.Value
 import model.applicableGroundSelections
-import model.usedVariables
 import model.registry.FieldResolver
+import model.usedVariables
 import semantics.RuntimeSupport
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity

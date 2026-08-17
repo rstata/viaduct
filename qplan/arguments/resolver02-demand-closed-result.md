@@ -38,7 +38,7 @@ The prefix induction invariant, using Lemma 3 for keys already resolved, says th
 
 The canonical registry's acyclic resolver-demand invariant guarantees that every nonempty unresolved set contains a ready key. `dependencyOrder` rejects a nonempty set with no ready member as a cycle. Independent ready keys may appear in any order because no member requires another member of that ready set.
 
-Fixture-generated node loading needs no separate semantic case. A `T$Bridge.$node` resolver has the ordinary fixed fragment `{ $id }`; its passive `$id` sibling is in the same bridge OER and precedes the loader through the same dependency relation. Unequal source argument tuples remain distinct `foo$bridge(args)` ground producer keys.
+Fixture-generated node loading needs no separate semantic case. A `T_V_A_Bridge.node` resolver has the ordinary fixed fragment `{ id }`; its passive `id` sibling is in the same bridge OER and precedes the loader through the same dependency relation. Unequal source argument tuples remain distinct `foo_V_A_node(args)` ground producer keys.
 
 ## Lemma 3: Recursive Resolution Satisfies Selections And Closes Descendants
 
@@ -48,7 +48,7 @@ The argument is a well-founded mutual induction over passive `resolveValue` cons
 
 For an object output, `resolveValue` allocates one stable mutable target OER, copies the selected passive cells, stops at registered resolver boundaries, and records the source object, target OER, exact path, and collapsed selections for every occurrence requiring active work. `resolveObjects` completes those retained targets deepest first. Parent cells and immutable list positions retain the same target OER identities while their absent child cells become present; no ancestor or passive subtree is rebuilt or replaced.
 
-At one object occurrence, Lemma 1 establishes the complete local resolver obligations and Lemma 2 supplies materializable inputs in dependency order. The induction hypotheses establish selection satisfaction and closure below every resulting cell. A generated `T$Bridge.$node` output is completed through the same retained-target induction as any other object output.
+At one object occurrence, Lemma 1 establishes the complete local resolver obligations and Lemma 2 supplies materializable inputs in dependency order. The induction hypotheses establish selection satisfaction and closure below every resulting cell. A generated `T_V_A_Bridge.node` output is completed through the same retained-target induction as any other object output.
 
 The dependency-prefix and recursive-result inductions are mutually supporting but not circular: input availability for the current key depends only on strictly earlier keys in the finite prefix, while recursive closure depends on strictly smaller value-construction subderivations or separately retained descendant occurrences.
 

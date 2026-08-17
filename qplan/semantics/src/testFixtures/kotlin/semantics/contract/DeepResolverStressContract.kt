@@ -172,7 +172,7 @@ interface DeepResolverStressContract : ResolverContract {
                             activatedNestedObjectPathApplications += 1
                         }
                         if (
-                            application.key.field.fieldName.endsWith("\$bridge") &&
+                            application.key.field.fieldName.endsWith("_V_A_node") &&
                             application.key.arguments.type.fields.isNotEmpty()
                         ) {
                             argumentBearingNodeBridgeProducerApplications += 1

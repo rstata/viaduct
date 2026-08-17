@@ -2,6 +2,7 @@ package model.testing
 
 import model.Fragment
 import model.Schema
+import model.SourceSchemaAdapter
 import model.TypeExpr
 import model.Value
 import model.spec.SpecSelection
@@ -74,12 +75,9 @@ class FromObjectField private constructor(
                 objectFragment =
                     Fragment.of(
                         nominalType = parsed.nominalType,
-                        subselections =
-                            schema.lowerNodeSelections(
-                                flatten(schema, parsed.nominalType, parsed.selections),
-                            ),
+                        subselections = flatten(schema, parsed.nominalType, parsed.selections),
                     ),
-                keyPath = schema.lowerNodeKeyPath(compiled.keys),
+                keyPath = compiled.keys,
                 terminalType = compiled.terminalType,
                 nullableTraversal = compiled.nullableTraversal,
             )
@@ -107,7 +105,7 @@ private data class CompiledPath(
 )
 
 private data class MatchingField(
-    val key: Value.Key,
+    val keys: List<Value.Key>,
     val typeExpr: TypeExpr<Schema.OutputType>,
     val subselections: List<SpecSelection>,
     val lossyCondition: Pair<Schema.CompositeType, Schema.CompositeType>?,
@@ -140,12 +138,13 @@ private fun GJSchema.compilePath(
         )
     }
 
-    val distinctKeys = matches.map(MatchingField::key).distinct()
+    val distinctKeys = matches.map(MatchingField::keys).distinct()
     require(distinctKeys.size == 1) {
         "fromObjectField response key $responseKey does not identify one canonical field and " +
             "argument tuple"
     }
-    val key = distinctKeys.single()
+    val matchedKeys = distinctKeys.single()
+    val key = matchedKeys.first()
     val distinctTypes = matches.map(MatchingField::typeExpr).distinct()
     require(distinctTypes.size == 1) {
         "fromObjectField response key $responseKey does not identify one output type"
@@ -159,7 +158,7 @@ private fun GJSchema.compilePath(
                 "or enum"
         }
         return CompiledPath(
-            keys = keys + key,
+            keys = keys + matchedKeys,
             terminalType = typeExpr,
             nullableTraversal = nullableTraversal,
         )
@@ -174,7 +173,7 @@ private fun GJSchema.compilePath(
         selections = matches.flatMap(MatchingField::subselections),
         responsePath = responsePath,
         index = index + 1,
-        keys = keys + key,
+        keys = keys + matchedKeys,
         nullableTraversal = nullableTraversal || typeExpr.isNullable,
     )
 }
@@ -192,11 +191,37 @@ private fun GJSchema.matchingFields(
                     emptyList()
                 } else {
                     val field = field(typeInScope.typeName, selection.fieldName)
+                    val loweredNodeField = isLoweredNodeField(field)
+                    val payloadSelection =
+                        if (loweredNodeField) {
+                            selection.subselections
+                                .orEmpty()
+                                .single() as SpecSelection.Field
+                        } else {
+                            null
+                        }
+                    val payloadKey =
+                        payloadSelection?.let { payload ->
+                            val bridgeType = field.typeExpr.baseType as Schema.ObjectType
+                            Value.Key.of(
+                                field =
+                                    this@matchingFields.field(
+                                        bridgeType.typeName,
+                                        payload.fieldName,
+                                    ),
+                                arguments = payload.arguments,
+                            )
+                        }
                     listOf(
                         MatchingField(
-                            key = Value.Key.of(field, selection.arguments),
-                            typeExpr = field.typeExpr,
-                            subselections = selection.subselections.orEmpty(),
+                            keys =
+                                listOf(Value.Key.of(field, selection.arguments)) +
+                                    listOfNotNull(payloadKey),
+                            typeExpr = SourceSchemaAdapter(this@matchingFields).typeExpr(field),
+                            subselections =
+                                payloadSelection?.subselections.orEmpty()
+                                    .takeIf { loweredNodeField }
+                                    ?: selection.subselections.orEmpty(),
                             lossyCondition = lossyCondition,
                         ),
                     )

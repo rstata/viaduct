@@ -36,7 +36,7 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val viewer = schema.field("Query", "viewer")
+                    val viewer = schema.field("Query", "viewer_V_A_node")
                     val greeting = schema.field("User", "greeting")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         viewer to
@@ -137,18 +137,18 @@ interface NodeResolverContract : ResolverContract {
             assertIs<EngineResult.Object>(
                 viewer.getCell(schema.contractKey("Viewer", "card")).get(),
             )
-        val bridgeKey = schema.contractKey("Card", "profile\$bridge")
+        val bridgeKey = schema.contractKey("Card", "profile_V_A_node")
         val bridge = assertIs<EngineResult.Object>(card.getCell(bridgeKey).get())
         val profile =
             assertIs<EngineResult.Object>(
-                bridge.getCell(schema.contractKey("Profile\$Bridge", "\$node")).get(),
+                bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "node")).get(),
             )
 
         assertEquals(expectedPassiveResultKeys(card.type, setOf(bridgeKey)), card.keys)
         assertEquals(
             "\$node:7:Profileprofile-1",
             assertIs<Value.ID>(
-                bridge.getCell(schema.contractKey("Profile\$Bridge", "\$id")).get(),
+                bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "id")).get(),
             ).idValue,
         )
         assertEquals(
@@ -196,9 +196,15 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val nodes = schema.field("Query", "nodes")
+                    val nodes = schema.field("Query", "nodes_V_A_node")
                     val elementType =
-                        (nodes.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
+                        TypeExpr.List.of(
+                            TypeExpr.Named.of(
+                                schema.type("Node") as Schema.OutputType,
+                                isNullable = false,
+                            ),
+                            isNullable = false,
+                        ).elementType
                     mapOf(
                         nodes to
                             model.testing.fieldResolverOf(
@@ -239,9 +245,9 @@ interface NodeResolverContract : ResolverContract {
             )
 
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
-        val bridgeField = schema.objectField("Query", "nodes\$bridge")
-        val bridgeType = schema.contractObjectType("Node\$Bridge")
-        val payloadKey = schema.contractKey("Node\$Bridge", "\$node")
+        val bridgeField = schema.objectField("Query", "nodes_V_A_node")
+        val bridgeType = schema.contractObjectType("Node_V_A_Bridge")
+        val payloadKey = schema.contractKey("Node_V_A_Bridge", "node")
         val firstKey = Value.GroundKey.of(bridgeField, mapOf("group" to "first"))
         val secondKey = Value.GroundKey.of(bridgeField, mapOf("group" to "second"))
 
@@ -289,8 +295,18 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val matrix = schema.field("Query", "matrix")
-                    val outer = matrix.typeExpr as TypeExpr.List<Schema.OutputType>
+                    val matrix = schema.field("Query", "matrix_V_A_node")
+                    val outer =
+                        TypeExpr.List.of(
+                            TypeExpr.List.of(
+                                TypeExpr.Named.of(
+                                    schema.type("User") as Schema.OutputType,
+                                    isNullable = false,
+                                ),
+                                isNullable = false,
+                            ),
+                            isNullable = false,
+                        )
                     val inner = outer.elementType as TypeExpr.List<Schema.OutputType>
                     fun row(vararg ids: String): Value.OutputList =
                         Value.OutputList.of(
@@ -326,20 +342,20 @@ interface NodeResolverContract : ResolverContract {
         val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val matrix =
             assertIs<EngineResult.List>(
-                result.getCell(schema.contractKey("Query", "matrix\$bridge")).get(),
+                result.getCell(schema.contractKey("Query", "matrix_V_A_node")).get(),
             )
         val payloadTypes =
             matrix.map { row ->
                 assertIs<EngineResult.List>(row.get()).map { bridgeCell ->
                     val bridge = assertIs<EngineResult.Object>(bridgeCell.get())
                     assertIs<EngineResult.Object>(
-                        bridge.getCell(schema.contractKey("User\$Bridge", "\$node")).get(),
+                        bridge.getCell(schema.contractKey("User_V_A_Bridge", "node")).get(),
                     ).type.typeName
                 }
             }.flatten()
 
         assertEquals(listOf("User", "User", "User"), payloadTypes)
-        assertEquals(3, observedFields.count { it == "\$node" })
+        assertEquals(3, observedFields.count { it == "node" })
     }
 
     private companion object {

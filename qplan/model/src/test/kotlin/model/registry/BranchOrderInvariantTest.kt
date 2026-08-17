@@ -5,8 +5,8 @@ import model.Schema
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.testing.FromObjectField
 import model.testing.FieldResolverDefinition
+import model.testing.FromObjectField
 import model.testing.TestWorld
 import model.testing.fromObjectField
 import kotlin.test.Test
@@ -405,7 +405,7 @@ class BranchOrderInvariantTest {
                                 """.trimIndent(),
                             ),
                         ),
-                    schema.field("Query", "user") to
+                    schema.field("Query", "user_V_A_node") to
                         resolver(schema.emptyFragmentOf("Query")),
                     schema.field("Query", "consume") to
                         resolver(schema.emptyFragmentOf("Query")),

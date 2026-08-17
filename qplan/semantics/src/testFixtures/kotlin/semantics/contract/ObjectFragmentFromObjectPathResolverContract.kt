@@ -1,7 +1,7 @@
 package semantics.contract
 
-import model.Value
 import model.TypeExpr
+import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf

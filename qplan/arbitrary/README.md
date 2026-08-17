@@ -1,8 +1,6 @@
-# Arbitrary
+# Arbitrary Generators
 
-This module generates valid GraphQL schemas, resolver registries, and Query fragments for property-testing the qplanning resolver models. Its design and significant portions of its generator infrastructure are copied or adapted from Viaduct's `oss/core/shared/arbitrary` library at `~/ht/projects/viaduct/oss/core/shared/arbitrary`.
-
-The public generators live in the `semantics.arbitrary` package and are exposed as Kotest property-testing `Arb` values. A generated schema is the common input to independent registry and query generators; `Arb.resolverTestBatch` composes them into one schema, `R` registries, and `Q` queries so a property can evaluate the full `R x Q` product.
+The arbitrary project generates valid GraphQL schemas, resolver registries, and Query selections for property testing qplan resolver algorithms. It is pre-reasoning infrastructure: generated recipes may use ordinary implementation state, but every emitted world crosses the same canonical schema, registry, lowering, and validation boundaries used by static fixtures.
 
 ## Composition
 
@@ -18,21 +16,44 @@ val config =
         (ResolverFragmentsEnabled to false)
 
 checkResolverTestCases(counts, config) { testWorld, testCase ->
-    // Parse testCase.query, run the resolver, and judge correctResolution.
+    // Run the resolver and judge the completed result.
 }
 ```
 
-`checkResolverTestCases` uses `S` as its outer Kotest iteration count. Each sample contains exactly `R` registries and `Q` queries, and the runner evaluates their Cartesian product while reusing one world per registry. `Arb.resolverTestBatch` and `ResolverTestBatch.cases` remain available when a test needs to control execution directly.
+`checkResolverTestCases` uses `S` as its outer Kotest iteration count. Each schema sample contains `R` independently generated registries and `Q` independently generated queries, and the runner evaluates their Cartesian product while reusing one canonical world per registry.
 
-## Generators
+## Generated Worlds
 
-- `Arb.schema(config)` generates GraphQL SDL in the model's supported domain.
-- `schema.registry(config)` chooses source field-resolver coordinates and raw node resolvers, infers output selection paths, and generates deterministic resolver programs that may be constant, input-sensitive, argument-sensitive, or sensitive to both. It may also generate an acyclic object fragment whose variable providers strictly precede their use branches; providers use alias-preserving fragment source and response-key paths, which `TestWorld` compiles to canonical key paths while lowering the registry.
-- `schema.query(config)` generates a valid named Query fragment containing literal arguments only.
-- `Arb.resolverTestBatch(counts, config)` composes the three generators without coordinating registry choices with query choices.
+`Arb.schema(config)` generates supported GraphQL SDL. `schema.registry(config)` chooses field-resolver coordinates and raw node resolvers, derives output paths and fixed object fragments, and produces deterministic resolver programs. `schema.query(config)` generates valid Query selections against the schema.
 
-The configuration includes independent switches for arguments, query fragments, resolver fragments, resolver variables, FromArgument resolver variables, interfaces, unions, lists, and raw node resolvers, plus weights and size bounds for generated structures and values. Resolver variables remain disabled by default. Resolver03's variable-enabled properties exercise FromArgument definitions; FromObjectField runtime binding remains disabled. Variable-enabled registry and fixture tests additionally generate globally unique variable names, variable-bearing object-fragment arguments, and type-compatible field-relative provider paths that are explicitly inserted into their defining fragments. `MinimumSelectionDepth` creates a concrete object-field backbone and forces each query to select it, while `MaxSelectionDepth` caps the measured field-path depth reported by `ArbitraryQuery.selectionDepth`. Enabling node resolvers registers every generated `Node` implementation, while generated non-`Node` interfaces and unions exclude `Node` objects so fixture lowering never receives a mixed node-resolved and inline possible-type set. Lowering creates `T$Bridge` only for used node output types and names every lowered producer `foo$bridge`, independent of list rank.
+Resolver programs may be constant, input-sensitive, argument-sensitive, or sensitive to both. Structured outputs derive bounded occurrence-distinct values from canonical input and argument fingerprints, never from application order or mutable randomness.
 
-Kotest reports a replay seed for a failing batch. Every individual semantic failure also includes the exact SDL, resolver coordinates with inferred output paths and object-fragment text, and Query fragment.
+Generated node implementations are fixture inputs. Composition lowers node-valued source fields to `foo$bridge` producers and argumentless `T$Bridge.$node` loaders. Generated non-`Node` abstract types remain disjoint from node-resolved objects.
 
-Resolver03 and Resolver08's gated deep stress properties run with `RESOLVER03_STRESS_CASES=10000 RESOLVER03_STRESS_SEED=<long> ./gradlew :semantics:resolver03Stress` and `RESOLVER08_STRESS_CASES=10000 RESOLVER08_STRESS_SEED=<long> ./gradlew :semantics:resolver08Stress`. They generate depth-4-to-6 dependency-heavy worlds with FromArgument variables and node resolvers enabled and FromObjectField variables disabled, and require exact equality between witnessed application identities and independently reconstructed resolver-bearing OER identities. Node implementations use a deliberately low 5% per-object weight because static Resolver01-03 tests exhaustively cover mixed-type dispatch while stress retains a cheaper sample of generated node interactions. Coverage assertions require generated node resolvers plus activated bridge producers and `$node` loaders. An identity includes the canonical post-lowering field, exact arguments, and materialized-input fingerprint, keeping `foo$bridge(args)` producer applications distinct from argumentless `T$Bridge.$node` applications at each bridge-object occurrence. Selective-demand fingerprints are captured only by focused witness profiles and are disabled for stress runs. The case count must be an integer, at least 10,000, and a multiple of 10; the seed must be a `Long`. Malformed values fail, while ordinary repository validation excludes the dedicated stress tasks.
+Resolver dependencies and variable provider/use branches are generated in one acyclic rank order and then validated by canonical registry assembly. Provider paths are inserted into the defining resolver's fixed object fragment before compilation.
+
+Resolver02/03, Resolver07/08, and Resolver22/23 generated profiles exercise `FromArgument`. Resolver25 and Resolver26 profiles additionally execute `FromObjectField`, including mixed-variable, nested-provider, and late-demand interactions described in [`../semantics/testing-contracts.md`](../semantics/testing-contracts.md).
+
+Queries and registries are independently generated from one schema. Query sources are bounded below GraphQL Java's parser limit, and oversized candidates are discarded before becoming test cases.
+
+## Feature Controls
+
+Configuration controls arguments, resolver fragments, variables by source, interfaces, unions, lists, node lowering, selection depth, resolver density, and other size or weighting decisions. Feature generation does not imply runtime activation; profiles that claim an interaction must record or require evidence that the relevant resolver application occurred.
+
+Generated witnesses identify applications by canonical post-lowering field, exact arguments, materialized-input fingerprint, and, where required, result occurrence. Focused selective-demand profiles may capture supplied-demand detail; ordinary stress profiles avoid unnecessary witness cost.
+
+## Failure Replay
+
+Every semantic failure reports the profile, seed, one-based `S:R:Q` coordinate, schema, registry, and query. Replay the exact coordinate through `:semantics:resolverPropertyReplay` before changing generator or resolver code. [`../semantics/testing-contracts.md`](../semantics/testing-contracts.md) defines the stable profile IDs and replay interface.
+
+Classify failures as resolver, generator, oracle, campaign, or resource-envelope behavior before making changes. A generated world that contains a feature but never activates it is a coverage defect, not evidence about that feature.
+
+## Validation
+
+Run generator tests with:
+
+```shell
+./gradlew :arbitrary:test
+```
+
+Resolver properties live in `semantics` and are included in `./gradlew check`. Deep stress and broad campaigns are opt-in and require explicit seeds.

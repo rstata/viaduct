@@ -1,6 +1,6 @@
 # Resolution Algorithms By Example
 
-These examples describe Resolver03's two distinct demand operations. Local closure determines everything needed to construct resolver inputs. Output projection determines everything a producer must retain so client demand and downstream resolver inputs can be satisfied. Durable lessons from the removed Resolver04 experiment live in [Query Plan Research](./evergreen.md#resolver04-and-resolver05-retrospective).
+These examples describe Resolver03's two distinct demand operations. Local closure determines everything needed to construct resolver inputs. Output projection determines everything a producer must retain so client demand and downstream resolver inputs can be satisfied. The durable rules behind those operations are in [`design-principles.md`](./design-principles.md).
 
 An `objectFragment` is the resolver's fixed open input requirement at its containing object. Local demand closure repeatedly adds the stamped and grounded object fragments of activated resolver occurrences until every direct and transitive input requirement is present.
 
@@ -136,7 +136,7 @@ query {
 }
 ```
 
-The initial call to `Value.Object.resolve` operates on the concrete `Query` OER. Its local demand contains the exact key `Query.project`; `User.greeting` is nested output demand, not a key on that current OER. Closing the input demand for `Query.project` adds nothing:
+The initial call to `semantics.resolver03.resolve` obtains the concrete Query source from `ResolverRegistry.resolveRootQuery()` and constructs the Query OER. Its local demand contains the exact key `Query.project`; `User.greeting` is nested output demand, not a key on that current OER. Closing the input demand for `Query.project` adds nothing:
 
 ```text
 closed input demand added for Query.project = {}

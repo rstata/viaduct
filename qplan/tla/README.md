@@ -43,7 +43,7 @@ TLAPS proves the following under each module's explicit world assumptions:
 
 TLC exhaustively checks small models containing transitive sibling demand, an argument-preserving bridge-shaped dependency, guarded nested requirements, occurrence-indexed construction, projection, materialization, and composed Resolver03 application.
 
-The validated matrix currently contains 41 parsed TLA+ modules, 13 TLAPS proof modules, and 13 TLC models. These counts describe the successful 2026-08-07 validation run after removing the variable/provider and Resolver04 modules.
+The complete checked-in module matrix is the validation target. Treat a successful run as evidence about the current files rather than preserving dated module counts here.
 
 ## Assumptions
 
@@ -81,7 +81,7 @@ State constant world predicates as TLC invariants so an invalid fixture fails vi
 
 ## Validation
 
-From `scratchpad/qplanning`, parse every module, prove every proof module serially, and run every TLC model:
+From `qplan`, parse every module, prove every proof module serially, and run every TLC model:
 
 ```sh
 for module in tla/*.tla; do mise run tla:parse -- "$module"; done
@@ -90,3 +90,5 @@ for module in tla/*MC.tla; do mise run tla:check -- "$module"; done
 ```
 
 TLC commands may run concurrently only when each receives a unique absolute `-metadir`; the loop above runs them serially. `tla:check` changes to the specification directory and normalizes path-valued options so TLAPS standard-library imports resolve.
+
+[`refinement-backlog.md`](./refinement-backlog.md) records the structural extraction and Kotlin-alignment work that remains outside this proof baseline.

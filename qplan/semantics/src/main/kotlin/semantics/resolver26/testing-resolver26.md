@@ -125,7 +125,7 @@ Record generated and activated feature vectors separately, then retain seeds tha
 
 Scheduling perturbations such as deliberate yields may eventually expose additional races, but add them only with a reproducible seed and a reliable coordinate replay. A corpus whose failures cannot be localized is less useful than a slightly smaller one with exact forensic evidence.
 
-## Appendix: Testing TODO Handoff
+## Open Testing Gaps
 
 This appendix records known weaknesses in Resolver26's test infrastructure. They are not established Resolver26 implementation defects, but they limit what the current green suites prove and should be addressed before treating a large campaign as strong concurrency or interaction evidence.
 
@@ -143,16 +143,12 @@ This appendix records known weaknesses in Resolver26's test infrastructure. They
 
 ### Preserve Occurrence Identity In The Exact-Application Oracle
 
-- [x] Propagate the exact resolver occurrence path into execution observations and occurrence-aware application identities. `ResolverOccurrenceWitnessTest.occurrence oracle rejects duplicate-one omit-one for equal-input list elements` now proves that executing list position 0 twice while omitting position 1 fails the oracle even when field, arguments, and materialized input are equal.
 - [ ] Reconstruct expected demanded occurrences independently of the completed Resolver26 result. `registeredResolverApplicationIdentityCounts` currently discovers expected applications from resolver-bearing cells already present in that result, so an extra valid cell accompanied by an extra matching invocation can increase both expected and actual counts together and pass.
 - [ ] Restore an independent supplied-demand oracle or replace the disabled `ResolverWitnessContract.generated supplied demand matches independently reconstructed successor demand` check with a narrower reconstruction that handles list-transparent continuation paths.
 
 ### Fill Generator Reachability Holes
 
-- [x] Generate genuinely nested output-list types. `MaxOutputListDepth` now controls recursive output-list wrapping, and `ResolverCoverageAdversarialTest.generated schemas include nested output lists` exercises a depth-two generated list.
-- [x] Apply GraphQL singleton coercion when a scalar `FromObjectField` provider supplies an input-list variable. `FromObjectFieldSingletonCoercionRegressionTest.singleton coerces a scalar object-field value through two input-list layers` is enabled and passes.
 - [ ] Generate singleton-coercion cases in the property corpus. Runtime coercion is covered by the static regression, but `ListVariableTarget` still requires a list-valued provider, so generated worlds do not reach scalar providers supplying one or more input-list layers.
-- [x] Generate passive polymorphic deepening. The registry generator can now prefer passive abstract output fields, and `ResolverCoverageAdversarialTest.Resolver03 witness profile activates polymorphic passive deepening` exercises the generated interaction.
 - [ ] Generate fields with multiple arguments so grounding, defaults, errors, and variable sources can interact within one resolver key; generated fields currently have at most one argument.
 - [ ] Deliberately reuse one variable across multiple selection occurrences and preserve `VariableInputPlan` as a replacement candidate, so occurrence-stamping behavior is exercised instead of relying on accidental variable layouts.
 - [ ] Generate convergence between a `FromObjectField` variable value and a literal argument; the registry generator currently reports this convergence feature as always false.

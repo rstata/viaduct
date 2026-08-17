@@ -2,13 +2,19 @@
 
 Resolver25 and Resolver26 implement the current benchmark profile: selective node and field resolvers, resolver object fragments, `FromArgument` and `FromObjectField` variables, and no query fragments.
 
+## Running And Reporting
+
+Run `./gradlew :semantics:resolver25FullBenchmark --console=plain` or `./gradlew :semantics:resolver26FullBenchmark --console=plain` for the full workflow. Use the corresponding `resolver25OverheadBenchmark` or `resolver26OverheadBenchmark` task for the fixed-corpus overhead benchmark.
+
+After every run, report each measured iteration, the final JMH score and error, units, the number of top-level resolutions in one JMH operation, and mean time per resolution. For overhead runs, also report every emitted corpus statistic with its actual percentile label rather than describing all percentiles as P90.
+
 ## Full Benchmark
 
 `resolver25FullBenchmark` and `resolver26FullBenchmark` run the complete generated property-testing workflow. One JMH operation generates and validates 100 schemas by two registries by five queries, for 1,000 resolver calls. Generation, world assembly, resolution-witness capture, resolution, and post-resolution validation are all timed.
 
 ## Overhead Benchmark
 
-`resolver25OverheadBenchmark` and `resolver26OverheadBenchmark` load one checked-in schema/registry pair. Before each measured invocation, JMH setup parses the schema and registry once, generates and parses a seeded query batch against those shared static objects, creates fresh request-local `Assumptions` and root values for every resolution, and stores the prepared calls in an array. JMH excludes that setup; the measured method only iterates the array, invokes the resolver, and consumes each result.
+`resolver25OverheadBenchmark` and `resolver26OverheadBenchmark` load one checked-in schema/registry pair. Before each measured invocation, JMH setup parses the schema and registry once, generates and parses a seeded query batch against those shared static objects, creates fresh request-local `Assumptions` for every resolution, and stores the prepared calls in an array. JMH excludes that setup; the measured method iterates the array, invokes the resolver, and consumes each result. Each resolver invocation obtains its canonical Query source through `ResolverRegistry.resolveRootQuery()` inside the measured call.
 
 Control the random query batch with `-PresolverBenchmarkQueryCount=N` and `-PresolverBenchmarkQuerySeed=S`, and its repetition count with `-PresolverBenchmarkLoopCount=M`. One overhead JMH operation contains exactly `N * M` resolver calls.
 
@@ -20,7 +26,7 @@ After the measured trial, an untimed reporting pass resolves the `N` queries onc
 
 The report also separates active from passive result fields, reports their ratio, and describes the fixed registry's active/passive fields per non-Query object plus object-fragment recursive selection counts and depths.
 
-For Resolver26, each measured call includes `runBlocking` on the process-scoped configured dispatcher, the 15-second request timeout, coroutine launch/join work, successor-demand computation, result and Cell allocation, promise and access checks, and request-local cycle protection. Cycle protection registers each Cell writer and records reader-to-writer edges in concurrent maps before a potentially blocking read; it throws on a detected dependency cycle. The ordinary benchmark passes a no-op application observer, but Resolver26 still constructs and submits each observation to that no-op. Query generation, parsing, `Assumptions` and root construction, resolution-witness capture, correctness validation, and statistics traversal are outside the measured method.
+For Resolver26, each measured call includes `runBlocking` on the process-scoped configured dispatcher, the 15-second request timeout, coroutine launch/join work, successor-demand computation, Query-source and result allocation, promise and access checks, and request-local cycle protection. Cycle protection registers each Cell writer and records reader-to-writer edges in concurrent maps before a potentially blocking read; it throws on a detected dependency cycle. The ordinary benchmark passes a no-op application observer, but Resolver26 still constructs and submits each observation to that no-op. Query generation, parsing, `Assumptions` construction, resolution-witness capture, correctness validation, and statistics traversal are outside the measured method.
 
 ## Corpus Search
 

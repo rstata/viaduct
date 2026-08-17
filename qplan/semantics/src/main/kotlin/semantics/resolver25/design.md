@@ -2,192 +2,78 @@
 
 ## Status
 
-Resolver25 is an experimental one-shot resolver built from the Resolver23 coroutine structure. This document describes the design as it exists now and records the reasoning that led to it. The orchestration protocol is expected to last longer than the current path-variable implementation. Resolver25 now carries path-variable definitions through generalized non-list object paths, but its type-local preparation plan remains experimental scaffolding rather than a proposed final static analysis.
+Resolver25 is an experimental selective resolver that applies each grounded resolver key at most once. It supports runtime `FromObjectField` bindings and deliberately uses grounded-key identity, so separately discovered selections that become the same `Value.GroundKey` contribute to one key state.
 
-## Goal
+Resolver25 is maintained as an alternate construction and comparison for Resolver26. It is not the primary implementation blueprint.
 
-For each resolver-bearing object-result instance and exact `GroundKey`, aggregate all in-scope demand before launching its resolver, then launch that resolver exactly once. The resolver must receive the complete selective demand that belongs to its producer. Later readers, cache hits, or demand unions must not make an under-supplied resolver invocation appear correct after the fact. Execution state is monotonic: promises, bindings, and latches move from absent or incomplete to one terminal value and are not replaced.
-
-## Historical Shape
-
-Resolver25 has the same two fundamental kinds of work as the earliest resolver constructors:
-
-1. **Orchestrate an OER node.** Discover and coordinate the active fields needed on one concrete `EngineResult.Object`.
-2. **Resolve an OER key.** Materialize one resolver instance's inputs, launch its resolver, construct its output, and publish the exact value.
-
-This division is not new, and this document does not repeat all of its inherited mechanics. Humans and agents should read Resolver03 for the compact recursive selective constructor, Resolver08 for the same shape expressed as explicit depth-first orchestrator and resolver tasks, and Resolver23 for the structured-coroutine form on which Resolver25 is based. Resolver03 names the operations `orchestrateKeys` and `resolveKey`. Resolver08 turns those operations into `SlotOrchestrator` and `SlotResolver` work items. Resolver23 replaces explicit queue scheduling with deferred value promises and structured suspension. Resolver25 retains that lineage while adding an explicit preparation protocol before resolver launch.
-
-## Terms
-
-An **object-result instance** is one runtime `EngineResult.Object` at one result-tree location. A **resolver template** is the static schema and registry definition. A **resolver instance** is the dynamic resolver for one exact field key on one object-result instance. An **arg-variable** is bound from the exact arguments of its defining resolver instance. A **path-variable** is bound by reading a value from an OER path. A **latch** is a deferred value used to announce that a coordination phase has completed. A value-bearing deferred can be both a result and the latch announcing that the result is ready. **Structural closure** means expanding every activated resolver field's fixed object fragment before exact keys are known. **Prepare** means ground complete exact demand and establish all resolver-instance state needed before launch. **Launch** means install value promises and start the resolver coroutines.
+The current implementation is authoritative. The earlier static `StrictPreparationPlan` and per-field preparation-graph design is retired; descriptions of that graph are stale rather than requirements the implementation is expected to recover.
 
 ## Runtime Ownership
 
-The public `resolve` entry creates the mutable root OER and one structured coroutine scope.
+One request `coroutineScope` owns all Resolver25 work. `ResolverRuntime` keeps an identity map from each mutable target OER to its sole `ObjectResultOrchestrator`.
 
-`ResolverRuntime` belongs to that scope and creates at most one `ObjectResultOrchestrator` for each target OER identity.
+Creating an orchestrator for a new target installs its conservative potential demand, submits initial actual demand, and starts completion coordination. Contributing to an existing target submits additional actual demand to the same orchestrator and returns latches for those contributions.
 
-The identity set rejects late attempts to create a second orchestrator for an already orchestrated object-result instance. Every orchestrator and resolver coroutine is a child of the root structured scope. The public call therefore does not return an OER containing abandoned background jobs.
+The implementation distinguishes several facts:
 
-`coroutineScope` waits for all descendant work to complete, and a child failure cancels the request scope.
+- A value promise is installed for one exact key.
+- Actual demand for that key has been merged.
+- The key's nested fringe is discoverable.
+- Resolver output is available for later descendant demand.
+- The key's demand has sealed and the key may launch.
+- An OER's submitted activation work has installed its contributions.
 
-No job intentionally escapes the request.
+These facts must not be collapsed into one generic readiness signal.
 
-## Object-Result Orchestration
+## Potential And Actual Demand
 
-An `ObjectResultOrchestrator` owns coordination for one source object and its corresponding target OER. It creates one `FieldState` for every canonical field of the source object's concrete type. The field is the planning granularity because demand for multiple exact keys of that field can depend on the same statically known contributors. For every field, orchestration starts one preparation coroutine and one launch coroutine. A third coroutine waits until every field has installed all of its demanded value promises and then completes `orchestrationReady`. The coroutines express dependencies by awaiting latches and promises rather than by polling a readiness worklist.
+Potential demand is a conservative field-level envelope. `closeStructuralDemand` expands each activated resolver field's fixed object fragment once, regardless of how many open or ground keys currently select that field.
 
-## Coordination Stages
+Actual demand arrives as selection occurrences. Each occurrence becomes activation work, grounds through available variables, and is interned in its field's `FieldState` by `Value.GroundKey`.
 
-Resolver25 distinguishes four facts that earlier implementations could leave implicit.
+Potential demand bounds the output and descendant work that may be needed. Actual demand determines which exact keys and subselections really activate. Keeping them separate avoids activating every resolver on a type while still permitting descendant demand to be prepared before all variable values are known.
 
-### Structural Closure
+## Grounded-Key Activation
 
-`closeStructuralDemand` runs synchronously when an object-result orchestrator is created. It repeatedly merges demand for the concrete OER type, projects every applicable non-error resolver selection to its canonical `Schema.ObjectField`, and adds that field's fixed object fragment once. The fixed point is field-activated rather than `ObjectKey`-activated: one or ten open keys for the same resolver field expand the same template once, while `merge` continues to preserve distinct open selections for later grounding. The closure is then filtered to instance-independent demand. Variable-bearing selections still activate their resolver fields and therefore import those fields' fixed successor demand, but those selections themselves remain for exact instance preparation.
+Immediately groundable activations start `UNDISPATCHED` so their demand can merge before an existing key seals. Activations that require bindings suspend until those bindings complete.
 
-Structural closure is deliberately not a latch. It uses only incoming selections, the concrete OER type, and fixed registry templates, so it completes before any preparation coroutine starts. This is the step that lets the fixed demand from `C.f($v)` reach `A` before the provider `B` completes.
+The first activation for a ground key creates and classifies its `KeyState` as preexisting, argument-error, passive, or resolver-backed. For a non-preexisting key it then reserves the OER cell, claims its value promise, and registers the writer. A preexisting key reuses the installed cell and contributes nested fringe work without claiming another writer. Later activations merge into the same `KeyState`.
 
-### Preparation
+If later demand arrives before launch, it contributes to the key's open demand. If it arrives after launch, Resolver25 does not reapply the containing key: passive values traverse their existing result, and resolver-backed values wait for `outputAvailable` before installing additional descendant fringe work.
 
-`prepareResolverInstances` waits for every field whose preparation can contribute demand to the current field.
+## Resolver Preparation
 
-Those contributors are now limited to instance-specific variable-bearing branches and provider-marker paths; fixed object-fragment demand was already contributed by structural closure. Preparation also waits until any currently modeled incoming path-variable provider promises can be looked up. It snapshots accumulated selections, fetches variable bindings, produces exact `GroundKey` values, and groups selections that ground to the same key. Grouping happens after substitution because symbolic keys that look different can become one exact producer. `mergeWithVariables` also reports which stamped path-variables terminate at each exact key. The merged demand is immutable for the remainder of orchestration. Preparation then calls `prepareResolverInstance` once for every exact key. Preparing an active resolver instance binds arg-variables, declares path-variable bindings, and contributes only its variable-bearing stamped branches and synthetic provider-marker paths. Preparing does not launch the field resolver itself.
+Preparing one resolver-backed key:
 
-### The `sealedDemand` Latch
+1. completes `FromArgument` bindings from the exact key;
+2. declares its stamped `FromObjectField` bindings;
+3. contributes the resolver's stamped object fragment as actual demand; and
+4. launches provider readers that complete object-field bindings from published OER values.
 
-Each `FieldState` owns:
+Resolver inputs must install before the consumer launches. Provider reads use exact OER cells and the shared cycle-checking instrumentation. Provider paths may traverse singular object values; list traversal is outside this reader.
 
-```kotlin
-CompletableDeferred<PreparedFieldDemand>
-```
+## Launch And Publication
 
-This value is named `sealedDemand`. Its `PreparedFieldDemand` contains the exact selection map and the path-variables defined by each exact key. It is both the outcome of preparation and the latch for preparation as a whole. Completion means that demand for the field is sealed, equal exact keys have been merged, and every resulting resolver instance has otherwise been prepared. Consumers await the value directly; there is no separate preparation-complete latch. Calling `FieldState.add` after this latch completes is an error. The value-bearing latch makes the phase boundary explicit without duplicating state.
+`KeyState.sealDemandForLaunch` takes the final invocation snapshot for that key and rejects subsequent attempts to change the producer's launch demand. Resolver invocation materializes the fixed object fragment from the target OER and computes selective successor demand while deferring still-open template boundaries.
 
-### Launch
+Resolver output is converted to passive engine-result shape. `outputAvailable` publishes the raw output and its result tree so later descendant demand can traverse it. Child orchestrators become ready before the containing value promise is completed, preserving install-before-parent-publication.
 
-`launchResolverInstances` awaits `sealedDemand`.
+Argument errors complete the value and access result directly. Successful values complete the exact cell once and set `accessAccepted` to true.
 
-It finds exact demanded keys that are not already present in the target OER. It eagerly creates every missing value promise and registers its writer before launching any resolver coroutine for the field. It then completes `promisesInstalled`. Before launching, it waits until promises for the resolver's object-fragment input fields are installed and can therefore be read safely. Finally, it launches one `resolveKey` coroutine for every unresolved exact key. The launch phase does not require input values to be complete before the coroutine exists; materialization awaits the exact promises it reads.
+## OER Readiness
 
-### Promise Installation
+An orchestrator counts submitted activations. Its `orchestrationReady` latch completes when all currently submitted activation contributions have installed their key promises and fringe obligations.
 
-`promisesInstalled: CompletableDeferred<Unit>` means that every exact promise selected by the field's sealed demand exists in the target OER.
+Readiness does not mean every descendant value is complete. Exact cell promises remain the value-completion mechanism. This distinction lets a parent publish a stable child OER without hiding active child work from readers.
 
-It does not mean that those promises have values. This distinction prevents lookup races while preserving concurrency between producers.
+## Identity And One-Shot Scope
 
-### The `orchestrationReady` Latch
+Resolver25's one-shot unit is `(OER occurrence, Value.GroundKey)`. Literal and variable-bearing selections that ground to the same key merge if they arrive before launch.
 
-Each `ObjectResultOrchestrator` owns one `orchestrationReady: CompletableDeferred<Unit>`. It completes after every `FieldState.promisesInstalled` latch on that OER instance has completed. `ResolverRuntime.createOrchestrator` returns this latch to the resolver that created the OER instance.
+The conservative potential-demand envelope and late descendant traversal are part of this experimental guarantee. Resolver25 does not establish a general static plan for every recursive, list, provider-chain, or mixed-variable world, and passing generated tests is finite evidence rather than proof.
 
-When `resolveKey` creates descendant OER instances, it collects their `orchestrationReady` latches and awaits them all before completing the parent key's value promise. A reader therefore cannot observe a published child OER before all of that child's demanded exact promises can be looked up. This preserves Resolver23's install-before-parent-publication discipline.
+## Comparison With Resolver26
 
-`orchestrationReady` does not mean that any descendant resolver has completed. It marks only the point at which the descendant OER instance is structurally ready to publish; exact value promises remain the resolver-instance completion latches.
+Resolver26 avoids Resolver25's persistent OER-local acceptance of actual demand. It closes one final symbolic forest synchronously and gives variable-bearing source selections distinct occurrence identity, even when visible ground arguments agree.
 
-### Promise Completion
-
-The exact value promise stored at `target[key]` is the completion latch for that resolver instance. There is deliberately no additional resolver-complete latch. Provider reads and ordinary materialization await the exact value promises they need. The promise is value-bearing, so completion and the produced result cannot diverge. An OER-wide or field-wide completion latch would be coarser and duplicative.
-
-## Resolving One Key
-
-`resolveKey` handles one exact `GroundKey`.
-
-Argument errors complete directly. An active resolver key materializes the resolver template's object fragment from the target OER. Materialization reads exact promises and records the resolver instance as the reader for cycle diagnostics. The resolver receives its ground arguments and selective successor demand. Resolver behavior recursively adds canonical `__typename` before projecting that demand. Resolver25's local `resolveValue` converts the returned `Value.Output` into `EngineResult` structure and consumes path-variable markers when their terminal keys become exact. Every passive terminal, including `__typename`, copies its value from the source object and completes its bindings during traversal. A resolver-backed terminal preserves its marker in the child OER's demand, and `resolveKey` completes the binding when that resolver's exact value is published. Any descendant OERs requiring active resolution receive their own orchestrators. The parent value is published only after those descendant orchestrators report that their promises are installed. The descendant values need not be complete at that moment; their exact promises remain the completion mechanism.
-
-## Static Preparation Plan
-
-`StrictPreparationPlan` currently builds a plan for one concrete object type.
-
-It gives every field two steps: `PREPARE(field)` and `LAUNCH(field)`. Every field has an edge from its own preparation to its own launch. Only variable-bearing object-fragment branches add preparation edges because fixed demand is already closed structurally. Path-variable definitions add a preparation edge for marker delivery to the provider root. Object-fragment reads add launch edges ensuring required field promises are installed before the consumer launches. A provider launch also precedes preparation of a field whose key consumes its variable. The combined graph is checked for cycles before orchestration. The runtime projects that graph into `demandContributors`, `incomingPathVarProviders`, and `resolverInputFields`. This phase graph is useful evidence that preparation dependencies and value-reading dependencies are not the same relation. Its current type-local construction is not yet a general operation-and-registry ordering analysis.
-
-## Diagnostic Instrumentation
-
-`RuntimeSupport` is carried as `diagnosticInstrumentation`.
-
-Resolver25 calls `successorDemand()` directly rather than hiding ordinary demand semantics behind the instrumentation abstraction. The instrumentation registers one writer coordinate for every exact value promise, and materialization registers exact reader coordinates. Those coordinates allow runtime cycle diagnostics to explain ordinary resolver-read cycles in terms of concrete object-result instances and keys. Path-variable binding suspension is currently represented by the static preparation relation rather than an additional exact runtime reader edge. Runtime checking complements static rejection; it does not prove that arbitrary coroutine deadlock is impossible.
-
-## What Resolver25 Currently Demonstrates
-
-Resolver25 demonstrates that Resolver23's structured-coroutine shape can be extended with structural closure followed by an explicit prepare-before-launch protocol. It demonstrates transitive field-level activation of fixed object-fragment demand, including a nested `B -> C.f -> A -> Z` case where structural closure dissolves the apparent preparation cycle before `B` completes and gives both `A` and `Z` their complete demand. That test launches two exact `C.f` instances with different arguments while launching `A` and `Z` once each, distinguishing field-level structural expansion from `GroundKey`-level execution. Resolver25 also demonstrates a value-bearing per-field latch that publishes exact merged demand, eager promise installation without a duplicate resolver-completion mechanism, late equality merging before one launch, generalized path propagation through descendant object-result instances, passive and resolver-backed terminal fields, and terminal scalar-list conversion. It preserves one structured request scope and exact read/write diagnostics.
-
-## What Resolver25 Does Not Yet Demonstrate
-
-Resolver25 still does not establish a complete one-shot analysis for every path-variable shape. `VariableDefinition.FromObjectField` paths cannot cross lists, and Resolver25 additionally rejects provider paths containing argument-bearing fields; intermediate argument grounding is deferred for later work. The preparation plan models a nested provider by its top-level root branch rather than by an operation-specific graph of exact possible resolver instances. The type-local phase graph has not shown that it can order resolver instances across list positions, recursion, or every composition of provider chains and nested variable uses. An initial mixed-variable stress run found a valid registry whose path-variable provider edge, arg-variable preparation edges, and ordinary launch edges formed `launch(query1) -> launch(query5) -> prepare(query2) -> prepare(query7) -> prepare(query1) -> launch(query1)`. The path-focused stress profile therefore disables arg-variable generation until the accepted one-shot domain has an explicit mixed-variable ordering restriction. Path-variable waits are not yet represented in exact runtime cycle instrumentation. The implementation has not proved schedule independence on arbitrary dispatchers. Passing focused, generated, and stress tests is implementation evidence, not a proof of producer-complete one-shot resolution.
-
-## Near-Term Design Direction
-
-Keep the old orchestrate-OER/resolve-key shape. Keep structured concurrency, install-before-publication, exact value promises, and the distinction between prepare and launch. Keep `sealedDemand` as a value-bearing per-field preparation latch unless a more precise granularity is shown necessary. Build on marker paths as the runtime representation of generalized provider traversal, including their survival through resolver-backed terminals. Analyze a GraphQL operation together with the executor registry to add ordering edges between the resolver instances that can exist for that operation. Prefer restrictions that ensure this ordering is acyclic and statically bounded. Do not recover correctness by retaining complete output everywhere or by keeping every orchestrator open indefinitely.
-
-## Appendix: Context Dump
-
-### Why One-Shot Is Hard
-
-The one-shot requirement is producer-specific: all in-scope demand for one exact resolver-bearing OER key must be supplied to the invocation that produces it. Final result coverage is weaker because later demand, cache hits, or additional materialization can hide that the producing invocation was incomplete. Waiting for all currently known contributors is also weaker than proving that no future execution can reveal another contributor. Selective resolvers make this distinction observable because a resolver can discard output that was not requested when it launched. Once that happens, widening demand afterward cannot recover the missing output without a second invocation.
-
-### The Resolver09 to Resolver10 Jump
-
-Resolver09 works with exact grounded resolver instances and refreshes readiness as parent execution publishes more OER structure. Its persistent OER-local orchestrators can discover descendant and list-element instances after their containing values exist. Dependencies can be recomputed from grounded materialized object fragments and exact instance coordinates. Resolver10 adds runtime path-variable providers, and that changes the state space rather than merely adding another dependency edge to an already ground graph. A resolver object fragment may contain a symbolic key whose exact `GroundKey` is unavailable until another OER value is produced. Resolver10 consequently needs pending symbolic selections, pending bindings, provider traversal, late grounding, equality convergence, and a rule for when demand is safe to seal. Provider traversal can itself require resolver work and can cross nested objects whose runtime instances do not exist until ancestors publish their shape. The implementation must distinguish "the provider path is statically known" from "the exact provider instance and value are now available." It must also distinguish "this symbolic key became ground" from "all demand that may converge on that ground key has been found." That is the core reason the Resolver09 to Resolver10 progression grows sharply in complexity.
-
-### Path Variables Add Resolver-Instance Dependencies
-
-A path-variable is not merely delayed argument substitution. It adds a value-flow dependency between dynamic resolver instances: in the running `B -> C.f -> A` shape, `B` produces the value used to ground the exact `C.f($v)` key. Earlier reasoning assumed that preparing that exact `f` instance was also necessary before contributing demand to `A`. The later structural-closure insight separates those facts. Viaduct requires every argument-bearing field to be a resolver boundary, and a field resolver's object fragment is fixed across all of its argument values. Therefore the appearance of any applicable `C.f` selection activates `f`'s fixed demand on `A` at field granularity; one or ten future `f` instances contribute the same structural demand. `B` remains necessary to ground and launch an exact `f` instance, but no longer delays fixed demand reaching `A`.
-
-### Why Preparation Is Separate From Launch
-
-Launching a resolver instance can still be too early when multiple open selections may later ground to the same key with different requested output subselections. Structural closure removes fixed object-fragment demand from that uncertainty, while preparation grounds the remaining selections, merges late-equal `GroundKey` values, and installs occurrence-specific marker paths. Launch is permitted only after that exact preparation establishes the immutable demand for the producer. The user steered the design toward a value-bearing latch at object-field granularity because the relevant unit is "all exact demand for this field has been prepared," not "an entire OER has globally finished." The resulting `sealedDemand` value reports both the merged demand and completion of resolver-instance preparation.
-
-### Why Promise Stages Matter
-
-Promise installation and promise completion release different dependencies. A consumer can safely start materialization once the exact promises it may read have been installed, even while their producers are still running. The exact promise then suspends the consumer until the value exists. An earlier design carried a separate field-level resolver-completion latch. The user identified that the exact value promise already serves as the resolver-instance completion latch, and the duplicate mechanism was removed. Likewise, `orchestrationReady` does not mean descendant resolution is complete; it means descendant promises are installed so publishing the parent cannot expose an OER whose active cells cannot yet be found.
-
-### Why "Retain Everything" Is Not The Endpoint
-
-Resolver24 and Resolver24i keep persistent orchestrators capable of accepting late grounded demand. They conservatively retain complete internal output so a path reader can observe providers and late demand can flow into published children. That strategy is useful implementation evidence and can preserve runtime correctness over a broad path-variable domain. It does not establish the desired one-shot selective-demand argument if a resolver can launch before all demand for its producer is known. Complete retention can also mask the exact point at which selective output would have been under-supplied. The user therefore rejected "keep every orchestrator alive and retain everything" as the intended endpoint. The desired design bounds contributors and orders preparation before launch.
-
-### Why The Coroutine Baseline Is Resolver23
-
-The reactor progression explains the problem, but it is not the intended implementation direction. The user explicitly chose Resolver21-23, especially Resolver23, as the baseline for future work. Structured coroutines let value and coordination dependencies appear as suspension on deferred values. They avoid readiness polling, repeated orchestrator scans, and scheduler-specific work queues. The root scope also gives cancellation and quiescence semantics directly: success means all child work completed, and failure cancels siblings. Resolver25 therefore attempts to express the extra path-variable ordering as latches and promise dependencies inside the Resolver23 shape.
-
-### The Strictness We Actually Want
-
-The user is willing to restrict path variables to recover a statically orderable one-shot domain. The intended restrictions are principally those needed to bound dependency discovery and prevent cycles. The promising analysis unit is a GraphQL operation in the context of an executor registry, because the operation bounds which resolver instances and paths can activate while the registry describes resolver fragments and variable providers. That analysis should add ordering edges between resolver instances, including edges introduced by path-variable value flow and demand contribution. Accepted inputs should admit an acyclic one-shot ordering. A restriction to a single direct path component does not express that semantic property and discards many potentially acyclic cases; Resolver25 has removed that restriction, but its root-branch approximation is not yet the final instance-level analysis.
-
-### Cycles Need One Relation
-
-Ordinary resolver inputs already create producer-before-consumer dependencies, while path-variable providers create provider-completion-before-exact-consumer-preparation dependencies. The apparent `B -> C.f -> A -> B` cycle disappears when `f`'s fixed demand reaches `A` during structural closure rather than exact `f` preparation. Remaining preparation edges cover only genuinely instance-specific variable branches and marker delivery. Resolver25 still composes those edges with promise-installation dependencies in one `PREPARE(field)` and `LAUNCH(field)` graph. The current graph is type-local and field-granular, so it is not yet the final instance-level cycle analysis. Runtime exact-coordinate cycle checking remains valuable for diagnostics and for detecting violated assumptions.
-
-### Instance Identity Cannot Be Flattened
-
-Resolver dependencies are relationships between resolver instances, not merely resolver templates. One schema path can produce many runtime instances through recursion, polymorphism, and lists. Equal node IDs or equal arguments do not merge separate result-tree instances. Conversely, separately discovered symbolic selections can converge on the same `GroundKey` within one OER instance after binding. Any static ordering must preserve enough guards and provenance to map possibilities to these runtime identities. This is why a schema-only field graph is likely conservative and why operation context matters.
-
-### Late Equality Is The Decisive Case
-
-Suppose one demand already contains `field(arg: "same") { one }` while another contains `field(arg: $v) { two }`. If `$v` later becomes `"same"`, both selections belong to one exact producer and must be merged before launch. Launching the literal key first with only `{ one }` is already incorrect for a selective one-shot resolver. Interning the grounded key later prevents a duplicate writer but does not repair the missing `{ two }` demand. Resolver25's preparation phase handles this case inside its narrow domain by grounding before grouping and launching. The general design must preserve that property across longer provider paths and dynamically created OER instances.
-
-### Static Shape And Runtime Shape
-
-The registry can expose fixed resolver fragments and structural provider paths. The operation can bound selected roots and guarded alternatives. Runtime values still determine exact arguments, concrete types, null branches, list lengths, and the object-result instances that actually exist. One-shot planning therefore needs a static bound on possible contributors without pretending all runtime identities are already known. It may conservatively include guarded alternatives, but it must avoid conflating unrelated instances or recursively expanding an unbounded envelope. The previous Resolver10 work found both sides of this tension: broad conservative projection preserved potential demand but could explode, while narrow eager projection missed provider branches and late contributors.
-
-### Lessons From Resolver10 Debugging
-
-Generated failures showed that skipping all successor closure whenever path variables were reachable omitted ordinary nested behavioral boundaries. Stopping exactly at a path-variable resolver still omitted variable-free provider branches needed to create the provider's nested resolver instances. Conservative activation closure had to begin from actually incoming fields rather than every resolver on an OER type to avoid pulling unrelated recursive branches into execution. Variable-bearing demand could block sealing, but field-wide blocking was too coarse when only one exact argument shape could receive the late contribution. Potential exact-key comparison was needed to release unrelated instances of the same field while preserving late-equality safety. Conservative demand union also needed structural coalescing because duplicate selections compounded through successor closure and caused pathological growth. These are warnings for a static one-shot analysis: conservatism needs instance and key precision, and "include every possibility" is not automatically finite or practical.
-
-### Cleanup As Design Investigation
-
-The cleanup work was intentionally more than hygiene. Standardizing on resolver-instance terminology exposed which relationships were dynamic. Replacing generic prerequisites with incoming path-variable providers exposed the value-flow origin of the ordering. Renaming seal/apply to prepare/launch clarified that preparation includes demand sealing plus resolver-instance setup. Separating `sealedDemand`, `promisesInstalled`, `orchestrationReady`, and exact promise completion exposed four materially different facts. Removing the duplicate resolver-completion latch showed that value promises already carry precise completion. Replacing hidden runtime completion callbacks with direct `successorDemand()` calls separated semantic demand computation from diagnostic instrumentation. Removing optimization-only short circuits made the required phase protocol visible even for empty demand. Questioning the single-component assumption revealed that the current path-variable reader is a dead end if mistaken for the general solution. Future cleanup should continue to be treated as a way to surface hidden assumptions and test whether each abstraction names one real invariant.
-
-### Current Working Hypothesis
-
-The lasting runtime shape is one orchestrator per object-result instance plus one resolver coroutine per exact key. The coordination shape is now: close fixed demand by activated resolver field, prepare exact instances, install promises, launch resolvers, and await exact values. Path variables delay exact keys but, under the argument-bearing resolver-boundary requirement, do not delay fixed successor demand. Runtime creation of descendant instances repeats the same local structural closure for their concrete OER type. The remaining restrictions and planning edges should be judged by whether they protect instance-specific demand without reintroducing field-wide waits for fixed object fragments.
-
-### Questions To Carry Forward
-
-1. What static node identifies a possible resolver instance before runtime object and list instances exist?
-2. Which operation and registry facts bound every demand contributor to an exact producer?
-3. How are dependencies instantiated as descendants and list elements are published?
-4. At what granularity should preparation latches live when one field has many argument keys with different possible contributors?
-5. How does a multi-component provider path request and await intermediate resolver instances without reopening their sealed demand?
-6. How are nulls, errors, abstract types, and lists represented in the ordering without manufacturing nonexistent runtime work?
-7. Which cycle restrictions are necessary, and which current restrictions are merely implementation shortcuts?
-8. Can static cycle detection and runtime exact-coordinate diagnostics share one dependency representation?
-9. How is conservative demand bounded so recursive fragments do not produce an impractical envelope?
-10. What focused counterexamples distinguish a true one-shot guarantee from final-result correctness or complete-output masking?
+Use Resolver25 to study the consequences of grounded-key convergence and late descendant installation. Do not copy its activation registry, output handoff, or readiness protocol into Resolver26 unless a specific requirement survives comparison with Resolver03, Resolver08, and Resolver23.

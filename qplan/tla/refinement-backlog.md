@@ -1,10 +1,12 @@
-# TLA+ Refinement Handoff
+# TLA+ Refinement Backlog
 
 ## Purpose
 
-This file records active work needed to turn the passing Resolver01-03 atomic proof baseline into a refinement argument for the Kotlin model. [`README.md`](README.md) defines what is currently machine checked. Durable historical lessons live in the root [Resolver04 and Resolver05 retrospective](../evergreen.md#resolver04-and-resolver05-retrospective).
+This file records work needed to turn the passing Resolver01-03 atomic proof baseline into a refinement argument for the Kotlin model. [`README.md`](README.md) defines what is currently machine checked, and [`../design-principles.md`](../design-principles.md) defines the durable semantic obligations.
 
-Field-relative variables, `@parent`, checkers, lazy values, cyclic resolver demand, and other future features remain outside the current proof scope.
+This is a backlog, not the immediate project handoff. The current priority is the all-resolver Engine API alignment in [`../handoff.md`](../handoff.md). Refinement work should resume from the aligned carrier boundary unless an explicit prompt prioritizes TLA+ work sooner.
+
+Field-relative variables, `@parent`, checkers, lazy values, and cyclic resolver demand remain outside the current proof scope.
 
 ## Current Assessment
 
@@ -86,7 +88,7 @@ Model the returned OER as transition state. Each cell moves from absent to one v
 
 Model equivalents of `resolveKey`, recursive `resolveValue`, materialization, and cell write. Terminal cells and values should then be the state produced by the fold, not alignment inputs.
 
-This is also the right basis for the future worklist executor: its refinement target should be monotonic writes, not immutable subtree union.
+This is also the right basis for refining the aligned qplan constructors: the target should be monotonic writes, not immutable subtree union.
 
 ### 4. Structural Observation And Projection
 
@@ -98,7 +100,7 @@ State separate theorems for termination, demand closure, input availability, pro
 
 Final premises may constrain valid worlds and resolver functions, but must not choose supplied demand, returned cells, actual observations, or application counts for the algorithm.
 
-## Immediate Work
+## Suggested Repair Order
 
 1. Preserve the passing baseline while adding a new adversarial refinement model.
 2. Add wrong-cell and missing-observation countermodels.

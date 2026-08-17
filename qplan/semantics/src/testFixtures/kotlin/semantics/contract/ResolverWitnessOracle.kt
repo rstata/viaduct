@@ -20,7 +20,10 @@ import semantics.correctresolution.conformsToSelectionsAt
 import semantics.materialize
 
 /**
- * Expected deterministic resolver applications, independently reconstructed from OER cells.
+ * Expected deterministic resolver applications reconstructed from resolver-bearing result cells.
+ *
+ * This is independent of the observed application stream, but not of the completed result under
+ * test: an extra result cell paired with an extra invocation can increase both counts together.
  */
 context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():

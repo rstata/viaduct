@@ -37,10 +37,11 @@ import semantics.resolveValue
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Resolves selective demand once per ordinary or provenance-stamped resolver instance.
+ * Resolves selective demand once per ordinary or occurrence-stamped resolver instance.
  *
  * Pre-grounded selections coalesce by ordinary ground key. Every variable-bearing selection in a
- * resolver object fragment retains its nonempty provenance and therefore resolves independently.
+ * resolver object fragment retains its opaque occurrence lineage and therefore resolves
+ * independently.
  */
 context(world: Assumptions)
 fun resolve(selections: SelectionForest): EngineResult.Object =

@@ -3,6 +3,24 @@ package model
 import model.invariants.conformsToSchemaType
 
 /**
+ * One step in an exact path through an engine-result tree.
+ *
+ * An [ObjectEngineResult.GroundKey] selects an object field, while a [ListEngineResult.Index]
+ * selects a list element. Equality is structural within each variant.
+ */
+sealed interface PathComponent
+
+/**
+ * Returns this exact OER path as an object-key-only selection path.
+ *
+ * A null path or any path containing a [ListEngineResult.Index] has no corresponding selection
+ * path and yields null.
+ */
+fun kotlin.collections.List<PathComponent>?.toSelectionPath():
+    kotlin.collections.List<ObjectEngineResult.GroundKey>? =
+    this?.map { component -> component as? ObjectEngineResult.GroundKey ?: return null }
+
+/**
  * A finite, well-founded field-resolution result.
  *
  * Equality depends on the result variant. [SimpleEngineResult] values use structural equality,
@@ -167,14 +185,188 @@ fun SimpleEngineResult.toValue(): Value.Simple =
  * cells are installed or their slots are completed.
  */
 sealed interface ObjectEngineResult : EngineResult {
+    /**
+     * One alias-free output-field coordinate consisting of a canonical field and its arguments.
+     *
+     * ### Invariant: key-argument-definition
+     *
+     * `arguments.type == field.arguments`.
+     *
+     * ### Invariant: object-key-field-classification
+     *
+     * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
+     *
+     * Ordinary-key equality is structural over [field] and [arguments], using canonical schema
+     * equality. [GroundKey.Stamped] additionally includes its opaque selection occurrence stamp;
+     * callers that need resolver-visible identity must explicitly project it to an ordinary key.
+     */
+    sealed interface Key {
+        val field: Schema.OutputField
+        val arguments: OpenArguments
+
+        companion object {
+            /**
+             * ### Invariant: map-key-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
+            fun of(
+                field: Schema.OutputField,
+                arguments: Map<String, Any?>,
+            ): Key = of(field, OpenArguments.of(field, arguments))
+
+            /** Constructs the precise key category for a field on a concrete object type. */
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Map<String, Any?>,
+            ): ObjectKey = ObjectKey.of(field, arguments)
+
+            /**
+             * ### Invariant: arguments-key-factory-schema-conformance
+             *
+             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             */
+            fun of(
+                field: Schema.OutputField,
+                arguments: OpenArguments,
+            ): Key {
+                require(arguments.type == field.arguments) {
+                    "Key arguments do not belong to its output field"
+                }
+                return when (field) {
+                    is Schema.ObjectField -> ObjectKey.of(field, arguments)
+                    else -> KeyImpl(field, arguments)
+                }
+            }
+
+            /** Constructs the precise key category for a field on a concrete object type. */
+            fun of(
+                field: Schema.ObjectField,
+                arguments: OpenArguments,
+            ): ObjectKey = ObjectKey.of(field, arguments)
+
+            /** Constructs the precise ground key category. */
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Value.Arguments,
+            ): GroundKey = GroundKey.of(field, arguments)
+        }
+    }
+
+    /**
+     * A selection-only key marking one component of a stamped path-variable's provider path.
+     *
+     * The marker remains distinct from [ObjectKey] even when [field] belongs to a concrete object
+     * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key
+     * and reports a binding when the path terminates at this component.
+     */
+    sealed interface VariableKey : Key {
+        val variableDefinedByThisKey: Value.Variable.Stamped
+
+        companion object {
+            fun of(
+                key: Key,
+                variableDefinedByThisKey: Value.Variable.Stamped,
+            ): VariableKey =
+                VariableKeyImpl(
+                    field = key.field,
+                    arguments = key.arguments,
+                    variableDefinedByThisKey = variableDefinedByThisKey,
+                )
+        }
+    }
+
+    /**
+     * A key whose field belongs to a concrete object type.
+     *
+     * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Ordinary instances use
+     * structural key equality; [GroundKey.Stamped] additionally retains occurrence identity.
+     */
+    sealed interface ObjectKey : Key {
+        override val field: Schema.ObjectField
+        override val arguments: OpenArguments
+
+        companion object {
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Map<String, Any?>,
+            ): ObjectKey = of(field, OpenArguments.of(field, arguments))
+
+            fun of(
+                field: Schema.ObjectField,
+                arguments: OpenArguments,
+            ): ObjectKey {
+                require(arguments.type == field.arguments) {
+                    "Key arguments do not belong to its output field"
+                }
+                return if (arguments is Value.Arguments) {
+                    GroundKeyImpl(field, arguments)
+                } else {
+                    ObjectKeyImpl(field, arguments)
+                }
+            }
+        }
+    }
+
+    /**
+     * A concrete-object key whose arguments are ground and which can therefore select an OER field.
+     */
+    sealed interface GroundKey : ObjectKey, PathComponent {
+        override val arguments: Value.Arguments
+
+        /**
+         * A ground key produced from a variable-bearing source selection.
+         *
+         * [selectionStamp] identifies the variable-bearing source selection that was grounded. It
+         * distinguishes different source selections even when their grounded arguments agree.
+         */
+        sealed interface Stamped : GroundKey {
+            val selectionStamp: SelectionStamp
+
+            companion object {
+                fun of(
+                    selectionStamp: SelectionStamp,
+                    field: Schema.ObjectField,
+                    arguments: Value.Arguments,
+                ): Stamped {
+                    require(arguments.type == field.arguments) {
+                        "Ground arguments do not belong to the stamped selection field"
+                    }
+                    return StampedGroundKeyImpl(
+                        field = field,
+                        arguments = arguments,
+                        selectionStamp = selectionStamp,
+                    )
+                }
+            }
+        }
+
+        companion object {
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Map<String, Any?>,
+            ): GroundKey = of(field, Value.Arguments.of(field, arguments))
+
+            fun of(
+                field: Schema.ObjectField,
+                arguments: Value.Arguments,
+            ): GroundKey {
+                require(arguments.type == field.arguments) {
+                    "Key arguments do not belong to its output field"
+                }
+                return GroundKeyImpl(field, arguments)
+            }
+        }
+    }
+
     val type: Schema.ObjectType
 
-    val keys: Set<Value.GroundKey>
+    val keys: Set<GroundKey>
 
-    fun isCellSet(field: Value.GroundKey): Boolean = field in keys
+    fun isCellSet(field: GroundKey): Boolean = field in keys
 
     /** @throws MissingFieldException when [field] has no cell */
-    fun getCell(field: Value.GroundKey): EngineResult.Cell
+    fun getCell(field: GroundKey): EngineResult.Cell
 
     /**
      * Returns the field cell, explicitly creating an unclaimed reader placeholder when this
@@ -182,7 +374,7 @@ sealed interface ObjectEngineResult : EngineResult {
      *
      * @throws MissingFieldException when this object is immutable or frozen and has no cell
      */
-    fun reserveCell(field: Value.GroundKey): EngineResult.Cell
+    fun reserveCell(field: GroundKey): EngineResult.Cell
 
     /**
      * Seals this object's cell-key set and freezes every present cell's value slot. Claimed
@@ -200,8 +392,8 @@ sealed interface ObjectEngineResult : EngineResult {
          */
         fun of(
             type: Schema.ObjectType,
-            values: Map<Value.GroundKey, EngineResult?> = emptyMap(),
-            accessAccepted: Map<Value.GroundKey, Value.Boolean> =
+            values: Map<GroundKey, EngineResult?> = emptyMap(),
+            accessAccepted: Map<GroundKey, Value.Boolean> =
                 values.keys.associateWith { Value.Boolean.of(true) },
             mutable: Boolean = false,
         ): ObjectEngineResult {
@@ -240,6 +432,18 @@ sealed interface ObjectEngineResult : EngineResult {
  * position requires comparing type expressions, not recursively revalidating its contents.
  */
 sealed interface ListEngineResult : EngineResult {
+    /** A non-negative position selecting one element of an engine-result list. */
+    sealed interface Index : PathComponent {
+        val index: Int
+
+        companion object {
+            fun of(index: Int): Index {
+                require(index >= 0) { "List index must be non-negative" }
+                return ListIndexImpl(index)
+            }
+        }
+    }
+
     val typeExpr: TypeExpr<Schema.OutputType>
     val size: Int
     val indices: IntRange
@@ -574,7 +778,7 @@ private class CellValueStore(
 
 private class ObjectResultImpl(
     override val type: Schema.ObjectType,
-    cells: Map<Value.GroundKey, EngineResult.Cell>,
+    cells: Map<ObjectEngineResult.GroundKey, EngineResult.Cell>,
     mutable: Boolean,
 ) : ObjectEngineResult {
     private val cellStore =
@@ -584,18 +788,18 @@ private class ObjectResultImpl(
             mutable = mutable,
         )
 
-    override val keys: Set<Value.GroundKey>
+    override val keys: Set<ObjectEngineResult.GroundKey>
         get() = cellStore.keys
 
-    override fun isCellSet(field: Value.GroundKey): Boolean = cellStore.isSet(field)
+    override fun isCellSet(field: ObjectEngineResult.GroundKey): Boolean = cellStore.isSet(field)
 
-    override fun getCell(field: Value.GroundKey): EngineResult.Cell {
+    override fun getCell(field: ObjectEngineResult.GroundKey): EngineResult.Cell {
         validateObjectField(type, field)
         return cellStore.readOrNull(field)
             ?: throw MissingFieldException(type.typeName, field.field.fieldName)
     }
 
-    override fun reserveCell(field: Value.GroundKey): EngineResult.Cell {
+    override fun reserveCell(field: ObjectEngineResult.GroundKey): EngineResult.Cell {
         validateObjectField(type, field)
         return cellStore.reserve(field)
     }
@@ -604,7 +808,7 @@ private class ObjectResultImpl(
         cellStore.freeze()
     }
 
-    val completedCells: Map<Value.GroundKey, EngineResult.Cell>
+    val completedCells: Map<ObjectEngineResult.GroundKey, EngineResult.Cell>
         get() = cellStore.completedCells()
 
     fun requireCompleted() {
@@ -614,25 +818,25 @@ private class ObjectResultImpl(
 
 private class ObjectCellStore(
     private val type: Schema.ObjectType,
-    cells: Map<Value.GroundKey, EngineResult.Cell>,
+    cells: Map<ObjectEngineResult.GroundKey, EngineResult.Cell>,
     private val mutable: Boolean,
 ) {
     private val lock = Any()
     private val cells = cells.toMutableMap()
     private var frozen = !mutable
 
-    val keys: Set<Value.GroundKey>
+    val keys: Set<ObjectEngineResult.GroundKey>
         get() = synchronized(lock) { cells.keys.toSet() }
 
     val cellValues: kotlin.collections.List<EngineResult.Cell>
         get() = synchronized(lock) { cells.values.toList() }
 
-    fun isSet(field: Value.GroundKey): Boolean = synchronized(lock) { field in cells }
+    fun isSet(field: ObjectEngineResult.GroundKey): Boolean = synchronized(lock) { field in cells }
 
-    fun readOrNull(field: Value.GroundKey): EngineResult.Cell? =
+    fun readOrNull(field: ObjectEngineResult.GroundKey): EngineResult.Cell? =
         synchronized(lock) { cells[field] }
 
-    fun reserve(field: Value.GroundKey): EngineResult.Cell =
+    fun reserve(field: ObjectEngineResult.GroundKey): EngineResult.Cell =
         synchronized(lock) {
             cells[field]
                 ?: if (frozen) {
@@ -659,14 +863,14 @@ private class ObjectCellStore(
         }
     }
 
-    fun completedCells(): Map<Value.GroundKey, EngineResult.Cell> =
+    fun completedCells(): Map<ObjectEngineResult.GroundKey, EngineResult.Cell> =
         synchronized(lock) {
             cells.mapValues { (_, cell) ->
                 cell.also { it.implementation.requireCompleted() }
             }
         }
 
-    private fun mutableCell(field: Value.GroundKey): EngineResult.Cell =
+    private fun mutableCell(field: ObjectEngineResult.GroundKey): EngineResult.Cell =
         CellImpl(
             mutable = true,
             validateValue = { value -> validateObjectValue(field, value) },
@@ -683,6 +887,10 @@ private data class ListResultImpl(
 
     override fun get(index: Int): EngineResult.Cell = cells[index]
 }
+
+private data class ListIndexImpl(
+    override val index: Int,
+) : ListEngineResult.Index
 
 private data class IntEngineResultImpl(
     override val intValue: Int,
@@ -708,6 +916,33 @@ private data class EnumEngineResultImpl(
     override val type: Schema.EnumType,
     override val enumValue: String,
 ) : EnumEngineResult
+
+private data class KeyImpl(
+    override val field: Schema.OutputField,
+    override val arguments: OpenArguments,
+) : ObjectEngineResult.Key
+
+private data class VariableKeyImpl(
+    override val field: Schema.OutputField,
+    override val arguments: OpenArguments,
+    override val variableDefinedByThisKey: Value.Variable.Stamped,
+) : ObjectEngineResult.VariableKey
+
+private data class ObjectKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: OpenArguments,
+) : ObjectEngineResult.ObjectKey
+
+private data class GroundKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: Value.Arguments,
+) : ObjectEngineResult.GroundKey
+
+private data class StampedGroundKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: Value.Arguments,
+    override val selectionStamp: SelectionStamp,
+) : ObjectEngineResult.GroundKey.Stamped
 
 private data class CompletedCell(
     val value: EngineResult?,
@@ -808,14 +1043,14 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
 
 private fun validateObjectField(
     type: Schema.ObjectType,
-    field: Value.GroundKey,
+    field: ObjectEngineResult.GroundKey,
 ): Unit =
     require(field.field.containingType == type) {
         "${type.typeName} result contains a field owned by another type"
     }
 
 private fun validateObjectValue(
-    field: Value.GroundKey,
+    field: ObjectEngineResult.GroundKey,
     value: EngineResult?,
 ) {
     if (field.arguments.containsErrorValue()) {

@@ -213,8 +213,8 @@ class RuntimeSupportTest {
         val support =
             RuntimeSupport.cycleChecking { selections -> selections }
 
-        fun key(name: String): Value.GroundKey =
-            Value.GroundKey.of(
+        fun key(name: String): ObjectEngineResult.GroundKey =
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", name),
                 emptyMap(),
             )

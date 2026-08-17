@@ -141,12 +141,12 @@ private suspend fun orchestrateObject(
         val localizedDemand: LocalizeTopLevelStampsResult =
             initialDemand.localizeTopLevelStamps(path)
         var accumulatedDemand: SelectionForest = localizedDemand.demand
-        val expansions: MutableMap<Value.ObjectKey, ResolverExpansion> = linkedMapOf()
+        val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> = linkedMapOf()
         val pathVariableDefinitions: MutableList<StampedObjectPathDefinition> = mutableListOf()
 
         while (true) {
             val mergedDemand: ObjectSelectionForest = accumulatedDemand.merge(source.type)
-            val newResolverSelections: Map<Value.ObjectKey, ObjectSelection> =
+            val newResolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
                 mergedDemand
                     .byKey()
                     .filter { (objectKey, _) ->
@@ -180,7 +180,7 @@ private suspend fun orchestrateObject(
                 val resolver: FieldResolver =
                     world.resolverRegistry.resolver(objectKey.field)
                 if (
-                    objectKey is Value.GroundKey &&
+                    objectKey is ObjectEngineResult.GroundKey &&
                     objectKey.arguments.argumentsContainErrorValue()
                 ) {
                     check(
@@ -201,7 +201,7 @@ private suspend fun orchestrateObject(
                 val ownerStamp: SelectionStamp? = objectKey.selectionStamp()
                 val resolverPath: List<PathComponent> =
                     if (ownerStamp == null) {
-                        path + (objectKey as Value.GroundKey)
+                        path + (objectKey as ObjectEngineResult.GroundKey)
                     } else {
                         ownerStamp.resolverPath
                     }
@@ -260,8 +260,8 @@ private suspend fun orchestrateObject(
     closed.prepareBindings()
     closed.demand.byKey().forEach { (objectKey, selection) ->
         if (objectKey.field !in world.resolverRegistry) {
-            val groundKey: Value.GroundKey =
-                objectKey as? Value.GroundKey
+            val groundKey: ObjectEngineResult.GroundKey =
+                objectKey as? ObjectEngineResult.GroundKey
                     ?: error("Resolver26 found open arguments on passive key $objectKey")
             val sourceValue: Value.Output? = source.fieldValues.getValue(groundKey)
             if (!target.isCellSet(groundKey)) {
@@ -322,7 +322,7 @@ private suspend fun orchestrateObject(
                     }
 
                 else ->
-                    check(objectKey is Value.GroundKey && target.isCellSet(objectKey)) { // TODO: isValueSet should tolerate Value.Key as input
+                    check(objectKey is ObjectEngineResult.GroundKey && target.isCellSet(objectKey)) { // TODO: isValueSet should tolerate ObjectEngineResult.Key as input
                         "Resolver26 passive key $objectKey was not materialized by resolveValue"
                     }
             }
@@ -390,7 +390,7 @@ private fun CloseInputDemandResult.prepareBindings() {
         expansion.variableDefinitions.forEach { stampedDefinition ->
             when (val definition = stampedDefinition.definition) {
                 is VariableDefinition.FromArgument ->
-                    if (expansion.ownerKey is Value.GroundKey) {
+                    if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
                         world.bindVariable(
                             stampedDefinition.variable,
                             expansion.ownerKey.arguments.fieldValues.getValue(
@@ -451,24 +451,24 @@ private fun SelectionForest.localizeTopLevelStamps(
 }
 
 // Returns every selection-stamped argument or provider-marker variable carried by this key.
-private fun Value.Key.selectionStampedVariables(): Set<Value.Variable.SelectionStamped> =
+private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variable.SelectionStamped> =
     buildSet {
         addAll(arguments.usedVariables().filterIsInstance<Value.Variable.SelectionStamped>())
-        val marker = (this@selectionStampedVariables as? Value.VariableKey)?.variableDefinedByThisKey
+        val marker = (this@selectionStampedVariables as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
         if (marker is Value.Variable.SelectionStamped) add(marker)
     }
 
 // Returns the occurrence stamp carried by an open or already-grounded stamped object key.
-private fun Value.Key.selectionStamp(): SelectionStamp? =
+private fun ObjectEngineResult.Key.selectionStamp(): SelectionStamp? =
     when (this) {
-        is Value.GroundKey.Stamped -> selectionStamp
+        is ObjectEngineResult.GroundKey.Stamped -> selectionStamp
         else -> (arguments as? OpenArguments.Stamped)?.selectionStamp
     }
 
 // Completes variables defined from this resolver instance's now-ground arguments.
 context(world: Assumptions)
-private fun ResolverExpansion.completeFromArgumentBindings(groundKey: Value.GroundKey) {
-    if (ownerKey is Value.GroundKey) return
+private fun ResolverExpansion.completeFromArgumentBindings(groundKey: ObjectEngineResult.GroundKey) {
+    if (ownerKey is ObjectEngineResult.GroundKey) return
     variableDefinitions.forEach { stampedDefinition ->
         if (stampedDefinition.definition !is VariableDefinition.FromArgument) {
             return@forEach
@@ -526,7 +526,7 @@ private suspend fun resolveField(
             suppliedDemand = invocationDemand,
             variableArgumentCount = variableArgumentCount,
             occurrenceStamp =
-                (groundKey as? Value.GroundKey.Stamped)?.selectionStamp,
+                (groundKey as? ObjectEngineResult.GroundKey.Stamped)?.selectionStamp,
             variableSourceSelectionStamps = variableSourceSelectionStamps,
         ),
     )
@@ -565,7 +565,7 @@ private fun ObjectResolution.isRootOfOutputAt(
 ): Boolean =
     path.size >= coordinate.size &&
         path.take(coordinate.size) == coordinate &&
-        path.drop(coordinate.size).all { component -> component is Value.ListIndex }
+        path.drop(coordinate.size).all { component -> component is ListEngineResult.Index }
 
 // Starts orchestration for object values already materialized by resolveValue.
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
@@ -616,7 +616,7 @@ private fun launchPassiveChildOrchestrations(
             }
             source.values.forEachIndexed { index, value ->
                 launchPassiveChildOrchestrations(
-                    path = path + Value.ListIndex.of(index),
+                    path = path + ListEngineResult.Index.of(index),
                     source = value,
                     target = target[index].getValue().get(),
                     initialDemand = initialDemand,
@@ -628,7 +628,7 @@ private fun launchPassiveChildOrchestrations(
 }
 
 private data class ResolverExpansion(
-    val ownerKey: Value.ObjectKey,
+    val ownerKey: ObjectEngineResult.ObjectKey,
     val resolver: FieldResolver,
     val inputDemand: SelectionForest,
     val variableDefinitions: List<SelectionStampedVariableDefinition>,
@@ -636,7 +636,7 @@ private data class ResolverExpansion(
 
 private class CloseInputDemandResult(
     val demand: ObjectSelectionForest,
-    val expansions: Map<Value.ObjectKey, ResolverExpansion>,
+    val expansions: Map<ObjectEngineResult.ObjectKey, ResolverExpansion>,
     val bindingAliases: List<BindingAlias>,
     val pathVariableDefinitions: List<StampedObjectPathDefinition>,
 ) {

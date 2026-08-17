@@ -33,7 +33,7 @@ class MaterializeTest {
                         """.trimIndent(),
                     ).assumptions
             val field =
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     world.schema.objectField("Query", "value"),
                     emptyMap(),
                 )
@@ -113,12 +113,12 @@ class MaterializeTest {
                 ).assumptions
         val childType = world.schema.type("Child") as Schema.ObjectType
         val childKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "child"),
                 emptyMap(),
             )
         val valueKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Child", "value"),
                 emptyMap(),
             )

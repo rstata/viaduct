@@ -24,7 +24,9 @@ Use canonical schema relations for GraphQL semantics rather than Kotlin inherita
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
 
-`Value.Key` is an open selection key. `Value.ObjectKey` refines it to a concrete object field while retaining open arguments. `Value.GroundKey` additionally requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
+`ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
+
+Keys belong to the engine-result domain even where a value-domain carrier temporarily consumes them. `Value.Object` and `Value.ObjectFields` currently use `ObjectEngineResult.GroundKey` while the value-domain object representation still stores canonical fields and explicit arguments. They must not define a parallel key hierarchy.
 
 Ground inputs implement the opaque `OpenValue` and `OpenArguments` interfaces. Grounding throws on an unbound stamped variable or an unstamped template.
 
@@ -40,7 +42,7 @@ Simple resolver outputs and simple field results use independent carriers. Conve
 
 Cells are allocated by their containing OER or LER and use reference identity as their occurrence ID. Object construction is immutable by default. Opt-in mutable objects atomically install each absent exact cell once and throw on unset reads, repeated claims, or repeated writes. Lists have immutable positions and may opt into mutable cell slots.
 
-An exact result path contains only `Value.GroundKey` object steps and `Value.ListIndex` list steps. Open keys, schema fields, response keys, and aliases are not path components.
+An exact result path contains only `ObjectEngineResult.GroundKey` object steps and `ListEngineResult.Index` list steps. Open keys, schema fields, response keys, and aliases are not path components.
 
 Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to source/response processing and must not create parallel semantic field identities.
 
@@ -62,7 +64,7 @@ A semantic category is a modeled set of values represented by an interface hiera
 
 A concrete variant is one particular form of value in a category, such as `ObjectEngineResult` within `EngineResult` or `TypeExpr.List` within `TypeExpr`.
 
-A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `ObjectEngineResult`, `Promise`, `Value.Key`, and `FieldResolver` are examples.
+A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `ObjectEngineResult`, `Promise`, `ObjectEngineResult.Key`, and `FieldResolver` are examples.
 
 An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema` and `ResolverRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `FieldResolver`.
 
@@ -118,7 +120,7 @@ Distinguish logic-constructible types from externally supplied types. OERs, sche
 
 Every independently constructible non-singleton semantic type has a public factory, conventionally named `of`. For example, `ObjectEngineResult`, `IntEngineResult`, `Promise`, `Value.Int`, and `FieldResolver` have factories. `EngineResult.Cell` is deliberately not independently constructible: OER and LER factories allocate their cells so a cell cannot be shared by two containers. Abstract categories such as `EngineResult` and `Value` need no factory when their concrete variants provide the construction operations.
 
-Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `Value.Key` and `GroundKeyImpl` implementing `Value.GroundKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
+Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `ObjectEngineResult.Key` and `GroundKeyImpl` implementing `ObjectEngineResult.GroundKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
 Externally supplied types have no model construction factory or main-source implementation. For example, test-fixture code privately implements `Schema.ObjectType` and `ResolverRegistry` while semantic code sees only their public interfaces.
 
@@ -132,7 +134,7 @@ Place a factory on the highest semantic category where its meaning remains coher
 
 An `of` factory normally accepts already semantic components. For example, `Promise.of` accepts the semantic value it immediately contains. Parsing GraphQL text and decoding SDL are pre-reasoning infrastructure rather than `of` factory behavior.
 
-GraphQL coercion may be a semantic function. For example, construction of an argument-bearing object key may apply argument coercion, but the coercion relation should be independently defined rather than embedded only inside `Value.Key.of`. Each coercion function separately specifies whether coercion failure is a modeled result or an input outside its domain.
+GraphQL coercion may be a semantic function. For example, construction of an argument-bearing object key may apply argument coercion, but the coercion relation should be independently defined rather than embedded only inside `ObjectEngineResult.Key.of`. Each coercion function separately specifies whether coercion failure is a modeled result or an input outside its domain.
 
 Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `ObjectEngineResult.of` validates every initially present value coordinate, nullability, and nested result type, while `EngineResult.Cell.setValue` and validating deferred value promises enforce the same invariant before completion. Every observable completed value therefore satisfies its documented carrier invariants, and `correctResolution` does not need schema conformance as a separate conjunct.
 

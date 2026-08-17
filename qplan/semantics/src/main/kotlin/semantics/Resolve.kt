@@ -52,9 +52,9 @@ internal fun Value.Object.orchestrateKeys(
 context(world: Assumptions)
 internal fun Value.Object.dependencyOrder(
     path: List<PathComponent>,
-    keys: Set<Value.GroundKey>,
-    ordered: List<Value.GroundKey> = emptyList(),
-): List<Value.GroundKey> {
+    keys: Set<ObjectEngineResult.GroundKey>,
+    ordered: List<ObjectEngineResult.GroundKey> = emptyList(),
+): List<ObjectEngineResult.GroundKey> {
     if (keys.isEmpty()) return ordered
 
     val ready =
@@ -75,9 +75,9 @@ internal fun Value.Object.dependencyOrder(
 context(world: Assumptions)
 private fun Value.Object.dependenciesOf(
     path: List<PathComponent>,
-    consumer: Value.GroundKey,
-    unresolved: Set<Value.GroundKey>,
-): Set<Value.GroundKey> {
+    consumer: ObjectEngineResult.GroundKey,
+    unresolved: Set<ObjectEngineResult.GroundKey>,
+): Set<ObjectEngineResult.GroundKey> {
     if (
         consumer.arguments.argumentsContainErrorValue() ||
         consumer.field !in world.resolverRegistry

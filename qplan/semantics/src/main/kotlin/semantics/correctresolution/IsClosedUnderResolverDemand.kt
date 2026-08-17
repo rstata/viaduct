@@ -40,7 +40,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                     .let { resolver ->
                         val coordinate = path + groundKey
                         val selectionStamped =
-                            if (groundKey is Value.GroundKey.Stamped) {
+                            if (groundKey is ObjectEngineResult.GroundKey.Stamped) {
                                 resolver.stampFrom(groundKey.selectionStamp)
                             } else {
                                 resolver.stamp(coordinate)
@@ -85,7 +85,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
         is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
-                    path + Value.ListIndex.of(index),
+                    path + ListEngineResult.Index.of(index),
                 )
             }
     }

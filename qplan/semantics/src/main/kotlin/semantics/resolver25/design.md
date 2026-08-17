@@ -2,7 +2,7 @@
 
 ## Status
 
-Resolver25 is an experimental selective resolver that applies each grounded resolver key at most once. It supports runtime `FromObjectField` bindings and deliberately uses grounded-key identity, so separately discovered selections that become the same `Value.GroundKey` contribute to one key state.
+Resolver25 is an experimental selective resolver that applies each grounded resolver key at most once. It supports runtime `FromObjectField` bindings and deliberately uses grounded-key identity, so separately discovered selections that become the same `ObjectEngineResult.GroundKey` contribute to one key state.
 
 Resolver25 is maintained as an alternate construction and comparison for Resolver26. It is not the primary implementation blueprint.
 
@@ -29,7 +29,7 @@ These facts must not be collapsed into one generic readiness signal.
 
 Potential demand is a conservative field-level envelope. `closeStructuralDemand` expands each activated resolver field's fixed object fragment once, regardless of how many open or ground keys currently select that field.
 
-Actual demand arrives as selection occurrences. Each occurrence becomes activation work, grounds through available variables, and is interned in its field's `FieldState` by `Value.GroundKey`.
+Actual demand arrives as selection occurrences. Each occurrence becomes activation work, grounds through available variables, and is interned in its field's `FieldState` by `ObjectEngineResult.GroundKey`.
 
 Potential demand bounds the output and descendant work that may be needed. Actual demand determines which exact keys and subselections really activate. Keeping them separate avoids activating every resolver on a type while still permitting descendant demand to be prepared before all variable values are known.
 
@@ -68,7 +68,7 @@ Readiness does not mean every descendant value is complete. Exact cell promises 
 
 ## Identity And One-Shot Scope
 
-Resolver25's one-shot unit is `(OER occurrence, Value.GroundKey)`. Literal and variable-bearing selections that ground to the same key merge if they arrive before launch.
+Resolver25's one-shot unit is `(OER occurrence, ObjectEngineResult.GroundKey)`. Literal and variable-bearing selections that ground to the same key merge if they arrive before launch.
 
 The conservative potential-demand envelope and late descendant traversal are part of this experimental guarantee. Resolver25 does not establish a general static plan for every recursive, list, provider-chain, or mixed-variable world, and passing generated tests is finite evidence rather than proof.
 

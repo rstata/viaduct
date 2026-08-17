@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.Fragment
 import model.Schema
 import model.Selection
@@ -92,7 +94,7 @@ class ResolverRegistryTest {
         assertEquals(bridgeType, bridgeObject.type)
         assertIs<Value.ID>(
             bridgeObject.fieldValues.getValue(
-                Value.GroundKey.of(bridgeIdField, emptyMap()),
+                ObjectEngineResult.GroundKey.of(bridgeIdField, emptyMap()),
             ),
         )
         val payloadResolver = registry.resolver(payloadField)
@@ -124,7 +126,7 @@ class ResolverRegistryTest {
         val fixture = Fixture()
         val root = fixture.assumptions.resolverRegistry.resolveRootQuery()
         val typenameKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 fixture.schema.objectField("Query", "__typename"),
                 emptyMap(),
             )
@@ -501,8 +503,8 @@ class ResolverRegistryTest {
             )
         val schema = world.schema
         val record = schema.type("Record") as Schema.ObjectType
-        fun key(fieldName: String): Value.GroundKey =
-            Value.GroundKey.of(
+        fun key(fieldName: String): ObjectEngineResult.GroundKey =
+            ObjectEngineResult.GroundKey.of(
                 schema.objectField("Record", fieldName),
                 emptyMap(),
             )
@@ -805,8 +807,8 @@ class ResolverRegistryTest {
         val user = schema.type("User") as Schema.ObjectType
         val userField = schema.field("Query", "user_V_A_node")
 
-        fun key(fieldName: String): Value.Key =
-            Value.Key.of(
+        fun key(fieldName: String): ObjectEngineResult.Key =
+            ObjectEngineResult.Key.of(
                 field = schema.field(user.typeName, fieldName),
                 arguments = emptyMap(),
             )
@@ -819,7 +821,7 @@ class ResolverRegistryTest {
         ): model.Selection {
             return Selection.of(
                 key =
-                    Value.Key.of(
+                    ObjectEngineResult.Key.of(
                         field = schema.field(typeName, fieldName),
                         arguments = emptyMap(),
                     ),

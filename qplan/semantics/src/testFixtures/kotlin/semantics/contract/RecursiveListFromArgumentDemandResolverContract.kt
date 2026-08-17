@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
@@ -56,7 +58,7 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
         assertEquals(
             IntEngineResult.of(1),
             resolved.getCell(
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     world.schema.objectField("Query", "result"),
                     mapOf("value" to 7),
                 ),

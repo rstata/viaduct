@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.OpenArguments
 import model.Value
 import model.emptyFragmentOf
@@ -60,11 +62,11 @@ class StampedObjectPathDefinitionTest {
         val resolver = testWorld.resolverRegistry.resolver(result)
         val firstPath =
             listOf(
-                Value.GroundKey.of(result, mapOf("seed" to 3)),
+                ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 3)),
             )
         val secondPath =
             listOf(
-                Value.GroundKey.of(result, mapOf("seed" to 4)),
+                ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 4)),
             )
 
         val compatibilityFragment = resolver.stampVars(firstPath)
@@ -153,7 +155,7 @@ class StampedObjectPathDefinitionTest {
                 testWorld.schema.objectField("Query", "result"),
             )
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 testWorld.schema.objectField("Query", "result"),
                 mapOf("seed" to 3),
             )
@@ -176,16 +178,16 @@ class StampedObjectPathDefinitionTest {
         val marker =
             resolver
                 .stampVars(sitePath)
-                .filter { selection -> selection.key is Value.VariableKey }
+                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
                 .single()
         assertEquals(
             definition.variable,
-            assertIs<Value.VariableKey>(marker.key).variableDefinedByThisKey,
+            assertIs<ObjectEngineResult.VariableKey>(marker.key).variableDefinedByThisKey,
         )
         val fullyStampedMarker =
             resolver
                 .stamp(sitePath)
-                .filter { selection -> selection.key is Value.VariableKey }
+                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
                 .single()
         val selectionStampedValue =
             resolver
@@ -196,7 +198,7 @@ class StampedObjectPathDefinitionTest {
         assertIs<OpenArguments.Stamped>(fullyStampedMarker.key.arguments)
         assertEquals(
             selectionStampedValue,
-            assertIs<Value.VariableKey>(
+            assertIs<ObjectEngineResult.VariableKey>(
                 fullyStampedMarker.key,
             ).variableDefinedByThisKey,
         )
@@ -255,7 +257,7 @@ class StampedObjectPathDefinitionTest {
                 testWorld.schema.objectField("Query", "result"),
             )
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 testWorld.schema.objectField("Query", "result"),
                 emptyMap(),
             )
@@ -264,7 +266,7 @@ class StampedObjectPathDefinitionTest {
             resolver
                 .stampVars(listOf(resultKey))
                 .filter { selection ->
-                    selection.key is Value.VariableKey &&
+                    selection.key is ObjectEngineResult.VariableKey &&
                         selection.key.field.fieldName == "box"
                 }
                 .single()
@@ -272,11 +274,11 @@ class StampedObjectPathDefinitionTest {
 
         assertEquals(
             definition.variable,
-            assertIs<Value.VariableKey>(markedBox.key).variableDefinedByThisKey,
+            assertIs<ObjectEngineResult.VariableKey>(markedBox.key).variableDefinedByThisKey,
         )
         assertEquals(
             definition.variable,
-            assertIs<Value.VariableKey>(markedValue.key).variableDefinedByThisKey,
+            assertIs<ObjectEngineResult.VariableKey>(markedValue.key).variableDefinedByThisKey,
         )
     }
 
@@ -346,7 +348,7 @@ class StampedObjectPathDefinitionTest {
                 testWorld.schema.objectField("Query", "result"),
             )
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 testWorld.schema.objectField("Query", "result"),
                 emptyMap(),
             )
@@ -354,12 +356,12 @@ class StampedObjectPathDefinitionTest {
             resolver
                 .stampVars(listOf(resultKey))
                 .filter { selection ->
-                    selection.key is Value.VariableKey &&
+                    selection.key is ObjectEngineResult.VariableKey &&
                         selection.key.field.fieldName == "container"
                 }.single()
         val markedBoxes =
             markedContainer.subselections.filter { selection ->
-                selection.key is Value.VariableKey &&
+                selection.key is ObjectEngineResult.VariableKey &&
                     selection.key.field.fieldName == "box"
             }
 

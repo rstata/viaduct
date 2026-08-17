@@ -26,14 +26,14 @@ internal suspend fun ObjectEngineResult.readProvider(
 ): Value.Input? {
     var current = this
     definition.path.forEachIndexed { index, openKey ->
-        val specializedKey: Value.ObjectKey =
+        val specializedKey: ObjectEngineResult.ObjectKey =
             Selection.of(
                 key = openKey,
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
-        val groundKey: Value.GroundKey =
-            Value.GroundKey.of(
+        val groundKey: ObjectEngineResult.GroundKey =
+            ObjectEngineResult.GroundKey.of(
                 field = specializedKey.field,
                 arguments = specializedKey.arguments.fetchBindings(),
             )

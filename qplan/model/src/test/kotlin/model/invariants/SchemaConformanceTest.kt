@@ -1,5 +1,7 @@
 package model.invariants
 
+import model.ObjectEngineResult
+
 import model.Schema
 import model.Value
 import model.engineResultOf
@@ -61,8 +63,8 @@ class SchemaConformanceTest {
     private fun Schema.key(
         type: Schema.ObjectType,
         fieldName: String,
-    ): Value.GroundKey =
-        Value.GroundKey.of(
+    ): ObjectEngineResult.GroundKey =
+        ObjectEngineResult.GroundKey.of(
             field = objectField(type.typeName, fieldName),
             arguments = emptyMap(),
         )

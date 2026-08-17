@@ -2,6 +2,7 @@ package semantics.resolver25
 
 import model.Assumptions
 import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.SelectionForest
@@ -81,8 +82,8 @@ private fun Resolver25LifecycleEvent.debugSummary(): String =
 private fun List<PathComponent>.debugSummary(): String =
     joinToString("/") { component ->
         when (component) {
-            is Value.GroundKey -> component.field.debugSummary()
-            is Value.ListIndex -> "[${component.index}]"
+            is ObjectEngineResult.GroundKey -> component.field.debugSummary()
+            is ListEngineResult.Index -> "[${component.index}]"
         }
     }
 

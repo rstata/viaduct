@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.Schema
@@ -296,14 +298,14 @@ class SuccessorDemandTest {
         assertEquals(layerFields.size + 1, registry.resolverLookups)
     }
 
-    private fun Set<Value.GroundKey>.fieldNames(): Set<String> =
+    private fun Set<ObjectEngineResult.GroundKey>.fieldNames(): Set<String> =
         mapTo(mutableSetOf()) { key -> key.field.fieldName }
 
     private fun Schema.key(
         type: Schema.ObjectType,
         fieldName: String,
-    ): Value.GroundKey =
-        Value.GroundKey.of(
+    ): ObjectEngineResult.GroundKey =
+        ObjectEngineResult.GroundKey.of(
             field = objectField(type.typeName, fieldName),
             arguments = emptyMap(),
         )

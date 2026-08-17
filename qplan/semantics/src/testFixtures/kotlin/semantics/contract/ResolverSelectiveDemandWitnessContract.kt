@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ObjectEngineResult
+
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -55,7 +57,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                             ) { input, _ ->
                                 val base =
                                     input.fieldValues.getValue(
-                                        Value.GroundKey.of(
+                                        ObjectEngineResult.GroundKey.of(
                                             schema.objectField("Item", "base"),
                                             emptyMap(),
                                         ),

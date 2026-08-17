@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import model.Schema
 import model.Value
 import model.emptyFragmentOf
@@ -40,8 +42,8 @@ class FromObjectFieldTest {
 
         assertEquals(
             listOf(
-                Value.Key.of(schema.field("Query", "profile"), emptyMap()),
-                Value.Key.of(
+                ObjectEngineResult.Key.of(schema.field("Query", "profile"), emptyMap()),
+                ObjectEngineResult.Key.of(
                     schema.field("Profile", "commonName"),
                     mapOf("style" to 2),
                 ),
@@ -75,7 +77,7 @@ class FromObjectFieldTest {
             )
 
         assertEquals(
-            listOf(Value.Key.of(schema.field("Query", "z"), mapOf("w" to 2))),
+            listOf(ObjectEngineResult.Key.of(schema.field("Query", "z"), mapOf("w" to 2))),
             provider.keyPath,
         )
     }
@@ -159,7 +161,7 @@ class FromObjectFieldTest {
             )
 
         assertEquals(
-            listOf(Value.Key.of(schema.field("Named", "name"), emptyMap())),
+            listOf(ObjectEngineResult.Key.of(schema.field("Named", "name"), emptyMap())),
             provider.keyPath,
         )
     }

@@ -46,7 +46,7 @@ The next model should make these operations structural and partial, with domain 
 
 Opaque atoms do not prove that unequal Kotlin exact keys, arguments, containing-object paths, concrete guards, list positions, and OER occurrences remain unequal after extraction.
 
-The refinement needs explicit structural carriers or injective preservation obligations. In particular, distinct `Value.GroundKey` values and distinct object occurrences must not collapse.
+The refinement needs explicit structural carriers or injective preservation obligations. In particular, distinct `ObjectEngineResult.GroundKey` values and distinct object occurrences must not collapse.
 
 ### Classifications And Attribution
 
@@ -54,7 +54,7 @@ Resolver cells, argument-error cells, typename cells, resolver boundaries, and c
 
 ### One Application
 
-The local core proves one sequence position per demanded exact key, but the composed Resolver03 result does not expose that fact. The final theorem should include one mathematical application per resolver-bearing `Value.GroundKey` and OER occurrence.
+The local core proves one sequence position per demanded exact key, but the composed Resolver03 result does not expose that fact. The final theorem should include one mathematical application per resolver-bearing `ObjectEngineResult.GroundKey` and OER occurrence.
 
 ### Projection Facts
 
@@ -78,7 +78,7 @@ Each repaired relation should make its fixture pass for the intended reason. Kee
 
 ### 2. Structural Extraction
 
-Introduce finite structures or proved refinement maps for schemas, object occurrences, `Value.GroundKey`, selections, type guards, fragments, values, object cells, and list positions.
+Introduce finite structures or proved refinement maps for schemas, object occurrences, `ObjectEngineResult.GroundKey`, selections, type guards, fragments, values, object cells, and list positions.
 
 Derive registry classifications and operation/resolver demand from those structures. Prove preservation of arguments, paths, guards, and occurrence identity.
 

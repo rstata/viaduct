@@ -72,7 +72,7 @@ class DescendantVariableOwnerRegressionTest {
         val items =
             resolved
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         world.schema.objectField("Query", "items"),
                         emptyMap(),
                     ),
@@ -83,7 +83,7 @@ class DescendantVariableOwnerRegressionTest {
                 val item = cell.getValue().get() as ObjectEngineResult
                 item
                     .getCell(
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             world.schema.objectField("Item", "result"),
                             emptyMap(),
                         ),

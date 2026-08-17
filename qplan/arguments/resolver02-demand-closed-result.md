@@ -44,7 +44,7 @@ Fixture-generated node loading needs no separate semantic case. A `T_V_A_Bridge.
 
 After a key is resolved, its cell value satisfies every subselection accumulated for that key, and every object or list nested within that value satisfies `isClosedUnderResolverDemand`.
 
-The argument is a well-founded mutual induction over passive `resolveValue` construction, retained object continuations, the finite dependency-order prefix, and nested result structure. Null, error, and simple values create no descendant demand. A list applies the induction hypothesis independently at every exact `Value.ListIndex` path.
+The argument is a well-founded mutual induction over passive `resolveValue` construction, retained object continuations, the finite dependency-order prefix, and nested result structure. Null, error, and simple values create no descendant demand. A list applies the induction hypothesis independently at every exact `ListEngineResult.Index` path.
 
 For an object output, `resolveValue` allocates one stable mutable target OER, copies the selected passive cells, stops at registered resolver boundaries, and records the source object, target OER, exact path, and collapsed selections for every occurrence requiring active work. `resolveObjects` completes those retained targets deepest first. Parent cells and immutable list positions retain the same target OER identities while their absent child cells become present; no ancestor or passive subtree is rebuilt or replaced.
 

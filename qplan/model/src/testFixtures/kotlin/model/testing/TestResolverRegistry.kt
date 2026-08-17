@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import model.Fragment
 import model.Schema
 import model.Selection
@@ -235,7 +237,7 @@ private class NodeResolverLowering(
                 subselections =
                     selectionForestOf(
                         Selection.of(
-                            key = Value.Key.of(idField, emptyMap()),
+                            key = ObjectEngineResult.Key.of(idField, emptyMap()),
                             possibleTypes = setOf(bridgeType),
                             subselections = selectionForestOf(),
                         ),
@@ -247,7 +249,7 @@ private class NodeResolverLowering(
                 loadNode(
                     typedId =
                         input.fieldValues.getValue(
-                            Value.GroundKey.of(idField, emptyMap()),
+                            ObjectEngineResult.GroundKey.of(idField, emptyMap()),
                         ),
                     nodeOutputType = nodeOutputType,
                 )
@@ -280,7 +282,7 @@ private class NodeResolverLowering(
         }
         val returnedId =
             result.fieldValues.getValue(
-                Value.GroundKey.of(validateNodeIdField(type), emptyMap()),
+                ObjectEngineResult.GroundKey.of(validateNodeIdField(type), emptyMap()),
             )
         require(returnedId == id) {
             "Node resolver for ${type.typeName} did not repeat its input ID"
@@ -499,7 +501,7 @@ private class TestResolverRegistry(
     override fun resolveRootQuery(): Value.Object {
         val query = schema.query
         val typename =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 field = query.fields.getValue("__typename"),
                 arguments = emptyMap(),
             )
@@ -559,7 +561,7 @@ private class TestResolverRegistry(
             }
     }
 
-    private fun model.SelectionForest.containsProviderPath(providerPath: List<Value.Key>): Boolean {
+    private fun model.SelectionForest.containsProviderPath(providerPath: List<ObjectEngineResult.Key>): Boolean {
         val provider = providerPath.first()
         val remaining = providerPath.drop(1)
         return toSelectionList().any { selection ->
@@ -613,7 +615,7 @@ private class TestResolverRegistry(
         }
     }
 
-    private fun List<Value.Key>.toSelection(
+    private fun List<ObjectEngineResult.Key>.toSelection(
         possibleTypes: Set<Schema.ObjectType>,
     ): Selection {
         val key = first()

@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.PathComponent
 import model.Schema
@@ -20,8 +22,8 @@ import model.Value
  * @throws MissingResolverException when this field has no registered field resolver
  */
 context(world: Assumptions)
-fun Value.GroundKey.demandsFromSibling(
-    siblingKey: Value.GroundKey,
+fun ObjectEngineResult.GroundKey.demandsFromSibling(
+    siblingKey: ObjectEngineResult.GroundKey,
     path: List<PathComponent> = emptyList(),
 ): Boolean {
     val field = this.field

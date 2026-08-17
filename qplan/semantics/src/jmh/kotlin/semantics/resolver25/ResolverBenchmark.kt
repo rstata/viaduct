@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.ObjectEngineResult
+
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode
 import org.openjdk.jmh.annotations.Fork
@@ -112,7 +114,7 @@ open class ResolverBenchmark {
                                                     occurrenceStamp =
                                                         (
                                                             event.coordinate.lastOrNull()
-                                                                as? Value.GroundKey.Stamped
+                                                                as? ObjectEngineResult.GroundKey.Stamped
                                                         )?.selectionStamp,
                                                     variableArgumentCount =
                                                         variableUse.argumentNames.size,

@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.ObjectEngineResult
+
 import model.ObjectSelection
 import model.PathComponent
 import model.Schema
@@ -12,7 +14,7 @@ internal sealed interface Resolver25BindingSource {
     ) : Resolver25BindingSource
 
     data class FromObjectField(
-        val providerPath: List<Value.Key>,
+        val providerPath: List<ObjectEngineResult.Key>,
     ) : Resolver25BindingSource
 }
 

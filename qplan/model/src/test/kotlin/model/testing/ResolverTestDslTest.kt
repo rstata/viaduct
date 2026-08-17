@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import model.Schema
 import model.SourceSchemaAdapter
 import model.Value
@@ -201,7 +203,7 @@ class ResolverTestDslTest {
         assertEquals(
             Value.Int.of(9),
             result.fieldValues.getValue(
-                Value.GroundKey.of(world.schema.objectField("Person", "value"), emptyMap()),
+                ObjectEngineResult.GroundKey.of(world.schema.objectField("Person", "value"), emptyMap()),
             ),
         )
     }
@@ -243,13 +245,13 @@ class ResolverTestDslTest {
         assertEquals(
             Value.ID.of("user-2"),
             user.fieldValues.getValue(
-                Value.GroundKey.of(schema.objectField("User", "id"), emptyMap()),
+                ObjectEngineResult.GroundKey.of(schema.objectField("User", "id"), emptyMap()),
             ),
         )
         assertEquals(
             Value.Int.of(8),
             user.fieldValues.getValue(
-                Value.GroundKey.of(schema.objectField("User", "score"), emptyMap()),
+                ObjectEngineResult.GroundKey.of(schema.objectField("User", "score"), emptyMap()),
             ),
         )
         val sourceSchema = SourceSchemaAdapter(schema)

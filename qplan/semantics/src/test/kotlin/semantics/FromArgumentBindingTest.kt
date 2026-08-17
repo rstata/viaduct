@@ -1,5 +1,7 @@
 package semantics
 
+import model.ObjectEngineResult
+
 import kotlinx.coroutines.runBlocking
 import model.Value
 import model.emptyFragmentOf
@@ -35,7 +37,7 @@ class FromArgumentBindingTest {
             )
         val world = testWorld.assumptions
         val field = world.schema.objectField("Query", "echo")
-        val key = Value.GroundKey.of(field, mapOf("value" to 1))
+        val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
 
         context(world) {
             listOf(key).bindFromArguments(emptyList())

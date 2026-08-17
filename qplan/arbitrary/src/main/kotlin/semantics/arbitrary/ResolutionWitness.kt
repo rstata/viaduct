@@ -287,7 +287,7 @@ data class ResolutionOccurrenceWitness(
 /**
  * One registered resolver occurrence found by traversing a returned result independently of the
  * resolver constructors and correctness predicates. [occurrencePath] is the exact root-to-field
- * OER path: [Value.GroundKey] components select object fields and [Value.ListIndex] components
+ * OER path: [ObjectEngineResult.GroundKey] components select object fields and [ListEngineResult.Index] components
  * select list elements, distinguishing equal fields at different list positions.
  */
 data class RegisteredResolverOccurrence(
@@ -349,7 +349,7 @@ fun EngineResult?.registeredResolverOccurrences(
                 value.forEachIndexed { index, cell ->
                     visit(
                         cell.getValue().get(),
-                        path + Value.ListIndex.of(index),
+                        path + ListEngineResult.Index.of(index),
                     )
                 }
 
@@ -553,7 +553,7 @@ private class FingerprintBudget(
                 ")",
         )
 
-    private fun canonicalKey(key: Value.Key): String =
+    private fun canonicalKey(key: ObjectEngineResult.Key): String =
         node(
             "key(" +
                 atom(key.field.containingType.typeName) +
@@ -620,7 +620,7 @@ private class FingerprintBudget(
     private fun atom(value: String): String = "${value.length}:$value"
 }
 
-private fun Value.GroundKey.canonicalFingerprint(
+private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
     bounds: ResolutionWitnessBounds,
 ): ResolutionFingerprint =
     ResolutionFingerprint(

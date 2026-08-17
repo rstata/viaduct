@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import graphql.language.NamedNode
 import graphql.language.Node
 import graphql.parser.Parser
@@ -129,7 +131,7 @@ internal class GJSchema private constructor(
                 val idField = objectField(output.type.typeName, "id")
                 val id =
                     output.fieldValues.getValue(
-                        Value.GroundKey.of(idField, emptyMap()),
+                        ObjectEngineResult.GroundKey.of(idField, emptyMap()),
                     )
                 require(id != Value.Error && id is Value.ID) {
                     "Node reference ${output.type.typeName}/id must contain a non-error ID"
@@ -140,7 +142,7 @@ internal class GJSchema private constructor(
                     type = bridgeType,
                     fields =
                         mapOf(
-                            Value.GroundKey.of(bridgeId, emptyMap()) to
+                            ObjectEngineResult.GroundKey.of(bridgeId, emptyMap()) to
                                 Value.ID.of(
                                     "$TYPED_NODE_ID_PREFIX${output.type.typeName.length}:" +
                                         "${output.type.typeName}${id.idValue}",

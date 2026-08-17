@@ -63,10 +63,10 @@ class ResolveValueTest {
         val schema = world.schema
         val userType = schema.type("User") as Schema.ObjectType
         val profileType = schema.type("Profile") as Schema.ObjectType
-        val typeNameKey = Value.GroundKey.of(schema.objectField("User", "__typename"), emptyMap())
-        val computedKey = Value.GroundKey.of(schema.objectField("User", "computed"), emptyMap())
-        val profileKey = Value.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
-        val rawKey = Value.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
+        val typeNameKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "__typename"), emptyMap())
+        val computedKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "computed"), emptyMap())
+        val profileKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
+        val rawKey = ObjectEngineResult.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "__typename" setTo "User"
@@ -166,12 +166,12 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val typeNameKey = Value.GroundKey.of(schema.objectField("User", "__typename"), emptyMap())
-        val nameKey = Value.GroundKey.of(schema.objectField("User", "name"), emptyMap())
-        val profileKey = Value.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
+        val typeNameKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "__typename"), emptyMap())
+        val nameKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "name"), emptyMap())
+        val profileKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
         val profileTypeNameKey =
-            Value.GroundKey.of(schema.objectField("Profile", "__typename"), emptyMap())
-        val rawKey = Value.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
+            ObjectEngineResult.GroundKey.of(schema.objectField("Profile", "__typename"), emptyMap())
+        val rawKey = ObjectEngineResult.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "__typename" setTo "User"
@@ -262,9 +262,9 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val typeNameKey =
-            Value.GroundKey.of(world.schema.objectField("User", "__typename"), emptyMap())
-        val selectedKey = Value.GroundKey.of(world.schema.objectField("User", "selected"), emptyMap())
-        val extraKey = Value.GroundKey.of(world.schema.objectField("User", "extra"), emptyMap())
+            ObjectEngineResult.GroundKey.of(world.schema.objectField("User", "__typename"), emptyMap())
+        val selectedKey = ObjectEngineResult.GroundKey.of(world.schema.objectField("User", "selected"), emptyMap())
+        val extraKey = ObjectEngineResult.GroundKey.of(world.schema.objectField("User", "extra"), emptyMap())
         val value =
             world.schema.objectOf("User") {
                 "__typename" setTo "User"
@@ -356,17 +356,17 @@ class ResolveValueTest {
                 }
                 """.trimIndent(),
             ).subselections
-        val itemsKey = Value.GroundKey.of(itemsField, emptyMap())
-        val nestedKey = Value.GroundKey.of(schema.objectField("Item", "nested"), emptyMap())
-        val computedKey = Value.GroundKey.of(schema.objectField("Item", "computed"), emptyMap())
-        val renderedKey = Value.GroundKey.of(schema.objectField("Nested", "rendered"), emptyMap())
+        val itemsKey = ObjectEngineResult.GroundKey.of(itemsField, emptyMap())
+        val nestedKey = ObjectEngineResult.GroundKey.of(schema.objectField("Item", "nested"), emptyMap())
+        val computedKey = ObjectEngineResult.GroundKey.of(schema.objectField("Item", "computed"), emptyMap())
+        val renderedKey = ObjectEngineResult.GroundKey.of(schema.objectField("Nested", "rendered"), emptyMap())
         val rootPath = listOf<PathComponent>(itemsKey)
         val expectedPaths =
             setOf(
-                rootPath + Value.ListIndex.of(0),
-                rootPath + Value.ListIndex.of(0) + nestedKey,
-                rootPath + Value.ListIndex.of(1),
-                rootPath + Value.ListIndex.of(1) + nestedKey,
+                rootPath + ListEngineResult.Index.of(0),
+                rootPath + ListEngineResult.Index.of(0) + nestedKey,
+                rootPath + ListEngineResult.Index.of(1),
+                rootPath + ListEngineResult.Index.of(1) + nestedKey,
             )
 
         val resolvedValue =
@@ -412,7 +412,7 @@ class ResolveValueTest {
         val result = assertIs<ListEngineResult>(replayed)
         result.forEachIndexed { index, cell ->
             val item = assertIs<ObjectEngineResult>(cell.getValue().get())
-            val itemPath = rootPath + Value.ListIndex.of(index)
+            val itemPath = rootPath + ListEngineResult.Index.of(index)
             assertSame(item, resolutionsByPath.getValue(itemPath).target)
             assertEquals(IntEngineResult.of(1), item.getCell(computedKey).getValue().get())
 

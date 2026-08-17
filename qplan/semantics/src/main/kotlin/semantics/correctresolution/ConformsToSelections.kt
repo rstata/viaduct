@@ -81,7 +81,7 @@ private fun EngineResult?.engineResultConformsToSelections(
             indices.all { index ->
                 get(index).getValue().get().engineResultConformsToSelections(
                     selections = selections,
-                    path = path + Value.ListIndex.of(index),
+                    path = path + ListEngineResult.Index.of(index),
                 )
             }
     }

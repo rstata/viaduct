@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
@@ -34,7 +36,7 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 emptyMap(),
             )

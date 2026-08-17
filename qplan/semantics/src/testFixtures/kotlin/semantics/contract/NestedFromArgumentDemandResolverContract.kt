@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
@@ -47,7 +49,7 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
             IntEngineResult.of(7),
             resolved
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         world.schema.objectField("Query", "result"),
                         mapOf("value" to 7),
                     ),

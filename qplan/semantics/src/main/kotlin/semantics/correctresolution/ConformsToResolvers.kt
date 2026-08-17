@@ -82,9 +82,9 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ObjectSelectionForest? {
-    val groundKey = path.lastOrNull() as? Value.GroundKey
+    val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
     val selectionStamped =
-        if (groundKey is Value.GroundKey.Stamped) {
+        if (groundKey is ObjectEngineResult.GroundKey.Stamped) {
             stampFrom(groundKey.selectionStamp)
         } else {
             stamp(path)
@@ -120,7 +120,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
         is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultConformsToResolvers(
-                    path + Value.ListIndex.of(index),
+                    path + ListEngineResult.Index.of(index),
                 )
             }
     }

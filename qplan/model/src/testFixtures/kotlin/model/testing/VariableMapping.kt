@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import model.Fragment
 import model.Selection
 import model.SelectionForest
@@ -15,11 +17,11 @@ internal fun Fragment.mapVariables(
         subselections = subselections.mapVariables(transform),
     )
 
-internal fun List<Value.Key>.mapVariables(
+internal fun List<ObjectEngineResult.Key>.mapVariables(
     transform: (Value.Variable.Template) -> Value.Variable.Template,
-): List<Value.Key> =
+): List<ObjectEngineResult.Key> =
     map { key ->
-        Value.Key.of(
+        ObjectEngineResult.Key.of(
             field = key.field,
             arguments = key.arguments.mapVariableTemplates(transform),
         )
@@ -32,7 +34,7 @@ private fun SelectionForest.mapVariables(
         selectionForestOf(
             Selection.of(
                 key =
-                    Value.Key.of(
+                    ObjectEngineResult.Key.of(
                         field = selection.key.field,
                         arguments = selection.key.arguments.mapVariableTemplates(transform),
                     ),

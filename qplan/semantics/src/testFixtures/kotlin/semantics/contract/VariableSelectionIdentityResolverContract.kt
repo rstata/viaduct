@@ -83,7 +83,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         assertEquals(listOf(setOf("one", "two")), suppliedDemandFields)
 
         val payloadKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "payload"),
                 mapOf("arg" to 1),
             )
@@ -117,7 +117,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             listOf(setOf("one", "two"), setOf("one", "two")),
             suppliedDemandFields,
         )
-        assertTrue(payloadKey !is Value.GroundKey.Stamped)
+        assertTrue(payloadKey !is ObjectEngineResult.GroundKey.Stamped)
     }
 
     @Test
@@ -163,7 +163,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 mapOf(
                     "seed" to 1,

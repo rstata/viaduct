@@ -3,24 +3,6 @@ package model
 import model.invariants.conformsToSchemaType
 
 /**
- * One step in an exact path through an engine-result tree.
- *
- * A [Value.GroundKey] selects an object field, while a [Value.ListIndex] selects a list element.
- * Equality is structural within each variant.
- */
-sealed interface PathComponent
-
-/**
- * Returns this exact OER path as an object-key-only selection path.
- *
- * A null path or any path containing a [Value.ListIndex] has no corresponding selection path and
- * yields null.
- */
-fun kotlin.collections.List<PathComponent>?.toSelectionPath():
-    kotlin.collections.List<Value.GroundKey>? =
-    this?.map { component -> component as? Value.GroundKey ?: return null }
-
-/**
  * A ground GraphQL semantic value.
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
@@ -273,7 +255,7 @@ sealed interface Value {
      *
      * This tuple is ground and inspectable. [OpenArguments] represents a tuple that may contain
      * variables. Equality is structural over its field values. Occurrence identity belongs to
-     * [GroundKey.Stamped], not the grounded argument value.
+     * [ObjectEngineResult.GroundKey.Stamped], not the grounded argument value.
      */
     sealed interface Arguments : InputObjectLike, OpenArguments {
         override val type: Schema.FieldArguments
@@ -300,199 +282,13 @@ sealed interface Value {
     }
 
     /**
-     * One alias-free output-field coordinate consisting of a canonical field and its arguments.
-     *
-     * ### Invariant: key-argument-definition
-     *
-     * `arguments.type == field.arguments`.
-     *
-     * ### Invariant: object-key-field-classification
-     *
-     * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
-     *
-     * Ordinary-key equality is structural over [field] and [arguments], using canonical schema
-     * equality. [GroundKey.Stamped] additionally includes its opaque selection occurrence stamp;
-     * callers that need resolver-visible identity must explicitly project it to an ordinary key.
-     */
-    sealed interface Key {
-        val field: Schema.OutputField
-        val arguments: OpenArguments
-
-        companion object {
-            /**
-             * ### Invariant: map-key-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(
-                field: Schema.OutputField,
-                arguments: Map<kotlin.String, Any?>,
-            ): Key = of(field, OpenArguments.of(field, arguments))
-
-            /** Constructs the precise key category for a field on a concrete object type. */
-            fun of(
-                field: Schema.ObjectField,
-                arguments: Map<kotlin.String, Any?>,
-            ): ObjectKey = ObjectKey.of(field, arguments)
-
-            /**
-             * ### Invariant: arguments-key-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(
-                field: Schema.OutputField,
-                arguments: OpenArguments,
-            ): Key {
-                require(arguments.type == field.arguments) {
-                    "Key arguments do not belong to its output field"
-                }
-                return when (field) {
-                    is Schema.ObjectField -> ObjectKey.of(field, arguments)
-                    else -> KeyImpl(field, arguments)
-                }
-            }
-
-            /** Constructs the precise key category for a field on a concrete object type. */
-            fun of(
-                field: Schema.ObjectField,
-                arguments: OpenArguments,
-            ): ObjectKey = ObjectKey.of(field, arguments)
-
-            /** Constructs the precise ground key category. */
-            fun of(
-                field: Schema.ObjectField,
-                arguments: Arguments,
-            ): GroundKey = GroundKey.of(field, arguments)
-        }
-    }
-
-    /**
-     * A selection-only key marking one component of a stamped path-variable's provider path.
-     *
-     * The marker remains distinct from [ObjectKey] even when [field] belongs to a concrete object
-     * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key
-     * and reports a binding when the path terminates at this component.
-     */
-    sealed interface VariableKey : Key {
-        val variableDefinedByThisKey: Variable.Stamped
-
-        companion object {
-            fun of(
-                key: Key,
-                variableDefinedByThisKey: Variable.Stamped,
-            ): VariableKey =
-                VariableKeyImpl(
-                    field = key.field,
-                    arguments = key.arguments,
-                    variableDefinedByThisKey = variableDefinedByThisKey,
-                )
-        }
-    }
-
-    /**
-     * A key whose field belongs to a concrete object type.
-     *
-     * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Ordinary instances use
-     * structural key equality; [GroundKey.Stamped] additionally retains occurrence identity.
-     */
-    sealed interface ObjectKey : Key {
-        override val field: Schema.ObjectField
-        override val arguments: OpenArguments
-
-        companion object {
-            fun of(
-                field: Schema.ObjectField,
-                arguments: Map<kotlin.String, Any?>,
-            ): ObjectKey = of(field, OpenArguments.of(field, arguments))
-
-            fun of(
-                field: Schema.ObjectField,
-                arguments: OpenArguments,
-            ): ObjectKey {
-                require(arguments.type == field.arguments) {
-                    "Key arguments do not belong to its output field"
-                }
-                return if (arguments is Arguments) {
-                    GroundKeyImpl(field, arguments)
-                } else {
-                    ObjectKeyImpl(field, arguments)
-                }
-            }
-        }
-    }
-
-    /**
-     * A concrete-object key whose arguments are ground and which can therefore select an OER field.
-     */
-    sealed interface GroundKey : ObjectKey, PathComponent {
-        override val arguments: Arguments
-
-        /**
-         * A ground key produced from a variable-bearing source selection.
-         *
-         * [selectionStamp] identifies the variable-bearing source selection that was grounded. It
-         * distinguishes different source selections even when their grounded arguments agree.
-         */
-        sealed interface Stamped : GroundKey {
-            val selectionStamp: SelectionStamp
-
-            companion object {
-                fun of(
-                    selectionStamp: SelectionStamp,
-                    field: Schema.ObjectField,
-                    arguments: Arguments,
-                ): Stamped {
-                    require(arguments.type == field.arguments) {
-                        "Ground arguments do not belong to the stamped selection field"
-                    }
-                    return StampedGroundKeyImpl(
-                        field = field,
-                        arguments = arguments,
-                        selectionStamp = selectionStamp,
-                    )
-                }
-            }
-        }
-
-        companion object {
-            fun of(
-                field: Schema.ObjectField,
-                arguments: Map<kotlin.String, Any?>,
-            ): GroundKey = of(field, Arguments.of(field, arguments))
-
-            fun of(
-                field: Schema.ObjectField,
-                arguments: Arguments,
-            ): GroundKey {
-                require(arguments.type == field.arguments) {
-                    "Key arguments do not belong to its output field"
-                }
-                return GroundKeyImpl(field, arguments)
-            }
-        }
-    }
-
-    /** A non-negative position selecting one element of an engine-result list. */
-    sealed interface ListIndex : PathComponent {
-        val index: kotlin.Int
-
-        companion object {
-            fun of(index: kotlin.Int): ListIndex {
-                require(index >= 0) { "List index must be non-negative" }
-                return ListIndexImpl(index)
-            }
-        }
-    }
-
-    /**
      * A possibly partial object output.
      *
      * ### Invariant: object-value-owner
      *
-     * `fieldValues.containingType == type`. Every present [GroundKey] carries a field owned by
-     * [type]. Object values are partial; resolver behavior is responsible for supplying passive
-     * fields, including canonical `__typename`.
+     * `fieldValues.containingType == type`. Every present [ObjectEngineResult.GroundKey] carries a
+     * field owned by [type]. Object values are partial; resolver behavior is responsible for
+     * supplying passive fields, including canonical `__typename`.
      */
     sealed interface Object : Output, Typed {
         override val type: Schema.ObjectType
@@ -506,7 +302,7 @@ sealed interface Value {
              */
             fun of(
                 type: Schema.ObjectType,
-                fields: Map<GroundKey, Output?> = emptyMap(),
+                fields: Map<ObjectEngineResult.GroundKey, Output?> = emptyMap(),
             ): Object {
                 fields.forEach { (key, value) ->
                     require(value.conformsToSchemaType(key.field.typeExpr)) {
@@ -528,16 +324,16 @@ sealed interface Value {
      * ### Invariant: object-field-values-owner
      *
      * [containingType] is the concrete object type whose fields these values inhabit. Every present
-     * [GroundKey] carries a field owned by [containingType].
+     * [ObjectEngineResult.GroundKey] carries a field owned by [containingType].
      */
-    sealed interface ObjectFields : Map<GroundKey, Output?> {
+    sealed interface ObjectFields : Map<ObjectEngineResult.GroundKey, Output?> {
         val containingType: Schema.ObjectType
 
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: GroundKey): Output?
+        override operator fun get(key: ObjectEngineResult.GroundKey): Output?
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: GroundKey): Output?
+        fun getValue(key: ObjectEngineResult.GroundKey): Output?
     }
 
     /**
@@ -854,46 +650,15 @@ private data class SelectionStampedVariableValueImpl(
 private fun kotlin.collections.List<PathComponent>.renderVariablePath(): String =
     joinToString(prefix = "[", postfix = "]") { component ->
         when (component) {
-            is Value.GroundKey ->
+            is ObjectEngineResult.GroundKey ->
                 "${component.field.containingType.typeName}/${component.field.fieldName}" +
                     component.arguments.fieldValues
                         .takeIf { arguments -> arguments.isNotEmpty() }
                         ?.let { arguments -> "($arguments)" }
                         .orEmpty()
-            is Value.ListIndex -> "index=${component.index}"
+            is ListEngineResult.Index -> "index=${component.index}"
         }
     }
-
-private data class KeyImpl(
-    override val field: Schema.OutputField,
-    override val arguments: OpenArguments,
-) : Value.Key
-
-private data class VariableKeyImpl(
-    override val field: Schema.OutputField,
-    override val arguments: OpenArguments,
-    override val variableDefinedByThisKey: Value.Variable.Stamped,
-) : Value.VariableKey
-
-private data class ObjectKeyImpl(
-    override val field: Schema.ObjectField,
-    override val arguments: OpenArguments,
-) : Value.ObjectKey
-
-private data class GroundKeyImpl(
-    override val field: Schema.ObjectField,
-    override val arguments: Value.Arguments,
-) : Value.GroundKey
-
-private data class StampedGroundKeyImpl(
-    override val field: Schema.ObjectField,
-    override val arguments: Value.Arguments,
-    override val selectionStamp: SelectionStamp,
-) : Value.GroundKey.Stamped
-
-private data class ListIndexImpl(
-    override val index: Int,
-) : Value.ListIndex
 
 private data class PresentDefaultValueImpl(
     override val value: Value.Input?,
@@ -901,9 +666,9 @@ private data class PresentDefaultValueImpl(
 
 private class ObjectFieldValuesImpl(
     override val containingType: Schema.ObjectType,
-    private val backingMap: Map<Value.GroundKey, Value.Output?>,
+    private val backingMap: Map<ObjectEngineResult.GroundKey, Value.Output?>,
 ) : Value.ObjectFields,
-    Map<Value.GroundKey, Value.Output?> by backingMap {
+    Map<ObjectEngineResult.GroundKey, Value.Output?> by backingMap {
     init {
         require(backingMap.keys.all { it.field.containingType == containingType }) {
             val foreignFields =
@@ -915,9 +680,9 @@ private class ObjectFieldValuesImpl(
         }
     }
 
-    override operator fun get(key: Value.GroundKey): Value.Output? = getValue(key)
+    override operator fun get(key: ObjectEngineResult.GroundKey): Value.Output? = getValue(key)
 
-    override fun getValue(key: Value.GroundKey): Value.Output? {
+    override fun getValue(key: ObjectEngineResult.GroundKey): Value.Output? {
         if (!backingMap.containsKey(key)) {
             throw MissingFieldException(containingType.typeName, key.field.fieldName)
         }

@@ -1,5 +1,7 @@
 package semantics
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.PathComponent
 import model.Value
@@ -14,7 +16,7 @@ import model.registry.VariableDefinition
  * completed exactly once.
  */
 context(world: Assumptions)
-internal fun Iterable<Value.GroundKey>.bindFromArguments(
+internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     path: List<PathComponent>,
     onDeclared: (
         Value.Variable.Stamped,

@@ -76,7 +76,7 @@ sealed interface OpenArguments {
      *
      * [selectionStamp] participates in structural equality, and every recursively contained
      * variable carries that same stamp. Grounding preserves the selection stamp through
-     * [Value.GroundKey.Stamped].
+     * [ObjectEngineResult.GroundKey.Stamped].
      */
     sealed interface Stamped : OpenArguments {
         val selectionStamp: SelectionStamp

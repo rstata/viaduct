@@ -49,9 +49,9 @@ context(world: Assumptions)
 internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
 ): List<StampedObjectPathDefinition> {
-    val groundKey = path.lastOrNull() as? Value.GroundKey
+    val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
     val selectionStampedDefinitions =
-        if (groundKey is Value.GroundKey.Stamped) {
+        if (groundKey is ObjectEngineResult.GroundKey.Stamped) {
             selectionStampedVariableDefinitionsFrom(groundKey.selectionStamp)
         } else {
             selectionStampedVariableDefinitions(path)
@@ -75,7 +75,7 @@ internal fun FieldResolver.boundObjectPathDefinitions(
 
 context(world: Assumptions)
 private fun ObjectEngineResult.readCompletedProvider(
-    path: List<Value.Key>,
+    path: List<ObjectEngineResult.Key>,
 ): Value.Input? {
     var current = this
     path.forEachIndexed { index, openKey ->

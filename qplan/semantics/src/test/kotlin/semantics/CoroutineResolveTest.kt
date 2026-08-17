@@ -53,7 +53,7 @@ class CoroutineResolveTest {
                 world.schema.groundKey("Query", "first"),
                 world.schema.groundKey("Query", "second"),
             )
-        val registeredKeys = linkedSetOf<Value.GroundKey>()
+        val registeredKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
         var producerStarts = 0
         val runtimeSupport =
             object : RuntimeSupport {
@@ -68,7 +68,7 @@ class CoroutineResolveTest {
                     cell: EngineResult.Cell,
                     writer: List<PathComponent>,
                 ) {
-                    registeredKeys += writer.last() as Value.GroundKey
+                    registeredKeys += writer.last() as ObjectEngineResult.GroundKey
                 }
             }
         val selections =
@@ -120,7 +120,7 @@ class CoroutineResolveTest {
         val expectedChildResultKeys =
             expectedChildKeys + world.schema.groundKey("Child", "__typename")
         var rootCell: EngineResult.Cell? = null
-        val childRegistrations = linkedSetOf<Value.GroundKey>()
+        val childRegistrations = linkedSetOf<ObjectEngineResult.GroundKey>()
         val runtimeSupport =
             object : RuntimeSupport {
                 context(world: Assumptions)
@@ -136,7 +136,7 @@ class CoroutineResolveTest {
                         assertFailsWith<UncompletedPromiseException> {
                             assertNotNull(rootCell).getValue().get()
                         }
-                        childRegistrations += writer.last() as Value.GroundKey
+                        childRegistrations += writer.last() as ObjectEngineResult.GroundKey
                     }
                 }
             }
@@ -343,11 +343,11 @@ private fun registryOverride(
 private fun Schema.groundKey(
     typeName: String,
     fieldName: String,
-): Value.GroundKey =
-    Value.GroundKey.of(
+): ObjectEngineResult.GroundKey =
+    ObjectEngineResult.GroundKey.of(
         objectField(typeName, fieldName),
         emptyMap(),
     )
 
-private fun Schema.ObjectField.groundKey(): Value.GroundKey =
-    Value.GroundKey.of(this, emptyMap())
+private fun Schema.ObjectField.groundKey(): ObjectEngineResult.GroundKey =
+    ObjectEngineResult.GroundKey.of(this, emptyMap())

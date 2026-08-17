@@ -17,7 +17,7 @@ package model
  * reachable from the schema is likewise the canonical result of [type].
  *
  * Construct every [Value] other than the schema-independent [Value.Error], every [Value.Arguments],
- * and every [Value.Key] through a factory on its precise semantic category. The one-schema world
+ * and every [ObjectEngineResult.Key] through a factory on its precise semantic category. The one-schema world
  * stipulates that every definition supplied to those factories is canonical in this schema; the
  * factories do not revalidate that ownership. Nested definitions navigate to their canonical owners through
  * [OutputField.containingType] and [InputLikeField.containingType]. Compare definitions with ordinary

@@ -91,9 +91,9 @@ class ObjectConstructionTest {
         val implicit = Value.Object.of(userType)
         val explicit = Value.Object.of(userType, mapOf(typenameKey to typenameValue))
 
-        assertEquals(emptyMap<Value.GroundKey, Value.Output?>(), implicit.fieldValues)
+        assertEquals(emptyMap<ObjectEngineResult.GroundKey, Value.Output?>(), implicit.fieldValues)
         assertEquals(
-            mapOf<Value.GroundKey, Value.Output?>(typenameKey to typenameValue),
+            mapOf<ObjectEngineResult.GroundKey, Value.Output?>(typenameKey to typenameValue),
             explicit.fieldValues,
         )
     }
@@ -148,7 +148,7 @@ class ObjectConstructionTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
         val user = schema.objectOf("User")
-        val viewerKey = Value.GroundKey.of(schema.objectField("Query", "viewer"), emptyMap())
+        val viewerKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "viewer"), emptyMap())
 
         assertFailsWith<IllegalArgumentException> {
             Value.Object.of(
@@ -183,8 +183,8 @@ class ObjectConstructionTest {
         schema: Schema,
         fieldName: String,
         vararg arguments: Pair<String, Any?>,
-    ): Value.GroundKey =
-        Value.GroundKey.of(
+    ): ObjectEngineResult.GroundKey =
+        ObjectEngineResult.GroundKey.of(
             field = schema.objectField("User", fieldName),
             arguments = arguments.toMap(),
         )

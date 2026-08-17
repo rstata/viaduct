@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.Schema
 import model.Selection
@@ -35,7 +37,7 @@ fun SelectionForest.successorDemand(): SelectionForest =
             selection.possibleTypes.flatMapToSelectionForest { possibleType ->
                 val specializedKey = selection.objectKey(possibleType)
                 val key =
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         field = specializedKey.field,
                         arguments = specializedKey.arguments.instantiateBindings(),
                     )
@@ -86,7 +88,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
     addDemand(this)
     val deferredSelections = mutableSetOf<SelectionIdentity>()
     val expandedTemplateFields = mutableSetOf<Schema.ObjectField>()
-    val expandedGroundedKeys = mutableSetOf<Value.GroundKey>()
+    val expandedGroundedKeys = mutableSetOf<ObjectEngineResult.GroundKey>()
     var pendingIndex = 0
     while (pendingIndex < pendingSelections.size) {
         val identity = pendingSelections[pendingIndex++]
@@ -118,7 +120,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
         for (possibleType in selection.possibleTypes) {
             val specializedKey = selection.objectKey(possibleType)
             val key =
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     field = specializedKey.field,
                     arguments = specializedKey.arguments.fetchBindings(),
                 )
@@ -153,7 +155,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
 // These occurrences would converge at every concrete merge boundary. Coalescing them while closing
 // demand avoids expanding the same resolver-demand DAG once per incoming path.
 private data class SelectionIdentity(
-    val key: Value.Key,
+    val key: ObjectEngineResult.Key,
     val possibleTypes: Set<Schema.ObjectType>,
 )
 
@@ -182,7 +184,7 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
     possibleTypes.flatMapToSelectionForest { possibleType ->
         val specializedKey = objectKey(possibleType)
         val key =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 field = specializedKey.field,
                 arguments = specializedKey.arguments.instantiateBindings(),
             )
@@ -245,7 +247,7 @@ private fun SelectionForest.substitute(
         selectionForestOf(
             Selection.of(
                 key =
-                    Value.Key.of(
+                    ObjectEngineResult.Key.of(
                         field = selection.key.field,
                         arguments = selection.key.arguments.substituteTemplates(bindings),
                     ),

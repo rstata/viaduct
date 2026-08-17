@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.Schema
 import model.Selection
@@ -122,7 +124,7 @@ private fun SelectionForest.passivePredecessorDemand(
         }.coalesceEquivalentSelections()
 
 private data class ProjectionSelectionIdentity(
-    val key: Value.Key,
+    val key: ObjectEngineResult.Key,
     val possibleTypes: Set<Schema.ObjectType>,
 )
 

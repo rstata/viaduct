@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.emptyFragmentOf
@@ -40,11 +42,11 @@ interface ObjectFragmentFromArgumentResolverContract :
         val resultField = world.schema.objectField("Query", "result")
         val variable = Value.Variable.of(resultField, "seed")
         val firstKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 resultField,
                 mapOf("seed" to 7),
             )
-        val secondKey = Value.GroundKey.of(resultField, mapOf("seed" to 8))
+        val secondKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 8))
         val resolved =
             resolveAndValidate(
                 world,
@@ -106,7 +108,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                 fieldResolvers = { schema ->
                     val result = schema.objectField("Query", "result")
                     val consume = schema.objectField("Query", "consume")
-                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 7))
+                    val consumeKey = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 7))
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
@@ -128,7 +130,7 @@ interface ObjectFragmentFromArgumentResolverContract :
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 mapOf("value" to 7),
             )
@@ -157,7 +159,7 @@ interface ObjectFragmentFromArgumentResolverContract :
             )
         val world = testWorld.assumptions
         val oneKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "one"),
                 mapOf("seed" to 7),
             )

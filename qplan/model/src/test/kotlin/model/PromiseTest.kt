@@ -69,7 +69,7 @@ class PromiseTest {
                     """.trimIndent(),
                 ).schema
         val field =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 schema.objectField("Query", "required"),
                 emptyMap(),
             )

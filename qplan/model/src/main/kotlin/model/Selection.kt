@@ -2,7 +2,7 @@ package model
 
 /** An opaque identity assigned once to a selection occurrence in a resolver registry. */
 class SelectionOccurrenceId internal constructor(
-    internal val sourceKey: Value.Key,
+    internal val sourceKey: ObjectEngineResult.Key,
 )
 
 /**
@@ -17,7 +17,7 @@ class SelectionStamp internal constructor(
     internal val occurrenceLineage: List<SelectionOccurrenceId>,
 ) {
     /** The original registry key represented by the final occurrence in this lineage. */
-    val sourceKey: Value.Key
+    val sourceKey: ObjectEngineResult.Key
         get() = occurrenceLineage.last().sourceKey
 
     init {
@@ -100,31 +100,31 @@ sealed interface ObjectSelectionForest : SelectionForest {
     override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest
 
     /** The concrete-object keys contributed by these normalized selections. */
-    fun keys(): Set<Value.ObjectKey>
+    fun keys(): Set<ObjectEngineResult.ObjectKey>
 
     /** Returns the unique selection for each key. */
-    fun byKey(): Map<Value.ObjectKey, ObjectSelection>
+    fun byKey(): Map<ObjectEngineResult.ObjectKey, ObjectSelection>
 
     /**
      * Returns the ground keys contributed by these selections.
      *
      * @throws IllegalStateException when any key contains an open argument expression
      */
-    fun groundKeys(): Set<Value.GroundKey>
+    fun groundKeys(): Set<ObjectEngineResult.GroundKey>
 
     /**
      * Returns the unique selection for each ground key.
      *
      * @throws IllegalStateException when any key contains an open argument expression
      */
-    fun byGroundKey(): Map<Value.GroundKey, ObjectSelection>
+    fun byGroundKey(): Map<ObjectEngineResult.GroundKey, ObjectSelection>
 
     /**
      * Returns the selection for [key].
      *
      * @throws NoSuchElementException when [key] is absent
      */
-    operator fun get(key: Value.ObjectKey): ObjectSelection
+    operator fun get(key: ObjectEngineResult.ObjectKey): ObjectSelection
 
     companion object {
         /** Constructs a normalized forest satisfying [ObjectSelectionForest]'s invariant. */
@@ -194,7 +194,7 @@ fun Iterable<SelectionForest>.concatenateSelectionForests(): SelectionForest =
  */
 fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
     val childrenByKey =
-        buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
+        buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
             occurrences().forEach { selection ->
                 if (type in selection.possibleTypes) {
                     getOrPut(selection.objectKey(type), ::mutableListOf)
@@ -209,7 +209,7 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
  * Grounds and normalizes the demand applicable to [result], reporting completed path bindings.
  *
  * Every applicable occurrence contributes an ordinary ground selection, including an occurrence
- * whose [Value.VariableKey] is the only demand for that key. Equal keys are coalesced after binding
+ * whose [ObjectEngineResult.VariableKey] is the only demand for that key. Equal keys are coalesced after binding
  * substitution. A terminal marker reports its completed simple, list, null, or error value. An
  * intermediate marker defers a completed object to its marked child but reports null or error as a
  * prematurely terminated binding. Absent and incomplete result keys report no binding.
@@ -219,9 +219,9 @@ suspend fun SelectionForest.mergeWithVariables(
     result: ObjectEngineResult,
 ): Pair<ObjectSelectionForest, Map<Value.Variable.Stamped, Value.Input?>> {
     val type: Schema.ObjectType = result.type
-    val childrenByKey: MutableMap<Value.ObjectKey, MutableList<SelectionForest>> =
+    val childrenByKey: MutableMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> =
         linkedMapOf()
-    val groundKeyByVariable: MutableMap<Value.Variable.Stamped, Value.GroundKey> =
+    val groundKeyByVariable: MutableMap<Value.Variable.Stamped, ObjectEngineResult.GroundKey> =
         linkedMapOf()
     val bindings: MutableMap<Value.Variable.Stamped, Value.Input?> =
         linkedMapOf()
@@ -229,15 +229,15 @@ suspend fun SelectionForest.mergeWithVariables(
         if (type !in selection.possibleTypes) return@forEach
 
         val variable: Value.Variable.Stamped? =
-            (selection.key as? Value.VariableKey)?.variableDefinedByThisKey
-        val specializedKey: Value.ObjectKey = selection.objectKey(type)
-        val groundKey: Value.GroundKey =
+            (selection.key as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
+        val specializedKey: ObjectEngineResult.ObjectKey = selection.objectKey(type)
+        val groundKey: ObjectEngineResult.GroundKey =
             specializedKey.ground(specializedKey.arguments.fetchBindings())
         childrenByKey
             .getOrPut(groundKey, ::mutableListOf)
             .add(selection.subselections)
         if (variable != null) {
-            val previous: Value.GroundKey? = groundKeyByVariable.put(variable, groundKey)
+            val previous: ObjectEngineResult.GroundKey? = groundKeyByVariable.put(variable, groundKey)
             require(previous == null || previous == groundKey) {
                 "Path-variable $variable is defined by conflicting keys: $previous and $groundKey"
             }
@@ -249,7 +249,7 @@ suspend fun SelectionForest.mergeWithVariables(
             val value: EngineResult? = promise.get()
             val continues =
                 selection.subselections.occurrences().any { child ->
-                    (child.key as? Value.VariableKey)?.variableDefinedByThisKey == variable
+                    (child.key as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey == variable
                 }
             val binding: Value.Input? =
                 if (continues) {
@@ -302,7 +302,7 @@ private fun ListEngineResult.toPathVariableInputList(): Value.InputList {
 /**
  * Instantiates this normalized forest's current bindings and normalizes by the resulting exact key.
  *
- * Every result key is a [Value.GroundKey]. Equal unstamped keys coalesce after substitution.
+ * Every result key is a [ObjectEngineResult.GroundKey]. Equal unstamped keys coalesce after substitution.
  * Distinct selection-stamped keys remain distinct even when their grounded argument values agree.
  *
  * @throws IllegalStateException when a key contains an unbound stamped variable or an unstamped
@@ -311,7 +311,7 @@ private fun ListEngineResult.toPathVariableInputList(): Value.InputList {
 context(world: Assumptions)
 fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
     val childrenByKey =
-        buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
+        buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
             byKey().values.forEach { selection ->
                 val key = selection.key.ground(selection.key.arguments.instantiateBindings())
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
@@ -328,7 +328,7 @@ fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
 context(world: Assumptions)
 suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
     val childrenByKey =
-        buildMap<Value.ObjectKey, MutableList<SelectionForest>> {
+        buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
             byKey().values.forEach { selection ->
                 val key = selection.key.ground(selection.key.arguments.fetchBindings())
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
@@ -337,23 +337,23 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
     return normalizedObjectSelectionForest(type, childrenByKey)
 }
 
-private fun Value.ObjectKey.ground(arguments: Value.Arguments): Value.GroundKey {
+private fun ObjectEngineResult.ObjectKey.ground(arguments: Value.Arguments): ObjectEngineResult.GroundKey {
     val openArguments = this.arguments
     return when {
-        this is Value.GroundKey.Stamped ->
-            Value.GroundKey.Stamped.of(
+        this is ObjectEngineResult.GroundKey.Stamped ->
+            ObjectEngineResult.GroundKey.Stamped.of(
                 selectionStamp = selectionStamp,
                 field = field,
                 arguments = arguments,
             )
         openArguments is OpenArguments.Stamped ->
-            Value.GroundKey.Stamped.of(
+            ObjectEngineResult.GroundKey.Stamped.of(
                 selectionStamp = openArguments.selectionStamp,
                 field = field,
                 arguments = arguments,
             )
         else ->
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 field = field,
                 arguments = arguments,
             )
@@ -362,7 +362,7 @@ private fun Value.ObjectKey.ground(arguments: Value.Arguments): Value.GroundKey 
 
 private fun normalizedObjectSelectionForest(
     type: Schema.ObjectType,
-    childrenByKey: Map<Value.ObjectKey, List<SelectionForest>>,
+    childrenByKey: Map<ObjectEngineResult.ObjectKey, List<SelectionForest>>,
 ): ObjectSelectionForest {
     // Specialization preserves local validity; grouping establishes normalized unique keys.
     val possibleTypes = setOf(type)
@@ -414,9 +414,9 @@ fun SelectionForest.localizeTopLevelSelectionStamps(
 }
 
 // Returns this key with each occurrence stamp extended through the concrete OER path.
-private fun Value.Key.localizeSelectionStamps(
+private fun ObjectEngineResult.Key.localizeSelectionStamps(
     path: List<PathComponent>,
-): Value.Key {
+): ObjectEngineResult.Key {
     val stampedArguments = arguments as? OpenArguments.Stamped
     val localizedArguments =
         stampedArguments?.restamp(
@@ -424,24 +424,24 @@ private fun Value.Key.localizeSelectionStamps(
         )
     val baseKey =
         when (this) {
-            is Value.GroundKey.Stamped ->
-                Value.GroundKey.Stamped.of(
+            is ObjectEngineResult.GroundKey.Stamped ->
+                ObjectEngineResult.GroundKey.Stamped.of(
                     selectionStamp = selectionStamp.extendThrough(path),
                     field = field,
                     arguments = arguments,
                 )
 
             else ->
-                Value.Key.of(
+                ObjectEngineResult.Key.of(
                     field = field,
                     arguments = localizedArguments ?: arguments,
                 )
         }
-    val marker = (this as? Value.VariableKey)?.variableDefinedByThisKey
+    val marker = (this as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
     return if (marker == null) {
         baseKey
     } else {
-        Value.VariableKey.of(
+        ObjectEngineResult.VariableKey.of(
             key = baseKey,
             variableDefinedByThisKey = marker.localizeSelectionStamp(path),
         )
@@ -471,12 +471,12 @@ private fun SelectionStamp.extendThrough(
     )
 
 /** Returns this selection's ground key. */
-fun ObjectSelection.groundKey(): Value.GroundKey =
-    key as? Value.GroundKey
+fun ObjectSelection.groundKey(): ObjectEngineResult.GroundKey =
+    key as? ObjectEngineResult.GroundKey
         ?: error("Object selection key contains open arguments: $key")
 
 /** Returns the occurrence-specific variables used by this key's arguments. */
-fun Value.Key.stampedVariables(): Set<Value.Variable.Stamped> =
+fun ObjectEngineResult.Key.stampedVariables(): Set<Value.Variable.Stamped> =
     arguments.stampedVariables()
 
 /** Returns the occurrence-specific variables used recursively by this selection. */
@@ -507,19 +507,19 @@ fun SelectionForest.usedVariables(): Set<Value.Variable> {
  * This operation preserves open argument expressions while applying the argument definition,
  * including defaults, of the corresponding canonical object field.
  */
-fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey {
+fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
     val concreteField = type.fields.getValue(key.field.fieldName)
     val sourceKey = key
-    if (sourceKey is Value.GroundKey.Stamped) {
+    if (sourceKey is ObjectEngineResult.GroundKey.Stamped) {
         val groundedArguments = sourceKey.arguments.retarget(concreteField)
         check(groundedArguments is Value.Arguments)
-        return Value.GroundKey.Stamped.of(
+        return ObjectEngineResult.GroundKey.Stamped.of(
             selectionStamp = sourceKey.selectionStamp,
             field = concreteField,
             arguments = groundedArguments,
         )
     }
-    return Value.ObjectKey.of(
+    return ObjectEngineResult.ObjectKey.of(
         field = concreteField,
         arguments = key.arguments.retarget(concreteField),
     )
@@ -539,7 +539,7 @@ fun Selection.objectKey(type: Schema.ObjectType): Value.ObjectKey {
  * - [possibleTypes] is a subset of the object types contained by [key]'s field owner.
  * - When [isLeaf] is true, [subselections] is empty. The converse does not hold: a composite
  *   selection may also have no subselections.
- * - A selection's [key] is a [Value.ObjectKey] exactly when it is an [ObjectSelection].
+ * - A selection's [key] is a [ObjectEngineResult.ObjectKey] exactly when it is an [ObjectSelection].
  *
  * ### Invariant: selection-well-foundedness
  *
@@ -563,7 +563,7 @@ sealed interface Selection {
      *
      * ### Representation
      *
-     * [Value.Key.field] is the canonical schema field intended by this selection, and
+     * [ObjectEngineResult.Key.field] is the canonical schema field intended by this selection, and
      * its containing type records the immediate field-lookup context. Non-variable argument values
      * are in their coerced semantic form. An argument may contain a [Value.Variable]. Variables
      * compare by name. Because a selection key is outside an OER or [Value.Object], its field may
@@ -574,7 +574,7 @@ sealed interface Selection {
      * Compared to GraphQL selections, model selections use an alias-free schema field coordinate
      * rather than a GraphQL response key.
      */
-    val key: Value.Key
+    val key: ObjectEngineResult.Key
 
     /**
      * The concrete runtime parent-object types for which this selection applies: if during resolution
@@ -631,13 +631,13 @@ sealed interface Selection {
          * Constructs a selection that satisfies the invariant documented on [Selection].
          */
         fun of(
-            key: Value.Key,
+            key: ObjectEngineResult.Key,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
         ): Selection {
             validateSelection(key, possibleTypes, subselections)
             return when (key) {
-                is Value.ObjectKey ->
+                is ObjectEngineResult.ObjectKey ->
                     ObjectSelectionImpl(
                         key = key,
                         possibleTypes = possibleTypes,
@@ -654,7 +654,7 @@ sealed interface Selection {
 
         /** Constructs the precise selection category for a concrete-object field key. */
         fun of(
-            key: Value.ObjectKey,
+            key: ObjectEngineResult.ObjectKey,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
         ): ObjectSelection = ObjectSelection.of(key, possibleTypes, subselections)
@@ -663,11 +663,11 @@ sealed interface Selection {
 
 /** A selection whose field coordinate belongs to a concrete object type. */
 sealed interface ObjectSelection : Selection {
-    override val key: Value.ObjectKey
+    override val key: ObjectEngineResult.ObjectKey
 
     companion object {
         fun of(
-            key: Value.ObjectKey,
+            key: ObjectEngineResult.ObjectKey,
             possibleTypes: Set<Schema.ObjectType>,
             subselections: SelectionForest,
         ): ObjectSelection {
@@ -678,7 +678,7 @@ sealed interface ObjectSelection : Selection {
 }
 
 private fun validateSelection(
-    key: Value.Key,
+    key: ObjectEngineResult.Key,
     possibleTypes: Set<Schema.ObjectType>,
     subselections: SelectionForest,
 ) {
@@ -694,13 +694,13 @@ private fun validateSelection(
 }
 
 private class SelectionImpl(
-    override val key: Value.Key,
+    override val key: ObjectEngineResult.Key,
     override val possibleTypes: Set<Schema.ObjectType>,
     override val subselections: SelectionForest,
 ) : Selection
 
 private class ObjectSelectionImpl(
-    override val key: Value.ObjectKey,
+    override val key: ObjectEngineResult.ObjectKey,
     override val possibleTypes: Set<Schema.ObjectType>,
     override val subselections: SelectionForest,
 ) : ObjectSelection
@@ -737,7 +737,7 @@ private class SelectionForestImpl(
 
 private class ObjectSelectionForestImpl(
     override val type: Schema.ObjectType,
-    private val selectionsByKey: Map<Value.ObjectKey, ObjectSelection>,
+    private val selectionsByKey: Map<ObjectEngineResult.ObjectKey, ObjectSelection>,
     occurrences: List<ObjectSelection> = selectionsByKey.values.toList(),
 ) : AbstractSelectionForest(occurrences),
     ObjectSelectionForest {
@@ -747,19 +747,19 @@ private class ObjectSelectionForestImpl(
             selectionsByKey.filterValues(predicate),
         )
 
-    override fun keys(): Set<Value.ObjectKey> = selectionsByKey.keys
+    override fun keys(): Set<ObjectEngineResult.ObjectKey> = selectionsByKey.keys
 
-    override fun byKey(): Map<Value.ObjectKey, ObjectSelection> = selectionsByKey
+    override fun byKey(): Map<ObjectEngineResult.ObjectKey, ObjectSelection> = selectionsByKey
 
-    override fun groundKeys(): Set<Value.GroundKey> = byGroundKey().keys
+    override fun groundKeys(): Set<ObjectEngineResult.GroundKey> = byGroundKey().keys
 
-    override fun byGroundKey(): Map<Value.GroundKey, ObjectSelection> =
+    override fun byGroundKey(): Map<ObjectEngineResult.GroundKey, ObjectSelection> =
         selectionsByKey.mapKeys { (key, _) ->
-            key as? Value.GroundKey
+            key as? ObjectEngineResult.GroundKey
                 ?: error("Object selection forest contains open key: $key")
         }
 
-    override fun get(key: Value.ObjectKey): ObjectSelection = selectionsByKey.getValue(key)
+    override fun get(key: ObjectEngineResult.ObjectKey): ObjectSelection = selectionsByKey.getValue(key)
 }
 
 private fun SelectionForest.occurrences(): List<Selection> =

@@ -1,5 +1,7 @@
 package semantics
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.Schema
 import model.Value
@@ -142,8 +144,8 @@ class WorldInjectionTest {
 private fun Schema.key(
     type: Schema.ObjectType,
     fieldName: String,
-): Value.GroundKey =
-    Value.GroundKey.of(
+): ObjectEngineResult.GroundKey =
+    ObjectEngineResult.GroundKey.of(
         field = objectField(type.typeName, fieldName),
         arguments = emptyMap(),
     )

@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.Schema
 import model.TypeExpr
 import model.Value
@@ -24,7 +26,7 @@ sealed interface VariableDefinition {
 
     /** A variable whose value is read from one path in its defining resolver's object fragment. */
     sealed interface FromObjectField : VariableDefinition {
-        val path: List<Value.Key>
+        val path: List<ObjectEngineResult.Key>
 
         companion object {
             /**
@@ -35,7 +37,7 @@ sealed interface VariableDefinition {
              * [path] is nonempty, every nonterminal key selects a non-list composite value, and
              * the terminal key selects a simple value.
              */
-            fun of(path: List<Value.Key>): FromObjectField {
+            fun of(path: List<ObjectEngineResult.Key>): FromObjectField {
                 require(path.isNotEmpty()) {
                     "From-object-field variable path must not be empty"
                 }
@@ -64,5 +66,5 @@ private data class FromArgumentImpl(
 ) : VariableDefinition.FromArgument
 
 private data class FromObjectFieldImpl(
-    override val path: List<Value.Key>,
+    override val path: List<ObjectEngineResult.Key>,
 ) : VariableDefinition.FromObjectField

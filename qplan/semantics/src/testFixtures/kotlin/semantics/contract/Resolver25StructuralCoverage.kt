@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
@@ -176,7 +178,7 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
     }
     if (
         declarations.values.any { event ->
-            event.ownerCoordinate.any { component -> component is Value.ListIndex }
+            event.ownerCoordinate.any { component -> component is ListEngineResult.Index }
         }
     ) {
         signatures += Resolver25StructuralSignature.LIST_ELEMENT_VARIABLE_OWNER
@@ -240,7 +242,7 @@ private fun SelectionForest.fields(): Set<Schema.OutputField> =
     }
 
 private fun List<PathComponent>.fieldOccurrence(): Pair<List<PathComponent>, Schema.ObjectField> {
-    val groundedKey = last() as Value.GroundKey
+    val groundedKey = last() as ObjectEngineResult.GroundKey
     return dropLast(1) to groundedKey.field
 }
 

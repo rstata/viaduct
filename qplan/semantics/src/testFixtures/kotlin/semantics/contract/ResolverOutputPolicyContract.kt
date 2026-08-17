@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.EngineResult
-import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
@@ -102,32 +100,19 @@ private fun ResolverContract.assertRejectsWorldMode(selectiveResolvers: Boolean)
 
 private fun ResolverContract.resolvePassiveOutputFixture(): PassiveOutputFixtureResult {
     val testWorld =
-        TestWorld.fromSDL(
+        TestWorld.fromDSL(
             selectiveResolvers = selectiveResolvers,
             schemaSDL =
                 """
-                type User {
-                  requested: String!
-                  extra: String!
+                extend type Query {
+                  user: User! @resolver(result: {requested: 1, extra: 2})
                 }
 
-                type Query {
-                  user: User!
+                type User {
+                  requested: Int!
+                  extra: Int!
                 }
                 """.trimIndent(),
-            fieldResolvers = { schema ->
-                mapOf(
-                    schema.field("Query", "user") to
-                        model.testing.fieldResolverOf(
-                            schema.emptyFragmentOf("Query"),
-                        ) { _, _ ->
-                            schema.objectOf("User") {
-                                "requested" setTo "requested"
-                                "extra" setTo "extra"
-                            }
-                        },
-                )
-            },
         )
     val world = testWorld.assumptions
     val fragment = world.fragmentFrom("fragment ignored on Query { user { requested } }")
@@ -149,42 +134,37 @@ private data class RecursiveOutputFixtureResult(
 
 private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFixtureResult {
     val testWorld =
-        TestWorld.fromSDL(
+        TestWorld.fromDSL(
             selectiveResolvers = selectiveResolvers,
             schemaSDL =
                 """
-                type Chain { label: String!, next: Chain, computed: String! }
-                type Query { chain: Chain! }
+                extend type Query {
+                  chain: Chain!
+                    @resolver(
+                      result: {
+                        label: 1
+                        next: {label: 2, next: null}
+                      }
+                    )
+                }
+
+                type Chain {
+                  label: Int!
+                  next: Chain
+                  computed: Int!
+                    @resolver(
+                      of: "next { label }"
+                      result: "sum(next.label)"
+                    )
+                }
                 """.trimIndent(),
-            fieldResolvers = { schema ->
-                val nextKey = schema.contractKey("Chain", "next")
-                val labelKey = schema.contractKey("Chain", "label")
-                mapOf(
-                    schema.field("Query", "chain") to
-                        model.testing.fieldResolverOf(
-                            schema.emptyFragmentOf("Query"),
-                        ) { input, _ ->
-                            require(input.hasExactlyFields())
-                            schema.objectOf("Chain") {
-                                "label" setTo "first"
-                                "next" setTo
-                                    objectOf("Chain") {
-                                        "label" setTo "second"
-                                        "next" setTo null
-                                    }
-                            }
-                        },
-                    schema.field("Chain", "computed") to
-                        model.testing.fieldResolverOf(
-                            schema.fragmentFrom(
-                                "fragment ignored on Chain { next { label } }",
-                            ),
-                        ) { input, _ ->
-                            val next =
-                                input.fieldValues.getValue(nextKey) as Value.Object
-                            next.fieldValues.getValue(labelKey) as Value.String
-                        },
-                )
+            applicationObserver = { field, input, _, _ ->
+                if (
+                    field.containingType.typeName == "Query" &&
+                    field.fieldName == "chain"
+                ) {
+                    require(input.hasExactlyFields())
+                }
             },
         )
     val world = testWorld.assumptions

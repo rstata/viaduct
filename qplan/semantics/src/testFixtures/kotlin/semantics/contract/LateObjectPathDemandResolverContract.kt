@@ -3,13 +3,10 @@ package semantics.contract
 import model.EngineResult
 import model.Schema
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromObjectField
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,52 +25,34 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `successor passive demand is materialized from selective resolver output`() {
         var payloadDemandFields: Set<String>? = null
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Payload {
-                      computed: Int!
-                      raw: Int!
+                    extend type Query {
+                      payload: Payload! @resolver(result: {raw: 7})
                     }
 
-                    type Query {
-                      payload: Payload!
+                    type Payload {
+                      computed: Int!
+                        @resolver(of: "raw", result: "sum(raw)")
+                      raw: Int!
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val payloadType = schema.type("Payload") as Schema.ObjectType
-                    val rawKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Payload", "raw"),
-                            emptyMap(),
-                        )
-                    mapOf(
-                        schema.objectField("Query", "payload") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Payload") {
-                                    "raw" setTo 7
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "payload" &&
+                        demand != null
+                    ) {
+                        payloadDemandFields =
+                            demand
+                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .groundKeys()
+                                .mapTo(linkedSetOf()) { groundKey ->
+                                    groundKey.field.fieldName
                                 }
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) {
-                                    payloadDemandFields =
-                                        demand
-                                            .merge(payloadType)
-                                            .groundKeys()
-                                            .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.fieldName
-                                            }
-                                }
-                            },
-                        schema.objectField("Payload", "computed") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Computed on Payload { raw }",
-                                ),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(rawKey)
-                            },
-                    )
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -115,107 +94,50 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `open resolver template closes demand before an argumentless descendant launches`() {
         var nodeApplications = 0
         var nodeDemandFields: Set<String>? = null
-        val triggerFragment =
-            """
-            fragment Trigger on Query {
-              late(arg: ${'$'}value)
-              seed {
-                node {
-                  first
-                }
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
+                    extend type Query {
+                      trigger: Int!
+                        @resolver(
+                          of: "late(arg: ${'$'}value) seed { node { first } }"
+                          pathVars: [{name: "value", path: ["seed", "node", "first"]}]
+                          result: "sum(late)"
+                        )
+                      late(arg: Int!): Int!
+                        @resolver(
+                          of: "seed { node { second } }"
+                          result: "sum(seed.node.second)"
+                        )
+                      seed: Mid! @resolver(result: {})
+                    }
+
+                    type Mid {
+                      node: Leaf! @resolver(result: {first: 1, second: 2})
+                    }
+
                     type Leaf {
                       first: Int!
                       second: Int!
                     }
-
-                    type Mid {
-                      node: Leaf!
-                    }
-
-                    type Query {
-                      trigger: Int!
-                      late(arg: Int!): Int!
-                      seed: Mid!
-                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val seedKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "seed"),
-                            emptyMap(),
-                        )
-                    val lateKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "late"),
-                            mapOf("arg" to 1),
-                        )
-                    val nodeKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Mid", "node"),
-                            emptyMap(),
-                        )
-                    val secondKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Leaf", "second"),
-                            emptyMap(),
-                        )
-                    val leafType = schema.type("Leaf") as Schema.ObjectType
-                    mapOf(
-                        schema.objectField("Query", "trigger") to
-                            fieldResolverOf(schema.fragmentFrom(triggerFragment)) { input, _ ->
-                                input.fieldValues.getValue(lateKey)
-                            },
-                        schema.objectField("Query", "late") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Late on Query { seed { node { second } } }",
-                                ),
-                            ) { input, _ ->
-                                val seed = input.fieldValues.getValue(seedKey) as Value.Object
-                                val node = seed.fieldValues.getValue(nodeKey) as Value.Object
-                                node.fieldValues.getValue(secondKey)
-                            },
-                        schema.objectField("Query", "seed") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Mid") {}
-                            },
-                        schema.objectField("Mid", "node") to
-                            fieldResolverOf(schema.emptyFragmentOf("Mid")) { _, _ ->
-                                schema.objectOf("Leaf") {
-                                    "first" setTo 1
-                                    "second" setTo 2
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingType.typeName == "Mid" &&
+                        field.fieldName == "node" &&
+                        demand != null
+                    ) {
+                        nodeApplications += 1
+                        nodeDemandFields =
+                            demand
+                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .groundKeys()
+                                .mapTo(linkedSetOf()) { groundKey ->
+                                    groundKey.field.fieldName
                                 }
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) {
-                                    nodeApplications += 1
-                                    nodeDemandFields =
-                                        demand
-                                            .merge(leafType)
-                                            .groundKeys()
-                                            .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.fieldName
-                                            }
-                                }
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val trigger = schema.objectField("Query", "trigger")
-                    mapOf(
-                        Value.Variable.of(trigger, "value") to
-                            schema.fromObjectField(
-                                triggerFragment,
-                                listOf("seed", "node", "first"),
-                            ),
-                    )
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -243,87 +165,44 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `future variable boundary selects its passive predecessors`() {
         var parentApplications = 0
         var parentDemandFields: Set<String>? = null
-        val lateFragment =
-            """
-            fragment Late on Query {
-              provider
-              parent {
-                computed(value: ${'$'}value)
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
+                    extend type Query {
+                      late: Int!
+                        @resolver(
+                          of: "provider parent { computed(value: ${'$'}value) }"
+                          pathVars: [{name: "value", path: ["provider"]}]
+                          result: "sum(parent.computed)"
+                        )
+                      provider: Int! @resolver(result: 7)
+                      parent: Payload! @resolver(result: {source: 7})
+                    }
+
                     type Payload {
                       source: Int!
                       computed(value: Int!): Int!
-                    }
-
-                    type Query {
-                      late: Int!
-                      provider: Int!
-                      parent: Payload!
+                        @resolver(of: "source", result: "sum(source)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val payloadType = schema.type("Payload") as Schema.ObjectType
-                    val parentKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "parent"),
-                            emptyMap(),
-                        )
-                    val computed = schema.objectField("Payload", "computed")
-                    val computedKey = Value.GroundKey.of(computed, mapOf("value" to 7))
-                    val sourceKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Payload", "source"),
-                            emptyMap(),
-                        )
-                    mapOf(
-                        schema.objectField("Query", "late") to
-                            fieldResolverOf(schema.fragmentFrom(lateFragment)) { input, _ ->
-                                val parent = input.fieldValues.getValue(parentKey) as Value.Object
-                                parent.fieldValues.getValue(computedKey)
-                            },
-                        schema.objectField("Query", "provider") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(7)
-                            },
-                        schema.objectField("Query", "parent") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Payload") {
-                                    "source" setTo 7
-                                }
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) {
-                                    parentApplications += 1
-                                    parentDemandFields =
-                                        linkedSetOf<String>().also { fields ->
-                                            demand.merge(payloadType).forEach { selection ->
-                                                fields += selection.key.field.fieldName
-                                            }
-                                        }
-                                }
-                            },
-                        computed to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Computed on Payload { source }",
-                                ),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(sourceKey)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val late = schema.objectField("Query", "late")
-                    mapOf(
-                        Value.Variable.of(late, "value") to
-                            schema.fromObjectField(lateFragment, listOf("provider")),
-                    )
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "parent" &&
+                        demand != null
+                    ) {
+                        parentApplications += 1
+                        parentDemandFields =
+                            linkedSetOf<String>().also { fields ->
+                                demand
+                                    .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                    .forEach { selection ->
+                                        fields += selection.key.field.fieldName
+                                    }
+                            }
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -359,86 +238,38 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `late variable selection crosses a passive object field`() {
         var holderApplications = 0
         var computedApplications = 0
-        val resultFragment =
-            """
-            fragment Result on Query {
-              provider
-              holder {
-                nested {
-                  computed(value: ${'$'}value)
-                }
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Nested {
-                      computed(value: Int!): Int!
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "provider holder { nested { computed(value: ${'$'}value) } }"
+                          pathVars: [{name: "value", path: ["provider"]}]
+                          result: "sum(holder.nested.computed)"
+                        )
+                      provider: Int! @resolver(result: 7)
+                      holder: Holder! @resolver(result: {nested: {}})
                     }
 
                     type Holder {
                       nested: Nested!
                     }
 
-                    type Query {
-                      result: Int!
-                      provider: Int!
-                      holder: Holder!
+                    type Nested {
+                      computed(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val holderKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "holder"),
-                            emptyMap(),
-                        )
-                    val nestedKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Holder", "nested"),
-                            emptyMap(),
-                        )
-                    val computed = schema.objectField("Nested", "computed")
-                    val computedKey = Value.GroundKey.of(computed, mapOf("value" to 7))
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val holder = input.fieldValues.getValue(holderKey) as Value.Object
-                                val nested =
-                                    holder.fieldValues.getValue(nestedKey) as Value.Object
-                                nested.fieldValues.getValue(computedKey)
-                            },
-                        schema.objectField("Query", "holder") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Holder") {
-                                    "nested" setTo schema.objectOf("Nested")
-                                }
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) holderApplications += 1
-                            },
-                        schema.objectField("Query", "provider") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(7)
-                            },
-                        computed to
-                            fieldResolverOf(schema.emptyFragmentOf("Nested")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) computedApplications += 1
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "value") to
-                            schema.fromObjectField(
-                                resultFragment,
-                                listOf("provider"),
-                            ),
-                    )
+                applicationObserver = { field, _, _, demand ->
+                    if (demand != null) {
+                        when (field.containingType.typeName to field.fieldName) {
+                            "Query" to "holder" -> holderApplications += 1
+                            "Nested" to "computed" -> computedApplications += 1
+                        }
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -466,92 +297,41 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `late equal child call follows the configured identity policy`() {
         var parentApplications = 0
         var childApplications = 0
-        val outerFragment =
-            """
-            fragment Outer on Query {
-              source
-              parent {
-                child(value: ${'$'}value)
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Parent {
-                      child(value: Int!): Int!
+                    extend type Query {
+                      early: Int!
+                        @resolver(
+                          of: "parent { child(value: 1) }"
+                          result: "sum(parent.child)"
+                        )
+                      outer: Int!
+                        @resolver(
+                          of: "source parent { child(value: ${'$'}value) }"
+                          pathVars: [{name: "value", path: ["source"]}]
+                          result: "sum(parent.child)"
+                        )
+                      source: Int!
+                        @resolver(of: "delay", result: "sum(delay)")
+                      delay: Int! @resolver(result: 1)
+                      parent: Parent! @resolver(result: {})
                     }
 
-                    type Query {
-                      early: Int!
-                      outer: Int!
-                      source: Int!
-                      delay: Int!
-                      parent: Parent!
+                    type Parent {
+                      child(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val parentKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Query", "parent"),
-                            emptyMap(),
-                        )
-                    val child = schema.objectField("Parent", "child")
-                    val childKey = Value.GroundKey.of(child, mapOf("value" to 1))
-                    mapOf(
-                        schema.objectField("Query", "outer") to
-                            fieldResolverOf(schema.fragmentFrom(outerFragment)) { input, _ ->
-                                val parent = input.fieldValues.getValue(parentKey) as Value.Object
-                                parent.fieldValues.getValue(childKey)
-                            },
-                        schema.objectField("Query", "early") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Early on Query { parent { child(value: 1) } }",
-                                ),
-                            ) { input, _ ->
-                                val parent = input.fieldValues.getValue(parentKey) as Value.Object
-                                parent.fieldValues.getValue(childKey)
-                            },
-                        schema.objectField("Query", "source") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment Source on Query { delay }",
-                                ),
-                            ) { input, _ ->
-                                input.fieldValues.getValue(
-                                    Value.GroundKey.of(
-                                        schema.objectField("Query", "delay"),
-                                        emptyMap(),
-                                    ),
-                                )
-                            },
-                        schema.objectField("Query", "delay") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
-                            },
-                        schema.objectField("Query", "parent") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Parent")
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) parentApplications += 1
-                            },
-                        child to
-                            fieldResolverOf(schema.emptyFragmentOf("Parent")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) childApplications += 1
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val outer = schema.objectField("Query", "outer")
-                    mapOf(
-                        Value.Variable.of(outer, "value") to
-                            schema.fromObjectField(outerFragment, listOf("source")),
-                    )
+                applicationObserver = { field, _, _, demand ->
+                    if (demand != null) {
+                        when (field.containingType.typeName to field.fieldName) {
+                            "Query" to "parent" -> parentApplications += 1
+                            "Parent" to "child" -> childApplications += 1
+                        }
+                    }
                 },
             )
         val world = testWorld.assumptions

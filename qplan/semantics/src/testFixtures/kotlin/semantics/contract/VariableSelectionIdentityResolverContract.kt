@@ -3,13 +3,10 @@ package semantics.contract
 import model.EngineResult
 import model.Schema
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromArgument
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,62 +28,41 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     fun `equal pre-grounded selections merge in fragments and external queries`() {
         var payloadApplications = 0
         val suppliedDemandFields = mutableListOf<Set<String>>()
-        val resultFragment =
-            """
-            fragment Result on Query {
-              payload(arg: "same") { one }
-              payload(arg: "same") { two }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "payload(arg: 1) { one } payload(arg: 1) { two }"
+                          result: "sum(payload.one, payload.two)"
+                        )
+                      payload(arg: Int!): Payload!
+                        @resolver(result: {one: 3, two: 5})
+                    }
+
                     type Payload {
                       one: Int!
                       two: Int!
                     }
-
-                    type Query {
-                      result: Int!
-                      payload(arg: String!): Payload!
-                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val payloadType = schema.type("Payload") as Schema.ObjectType
-                    val payload = schema.objectField("Query", "payload")
-                    val payloadKey = Value.GroundKey.of(payload, mapOf("arg" to "same"))
-                    val oneKey = schema.contractKey("Payload", "one")
-                    val twoKey = schema.contractKey("Payload", "two")
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val value =
-                                    input.fieldValues.getValue(payloadKey) as Value.Object
-                                val one = value.fieldValues.getValue(oneKey) as Value.Int
-                                val two = value.fieldValues.getValue(twoKey) as Value.Int
-                                Value.Int.of(one.intValue + two.intValue)
-                            },
-                        payload to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Payload") {
-                                    "one" setTo 3
-                                    "two" setTo 5
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "payload" &&
+                        demand != null
+                    ) {
+                        payloadApplications += 1
+                        suppliedDemandFields +=
+                            demand
+                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .groundKeys()
+                                .mapTo(linkedSetOf()) { key ->
+                                    key.field.fieldName
                                 }
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) {
-                                    payloadApplications += 1
-                                    suppliedDemandFields +=
-                                        demand
-                                            .merge(payloadType)
-                                            .groundKeys()
-                                            .mapTo(linkedSetOf()) { key ->
-                                                key.field.fieldName
-                                            }
-                                }
-                            },
-                    )
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -107,7 +83,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         val payloadKey =
             Value.GroundKey.of(
                 world.schema.objectField("Query", "payload"),
-                mapOf("arg" to "same"),
+                mapOf("arg" to 1),
             )
         val oneKey = world.schema.contractKey("Payload", "one")
         val twoKey = world.schema.contractKey("Payload", "two")
@@ -115,8 +91,8 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             world.fragmentFrom(
                 """
                 fragment Query on Query {
-                  payload(arg: "same") { one }
-                  payload(arg: "same") { two }
+                  payload(arg: 1) { one }
+                  payload(arg: 1) { two }
                 }
                 """.trimIndent(),
             )
@@ -146,73 +122,41 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     fun `applies the configured identity policy after variable selections ground equally`() {
         var payloadApplications = 0
         val suppliedDemandFields = mutableListOf<Set<String>>()
-        val resultFragment =
-            """
-            fragment Result on Query {
-              payload(arg: "same") { one }
-              payload(arg: ${'$'}seed) { two }
-              payload(arg: ${'$'}seed) { two }
-              payload(arg: ${'$'}other) { one }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
+                    extend type Query {
+                      result(seed: Int!, other: Int!): Int!
+                        @resolver(
+                          of: "payload(arg: 1) { one } payload(arg: ${'$'}seed) { two } payload(arg: ${'$'}seed) { two } payload(arg: ${'$'}other) { one }"
+                          result: "sum(payload.one, payload.two)"
+                        )
+                      payload(arg: Int!): Payload!
+                        @resolver(result: {one: 3, two: 5})
+                    }
+
                     type Payload {
                       one: Int!
                       two: Int!
                     }
-
-                    type Query {
-                      result(seed: String!, other: String!): Int!
-                      payload(arg: String!): Payload!
-                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val payload = schema.objectField("Query", "payload")
-                    val payloadKey = Value.GroundKey.of(payload, mapOf("arg" to "same"))
-                    val oneKey = schema.contractKey("Payload", "one")
-                    val twoKey = schema.contractKey("Payload", "two")
-                    mapOf(
-                        schema.objectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val value =
-                                    input.fieldValues.getValue(payloadKey) as Value.Object
-                                val one = value.fieldValues.getValue(oneKey) as Value.Int
-                                val two = value.fieldValues.getValue(twoKey) as Value.Int
-                                Value.Int.of(one.intValue + two.intValue)
-                            },
-                        payload to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Payload") {
-                                    "one" setTo 3
-                                    "two" setTo 5
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "payload" &&
+                        demand != null
+                    ) {
+                        payloadApplications += 1
+                        suppliedDemandFields +=
+                            demand
+                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .groundKeys()
+                                .mapTo(linkedSetOf()) { key ->
+                                    key.field.fieldName
                                 }
-                            }.observeApplications { _, _, demand ->
-                                if (demand != null) {
-                                    payloadApplications += 1
-                                    suppliedDemandFields +=
-                                        demand
-                                            .merge(
-                                                schema.type("Payload") as Schema.ObjectType,
-                                            ).groundKeys()
-                                            .mapTo(linkedSetOf()) { key ->
-                                                key.field.fieldName
-                                            }
-                                }
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    mapOf(
-                        Value.Variable.of(result, "seed") to
-                            schema.fromArgument(result, "seed"),
-                        Value.Variable.of(result, "other") to
-                            schema.fromArgument(result, "other"),
-                    )
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -220,13 +164,13 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             Value.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 mapOf(
-                    "seed" to "same",
-                    "other" to "same",
+                    "seed" to 1,
+                    "other" to 1,
                 ),
             )
         val fragment =
             world.fragmentFrom(
-                """fragment Query on Query { result(seed: "same", other: "same") }""",
+                """fragment Query on Query { result(seed: 1, other: 1) }""",
             )
 
         val resolved =

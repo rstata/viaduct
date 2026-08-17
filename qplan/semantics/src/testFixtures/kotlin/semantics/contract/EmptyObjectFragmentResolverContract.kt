@@ -2,9 +2,7 @@ package semantics.contract
 
 import model.EngineResult
 import model.Schema
-import model.TypeExpr
 import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
@@ -40,37 +38,27 @@ interface EmptyObjectFragmentResolverContract :
     @Test
     fun `accepts position-distinct passive fields in list output`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Item { selected: String!, extra: String }
-                    type Query { items: [Item!]! }
+                    extend type Query {
+                      items: [Item!]!
+                        @resolver(
+                          result: [
+                            {selected: 1, extra: 2},
+                            {selected: 3}
+                          ]
+                        )
+                    }
+
+                    type Item {
+                      selected: Int!
+                      extra: Int
+                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val items = schema.field("Query", "items")
-                    val elementType =
-                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    mapOf(
-                        items to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields())
-                                Value.OutputList.of(
-                                    elementType,
-                                    listOf(
-                                        schema.objectOf("Item") {
-                                            "selected" setTo "first"
-                                            "extra" setTo "only-first"
-                                        },
-                                        schema.objectOf("Item") {
-                                            "selected" setTo "second"
-                                        },
-                                    ),
-                                )
-                            },
-                    )
+                applicationObserver = { _, input, _, _ ->
+                    require(input.hasExactlyFields())
                 },
             )
         val world = testWorld.assumptions
@@ -84,47 +72,38 @@ interface EmptyObjectFragmentResolverContract :
     fun `specializes shared list continuation and concrete argument defaults`() {
         val applications = mutableListOf<String>()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    interface Item { computed: Int! }
-                    type A implements Item { computed(factor: Int = 2): Int! }
-                    type B implements Item { computed: Int! }
-                    type Query { items: [Item!]! }
+                    extend type Query {
+                      items: [Item!]!
+                        @resolver(
+                          result: [
+                            {__typename: "A"},
+                            {__typename: "B"}
+                          ]
+                        )
+                    }
+
+                    interface Item {
+                      computed: Int!
+                    }
+
+                    type A implements Item {
+                      computed(factor: Int = 2): Int!
+                        @resolver(result: "sum(${'$'}factor)")
+                    }
+
+                    type B implements Item {
+                      computed: Int! @resolver(result: 3)
+                    }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val items = schema.field("Query", "items")
-                    val elementType =
-                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    mapOf(
-                        items to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields())
-                                Value.OutputList.of(
-                                    elementType,
-                                    listOf(schema.objectOf("A"), schema.objectOf("B")),
-                                )
-                            },
-                        schema.field("A", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("A"),
-                            ) { input, arguments ->
-                                require(input.hasExactlyFields())
-                                applications += "A"
-                                arguments.fieldValues.getValue("factor") as Value.Int
-                            },
-                        schema.field("B", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("B"),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields())
-                                applications += "B"
-                                Value.Int.of(3)
-                            },
-                    )
+                applicationObserver = { field, input, _, _ ->
+                    require(input.hasExactlyFields())
+                    if (field.fieldName == "computed") {
+                        applications += field.containingType.typeName
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -157,33 +136,26 @@ interface EmptyObjectFragmentResolverContract :
     @Test
     fun `applies a concrete implementation default after interface dispatch`() {
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    interface Item { computed: Int! }
+                    extend type Query {
+                      item: Item!
+                        @resolver(result: {__typename: "ConcreteItem"})
+                    }
+
+                    interface Item {
+                      computed: Int!
+                    }
+
                     type ConcreteItem implements Item {
                       computed(factor: Int = 7): Int!
+                        @resolver(result: "sum(${'$'}factor)")
                     }
-                    type Query { item: Item! }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    mapOf(
-                        schema.field("Query", "item") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { input, _ ->
-                                require(input.hasExactlyFields())
-                                schema.objectOf("ConcreteItem")
-                            },
-                        schema.field("ConcreteItem", "computed") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("ConcreteItem"),
-                            ) { input, arguments ->
-                                require(input.hasExactlyFields())
-                                arguments.fieldValues.getValue("factor") as Value.Int
-                            },
-                    )
+                applicationObserver = { _, input, _, _ ->
+                    require(input.hasExactlyFields())
                 },
             )
         val world = testWorld.assumptions

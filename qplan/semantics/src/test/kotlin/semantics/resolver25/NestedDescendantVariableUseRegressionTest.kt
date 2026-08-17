@@ -21,72 +21,31 @@ import kotlin.test.assertEquals
 class NestedDescendantVariableUseRegressionTest {
     @Test
     fun `descendant owner contributes nested demand through an existing passive object`() {
-        val resultFragment =
-            """
-            fragment Result on Item {
-              source
-              holder {
-                consume(value: ${'$'}value)
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 schemaSDL =
                     """
-                    type Holder {
-                      consume(value: Int!): Int!
+                    extend type Query {
+                      item: Item!
+                        @resolver(result: {source: 7, holder: {}})
                     }
 
                     type Item {
                       source: Int!
                       holder: Holder!
                       result: Int!
+                        @resolver(
+                          of: "source holder { consume(value: ${'$'}value) }"
+                          pathVars: [{name: "value", path: ["source"]}]
+                          result: "sum(holder.consume)"
+                        )
                     }
 
-                    type Query {
-                      item: Item!
+                    type Holder {
+                      consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val holderKey =
-                        Value.GroundKey.of(
-                            schema.objectField("Item", "holder"),
-                            emptyMap(),
-                        )
-                    val consume = schema.objectField("Holder", "consume")
-                    mapOf(
-                        schema.objectField("Query", "item") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Item") {
-                                    "source" setTo 7
-                                    "holder" setTo schema.objectOf("Holder")
-                                }
-                            },
-                        schema.objectField("Item", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val holder =
-                                    input.fieldValues.getValue(holderKey) as Value.Object
-                                holder.fieldValues.getValue(
-                                    Value.GroundKey.of(
-                                        consume,
-                                        mapOf("value" to 7),
-                                    ),
-                                )
-                            },
-                        consume to
-                            fieldResolverOf(schema.emptyFragmentOf("Holder")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.objectField("Item", "result")
-                    mapOf(
-                        Value.Variable.of(result, "value") to
-                            schema.fromObjectField(resultFragment, listOf("source")),
-                    )
-                },
             )
         val world = testWorld.assumptions
         val itemKey =

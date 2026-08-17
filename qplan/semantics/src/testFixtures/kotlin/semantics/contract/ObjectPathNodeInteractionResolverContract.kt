@@ -1,13 +1,8 @@
 package semantics.contract
 
-import model.Value
-import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
-import model.testing.fieldResolverOf
-import model.testing.fromObjectField
-import model.testing.nodeResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -15,107 +10,55 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
     fun `retains potential demand through a passive node bridge`() {
         var driverApplications = 0
-        val driverFragment =
-            """
-            fragment Driver on Query {
-              source
-              item {
-                trigger(value: ${'$'}sourceValue)
-              }
-            }
-            """.trimIndent()
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    interface Node {
-                      id: ID!
-                    }
-
-                    type Details {
-                      related: Profile!
-                    }
-
-                    type Profile implements Node {
-                      id: ID!
-                      details: Details!
+                    extend type Query {
+                      item: Item!
+                        @resolver(result: {profile: {id: "profile"}})
+                      source: Int! @resolver(result: 7)
+                      driver: Profile!
+                        @resolver(
+                          of: "source item { trigger(value: ${'$'}sourceValue) }"
+                          pathVars: [{name: "sourceValue", path: ["source"]}]
+                          result: {id: "driver"}
+                        )
                     }
 
                     type Item {
                       profile: Profile!
                       trigger(value: Int!): Int!
+                        @resolver(
+                          of: "profile { details { related { __typename } } }"
+                          result: 7
+                        )
                     }
 
-                    type Query {
-                      item: Item!
-                      source: Int!
-                      driver: Profile!
+                    type Profile implements Node
+                      @nodeResolver(
+                        result: [
+                          {
+                            id: "profile"
+                            result: {details: {related: {id: "related"}}}
+                          }
+                          {id: "related", result: {}}
+                          {id: "driver", result: {}}
+                        ]
+                      ) {
+                      id: ID!
+                      details: Details!
+                    }
+
+                    type Details {
+                      related: Profile!
                     }
                     """.trimIndent(),
-                nodeResolvers = { schema ->
-                    mapOf(
-                        (schema.type("Profile") as model.Schema.ObjectType) to
-                            nodeResolverOf { id ->
-                                schema.objectOf("Profile") {
-                                    "id" setTo id
-                                    "details" setTo
-                                        schema.objectOf("Details") {
-                                            "related" setTo
-                                                schema.objectOf("Profile") {
-                                                    "id" setTo "related"
-                                                }
-                                        }
-                                }
-                            },
-                    )
-                },
-                fieldResolvers = { schema ->
-                    mapOf(
-                        schema.objectField("Query", "item") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Item") {
-                                    "profile" setTo
-                                        schema.objectOf("Profile") {
-                                            "id" setTo "profile"
-                                        }
-                                }
-                            },
-                        schema.objectField("Query", "source") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(7)
-                            },
-                        schema.objectField("Query", "driver_V_A_node") to
-                            fieldResolverOf(schema.fragmentFrom(driverFragment)) { _, _ ->
-                                driverApplications += 1
-                                schema.objectOf("Profile") {
-                                    "id" setTo "driver"
-                                }
-                            },
-                        schema.objectField("Item", "trigger") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    """
-                                    fragment Trigger on Item {
-                                      profile {
-                                        details {
-                                          related { __typename }
-                                        }
-                                      }
-                                    }
-                                    """.trimIndent(),
-                                ),
-                            ) { _, _ ->
-                                Value.Int.of(7)
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val driver = schema.objectField("Query", "driver_V_A_node")
-                    mapOf(
-                        Value.Variable.of(driver, "sourceValue") to
-                            schema.fromObjectField(driverFragment, listOf("source")),
-                    )
+                applicationObserver = { field, _, _, _ ->
+                    if (field.fieldName == "driver_V_A_node") {
+                        driverApplications += 1
+                    }
                 },
             )
         val world = testWorld.assumptions

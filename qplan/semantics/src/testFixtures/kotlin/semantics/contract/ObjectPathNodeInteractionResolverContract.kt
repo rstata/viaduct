@@ -1,15 +1,11 @@
 package semantics.contract
 
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
-import kotlin.test.assertEquals
 
 interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
     fun `retains potential demand through a passive node bridge`() {
-        var driverApplications = 0
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -55,19 +51,12 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                       related: Profile!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    if (field.fieldName == "driver_V_A_node") {
-                        driverApplications += 1
-                    }
-                },
             )
         val world = testWorld.assumptions
 
         resolveAndValidate(
             world,
-            world.objectOf("Query"),
-            world.fragmentFrom(
-                """
+            """
                     fragment ignored on Query {
                       item {
                         profile {
@@ -76,10 +65,12 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                       }
                       driver { id }
                     }
-                """.trimIndent(),
-            ),
+            """.trimIndent(),
         )
 
-        assertEquals(1, driverApplications)
+        testWorld.applicationArguments.assertApplicationCount(
+            world.schema.objectField("Query", "driver_V_A_node"),
+            1,
+        )
     }
 }

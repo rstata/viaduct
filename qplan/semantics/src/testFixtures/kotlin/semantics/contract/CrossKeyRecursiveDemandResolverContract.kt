@@ -1,7 +1,5 @@
 package semantics.contract
 
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,9 +36,7 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
 
         resolveAndValidate(
             world,
-            world.objectOf("Query"),
-            world.fragmentFrom(
-                """
+            """
                 fragment ignored on Query {
                   item {
                     children(depth: 1) {
@@ -51,8 +47,7 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
                     }
                   }
                 }
-                """.trimIndent(),
-            ),
+            """.trimIndent(),
         )
 
         assertEquals(4, childrenApplications)

@@ -4,6 +4,8 @@ import model.Assumptions
 import model.EngineResult
 import model.Fragment
 import model.Value
+import model.fragmentFrom
+import model.objectOf
 import org.junit.jupiter.api.AfterEach
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
@@ -77,3 +79,22 @@ internal fun ResolverContract.resolveAndValidate(
     }
     return result
 }
+
+internal fun ResolverContract.resolveAndValidate(
+    world: Assumptions,
+    fragment: Fragment,
+): EngineResult.Object =
+    resolveAndValidate(
+        world = world,
+        root = world.objectOf("Query"),
+        fragment = fragment,
+    )
+
+internal fun ResolverContract.resolveAndValidate(
+    world: Assumptions,
+    fragmentSource: String,
+): EngineResult.Object =
+    resolveAndValidate(
+        world = world,
+        fragment = world.fragmentFrom(fragmentSource),
+    )

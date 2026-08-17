@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,9 +39,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val resultField = world.schema.objectField("Query", "result")
         val resultKey = Value.GroundKey.of(resultField, emptyMap())
         val resolver = world.resolverRegistry.resolver(resultField)
-        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
-
-        val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
         val boundVariable =
             context(world) {
                 resolver
@@ -64,6 +60,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         listOf<Value.Input?>(null, Value.Error).forEach { provided ->
             val dslValue = if (provided == Value.Error) "\"ERROR\"" else "null"
             var observedResultInput = false
+            var consumedArguments: Value.Arguments? = null
             var consumedValue: Value.Output? = null
             val testWorld =
                 TestWorld.fromDSL(
@@ -86,10 +83,11 @@ interface ObjectFragmentFromObjectPathResolverContract :
                             field.containingType.typeName == "Query" &&
                             field.fieldName == "result"
                         ) {
-                            consumedValue =
+                            val consumed =
                                 input.fieldValues.entries
                                     .single { (key, _) -> key.field.fieldName == "consume" }
-                                    .value
+                            consumedArguments = consumed.key.arguments
+                            consumedValue = consumed.value
                             observedResultInput = true
                         }
                     },
@@ -98,9 +96,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val resultField = world.schema.objectField("Query", "result")
             val resultKey = Value.GroundKey.of(resultField, emptyMap())
             val resolver = world.resolverRegistry.resolver(resultField)
-            val fragment = world.fragmentFrom("fragment ignored on Query { result }")
-
-            val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
+            val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
             val boundVariable =
                 context(world) {
                     resolver
@@ -116,6 +112,13 @@ interface ObjectFragmentFromObjectPathResolverContract :
             assertEquals(
                 provided,
                 world.getBinding(boundVariable),
+            )
+            assertEquals(
+                Value.Arguments.of(
+                    world.schema.objectField("Query", "consume"),
+                    mapOf("value" to provided),
+                ),
+                consumedArguments,
             )
             assertEquals(true, observedResultInput)
             assertEquals(provided as Value.Output?, consumedValue)
@@ -153,19 +156,13 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 emptyMap(),
             )
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom("fragment ignored on Query { result }"),
-            )
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
         assertEquals(Value.Int.of(9), resolved.getCell(resultKey).get())
     }
 
     @Test
     fun `converts a terminal scalar list to a ground input list`() {
-        var consumedValues: Value.Input? = null
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -182,14 +179,6 @@ interface ObjectFragmentFromObjectPathResolverContract :
                       consume(values: [Int!]!): Int! @resolver(result: 10)
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, arguments, _ ->
-                    if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "consume"
-                    ) {
-                        consumedValues = arguments.fieldValues.getValue("values")
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey =
@@ -198,17 +187,12 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 emptyMap(),
             )
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom("fragment ignored on Query { result }"),
-            )
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
         assertEquals(Value.Int.of(10), resolved.getCell(resultKey).get())
-        assertEquals(
-            listOf(Value.Int.of(2), Value.Int.of(3), Value.Int.of(5)),
-            (consumedValues as Value.InputList).values,
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Query", "consume"),
+            mapOf("values" to listOf(2, 3, 5)),
         )
     }
 }

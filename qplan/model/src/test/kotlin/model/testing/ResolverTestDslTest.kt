@@ -41,20 +41,25 @@ class ResolverTestDslTest {
         val containerField = schema.objectField("Query", "container")
         val container =
             assertIs<Value.Object>(
-                world.resolverRegistry.resolver(containerField)(
-                    world.resolverRegistry.resolveRootQuery(),
-                    Value.Arguments.of(containerField, emptyMap()),
-                ),
+                world.apply(containerField),
             )
         val total = schema.objectField("Container", "total")
 
-        val result =
-            world.resolverRegistry.resolver(total)(
-                container,
-                Value.Arguments.of(total, mapOf("extra" to 4)),
-            )
+        val result = world.apply(total, container, mapOf("extra" to 4))
 
         assertEquals(Value.Int.of(10), result)
+        assertEquals(
+            listOf(Value.Arguments.of(total, mapOf("extra" to 4))),
+            world.applicationArguments.arguments(total),
+        )
+        assertEquals(
+            mapOf<Schema.OutputField, List<Value.Arguments>>(
+                containerField to
+                    listOf(Value.Arguments.of(containerField, emptyMap())),
+                total to listOf(Value.Arguments.of(total, mapOf("extra" to 4))),
+            ),
+            world.applicationArguments.all(),
+        )
     }
 
     @Test
@@ -99,19 +104,8 @@ class ResolverTestDslTest {
         val nullable = world.schema.objectField("Query", "nullable")
         val failed = world.schema.objectField("Query", "failed")
 
-        assertNull(
-            world.resolverRegistry.resolver(nullable)(
-                root,
-                Value.Arguments.of(nullable, emptyMap()),
-            ),
-        )
-        assertEquals(
-            Value.Error,
-            world.resolverRegistry.resolver(failed)(
-                root,
-                Value.Arguments.of(failed, emptyMap()),
-            ),
-        )
+        assertNull(world.apply(nullable, root))
+        assertEquals(Value.Error, world.apply(failed, root))
     }
 
     @Test
@@ -158,25 +152,21 @@ class ResolverTestDslTest {
             )
         val root = world.resolverRegistry.resolveRootQuery()
         val echo = world.schema.objectField("Query", "echo")
-        val echoResolver = world.resolverRegistry.resolver(echo)
 
         listOf<Value.Input?>(Value.Int.of(4), null, Value.Error).forEach { value ->
             assertEquals(
                 value as Value.Output?,
-                echoResolver(
-                    root,
-                    Value.Arguments.of(echo, mapOf("input" to value)),
-                ),
+                world.apply(echo, root, mapOf("input" to value)),
             )
         }
 
         val echoPath = world.schema.objectField("Query", "echoPath")
         assertNull(
-            world.resolverRegistry.resolver(echoPath)(
+            world.apply(
+                echoPath,
                 world.schema.objectOf("Query") {
                     "source" setTo null
                 },
-                Value.Arguments.of(echoPath, emptyMap()),
             ),
         )
     }
@@ -204,10 +194,7 @@ class ResolverTestDslTest {
 
         val result =
             assertIs<Value.Object>(
-                world.resolverRegistry.resolver(subject)(
-                    world.resolverRegistry.resolveRootQuery(),
-                    Value.Arguments.of(subject, emptyMap()),
-                ),
+                world.apply(subject),
             )
 
         assertEquals("Person", result.type.typeName)
@@ -220,16 +207,22 @@ class ResolverTestDslTest {
     }
 
     @Test
-    fun `resolves Node references through globally keyed node results`() {
+    fun `resolves Node references using an ID argument`() {
         val world =
             TestWorld.fromDSL(
                 """
                 extend type Query {
-                  viewer: User! @resolver(result: {id: "user-1"})
+                  viewer(id: ID!): User!
+                    @resolver(result: {id: "idFrom(${'$'}id)"})
                 }
 
                 type User implements Node
-                  @nodeResolver(result: [{id: "user-1", result: {score: 7}}]) {
+                  @nodeResolver(
+                    result: [
+                      {id: "user-1", result: {score: 7}},
+                      {id: "user-2", result: {score: 8}}
+                    ]
+                  ) {
                   id: ID!
                   score: Int!
                 }
@@ -239,28 +232,22 @@ class ResolverTestDslTest {
         val viewer = schema.objectField("Query", "viewer_V_A_node")
         val bridge =
             assertIs<Value.Object>(
-                world.resolverRegistry.resolver(viewer)(
-                    world.resolverRegistry.resolveRootQuery(),
-                    Value.Arguments.of(viewer, emptyMap()),
-                ),
+                world.apply(viewer, arguments = mapOf("id" to Value.ID.of("user-2"))),
             )
         val node = schema.objectField("User_V_A_Bridge", "node")
         val user =
             assertIs<Value.Object>(
-                world.resolverRegistry.resolver(node)(
-                    bridge,
-                    Value.Arguments.of(node, emptyMap()),
-                ),
+                world.apply(node, bridge),
             )
 
         assertEquals(
-            Value.ID.of("user-1"),
+            Value.ID.of("user-2"),
             user.fieldValues.getValue(
                 Value.GroundKey.of(schema.objectField("User", "id"), emptyMap()),
             ),
         )
         assertEquals(
-            Value.Int.of(7),
+            Value.Int.of(8),
             user.fieldValues.getValue(
                 Value.GroundKey.of(schema.objectField("User", "score"), emptyMap()),
             ),
@@ -302,10 +289,17 @@ class ResolverTestDslTest {
         val item = world.schema.objectField("Query", "item")
 
         assertThrows<IllegalArgumentException> {
-            world.resolverRegistry.resolver(item)(
-                world.resolverRegistry.resolveRootQuery(),
-                Value.Arguments.of(item, emptyMap()),
-            )
+            world.apply(item)
         }
     }
 }
+
+private fun TestWorld.apply(
+    field: Schema.ObjectField,
+    input: Value.Object = resolverRegistry.resolveRootQuery(),
+    arguments: Map<String, Any?> = emptyMap(),
+): Value.Output? =
+    resolverRegistry.resolver(field)(
+        input,
+        Value.Arguments.of(field, arguments),
+    )

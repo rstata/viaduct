@@ -2,8 +2,6 @@ package semantics.contract
 
 import model.EngineResult
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,13 +38,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
         val world = testWorld.assumptions
 
         val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    "fragment ignored on Query { item { result } }",
-                ),
-            )
+            resolveAndValidate(world, "fragment ignored on Query { item { result } }")
         val item =
             resolved.getCell(
                 Value.GroundKey.of(

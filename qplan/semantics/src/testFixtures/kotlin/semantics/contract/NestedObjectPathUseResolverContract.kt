@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,14 +38,7 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
                 emptyMap(),
             )
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    "fragment ignored on Query { result }",
-                ),
-            )
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
         assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
     }

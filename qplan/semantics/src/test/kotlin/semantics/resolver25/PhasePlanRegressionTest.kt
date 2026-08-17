@@ -5,6 +5,7 @@ import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.assertArguments
 import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -59,5 +60,9 @@ class PhasePlanRegressionTest {
             Resolver25StructuralSignature.MULTIPLE_OBJECT_PATH_OWNERS,
         )
         assertEquals(Value.Int.of(7), resolved.getCell(outerKey).getValue().get())
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Query", "middle"),
+            mapOf("value" to 7),
+        )
     }
 }

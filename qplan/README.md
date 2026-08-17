@@ -15,6 +15,7 @@ The longer-term `viaduct.engine.runtime.execution2` goal is query execution only
 - [`context-params.md`](./context-params.md) defines the canonical `Assumptions` context-parameter conventions used by model and semantics APIs.
 - [`viaduct-execution.md`](./viaduct-execution.md) describes the idealized source-world execution model that qplan represents.
 - [`examples.md`](./examples.md) gives complete GraphQL examples of demand closure and output projection.
+- [`resolver-test-dsl.md`](./resolver-test-dsl.md) defines the schema-embedded deterministic resolver-world DSL.
 - [`from-object-field-census.md`](./from-object-field-census.md) preserves a dated production-shape census used to choose representative provider-path fixtures.
 - [`maintainer-guide.md`](./maintainer-guide.md) contains the practical testing, replay, debugging, and investigation workflow.
 - [`claims.md`](./claims.md) indexes scoped propositions; `arguments/` contains their supporting reasoning.

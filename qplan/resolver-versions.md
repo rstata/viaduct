@@ -2,78 +2,67 @@
 
 ## Purpose
 
-Resolver26 is the productionization target, but it is intentionally not the only maintained implementation. The earlier versions form three matched proof progressions that separate semantic capability from execution structure, while Resolver25 preserves an alternate answer to the general one-shot producer-completeness problem.
+Every maintained resolver participates in the Engine API alignment. The versions form a comparison grid that separates semantic capability from execution structure; they are not eleven production candidates. Resolver26 is the primary algorithm, while earlier versions make its essential ideas easier to isolate and verify.
 
-## The Three Proof Progressions
+## Comparison Grid
 
 | Semantic stage | Recursive construction | Explicit depth-first tasks | Structured coroutines | Capability |
 | --- | --- | --- | --- | --- |
-| Base | Resolver01 | Resolver06 | Resolver21 | Empty user object fragments and complete resolver output |
-| Object fragments | Resolver02 | Resolver07 | Resolver22 | Nonempty fragments and `FromArgument`, still with complete output |
-| Selective resolution | Resolver03 | Resolver08 | Resolver23 | The same fragment domain with selective resolver output and full successor demand |
+| Base | Resolver01 | Resolver06 | Resolver21 | Empty user object fragments and complete output |
+| Object fragments | Resolver02 | Resolver07 | Resolver22 | Nonempty fragments and `FromArgument`, with complete output |
+| Selective resolution | Resolver03 | Resolver08 | Resolver23 | The same fragment domain with selective output and full successor demand |
 
-Each column holds semantic capability roughly constant while changing the execution structure. Each row holds the semantic stage roughly constant while changing from recursive construction to an explicit task queue to structured suspension. This makes the nine versions useful as a refinement grid rather than as nine competing production implementations.
+Each row changes semantic capability while holding the execution family roughly constant. Each column changes execution structure while holding capability roughly constant.
 
-### Resolver01
+### Recursive Reference: Resolver01-03
 
-Resolver01 is the smallest recursive construction. It supports empty user object fragments, generated node-loader bridges, and complete resolver output. Maintain it as the base case for result-tree construction, exact-key publication, and proofs that do not yet need resolver-input closure.
+Resolver01 is the smallest result-tree constructor. Resolver02 adds object-fragment closure and `FromArgument`. Resolver03 adds selective projection and full successor demand.
 
-### Resolver02
+Resolver03 is the principal compact semantic reference. Start there when reasoning about demand closure, exact-key publication, passive deepening, argument grounding, or completed-result correctness that does not require runtime object-field variables.
 
-Resolver02 adds nonempty object fragments and variables bound from resolver arguments while retaining complete resolver output. Maintain it to isolate object-fragment demand closure and argument grounding from selective-output reasoning.
+### Explicit Work: Resolver06-08
 
-### Resolver03
+Resolver06-08 express the same three stages through `DepthFirstReactor` tasks. Resolver08 is especially useful after Resolver03 passes: it exposes task identity, queue ordering, and publication as explicit mechanics without adding `FromObjectField` or occurrence-stamped demand.
 
-Resolver03 adds selective output and full successor-demand closure. It is the principal compact semantic reference, the subject of the current TLA+ and written correctness arguments, and the first implementation to consult when a Resolver25 or Resolver26 failure may be independent of concurrency and object-path variables.
+### Structured Suspension: Resolver21-23
 
-### Resolver06
+Resolver21-23 express the same stages through request-owned structured coroutines and exact promises. Resolver23 is the clean coroutine baseline for comparing promise installation, suspension, child publication, and request quiescence with Resolver25 or Resolver26.
 
-Resolver06 expresses Resolver01's domain through explicit orchestrator and resolver tasks scheduled by `DepthFirstReactor`. Maintain it as the base refinement from recursive calls to explicit work items and queue ordering.
-
-### Resolver07
-
-Resolver07 is the task-based counterpart of Resolver02. Maintain it to separate object-fragment and `FromArgument` semantics from the mechanics of recursive execution.
-
-### Resolver08
-
-Resolver08 is the task-based counterpart of Resolver03. Maintain it as the simplest operational model with explicit task identity, publication order, and selective output. When Resolver03 succeeds and a later resolver fails, Resolver08 helps determine whether the defect appears when recursive continuation becomes scheduled work.
-
-### Resolver21
-
-Resolver21 is the structured-coroutine counterpart of Resolver01. Maintain it as the smallest model of deferred value promises, install-before-publication, request-root structured concurrency, and suspension-based materialization.
-
-### Resolver22
-
-Resolver22 is the structured-coroutine counterpart of Resolver02. Maintain it to introduce object fragments and `FromArgument` while preserving complete output, before selective producer demand is added.
-
-### Resolver23
-
-Resolver23 is the structured-coroutine counterpart of Resolver03 and the direct conceptual ancestor of Resolver25. Maintain it as the clean coroutine baseline: it has structured suspension and exact promises without Resolver25's preparation graph or Resolver26's occurrence-stamped symbolic activation.
-
-## Advanced Implementations
+## Advanced Resolvers
 
 ### Resolver25
 
-Resolver25 is the alternate construction for the general one-shot problem. It separates structural closure, exact-instance preparation, promise installation, and launch so equal exact keys can merge before one producer runs. Its current implementation still documents restrictions on provider paths and mixed-variable ordering, but its producer-completeness model, lifecycle instrumentation, witnesses, and broad campaigns make it an essential independent comparison for Resolver26.
+Resolver25 merges actual demand by grounded key. One orchestrator owns each OER occurrence, closes a conservative potential-demand envelope by activated field, grounds actual selections independently, and merges equal keys until a key seals for launch. Published output can accept descendant demand through its output and fringe state without reapplying the containing key.
+
+This current activation implementation is authoritative; the retired static preparation graph is not a target to restore. Resolver25 remains an alternate experiment, not the primary blueprint. It is useful when comparing late equality, potential versus actual demand, provider traversal, or merged-ground-key identity with Resolver26.
 
 ### Resolver26
 
-Resolver26 is the implementation to harden and productionize. It gives variable-bearing selections occurrence-stamped identity, closes symbolic demand without waiting for bindings, and uses one request-root structured-concurrency scope. Production API integration, multithreaded validation, benchmarks, failure semantics, and performance work should center on Resolver26.
+Resolver26 gives each variable-bearing resolver-fragment selection an opaque occurrence lineage. It synchronously closes symbolic demand before local installation, prepares every binding, reserves active cells as their keys ground, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
 
-## Debugging With Earlier Versions
+Resolver26 is the primary algorithm and eventual implementation blueprint. Engine API alignment should keep its qplan shape close to what a future Viaduct query executor can use, but that future executor is not part of an ordinary qplan refactor.
 
-Start with Resolver03 when investigating demand closure, exact application count, selective output, passive deepening, argument grounding, or completed-result correctness without object-path variables. Move to Resolver08 when explicit task order, child publication, or queue scheduling may matter. Move to Resolver23 when promise installation, structured suspension, cancellation, or coroutine ownership may matter. Compare Resolver25 and Resolver26 only after the failure survives those simpler models, or immediately when the behavior depends on `FromObjectField`, late symbolic demand, equal-key convergence, or occurrence-stamped identity.
+## Debugging Reduction
 
-The base and middle rows are useful when a failure can be reduced further. Resolver01/06/21 remove nonempty object fragments; Resolver02/07/22 add object fragments and `FromArgument` without selective-output pressure. A counterexample that first appears in one row or one column gives a much sharper starting hypothesis than a Resolver26-only failure.
+Use this order unless the failing feature requires a later version:
 
-Cross-version agreement is not an independent correctness proof because the implementations share model carriers, registry construction, generators, and parts of the correctness oracle. Use the progression to localize defects and test refinement claims, while retaining independent application, binding, lifecycle, and occurrence-aware witnesses for advanced behavior.
+1. Resolver03 for compact selective semantics.
+2. Resolver08 for explicit work ordering and publication.
+3. Resolver23 for structured suspension and promise ownership.
+4. Resolver25 or Resolver26 for runtime `FromObjectField`, late symbolic keys, or their distinct identity policies.
 
-## Testing Policy
+Reduce further to Resolver01/06/21 to remove object fragments, or Resolver02/07/22 to retain object fragments and `FromArgument` without selective-output pressure.
 
-Resolvers01-23 should have no resolver-specific test logic. They opt into shared deterministic, generated, policy, task-ordering, mutation, witness, stress, and list-passive-deepening contracts according to capability. The selective endpoints Resolver03, Resolver08, and Resolver23 share list-passive-deepening and deep-stress coverage with Resolver25 and Resolver26. Bespoke tests are reserved for behavior unique to Resolver25 or Resolver26.
+Cross-version agreement is not independent proof because versions share carriers, fixture construction, generators, and parts of the oracle. Use the grid to localize differences, then rely on independent application, binding, lifecycle, and occurrence-aware evidence.
 
-Every maintained version compiles and runs its ordinary contracts under `./gradlew check`. Keep generated profiles and contract assertions shared so a model or carrier migration changes one test definition rather than eleven copies. Production-facing Viaduct adapters belong to Resolver26 or shared carrier boundaries; older versions should migrate through common model APIs rather than acquiring separate execution2 integrations.
+## Refactoring Policy
 
-## Retired Versions
+Shared carrier and API migrations must update every maintained version. Prefer one shared model operation or adapter boundary over resolver-specific compatibility code. Older versions should not acquire separate `execution2` integrations.
 
-Resolver09, Resolver10, Resolver24, and Resolver24i are intentionally absent from the maintained source tree. Resolver09 explored readiness scanning and dynamic dependency reconstruction. Resolver10 added pending symbolic demand, runtime provider traversal, late grounding, convergence, and sealing to that reactor. Resolver24 translated open late-demand acceptance into persistent coroutine orchestrators, and Resolver24i presented a narrow single-file specialization. Their useful lessons remain in Resolver25's design history and Git history, but their divergent schedulers, complete-output retention, duplicated tests, and large migration surfaces did not justify carrying them through future model refactors.
+Resolvers01-23 gain behavior through shared contracts. Bespoke tests remain appropriate only for Resolver25/26 policies and implementation-specific lifecycle or concurrency behavior.
+
+## Resolver10 As A Lesson
+
+Resolver10 is not maintained, but comparing its abandoned approach with Resolver03, Resolver08, and Resolver26 is useful. It combined readiness rescanning, persistent late-demand acceptance, provider traversal, late grounding, and complete-output retention. That machinery increased the state space and could conceal incomplete demand supplied to the original producer.
+
+Use Resolver10 to recognize paths that can be simplified, not as code to revive or a complete version to document.

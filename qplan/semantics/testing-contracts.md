@@ -130,7 +130,7 @@ Resolver25 also has independent unfiltered broad profiles. Every generated `S x 
   -Presolver25BroadStressSize=10:20:50
 ```
 
-The recorded broad campaign runs five profiles per round and 2,000 cases per profile. Rounds 1-20 use `200:2:5`, rounds 21-45 use `40:25:2`, rounds 46-80 use `10:4:50` for the four common profiles while multiple-owner remains `40:25:2`, and rounds 81-100 use `20:10:10` with large/deep worlds while multiple-owner remains `40:25:2`. The checked-in manifest records 100 distinct base seeds; profile salts produce 500 distinct effective seeds and exactly 1,000,000 Resolver25 calls.
+The checked-in campaign script distributes persisted seeds across schema breadth, registry diversity, query interactions, and large/deep worlds. Use it for reproducible broad evidence rather than treating one large random product as sufficient coverage.
 
 ```shell
 ./run-resolver25-broad-campaign.sh
@@ -159,18 +159,7 @@ Every generated case checks exact attempted/resolved/completed accounting, exact
 identity counts, `correctResolution`, and independently reconstructed object-path bindings. A
 profile's aggregate run must also observe its required Resolver26 structural signatures.
 
-The checked-in campaign contains 100 fresh-JVM rounds and one million total cases. Its phases put
-the same 2,000-case budget into different dimensions:
-
-| Phase | `S:R:Q` |
-| --- | --- |
-| Schema breadth | `200:2:5` |
-| Registry diversity | `40:25:2` |
-| Query interactions | `10:4:50` |
-| Large/deep worlds | `20:10:10` |
-
-Large/deep worlds fix generated list fanout at one so the budget explores depth instead of
-combinatorial list multiplication. Run persisted rounds with:
+The checked-in campaign uses fresh JVM rounds and persisted seeds distributed across schema breadth, registry diversity, query interactions, and large/deep worlds. Large/deep worlds bound generated list fanout so the budget explores depth instead of combinatorial list multiplication. Run persisted rounds with:
 
 ```shell
 ./run-resolver26-broad-campaign.sh 21

@@ -8,6 +8,48 @@ For example, `EngineResult`, `Value`, and `Selection` are semantic model types b
 
 Exceptions, annotations, dependency-injection qualifiers, test utilities, parsing, schema decoding, registry assembly, and other composition infrastructure are outside these policies unless a rule explicitly includes them.
 
+## Carrier Boundary
+
+`EngineResult` values are finite and well-founded. `Value.Simple` results use structural equality, cells and OERs use reference equality, and lists use structural equality over their type expression and positional cell identity. Use `sameCompletedResultAs` for explicit extensional comparison of completed result trees.
+
+Mutable OERs may gain validated exact cells monotonically. Each cell has independent write-once value and `accessAccepted` promises, and a written parent cell may retain a mutable child OER while that child gains cells. Self-reference and cyclic result graphs are outside the result domain.
+
+`Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
+
+Use canonical schema relations for GraphQL semantics rather than Kotlin inheritance. In particular, use schema-canonical definitions, `Schema.TypeRelation`, and `CompositeType.possibleTypes` as appropriate for field ownership, type overlap, applicability, and subtype reasoning.
+
+## Variables And Keys
+
+`Value.Variable.Template` is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific variable. Request-local `Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read completed bindings, while coroutine operations may suspend for them.
+
+Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
+
+`Value.Key` is an open selection key. `Value.ObjectKey` refines it to a concrete object field while retaining open arguments. `Value.GroundKey` additionally requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
+
+Ground inputs implement the opaque `OpenValue` and `OpenArguments` interfaces. Grounding throws on an unbound stamped variable or an unstamped template.
+
+## Result Representation
+
+`EngineResult.Cell` represents one object-field or list-element occurrence with independent value and `accessAccepted` promises. A completed access result of true means access is accepted and false means it is rejected. Field and type checks are represented by that one result.
+
+`Value.Output` represents resolver output without result cells or access decisions. Do not collapse resolver output and engine result into one carrier merely because they can contain corresponding values.
+
+`Value.Fields` and `Value.ObjectFields` deliberately throw when indexed outside their lookup domain, including when a missing entry would otherwise be indistinguishable from a present null. Test membership before an optional lookup; use direct indexing only when presence is a precondition.
+
+Cells are allocated by their containing OER or LER and use reference identity as their occurrence ID. Object construction is immutable by default. Opt-in mutable objects atomically install each absent exact cell once and throw on unset reads, repeated claims, or repeated writes. Lists have immutable positions and may opt into mutable cell slots.
+
+An exact result path contains only `Value.GroundKey` object steps and `Value.ListIndex` list steps. Open keys, schema fields, response keys, and aliases are not path components.
+
+Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to source/response processing and must not create parallel semantic field identities.
+
+Raw node references exist only as fixture inputs. Composition lowers them through `foo$bridge` producers and argumentless `T$Bridge.$node` loaders before semantic reasoning.
+
+## Engine API Alignment
+
+Viaduct's `EngineObjectData.Sync` is the target synchronous partial-object boundary for the current migration. It is name-keyed and distinguishes absent selections from present-null values through `isPresent`.
+
+Align storage and access with that API where it preserves the modeled meaning, but retain explicit qplan structure for schema-canonical keys, occurrence identity, write-once ownership, and access decisions when EOD does not represent those facts directly. Record current migration choices in [`../handoff.md`](../handoff.md); update this guide only when a choice becomes a stable model rule.
+
 ## Working Vocabulary
 
 A semantic category is a modeled set of values represented by an interface hierarchy, such as `EngineResult`, `Value`, or `Schema.Type`.

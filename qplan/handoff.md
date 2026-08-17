@@ -1,107 +1,70 @@
-# Correct OER Specification Handoff
+# Qplan Handoff
 
-## Purpose
+## Precedence
 
-This is the volatile handoff for the query-planning model. It records the current semantic boundary, active implementation shape, and next work; completed milestones and detailed chronology belong in Git history. Read [Query Plan Research](./evergreen.md) for durable production evidence and lessons, [An Idealized Viaduct Query Execution Model](./viaduct-execution.md) for the source-world model, and [Resolution Algorithms By Example](./examples.md) for current demand-closure and projection examples.
+Follow the current explicit prompt first, then this handoff. The immediate work is in qplan. Do not turn a qplan refactor into `execution2` design or implementation unless the prompt explicitly asks for that work.
 
-[`notes.md`](./notes.md) is protected personal working material maintained elsewhere. It is useful background but is not authoritative for current code behavior.
+## Immediate Objective
 
-Compiling Kotlin is the primary specification language. A scoped Resolver01-03 TLA+ construction-calculus baseline also exists in [`tla`](./tla); it proves its finite atomic model under explicit extraction and alignment assumptions, not a refinement of the Kotlin implementation. [`tla/README.md`](./tla/README.md) defines the proved results and boundary, while [`tla/handoff.md`](./tla/handoff.md) records the active refinement work.
+Refactor every maintained qplan resolver to use Viaduct engine API carriers where they express the same semantic facts as qplan's current types. `EngineObjectData.Sync` is the first important boundary because the intended integration domain uses already-resolved synchronous partial object data and must distinguish an absent selection from a present null value.
 
-## Goal
+The migration applies to Resolver01-03, Resolver06-08, Resolver21-23, Resolver25, and Resolver26. Earlier versions remain the semantic and execution-structure comparison grid; they must not be left on a separate qplan-only carrier model while only Resolver26 moves forward.
 
-The long-term goal is a query-plan and executor that support one resolver application per resolver-bearing OER occurrence after all in-scope demand for that exact field has been aggregated. Distinct result-tree occurrences remain distinct even when node IDs, resolver coordinates, arguments, or values are equal; caching, batching, and request deduplication are separate execution layers.
+Resolver26 is the primary algorithm and eventual implementation blueprint. The purpose of the qplan refactor is to reduce the distance between a formally reasoned model and a future Viaduct implementation, not to maintain two independently shaped designs.
 
-The intended execution state is monotonic. OERs and LERs allocate stable cells, and each cell's value and `accessAccepted` result moves only from absent to one immediate or deferred promise; each deferred promise completes once. Field and type checks are collapsed into the cell's single access result. A parent cell may publish a mutable child OER before that child is complete, so descendants can gain cells without rebuilding ancestors. Every maintained execution structure preserves this publication discipline.
+## Longer-Term Context
 
-## Current Model
+The longer-term target is a `viaduct.engine.runtime.execution2` query executor based on Resolver26. That target is limited to queries and `EngineObjectData.Sync`. It excludes mutations, subscriptions, custom scalars, query fragments and `fromQueryField` variables, EOD aliases, and asynchronous EOD variants.
 
-Each reasoning exercise fixes one `Assumptions`, one canonical `Schema`, and one canonical field-resolver registry. The model distinguishes open selection expressions from ground semantic values: `Value.Key` may contain open arguments, `Value.ObjectKey` has a concrete object field but may remain open, and `Value.GroundKey` is the exact key admitted to OERs, `Value.Object` values, paths, materialization, dependency ordering, and resolver application.
+Those exclusions guide compatibility choices during qplan alignment. They do not make production routing, engine lifecycle, mutation ordering, response serialization, or other `execution2` concerns part of the current task.
 
-`EngineResult.Object` contains exact-key cells, while `EngineResult.List` contains positional cells. Each cell has independent opt-in monotonic value and `accessAccepted` promises. Containers allocate their cells; cell reference identity is the stable occurrence key used by runtime writer and cycle bookkeeping, so there is no separate cell ID. Resolver01-03 allocate empty mutable root and child OERs, close local demand, order exact sibling dependencies, materialize inputs from completed cell-value promises, and publish every exact value once. `ResolveValue.kt` creates passive result structure, retains each child OER occurrence requiring active work, and populates those targets deepest first without replacing parent cells or immutable list positions. `EngineResult.Object.materialize` is suspending and awaits present deferred cell-value promises; Resolvers01-08 call it through `runBlocking` at the shared synchronous resolver-application boundary, where their completed-promise invariant prevents suspension.
+## Current Carrier Boundary
 
-The recursive resolvers share this constructor and differ only at output boundaries:
+The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `EngineResult.Object` values keyed by `Value.GroundKey`; their cells carry independent write-once value and `accessAccepted` promises and use reference identity for result occurrences.
 
-| Resolver | Supported user fragment domain | Output policy |
-| --- | --- | --- |
-| Resolver01 | Empty object fragments, plus generated `$node { $id }` loaders | Complete output |
-| Resolver02 | Nonempty fragments, including `FromArgument` | Complete output with `successorBoundaryDemand()` |
-| Resolver03 | Nonempty fragments, including `FromArgument` | Selective output with full `successorDemand()` |
+`EngineObjectData.Sync` is name-keyed, untyped at the value boundary, and partial. `get` distinguishes an unset selection by throwing, `getOrNull` tolerates it, and `isPresent` distinguishes absent from present-null without reading the value.
 
-Resolver01/02 require non-selective worlds, while Resolver03 requires a selective world. Their queue and coroutine counterparts enforce the corresponding mode through `Assumptions.selectiveResolvers`; runtime selection completion computes only boundary-dependent demand, while the world mode determines complete versus selective resolver invocation and output construction.
+The refactor must decide which qplan responsibilities move directly to engine API carriers and which remain model structure around them. Preserve exact-key validation, occurrence identity, selection-occurrence identity, and the difference between result values and access decisions even when the underlying object storage changes.
 
-Resolver06-08 mirror Resolver01-03 through a single-threaded `DepthFirstReactor`. `SlotOrchestrator` tasks close local demand and enqueue dependency-ordered slots; `SlotResolver` tasks execute one slot, publish its passive result tree, and enqueue its fringe. A stable priority queue orders tasks by longest containing-OER path, resolver-before-orchestrator task kind, and insertion order, reproducing the recursive constructor's depth-first traversal without recursive scheduling. Resolver08 uses selective output with full `successorDemand()`.
+Response aliases are outside the intended integration scope. Qplan may therefore use canonical field names at the EOD boundary; it does not need to model alias-keyed input EODs for this work.
 
-Resolver21-23 use the shared structured-coroutine constructor in `CoroutineResolve.kt`. Resolver21 covers Resolver01's empty-fragment domain with identity completion, Resolver22 covers Resolver02's nonempty fragments and `FromArgument` with complete non-selective output through `successorBoundaryDemand()`, and Resolver23 covers Resolver03's feature domain with selective output through `successorDemand()`. Each OER orchestration installs and registers all local deferred value promises before launching producers in the inherited single-threaded context. Resolver materialization suspends directly on those promises; active child promises are installed before their containing value publishes, and structured scopes keep the root open until every descendant completes. Runtime writer registration and exact reader coordinates detect resolver-read cycles without a reactor, readiness scan, dependency order, polling loop, or escaping job.
+## Resolver State
 
-Resolver25 is an experimental strict one-shot alternative based on Resolver23 rather than Resolver24. Its constructor and wrapper are colocated in `semantics/resolver25/Resolver.kt` because the phase planner and restrictions are specific to this experiment. Each OER has one value-bearing `sealedDemand: Deferred<Map<GroundKey, ObjectSelection>>` per canonical object field. A static two-phase field graph distinguishes resolver-instance preparation from launch: demand contributors prepare before the fields they may contribute to, reader-source promises are installed before variable-bearing demand is grounded, and resolver input promises are installed before their consumers launch. Preparation grounds and merges equal keys, prepares each resulting resolver instance exactly once, and completes `sealedDemand` with the immutable exact-key map. Launch eagerly installs every promise before starting one coroutine per map entry. The exact value promise acts as that resolver instance's completion latch and is awaited by provider reads and materialization. The OER-level `orchestrationReady` latch preserves Resolver23's install-before-parent-publication discipline without conflating promise visibility with preparation.
+[`resolver-versions.md`](./resolver-versions.md) defines the maintained portfolio. Resolver03 is the compact semantic reference, Resolver08 makes scheduling explicit, and Resolver23 is the structured-coroutine baseline. Comparing Resolver26 with those versions is the preferred way to separate essential semantics from incidental machinery.
 
-Canonical field-resolver behavior recursively adds concrete `__typename` values before applying selective projection. `ResolverRegistry.resolveRootQuery()` supplies the initial `Query.__typename`. Resolver25 treats each retained typename as ordinary passive source data: complete resolver output retains it, selective output retains it only when demanded, and later grounded demand traverses it through the same passive path as any other field.
+Resolver25's current implementation is the source of truth. It uses one orchestrator per OER occurrence, conservative field-level potential demand, independently grounded actual-demand activations, per-ground-key merging, key-local launch sealing, output availability, and fringe-installation latches. Its previous `StrictPreparationPlan` and per-field `sealedDemand` architecture is retired; documentation must not preserve that static preparation graph as intended behavior.
 
-Resolver25 treats each stamped `FromObjectField` variable as a reader of its provider path and as a demand contributor only to branches whose keys use it. An occurrence-owned reader coroutine waits for the root provider promise to be installed, traverses active or passive values without contributing provider demand, and completes the binding at the terminal value or an earlier null/error. Variable-bearing branches wait for their true demand contributors and reader-source promise installation before grounding and merging exact keys.
+Resolver26 synchronously closes one OER's symbolic demand, assigns opaque occurrence identity to variable-bearing resolver-fragment selections, prepares bindings, materializes passive values, grounds and reserves every active key, launches field-resolution tasks under one request scope, and freezes the OER key set. It has no re-orchestration loop or late-demand registry.
 
-Resolver25 deliberately supports argument-free `FromObjectField` provider paths and variable uses on direct or nested resolver keys. Provider paths may cross nested objects but not lists, and readers propagate early null or error termination. Resolver25 still rejects provider chains and cycles in the combined prepare/launch graph. Focused tests cover direct and nested binding, descendant owners, late equality merging before one launch, and multiple variable owners with an acyclic canonical branch order. Resolver23's variable-free and `FromArgument` deterministic and generated contracts also pass. Resolver25 does not use persistent OER demand acceptance, a projection envelope, or complete-output retention.
+Runtime `FromObjectField` execution is present in Resolver25 and Resolver26. Documentation or tests that describe it as metadata-only are stale.
 
-Resolver26 relaxes one-shot identity for variable-bearing selections in resolver object fragments. Each such source selection is stamped by that selection plus the exact resolver path that instantiated it, so distinct variable-bearing selections never converge after grounding, even when they use the same variable and produce equal arguments. Pre-grounded external and object-fragment selections remain unstamped and coalesce normally. Each stamped key owns its own output OER tree and descendant resolver instances, while argumentless ancestors still execute once.
+## Migration Sequence
 
-Resolver26 closes symbolic demand without waiting for bindings. Every unbound stamped selection
-owns one activation coroutine that awaits only its argument bindings and then contributes that
-selection back to its OER. There is no outer orchestration fixpoint, binding-ready latch, global
-preparation graph, or hierarchical phase plan. Symbolic descendant demand crosses both resolver
-outputs and passive values, so activation below an already published argumentless or passive
-ancestor does not reapply that ancestor's resolver.
+1. Define the exact correspondence between qplan result carriers and `EngineObjectData.Sync`, including absent, present-null, error, nested object, list, and access-decision behavior.
+2. Introduce the shared model boundary first, with focused carrier tests that make the correspondence executable.
+3. Migrate the recursive Resolver01-03 progression and its contracts.
+4. Carry the same boundary through Resolver06-08 and Resolver21-23 without introducing resolver-specific adapter models.
+5. Migrate Resolver25 and Resolver26 while preserving their distinct identity and demand policies.
+6. Update arbitrary generation, witnesses, correctness judgments, and examples to the resulting shared vocabulary.
+7. Keep the complete ordinary test matrix green at each shared step; use Resolver03/08/23 comparisons to localize semantic regressions before diagnosing advanced resolver behavior.
 
-Each demand contribution reuses passive fields already materialized recursively by `resolveValue`
-and copies missing demanded fields, as at the request root, from the corresponding source
-`Value.Object` through that same materialization path. It synchronously descends closed demand
-through those passive values, then launches coroutines for newly demanded resolver and
-argument-error fields. `resolveField` handles argument errors directly and otherwise strictly
-requires a registered resolver. Resolver fields publish their source output and initial result tree;
-later symbolic demand traverses passive fields through the containing source and
-already-materialized result subtree. Provider readers specialize each interface or union path
-component to the current concrete OER type before grounding it. Canonical resolver behavior
-recursively supplies concrete `__typename` values, while the registry supplies the root Query
-typename. Resolver26 copies retained typename into an OER only when demand selects it.
+## Backlogged TLA+ Refinement
 
-Resolver26 stores one request-root coroutine scope in its runtime. Every launched coroutine is a direct child of that root, and coroutine completion is not used as a cross-coroutine readiness signal. Cross-coroutine readiness flows only through named latches, promises, or value-bearing deferreds. The synchronous boundary uses a fixed dispatcher selected by the universal Resolver26 test thread count, while an internal validation entry can supply an instrumented dispatcher without changing task ownership. Resolution-time instrumentation is thread-safe; post-resolution validation remains serial. The current decisions are recorded in [`semantics/resolver26/design.md`](./semantics/src/main/kotlin/semantics/resolver26/design.md), and the testing workflow is recorded in [`semantics/resolver26/testing-resolver26.md`](./semantics/src/main/kotlin/semantics/resolver26/testing-resolver26.md).
+TLA+ refinement work is explicitly backlogged until the EOD carrier refactor stabilizes. Preserve the existing proof baseline and its stated boundary, but do not make structural extraction, Kotlin refinement, or new variable-aware proofs part of the active EOD migration. [`tla/refinement-backlog.md`](./tla/refinement-backlog.md) is the restart point for that later work.
 
-`DepthFirstReactor` reports orchestrator and slot-resolver launch, start, and finish events through `ReactorInstrumentation`. The instrument supplies shared task-ordering observations, rejects duplicate lifecycle transitions, and validates at successful completion that every launched lifecycle finished and every closed OER demand was published.
+## Cleanup TODOs
 
-Resolver03's scoped one-shot construction claim is recorded in [`claims.md`](./claims.md) and [`arguments/resolver03-one-shot-construction.md`](./arguments/resolver03-one-shot-construction.md). [`resolver-versions.md`](./resolver-versions.md) explains how Resolver03, Resolver08, and Resolver23 form a progression from recursive construction through explicit tasks to structured coroutines.
+- [ ] Replace the public `StampedObjectPathDefinition` and `SelectionStampedVariableDefinition` data classes with public abstractions backed by private implementations and controlled factories. Define their equality contracts explicitly and update model, resolver, fixture, and oracle call sites without changing provider or occurrence semantics.
 
-Stamped variables occupy request-local binding promises in `Assumptions`; `getBinding` reads synchronously and `fetchBinding` suspends. `FromArgument` promises are declared at the defining resolver occurrence, completed immediately from its exact arguments, and grounded during layer-by-layer local demand closure. Resolver25 and Resolver26 declare the same promise kind for compiled `FromObjectField` providers and complete them after evaluating published OER values.
+## Open Design Questions
 
-Fixture composition lowers node-valued source fields before semantic reasoning. A source `foo(args): W<T>` becomes `foo$bridge(args): W<T$Bridge>`, each bridge object contains passive `$id`, and the generated argumentless `T$Bridge.$node` resolver loads the node from `{ $id }`. Lists retain one bridge and one `$node` resolver-bearing OER occurrence per non-null element.
-
-The plan-independent `correctResolution` judgment checks a completed Query OER against ground selections. It is check-insensitive and does not prove execution order, application count, provider binding, or concurrency. Resolver witnesses provide separate finite evidence about application identities and supplied demand.
-
-## Scope
-
-Inputs are post-validation; named fragment spreads are inlined and operation variables are substituted before semantic reasoning. Applied directives, `fromQueryField`, `@parent`, lazy executor values, checker execution, raw-versus-checked dependencies, mutations, subscriptions, and incremental execution are deferred. Every argument-bearing output field is assumed to have an explicit resolver. The canonical registry conservatively rejects every coordinate-level resolver-demand cycle, including some exact worlds that would execute acyclically.
-
-Canonical node lowering requires every possible concrete type of a node-valued source field to have a raw node resolver and rejects mixed node-resolved and inline possible-type sets. Canonical field resolvers exist only at concrete object-field coordinates.
-
-## Active Work
-
-Resolver21-23 establish the coroutine proof progression over deferred value and binding promises. Resolver25 tests whether bounded contributors and an explicit prepare/launch order can preserve one producer under late key convergence. Resolver26 instead uses occurrence-stamped argument identity to remove cross-resolver-instance convergence while retaining local late-demand handoff beneath argumentless ancestors. Harden and productionize Resolver26, preserve Resolver25 as the alternate one-shot construction, and carry Resolver01-03, Resolver06-08, and Resolver21-23 through shared model migrations as the three matched proof progressions described in [`resolver-versions.md`](./resolver-versions.md).
-
-The previously observed `ResolverWitnessBoundExceededException` remains unexplained. Generated failures now report explicit seeds, `S:R:Q` coordinates, and full schema/registry/query inputs through the replay workflow in [`semantics/testing-contracts.md`](./semantics/testing-contracts.md); use that evidence to distinguish unintended growth from an overly broad generated resource envelope.
-
-### Cleanup TODOs
-
-* Move variable binding-state out of `model` project -- along with `fetchBindings` -- other than `Promise` don't want suspend fn's in there
-* `ObjectSelectionForest.get` is an operator but throws on absence; reconsider whether that is idiomatic.
-* Make `snip` explicit in resolution rather than implicit in the resolver wrapper.
-* Move recursive input-error detection from the semantics layer to an input-like model operation.
-* Decide whether `FieldArgument.name` and `argumentName` should both exist.
+- Does `EngineObjectData.Sync` become the object result carrier itself, or does qplan retain a typed occurrence wrapper around it?
+- Where should schema conformance and exact `GroundKey` validation live once field storage is name-keyed?
+- How should cell occurrence identity and write-once promise ownership be represented without relying on the current `EngineResult.Object` implementation?
+- Should `accessAccepted` remain a separate qplan cell fact, or map to an existing engine API concept outside EOD?
+- Which conversions belong to the model artifact and which are test-fixture or future integration adapters?
+- How should the TLA+ extraction boundary name the aligned carriers without claiming a refinement that has not been proved?
 
 ## Validation
 
-Run `./gradlew check` for the Kotlin model and documentation labels. Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26 have opt-in fixed-seed stress tasks named `<resolver>Stress`. Resolver25 and Resolver26 additionally have seeded `<resolver>BroadStress` tasks for full-feature generated products. Generated tests choose and report explicit seeds; a green run is finite evidence, not a timeless repository fact. The TLA+ toolchain and complete validation matrix are documented in [`tla/README.md`](./tla/README.md).
-
-The latest Resolver26 validation used seed `20260812`: deep stress passed 10,000 cases with
-505,590 resolver applications, and broad stress size `5:10:20` passed all 1,000 cases with 877
-activated path-variable applications and provider paths through depth three. The broad corpus
-replays through `resolverPropertyReplay` under profile `resolver26-broad-stress`.
-
-Resolver26 multithreaded validation first passed the same 100-case broad corpus with fixed pools of 2, 5, 10, and 100 threads. It then passed 100,000 requests from ten heterogeneous campaign rounds on the 100-thread pool. Requests remained serial while every coroutine within one request inherited that pool; the maximum observed overlap was 33 executing continuations. Resolution-time application recording is now thread-safe, while all witness analysis and extensional checks remain serial after each request.
+Run `./gradlew check` from `qplan` for the ordinary model, arbitrary, semantics, and documentation gates. Use [`maintainer-guide.md`](./maintainer-guide.md) for replay and investigation, [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) for the capability matrix, and Resolver26's local testing guide for stress and concurrency work.

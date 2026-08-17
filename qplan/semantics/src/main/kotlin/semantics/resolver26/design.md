@@ -2,192 +2,87 @@
 
 ## Status
 
-Resolver26 is an experimental selective resolver based primarily on Resolver23. It preserves one
-selective invocation per resolver instance while defining a distinct instance for every
-variable-bearing selection in a resolver object fragment.
+Resolver26 is the primary qplan algorithm and eventual implementation blueprint. It is a selective query resolver based on structured concurrency and synchronous symbolic closure.
 
-The exercise assumes that every field resolver completes normally and throws no exception, including `CancellationException`. Resolver26's behavior after any resolver exception is outside the modeled domain; request-scope cancellation and failure propagation do not establish recovery of partially claimed promises.
+The exercise assumes every field resolver completes normally, including with respect to `CancellationException`. Recovery after a resolver exception and partial promise claiming is outside the modeled domain.
 
 ## Resolver Identity
 
-Every variable-bearing source selection receives a nonempty `SelectionStamp`:
+Pre-grounded external selections and variable-free resolver-fragment selections use ordinary ground-key identity and coalesce when their keys are equal.
 
-```kotlin
-data class SelectionStamp(
-    val resolverPath: List<PathComponent>,
-    val provenance: List<Selection>,
-)
-```
+Every variable-bearing selection introduced from a resolver object fragment carries a `SelectionStamp`. The stamp combines the concrete resolver path with an opaque lineage of registry-assigned `SelectionOccurrenceId` values. Selection equality is undefined; the opaque occurrence IDs provide stable identity without treating selection content as provenance.
 
-`provenance` records the source-selection chain that caused the key to exist. `resolverPath`
-identifies the concrete resolver occurrence independently of scheduling. When stamped demand
-descends into a concrete child OER, its top-level stamps are extended through that OER's exact
-absolute path. Paths through lists therefore contain every `ListIndex`; the same source selection
-instantiated in two list elements has two different resolver identities.
+When demand descends into an object or list occurrence, its top-level stamps localize through that exact result path. Distinct list positions and object occurrences therefore remain distinct. Stamped keys never coalesce with ordinary keys or with another occurrence lineage, even when they eventually have equal visible arguments.
 
-The arguments, every variable they contain, and the eventual `GroundKey.Stamped` carry the same
-stamp. `closeInputDemand` explicitly rejects duplicate stamps in its result. Distinct stamped keys
-never coalesce, even when their grounded arguments agree.
+Resolver input materialization removes storage-only occurrence identity only after reading each exact occurrence. Equal visible values can then combine in the materialized GraphQL input.
 
-Pre-grounded selections remain ordinary. This includes external query selections and resolver
-object-fragment selections whose arguments contain no variables. Equal ordinary ground keys
-coalesce normally. Resolver input materialization projects stamped storage keys to ordinary
-GraphQL keys only after recursively materializing each stored instance at its exact path; equal
-visible values are then structurally unioned.
+## Request And Task Ownership
 
-## Request, Task, And Coroutine Ownership
+One root `coroutineScope` owns the request. Every orchestration task and field-resolution task is a direct child of that request scope. Successful synchronous return therefore means all request work has reached quiescence.
 
-A request is one top-level external resolution. Its root `coroutineScope` owns every coroutine
-servicing that request and supplies cancellation, failure propagation, and final quiescence.
+Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises or binding promises. The dispatcher changes scheduling only; it does not change resolver, selection, stamp, path, or task identity.
 
-Resolver26 has two task kinds:
+## Synchronous Demand Closure
 
-* An orchestration task closes and installs all demand for one OER.
-* A field-resolution task grounds and resolves one field instance.
+`orchestrateObject` first localizes incoming stamps to the concrete OER path and synchronously computes one final `ObjectSelectionForest`.
 
-Coroutines within one task may use structured concurrency and may parent to other coroutines in the
-same task. A coroutine may never parent to a coroutine in another task. Cross-task readiness is
-communicated through explicit promises, never through another task's call stack or `Job`
-completion.
+Closure repeatedly expands each newly seen resolver `ObjectKey` with that resolver's complete stamped object fragment. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and its stamped variable definitions.
 
-The public synchronous entry point uses `runBlocking` on a process-scoped fixed dispatcher selected by `resolver26.thread.count`, which defaults to one. Every request task and coroutine inherits that dispatcher. An internal validation entry point accepts an explicit `CoroutineContext` for dispatcher instrumentation. Dispatcher choice changes scheduling only, not request, task, coroutine, resolver-instance, or stamp identity.
+The closed forest must contain exactly the resolver keys represented by the expansion map, and every selection stamp must be unique. There is no later demand contribution, re-orchestration loop, pending-demand registry, or outer fixpoint.
 
-Resolution-time test instrumentation is thread-safe. Post-resolution witness analysis, structural coverage, extensional-result validation, and object-path-binding validation remain serial and begin only after the synchronous request has reached quiescence.
+An open resolver key contributes its object-fragment dependencies before its arguments ground. If those arguments later become an error, those dependencies may have executed speculatively. That imprecision is accepted by the current model.
 
-## Readiness And OER Lifecycle
+## Binding Preparation
 
-Only two value-bearing readiness mechanisms cross coroutine boundaries:
+After closure, the orchestrator declares every open binding before launching local field work.
 
-| Mechanism | Identity | Completion meaning |
-| --- | --- | --- |
-| OER value `Promise` | OER identity plus exact `GroundKey` | The field value has been published. |
-| Binding `Promise` | Stamped variable | The variable's input value has been produced. |
+`FromArgument` definitions owned by an already-ground key complete immediately. Definitions owned by open keys complete after that key grounds. Localized child stamps use explicit binding aliases whose values are copied from the source occurrence.
 
-Binding declarations need no separate readiness mechanism. An OER orchestrator closes demand and
-declares every binding before it launches any local field-resolution coroutine. Every source
-variable in that resolver's stamped object fragment is therefore already declared when its input
-materializer starts.
+Each `FromObjectField` definition launches a provider reader that follows its compiled path through OER promises and completes the declared binding. Resolver26 currently requires argument-free provider path components.
 
-When recursive input materialization descends into a child OER, it first awaits the source
-variable's binding and grounds the stamped key. It then localizes that ground key to the concrete
-child path. This produces the same storage key as localizing the open key and then grounding it,
-without reading the child orchestrator's localized binding alias. Readers never insert binding
-promises.
+Readers never insert undeclared binding promises.
 
-An OER slot follows this lifecycle:
+## Passive Values
 
-```text
-absent -> reader placeholder -> writer claimed -> completed
-```
+Passive ground keys are copied from the source `Value.Object` through the shared `resolveValue` path. Missing passive source keys are errors; open passive keys are outside the algorithm's domain.
 
-`getValue` may create an unclaimed placeholder on a mutable OER. `createValuePromise` strictly
-claims that placeholder or creates a claimed slot. Once orchestration has grounded and claimed
-every final field key, `freeze` forbids new slots and fails every unclaimed placeholder. Claimed
-promises may complete after freezing.
+When a passive value contains object or list occurrences, the runtime launches orchestration for those occurrences with the corresponding downstream selections. Existing cells are reused rather than replaced.
 
-## Demand Closure
+## Active Installation And Freeze
 
-`closeInputDemand` is a synchronous function nested inside the OER orchestrator. It first localizes
-incoming top-level stamps to the concrete OER path, then repeatedly merges the accumulated forest
-and expands every new resolver `ObjectKey`. A resolver contributes its complete stamped object
-fragment regardless of whether its arguments are already ground. This reaches one closed
-`ObjectSelectionForest` whose key set is final before orchestration installs any field.
+Each active selection awaits only its declared argument bindings and grounds to one `Value.GroundKey`. Installation then completes any delayed `FromArgument` bindings owned by that newly grounded resolver key, reserves the exact target cell, claims the value promise, registers the writer, and launches one field-resolution task.
 
-An open stamped key is not merged with an ordinary key or another stamp. Its grounding coroutine
-awaits only its declared argument bindings and then claims its exact OER slot. Variables sourced
-from a pre-grounded resolver argument bind immediately. Variables inherited by a localized child
-stamp use an explicit binding alias. `FromObjectField` provider coroutines read OER promises and
-complete their declared bindings.
+`reserveCell` explicitly creates an unclaimed cell placeholder when needed. `Cell.createValuePromise` claims that placeholder for the writer. Strict claiming makes disagreement between readers and writers observable.
 
-Known ground argument errors skip object-fragment expansion and resolve directly to `Value.Error`. An open key, however, contributes its object-fragment demand before its arguments ground, so dependencies from that fragment may execute even when the key later grounds to `Value.Error`. This speculative execution of doomed dependencies is a deliberate and currently accepted imprecision: no harmful result behavior is known, and it is not considered a Resolver26 correctness defect for this exercise.
-
-Resolver26 currently requires argument-free `FromObjectField` provider paths. Each provider
-component is specialized to the concrete OER type before lookup.
-
-## Orchestration
-
-Orchestration closes one OER's demand and declares its bindings. Every demanded passive value
-already materialized by `resolveValue` is reused; a missing value, as at the request root, is copied
-from the corresponding source `Value.Object` field through the same `resolveValue` path. It
-launches orchestration for every passive child OER without waiting for those child tasks.
-
-Within its structured task, orchestration starts binding aliases, provider readers, and one
-grounding coroutine per active resolver key. Each grounding coroutine awaits arguments, claims the
-corresponding OER promise, and launches a field-resolution task directly under the request scope. A
-reader may create an OER value placeholder before its grounding coroutine claims it; strict
-claiming preserves the one-writer invariant. Once all local keys have been claimed, orchestration
-freezes the OER.
-
-There is no re-orchestration loop, pending-demand collection, activation registry, installed-value
-latch, output handoff, or late-demand fixpoint.
+After every local active key has grounded and claimed its cell, the orchestrator calls `freeze`. Freezing seals the OER key set and fails any unclaimed value placeholders. Claimed promises may complete after the OER is frozen.
 
 ## Field Resolution
 
-`resolveField` accepts only registered resolver fields. It handles argument errors directly,
-materializes the resolver's closed input, and invokes the selective resolver exactly once.
+The field-resolution task:
 
-Resolver26's local successor-demand function never reads or awaits argument bindings. It retains
-requested ground resolver boundaries, omits open resolver boundaries, and substitutes every
-boundary's fixed passive predecessor demand. The resolver wrapper immediately snips its output to
-that ground invocation demand.
+1. derives invocation successor demand from the key's closed construction demand;
+2. materializes the resolver's fixed input demand from exact OER cells;
+3. records the occurrence-aware application observation;
+4. invokes the selective resolver once;
+5. builds the passive result shape; and
+6. launches orchestration for returned root object or list-element occurrences before publishing the containing value.
 
-The shared `semantics.resolveValue` recursively materializes the passive output allowed by the
-invocation demand. Resolver26 does not close demand or generate additional resolver input inside
-value construction. It separately passes the original downstream selections to orchestration for
-each returned root object or list element.
+Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same localized child keys; strict occurrence stamps, binding aliases, and reservation rules make disagreement fail rather than silently create another identity.
 
-Field resolution launches orchestration for the returned root objects or list elements and
-immediately publishes the result. A later materializer may descend through that passive result tree
-without waiting for descendant orchestration because it grounds selections from its resolver's
-already-declared source bindings before localizing their storage-key stamps.
+Argument errors complete the cell with `Value.Error` without invoking the resolver. Successful values complete the cell once and set `accessAccepted` to true.
 
-This is a sharp sequencing choice: child orchestration is launched before the parent value is published, but parent publication does not wait for child orchestration. Correctness therefore depends on every later reader independently deriving and reserving exactly the localized child key that child orchestration will eventually claim. That agreement is especially difficult for variable-bearing arguments because the reader must derive the same occurrence-specific `SelectionStamp`, use the matching variable-instance bindings to ground the arguments, and localize the resulting key to the same child path.
+## Successor Demand
 
-Resolver behavior recursively adds canonical `__typename` before selective output projection, and
-`ResolverRegistry.resolveRootQuery()` supplies it on the initial Query object. Resolver26 otherwise
-treats it as an ordinary passive value: `resolveValue` copies it into an OER when demand selects it
-and silently ignores it otherwise. `__typename` never participates in field launch.
+Successor demand is output projection, not input closure. It retains passive selections supplied by the current resolver and stops at each resolver-bearing boundary.
+
+The boundary resolver's fixed object fragment may contribute passive predecessor demand, but its arguments are unnecessary for choosing that template. The original downstream construction demand continues into each returned child OER, where synchronous closure assigns work to successor resolvers.
 
 ## Strictness
 
-Operations reject repeated or contradictory lifecycle transitions whenever repetition is not part
-of the protocol. Promise claiming, binding declaration, binding completion, and stamp uniqueness
-are strict. This keeps scheduling and ownership bugs observable instead of silently treating them
-as idempotent.
+Binding declaration and completion, cell reservation and claiming, stamp uniqueness, writer ownership, and OER freezing are strict. Repeated or contradictory transitions are protocol defects, not harmless idempotence.
 
-## Naming
+## Deliberate Scope
 
-Variables and properties containing exact `GroundKey` values use `groundKey` or `groundKeys` in
-their names. The `RuntimeSupport` context argument is named `diagnosticInstrumentation`.
+Resolver26 models query resolution with canonical field identity and synchronous source values. It supports runtime `FromObjectField` bindings within its stated provider restriction.
 
-Any variable, property, or function that is, contains, or returns a
-`CompletableDeferred<Unit>`/`Deferred<Unit>` has a name ending in `Latch` or `Latches`.
-
-## Appendix: Working Learnings
-
-### Successor Demand Stops At OSS Boundaries
-
-Successor demand is an output projection. It retains passive selections within a resolver's output
-selection set and stops at every resolver-bearing field, including every field with arguments. A
-requested ground boundary remains in the invocation selection set for compatibility with the
-established selective-resolver contract. An open boundary is omitted because it cannot be passed to
-the shared ground-only value constructor.
-
-Every boundary identifies another resolver template whose object fragment must be traversed for its
-passive predecessor demand. Active selections encountered inside that object fragment are traversal
-boundaries rather than output supplied by the preceding resolver.
-
-Resolver arguments are therefore unnecessary when computing successor demand. They identify a
-resolver instance and may supply its eventual values, but they do not select its object fragment.
-Successor-demand traversal can use an `ObjectKey` to identify the field and registered resolver
-template without grounding the key, reading a binding, or awaiting a binding.
-
-Demand used for two different purposes must remain distinct:
-
-* Ground successor demand is passed to a selective resolver and used to construct its passive
-  output.
-* The original downstream selections are passed to each returned child OER's orchestration, where
-  `closeInputDemand` stamps resolver-fragment selections and eventually grounds resolver instances.
-
-The shared historical `successorDemand` retains its existing behavior for compatibility. Resolver26
-should use a local OSS-pruned variant that applies these rules.
+The future integration target excludes mutations, subscriptions, custom scalars, query fragments and `fromQueryField`, EOD aliases, and asynchronous EOD variants. These exclusions constrain future alignment; they do not require resolver26-specific production adapters inside qplan.

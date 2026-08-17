@@ -1,12 +1,8 @@
-# Production `FromObjectField` Shapes
+# `FromObjectField` Production Census
 
 ## Scope
 
-This survey examines current application code under
-`~/ht/projects/viaduct/modules` on clean Viaduct `master` at `36cf5db45cd8c`.
-Modern usage is an exact search for `fromObjectField`; classic usage is a
-source census of DFP and component delegation. Framework tests and examples
-are excluded from production counts.
+This is a dated source census captured from Viaduct application code at commit `36cf5db45cd8c`. It is evidence about the shapes that existed in that snapshot, not a current production inventory or a record of qplan implementation priorities. Modern usage is an exact search for `fromObjectField`; classic usage is a source census of DFP and component delegation. Framework tests and examples are excluded from production counts.
 
 The modern sample is exhaustive but narrow: all 11 declarations belong to
 four resolver classes in one PDP Stays migration cohort. Classic evidence is
@@ -133,19 +129,8 @@ argument-free traversal through singular concrete node-backed objects. That
 covers all 11 declarations, but preserves the dynamic descendant-provider
 problem that makes Resolver25 substantially harder.
 
-## Consequences For Resolver25
+## Relevance To Qplan
 
-Resolver25 currently rejects every argument-bearing provider field. Modern
-production instead supports the narrower invariant "no argument-bearing
-intermediate field and no late-bound provider argument." Its one exception,
-`shouldSkipListingHighlights(pdpSurface: ...)`, is direct and grounded by
-`FromArgument`.
+The census supports keeping direct sibling providers, singular nested object paths, scalar-list terminals, and already-ground provider arguments visible in model tests. It provides no evidence that list traversal, provider chains, alias-sensitive identity, or late-bound provider arguments are required by the observed modern cohort.
 
-The production-shaped next experiment is therefore not broader path
-planning. It is:
-
-1. specialize Resolver25 to direct providers;
-2. allow direct provider keys grounded from `FromArgument`;
-3. reject nested provider paths, provider chains, and list-descendant uses;
-4. retain substitution-before-grouping and late-equality tests; and
-5. add a focused case matching the `shouldSkipListingHighlights` shape.
+These observations constrain representative fixtures; they do not define Resolver25 or Resolver26 architecture. Current resolver behavior is documented in each resolver's `design.md`, and the immediate all-resolver Engine API migration is defined in [`handoff.md`](./handoff.md).

@@ -41,7 +41,7 @@ class ValueKeyTest {
     @Test
     fun `concrete fields with open arguments construct object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val field = schema.objectField("Query", "find")
+        val field = schema.objectField("Query", "find_V_A_node")
         val variable = Value.Variable.of(field, "id")
 
         val key =
@@ -64,7 +64,7 @@ class ValueKeyTest {
     @Test
     fun `selection paths contain only object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = Value.GroundKey.of(schema.objectField("Query", "user"), emptyMap())
+        val user = Value.GroundKey.of(schema.objectField("Query", "user_V_A_node"), emptyMap())
         val id = Value.GroundKey.of(schema.objectField("User", "id"), emptyMap())
 
         assertEquals(listOf(user, id), listOf<PathComponent>(user, id).toSelectionPath())

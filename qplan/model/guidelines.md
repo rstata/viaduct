@@ -42,7 +42,11 @@ An exact result path contains only `Value.GroundKey` object steps and `Value.Lis
 
 Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to source/response processing and must not create parallel semantic field identities.
 
-Raw node references exist only as fixture inputs. Composition lowers them through `foo$bridge` producers and argumentless `T$Bridge.$node` loaders before semantic reasoning.
+The fixture retains an unchanged GraphQL-Java source schema for validation and derives a separate model-only lowered schema. Source Node-valued fields are absent from that model schema: `foo: W<T>` is represented only by `foo_V_A_node: W<T_V_A_Bridge>`, and each concrete bridge has ordinary `id` and `node` fields with no generated hierarchy. Source schema names containing `V_A` are rejected. Because there is no bridge hierarchy, fixture composition also rejects object implementations that narrow the named return type of a Node-valued interface field.
+
+Raw node references exist only as fixture inputs. Source-facing object construction and resolver adaptation lower them through `foo_V_A_node` producers and argumentless `T_V_A_Bridge.node` loaders before semantic reasoning. `Value.Object` itself stores only canonical lowered fields.
+
+Ordinary model and semantics tests use canonical `Schema.field` and `Schema.objectField` coordinates, including explicit synthetic names for lowered Node fields. Source-name translation is confined to explicit pre-reasoning boundaries: GraphQL parsing, source-facing object construction, source declaration compilation, resolver adaptation, arbitrary source-recipe materialization, and focused tests of those adapters. Canonical assertions and resolver oracles must not use source-name lookup. Fixture code exposes this translation through `SourceSchemaAdapter`, not generic extensions on `Schema`.
 
 ## Engine API Alignment
 

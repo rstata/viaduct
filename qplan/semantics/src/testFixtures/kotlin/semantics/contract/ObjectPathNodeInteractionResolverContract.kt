@@ -85,7 +85,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 Value.Int.of(7)
                             },
-                        schema.objectField("Query", "driver") to
+                        schema.objectField("Query", "driver_V_A_node") to
                             fieldResolverOf(schema.fragmentFrom(driverFragment)) { _, _ ->
                                 driverApplications += 1
                                 schema.objectOf("Profile") {
@@ -111,7 +111,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                     )
                 },
                 variableProviders = { schema ->
-                    val driver = schema.objectField("Query", "driver")
+                    val driver = schema.objectField("Query", "driver_V_A_node")
                     mapOf(
                         Value.Variable.of(driver, "sourceValue") to
                             schema.fromObjectField(driverFragment, listOf("source")),

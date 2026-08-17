@@ -32,7 +32,7 @@ class WorldInjectionTest {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val userField = schema.field("Query", "user")
+                    val userField = schema.field("Query", "user_V_A_node")
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         userField to
@@ -57,9 +57,8 @@ class WorldInjectionTest {
         assertEquals(registry, testWorld.instance(ResolverRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
 
-        val userField = schema.objectField("Query", "user")
-        val bridgeField = schema.objectField("Query", "user\$bridge")
-        val payloadField = schema.objectField("User\$Bridge", "\$node")
+        val bridgeField = schema.objectField("Query", "user_V_A_node")
+        val payloadField = schema.objectField("User_V_A_Bridge", "node")
         val user = schema.type("User") as Schema.ObjectType
         val bridge =
             assertIs<Value.Object>(
@@ -98,7 +97,9 @@ class WorldInjectionTest {
             ).idValue,
         )
 
-        assertFalse(userField in registry)
+        kotlin.test.assertFailsWith<Schema.MissingSchemaElementException> {
+            schema.objectField("Query", "user")
+        }
         assertEquals(bridgeField, selections.single().key.field)
         assertEquals(
             payloadField,
@@ -116,7 +117,7 @@ class WorldInjectionTest {
 
         assertFalse(world.schema.objectField("User", "id") in world.resolverRegistry)
         world.resolverRegistry.resolver(
-            world.schema.objectField("Query", "user\$bridge"),
+            world.schema.objectField("Query", "user_V_A_node"),
         )
     }
 

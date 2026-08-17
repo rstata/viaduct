@@ -31,28 +31,27 @@ import model.TypeExpr
 import model.Value
 
 /** Names reserved for fixture-generated canonical node bridge types and fields. */
-internal const val NODE_BRIDGE_TYPE_SUFFIX = "\$Bridge"
-internal const val NODE_BRIDGE_FIELD_SUFFIX = "\$bridge"
-internal const val NODE_BRIDGE_ID_FIELD = "\$id"
-internal const val NODE_BRIDGE_PAYLOAD_FIELD = "\$node"
+internal const val SYNTHETIC_NAME_TOKEN = "V_A"
+internal const val NODE_BRIDGE_TYPE_SUFFIX = "_V_A_Bridge"
+internal const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
+internal const val NODE_BRIDGE_ID_FIELD = "id"
+internal const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
+internal const val TYPED_NODE_ID_PREFIX = "\$node:"
 
 internal fun nodeBridgeTypeName(nodeType: Schema.CompositeType): String =
     nodeType.typeName + NODE_BRIDGE_TYPE_SUFFIX
 
-internal fun nodeBridgeFieldName(field: Schema.OutputField): String =
-    field.fieldName + NODE_BRIDGE_FIELD_SUFFIX
-
-internal fun isNodeBridgeFieldName(fieldName: String): Boolean =
-    fieldName.endsWith(NODE_BRIDGE_FIELD_SUFFIX)
+internal fun nodeBridgeFieldName(sourceFieldName: String): String =
+    sourceFieldName + NODE_BRIDGE_FIELD_SUFFIX
 
 /**
  * Decodes external GraphQL SDL into the canonical fixture schema.
  *
  * For each Node subtype used as a source field's named output type, the decoded schema contains one
- * concrete `T$Bridge` type with `$id: ID` and `$node: T`. Every source field `foo: W<T>` additionally
- * receives `foo$bridge: W<T$Bridge>`, preserving its arguments, list structure, and nullability.
- * These definitions belong only to the lowered reasoning world and are never parsed from GraphQL
- * text.
+ * concrete `T_V_A_Bridge` type with `id: ID` and `node: T`. A source field `foo: W<T>` is omitted
+ * and represented by `foo_V_A_node: W<T_V_A_Bridge>`, preserving its arguments, list structure,
+ * and nullability. These definitions belong only to the lowered reasoning world and are never
+ * parsed from GraphQL text.
  */
 internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
@@ -95,7 +94,6 @@ internal class GJSchemaDecoder(
         populateInputFields()
         populateCompositeFields()
         populateNodeBridgeTypes()
-        populateNodeBridgeFields()
 
         return schema
     }
@@ -258,6 +256,7 @@ internal class GJSchemaDecoder(
             .forEach { graphQLType ->
                 val modelType = types.getValue(graphQLType.name) as Schema.CompositeType
                 graphQLType.fieldDefinitions.forEach { graphQLField ->
+                    val sourceTypeExpr = decodeOutputType(graphQLField.type)
                     val arguments =
                         fieldArgumentsOf(
                             definitions = graphQLField.arguments,
@@ -276,9 +275,19 @@ internal class GJSchemaDecoder(
                         }
                     val modelField =
                         outputFieldOf(
-                            fieldName = graphQLField.name,
+                            fieldName =
+                                if (isNodeType(sourceTypeExpr.baseType)) {
+                                    nodeBridgeFieldName(graphQLField.name)
+                                } else {
+                                    graphQLField.name
+                                },
                             containingType = modelType,
-                            typeExpr = decodeOutputType(graphQLField.type),
+                            typeExpr =
+                                if (isNodeType(sourceTypeExpr.baseType)) {
+                                    nodeBridgeTypeExpr(sourceTypeExpr)
+                                } else {
+                                    sourceTypeExpr
+                                },
                             arguments = arguments,
                         )
                     addCompositeField(modelType, modelField)
@@ -322,65 +331,15 @@ internal class GJSchemaDecoder(
         }
     }
 
-    private fun populateNodeBridgeFields() {
-        val nodeType = types["Node"] as? Schema.InterfaceType ?: return
-        graphQLSchema.allTypesAsList
-            .filterIsInstance<graphql.schema.GraphQLFieldsContainer>()
-            .filter { it is GraphQLObjectType || it is GraphQLInterfaceType }
-            .filterNot { it.name.startsWith("__") }
-            .forEach { graphQLContainingType ->
-                val containingType =
-                    types.getValue(graphQLContainingType.name) as Schema.CompositeType
-                graphQLContainingType.fieldDefinitions.forEach { graphQLField ->
-                    val nodeField = compositeFields(containingType).getValue(graphQLField.name)
-                    val outputType = nodeField.typeExpr.baseType as? Schema.CompositeType
-                        ?: return@forEach
-                    val isNodeType =
-                        schema.relation(nodeType, outputType) in
-                            setOf(
-                                Schema.TypeRelation.SAME,
-                                Schema.TypeRelation.WIDER_THAN,
-                            )
-                    if (!isNodeType) return@forEach
-
-                    val bridgeName = nodeBridgeFieldName(nodeField)
-                    require(bridgeName !in compositeFields(containingType)) {
-                        "Synthetic node bridge field collides with $bridgeName"
-                    }
-                    val arguments =
-                        fieldArgumentsOf(
-                            definitions =
-                                nodeField.arguments.fields.values
-                                    .map { it as Schema.FieldArgument },
-                            name = { argument -> argument.argumentName },
-                        ) { argument, argumentType ->
-                            FieldArgumentImpl(
-                                argumentName = argument.argumentName,
-                                containingType = argumentType,
-                                typeExpr = argument.typeExpr,
-                                defaultValue = argument.defaultValue,
-                            )
-                        }
-                    addCompositeField(
-                        containingType,
-                        outputFieldOf(
-                            fieldName = bridgeName,
-                            containingType = containingType,
-                            typeExpr = nodeBridgeTypeExpr(nodeField.typeExpr),
-                            arguments = arguments,
-                        ),
-                    )
-                }
-            }
+    private fun isNodeType(type: Schema.OutputType): Boolean {
+        val nodeType = types["Node"] as? Schema.InterfaceType ?: return false
+        if (type !is Schema.CompositeType) return false
+        return schema.relation(nodeType, type) in
+            setOf(
+                Schema.TypeRelation.SAME,
+                Schema.TypeRelation.WIDER_THAN,
+            )
     }
-
-    private fun compositeFields(
-        type: Schema.CompositeType,
-    ): Map<String, Schema.OutputField> =
-        when (type) {
-            is Schema.ObjectType -> objectFields.getValue(type)
-            else -> abstractCompositeFields.getValue(type)
-        }
 
     private fun addCompositeField(
         type: Schema.CompositeType,
@@ -413,9 +372,7 @@ internal class GJSchemaDecoder(
         }
 
     private fun decodeOutputType(type: GraphQLOutputType): TypeExpr<Schema.OutputType> =
-        decodeType(type) { typeName ->
-            types.getValue(typeName) as Schema.OutputType
-        }
+        decodeModelOutputType(type, schema)
 
     private fun decodeInputType(type: GraphQLInputType): TypeExpr<Schema.InputType> =
         decodeType(type) { typeName ->
@@ -774,6 +731,42 @@ private fun decodeModelInputType(
         else -> error("Unexpected input type: $type")
     }
 
+internal fun decodeModelOutputType(
+    type: GraphQLOutputType,
+    schema: Schema,
+): TypeExpr<Schema.OutputType> =
+    when (type) {
+        is GraphQLNonNull ->
+            when (val wrapped = type.wrappedType) {
+                is GraphQLList ->
+                    TypeExpr.List.of(
+                        elementType =
+                            decodeModelOutputType(
+                                wrapped.wrappedType as GraphQLOutputType,
+                                schema,
+                            ),
+                        isNullable = false,
+                    )
+                is GraphQLNamedType ->
+                    TypeExpr.Named.of(
+                        schema.type(wrapped.name) as Schema.OutputType,
+                        isNullable = false,
+                    )
+                else -> error("Unexpected non-null output type: $wrapped")
+            }
+        is GraphQLList ->
+            TypeExpr.List.of(
+                elementType =
+                    decodeModelOutputType(
+                        type.wrappedType as GraphQLOutputType,
+                        schema,
+                    ),
+            )
+        is GraphQLNamedType ->
+            TypeExpr.Named.of(schema.type(type.name) as Schema.OutputType)
+        else -> error("Unexpected output type: $type")
+    }
+
 private fun decodeObjectExternal(
     type: GraphQLInputObjectType,
     value: Any,
@@ -960,7 +953,7 @@ private class DecodedSchema(
     ): Boolean = implementsInterface(graphQLSchema, interfaceName, implementingType, visited)
 }
 
-private fun implementsInterface(
+internal fun implementsInterface(
     schema: GraphQLSchema,
     interfaceName: String,
     implementingType: GraphQLImplementingType,

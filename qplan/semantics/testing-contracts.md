@@ -23,7 +23,7 @@ Organize contracts by user-visible semantic capability, not by the resolver that
 Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 
 - `EmptyObjectFragmentResolverContract` covers empty object fragments, arguments, `__typename`, list occurrences, interfaces, and concrete implementation defaults.
-- `NodeResolverContract` covers source-level node resolution through fixture-lowered bridge producers and `$node` loaders.
+- `NodeResolverContract` covers source-level node resolution through fixture-lowered `foo_V_A_node` producers and `T_V_A_Bridge.node` loaders.
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including a transitive chain.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
@@ -79,7 +79,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `resolver25-broad-*` | Unfiltered balanced, list-descendant, nullable/error, mixed-variable, and multiple-owner pressure | Resolver25 | opt-in |
 | `resolver26-broad-*` | Heterogeneous stamped-resolution profiles | Resolver26 | opt-in profile-specific products |
 
-Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated `$node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
+Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated bridge `node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
 
 Profile IDs are part of the replay interface and must remain stable.
 

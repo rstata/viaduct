@@ -11,10 +11,10 @@ import model.TypeExpr
 import model.Value
 import model.instantiateBindings
 import model.objectKey
-import model.selectionForestOf
 import model.registry.FieldResolver
 import model.registry.StampedObjectPathDefinition
 import model.registry.VariableDefinition
+import model.selectionForestOf
 import semantics.arbitrary.registeredResolverOccurrences
 import kotlin.test.assertEquals
 

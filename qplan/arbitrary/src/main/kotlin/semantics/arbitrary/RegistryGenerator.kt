@@ -11,11 +11,11 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.SourceSchemaAdapter
 import model.TypeExpr
 import model.Value
 import model.fragmentFrom
 import model.objectOf
-import model.toSelectionForest
 import model.testing.CanonicalFieldResolverApplicationObserver
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -23,6 +23,7 @@ import model.testing.fromArgument
 import model.testing.fromObjectField
 import model.testing.nodeResolverOf
 import model.testing.withErrorArguments
+import model.toSelectionForest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -209,12 +210,12 @@ class ArbitraryRegistry internal constructor(
         canonicalField: FieldCoordinate,
     ): Set<String> {
         if (
-            canonicalField.fieldName != "\$node" ||
-            !canonicalField.typeName.endsWith("\$Bridge")
+            canonicalField.fieldName != "node" ||
+            !canonicalField.typeName.endsWith("_V_A_Bridge")
         ) {
             return emptySet()
         }
-        val nodeTypeName = canonicalField.typeName.removeSuffix("\$Bridge")
+        val nodeTypeName = canonicalField.typeName.removeSuffix("_V_A_Bridge")
         if (!schema.isComposite(nodeTypeName)) return emptySet()
 
         val possibleTypes =
@@ -229,7 +230,7 @@ class ArbitraryRegistry internal constructor(
     private fun sourceField(canonicalField: FieldCoordinate): FieldCoordinate {
         if (canonicalField in resolverPrograms) return canonicalField
         return canonicalField.fieldName
-            .removeSuffix("\$bridge")
+            .removeSuffix("_V_A_node")
             .takeIf { fieldName -> fieldName != canonicalField.fieldName }
             ?.let { fieldName ->
                 FieldCoordinate(canonicalField.typeName, fieldName)
@@ -329,14 +330,19 @@ class ArbitraryRegistry internal constructor(
             },
             applicationObserver = applicationObserver,
             fieldResolvers = { canonicalSchema ->
+                val sourceSchema = SourceSchemaAdapter(canonicalSchema)
                 fieldValues.map { (coordinate, plan) ->
                     val field =
-                        canonicalSchema.field(
+                        sourceSchema.field(
                             coordinate.typeName,
                             coordinate.fieldName,
                         )
                     val owner = field.containingType as Schema.ObjectType
-                    val constant = plan.materialize(canonicalSchema, field.typeExpr)
+                    val constant =
+                        plan.materialize(
+                            canonicalSchema,
+                            sourceSchema.typeExpr(field),
+                        )
                     val program = resolverPrograms.getValue(coordinate)
                     field to
                         fieldResolverOf(
@@ -412,7 +418,7 @@ class ArbitraryRegistry internal constructor(
                                         } else {
                                             plan.materialize(
                                                 schema = canonicalSchema,
-                                                typeExpr = field.typeExpr,
+                                                typeExpr = sourceSchema.typeExpr(field),
                                                 generatedHashSeed = generatedHashSeed,
                                             )
                                     }
@@ -422,9 +428,10 @@ class ArbitraryRegistry internal constructor(
                 }.toMap()
             },
             variableProviders = { canonicalSchema ->
+                val sourceSchema = SourceSchemaAdapter(canonicalSchema)
                 variableProviders.associate { provider ->
                     val field =
-                        canonicalSchema.field(
+                        sourceSchema.field(
                             provider.owner.typeName,
                             provider.owner.fieldName,
                         ) as Schema.ObjectField
@@ -1643,7 +1650,7 @@ private fun List<FragmentSelectionPlan>.materialize(
                     .filterValues { argument -> argument is ErrorInputPlan }
                     .keys,
             ).let { materializedSelection ->
-                if (materializedSelection.key.field.fieldName.endsWith("\$bridge")) {
+                if (materializedSelection.key.field.fieldName.endsWith("_V_A_node")) {
                     val payload = materializedSelection.subselections.single()
                     return@let Selection.of(
                         key = materializedSelection.key,
@@ -2198,20 +2205,22 @@ internal data class ObjectPlan(
         schema: Schema,
         inputId: Value.ID?,
         generatedHashSeed: Int = 0,
-    ): Value.Object =
-        schema.objectOf(typeName) {
+    ): Value.Object {
+        val sourceSchema = SourceSchemaAdapter(schema)
+        return schema.objectOf(typeName) {
             fields.forEach { (coordinate, plan) ->
                 require(coordinate.typeName == typeName)
-                val outputField = schema.field(typeName, coordinate.fieldName)
+                val outputField = sourceSchema.field(typeName, coordinate.fieldName)
                 field(coordinate.fieldName) setTo
                     plan.materialize(
                         schema,
-                        outputField.typeExpr,
+                        sourceSchema.typeExpr(outputField),
                         inputId,
                         generatedHashSeed,
                     )
             }
         }
+    }
 
     override fun selectedPaths(prefix: String): Set<String> =
         fields.flatMap { (coordinate, plan) ->

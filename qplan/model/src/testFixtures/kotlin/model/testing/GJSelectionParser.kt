@@ -13,6 +13,7 @@ import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import java.util.Locale
 import model.Schema
+import model.SourceSchemaAdapter
 import model.SelectionForest
 import model.Value
 import model.spec.SpecSelection
@@ -21,23 +22,21 @@ import model.spec.flatten
 /**
  * Parses and validates external GraphQL fragment text against the unaugmented source schema.
  *
- * Decoded selections are mapped to canonical definitions in [schema], then every node-valued
- * source field `foo { selections }` is lowered to
- * `foo$bridge { $node { selections } }`. Synthetic definitions cannot be selected in source text.
+ * Decoded selections are mapped directly to canonical definitions in [schema]. Every node-valued
+ * source field `foo { selections }` becomes
+ * `foo_V_A_node { node { selections } }`. Synthetic definitions cannot be selected in source text.
  */
 internal class GJSelectionParser(
     private val schema: GJSchema,
     private val variableValues: Map<String, Value.Input?>,
     private val variableField: Schema.ObjectField? = null,
 ) {
+    private val sourceSchema = SourceSchemaAdapter(schema)
     private var effectiveVariableField = variableField
 
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
         val parsed = specSelectionsFrom(fragment)
-        val selections =
-            schema.lowerNodeSelections(
-                flatten(schema, parsed.nominalType, parsed.selections),
-            )
+        val selections = flatten(schema, parsed.nominalType, parsed.selections)
         return parsed.nominalType to selections
     }
 
@@ -143,11 +142,29 @@ internal class GJSelectionParser(
                     GraphQLTypeUtil.unwrapAll(fieldDefinition.type) as GraphQLCompositeType
                 decodeSelectionSet(selectionSet, resultType)
             }
+        val canonicalField = sourceSchema.field(typeInScope.name, field.name)
+        val loweredNodeField = schema.isLoweredNodeField(canonicalField)
+        val canonicalSubselections =
+            if (loweredNodeField) {
+                val bridgeType = canonicalField.typeExpr.baseType as Schema.ObjectType
+                val payloadField =
+                    schema.objectField(bridgeType.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
+                listOf(
+                    SpecSelection.Field.of(
+                        alias = null,
+                        field = payloadField,
+                        arguments = emptyMap(),
+                        subselections = subselections,
+                    ),
+                )
+            } else {
+                subselections
+            }
         return SpecSelection.Field.of(
-            alias = field.alias,
-            field = schema.field(typeInScope.name, field.name),
+            alias = field.alias ?: field.name.takeIf { loweredNodeField },
+            field = canonicalField,
             arguments = arguments,
-            subselections = subselections,
+            subselections = canonicalSubselections,
         )
     }
 

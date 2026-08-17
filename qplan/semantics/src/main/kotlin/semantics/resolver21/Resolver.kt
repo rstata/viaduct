@@ -10,7 +10,7 @@ import semantics.coroutineResolve
 
 /**
  * Resolves [selections] with structured coroutines when user-declared resolver object fragments are
- * empty, except for generated `T$Bridge.$node` fragments that select passive sibling `$id`.
+ * empty, except for generated `T_V_A_Bridge.node` fragments that select passive sibling `id`.
  */
 context(world: Assumptions)
 fun resolve(selections: SelectionForest): EngineResult.Object {

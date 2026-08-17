@@ -41,7 +41,7 @@ class ResolverRegistryTest {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val userField = schema.field("Query", "user")
+                    val userField = schema.field("Query", "user_V_A_node")
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         userField to
@@ -67,16 +67,17 @@ class ResolverRegistryTest {
             schema.objectOf("User") {
                 "id" setTo "42"
             }
-        val userField = schema.objectField("Query", "user")
-        val bridgeField = schema.objectField("Query", "user\$bridge")
-        val bridgeType = schema.type("User\$Bridge") as Schema.ObjectType
-        val bridgeIdField = schema.objectField("User\$Bridge", "\$id")
-        val payloadField = schema.objectField("User\$Bridge", "\$node")
+        val bridgeField = schema.objectField("Query", "user_V_A_node")
+        val bridgeType = schema.type("User_V_A_Bridge") as Schema.ObjectType
+        val bridgeIdField = schema.objectField("User_V_A_Bridge", "id")
+        val payloadField = schema.objectField("User_V_A_Bridge", "node")
         val registry = world.resolverRegistry
         val assumptions = world.assumptions
 
         assertEquals(registry, assumptions.resolverRegistry)
-        assertFalse(userField in registry)
+        assertFailsWith<Schema.MissingSchemaElementException> {
+            schema.objectField("Query", "user")
+        }
         assertTrue(bridgeField in registry)
         assertTrue(payloadField in registry)
         assertTrue(registry.mayDemandFrom(bridgeField).isEmpty())
@@ -115,7 +116,7 @@ class ResolverRegistryTest {
                 )
             },
         )
-        assertEquals(listOf("user\$bridge", "\$node"), observedFields)
+        assertEquals(listOf("user_V_A_node", "node"), observedFields)
     }
 
     @Test
@@ -155,16 +156,16 @@ class ResolverRegistryTest {
                     """.trimIndent(),
             ).schema
 
-        assertTrue("user\$bridge" in schema.query.fields)
-        assertTrue("users\$bridge" in schema.query.fields)
-        assertTrue("matrix\$bridge" in schema.query.fields)
+        assertTrue("user_V_A_node" in schema.query.fields)
+        assertTrue("users_V_A_node" in schema.query.fields)
+        assertTrue("matrix_V_A_node" in schema.query.fields)
         assertFailsWith<Schema.MissingSchemaElementException> {
-            schema.type("Node\$Bridge")
+            schema.type("Node_V_A_Bridge")
         }
 
-        val userBridge = schema.type("User\$Bridge") as Schema.ObjectType
-        assertEquals(setOf("__typename", "\$id", "\$node"), userBridge.fields.keys)
-        val matrixBridge = schema.field("Query", "matrix\$bridge")
+        val userBridge = schema.type("User_V_A_Bridge") as Schema.ObjectType
+        assertEquals(setOf("__typename", "id", "node"), userBridge.fields.keys)
+        val matrixBridge = schema.field("Query", "matrix_V_A_node")
         val outer = assertIs<TypeExpr.List<Schema.OutputType>>(matrixBridge.typeExpr)
         val inner = assertIs<TypeExpr.List<Schema.OutputType>>(outer.elementType)
         assertEquals(userBridge, inner.elementType.baseType)
@@ -197,7 +198,7 @@ class ResolverRegistryTest {
                     mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
                 },
                 fieldResolvers = { schema ->
-                    val user = schema.field("Query", "user")
+                    val user = schema.field("Query", "user_V_A_node")
                     mapOf(
                         schema.field("Query", "seed") to
                             model.testing.fieldResolverOf(
@@ -216,13 +217,11 @@ class ResolverRegistryTest {
                 },
             )
         val schema = world.schema
-        val source = schema.objectField("Query", "user")
-        val bridge = schema.objectField("Query", "user\$bridge")
-        val payload = schema.objectField("User\$Bridge", "\$node")
-        val bridgeId = schema.objectField("User\$Bridge", "\$id")
+        val bridge = schema.objectField("Query", "user_V_A_node")
+        val payload = schema.objectField("User_V_A_Bridge", "node")
+        val bridgeId = schema.objectField("User_V_A_Bridge", "id")
 
-        assertFalse(source in world.resolverRegistry)
-        assertEquals(source.arguments.fields.keys, bridge.arguments.fields.keys)
+        assertEquals(setOf("id"), bridge.arguments.fields.keys)
         assertTrue(world.resolverRegistry.resolver(bridge).variables.isEmpty())
         val payloadResolver = world.resolverRegistry.resolver(payload)
         assertTrue(payloadResolver.variables.isEmpty())
@@ -343,7 +342,7 @@ class ResolverRegistryTest {
     fun `rejects foreign resolver coordinate definitions`() {
         val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val foreignUser = foreignSchema.type("User") as Schema.ObjectType
-        val foreignUserField = foreignSchema.field("Query", "user")
+        val foreignUserField = foreignSchema.field("Query", "user_V_A_node")
 
         assertFailsWith<IllegalArgumentException> {
             TestWorld.fromSDL(
@@ -432,7 +431,7 @@ class ResolverRegistryTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     val nodeFragment = schema.emptyFragmentOf("Node")
                     mapOf(
-                        schema.field("Query", "user") to
+                        schema.field("Query", "user_V_A_node") to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
@@ -485,78 +484,99 @@ class ResolverRegistryTest {
 
     @Test
     fun `snips selected fields recursively through objects and lists`() {
-        val fixture = Fixture()
+        val world =
+            TestWorld.fromSDL(
+                """
+                type Record {
+                  id: ID!
+                  name: String!
+                  friend: Record
+                  peers: [Record]
+                }
+
+                type Query {
+                  record: Record
+                }
+                """.trimIndent(),
+            )
+        val schema = world.schema
+        val record = schema.type("Record") as Schema.ObjectType
+        fun key(fieldName: String): Value.GroundKey =
+            Value.GroundKey.of(
+                schema.objectField("Record", fieldName),
+                emptyMap(),
+            )
+        fun selection(
+            fieldName: String,
+            subselections: model.SelectionForest = selectionForestOf(),
+        ): Selection =
+            Selection.of(
+                key = key(fieldName),
+                possibleTypes = setOf(record),
+                subselections = subselections,
+            )
         val friend =
-            fixture.assumptions.objectOf("User") {
+            schema.objectOf("Record") {
                 "id" setTo "friend"
                 "name" setTo "Friend"
             }
         val peer =
-            fixture.assumptions.objectOf("User") {
+            schema.objectOf("Record") {
                 "id" setTo "peer"
                 "name" setTo "Peer"
             }
         val source =
-            fixture.assumptions.objectOf("User") {
+            schema.objectOf("Record") {
                 "id" setTo "target"
                 "name" setTo "Target"
                 "friend" setTo friend
                 "peers" setTo listOf(peer, null)
             }
-        val user = fixture.schema.type("User") as Schema.ObjectType
-        val idSelection = fixture.selection(typeName = "Node", fieldName = "id")
-        val nameSelection = fixture.selection(typeName = "Node", fieldName = "name")
+        val idSelection = selection("id")
+        val nameSelection = selection("name")
         val selections =
             selectionForestOf(
                 idSelection,
-                Selection.of(
-                    key = Value.Key.of(fixture.schema.field("User", "friend"), emptyMap()),
-                    possibleTypes = setOf(user),
-                    subselections = selectionForestOf(idSelection),
-                ),
-                Selection.of(
-                    key = Value.Key.of(fixture.schema.field("User", "peers"), emptyMap()),
-                    possibleTypes = setOf(user),
-                    subselections = selectionForestOf(nameSelection),
-                ),
+                selection("friend", selectionForestOf(idSelection)),
+                selection("peers", selectionForestOf(nameSelection)),
             ) +
                 selectionForestOf(
-                    fixture.selection(
-                        typeName = "Node",
-                        fieldName = "name",
+                    Selection.of(
+                        key = key("name"),
                         possibleTypes = emptySet(),
+                        subselections = selectionForestOf(),
                     ),
                 )
 
         val result =
             assertIs<Value.Object>(
-                with(fixture.assumptions) {
+                with(world.assumptions) {
                     source.snipToDemand(selections)
                 },
             )
 
         assertEquals(
             setOf(
-                fixture.key("id"),
-                fixture.key("friend"),
-                fixture.key("peers"),
+                key("id"),
+                key("friend"),
+                key("peers"),
             ),
             result.fieldValues.keys,
         )
         assertEquals(
             "target",
-            assertIs<Value.ID>(result.fieldValues[fixture.key("id")]).idValue,
+            assertIs<Value.ID>(result.fieldValues[key("id")]).idValue,
         )
         val snippedFriend =
-            assertIs<Value.Object>(result.fieldValues[fixture.key("friend")])
+            assertIs<Value.Object>(result.fieldValues[key("friend")])
         assertEquals(
-            setOf(fixture.key("id")),
+            setOf(key("id")),
             snippedFriend.fieldValues.keys,
         )
-        val peers = assertIs<Value.OutputList>(result.fieldValues[fixture.key("peers")])
+        val peers = assertIs<Value.OutputList>(result.fieldValues[key("peers")])
         val snippedPeer = assertIs<Value.Object>(peers.values.first())
         assertEquals(
-            setOf(fixture.key("name")),
+            setOf(key("name")),
             snippedPeer.fieldValues.keys,
         )
         assertEquals(null, peers.values.last())
@@ -715,7 +735,7 @@ class ResolverRegistryTest {
         val fixture = Fixture()
 
         val leaf = fixture.selection("Node", "id")
-        val emptyComposite = fixture.selection("User", "friend")
+        val emptyComposite = fixture.selection("User", "friend_V_A_node")
 
         assertTrue(leaf.isLeaf)
         assertTrue(leaf.subselections.isEmpty())
@@ -738,7 +758,7 @@ class ResolverRegistryTest {
             fieldResolvers = { schema ->
                 val fragment =
                     Fragment.of(fragmentType(schema), selectionForestOf())
-                val userField = schema.field("Query", "user")
+                val userField = schema.field("Query", "user_V_A_node")
                 mapOf(
                     userField to
                         model.testing.fieldResolverOf(
@@ -767,12 +787,12 @@ class ResolverRegistryTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     val userFragment = schema.emptyFragmentOf("User")
                     mapOf(
-                        schema.field("Query", "user") to
+                        schema.field("Query", "user_V_A_node") to
                             model.testing.fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
-                        schema.field("User", "search") to
+                        schema.field("User", "search_V_A_node") to
                             model.testing.fieldResolverOf(
                                 objectFragment = userFragment,
                                 function = { _, _ -> error("Not invoked") },
@@ -783,7 +803,7 @@ class ResolverRegistryTest {
         val schema = world.schema
         val assumptions = world.assumptions
         val user = schema.type("User") as Schema.ObjectType
-        val userField = schema.field("Query", "user")
+        val userField = schema.field("Query", "user_V_A_node")
 
         fun key(fieldName: String): Value.Key =
             Value.Key.of(

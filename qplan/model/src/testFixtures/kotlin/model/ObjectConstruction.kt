@@ -29,6 +29,7 @@ class ObjectValueScope internal constructor(
     private val schema: Schema,
     private val type: Schema.ObjectType,
 ) {
+    private val sourceSchema = SourceSchemaAdapter(schema)
     private val fields = linkedMapOf<Value.GroundKey, Value.Output?>()
     private var isBuilt = false
 
@@ -40,13 +41,18 @@ class ObjectValueScope internal constructor(
         require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
             "Arguments for ${type.typeName}/$fieldName must have distinct names"
         }
+        val field = sourceSchema.field(type.typeName, fieldName)
+        require(field is Schema.ObjectField) {
+            "${type.typeName}/$fieldName does not lower to an object field"
+        }
         return ObjectFieldReference(
             scope = this,
             key =
                 Value.GroundKey.of(
-                    field = schema.objectField(type.typeName, fieldName),
+                    field = field,
                     arguments = arguments.toMap(),
                 ),
+            sourceTypeExpr = sourceSchema.typeExpr(field),
         )
     }
 
@@ -66,7 +72,11 @@ class ObjectValueScope internal constructor(
         require(key !in fields) {
             "Duplicate object field ${type.typeName}/${key.field.fieldName}"
         }
-        fields[key] = coerceOutputValue(key.field.typeExpr, value)
+        fields[key] =
+            sourceSchema.lowerOutput(
+                key.field,
+                coerceOutputValue(sourceTypeExpr, value),
+            )
     }
 
     /** Constructs a nested object value using the same schema. */
@@ -88,6 +98,7 @@ class ObjectValueScope internal constructor(
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
     internal val key: Value.GroundKey,
+    internal val sourceTypeExpr: TypeExpr<Schema.OutputType>,
 )
 
 private fun coerceOutputValue(

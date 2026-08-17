@@ -21,30 +21,35 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     val lateAncestorDemandPolicy: LateAncestorDemandPolicy
 
     @Test
-    fun `successor passive demand is materialized from selective resolver output`() {
-        var payloadDemandFields: Set<String>? = null
+    fun `disjoint successor demand is closed before one selective producer application`() {
+        var fooApplications = 0
+        var fooDemandFields: Set<String>? = null
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     extend type Query {
-                      payload: Payload! @resolver(result: {raw: 7})
+                      foo: Foo! @resolver(result: {z: 2, w: 3})
                     }
 
-                    type Payload {
-                      computed: Int!
-                        @resolver(of: "raw", result: "sum(raw)")
-                      raw: Int!
+                    type Foo {
+                      x: Int!
+                        @resolver(of: "z", result: "sum(z, z, z, z, z)")
+                      y: Int!
+                        @resolver(of: "w", result: "sum(w, w, w, w, w, w, w)")
+                      z: Int!
+                      w: Int!
                     }
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (
                         field.containingType.typeName == "Query" &&
-                        field.fieldName == "payload" &&
+                        field.fieldName == "foo" &&
                         demand != null
                     ) {
-                        payloadDemandFields =
+                        fooApplications += 1
+                        fooDemandFields =
                             demand
                                 .merge(field.typeExpr.baseType as Schema.ObjectType)
                                 .groundKeys()
@@ -55,21 +60,22 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 },
             )
         val world = testWorld.assumptions
-        val payloadKey = world.schema.contractKey("Query", "payload")
-        val computedKey = world.schema.contractKey("Payload", "computed")
-        val rawKey = world.schema.contractKey("Payload", "raw")
+        val fooKey = world.schema.contractKey("Query", "foo")
+        val xKey = world.schema.contractKey("Foo", "x")
+        val yKey = world.schema.contractKey("Foo", "y")
         val fragment =
             world.fragmentFrom(
-                "fragment Query on Query { payload { computed } }",
+                "fragment Query on Query { foo { x y } }",
             )
 
         val resolved =
             resolveAndValidate(world, fragment)
-        val payload = resolved.getCell(payloadKey).get() as EngineResult.Object
+        val foo = resolved.getCell(fooKey).get() as EngineResult.Object
 
-        assertEquals(Value.Int.of(7), payload.getCell(computedKey).get())
-        assertEquals(Value.Int.of(7), payload.getCell(rawKey).get())
-        assertEquals(setOf("computed", "raw"), payloadDemandFields)
+        assertEquals(Value.Int.of(10), foo.getCell(xKey).get())
+        assertEquals(Value.Int.of(21), foo.getCell(yKey).get())
+        assertEquals(1, fooApplications)
+        assertEquals(setOf("x", "y", "z", "w"), fooDemandFields)
         assertTrue(context(world) { resolved.correctResolution(fragment) })
     }
 

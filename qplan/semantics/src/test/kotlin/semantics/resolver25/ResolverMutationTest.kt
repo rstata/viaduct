@@ -2,6 +2,7 @@ package semantics.resolver25
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import semantics.contract.ResolverMutationContract
@@ -11,6 +12,6 @@ class ResolverMutationTest : ResolverMutationContract {
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         resolveWithLifecycleValidation(world, root, selections)
 }

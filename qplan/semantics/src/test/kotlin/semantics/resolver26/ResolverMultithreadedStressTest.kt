@@ -5,6 +5,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Fragment
 import model.fragmentFrom
 import model.objectOf
@@ -196,7 +197,7 @@ private suspend fun runResolver26MultithreadedStress(
             val world: Assumptions =
                 testWorld.newAssumptions(selectiveResolvers = true)
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
-            val result: EngineResult.Object =
+            val result: ObjectEngineResult =
                 context(world) {
                     resolve(
                         selections = fragment.subselections,

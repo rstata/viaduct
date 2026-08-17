@@ -3,6 +3,7 @@ package semantics.resolver25
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import org.junit.jupiter.api.Test
@@ -233,7 +234,7 @@ class ResolverGeneratedTest :
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         resolveWithLifecycleValidation(world, root, selections)
 
     override fun observeResolution(

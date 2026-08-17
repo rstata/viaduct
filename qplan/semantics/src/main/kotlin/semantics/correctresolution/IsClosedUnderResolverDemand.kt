@@ -2,7 +2,11 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.PathComponent
+import model.SimpleEngineResult
 import model.Value
 import model.applicableGroundSelections
 import model.usedVariables
@@ -18,11 +22,11 @@ import model.usedVariables
  * This predicate observes cell-value presence and content, but never access-acceptance results.
  */
 context(world: Assumptions)
-fun EngineResult.Object.isClosedUnderResolverDemand(): Boolean =
+fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
     objectIsClosedUnderResolverDemand(emptyList())
 
 context(world: Assumptions)
-private fun EngineResult.Object.objectIsClosedUnderResolverDemand(
+private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
     path: List<PathComponent>,
 ): Boolean {
     val registry = world.resolverRegistry
@@ -73,12 +77,12 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
 ): Boolean =
     when (this) {
         null,
-        Value.Error,
-        is Value.Simple,
+        ErrorEngineResult,
+        is SimpleEngineResult,
         -> true
 
-        is EngineResult.Object -> objectIsClosedUnderResolverDemand(path)
-        is EngineResult.List ->
+        is ObjectEngineResult -> objectIsClosedUnderResolverDemand(path)
+        is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
                     path + Value.ListIndex.of(index),

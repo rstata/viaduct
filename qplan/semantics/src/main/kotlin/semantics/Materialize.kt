@@ -2,12 +2,17 @@ package semantics
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
+import model.SimpleEngineResult
 import model.Value
 import model.applicableGroundSelections
 import model.localizeTopLevelSelectionStamps
+import model.toValue
 import model.unionOutput
 
 /**
@@ -18,7 +23,7 @@ import model.unionOutput
  * This operation is defined when this result contains every value promise selected by [selections] and every selection applicable at an object visited by this operation contains no [Value.Variable] in its key arguments.
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-internal suspend fun EngineResult.Object.materialize(
+internal suspend fun ObjectEngineResult.materialize(
     selections: ObjectSelectionForest,
     reader: List<PathComponent>,
 ): Value.Object {
@@ -34,7 +39,7 @@ internal suspend fun EngineResult.Object.materialize(
 
 // Materializes a selection forest rooted at one exact OER path.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-private suspend fun EngineResult.Object.materializeSelectedObjectValue(
+private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: SelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -47,7 +52,7 @@ private suspend fun EngineResult.Object.materializeSelectedObjectValue(
 
 // Materializes stored instances before projecting and unioning their visible GraphQL keys.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-private suspend fun EngineResult.Object.materializeSelectedObjectValue(
+private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: ObjectSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -89,15 +94,15 @@ private suspend fun EngineResult?.materializeEngineResultValue(
 ): Value.Output? =
     when (this) {
         null -> null
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.Object ->
+        ErrorEngineResult -> Value.Error
+        is SimpleEngineResult -> toValue()
+        is ObjectEngineResult ->
             materializeSelectedObjectValue(
                 selections = selections.localizeTopLevelSelectionStamps(resultPath),
                 reader = reader,
                 resultPath = resultPath,
             )
-        is EngineResult.List ->
+        is ListEngineResult ->
             Value.OutputList.of(
                 typeExpr = typeExpr,
                 values =
@@ -111,7 +116,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
 
 // Materializes each list element at a path containing its concrete list index.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-private suspend fun EngineResult.List.materializeValues(
+private suspend fun ListEngineResult.materializeValues(
     selections: SelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,

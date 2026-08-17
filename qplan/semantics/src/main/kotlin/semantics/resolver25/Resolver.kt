@@ -13,6 +13,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
@@ -20,6 +23,7 @@ import model.Promise
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.containsErrorValue
@@ -30,6 +34,8 @@ import model.merge
 import model.mergeWithVariables
 import model.objectKey
 import model.selectionForestOf
+import model.toEngineResult
+import model.toValue
 import model.registry.StampedObjectPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
 import semantics.RuntimeSupport
@@ -41,21 +47,21 @@ import semantics.materialize
  * Resolves selective demand once per grounded resolver instance.
  */
 context(world: Assumptions)
-fun resolve(selections: SelectionForest): EngineResult.Object =
+fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolveWithLifecycleInstrumentation(selections)
 
 context(world: Assumptions)
 internal fun resolveObserved(
     selections: SelectionForest,
     eventObserver: Resolver25LifecycleEventObserver,
-): EngineResult.Object =
+): ObjectEngineResult =
     resolveWithLifecycleInstrumentation(selections, eventObserver)
 
 context(world: Assumptions)
 private fun resolveWithLifecycleInstrumentation(
     selections: SelectionForest,
     eventObserver: Resolver25LifecycleEventObserver? = null,
-): EngineResult.Object {
+): ObjectEngineResult {
     require(world.selectiveResolvers) {
         "Resolver25 requires selective resolvers"
     }
@@ -63,7 +69,7 @@ private fun resolveWithLifecycleInstrumentation(
     return runBlocking {
         withTimeout(90_000) {
             context(RuntimeSupport.cycleChecking()) {
-                val result: EngineResult.Object =
+                val result: ObjectEngineResult =
                     source.type.newObjectResult()
                 coroutineScope {
                     val runtime =
@@ -90,7 +96,7 @@ private class ResolverRuntime(
     val instrumentation: Resolver25LifecycleInstrumentation,
 ) {
     private val orchestratorsByTarget:
-        MutableMap<EngineResult.Object, ObjectResultOrchestrator> =
+        MutableMap<ObjectEngineResult, ObjectResultOrchestrator> =
         Collections.synchronizedMap(IdentityHashMap())
 
     // Creates the sole orchestrator for one object-result instance or contributes late actual
@@ -99,7 +105,7 @@ private class ResolverRuntime(
     fun createOrchestrator(
         path: List<PathComponent>,
         source: Value.Object,
-        target: EngineResult.Object,
+        target: ObjectEngineResult,
         initialDemand: SelectionForest,
         potentialDemand: SelectionForest = initialDemand,
     ): Deferred<Unit> {
@@ -168,8 +174,8 @@ private fun Schema.ObjectType.closeStructuralDemand(
     }
 }
 
-private fun Schema.ObjectType.newObjectResult(): EngineResult.Object =
-    EngineResult.Object.of(
+private fun Schema.ObjectType.newObjectResult(): ObjectEngineResult =
+    ObjectEngineResult.of(
         type = this,
         mutable = true,
     )
@@ -186,7 +192,7 @@ private class ObjectResultOrchestrator(
     private val runtime: ResolverRuntime,
     private val path: List<PathComponent>,
     private val source: Value.Object,
-    private val target: EngineResult.Object,
+    private val target: ObjectEngineResult,
 ) {
     val orchestrationReady: CompletableDeferred<Unit> = CompletableDeferred()
 
@@ -567,12 +573,12 @@ private class ObjectResultOrchestrator(
             diagnosticInstrumentation.cycleCheck(reader, cell)
             val value = cell.getValue().await()
             if (value == null) return null
-            if (value == Value.Error) return Value.Error
+            if (value == ErrorEngineResult) return Value.Error
             if (index == definition.path.lastIndex) {
                 return value.toProviderInput()
             }
             current =
-                value as? EngineResult.Object
+                value as? ObjectEngineResult
                     ?: error("Provider path crossed a non-object at $openKey")
         }
         error("Provider path must be nonempty")
@@ -595,7 +601,7 @@ private class ObjectResultOrchestrator(
 
             is Value.OutputList -> {
                 val resultList =
-                    result as? EngineResult.List
+                    result as? ListEngineResult
                         ?: error("Passive list output does not match its engine result at $path")
                 require(values.size == resultList.size) {
                     "Passive list output changed length at $path"
@@ -612,7 +618,7 @@ private class ObjectResultOrchestrator(
 
             is Value.Object -> {
                 val resultObject =
-                    result as? EngineResult.Object
+                    result as? ObjectEngineResult
                         ?: error("Passive object output does not match its engine result at $path")
                 val mergedDemand: ObjectSelectionForest = demand.merge(type)
                 if (
@@ -698,10 +704,10 @@ private class ObjectResultOrchestrator(
             groundedKey.arguments.argumentsContainErrorValue() -> {
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
-                    AvailableKeyOutput(Value.Error, Value.Error),
+                    AvailableKeyOutput(Value.Error, ErrorEngineResult),
                 )
                 runtime.instrumentation.valuePublished(coordinate)
-                cell.getValue().complete(Value.Error)
+                cell.getValue().complete(ErrorEngineResult)
                 cell.setAccessAccepted(Value.Error)
             }
             else -> {
@@ -936,8 +942,8 @@ private suspend fun Value.Output?.resolveValue(
 ): ResolvedValue =
     when (this) {
         null -> ResolvedValue(null, emptyList())
-        Value.Error -> ResolvedValue(Value.Error, emptyList())
-        is Value.Simple -> ResolvedValue(this, emptyList())
+        Value.Error -> ResolvedValue(ErrorEngineResult, emptyList())
+        is Value.Simple -> ResolvedValue(toEngineResult(), emptyList())
         is Value.Object ->
             resolveObjectValue(
                 path = path,
@@ -955,7 +961,7 @@ private suspend fun Value.Output?.resolveValue(
                 }
             ResolvedValue(
                 engineResult =
-                    EngineResult.List.of(
+                    ListEngineResult.of(
                         typeExpr = typeExpr,
                         values = resolvedElements.map(ResolvedValue::engineResult),
                     ),
@@ -973,7 +979,7 @@ private suspend fun Value.Object.resolveObjectValue(
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
 ): ResolvedValue {
-    val engineResult: EngineResult.Object =
+    val engineResult: ObjectEngineResult =
         type.newObjectResult()
     val mergedDemand: ObjectSelectionForest =
         resolverDemand.mergeWithVariables(engineResult).first
@@ -1065,7 +1071,7 @@ private class ObjectResolution(
     val source: Value.Object,
     val selections: SelectionForest,
     val potentialSelections: SelectionForest,
-    val target: EngineResult.Object,
+    val target: ObjectEngineResult,
 )
 
 private class ResolvedField(
@@ -1075,15 +1081,15 @@ private class ResolvedField(
 
 private fun EngineResult.toProviderInput(): Value.Input =
     when (this) {
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.List -> toProviderInputList()
-        is EngineResult.Object ->
+        ErrorEngineResult -> Value.Error
+        is SimpleEngineResult -> toValue()
+        is ListEngineResult -> toProviderInputList()
+        is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun EngineResult.List.toProviderInputList(): Value.InputList {
+private fun ListEngineResult.toProviderInputList(): Value.InputList {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }

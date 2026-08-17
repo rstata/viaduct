@@ -1,7 +1,9 @@
 package semantics
 
 import model.EngineResult
+import model.ObjectEngineResult
 import model.PathComponent
+import model.StringEngineResult
 import model.Value
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -104,7 +106,7 @@ class RuntimeSupportTest {
         fixture.target
             .reserveCell(key)
             .createValuePromise()
-            .complete(Value.String.of("complete"))
+            .complete(StringEngineResult.of("complete"))
         fixture.register("first")
 
         assertFailsWith<ResolverReadCycleException> {
@@ -207,7 +209,7 @@ class RuntimeSupportTest {
                     }
                     """.trimIndent(),
                 ).assumptions
-        val target = EngineResult.Object.of(world.schema.query, mutable = true)
+        val target = ObjectEngineResult.of(world.schema.query, mutable = true)
         val support =
             RuntimeSupport.cycleChecking { selections -> selections }
 

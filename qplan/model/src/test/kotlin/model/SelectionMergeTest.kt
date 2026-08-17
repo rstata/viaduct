@@ -378,10 +378,11 @@ class SelectionMergeTest {
             )
         val groundKey = ordinary.key as Value.GroundKey
         val value = Value.Int.of(9)
+        val resultValue = IntEngineResult.of(9)
         val result =
-            EngineResult.Object.of(
+            ObjectEngineResult.of(
                 fixture.query,
-                mapOf(groundKey to value),
+                mapOf(groundKey to resultValue),
             )
 
         val markerOnly:
@@ -432,7 +433,7 @@ class SelectionMergeTest {
                 possibleTypes = ordinary.possibleTypes,
                 subselections = ordinary.subselections,
             )
-        val result = EngineResult.Object.of(fixture.query, mutable = true)
+        val result = ObjectEngineResult.of(fixture.query, mutable = true)
 
         val absent =
             runBlocking {
@@ -481,13 +482,14 @@ class SelectionMergeTest {
         val intermediateKey = intermediate.key as Value.GroundKey
         val leafKey = leaf.key as Value.GroundKey
         val leafValue = Value.Int.of(7)
+        val leafResult = IntEngineResult.of(7)
         val child =
-            EngineResult.Object.of(
+            ObjectEngineResult.of(
                 fixture.item,
-                mapOf(leafKey to leafValue),
+                mapOf(leafKey to leafResult),
             )
         val continuedResult =
-            EngineResult.Object.of(
+            ObjectEngineResult.of(
                 fixture.query,
                 mapOf(intermediateKey to child),
             )
@@ -509,9 +511,9 @@ class SelectionMergeTest {
         assertTrue(continued.second.isEmpty())
         assertEquals(mapOf(variable to leafValue), terminal.second)
 
-        listOf<EngineResult?>(null, Value.Error).forEach { prematureValue ->
+        listOf<EngineResult?>(null, ErrorEngineResult).forEach { prematureValue ->
             val prematureResult =
-                EngineResult.Object.of(
+                ObjectEngineResult.of(
                     fixture.query,
                     mapOf(intermediateKey to prematureValue),
                 )
@@ -524,7 +526,8 @@ class SelectionMergeTest {
             }
             assertEquals(
                 mapOf<Value.Variable.Stamped, Value.Input?>(
-                    variable to prematureValue as Value.Input?,
+                    variable to
+                        if (prematureValue == ErrorEngineResult) Value.Error else null,
                 ),
                 premature.second,
             )

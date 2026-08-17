@@ -2,17 +2,18 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
 import model.Value
 
 /** Subject-specific evidence retained alongside one resolution result. */
 interface ResolverResolutionObservation {
-    val result: EngineResult.Object
+    val result: ObjectEngineResult
 }
 
 private data class ResultOnlyResolverResolutionObservation(
-    override val result: EngineResult.Object,
+    override val result: ObjectEngineResult,
 ) : ResolverResolutionObservation
 
 /**
@@ -26,7 +27,7 @@ interface ResolverContract {
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object
+    ): ObjectEngineResult
 
     fun observeResolution(
         world: Assumptions,

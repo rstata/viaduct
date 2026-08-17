@@ -1,6 +1,8 @@
 package semantics.contract
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.Value
 import model.fragmentFrom
@@ -76,7 +78,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 resultQuery,
             )
 
-        assertEquals(Value.Int.of(8), resolvedResult.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(8), resolvedResult.getCell(resultKey).get())
         assertEquals(1, payloadApplications)
         assertEquals(listOf(setOf("one", "two")), suppliedDemandFields)
 
@@ -104,12 +106,12 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 externalQuery,
             )
         val payload =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 resolvedExternal.getCell(payloadKey).get(),
             )
 
-        assertEquals(Value.Int.of(3), payload.getCell(oneKey).get())
-        assertEquals(Value.Int.of(5), payload.getCell(twoKey).get())
+        assertEquals(IntEngineResult.of(3), payload.getCell(oneKey).get())
+        assertEquals(IntEngineResult.of(5), payload.getCell(twoKey).get())
         assertEquals(2, payloadApplications)
         assertEquals(
             listOf(setOf("one", "two"), setOf("one", "two")),
@@ -176,7 +178,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         val resolved =
             resolveAndValidate(world, fragment)
 
-        assertEquals(Value.Int.of(8), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(8), resolved.getCell(resultKey).get())
         when (variableSelectionIdentityPolicy) {
             VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> {
                 assertEquals(1, payloadApplications)

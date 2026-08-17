@@ -2,6 +2,7 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Fragment
 import model.Value
 import model.fragmentFrom
@@ -28,7 +29,7 @@ interface CorrectResolutionPostTestPolicy : ResolverContract {
 private data class PendingResolutionValidation(
     val world: Assumptions,
     val fragment: Fragment,
-    val result: EngineResult.Object,
+    val result: ObjectEngineResult,
 )
 
 private object ContractPostTestState {
@@ -66,7 +67,7 @@ internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     root: Value.Object,
     fragment: Fragment,
-): EngineResult.Object {
+): ObjectEngineResult {
     val result = resolve(world, root, fragment.subselections)
     if (this is CorrectResolutionPostTestPolicy) {
         ContractPostTestState.record(
@@ -83,7 +84,7 @@ internal fun ResolverContract.resolveAndValidate(
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     fragment: Fragment,
-): EngineResult.Object =
+): ObjectEngineResult =
     resolveAndValidate(
         world = world,
         root = world.objectOf("Query"),
@@ -93,7 +94,7 @@ internal fun ResolverContract.resolveAndValidate(
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     fragmentSource: String,
-): EngineResult.Object =
+): ObjectEngineResult =
     resolveAndValidate(
         world = world,
         fragment = world.fragmentFrom(fragmentSource),

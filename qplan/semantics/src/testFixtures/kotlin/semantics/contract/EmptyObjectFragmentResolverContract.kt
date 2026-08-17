@@ -1,7 +1,11 @@
 package semantics.contract
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.Schema
+import model.StringEngineResult
 import model.Value
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
@@ -25,7 +29,7 @@ interface EmptyObjectFragmentResolverContract :
 
         assertEquals(
             "Query",
-            assertIs<Value.String>(
+            assertIs<StringEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "__typename")).get(),
             ).stringValue,
         )
@@ -102,20 +106,20 @@ interface EmptyObjectFragmentResolverContract :
         val world = testWorld.assumptions
         val result = resolveAndValidate(world, "fragment ignored on Query { items { computed } }")
         val items =
-            assertIs<EngineResult.List>(
+            assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
             )
-        val a = assertIs<EngineResult.Object>(items[0].get())
-        val b = assertIs<EngineResult.Object>(items[1].get())
+        val a = assertIs<ObjectEngineResult>(items[0].get())
+        val b = assertIs<ObjectEngineResult>(items[1].get())
 
         assertEquals(
-            Value.Int.of(2),
+            IntEngineResult.of(2),
             a.getCell(
                 world.schema.contractKey("A", "computed", mapOf("factor" to 2)),
             ).get(),
         )
         assertEquals(
-            Value.Int.of(3),
+            IntEngineResult.of(3),
             b.getCell(world.schema.contractKey("B", "computed")).get(),
         )
         assertEquals(listOf("A", "B"), applications)
@@ -150,13 +154,13 @@ interface EmptyObjectFragmentResolverContract :
         val result =
             resolveAndValidate(world, "fragment ignored on Query { item { computed } }")
         val item =
-            assertIs<EngineResult.Object>(
+            assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "item")).get(),
             )
         val concreteDefaultKey =
             world.schema.contractKey("ConcreteItem", "computed", mapOf("factor" to 7))
 
-        assertEquals(Value.Int.of(7), item.getCell(concreteDefaultKey).get())
+        assertEquals(IntEngineResult.of(7), item.getCell(concreteDefaultKey).get())
         assertEquals(
             expectedPassiveResultKeys(item.type, setOf(concreteDefaultKey)),
             item.keys,

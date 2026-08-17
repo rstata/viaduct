@@ -2,15 +2,16 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 
 /**
  * Whether this Query-rooted result is a correct field-resolution result for [selections].
  *
  * The judgment is plan-independent and does not observe access-acceptance results. Also,
- * this judgment is purposefully permissive: as long as the [EngineResult.Object] conforms
+ * this judgment is purposefully permissive: as long as the [ObjectEngineResult] conforms
  * to our world assumptions (e.g., regarding schema conformance and resolver conformance),
- * this predicate allows the [EngineResult.Object] to contain more values than the input
+ * this predicate allows the [ObjectEngineResult] to contain more values than the input
  * [selections] and implicated [model.registry.FieldResolver.objectFragment]s require. Other
  * predicates define various degrees of minimality.
  *
@@ -21,7 +22,7 @@ import model.ObjectSelectionForest
  * be reasoned about as inductively-defined relations, not recursive routines.
  */
 context(world: Assumptions)
-fun EngineResult.Object.correctResolution(selections: ObjectSelectionForest): Boolean {
+fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean {
     require(selections.type == world.schema.query) {
         "Correct-resolution selections must be rooted at Query"
     }

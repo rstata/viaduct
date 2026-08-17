@@ -7,6 +7,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.OpenArguments
@@ -22,6 +25,7 @@ import model.groundKey
 import model.localizeTopLevelSelectionStamps
 import model.merge
 import model.selectionForestOf
+import model.toEngineResult
 import model.usedVariables
 import model.variableArgumentNames
 import model.variableSourceSelectionStamps
@@ -44,7 +48,7 @@ import kotlin.coroutines.CoroutineContext
  * independently.
  */
 context(world: Assumptions)
-fun resolve(selections: SelectionForest): EngineResult.Object =
+fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(
         selections = selections,
         coroutineContext = resolver26CoroutineContext(),
@@ -55,14 +59,14 @@ internal fun resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
     applicationObserver: Resolver26ApplicationObserver = {},
-): EngineResult.Object {
+): ObjectEngineResult {
     require(world.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
     }
     val source = world.resolverRegistry.resolveRootQuery()
     context(RuntimeSupport.cycleChecking()) {
-        val result: EngineResult.Object =
-            EngineResult.Object.of(
+        val result: ObjectEngineResult =
+            ObjectEngineResult.of(
                 type = source.type,
                 mutable = true,
             )
@@ -92,7 +96,7 @@ context(world: Assumptions)
 internal fun resolveObserved(
     selections: SelectionForest,
     applicationObserver: Resolver26ApplicationObserver,
-): EngineResult.Object =
+): ObjectEngineResult =
     resolve(
         selections = selections,
         coroutineContext = resolver26CoroutineContext(),
@@ -129,7 +133,7 @@ private suspend fun orchestrateObject(
     path: List<PathComponent>,
     source: Value.Object,
     initialDemand: SelectionForest,
-    target: EngineResult.Object,
+    target: ObjectEngineResult,
     runtime: ResolverRuntime,
 ) {
     // Expands resolver object fragments to a fixpoint and returns one unique key map for this OER.
@@ -333,7 +337,7 @@ private suspend fun installAndLaunchFieldResolver(
     path: List<PathComponent>,
     selection: ObjectSelection,
     expansion: ResolverExpansion,
-    target: EngineResult.Object,
+    target: ObjectEngineResult,
     runtime: ResolverRuntime,
 ) {
     val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
@@ -483,7 +487,7 @@ private suspend fun resolveField(
     path: List<PathComponent>,
     selection: ObjectSelection,
     expansion: ResolverExpansion,
-    target: EngineResult.Object,
+    target: ObjectEngineResult,
     cell: EngineResult.Cell,
     variableArgumentCount: Int,
     variableSourceSelectionStamps: Set<SelectionStamp>,
@@ -494,7 +498,7 @@ private suspend fun resolveField(
         "Resolver26 resolveField received passive key $groundKey"
     }
     if (groundKey.arguments.argumentsContainErrorValue()) {
-        cell.getValue().complete(Value.Error)
+        cell.getValue().complete(ErrorEngineResult)
         cell.setAccessAccepted(Value.Error)
         return
     }
@@ -580,19 +584,19 @@ private fun launchPassiveChildOrchestrations(
         }
 
         Value.Error -> {
-            check(target == Value.Error) {
+            check(target == ErrorEngineResult) {
                 "Resolver26 passive error source has different result at $path"
             }
         }
 
         is Value.Simple -> {
-            check(target == source) {
+            check(target == source.toEngineResult()) {
                 "Resolver26 passive simple source has different result at $path"
             }
         }
 
         is Value.Object -> {
-            check(target is EngineResult.Object) {
+            check(target is ObjectEngineResult) {
                 "Resolver26 passive object source has non-object result at $path"
             }
             runtime.launchOrchestrationTask {
@@ -607,7 +611,7 @@ private fun launchPassiveChildOrchestrations(
         }
 
         is Value.OutputList -> {
-            check(target is EngineResult.List && target.size == source.values.size) {
+            check(target is ListEngineResult && target.size == source.values.size) {
                 "Resolver26 passive list source has different result shape at $path"
             }
             source.values.forEachIndexed { index, value ->

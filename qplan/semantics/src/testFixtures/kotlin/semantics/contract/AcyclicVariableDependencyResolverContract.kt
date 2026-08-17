@@ -1,6 +1,8 @@
 package semantics.contract
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ObjectEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -45,7 +47,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { c }")
 
-        assertEquals(Value.Int.of(1), resolved.getCell(cKey).get())
+        assertEquals(IntEngineResult.of(1), resolved.getCell(cKey).get())
         testWorld.applicationArguments.assertDistinctArguments(
             world.schema.objectField("Query", "a"),
             mapOf("seed" to 1),
@@ -88,9 +90,9 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val outerKey = world.schema.contractKey("Query", "outer")
 
-        val resolved: EngineResult.Object =
+        val resolved: ObjectEngineResult =
             resolveAndValidate(world, "fragment ignored on Query { outer }")
 
-        assertEquals(Value.Int.of(1), resolved.getCell(outerKey).get())
+        assertEquals(IntEngineResult.of(1), resolved.getCell(outerKey).get())
     }
 }

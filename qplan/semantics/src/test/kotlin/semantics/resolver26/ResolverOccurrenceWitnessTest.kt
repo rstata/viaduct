@@ -1,6 +1,7 @@
 package semantics.resolver26
 
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.TypeExpr
 import model.Value
@@ -78,7 +79,7 @@ class ResolverOccurrenceWitnessTest {
             )
         val log = ResolutionOccurrenceApplicationLog()
 
-        val result: EngineResult.Object =
+        val result: ObjectEngineResult =
             context(world) {
                 resolve(
                     selections = fragment.subselections,

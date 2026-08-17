@@ -6,14 +6,14 @@ The semantics project defines transformations, resolver algorithms, and correctn
 
 ```kotlin
 context(world: Assumptions)
-fun EngineResult.Object.correctResolution(selections: ObjectSelectionForest): Boolean
+fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
 `correctResolution` judges a completed Query OER extensionally. It does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests.
 
 ## Vocabulary
 
-An **OER** is an `EngineResult.Object`, always associated with one concrete GraphQL object type. An **LER** is an `EngineResult.List`, whose element cells preserve exact list positions. **SER** is occasional shorthand for a simple result, represented by `Value.Simple` in the current model. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and simple values remain explicit parts of the physical result.
+An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. **SER** is occasional shorthand for a `SimpleEngineResult`. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and simple values remain explicit parts of the physical result.
 
 When discussing relationships among OER occurrences, a list is treated as a one-to-many path edge. The object containing a list field is therefore the parent of each object element for resolver-ancestry purposes, while each `Value.ListIndex` remains part of the element's exact identity.
 

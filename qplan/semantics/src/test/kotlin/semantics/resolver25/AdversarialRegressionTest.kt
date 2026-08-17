@@ -2,6 +2,8 @@ package semantics.resolver25
 
 import java.time.Duration
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ObjectEngineResult
 import model.Value
 import model.fragmentFrom
 import model.objectOf
@@ -39,7 +41,7 @@ class AdversarialRegressionTest {
         passiveIntermediate: Boolean,
     ) {
         val expectedInput = provided as Value.Input?
-        val expectedResult = provided as EngineResult?
+        val expectedResult = if (provided == Value.Error) ErrorEngineResult else null
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {
             val providerSelection =
                 if (passiveIntermediate) {
@@ -102,7 +104,7 @@ class AdversarialRegressionTest {
                             "fragment ignored on Query { result }",
                         ).subselections,
                 )
-            val resolved: EngineResult.Object = observation.result
+            val resolved: ObjectEngineResult = observation.result
             val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
             assertContains(signatures, Resolver25StructuralSignature.NESTED_PROVIDER_PATH)
             assertContains(

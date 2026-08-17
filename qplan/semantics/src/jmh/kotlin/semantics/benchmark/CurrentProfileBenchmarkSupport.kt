@@ -3,6 +3,8 @@ package semantics.benchmark
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.Fragment
 import model.SelectionForest
 import model.SelectionStamp
@@ -41,7 +43,7 @@ internal fun interface ResolverBenchmarkSubject {
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object
+    ): ObjectEngineResult
 }
 
 internal fun interface ObservedResolverBenchmarkSubject {
@@ -50,7 +52,7 @@ internal fun interface ObservedResolverBenchmarkSubject {
         root: Value.Object,
         selections: SelectionForest,
         applicationObserver: (ResolverBenchmarkApplicationObservation) -> Unit,
-    ): EngineResult.Object
+    ): ObjectEngineResult
 }
 
 internal data class ResolverBenchmarkApplicationObservation(
@@ -311,7 +313,7 @@ internal class CurrentProfileBenchmarkSupport(
                     passiveFields = 0,
                     depth = depth,
                 )
-            is EngineResult.List ->
+            is ListEngineResult ->
                 indices
                     .map { index -> get(index).getValue().get().shape(depth) }
                     .fold(
@@ -324,7 +326,7 @@ internal class CurrentProfileBenchmarkSupport(
                     ) { result, child ->
                         result.combine(child)
                     }
-            is EngineResult.Object ->
+            is ObjectEngineResult ->
                 keys
                     .map { key ->
                         val child = getCell(key).getValue().get().shape(depth + 1)

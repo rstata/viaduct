@@ -3,6 +3,7 @@ package semantics.resolver26
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Fragment
 import model.fragmentFrom
 import model.objectOf
@@ -150,7 +151,7 @@ internal suspend fun runResolver26BroadStress(
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
                 testCase.registry.clearResolutionWitness()
                 resolutionCalls += 1
-                val result: EngineResult.Object =
+                val result: ObjectEngineResult =
                     context(world) {
                         resolve(fragment.subselections)
                     }

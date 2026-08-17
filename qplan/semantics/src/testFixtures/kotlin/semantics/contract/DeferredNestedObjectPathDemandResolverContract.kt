@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -51,7 +52,7 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
             )
 
         assertEquals(
-            Value.Int.of(7),
+            IntEngineResult.of(7),
             resolved
                 .getCell(
                     world.schema.contractKey("Query", "driver"),

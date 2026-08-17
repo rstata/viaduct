@@ -2,12 +2,13 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.Fragment
 import model.instantiateBindings
 import model.merge
 
 context(world: Assumptions)
-internal fun EngineResult.Object.correctResolution(fragment: Fragment): Boolean =
+internal fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
     fragment.nominalType == world.schema.query &&
         correctResolution(
             fragment.subselections
@@ -16,9 +17,9 @@ internal fun EngineResult.Object.correctResolution(fragment: Fragment): Boolean 
         )
 
 context(world: Assumptions)
-internal fun EngineResult.Object.rootedAndWellTyped(fragment: Fragment): Boolean =
+internal fun ObjectEngineResult.rootedAndWellTyped(fragment: Fragment): Boolean =
     fragment.nominalType == world.schema.query && rootedAndWellTyped()
 
 context(world: Assumptions)
-internal fun EngineResult.Object.conformsToFragment(fragment: Fragment): Boolean =
+internal fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
     conformsToSelections(fragment.subselections)

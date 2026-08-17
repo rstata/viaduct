@@ -2,6 +2,7 @@ package semantics.resolver21
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.Value
 import semantics.contract.CompleteResolverOutputPolicyContract
@@ -18,7 +19,7 @@ class ResolverContractTest :
         world: Assumptions,
         root: Value.Object,
         selections: SelectionForest,
-    ): EngineResult.Object =
+    ): ObjectEngineResult =
         context(world) {
             semantics.resolver21.resolve(selections)
         }

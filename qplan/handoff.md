@@ -26,7 +26,9 @@ Those exclusions guide compatibility choices during qplan alignment. They do not
 
 ## Current Carrier Boundary
 
-The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `EngineResult.Object` values keyed by `Value.GroundKey`; their cells carry independent write-once value and `accessAccepted` promises and use reference identity for result occurrences.
+The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `ObjectEngineResult` values keyed by `Value.GroundKey`; their cells carry independent write-once value and `accessAccepted` promises and use reference identity for result occurrences.
+
+The resolver-value and engine-result domains are now distinct at every GraphQL output shape. Resolver inputs and outputs use `Value`, while completed fields use `IntEngineResult`, `FloatEngineResult`, `StringEngineResult`, `BooleanEngineResult`, `IDEngineResult`, `EnumEngineResult`, `ObjectEngineResult`, `ListEngineResult`, or `ErrorEngineResult`. `toEngineResult` and `toValue` mark crossings for simple values. This temporary parallel hierarchy keeps result semantics independent while the resolver-value side moves toward the engine API's future `EngineValueData` boundary.
 
 Schema alignment is deliberately independent of this carrier migration. GraphQL-Java remains the source-facing schema representation, while qplan's lowered `Schema` is used exclusively for field-resolution reasoning. Do not transform the GraphQL-Java schema or make tenant-visible APIs expose bridge coordinates.
 
@@ -69,7 +71,7 @@ TLA+ refinement work is explicitly backlogged until the EOD carrier refactor sta
 
 - Does `EngineObjectData.Sync` become the object result carrier itself, or does qplan retain a typed occurrence wrapper around it?
 - Where should schema conformance and exact `GroundKey` validation live once field storage is name-keyed?
-- How should cell occurrence identity and write-once promise ownership be represented without relying on the current `EngineResult.Object` implementation?
+- How should cell occurrence identity and write-once promise ownership be represented without relying on the current `ObjectEngineResult` implementation?
 - Should `accessAccepted` remain a separate qplan cell fact, or map to an existing engine API concept outside EOD?
 - Which conversions belong to the model artifact and which are test-fixture or future integration adapters?
 - How should the TLA+ extraction boundary name the aligned carriers without claiming a refinement that has not been proved?

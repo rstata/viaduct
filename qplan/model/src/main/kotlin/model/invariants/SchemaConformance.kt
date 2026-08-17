@@ -2,7 +2,12 @@ package model.invariants
 
 import model.Assumptions
 import model.EngineResult
+import model.EnumEngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.Schema
+import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.canContainPure
@@ -81,9 +86,10 @@ fun Value.Key.conformsToSchema(): Boolean {
 context(world: Assumptions)
 fun EngineResult.conformsToSchema(): Boolean =
     when (this) {
-        Value.Error -> true
-        is Value.Simple -> (this as Value).conformsToSchema()
-        is EngineResult.Object ->
+        ErrorEngineResult -> true
+        is EnumEngineResult -> enumValue in type.values
+        is SimpleEngineResult -> true
+        is ObjectEngineResult ->
             keys.all { key ->
                 val value = getCell(key).getValue().get()
                 key.field.containingType == type &&
@@ -91,7 +97,7 @@ fun EngineResult.conformsToSchema(): Boolean =
                     value.conformsToSchemaType(key.field.typeExpr) &&
                     (value?.conformsToSchema() ?: true)
             }
-        is EngineResult.List ->
+        is ListEngineResult ->
             all { cell ->
                 val value = cell.getValue().get()
                 value.conformsToSchemaType(typeExpr) &&
@@ -148,17 +154,17 @@ internal fun EngineResult?.conformsToSchemaType(
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
-        Value.Error -> true
-        is Value.Simple ->
+        ErrorEngineResult -> true
+        is SimpleEngineResult ->
             typeExpr is TypeExpr.Named && typeExpr.baseType == type
-        is EngineResult.Object ->
+        is ObjectEngineResult ->
             if (typeExpr is TypeExpr.Named) {
                 val declaredType = typeExpr.baseType
                 declaredType is Schema.CompositeType && type in declaredType.possibleTypes
             } else {
                 false
             }
-        is EngineResult.List ->
+        is ListEngineResult ->
             typeExpr is TypeExpr.List &&
                 typeExpr.elementType.canContainPure(this.typeExpr)
     }

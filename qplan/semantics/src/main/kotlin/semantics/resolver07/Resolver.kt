@@ -2,6 +2,7 @@ package semantics.resolver07
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.registry.successorBoundaryDemand
 import semantics.DepthFirstReactor
@@ -13,14 +14,14 @@ import semantics.RuntimeSupport
  * Results may contain more OER nodes than are strictly necessary to resolve the query.
  */
 context(world: Assumptions)
-fun resolve(selections: SelectionForest): EngineResult.Object =
+fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(selections, eventObserver = {})
 
 context(world: Assumptions)
 internal fun resolve(
     selections: SelectionForest,
     eventObserver: ReactorEventObserver,
-): EngineResult.Object {
+): ObjectEngineResult {
     require(!world.selectiveResolvers) {
         "Resolver07 requires non-selective resolvers"
     }

@@ -1,6 +1,8 @@
 package semantics.contract
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ObjectEngineResult
 import model.Schema
 import model.Value
 import model.fragmentFrom
@@ -70,10 +72,10 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         val resolved =
             resolveAndValidate(world, fragment)
-        val foo = resolved.getCell(fooKey).get() as EngineResult.Object
+        val foo = resolved.getCell(fooKey).get() as ObjectEngineResult
 
-        assertEquals(Value.Int.of(10), foo.getCell(xKey).get())
-        assertEquals(Value.Int.of(21), foo.getCell(yKey).get())
+        assertEquals(IntEngineResult.of(10), foo.getCell(xKey).get())
+        assertEquals(IntEngineResult.of(21), foo.getCell(yKey).get())
         assertEquals(1, fooApplications)
         assertEquals(setOf("x", "y", "z", "w"), fooDemandFields)
         assertTrue(context(world) { resolved.correctResolution(fragment) })
@@ -134,7 +136,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment Query on Query { trigger }")
 
-        assertEquals(Value.Int.of(2), resolved.getCell(triggerKey).get())
+        assertEquals(IntEngineResult.of(2), resolved.getCell(triggerKey).get())
         assertEquals(1, nodeApplications)
         assertEquals(setOf("first", "second"), nodeDemandFields)
         testWorld.applicationArguments.assertArguments(
@@ -192,7 +194,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment Query on Query { late }")
 
-        assertEquals(Value.Int.of(7), resolved.getCell(lateKey).get())
+        assertEquals(IntEngineResult.of(7), resolved.getCell(lateKey).get())
         assertEquals(1, parentApplications)
         assertEquals(
             when (lateAncestorDemandPolicy) {
@@ -252,7 +254,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment Query on Query { result }")
 
-        assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(7), resolved.getCell(resultKey).get())
         assertEquals(1, holderApplications)
         assertEquals(1, computedApplications)
     }
@@ -303,9 +305,9 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
         val parentKey = world.schema.contractKey("Query", "parent")
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { early outer }")
-        val parent = resolved.getCell(parentKey).get() as EngineResult.Object
+        val parent = resolved.getCell(parentKey).get() as ObjectEngineResult
 
-        assertEquals(Value.Int.of(1), resolved.getCell(outerKey).get())
+        assertEquals(IntEngineResult.of(1), resolved.getCell(outerKey).get())
         assertEquals(1, parentApplications)
         val expectedChildApplications =
             when (variableSelectionIdentityPolicy) {

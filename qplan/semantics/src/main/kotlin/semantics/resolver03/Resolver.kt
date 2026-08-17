@@ -2,6 +2,7 @@ package semantics.resolver03
 
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.registry.successorDemand
 import semantics.RuntimeSupport
@@ -12,7 +13,7 @@ import semantics.orchestrateKeys
  * necessary OER nodes has not been proved.
  */
 context(world: Assumptions)
-fun resolve(selections: SelectionForest): EngineResult.Object {
+fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(world.selectiveResolvers) {
         "Resolver03 requires selective resolvers"
     }
@@ -25,7 +26,7 @@ fun resolve(selections: SelectionForest): EngineResult.Object {
         source.orchestrateKeys(
             path = emptyList(),
             selections = selections,
-            resolved = EngineResult.Object.of(source.type, emptyMap(), mutable = true),
+            resolved = ObjectEngineResult.of(source.type, emptyMap(), mutable = true),
         )
     }
 }

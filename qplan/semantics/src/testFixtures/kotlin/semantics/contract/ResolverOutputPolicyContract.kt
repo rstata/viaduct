@@ -1,6 +1,7 @@
 package semantics.contract
 
 import model.EngineResult
+import model.ObjectEngineResult
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
@@ -118,7 +119,7 @@ private fun ResolverContract.resolvePassiveOutputFixture(): PassiveOutputFixture
     val result =
         resolveAndValidate(world, "fragment ignored on Query { user { requested } }")
     val user =
-        assertIs<EngineResult.Object>(
+        assertIs<ObjectEngineResult>(
             result.getCell(world.schema.contractKey("Query", "user")).get(),
         )
     return PassiveOutputFixtureResult(
@@ -171,11 +172,11 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
     val result =
         resolveAndValidate(world, "fragment ignored on Query { chain { computed } }")
     val chain =
-        assertIs<EngineResult.Object>(
+        assertIs<ObjectEngineResult>(
             result.getCell(world.schema.contractKey("Query", "chain")).get(),
         )
     val next =
-        assertIs<EngineResult.Object>(
+        assertIs<ObjectEngineResult>(
             chain.getCell(world.schema.contractKey("Chain", "next")).get(),
         )
     val nextKey = world.schema.contractKey("Chain", "next")

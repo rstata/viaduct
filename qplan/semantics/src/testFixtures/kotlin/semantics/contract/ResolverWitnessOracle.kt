@@ -3,6 +3,7 @@ package semantics.contract
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.Value
@@ -112,7 +113,7 @@ fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolv
 
 context(world: Assumptions)
 private fun FieldResolver.objectFragmentSatisfiedBy(
-    result: EngineResult.Object,
+    result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ObjectSelectionForest? {
     val groundKey = path.lastOrNull() as? Value.GroundKey

@@ -3,9 +3,13 @@ package semantics
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
+import model.SimpleEngineResult
 import model.UncompletedPromiseException
 import model.Value
 import model.emptyFragmentOf
@@ -149,7 +153,7 @@ class CoroutineResolveTest {
             }
 
         assertEquals(expectedChildKeys, childRegistrations)
-        val child = assertIs<EngineResult.Object>(result.getCell(childKey).getValue().get())
+        val child = assertIs<ObjectEngineResult>(result.getCell(childKey).getValue().get())
         assertEquals(expectedChildResultKeys, child.keys)
     }
 
@@ -296,13 +300,14 @@ class CoroutineResolveTest {
 private fun assertCompletedAndWriteOnce(result: EngineResult?) {
     when (result) {
         null,
-        is Value.Simple,
+        ErrorEngineResult,
+        is SimpleEngineResult,
         -> Unit
-        is EngineResult.List ->
+        is ListEngineResult ->
             result.indices.forEach { index ->
                 assertCompletedAndWriteOnce(result[index].getValue().get())
             }
-        is EngineResult.Object ->
+        is ObjectEngineResult ->
             result.keys.forEach { key ->
                 val promise = result.getCell(key).getValue()
                 val value = promise.get()

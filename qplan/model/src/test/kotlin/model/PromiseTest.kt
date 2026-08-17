@@ -74,7 +74,7 @@ class PromiseTest {
                 emptyMap(),
             )
         val promise =
-            EngineResult.Object
+            ObjectEngineResult
                 .of(schema.query, mutable = true)
                 .reserveCell(field)
                 .createValuePromise()
@@ -86,7 +86,7 @@ class PromiseTest {
             promise.get()
         }
 
-        promise.complete(Value.String.of("ready"))
-        assertEquals(Value.String.of("ready"), promise.get())
+        promise.complete(StringEngineResult.of("ready"))
+        assertEquals(StringEngineResult.of("ready"), promise.get())
     }
 }

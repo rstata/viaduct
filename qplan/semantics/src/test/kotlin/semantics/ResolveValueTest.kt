@@ -1,8 +1,12 @@
 package semantics
 
 import model.EngineResult
+import model.IntEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
+import model.StringEngineResult
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
@@ -95,15 +99,15 @@ class ResolveValueTest {
                 )
             }
 
-        val result = assertIs<EngineResult.Object>(resolved.engineResult)
+        val result = assertIs<ObjectEngineResult>(resolved.engineResult)
         val typeName =
-            assertIs<Value.String>(
+            assertIs<StringEngineResult>(
                 result.getCell(typeNameKey).getValue().get(),
             )
         assertEquals("User", typeName.stringValue)
         assertTrue(computedKey !in result.keys)
 
-        val profile = assertIs<EngineResult.Object>(result.getCell(profileKey).getValue().get())
+        val profile = assertIs<ObjectEngineResult>(result.getCell(profileKey).getValue().get())
         assertEquals(userType, result.type)
         assertEquals(profileType, profile.type)
         assertEquals(setOf(rawKey), profile.keys)
@@ -191,9 +195,9 @@ class ResolveValueTest {
                 )
             }
 
-        val result = assertIs<EngineResult.Object>(resolved.engineResult)
+        val result = assertIs<ObjectEngineResult>(resolved.engineResult)
         assertEquals(setOf(typeNameKey, nameKey, profileKey), result.keys)
-        val profile = assertIs<EngineResult.Object>(result.getCell(profileKey).getValue().get())
+        val profile = assertIs<ObjectEngineResult>(result.getCell(profileKey).getValue().get())
         assertEquals(setOf(profileTypeNameKey, rawKey), profile.keys)
         assertEquals(
             setOf(emptyList()),
@@ -280,7 +284,7 @@ class ResolveValueTest {
                 )
             }
 
-        val result = assertIs<EngineResult.Object>(resolved.engineResult)
+        val result = assertIs<ObjectEngineResult>(resolved.engineResult)
         assertEquals(setOf(typeNameKey, selectedKey, extraKey), result.keys)
     }
 
@@ -379,13 +383,13 @@ class ResolveValueTest {
                 when (objectResolution.target.type.typeName) {
                     "Item" ->
                         objectResolution.target.reserveCell(computedKey).also { cell ->
-                            cell.setValue(Value.Int.of(1))
+                            cell.setValue(IntEngineResult.of(1))
                             cell.setAccessAccepted(Value.Boolean.of(true))
                         }
 
                     "Nested" ->
                         objectResolution.target.reserveCell(renderedKey).also { cell ->
-                            cell.setValue(Value.Int.of(2))
+                            cell.setValue(IntEngineResult.of(2))
                             cell.setAccessAccepted(Value.Boolean.of(true))
                         }
 
@@ -405,19 +409,19 @@ class ResolveValueTest {
         )
         assertSame(resolvedValue.engineResult, replayed)
 
-        val result = assertIs<EngineResult.List>(replayed)
+        val result = assertIs<ListEngineResult>(replayed)
         result.forEachIndexed { index, cell ->
-            val item = assertIs<EngineResult.Object>(cell.getValue().get())
+            val item = assertIs<ObjectEngineResult>(cell.getValue().get())
             val itemPath = rootPath + Value.ListIndex.of(index)
             assertSame(item, resolutionsByPath.getValue(itemPath).target)
-            assertEquals(Value.Int.of(1), item.getCell(computedKey).getValue().get())
+            assertEquals(IntEngineResult.of(1), item.getCell(computedKey).getValue().get())
 
-            val nested = assertIs<EngineResult.Object>(item.getCell(nestedKey).getValue().get())
+            val nested = assertIs<ObjectEngineResult>(item.getCell(nestedKey).getValue().get())
             assertSame(
                 nested,
                 resolutionsByPath.getValue(itemPath + nestedKey).target,
             )
-            assertEquals(Value.Int.of(2), nested.getCell(renderedKey).getValue().get())
+            assertEquals(IntEngineResult.of(2), nested.getCell(renderedKey).getValue().get())
         }
     }
 }

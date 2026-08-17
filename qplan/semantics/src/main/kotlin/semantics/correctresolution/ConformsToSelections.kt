@@ -2,9 +2,13 @@ package semantics.correctresolution
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
+import model.SimpleEngineResult
 import model.Value
 import model.applicableGroundSelections
 import model.groundKey
@@ -24,24 +28,24 @@ import model.localizeTopLevelSelectionStamps
  * This operation is defined only when applicable selection keys contain no unbound variables.
  */
 context(world: Assumptions)
-fun EngineResult.Object.conformsToSelections(selections: SelectionForest): Boolean =
+fun ObjectEngineResult.conformsToSelections(selections: SelectionForest): Boolean =
     conformsToSelectionsAt(selections, emptyList())
 
 context(world: Assumptions)
-fun EngineResult.Object.conformsToSelections(selections: ObjectSelectionForest): Boolean {
+fun ObjectEngineResult.conformsToSelections(selections: ObjectSelectionForest): Boolean {
     selections.byGroundKey()
     return type == selections.type && conformsToSelectionsAt(selections, emptyList())
 }
 
 // Checks selections rooted at an OER whose exact absolute path is supplied by the caller.
 context(world: Assumptions)
-fun EngineResult.Object.conformsToSelectionsAt(
+fun ObjectEngineResult.conformsToSelectionsAt(
     selections: SelectionForest,
     path: List<PathComponent>,
 ): Boolean = objectConformsToSelections(selections, path)
 
 context(world: Assumptions)
-private fun EngineResult.Object.objectConformsToSelections(
+private fun ObjectEngineResult.objectConformsToSelections(
     selections: SelectionForest,
     path: List<PathComponent>,
 ): Boolean =
@@ -64,16 +68,16 @@ private fun EngineResult?.engineResultConformsToSelections(
 ): Boolean =
     when (this) {
         null,
-        Value.Error,
-        is Value.Simple,
+        ErrorEngineResult,
+        is SimpleEngineResult,
         -> true
 
-        is EngineResult.Object ->
+        is ObjectEngineResult ->
             objectConformsToSelections(
                 selections = selections.localizeTopLevelSelectionStamps(path),
                 path = path,
             )
-        is EngineResult.List ->
+        is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultConformsToSelections(
                     selections = selections,

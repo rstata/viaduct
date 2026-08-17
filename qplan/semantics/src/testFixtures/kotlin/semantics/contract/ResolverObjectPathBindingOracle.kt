@@ -2,6 +2,9 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
@@ -15,6 +18,7 @@ import model.registry.FieldResolver
 import model.registry.StampedObjectPathDefinition
 import model.registry.VariableDefinition
 import model.selectionForestOf
+import model.toValue
 import semantics.arbitrary.registeredResolverOccurrences
 import kotlin.test.assertEquals
 
@@ -22,7 +26,7 @@ import kotlin.test.assertEquals
  * Independently reads every activated object-path provider from the completed result.
  */
 context(world: Assumptions)
-fun EngineResult.Object.validateObjectPathBindings() {
+fun ObjectEngineResult.validateObjectPathBindings() {
     registeredResolverOccurrences(world.resolverRegistry).forEach { cell ->
         val resolver =
             world.resolverRegistry.resolver(
@@ -70,7 +74,7 @@ internal fun FieldResolver.boundObjectPathDefinitions(
 }
 
 context(world: Assumptions)
-private fun EngineResult.Object.readCompletedProvider(
+private fun ObjectEngineResult.readCompletedProvider(
     path: List<Value.Key>,
 ): Value.Input? {
     var current = this
@@ -96,10 +100,10 @@ private fun EngineResult.Object.readCompletedProvider(
                 .single()
         val value = current.getCell(key).get()
         if (value == null) return null
-        if (value == Value.Error) return Value.Error
+        if (value == ErrorEngineResult) return Value.Error
         if (index == path.lastIndex) return value.toInputValue()
         current =
-            value as? EngineResult.Object
+            value as? ObjectEngineResult
                 ?: error("Completed provider path crossed a non-object at $key")
     }
     error("Provider path must be nonempty")
@@ -107,15 +111,15 @@ private fun EngineResult.Object.readCompletedProvider(
 
 private fun EngineResult.toInputValue(): Value.Input =
     when (this) {
-        Value.Error -> Value.Error
-        is Value.Simple -> this
-        is EngineResult.List -> toInputList()
-        is EngineResult.Object ->
+        ErrorEngineResult -> Value.Error
+        is model.SimpleEngineResult -> toValue()
+        is ListEngineResult -> toInputList()
+        is ObjectEngineResult ->
             error("An object-path provider cannot terminate at an object")
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun EngineResult.List.toInputList(): Value.InputList {
+private fun ListEngineResult.toInputList(): Value.InputList {
     require(typeExpr.baseType is Schema.InputType)
     return Value.InputList.of(
         typeExpr = typeExpr as TypeExpr<Schema.InputType>,

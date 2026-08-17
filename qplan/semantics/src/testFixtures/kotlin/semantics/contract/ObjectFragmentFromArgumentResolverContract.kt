@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.IntEngineResult
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -55,8 +56,8 @@ interface ObjectFragmentFromArgumentResolverContract :
                 """.trimIndent(),
             )
 
-        assertEquals(Value.Int.of(14), resolved.getCell(firstKey).get())
-        assertEquals(Value.Int.of(16), resolved.getCell(secondKey).get())
+        assertEquals(IntEngineResult.of(14), resolved.getCell(firstKey).get())
+        assertEquals(IntEngineResult.of(16), resolved.getCell(secondKey).get())
         testWorld.applicationArguments.assertArguments(
             world.schema.field("Query", "consume"),
             mapOf("value" to 7),
@@ -134,7 +135,7 @@ interface ObjectFragmentFromArgumentResolverContract :
         val resolved =
             resolveAndValidate(world, "fragment ignored on Query { result(value: 7) }")
 
-        assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
+        assertEquals(IntEngineResult.of(7), resolved.getCell(resultKey).get())
     }
 
     @Test
@@ -162,6 +163,6 @@ interface ObjectFragmentFromArgumentResolverContract :
             )
         val resolved = resolveAndValidate(world, "fragment ignored on Query { one(seed: 7) }")
 
-        assertEquals(Value.Int.of(8), resolved.getCell(oneKey).get())
+        assertEquals(IntEngineResult.of(8), resolved.getCell(oneKey).get())
     }
 }

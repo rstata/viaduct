@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.ObjectEngineResult
+
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -192,7 +194,7 @@ class LifecycleInstrumentationTest {
                                 val seed =
                                     arguments.fieldValues.getValue("seed") as Value.Int
                                 input.fieldValues.getValue(
-                                    Value.GroundKey.of(
+                                    ObjectEngineResult.GroundKey.of(
                                         consume,
                                         mapOf("value" to seed.intValue),
                                     ),

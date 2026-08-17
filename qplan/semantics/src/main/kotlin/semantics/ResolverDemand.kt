@@ -1,5 +1,7 @@
 package semantics
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.ObjectSelectionForest
 import model.PathComponent
@@ -31,7 +33,7 @@ context(world: Assumptions)
 private fun Schema.ObjectType.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
-    expanded: Set<Value.GroundKey>,
+    expanded: Set<ObjectEngineResult.GroundKey>,
 ): ObjectSelectionForest {
     val applicableSelections = selections.applicableGroundSelections(this)
     val unexpandedResolverKeys =

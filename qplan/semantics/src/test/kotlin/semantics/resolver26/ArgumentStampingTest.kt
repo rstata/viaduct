@@ -77,12 +77,12 @@ class ArgumentStampingTest {
         val world: Assumptions = testWorld.assumptions
         val resultField: Schema.ObjectField =
             world.schema.objectField("Query", "result")
-        val resultKey: Value.GroundKey =
-            Value.GroundKey.of(resultField, mapOf("seed" to 7))
+        val resultKey: ObjectEngineResult.GroundKey =
+            ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
         val boxType: Schema.ObjectType =
             world.schema.type("Box") as Schema.ObjectType
-        val boxKey: Value.GroundKey =
-            Value.GroundKey.of(
+        val boxKey: ObjectEngineResult.GroundKey =
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "box"),
                 emptyMap(),
             )
@@ -96,7 +96,7 @@ class ArgumentStampingTest {
             childDemand.stampedVariables().single()
         world.bindVariable(sourceVariable, Value.Int.of(7))
 
-        val groundThenLocalize: Value.GroundKey =
+        val groundThenLocalize: ObjectEngineResult.GroundKey =
             context(world) {
                 childDemand
                     .merge(boxType)
@@ -111,7 +111,7 @@ class ArgumentStampingTest {
         val localizedVariable: Value.Variable.Stamped =
             localizedDemand.stampedVariables().single()
         world.bindVariable(localizedVariable, Value.Int.of(7))
-        val localizeThenGround: Value.GroundKey =
+        val localizeThenGround: ObjectEngineResult.GroundKey =
             context(world) {
                 localizedDemand
                     .merge(boxType)
@@ -123,7 +123,7 @@ class ArgumentStampingTest {
         assertEquals(groundThenLocalize, localizeThenGround)
         assertEquals(
             listOf(resultKey, boxKey),
-            assertIs<Value.GroundKey.Stamped>(localizeThenGround)
+            assertIs<ObjectEngineResult.GroundKey.Stamped>(localizeThenGround)
                 .selectionStamp
                 .resolverPath,
         )
@@ -155,11 +155,11 @@ class ArgumentStampingTest {
                 fieldResolvers = { schema ->
                     val result = schema.objectField("Query", "result")
                     val items = schema.objectField("Query", "items")
-                    val itemsKey = Value.GroundKey.of(items, emptyMap())
+                    val itemsKey = ObjectEngineResult.GroundKey.of(items, emptyMap())
                     val itemType =
                         (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
                     val child = schema.objectField("Item", "child")
-                    val visibleChildKey = Value.GroundKey.of(child, mapOf("value" to 7))
+                    val visibleChildKey = ObjectEngineResult.GroundKey.of(child, mapOf("value" to 7))
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
@@ -201,12 +201,12 @@ class ArgumentStampingTest {
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 mapOf("seed" to 7),
             )
         val itemsKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "items"),
                 emptyMap(),
             )
@@ -228,14 +228,14 @@ class ArgumentStampingTest {
                     item.keys.single { groundKey ->
                         groundKey.field.fieldName == "child"
                     }
-                assertIs<Value.GroundKey.Stamped>(childKey).selectionStamp
+                assertIs<ObjectEngineResult.GroundKey.Stamped>(childKey).selectionStamp
             }
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
         assertEquals(
             listOf(
-                listOf(resultKey, itemsKey, Value.ListIndex.of(0)),
-                listOf(resultKey, itemsKey, Value.ListIndex.of(1)),
+                listOf(resultKey, itemsKey, ListEngineResult.Index.of(0)),
+                listOf(resultKey, itemsKey, ListEngineResult.Index.of(1)),
             ),
             stamps.map { stamp -> stamp.resolverPath },
         )
@@ -272,14 +272,14 @@ class ArgumentStampingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val frank = schema.objectField("Query", "frank")
-                    val frankKey = Value.GroundKey.of(frank, mapOf("arg" to "hi"))
+                    val frankKey = ObjectEngineResult.GroundKey.of(frank, mapOf("arg" to "hi"))
                     val oneKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "one"),
                             emptyMap(),
                         )
                     val twoKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "two"),
                             emptyMap(),
                         )
@@ -324,7 +324,7 @@ class ArgumentStampingTest {
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 mapOf(
                     "seed" to "hi",
@@ -379,14 +379,14 @@ class ArgumentStampingTest {
                 fieldResolvers = { schema ->
                     val payloadType = schema.type("Payload") as Schema.ObjectType
                     val frank = schema.objectField("Query", "frank")
-                    val frankKey = Value.GroundKey.of(frank, mapOf("arg" to "hi"))
+                    val frankKey = ObjectEngineResult.GroundKey.of(frank, mapOf("arg" to "hi"))
                     val oneKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "one"),
                             emptyMap(),
                         )
                     val twoKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "two"),
                             emptyMap(),
                         )
@@ -432,12 +432,12 @@ class ArgumentStampingTest {
             )
         val world = testWorld.assumptions
         val leftKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "left"),
                 mapOf("seed" to "hi"),
             )
         val rightKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "right"),
                 mapOf("seed" to "hi"),
             )
@@ -462,7 +462,7 @@ class ArgumentStampingTest {
         assertEquals(IntEngineResult.of(5), resolved.getCell(rightKey).getValue().get())
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { groundKey ->
-            val stampedKey = assertIs<Value.GroundKey.Stamped>(groundKey)
+            val stampedKey = assertIs<ObjectEngineResult.GroundKey.Stamped>(groundKey)
             assertTrue(
                 stampedKey.selectionStamp.sourceKey.arguments !is
                     OpenArguments.Stamped,

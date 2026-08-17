@@ -1,5 +1,7 @@
 package semantics.resolver26
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.fragmentFrom
@@ -34,7 +36,7 @@ class FromObjectFieldSingletonCoercionRegressionTest {
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 emptyMap(),
             )

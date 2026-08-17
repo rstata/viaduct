@@ -66,7 +66,7 @@ class ValueVariableTest {
         val first = schema.objectField("Query", "first")
         val second = schema.objectField("Query", "second")
         val template = Value.Variable.of(first, "value")
-        val path = listOf(Value.ListIndex.of(0))
+        val path = listOf(ListEngineResult.Index.of(0))
         val stamp = template.stamp(path)
 
         assertEquals(template.stamp(path), stamp)
@@ -112,7 +112,7 @@ class ValueVariableTest {
                     "values" to listOf(template),
                 ),
             )
-        val path = listOf(Value.ListIndex.of(2))
+        val path = listOf(ListEngineResult.Index.of(2))
 
         val stamped = arguments.stampVars(path)
         val stampedVariable = template.stamp(path)
@@ -151,7 +151,7 @@ class ValueVariableTest {
         val source = world.schema.objectField("Query", "source")
         val consume = world.schema.objectField("Query", "consume")
         val template = Value.Variable.of(source, "value")
-        val path = listOf(Value.ListIndex.of(2))
+        val path = listOf(ListEngineResult.Index.of(2))
         val variable = template.stamp(path)
         val arguments =
             OpenArguments.of(
@@ -191,12 +191,12 @@ class ValueVariableTest {
             )
         val sourceSelection =
             Selection.of(
-                key = Value.Key.of(consume, arguments),
+                key = ObjectEngineResult.Key.of(consume, arguments),
                 possibleTypes = setOf(world.schema.query),
                 subselections = selectionForestOf(),
             )
-        val firstPath = listOf(Value.ListIndex.of(1))
-        val secondPath = listOf(Value.ListIndex.of(2))
+        val firstPath = listOf(ListEngineResult.Index.of(1))
+        val secondPath = listOf(ListEngineResult.Index.of(2))
         val occurrenceId = SelectionOccurrenceId(sourceSelection.key)
         val firstStamp = SelectionStamp(firstPath, listOf(occurrenceId))
         val secondStamp = SelectionStamp(secondPath, listOf(occurrenceId))
@@ -207,11 +207,11 @@ class ValueVariableTest {
         world.completeBinding(firstVariable, Value.Int.of(9))
         world.completeBinding(secondVariable, Value.Int.of(9))
 
-        fun ground(arguments: OpenArguments): Value.GroundKey =
+        fun ground(arguments: OpenArguments): ObjectEngineResult.GroundKey =
             context(world) {
                 selectionForestOf(
                     Selection.of(
-                        key = Value.Key.of(consume, arguments),
+                        key = ObjectEngineResult.Key.of(consume, arguments),
                         possibleTypes = setOf(world.schema.query),
                         subselections = selectionForestOf(),
                     ),
@@ -224,7 +224,7 @@ class ValueVariableTest {
         val first = ground(arguments.stamp(firstStamp))
         val equalFirst = ground(arguments.stamp(firstStamp))
         val second = ground(arguments.stamp(secondStamp))
-        val unstamped = Value.GroundKey.of(consume, mapOf("value" to 9))
+        val unstamped = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 9))
         val reapplied =
             context(world) {
                 selectionForestOf(
@@ -238,11 +238,11 @@ class ValueVariableTest {
                     .single()
             }
 
-        assertIs<Value.GroundKey.Stamped>(first)
+        assertIs<ObjectEngineResult.GroundKey.Stamped>(first)
         assertEquals(first, equalFirst)
         assertEquals(first, reapplied)
         assertNotEquals(first, second)
-        assertNotEquals<Value.GroundKey>(first, unstamped)
+        assertNotEquals<ObjectEngineResult.GroundKey>(first, unstamped)
         assertEquals(Value.Int.of(9), first.arguments.fieldValues.getValue("value"))
     }
 
@@ -285,7 +285,7 @@ class ValueVariableTest {
                 ).assumptions
             val source = world.schema.objectField("Query", "source")
             val consume = world.schema.objectField("Query", "consume")
-            val stamp = listOf(Value.ListIndex.of(1))
+            val stamp = listOf(ListEngineResult.Index.of(1))
             val variableTemplate = Value.Variable.of(source, "value")
             val openArguments =
                 OpenArguments.of(
@@ -299,7 +299,7 @@ class ValueVariableTest {
                 )
             val sourceSelection =
                 Selection.of(
-                    key = Value.Key.of(consume, openArguments),
+                    key = ObjectEngineResult.Key.of(consume, openArguments),
                     possibleTypes = setOf(world.schema.query),
                     subselections = selectionForestOf(),
                 )

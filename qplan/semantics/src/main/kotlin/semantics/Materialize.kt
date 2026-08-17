@@ -57,10 +57,10 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
 ): Value.Object {
-    val selectedValues = linkedMapOf<Value.GroundKey, Value.Output?>()
+    val selectedValues = linkedMapOf<ObjectEngineResult.GroundKey, Value.Output?>()
     selections.byGroundKey().forEach { (storedKey, selection) ->
         val visibleKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 field = storedKey.field,
                 arguments = storedKey.arguments.fieldValues,
             )
@@ -127,7 +127,7 @@ private suspend fun ListEngineResult.materializeValues(
             get(index).getValue().await().materializeEngineResultValue(
                 selections = selections,
                 reader = reader,
-                resultPath = resultPath + Value.ListIndex.of(index),
+                resultPath = resultPath + ListEngineResult.Index.of(index),
             )
     }
     return materialized

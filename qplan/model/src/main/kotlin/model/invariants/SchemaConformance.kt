@@ -71,7 +71,7 @@ fun Value.Arguments.conformsToSchema(): Boolean =
 
 /** Whether this key's arguments recursively conform to its output field. */
 context(world: Assumptions)
-fun Value.Key.conformsToSchema(): Boolean {
+fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
     val keyArguments = arguments
     return keyArguments.type == field.arguments &&
         (keyArguments !is Value.Arguments || keyArguments.conformsToSchema())

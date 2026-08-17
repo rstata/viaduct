@@ -1,5 +1,7 @@
 package semantics.resolver26
 
+import model.ListEngineResult
+import model.ObjectEngineResult
 import model.PathComponent
 import model.Value
 import semantics.arbitrary.ArbitraryRegistry
@@ -33,7 +35,7 @@ internal fun resolver26StructuralSignatures(
     val signatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
     val stampedOccurrences: List<RegisteredResolverOccurrence> =
         occurrences.filter { occurrence ->
-            occurrence.groundKey() is Value.GroundKey.Stamped
+            occurrence.groundKey() is ObjectEngineResult.GroundKey.Stamped
         }
     val activeSourceFields: Set<FieldCoordinate> =
         witness.applications
@@ -48,9 +50,9 @@ internal fun resolver26StructuralSignatures(
     }
     if (
         stampedOccurrences.any { occurrence ->
-            val stampedGroundKey = occurrence.groundKey() as Value.GroundKey.Stamped
+            val stampedGroundKey = occurrence.groundKey() as ObjectEngineResult.GroundKey.Stamped
             stampedGroundKey.selectionStamp.resolverPath.any { component ->
-                component is Value.ListIndex
+                component is ListEngineResult.Index
             }
         }
     ) {
@@ -68,7 +70,7 @@ internal fun resolver26StructuralSignatures(
             .any { equalVisibleOccurrences ->
                 equalVisibleOccurrences
                     .map { occurrence ->
-                        (occurrence.groundKey() as Value.GroundKey.Stamped).selectionStamp
+                        (occurrence.groundKey() as ObjectEngineResult.GroundKey.Stamped).selectionStamp
                     }.toSet()
                     .size > 1
             }
@@ -140,8 +142,8 @@ private data class VisibleResolverOccurrence(
 )
 
 // Returns the exact stored key at this registered resolver occurrence.
-private fun RegisteredResolverOccurrence.groundKey(): Value.GroundKey =
-    occurrencePath.last() as Value.GroundKey
+private fun RegisteredResolverOccurrence.groundKey(): ObjectEngineResult.GroundKey =
+    occurrencePath.last() as ObjectEngineResult.GroundKey
 
 // Reports whether this recorded application belongs to a FromArgument variable owner.
 private fun ArbitraryRegistry.applicationUsesFromArgumentVariable(

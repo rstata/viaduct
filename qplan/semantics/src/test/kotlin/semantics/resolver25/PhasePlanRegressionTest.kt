@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.fragmentFrom
@@ -40,7 +42,7 @@ class PhasePlanRegressionTest {
             )
         val world = testWorld.assumptions
         val outerKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "outer"),
                 emptyMap(),
             )

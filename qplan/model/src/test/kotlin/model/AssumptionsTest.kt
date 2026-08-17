@@ -260,7 +260,7 @@ class AssumptionsTest {
             assertIs<Value.String>(tags.values.single()).stringValue,
         )
         val nodeKey =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = nodeField,
                 arguments = mapOf("filter" to filterValue),
             )
@@ -269,18 +269,18 @@ class AssumptionsTest {
         assertEquals(filterValue, nodeKey.arguments.fieldExpressions()["filter"])
         assertEquals(
             nodeKey,
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = nodeField,
                 arguments = mapOf("filter" to filterValue),
             ),
         )
         val interfaceIdKey =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = schema.field("Node", "id"),
                 arguments = emptyMap(),
             )
         val objectIdKey =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = schema.field("User", "id"),
                 arguments = emptyMap(),
             )
@@ -335,7 +335,7 @@ class AssumptionsTest {
             assertFalse(
                 assumptions.isBound(
                     Value.Variable.of(field, "value")
-                        .stamp(listOf(Value.ListIndex.of(0))),
+                        .stamp(listOf(ListEngineResult.Index.of(0))),
                 ),
             )
         }
@@ -460,8 +460,8 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val profile = schema.type("Profile") as Schema.ObjectType
         val friend = schema.objectField("Profile", "friend")
-        val firstKey = Value.GroundKey.of(friend, mapOf("limit" to 1))
-        val secondKey = Value.GroundKey.of(friend, mapOf("limit" to 2))
+        val firstKey = ObjectEngineResult.GroundKey.of(friend, mapOf("limit" to 1))
+        val secondKey = ObjectEngineResult.GroundKey.of(friend, mapOf("limit" to 2))
         val friendValue = schema.objectOf("Profile")
 
         val value =
@@ -485,7 +485,7 @@ class AssumptionsTest {
                 type = profile,
                 fields =
                     mapOf(
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             friend,
                             mapOf(
                                 "limit" to

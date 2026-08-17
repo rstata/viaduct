@@ -42,7 +42,7 @@ class DemandSealingTest {
                     """.trimIndent(),
             )
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 testWorld.schema.objectField("Query", "result"),
                 emptyMap(),
             )
@@ -89,14 +89,14 @@ class DemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val aKey = Value.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
+                    val aKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
                     val cKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Query", "c"),
                             mapOf("value" to 4),
                         )
                     val lateKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "late"),
                             emptyMap(),
                         )
@@ -167,7 +167,7 @@ class DemandSealingTest {
             IntEngineResult.of(9),
             resolved
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
@@ -204,17 +204,17 @@ class DemandSealingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val aKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Query", "a"),
                             mapOf("name" to "same"),
                         )
                     val oneKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "one"),
                             emptyMap(),
                         )
                     val twoKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "two"),
                             emptyMap(),
                         )
@@ -273,7 +273,7 @@ class DemandSealingTest {
         assertTrue(
             resolved
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
@@ -314,7 +314,7 @@ class DemandSealingTest {
         val observation = observeResult(testWorld)
         val resolved = observation.result
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 testWorld.schema.objectField("Query", "result"),
                 emptyMap(),
             )
@@ -376,30 +376,30 @@ class DemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val aKey = Value.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
-                    val zKey = Value.GroundKey.of(schema.objectField("Query", "z"), emptyMap())
+                    val aKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
+                    val zKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "z"), emptyMap())
                     val earlyKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "early"),
                             emptyMap(),
                         )
                     val lateKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "late"),
                             emptyMap(),
                         )
                     val seedEarlyKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Seeds", "early"),
                             emptyMap(),
                         )
                     val seedLateKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Seeds", "late"),
                             emptyMap(),
                         )
                     val cKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Query", "c"),
                             mapOf("value" to 4),
                         )
@@ -508,7 +508,7 @@ class DemandSealingTest {
             IntEngineResult.of(9),
             resolved
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),

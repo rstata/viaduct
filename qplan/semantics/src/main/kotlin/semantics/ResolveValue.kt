@@ -62,7 +62,7 @@ internal fun Value.Output?.resolveValue(
                 ) { resolved, (index, value) ->
                     val element =
                         value.resolveValue(
-                            path = path + Value.ListIndex.of(index),
+                            path = path + ListEngineResult.Index.of(index),
                             resolverDemand = resolverDemand,
                         )
                     ResolvedList(
@@ -172,7 +172,7 @@ private class ResolvedList(
 )
 
 private class ResolvedObject(
-    val values: Map<Value.GroundKey, EngineResult?>,
+    val values: Map<ObjectEngineResult.GroundKey, EngineResult?>,
     val objectsNeedingResolution: List<ObjectResolution>,
     val objectOccurrences: List<ObjectResolution>,
 )

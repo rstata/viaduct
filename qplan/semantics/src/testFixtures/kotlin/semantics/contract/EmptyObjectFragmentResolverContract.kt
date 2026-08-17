@@ -175,4 +175,4 @@ internal fun Schema.contractKey(
     typeName: String,
     fieldName: String,
     arguments: Map<String, Any?> = emptyMap(),
-): Value.GroundKey = Value.GroundKey.of(objectField(typeName, fieldName), arguments)
+): ObjectEngineResult.GroundKey = ObjectEngineResult.GroundKey.of(objectField(typeName, fieldName), arguments)

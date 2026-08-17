@@ -35,12 +35,12 @@ class SelectionMergeTest {
 
         val merged = forest.merge(fixture.query)
         val oneKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 fixture.schema.objectField("Query", "scalar"),
                 mapOf("arg" to 1),
             )
         val missingKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 fixture.schema.objectField("Query", "scalar"),
                 mapOf("arg" to 3),
             )
@@ -154,7 +154,7 @@ class SelectionMergeTest {
 
         assertEquals(1, merged.size)
         assertEquals(
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 fixture.schema.field("ConcreteItem", "computed"),
                 mapOf("factor" to 7),
             ),
@@ -299,7 +299,7 @@ class SelectionMergeTest {
         val variableField = fixture.schema.objectField("Query", "search")
         val variable =
             Value.Variable.of(variableField, "x")
-                .stamp(listOf(Value.ListIndex.of(0)))
+                .stamp(listOf(ListEngineResult.Index.of(0)))
         val symbolic =
             fixture.searchSelection(
                 mapOf("values" to listOf(variable)),
@@ -366,17 +366,17 @@ class SelectionMergeTest {
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val firstMarker =
             Selection.of(
-                key = Value.VariableKey.of(ordinary.key, firstVariable),
+                key = ObjectEngineResult.VariableKey.of(ordinary.key, firstVariable),
                 possibleTypes = ordinary.possibleTypes,
                 subselections = ordinary.subselections,
             )
         val secondMarker =
             Selection.of(
-                key = Value.VariableKey.of(ordinary.key, secondVariable),
+                key = ObjectEngineResult.VariableKey.of(ordinary.key, secondVariable),
                 possibleTypes = ordinary.possibleTypes,
                 subselections = ordinary.subselections,
             )
-        val groundKey = ordinary.key as Value.GroundKey
+        val groundKey = ordinary.key as ObjectEngineResult.GroundKey
         val value = Value.Int.of(9)
         val resultValue = IntEngineResult.of(9)
         val result =
@@ -429,7 +429,7 @@ class SelectionMergeTest {
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val marker =
             Selection.of(
-                key = Value.VariableKey.of(ordinary.key, variable),
+                key = ObjectEngineResult.VariableKey.of(ordinary.key, variable),
                 possibleTypes = ordinary.possibleTypes,
                 subselections = ordinary.subselections,
             )
@@ -441,7 +441,7 @@ class SelectionMergeTest {
                     selectionForestOf(marker).mergeWithVariables(result)
                 }
             }
-        result.reserveCell(ordinary.key as Value.GroundKey).createValuePromise()
+        result.reserveCell(ordinary.key as ObjectEngineResult.GroundKey).createValuePromise()
         val incomplete =
             runBlocking {
                 context(fixture.world) {
@@ -463,7 +463,7 @@ class SelectionMergeTest {
         val leaf = fixture.selection("ConcreteItem", "a")
         val markedLeaf =
             Selection.of(
-                key = Value.VariableKey.of(leaf.key, variable),
+                key = ObjectEngineResult.VariableKey.of(leaf.key, variable),
                 possibleTypes = leaf.possibleTypes,
                 subselections = leaf.subselections,
             )
@@ -475,12 +475,12 @@ class SelectionMergeTest {
             )
         val markedIntermediate =
             Selection.of(
-                key = Value.VariableKey.of(intermediate.key, variable),
+                key = ObjectEngineResult.VariableKey.of(intermediate.key, variable),
                 possibleTypes = intermediate.possibleTypes,
                 subselections = intermediate.subselections,
             )
-        val intermediateKey = intermediate.key as Value.GroundKey
-        val leafKey = leaf.key as Value.GroundKey
+        val intermediateKey = intermediate.key as ObjectEngineResult.GroundKey
+        val leafKey = leaf.key as ObjectEngineResult.GroundKey
         val leafValue = Value.Int.of(7)
         val leafResult = IntEngineResult.of(7)
         val child =
@@ -551,7 +551,7 @@ class SelectionMergeTest {
             subselections: SelectionForest = selectionForestOf(),
         ): Selection =
             Selection.of(
-                key = Value.Key.of(schema.field(typeName, fieldName), arguments),
+                key = ObjectEngineResult.Key.of(schema.field(typeName, fieldName), arguments),
                 possibleTypes = possibleTypes,
                 subselections = subselections,
             )

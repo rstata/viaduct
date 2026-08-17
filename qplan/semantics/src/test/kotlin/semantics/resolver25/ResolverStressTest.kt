@@ -4,6 +4,7 @@ import java.time.Duration
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Value
 import model.fragmentFrom
@@ -114,7 +115,7 @@ class ResolverStressTest {
                     .any { occurrence ->
                         occurrence.canonicalField in targets &&
                             occurrence.occurrencePath.any { component ->
-                                component is Value.ListIndex
+                                component is ListEngineResult.Index
                             }
                     }
             },

@@ -50,7 +50,7 @@ When a passive value contains object or list occurrences, the runtime launches o
 
 ## Active Installation And Freeze
 
-Each active selection awaits only its declared argument bindings and grounds to one `Value.GroundKey`. Installation then completes any delayed `FromArgument` bindings owned by that newly grounded resolver key, reserves the exact target cell, claims the value promise, registers the writer, and launches one field-resolution task.
+Each active selection awaits only its declared argument bindings and grounds to one `ObjectEngineResult.GroundKey`. Installation then completes any delayed `FromArgument` bindings owned by that newly grounded resolver key, reserves the exact target cell, claims the value promise, registers the writer, and launches one field-resolution task.
 
 `reserveCell` explicitly creates an unclaimed cell placeholder when needed. `Cell.createValuePromise` claims that placeholder for the writer. Strict claiming makes disagreement between readers and writers observable.
 

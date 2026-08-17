@@ -1,5 +1,7 @@
 package semantics.correctresolution
 
+import model.ObjectEngineResult
+
 import model.Value
 import model.emptyFragmentOf
 import model.engineResultOf
@@ -77,7 +79,7 @@ class IsClosedUnderResolverDemandTest {
             )
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Parent", "result")
-        val resultKey = Value.GroundKey.of(resultField, mapOf("seed" to 7))
+        val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
         val variable = Value.Variable.of(resultField, "seed")
         val stamped = variable.stamp(listOf(resultKey))
         world.declareBinding(stamped)

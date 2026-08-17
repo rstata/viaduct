@@ -1,6 +1,7 @@
 package semantics.resolver26
 
 import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.TypeExpr
@@ -41,7 +42,7 @@ class ResolverOccurrenceWitnessTest {
                     val payloadType =
                         (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
                     val baseKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "base"),
                             emptyMap(),
                         )
@@ -123,11 +124,11 @@ class ResolverOccurrenceWitnessTest {
         )
         val first =
             computedApplications.single { application ->
-                Value.ListIndex.of(0) in application.occurrencePath
+                ListEngineResult.Index.of(0) in application.occurrencePath
             }
         val second =
             computedApplications.single { application ->
-                Value.ListIndex.of(1) in application.occurrencePath
+                ListEngineResult.Index.of(1) in application.occurrencePath
             }
         val malformed =
             ResolutionOccurrenceWitness(

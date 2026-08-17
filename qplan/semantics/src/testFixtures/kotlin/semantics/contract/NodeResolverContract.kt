@@ -243,8 +243,8 @@ interface NodeResolverContract : ResolverContract {
         val bridgeField = schema.objectField("Query", "nodes_V_A_node")
         val bridgeType = schema.contractObjectType("Node_V_A_Bridge")
         val payloadKey = schema.contractKey("Node_V_A_Bridge", "node")
-        val firstKey = Value.GroundKey.of(bridgeField, mapOf("group" to "first"))
-        val secondKey = Value.GroundKey.of(bridgeField, mapOf("group" to "second"))
+        val firstKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "first"))
+        val secondKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "second"))
 
         assertEquals(
             setOf(firstKey, secondKey),

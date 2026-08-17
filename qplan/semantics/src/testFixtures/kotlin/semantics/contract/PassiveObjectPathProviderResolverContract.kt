@@ -43,7 +43,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
             resolveAndValidate(world, "fragment ignored on Query { item { result } }")
         val item =
             resolved.getCell(
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     world.schema.objectField("Query", "item"),
                     emptyMap(),
                 ),
@@ -52,7 +52,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
         assertEquals(
             IntEngineResult.of(11),
             item.getCell(
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     world.schema.objectField("Item", "result"),
                     emptyMap(),
                 ),

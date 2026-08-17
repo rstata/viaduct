@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import java.util.IdentityHashMap
 import model.Assumptions
 import model.ObjectSelectionForest
@@ -20,7 +22,7 @@ import model.variableTemplates
 /** One occurrence-specific variable and its occurrence-specific object provider path. */
 data class StampedObjectPathDefinition(
     val variable: Value.Variable.Stamped,
-    val path: List<Value.Key>,
+    val path: List<ObjectEngineResult.Key>,
 )
 
 /** One selection-specific variable use and the resolver definition that supplies its value. */
@@ -87,7 +89,7 @@ class FieldResolver private constructor(
                         stampedFragment.markProviderPath(
                             path =
                                 it.path.map { key ->
-                                    Value.Key.of(
+                                    ObjectEngineResult.Key.of(
                                         field = key.field,
                                         arguments = key.arguments.stampVars(path),
                                     )
@@ -192,7 +194,7 @@ class FieldResolver private constructor(
                     variable = variable.stamp(sitePath),
                     path =
                         it.path.map { key ->
-                            Value.Key.of(
+                            ObjectEngineResult.Key.of(
                                 field = key.field,
                                 arguments = key.arguments.stampVars(sitePath),
                             )
@@ -315,7 +317,7 @@ private fun Value.Output?.synthesizeTypenames(): Value.Output? =
 
         is Value.Object -> {
             val typenameKey =
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     field = type.fields.getValue("__typename"),
                     arguments = emptyMap(),
                 )
@@ -343,7 +345,7 @@ private fun SelectionForest.stampVariables(
         selectionForestOf(
             Selection.of(
                 key =
-                    Value.Key.of(
+                    ObjectEngineResult.Key.of(
                         field = selection.key.field,
                         arguments = selection.key.arguments.stampVars(path),
                     ),
@@ -391,7 +393,7 @@ private fun SelectionForest.stampVariableSelections(
         selectionForestOf(
             Selection.of(
                 key =
-                    Value.Key.of(
+                    ObjectEngineResult.Key.of(
                         field = selection.key.field,
                         arguments = arguments,
                     ),
@@ -439,7 +441,7 @@ private fun SelectionForest.selectionStampedVariableDefinitions(
 }
 
 private fun SelectionForest.markProviderPath(
-    path: List<Value.Key>,
+    path: List<ObjectEngineResult.Key>,
     variable: Value.Variable.Stamped,
 ): SelectionForest {
     val key = path.first()
@@ -459,7 +461,7 @@ private fun SelectionForest.markProviderPath(
             } else {
                 selectionForestOf(
                     Selection.of(
-                        key = Value.VariableKey.of(selection.key, variable),
+                        key = ObjectEngineResult.VariableKey.of(selection.key, variable),
                         possibleTypes = selection.possibleTypes,
                         subselections = markedSubselections,
                     ),
@@ -470,7 +472,7 @@ private fun SelectionForest.markProviderPath(
 }
 
 private fun SelectionForest.markProviderSourcePath(
-    sourcePath: List<Value.Key>,
+    sourcePath: List<ObjectEngineResult.Key>,
     variable: Value.Variable.Stamped,
 ): SelectionForest {
     val sourceKey = sourcePath.first()
@@ -493,7 +495,7 @@ private fun SelectionForest.markProviderSourcePath(
             } else {
                 selectionForestOf(
                     Selection.of(
-                        key = Value.VariableKey.of(selection.key, variable),
+                        key = ObjectEngineResult.VariableKey.of(selection.key, variable),
                         possibleTypes = selection.possibleTypes,
                         subselections = markedSubselections,
                     ),
@@ -503,7 +505,7 @@ private fun SelectionForest.markProviderSourcePath(
     }
 }
 
-private fun Selection.hasSourceKey(sourceKey: Value.Key): Boolean {
+private fun Selection.hasSourceKey(sourceKey: ObjectEngineResult.Key): Boolean {
     val stampedArguments = key.arguments as? OpenArguments.Stamped
     val actualSourceKey =
         stampedArguments
@@ -515,7 +517,7 @@ private fun Selection.hasSourceKey(sourceKey: Value.Key): Boolean {
     return actualSourceKey == sourceKey
 }
 
-private fun SelectionForest.containsPath(path: List<Value.Key>): Boolean {
+private fun SelectionForest.containsPath(path: List<ObjectEngineResult.Key>): Boolean {
     if (path.isEmpty()) return false
     val key = path.first()
     val remaining = path.drop(1)
@@ -539,7 +541,7 @@ private fun SelectionForest.containsPath(path: List<Value.Key>): Boolean {
  * would be acyclic.
  *
  * Every variable is defined from one argument of its resolver field or from one nonempty canonical
- * [Value.Key] path relative to that field's containing object. Object-field paths are structurally
+ * [ObjectEngineResult.Key] path relative to that field's containing object. Object-field paths are structurally
  * contained by the defining field resolver's fixed [FieldResolver.objectFragment] envelope.
  * Variables referenced by a field resolver's object fragment or one of its object-field paths
  * belong to that same field. An object-field path must terminate at an input-compatible value whose

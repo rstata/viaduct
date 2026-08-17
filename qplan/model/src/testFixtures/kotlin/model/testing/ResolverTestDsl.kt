@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import graphql.language.ArrayValue
 import graphql.language.AstPrinter
 import graphql.language.Definition
@@ -786,7 +788,7 @@ private class ResultEvaluator(
             is Value.OutputList -> value.values.flatMap(::unwrapNodeBridge)
             is Value.Object -> {
                 val payload = schema.objectField(value.type.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
-                listOf(value.fieldValues.getValue(Value.GroundKey.of(payload, emptyMap())))
+                listOf(value.fieldValues.getValue(ObjectEngineResult.GroundKey.of(payload, emptyMap())))
             }
             else -> throw IllegalArgumentException("Malformed lowered Node bridge")
         }

@@ -51,12 +51,12 @@ class NestedDescendantVariableUseRegressionTest {
             )
         val world = testWorld.assumptions
         val itemKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "item"),
                 emptyMap(),
             )
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Item", "result"),
                 emptyMap(),
             )
@@ -114,14 +114,14 @@ class NestedDescendantVariableUseRegressionTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val holderKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Item", "holder"),
                             emptyMap(),
                         )
                     val consume = schema.objectField("Holder", "consume")
-                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 7))
+                    val consumeKey = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 7))
                     val twoKey =
-                        Value.GroundKey.of(
+                        ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "two"),
                             emptyMap(),
                         )
@@ -163,12 +163,12 @@ class NestedDescendantVariableUseRegressionTest {
             )
         val world = testWorld.assumptions
         val itemKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "item"),
                 emptyMap(),
             )
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Item", "result"),
                 emptyMap(),
             )

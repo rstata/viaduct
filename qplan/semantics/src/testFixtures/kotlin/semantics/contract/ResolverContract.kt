@@ -44,8 +44,8 @@ interface ResolverContract {
 
     fun expectedPassiveResultKeys(
         type: Schema.ObjectType,
-        keys: Set<Value.GroundKey>,
-    ): Set<Value.GroundKey> =
+        keys: Set<ObjectEngineResult.GroundKey>,
+    ): Set<ObjectEngineResult.GroundKey> =
         keys.filterNotTo(linkedSetOf()) { key ->
             key.field.fieldName == "__typename"
         } +
@@ -53,7 +53,7 @@ interface ResolverContract {
                 emptySet()
             } else {
                 setOf(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         field = type.fields.getValue("__typename"),
                         arguments = emptyMap(),
                     ),
@@ -62,9 +62,9 @@ interface ResolverContract {
 }
 
 internal fun Value.Object.hasExactlyFields(
-    vararg expectedFields: Value.GroundKey,
+    vararg expectedFields: ObjectEngineResult.GroundKey,
 ): Boolean = hasExactlyFields(expectedFields.toSet())
 
 internal fun Value.Object.hasExactlyFields(
-    expectedFields: Set<Value.GroundKey>,
+    expectedFields: Set<ObjectEngineResult.GroundKey>,
 ): Boolean = fieldValues.keys == expectedFields

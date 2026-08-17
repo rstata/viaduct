@@ -346,7 +346,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         )
     }
 
-    private fun Value.GroundKey.visibleIdentity() =
+    private fun ObjectEngineResult.GroundKey.visibleIdentity() =
         field to arguments.fieldValues
 
     @Test
@@ -473,7 +473,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 val product =
                     assertIs<ObjectEngineResult>(
                         group.getCell(
-                            Value.GroundKey.of(
+                            ObjectEngineResult.GroundKey.of(
                                 world.schema.objectField("Group", "product"),
                                 mapOf("factor" to factor),
                             ),
@@ -602,7 +602,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 val entries =
                     assertIs<ListEngineResult>(
                         group.getCell(
-                            Value.GroundKey.of(
+                            ObjectEngineResult.GroundKey.of(
                                 world.schema.objectField("Group", "entries"),
                                 mapOf("count" to count),
                             ),

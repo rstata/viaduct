@@ -1,5 +1,7 @@
 package model.spec
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.Schema
 import model.Selection
@@ -91,7 +93,7 @@ private fun SpecSelection.Field.flattenField(
 
     return Selection.of(
         key =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = field,
                 arguments = arguments,
             ),

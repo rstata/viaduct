@@ -30,7 +30,7 @@ class ObjectValueScope internal constructor(
     private val type: Schema.ObjectType,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val fields = linkedMapOf<Value.GroundKey, Value.Output?>()
+    private val fields = linkedMapOf<ObjectEngineResult.GroundKey, Value.Output?>()
     private var isBuilt = false
 
     /** Selects a field coordinate on this scope's object type. */
@@ -48,7 +48,7 @@ class ObjectValueScope internal constructor(
         return ObjectFieldReference(
             scope = this,
             key =
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     field = field,
                     arguments = arguments.toMap(),
                 ),
@@ -97,7 +97,7 @@ class ObjectValueScope internal constructor(
 /** One exact object-field coordinate selected in an [ObjectValueScope]. */
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
-    internal val key: Value.GroundKey,
+    internal val key: ObjectEngineResult.GroundKey,
     internal val sourceTypeExpr: TypeExpr<Schema.OutputType>,
 )
 

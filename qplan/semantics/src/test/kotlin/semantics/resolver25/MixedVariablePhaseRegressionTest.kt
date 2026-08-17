@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.ObjectEngineResult
+
 import model.IntEngineResult
 import model.Value
 import model.fragmentFrom
@@ -83,7 +85,7 @@ class MixedVariablePhaseRegressionTest {
             IntEngineResult.of(1),
             result
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         world.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
@@ -169,7 +171,7 @@ class MixedVariablePhaseRegressionTest {
             IntEngineResult.of(2),
             result
                 .getCell(
-                    Value.GroundKey.of(
+                    ObjectEngineResult.GroundKey.of(
                         world.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),

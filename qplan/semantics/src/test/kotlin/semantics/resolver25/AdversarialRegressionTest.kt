@@ -90,7 +90,7 @@ class AdversarialRegressionTest {
                 )
             val world = testWorld.assumptions
             val resultKey =
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     world.schema.objectField("Query", "result"),
                     emptyMap(),
                 )

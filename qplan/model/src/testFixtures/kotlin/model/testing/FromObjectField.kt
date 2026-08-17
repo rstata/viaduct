@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import model.Fragment
 import model.Schema
 import model.SourceSchemaAdapter
@@ -18,7 +20,7 @@ import model.spec.flatten
 class FromObjectField private constructor(
     val responsePath: List<String>,
     internal val objectFragment: Fragment,
-    internal val keyPath: List<Value.Key>,
+    internal val keyPath: List<ObjectEngineResult.Key>,
     internal val terminalType: TypeExpr<Schema.OutputType>,
     private val nullableTraversal: Boolean,
 ) : VariableDeclaration {
@@ -102,13 +104,13 @@ fun Schema.fromObjectField(
     )
 
 private data class CompiledPath(
-    val keys: List<Value.Key>,
+    val keys: List<ObjectEngineResult.Key>,
     val terminalType: TypeExpr<Schema.OutputType>,
     val nullableTraversal: Boolean,
 )
 
 private data class MatchingField(
-    val keys: List<Value.Key>,
+    val keys: List<ObjectEngineResult.Key>,
     val typeExpr: TypeExpr<Schema.OutputType>,
     val subselections: List<SpecSelection>,
     val lossyCondition: Pair<Schema.CompositeType, Schema.CompositeType>?,
@@ -119,7 +121,7 @@ private fun GJSchema.compilePath(
     selections: List<SpecSelection>,
     responsePath: List<String>,
     index: Int = 0,
-    keys: List<Value.Key> = emptyList(),
+    keys: List<ObjectEngineResult.Key> = emptyList(),
     nullableTraversal: Boolean = false,
 ): CompiledPath {
     val responseKey = responsePath[index]
@@ -206,7 +208,7 @@ private fun GJSchema.matchingFields(
                     val payloadKey =
                         payloadSelection?.let { payload ->
                             val bridgeType = field.typeExpr.baseType as Schema.ObjectType
-                            Value.Key.of(
+                            ObjectEngineResult.Key.of(
                                 field =
                                     this@matchingFields.field(
                                         bridgeType.typeName,
@@ -218,7 +220,7 @@ private fun GJSchema.matchingFields(
                     listOf(
                         MatchingField(
                             keys =
-                                listOf(Value.Key.of(field, selection.arguments)) +
+                                listOf(ObjectEngineResult.Key.of(field, selection.arguments)) +
                                     listOfNotNull(payloadKey),
                             typeExpr = SourceSchemaAdapter(this@matchingFields).typeExpr(field),
                             subselections =

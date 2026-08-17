@@ -14,7 +14,7 @@ Compilation, examples, generated tests, stress campaigns, and cross-resolver agr
 
 ## Keep Semantic Domains Distinct
 
-Selections may contain open `Value.Key` values. A `Value.ObjectKey` has a concrete object field but may still contain variables. Only a fully instantiated `Value.GroundKey` belongs in exact OER cells, `Value.Object`, result paths, materialization, dependency ordering, and resolver application.
+Selections may contain open `ObjectEngineResult.Key` values. An `ObjectEngineResult.ObjectKey` has a concrete object field but may still contain variables. Only a fully instantiated `ObjectEngineResult.GroundKey` belongs in exact OER cells, `Value.Object`, result paths, materialization, dependency ordering, and resolver application.
 
 Resolver input demand, client demand, output projection demand, symbolic or potential demand, and supplied demand serve different purposes. Resolver-owned output, internal selection forests, tenant-visible GraphQL fragments, and completed result coverage are likewise related but not interchangeable representations.
 

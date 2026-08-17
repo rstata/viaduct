@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.Value
@@ -298,7 +299,7 @@ class ResolutionWitnessTest {
             cells
                 .single { cell -> cell.applicationKey == computedTwoKey }
                 .occurrencePath
-                .contains(Value.ListIndex.of(1)),
+                .contains(ListEngineResult.Index.of(1)),
             "The second list element must retain its occurrence index",
         )
 
@@ -412,13 +413,13 @@ class ResolutionWitnessTest {
         val world = traversalWorld()
         val schema = world.schema
         val itemsKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 schema.objectField("Query", "items"),
                 emptyMap(),
             )
         val computedField = schema.objectField("Payload", "computed")
         val computedGroundKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 computedField,
                 mapOf("scale" to 1),
             )
@@ -434,13 +435,13 @@ class ResolutionWitnessTest {
         val firstPath =
             listOf(
                 itemsKey,
-                Value.ListIndex.of(0),
+                ListEngineResult.Index.of(0),
                 computedGroundKey,
             )
         val secondPath =
             listOf(
                 itemsKey,
-                Value.ListIndex.of(1),
+                ListEngineResult.Index.of(1),
                 computedGroundKey,
             )
         val applicationIdentity =

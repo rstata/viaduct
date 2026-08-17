@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.ObjectEngineResult
+
 import model.EngineResult
 import model.ErrorEngineResult
 import model.IntEngineResult
@@ -40,7 +42,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             )
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Query", "result")
-        val resultKey = Value.GroundKey.of(resultField, emptyMap())
+        val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
         val resolver = world.resolverRegistry.resolver(resultField)
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
         val boundVariable =
@@ -97,7 +99,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 )
             val world = testWorld.assumptions
             val resultField = world.schema.objectField("Query", "result")
-            val resultKey = Value.GroundKey.of(resultField, emptyMap())
+            val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
             val resolver = world.resolverRegistry.resolver(resultField)
             val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
             val boundVariable =
@@ -154,7 +156,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 emptyMap(),
             )
@@ -185,7 +187,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             )
         val world = testWorld.assumptions
         val resultKey =
-            Value.GroundKey.of(
+            ObjectEngineResult.GroundKey.of(
                 world.schema.objectField("Query", "result"),
                 emptyMap(),
             )

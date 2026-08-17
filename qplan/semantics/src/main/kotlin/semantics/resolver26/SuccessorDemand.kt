@@ -1,5 +1,7 @@
 package semantics.resolver26
 
+import model.ObjectEngineResult
+
 import model.Assumptions
 import model.Schema
 import model.Selection
@@ -22,16 +24,16 @@ private fun SelectionForest.successorDemand(
 ): SelectionForest =
     flatMap { selection ->
         selection.possibleTypes.flatMapToSelectionForest { possibleType ->
-            val objectKey: Value.ObjectKey = selection.objectKey(possibleType)
+            val objectKey: ObjectEngineResult.ObjectKey = selection.objectKey(possibleType)
             val requestedDemand: SelectionForest =
                 if (
                     objectKey.field in world.resolverRegistry &&
-                    objectKey !is Value.GroundKey
+                    objectKey !is ObjectEngineResult.GroundKey
                 ) {
                     selectionForestOf()
                 } else {
                     check(
-                        objectKey is Value.GroundKey ||
+                        objectKey is ObjectEngineResult.GroundKey ||
                             objectKey.field in world.resolverRegistry,
                     ) {
                         "Resolver26 found open arguments on passive key $objectKey"
@@ -82,13 +84,13 @@ private fun SelectionForest.passivePredecessorDemand(
 ): SelectionForest =
     flatMap { selection ->
         selection.possibleTypes.flatMapToSelectionForest { possibleType ->
-            val objectKey: Value.ObjectKey = selection.objectKey(possibleType)
+            val objectKey: ObjectEngineResult.ObjectKey = selection.objectKey(possibleType)
             if (objectKey.field in world.resolverRegistry) {
                 objectKey.field.fixedPassivePredecessorDemand(
                     passiveDemandByResolverField,
                 )
             } else {
-                check(objectKey is Value.GroundKey) {
+                check(objectKey is ObjectEngineResult.GroundKey) {
                     "Resolver26 found open arguments on passive key $objectKey"
                 }
                 selectionForestOf(

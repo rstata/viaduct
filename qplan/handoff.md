@@ -26,9 +26,11 @@ Those exclusions guide compatibility choices during qplan alignment. They do not
 
 ## Current Carrier Boundary
 
-The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `ObjectEngineResult` values keyed by `Value.GroundKey`; their cells carry independent write-once value and `accessAccepted` promises and use reference identity for result occurrences.
+The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `ObjectEngineResult` values keyed by `ObjectEngineResult.GroundKey`; their cells carry independent write-once value and `accessAccepted` promises and use reference identity for result occurrences.
 
 The resolver-value and engine-result domains are now distinct at every GraphQL output shape. Resolver inputs and outputs use `Value`, while completed fields use `IntEngineResult`, `FloatEngineResult`, `StringEngineResult`, `BooleanEngineResult`, `IDEngineResult`, `EnumEngineResult`, `ObjectEngineResult`, `ListEngineResult`, or `ErrorEngineResult`. `toEngineResult` and `toValue` mark crossings for simple values. This temporary parallel hierarchy keeps result semantics independent while the resolver-value side moves toward the engine API's future `EngineValueData` boundary.
+
+The complete key hierarchy now belongs to `ObjectEngineResult`: `Key`, `VariableKey`, `ObjectKey`, and `GroundKey`. `Value.Object` temporarily stores `ObjectEngineResult.GroundKey` entries so this ownership move does not also change object-value behavior. The later `EngineObjectData` alignment should replace that value-domain storage with response keys and no explicit key arguments; it must not reintroduce value-domain key types.
 
 Schema alignment is deliberately independent of this carrier migration. GraphQL-Java remains the source-facing schema representation, while qplan's lowered `Schema` is used exclusively for field-resolution reasoning. Do not transform the GraphQL-Java schema or make tenant-visible APIs expose bridge coordinates.
 
@@ -66,6 +68,10 @@ TLA+ refinement work is explicitly backlogged until the EOD carrier refactor sta
 ## Cleanup TODOs
 
 - [ ] Replace the public `StampedObjectPathDefinition` and `SelectionStampedVariableDefinition` data classes with public abstractions backed by private implementations and controlled factories. Define their equality contracts explicitly and update model, resolver, fixture, and oracle call sites without changing provider or occurrence semantics.
+
+## Known Resolver25 Defect
+
+- [ ] Investigate the reproducible Resolver25 construction-witness permutation failure at seed `-6254172039300282938`. `semantics.resolver25.ResolverWitnessTest.generated construction witness is exact minimal and permutation invariant` reports different supplied-demand fingerprints for corresponding resolver applications after query permutation. Replay with `./gradlew :semantics:test --tests 'semantics.resolver25.ResolverWitnessTest' -PresolverPropertySeed=-6254172039300282938`. The failure reproduced unchanged in a detached pre-refactor worktree before the `ListEngineResult.Index` move, so it is not caused by that carrier refactor.
 
 ## Open Design Questions
 

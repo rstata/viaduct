@@ -1,5 +1,7 @@
 package model.testing
 
+import model.ObjectEngineResult
+
 import model.OpenArguments
 import model.Selection
 import model.Value
@@ -9,7 +11,7 @@ import model.fieldExpressions
 fun Selection.withErrorArguments(argumentNames: Set<String>): Selection =
     Selection.of(
         key =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = key.field,
                 arguments =
                     OpenArguments.of(

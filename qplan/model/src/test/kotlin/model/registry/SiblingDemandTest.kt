@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.Fragment
 import model.Schema
 import model.Selection
@@ -130,8 +132,8 @@ class SiblingDemandTest {
         type: Schema.ObjectType,
         fieldName: String,
         arguments: Map<String, Any?> = emptyMap(),
-    ): Value.GroundKey =
-        Value.GroundKey.of(
+    ): ObjectEngineResult.GroundKey =
+        ObjectEngineResult.GroundKey.of(
             field = objectField(type.typeName, fieldName),
             arguments = arguments,
         )

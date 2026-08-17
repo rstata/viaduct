@@ -9,7 +9,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
-class ValueKeyTest {
+class ObjectEngineResultKeyTest {
     @Test
     fun `object fields always construct object keys with structural equality`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
@@ -17,13 +17,13 @@ class ValueKeyTest {
         val field = user.fields.getValue("id")
 
         val general =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = field as Schema.OutputField,
                 arguments = emptyMap(),
             )
-        val precise = Value.GroundKey.of(field, emptyMap())
+        val precise = ObjectEngineResult.GroundKey.of(field, emptyMap())
 
-        assertIs<Value.GroundKey>(general)
+        assertIs<ObjectEngineResult.GroundKey>(general)
         assertEquals(precise, general)
         assertSame(field, general.field)
     }
@@ -33,9 +33,9 @@ class ValueKeyTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val field = schema.field("Node", "id")
 
-        val key = Value.Key.of(field, emptyMap())
+        val key = ObjectEngineResult.Key.of(field, emptyMap())
 
-        assertFalse(key is Value.GroundKey)
+        assertFalse(key is ObjectEngineResult.GroundKey)
     }
 
     @Test
@@ -45,30 +45,30 @@ class ValueKeyTest {
         val variable = Value.Variable.of(field, "id")
 
         val key =
-            Value.Key.of(
+            ObjectEngineResult.Key.of(
                 field = field as Schema.OutputField,
                 arguments = OpenArguments.of(field, mapOf("id" to variable)),
             )
 
-        assertIs<Value.ObjectKey>(key)
-        assertFalse(key is Value.GroundKey)
+        assertIs<ObjectEngineResult.ObjectKey>(key)
+        assertFalse(key is ObjectEngineResult.GroundKey)
         assertSame(field, key.field)
     }
 
     @Test
     fun `list index rejects negative positions`() {
-        Value.ListIndex.of(2)
-        assertFailsWith<IllegalArgumentException> { Value.ListIndex.of(-1) }
+        ListEngineResult.Index.of(2)
+        assertFailsWith<IllegalArgumentException> { ListEngineResult.Index.of(-1) }
     }
 
     @Test
     fun `selection paths contain only object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = Value.GroundKey.of(schema.objectField("Query", "user_V_A_node"), emptyMap())
-        val id = Value.GroundKey.of(schema.objectField("User", "id"), emptyMap())
+        val user = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "user_V_A_node"), emptyMap())
+        val id = ObjectEngineResult.GroundKey.of(schema.objectField("User", "id"), emptyMap())
 
         assertEquals(listOf(user, id), listOf<PathComponent>(user, id).toSelectionPath())
-        assertNull(listOf<PathComponent>(user, Value.ListIndex.of(0), id).toSelectionPath())
+        assertNull(listOf<PathComponent>(user, ListEngineResult.Index.of(0), id).toSelectionPath())
         assertNull((null as List<PathComponent>?).toSelectionPath())
     }
 

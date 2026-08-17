@@ -1,6 +1,7 @@
 package semantics
 
 import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
@@ -51,7 +52,7 @@ internal sealed interface ReactorEvent {
 internal typealias ReactorEventObserver = (ReactorEvent) -> Unit
 
 context(world: model.Assumptions)
-internal fun Value.GroundKey.reactorSlotKind(): ReactorSlotKind =
+internal fun ObjectEngineResult.GroundKey.reactorSlotKind(): ReactorSlotKind =
     when {
         arguments.argumentsContainErrorValue() ->
             ReactorSlotKind.ENGINE_OWNED
@@ -175,13 +176,13 @@ internal fun List<PathComponent>.renderReactorPath(): String =
     } else {
         joinToString(separator = "/") { component ->
             when (component) {
-                is Value.GroundKey ->
+                is ObjectEngineResult.GroundKey ->
                     "${component.field.containingType.typeName}.${component.field.fieldName}" +
                         component.arguments.fieldValues.entries.joinToString(
                             prefix = "(",
                             postfix = ")",
                         ) { (name, value) -> "$name=$value" }
-                is Value.ListIndex -> "[${component.index}]"
+                is ListEngineResult.Index -> "[${component.index}]"
             }
         }
     }

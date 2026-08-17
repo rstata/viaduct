@@ -1,5 +1,7 @@
 package model.registry
 
+import model.ObjectEngineResult
+
 import model.Fragment
 import model.Schema
 import model.Selection
@@ -574,7 +576,7 @@ class ResolverDemandTest {
                         val errorSecond =
                             Selection.of(
                                 key =
-                                    Value.Key.of(
+                                    ObjectEngineResult.Key.of(
                                         parsedSecond.key.field,
                                         mapOf("arg" to Value.Error),
                                     ),

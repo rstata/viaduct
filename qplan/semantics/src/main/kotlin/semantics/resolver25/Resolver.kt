@@ -480,7 +480,7 @@ private class ObjectResultOrchestrator(
      */
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     private fun prepareResolverInstance(
-        groundedKey: Value.GroundKey,
+        groundedKey: ObjectEngineResult.GroundKey,
     ): List<Deferred<Unit>> {
         if (groundedKey.arguments.argumentsContainErrorValue()) {
             return emptyList()
@@ -556,7 +556,7 @@ private class ObjectResultOrchestrator(
                     subselections = selectionForestOf(),
                 ).objectKey(current.type)
             val groundedKey =
-                Value.GroundKey.of(
+                ObjectEngineResult.GroundKey.of(
                     field = specializedKey.field,
                     arguments = specializedKey.arguments.fetchBindings(),
                 )
@@ -609,7 +609,7 @@ private class ObjectResultOrchestrator(
                 values.indices.flatMap { index ->
                     values[index].launchNestedFringe(
                         result = resultList[index].getValue().get(),
-                        path = path + Value.ListIndex.of(index),
+                        path = path + ListEngineResult.Index.of(index),
                         demand = demand,
                         potentialDemand = potentialDemand,
                     )
@@ -643,15 +643,15 @@ private class ObjectResultOrchestrator(
                         check(field.arguments.fields.isEmpty()) {
                             "Passive fringe traversal crossed argument-bearing field $field"
                         }
-                        val groundedKey = Value.GroundKey.of(field, emptyMap())
+                        val groundedKey = ObjectEngineResult.GroundKey.of(field, emptyMap())
                         check(resultObject.isCellSet(groundedKey)) {
                             "Passive object at " +
                                 path.joinToString("/") { component ->
                                     when (component) {
-                                        is Value.GroundKey ->
+                                        is ObjectEngineResult.GroundKey ->
                                             "${component.field.containingType.typeName}/" +
                                                 component.field.fieldName
-                                        is Value.ListIndex -> "[${component.index}]"
+                                        is ListEngineResult.Index -> "[${component.index}]"
                                     }
                                 } +
                                 " has no demanded value promise for " +
@@ -770,9 +770,9 @@ private class ObjectResultOrchestrator(
         val field: Schema.ObjectField,
     ) {
         private var potentialSelections: SelectionForest = selectionForestOf()
-        val groundedKeys: MutableMap<Value.GroundKey, KeyState> = linkedMapOf()
+        val groundedKeys: MutableMap<ObjectEngineResult.GroundKey, KeyState> = linkedMapOf()
         private val groundedKeyAvailable:
-            MutableMap<Value.GroundKey, CompletableDeferred<KeyState>> =
+            MutableMap<ObjectEngineResult.GroundKey, CompletableDeferred<KeyState>> =
             linkedMapOf()
 
         @Synchronized
@@ -786,7 +786,7 @@ private class ObjectResultOrchestrator(
         context(world: Assumptions)
         @Synchronized
         fun activate(
-            groundedKey: Value.GroundKey,
+            groundedKey: ObjectEngineResult.GroundKey,
             groundedSelection: ObjectSelection,
             concreteType: Schema.ObjectType,
         ): KeyActivation {
@@ -810,7 +810,7 @@ private class ObjectResultOrchestrator(
                         val potentialArguments = potentialKey.arguments
                         if (
                             potentialArguments !is Value.Arguments ||
-                            Value.GroundKey.of(
+                            ObjectEngineResult.GroundKey.of(
                                 potentialKey.field,
                                 potentialArguments,
                             ) == groundedKey
@@ -851,7 +851,7 @@ private class ObjectResultOrchestrator(
         }
 
         suspend fun awaitGroundedKey(
-            groundedKey: Value.GroundKey,
+            groundedKey: ObjectEngineResult.GroundKey,
             requireNestedFringe: Boolean,
         ) {
             val available =
@@ -872,7 +872,7 @@ private class ObjectResultOrchestrator(
     }
 
     private class KeyState(
-        val groundedKey: Value.GroundKey,
+        val groundedKey: ObjectEngineResult.GroundKey,
         initialDemand: ObjectSelection,
         val potentialDemand: SelectionForest,
     ) {
@@ -954,7 +954,7 @@ private suspend fun Value.Output?.resolveValue(
             val resolvedElements: List<ResolvedValue> =
                 values.mapIndexed { index, value ->
                     value.resolveValue(
-                        path = path + Value.ListIndex.of(index),
+                        path = path + ListEngineResult.Index.of(index),
                         resolverDemand = resolverDemand,
                         potentialDemand = potentialDemand,
                     )
@@ -983,7 +983,7 @@ private suspend fun Value.Object.resolveObjectValue(
         type.newObjectResult()
     val mergedDemand: ObjectSelectionForest =
         resolverDemand.mergeWithVariables(engineResult).first
-    val resolverDemandByGroundedKey: Map<Value.GroundKey, ObjectSelection> =
+    val resolverDemandByGroundedKey: Map<ObjectEngineResult.GroundKey, ObjectSelection> =
         mergedDemand.byGroundKey()
     val closedPotentialDemand: ObjectSelectionForest =
         type.closeStructuralDemand(potentialDemand)
@@ -997,7 +997,7 @@ private suspend fun Value.Object.resolveObjectValue(
                     selection.subselections
                 }
             }
-    val unselectedGroundedKeys: Set<Value.GroundKey> =
+    val unselectedGroundedKeys: Set<ObjectEngineResult.GroundKey> =
         fieldValues.keys - resolverDemandByGroundedKey.keys
     require(unselectedGroundedKeys.isEmpty()) {
         "Selective resolver output ${type.typeName} contains unselected fields: " +
@@ -1006,7 +1006,7 @@ private suspend fun Value.Object.resolveObjectValue(
             }
     }
 
-    val selectedGroundedKeys: Set<Value.GroundKey> =
+    val selectedGroundedKeys: Set<ObjectEngineResult.GroundKey> =
         resolverDemandByGroundedKey.keys
             .filterTo(linkedSetOf()) { groundedKey ->
                 groundedKey.field !in world.resolverRegistry
@@ -1075,7 +1075,7 @@ private class ObjectResolution(
 )
 
 private class ResolvedField(
-    val groundedKey: Value.GroundKey,
+    val groundedKey: ObjectEngineResult.GroundKey,
     val value: ResolvedValue,
 )
 

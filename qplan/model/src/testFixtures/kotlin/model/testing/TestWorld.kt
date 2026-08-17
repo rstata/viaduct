@@ -81,6 +81,30 @@ class TestWorld private constructor(
                 throw exception
             }
         }
+
+        /**
+         * Composes one schema-embedded deterministic resolver world.
+         *
+         * Resolver-test directives are compiled into the ordinary fixture registry and stripped
+         * before the retained source schema is decoded. For readability, present [schemaSDL]
+         * top-down: start with `extend type Query`, then define the types reached from those root
+         * fields, followed by the types they reach.
+         */
+        fun fromDSL(
+            schemaSDL: String,
+            selectiveResolvers: Boolean = true,
+            applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
+        ): TestWorld {
+            val dsl = ResolverTestDsl.parse(schemaSDL)
+            return fromSDL(
+                schemaSDL = dsl.schemaSDL,
+                nodeResolvers = dsl::nodeResolvers,
+                fieldResolvers = dsl::fieldResolvers,
+                variableProviders = dsl::variableProviders,
+                selectiveResolvers = selectiveResolvers,
+                applicationObserver = applicationObserver,
+            )
+        }
     }
 }
 

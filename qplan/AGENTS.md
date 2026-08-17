@@ -10,7 +10,12 @@
 - [`model/guidelines.md`](./model/guidelines.md) - Read before changing semantic carriers, equality, factories, promises, keys, or result structures.
 - [`semantics/README.md`](./semantics/README.md) - Read before changing semantic transformations, resolver implementations, or correctness judgments.
 - [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) - Read before changing or interpreting resolver tests and generated profiles.
+- [`resolver-test-dsl.md`](./resolver-test-dsl.md) - Read before adding schema-embedded deterministic resolver worlds or counterexamples.
 - [`arbitrary/README.md`](./arbitrary/README.md) - Read before changing schema, registry, query, or witness generation.
 - [`claims.md`](./claims.md) - Use for the index of stable propositions and links to their scoped arguments.
 - [`tla/README.md`](./tla/README.md) - Read before changing or citing the machine-checked TLA+ baseline.
 - [`semantics/resolver-benchmarks.md`](./semantics/resolver-benchmarks.md) - Read before running, changing, or reporting resolver benchmarks.
+
+When writing resolver-test DSL schemas in tests, documentation, or counterexamples, present them
+top-down: start with `extend type Query`, then define the types reached from its fields, followed by
+their dependencies.

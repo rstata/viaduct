@@ -24,7 +24,7 @@ import model.variableTemplates
  * This alias is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
  * functions and exposes a field-only [ResolverRegistry].
  */
-typealias NodeResolverFunction = (Value.ID) -> Value.Object
+typealias NodeResolverFunction = (Value.ID) -> Value.Output?
 
 /** Marks a raw external node lookup for fixture composition. */
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
@@ -267,9 +267,14 @@ private class NodeResolverLowering(
         require(type in nodeOutputType.possibleTypes) {
             "Typed node ID ${type.typeName} is not valid for ${nodeOutputType.typeName}"
         }
-        val result =
-            nodeResolvers[type]?.invoke(id)
+        val resolver =
+            nodeResolvers[type]
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.typeName}")
+        val result = resolver(id)
+        if (result == null || result == Value.Error) return result
+        require(result is Value.Object) {
+            "Node resolver for ${type.typeName} returned a non-object value"
+        }
         require(result.type == type) {
             "Node resolver for ${type.typeName} returned ${result.type.typeName}"
         }

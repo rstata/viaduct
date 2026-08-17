@@ -4,12 +4,16 @@ import model.ObjectEngineResult
 
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.OpenArguments
 import model.Schema
+import model.Selection
 import model.Value
 import model.emptyFragmentOf
+import model.fetchBindings
 import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
+import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
@@ -207,6 +211,75 @@ class SuccessorDemandTest {
         assertEquals(
             setOf("result", "source", "fixed"),
             itemSelections.groundKeys().fieldNames(),
+        )
+    }
+
+    @Test
+    fun `deferred successor closure coalesces stamped selections by fetched key`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      successor(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.objectField("Query", "successor") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Int.of(0)
+                            },
+                    )
+                },
+            ).assumptions
+        val successor = world.schema.objectField("Query", "successor")
+        val variable = Value.Variable.of(successor, "value")
+        val first =
+            variable.stamp(
+                listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 1))),
+            )
+        val second =
+            variable.stamp(
+                listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 2))),
+            )
+        world.declareBinding(first)
+        world.completeBinding(first, Value.Int.of(7))
+        world.declareBinding(second)
+        world.completeBinding(second, Value.Int.of(7))
+        val selections =
+            selectionForestOf(
+                Selection.of(
+                    key =
+                        ObjectEngineResult.Key.of(
+                            successor,
+                            OpenArguments.of(successor, mapOf("value" to first)),
+                        ),
+                    possibleTypes = setOf(world.schema.query),
+                    subselections = selectionForestOf(),
+                ),
+                Selection.of(
+                    key =
+                        ObjectEngineResult.Key.of(
+                            successor,
+                            OpenArguments.of(successor, mapOf("value" to second)),
+                        ),
+                    possibleTypes = setOf(world.schema.query),
+                    subselections = selectionForestOf(),
+                ),
+            )
+
+        val grounded =
+            runBlocking {
+                context(world) {
+                    val fetched = selections.fetchSuccessorDemandDeferringTemplates()
+                    fetched.single()
+                    fetched.merge(world.schema.query).fetchBindings().groundKeys()
+                }
+            }
+        assertEquals(
+            setOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 7))),
+            grounded,
         )
     }
 

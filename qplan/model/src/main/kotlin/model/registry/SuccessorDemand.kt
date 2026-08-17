@@ -60,7 +60,8 @@ fun SelectionForest.successorDemand(): SelectionForest =
  * Extends output demand after awaiting stamped bindings, while deferring unstamped templates.
  *
  * A template-bearing branch belongs to a resolver occurrence whose exact path is not yet available.
- * Stamped branches retain ordinary full successor closure after their bindings complete.
+ * Stamped branches retain ordinary full successor closure after their bindings complete. Branches
+ * whose fetched keys are equal coalesce while one original key retains its variable provenance.
  */
 context(world: Assumptions)
 suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionForest {
@@ -138,11 +139,27 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
         }
     }
 
-    return childrenBySelection
-        .mapNotNull { (identity, children) ->
-            if (identity in deferredSelections) return@mapNotNull null
+    val groundedChildrenBySelection =
+        linkedMapOf<SelectionIdentity, MutableList<SelectionForest>>()
+    val representativeKeyByGroundedSelection =
+        linkedMapOf<SelectionIdentity, ObjectEngineResult.Key>()
+    childrenBySelection.forEach { (identity, children) ->
+        if (identity !in deferredSelections) {
+            val groundedIdentity =
+                SelectionIdentity(
+                    key = identity.key.fetchStampedBindings(),
+                    possibleTypes = identity.possibleTypes,
+                )
+            representativeKeyByGroundedSelection.putIfAbsent(groundedIdentity, identity.key)
+            groundedChildrenBySelection
+                .getOrPut(groundedIdentity, ::mutableListOf)
+                .add(children.concatenateSelectionForests())
+        }
+    }
+    return groundedChildrenBySelection
+        .map { (identity, children) ->
             Selection.of(
-                key = identity.key,
+                key = representativeKeyByGroundedSelection.getValue(identity),
                 possibleTypes = identity.possibleTypes,
                 subselections =
                     children
@@ -158,6 +175,15 @@ private data class SelectionIdentity(
     val key: ObjectEngineResult.Key,
     val possibleTypes: Set<Schema.ObjectType>,
 )
+
+context(world: Assumptions)
+private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
+    if (this is ObjectEngineResult.VariableKey || arguments is Value.Arguments) return this
+    return ObjectEngineResult.Key.of(
+        field = field,
+        arguments = arguments.fetchBindings(),
+    )
+}
 
 /**
  * Extends this output demand with the paths needed to find every successor resolver boundary.

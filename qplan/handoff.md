@@ -69,10 +69,6 @@ TLA+ refinement work is explicitly backlogged until the EOD carrier refactor sta
 
 - [ ] Replace the public `StampedObjectPathDefinition` and `SelectionStampedVariableDefinition` data classes with public abstractions backed by private implementations and controlled factories. Define their equality contracts explicitly and update model, resolver, fixture, and oracle call sites without changing provider or occurrence semantics.
 
-## Known Resolver25 Defect
-
-- [ ] Investigate the reproducible Resolver25 construction-witness permutation failure at seed `-6254172039300282938`. `semantics.resolver25.ResolverWitnessTest.generated construction witness is exact minimal and permutation invariant` reports different supplied-demand fingerprints for corresponding resolver applications after query permutation. Replay with `./gradlew :semantics:test --tests 'semantics.resolver25.ResolverWitnessTest' -PresolverPropertySeed=-6254172039300282938`. The failure reproduced unchanged in a detached pre-refactor worktree before the `ListEngineResult.Index` move, so it is not caused by that carrier refactor.
-
 ## Open Design Questions
 
 - Does `EngineObjectData.Sync` become the object result carrier itself, or does qplan retain a typed occurrence wrapper around it?

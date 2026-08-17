@@ -22,7 +22,6 @@ class SpecSelectionFlattenerTest {
 
         val version = result.single()
         assertEquals(fixture.schema.field("Query", "version"), version.key.field)
-        assertEquals(Schema.NoArguments, version.key.arguments.type)
         assertEquals(emptyMap(), version.key.arguments.fieldExpressions())
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertTrue(version.isLeaf)
@@ -65,7 +64,6 @@ class SpecSelectionFlattenerTest {
         val field = fixture.schema.field("Query", "release")
 
         assertEquals(field, release.key.field)
-        assertEquals(field.arguments, release.key.arguments.type)
         assertEquals(
             "beta",
             assertIs<Value.String>(

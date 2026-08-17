@@ -173,7 +173,12 @@ interface DeepResolverStressContract : ResolverContract {
                         }
                         if (
                             application.key.field.fieldName.endsWith("_V_A_node") &&
-                            application.key.arguments.type.fields.isNotEmpty()
+                            world.schema
+                                .field(
+                                    application.key.field.typeName,
+                                    application.key.field.fieldName,
+                                ).arguments.fields
+                                .isNotEmpty()
                         ) {
                             argumentBearingNodeBridgeProducerApplications += 1
                         }

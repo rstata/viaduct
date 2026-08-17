@@ -54,7 +54,7 @@ class ResolverRegistryTest {
                                         schema.objectOf("Query"),
                                         parent,
                                     )
-                                    assertEquals(Schema.NoArguments, arguments.type)
+                                    assertTrue(arguments.fieldValues.isEmpty())
                                     schema.objectOf("User") {
                                         "id" setTo "42"
                                     }

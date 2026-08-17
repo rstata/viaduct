@@ -9,7 +9,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
-import kotlin.test.assertSame
 
 class ValueVariableTest {
     @Test
@@ -209,7 +208,6 @@ class ValueVariableTest {
                     mapOf("filter" to mapOf("value" to template)),
                 ).stampVars(first.arguments, path)
 
-        assertSame(first.arguments, arguments.type)
         world.declareBinding(variable)
         world.completeBinding(variable, Value.Int.of(9))
 
@@ -222,7 +220,13 @@ class ValueVariableTest {
                 grounded.fieldValues.getValue("filter"),
             )
 
-        assertSame(world.schema.type("SecondFilter"), filter.type)
+        assertEquals(
+            Value.InputObject.of(
+                assertIs<Schema.InputObjectType>(world.schema.type("FirstFilter")),
+                mapOf("value" to 9),
+            ),
+            filter,
+        )
         assertEquals(Value.Int.of(9), filter.fieldValues.getValue("value"))
     }
 
@@ -320,6 +324,26 @@ class ValueVariableTest {
 
         assertFailsWith<IllegalArgumentException> {
             OpenArguments.Template.of(consume.arguments, arguments)
+        }
+    }
+
+    @Test
+    fun `argument template validates its expected argument definition`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  intConsumer(value: Int): Int
+                  stringConsumer(value: String): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val intConsumer = schema.objectField("Query", "intConsumer")
+        val stringConsumer = schema.objectField("Query", "stringConsumer")
+        val arguments = OpenArguments.of(intConsumer, mapOf("value" to 1))
+
+        assertFailsWith<IllegalArgumentException> {
+            OpenArguments.Template.of(stringConsumer.arguments, arguments)
         }
     }
 

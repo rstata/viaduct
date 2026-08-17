@@ -396,7 +396,9 @@ class ArbitraryRegistry internal constructor(
                                 val generatedHashSeed =
                                     stableGeneratedHash(
                                         effectiveInput.resolutionFingerprint().value,
-                                        effectiveArguments.resolutionFingerprint().value,
+                                        effectiveArguments
+                                            .resolutionFingerprint(field.arguments)
+                                            .value,
                                     )
                                 when (program) {
                                     ResolverProgramKind.CONSTANT -> constant
@@ -413,6 +415,7 @@ class ArbitraryRegistry internal constructor(
                                                     },
                                                 input = effectiveInput,
                                                 arguments = effectiveArguments,
+                                                argumentType = field.arguments,
                                                 applicationOrdinal = ordinal,
                                             )
                                         } else {
@@ -1904,12 +1907,13 @@ private fun sensitiveScalar(
     scalar: ScalarKind,
     input: Value.Object,
     arguments: Value.Arguments,
+    argumentType: Schema.FieldArguments,
     applicationOrdinal: Int? = null,
 ): Value.Simple {
     val fingerprint =
         input.resolutionFingerprint().value +
             "|" +
-            arguments.resolutionFingerprint().value +
+            arguments.resolutionFingerprint(argumentType).value +
             applicationOrdinal?.let { "|ordinal:$it" }.orEmpty()
     val hash = fingerprint.hashCode()
     return when (scalar) {

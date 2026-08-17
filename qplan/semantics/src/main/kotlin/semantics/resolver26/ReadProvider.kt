@@ -35,7 +35,10 @@ internal suspend fun ObjectEngineResult.readProvider(
         val groundKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(
                 field = specializedKey.field,
-                arguments = specializedKey.arguments.fetchBindings(),
+                arguments =
+                    specializedKey.arguments.fetchBindings(
+                        specializedKey.field.arguments,
+                    ),
             )
         val cell = current.reserveCell(groundKey)
         diagnosticInstrumentation.cycleCheck(reader, cell)

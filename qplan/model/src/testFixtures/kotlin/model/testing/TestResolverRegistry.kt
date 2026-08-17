@@ -589,7 +589,7 @@ private class TestResolverRegistry(
         buildList {
             this@variableUses.forEach { selection ->
                 selection.key.arguments.fieldExpressions().forEach { (name, value) ->
-                    val argument = selection.key.arguments.type.fields.getValue(name)
+                    val argument = selection.key.field.arguments.fields.getValue(name)
                     addAll(
                         value
                             .matchingVariableTypes(

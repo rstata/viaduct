@@ -450,10 +450,11 @@ fun SelectionForest.allowedResolverClosure(
 }
 
 fun Value.Arguments.resolutionFingerprint(
+    expectedType: Schema.FieldArguments,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): ResolutionFingerprint =
     ResolutionFingerprint(
-        FingerprintBudget(bounds).arguments(this),
+        FingerprintBudget(bounds).arguments(this, expectedType),
     )
 
 fun Value.Object.resolutionFingerprint(
@@ -488,14 +489,19 @@ private class FingerprintBudget(
 ) {
     private var nodes = 0
 
-    fun arguments(arguments: OpenArguments): String =
+    fun arguments(
+        arguments: OpenArguments,
+        expectedType: Schema.FieldArguments,
+    ): String =
         if (arguments is Value.Arguments) {
             node(
                 "args(" +
                     arguments.fieldValues.entries
                         .sortedBy(Map.Entry<String, Value.Input?>::key)
                         .joinToString(",") { (name, value) ->
-                            atom(name) + "=" + input(value)
+                            atom(name) +
+                                "=" +
+                                input(value, expectedType.fields.getValue(name).typeExpr)
                         } +
                     ")",
             )
@@ -558,39 +564,63 @@ private class FingerprintBudget(
             "key(" +
                 atom(key.field.containingType.typeName) +
                 "/" + atom(key.field.fieldName) +
-                ";" + arguments(key.arguments) +
+                ";" + arguments(key.arguments, key.field.arguments) +
                 ")",
         )
 
-    private fun input(value: Value.Input?): String =
-        when {
-            value == null -> node("null")
-            value == Value.Error -> node("error")
-            value is Value.Int -> node("int:${value.intValue}")
-            value is Value.Float -> node("float:${value.floatValue.toBits()}")
-            value is Value.String -> node("string:${atom(value.stringValue)}")
-            value is Value.Boolean -> node("boolean:${value.booleanValue}")
-            value is Value.ID -> node("id:${atom(value.idValue)}")
-            value is Value.Enum ->
-                node("enum:${atom(value.type.typeName)}:${atom(value.enumValue)}")
-            value is Value.InputList ->
+    private fun input(
+        value: Value.Input?,
+        expectedType: TypeExpr<Schema.InputType>,
+    ): String {
+        if (value == null) return node("null")
+        if (value == Value.Error) return node("error")
+
+        return when (expectedType) {
+            is TypeExpr.List -> {
+                require(value is Value.InputList)
                 node(
-                    "list:${typeExpr(value.typeExpr)}[" +
-                        value.values.joinToString(separator = ",", transform = ::input) +
+                    "list:${typeExpr(expectedType.elementType)}[" +
+                        value.values.joinToString(separator = ",") { element ->
+                            input(element, expectedType.elementType)
+                        } +
                         "]",
                 )
-            value is Value.InputObject ->
-                node(
-                    "input-object:${atom(value.type.typeName)}{" +
-                        value.fieldValues.entries
-                            .sortedBy(Map.Entry<String, Value.Input?>::key)
-                            .joinToString(",") { (name, fieldValue) ->
-                                atom(name) + "=" + input(fieldValue)
-                            } +
-                        "}",
-                )
-            else -> error("Unsupported input value $value")
+            }
+            is TypeExpr.Named ->
+                when (val expectedNamedType = expectedType.baseType) {
+                    Schema.IntType -> node("int:${(value as Value.Int).intValue}")
+                    Schema.FloatType ->
+                        node("float:${(value as Value.Float).floatValue.toBits()}")
+                    Schema.StringType ->
+                        node("string:${atom((value as Value.String).stringValue)}")
+                    Schema.BooleanType ->
+                        node("boolean:${(value as Value.Boolean).booleanValue}")
+                    Schema.IDType -> node("id:${atom((value as Value.ID).idValue)}")
+                    is Schema.EnumType ->
+                        node(
+                            "enum:${atom(expectedNamedType.typeName)}:" +
+                                atom((value as Value.Enum).enumValue),
+                        )
+                    is Schema.InputObjectType -> {
+                        require(value is Value.InputObject)
+                        node(
+                            "input-object:${atom(expectedNamedType.typeName)}{" +
+                                value.fieldValues.entries
+                                    .sortedBy(Map.Entry<String, Value.Input?>::key)
+                                    .joinToString(",") { (name, fieldValue) ->
+                                        atom(name) +
+                                            "=" +
+                                            input(
+                                                fieldValue,
+                                                expectedNamedType.fields.getValue(name).typeExpr,
+                                            )
+                                    } +
+                                "}",
+                        )
+                    }
+                }
         }
+    }
 
     private fun typeExpr(typeExpr: TypeExpr<Schema.Type>): String =
         when (typeExpr) {
@@ -626,7 +656,7 @@ private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
     ResolutionFingerprint(
         "${field.containingType.typeName.length}:${field.containingType.typeName}/" +
             "${field.fieldName.length}:${field.fieldName};" +
-            arguments.resolutionFingerprint(bounds).value,
+            arguments.resolutionFingerprint(field.arguments, bounds).value,
     )
 
 private fun Schema.OutputField.fieldCoordinate(): FieldCoordinate =

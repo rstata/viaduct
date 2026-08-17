@@ -39,7 +39,10 @@ fun SelectionForest.successorDemand(): SelectionForest =
                 val key =
                     ObjectEngineResult.GroundKey.of(
                         field = specializedKey.field,
-                        arguments = specializedKey.arguments.instantiateBindings(),
+                        arguments =
+                            specializedKey.arguments.instantiateBindings(
+                                specializedKey.field.arguments,
+                            ),
                     )
                 if (
                     key.arguments.containsErrorValue() ||
@@ -123,7 +126,10 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
             val key =
                 ObjectEngineResult.GroundKey.of(
                     field = specializedKey.field,
-                    arguments = specializedKey.arguments.fetchBindings(),
+                    arguments =
+                        specializedKey.arguments.fetchBindings(
+                            specializedKey.field.arguments,
+                        ),
                 )
             if (
                 !key.arguments.containsErrorValue() &&
@@ -181,7 +187,7 @@ private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineR
     if (this is ObjectEngineResult.VariableKey || arguments is Value.Arguments) return this
     return ObjectEngineResult.Key.of(
         field = field,
-        arguments = arguments.fetchBindings(),
+        arguments = arguments.fetchBindings(field.arguments),
     )
 }
 
@@ -212,7 +218,10 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
         val key =
             ObjectEngineResult.GroundKey.of(
                 field = specializedKey.field,
-                arguments = specializedKey.arguments.instantiateBindings(),
+                arguments =
+                    specializedKey.arguments.instantiateBindings(
+                        specializedKey.field.arguments,
+                    ),
             )
         if (
             key.arguments.containsErrorValue() ||
@@ -275,7 +284,11 @@ private fun SelectionForest.substitute(
                 key =
                     ObjectEngineResult.Key.of(
                         field = selection.key.field,
-                        arguments = selection.key.arguments.substituteTemplates(bindings),
+                        arguments =
+                            selection.key.arguments.substituteTemplates(
+                                selection.key.field.arguments,
+                                bindings,
+                            ),
                     ),
                 possibleTypes = selection.possibleTypes,
                 subselections = selection.subselections.substitute(bindings),

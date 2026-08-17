@@ -190,7 +190,7 @@ sealed interface ObjectEngineResult : EngineResult {
      *
      * ### Invariant: key-argument-definition
      *
-     * `arguments.type == field.arguments`.
+     * [arguments] recursively conforms to [field]'s argument definition.
      *
      * ### Invariant: object-key-field-classification
      *
@@ -230,7 +230,7 @@ sealed interface ObjectEngineResult : EngineResult {
                 field: Schema.OutputField,
                 arguments: OpenArguments,
             ): Key {
-                require(arguments.type == field.arguments) {
+                require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
                 }
                 return when (field) {
@@ -296,7 +296,7 @@ sealed interface ObjectEngineResult : EngineResult {
                 field: Schema.ObjectField,
                 arguments: OpenArguments,
             ): ObjectKey {
-                require(arguments.type == field.arguments) {
+                require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
                 }
                 return if (arguments is Value.Arguments) {
@@ -329,7 +329,7 @@ sealed interface ObjectEngineResult : EngineResult {
                     field: Schema.ObjectField,
                     arguments: Value.Arguments,
                 ): Stamped {
-                    require(arguments.type == field.arguments) {
+                    require(arguments.conformsToArgumentDefinition(field.arguments)) {
                         "Ground arguments do not belong to the stamped selection field"
                     }
                     return StampedGroundKeyImpl(
@@ -351,7 +351,7 @@ sealed interface ObjectEngineResult : EngineResult {
                 field: Schema.ObjectField,
                 arguments: Value.Arguments,
             ): GroundKey {
-                require(arguments.type == field.arguments) {
+                require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
                 }
                 return GroundKeyImpl(field, arguments)

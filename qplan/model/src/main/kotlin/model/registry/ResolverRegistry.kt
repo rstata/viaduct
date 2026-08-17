@@ -91,7 +91,11 @@ class FieldResolver private constructor(
                                 it.path.map { key ->
                                     ObjectEngineResult.Key.of(
                                         field = key.field,
-                                        arguments = key.arguments.stampVars(path),
+                                        arguments =
+                                            key.arguments.stampVars(
+                                                key.field.arguments,
+                                                path,
+                                            ),
                                     )
                                 },
                             variable = variable.stamp(path),
@@ -196,7 +200,11 @@ class FieldResolver private constructor(
                         it.path.map { key ->
                             ObjectEngineResult.Key.of(
                                 field = key.field,
-                                arguments = key.arguments.stampVars(sitePath),
+                                arguments =
+                                    key.arguments.stampVars(
+                                        key.field.arguments,
+                                        sitePath,
+                                    ),
                             )
                         },
                 )
@@ -347,7 +355,11 @@ private fun SelectionForest.stampVariables(
                 key =
                     ObjectEngineResult.Key.of(
                         field = selection.key.field,
-                        arguments = selection.key.arguments.stampVars(path),
+                        arguments =
+                            selection.key.arguments.stampVars(
+                                selection.key.field.arguments,
+                                path,
+                            ),
                     ),
                 possibleTypes = selection.possibleTypes,
                 subselections = selection.subselections.stampVariables(path),
@@ -381,8 +393,9 @@ private fun SelectionForest.stampVariableSelections(
                 selection.key.arguments
             } else {
                 OpenArguments.Template
-                    .of(selection.key.arguments)
+                    .of(selection.key.field.arguments, selection.key.arguments)
                     .stamp(
+                        selection.key.field.arguments,
                         SelectionStamp(
                             resolverPath = resolverPath,
                             occurrenceLineage =

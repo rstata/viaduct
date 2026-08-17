@@ -172,7 +172,7 @@ sealed interface Value {
             /**
              * ### Invariant: input-list-value-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Every result recursively conforms to the supplied element type expression.
              */
             fun of(
                 typeExpr: TypeExpr<Schema.InputType>,
@@ -232,7 +232,7 @@ sealed interface Value {
             /**
              * ### Invariant: input-object-value-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Every result recursively conforms to [type].
              * Declared defaults are materialized for fields absent from [fields].
              */
             fun of(
@@ -265,7 +265,7 @@ sealed interface Value {
             /**
              * ### Invariant: arguments-value-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Every result recursively conforms to [field]'s argument definition.
              * Declared defaults are materialized for arguments absent from [fields].
              */
             fun of(
@@ -848,7 +848,11 @@ private fun coerceNamedInputValue(
         is Schema.InputObjectType ->
             when (value) {
                 is Value.InputObject ->
-                    if (value.type == type) value else throw ClassCastException()
+                    if (value.conformsToSchemaType(TypeExpr.Named.of(type))) {
+                        value
+                    } else {
+                        throw ClassCastException()
+                    }
                 is Map<*, *> -> Value.InputObject.of(type, value.toStringKeyedMap())
                 else -> throw ClassCastException()
             }

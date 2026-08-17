@@ -47,7 +47,10 @@ sealed interface OpenArguments {
          * Equal templates stamped with equal selection stamps yield equal results. The resulting
          * tuple contains only ground values and selection-stamped variables.
          */
-        fun stamp(selectionStamp: SelectionStamp): Stamped
+        fun stamp(
+            expectedType: Schema.FieldArguments,
+            selectionStamp: SelectionStamp,
+        ): Stamped
 
         companion object {
             /**
@@ -55,7 +58,10 @@ sealed interface OpenArguments {
              *
              * [arguments] may contain only variable templates, never stamped variables.
              */
-            fun of(arguments: OpenArguments): Template {
+            fun of(
+                expectedType: Schema.FieldArguments,
+                arguments: OpenArguments,
+            ): Template {
                 if (arguments is Template) return arguments
                 require(arguments !is Stamped) {
                     "A stamped argument tuple cannot become a registry template"
@@ -64,7 +70,7 @@ sealed interface OpenArguments {
                     "A registry argument template cannot contain stamped variables"
                 }
                 return OpenArgumentsTemplateImpl(
-                    type = arguments.type,
+                    type = expectedType,
                     fieldValues = arguments.fieldExpressions(),
                 )
             }
@@ -111,10 +117,11 @@ sealed interface OpenArguments {
  * recursively contained selection-stamped variable.
  */
 fun OpenArguments.Stamped.restamp(
+    expectedType: Schema.FieldArguments,
     selectionStamp: SelectionStamp,
 ): OpenArguments.Stamped =
     stampedArgumentsOf(
-        type = type,
+        type = expectedType,
         fields =
             fieldExpressions().mapValues { (_, value) ->
                 value.restampVariables(selectionStamp)
@@ -141,9 +148,12 @@ private data class OpenArgumentsTemplateImpl(
     override val type: Schema.FieldArguments,
     val fieldValues: Map<String, OpenValue?>,
 ) : OpenArguments.Template {
-    override fun stamp(selectionStamp: SelectionStamp): OpenArguments.Stamped =
+    override fun stamp(
+        expectedType: Schema.FieldArguments,
+        selectionStamp: SelectionStamp,
+    ): OpenArguments.Stamped =
         stampedArgumentsOf(
-            type = type,
+            type = expectedType,
             fields =
                 fieldValues.mapValues { (_, value) ->
                     value.stampVariables(selectionStamp)
@@ -284,9 +294,34 @@ private fun OpenValue.conformsToSchemaType(
         is Value.Input -> this.conformsToSchemaType(typeExpr)
         is OpenListValueImpl ->
             typeExpr is TypeExpr.List &&
-                typeExpr.elementType.canContainPure(elementType)
-        is OpenInputObjectValueImpl ->
-            typeExpr is TypeExpr.Named && typeExpr.baseType == objectType
+                values.all { value ->
+                    value.conformsToSchemaTypeOrNull(typeExpr.elementType)
+                }
+        is OpenInputObjectValueImpl -> {
+            val expectedType = (typeExpr as? TypeExpr.Named)?.baseType
+            expectedType is Schema.InputObjectType &&
+                fieldValues.all { (name, value) ->
+                    val field = expectedType.fields[name] ?: return@all false
+                    value.conformsToSchemaTypeOrNull(field.typeExpr)
+                }
+        }
+    }
+
+private fun OpenValue?.conformsToSchemaTypeOrNull(
+    typeExpr: TypeExpr<Schema.InputType>,
+): Boolean =
+    if (this == null) {
+        typeExpr.isNullable
+    } else {
+        conformsToSchemaType(typeExpr)
+    }
+
+internal fun OpenArguments.conformsToArgumentDefinition(
+    expectedType: Schema.FieldArguments,
+): Boolean =
+    fieldExpressions().all { (name, value) ->
+        val field = expectedType.fields[name] ?: return@all false
+        value.conformsToSchemaTypeOrNull(field.typeExpr)
     }
 
 internal fun OpenArguments.fieldExpressions(): Map<String, OpenValue?> =
@@ -298,16 +333,17 @@ internal fun OpenArguments.fieldExpressions(): Map<String, OpenValue?> =
     }
 
 internal fun OpenArguments.stampVars(
+    expectedType: Schema.FieldArguments,
     path: List<PathComponent>,
 ): OpenArguments {
     val stamped = fieldExpressions().mapValues { (_, value) -> value.stampVars(path) }
     return if (stamped.values.all { it == null || it is Value.Input }) {
         argumentsOfGround(
-            type,
+            expectedType,
             stamped.mapValues { (_, value) -> value as Value.Input? },
         )
     } else {
-        OpenArgumentsImpl(type, stamped)
+        OpenArgumentsImpl(expectedType, stamped)
     }
 }
 
@@ -367,32 +403,34 @@ private fun OpenValue?.restampVariables(selectionStamp: SelectionStamp): OpenVal
     }
 
 internal fun OpenArguments.substituteTemplates(
+    expectedType: Schema.FieldArguments,
     bindings: Map<Value.Variable.Template, Value.Input?>,
 ): OpenArguments {
     val substituted =
         fieldExpressions().mapValues { (_, value) -> value.substituteTemplates(bindings) }
     return if (substituted.values.all { it == null || it is Value.Input }) {
         argumentsOfGround(
-            type,
+            expectedType,
             substituted.mapValues { (_, value) -> value as Value.Input? },
         )
     } else {
-        OpenArgumentsImpl(type, substituted)
+        OpenArgumentsImpl(expectedType, substituted)
     }
 }
 
 internal fun OpenArguments.mapVariableTemplates(
+    expectedType: Schema.FieldArguments,
     transform: (Value.Variable.Template) -> Value.Variable.Template,
 ): OpenArguments {
     val mapped =
         fieldExpressions().mapValues { (_, value) -> value.mapVariableTemplates(transform) }
     return if (mapped.values.all { it == null || it is Value.Input }) {
         argumentsOfGround(
-            type,
+            expectedType,
             mapped.mapValues { (_, value) -> value as Value.Input? },
         )
     } else {
-        OpenArgumentsImpl(type, mapped)
+        OpenArgumentsImpl(expectedType, mapped)
     }
 }
 
@@ -452,7 +490,7 @@ internal fun OpenArguments.variableTemplates(): Set<Value.Variable.Template> =
 internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments {
     val retargeted = OpenArguments.of(field, fieldExpressions())
     return when (this) {
-        is OpenArguments.Template -> OpenArguments.Template.of(retargeted)
+        is OpenArguments.Template -> OpenArguments.Template.of(field.arguments, retargeted)
         is OpenArguments.Stamped ->
             stampedArgumentsOf(
                 type = field.arguments,
@@ -474,15 +512,19 @@ internal fun OpenValue?.matchingVariableTypes(
             values.flatMap { value ->
                 value.matchingVariableTypes(variable, typeExpr.elementType, false)
             }
-        this is OpenInputObjectValueImpl ->
+        this is OpenInputObjectValueImpl &&
+            typeExpr is TypeExpr.Named &&
+            typeExpr.baseType is Schema.InputObjectType -> {
+            val expectedType = typeExpr.baseType as Schema.InputObjectType
             fieldValues.flatMap { (name, value) ->
-                val field = objectType.fields.getValue(name)
+                val field = expectedType.fields.getValue(name)
                 value.matchingVariableTypes(
                     variable,
                     field.typeExpr,
                     field.defaultValue is Value.Default.Present,
                 )
             }
+        }
         else -> emptyList()
     }
 
@@ -530,69 +572,103 @@ private fun OpenValue?.substituteTemplates(
     }
 
 /**
- * Grounds this argument tuple under [world].
+ * Grounds this argument tuple under [world] and [expectedType].
  *
  * @throws IllegalStateException when a stamped variable is unbound or a template is unstamped
  */
 context(world: Assumptions)
-internal fun OpenArguments.instantiateBindings(): Value.Arguments =
-    groundedArguments(
-        fieldExpressions().mapValues { (_, value) -> value.instantiateBindings() },
-    )
+internal fun OpenArguments.instantiateBindings(
+    expectedType: Schema.FieldArguments,
+): Value.Arguments {
+    return groundedArguments(expectedType) { value, typeExpr ->
+        value.instantiateBindings(typeExpr)
+    }
+}
 
-/** Grounds this argument tuple, suspending until every stamped variable is complete. */
+/** Grounds this argument tuple under [expectedType], suspending for incomplete stamped variables. */
 context(world: Assumptions)
-suspend fun OpenArguments.fetchBindings(): Value.Arguments =
-    groundedArguments(
-        fieldExpressions().mapValues { (_, value) -> value.fetchBindings() },
-    )
+suspend fun OpenArguments.fetchBindings(
+    expectedType: Schema.FieldArguments,
+): Value.Arguments {
+    return groundedArguments(expectedType) { value, typeExpr ->
+        value.fetchBindings(typeExpr)
+    }
+}
 
-private fun OpenArguments.groundedArguments(
-    fields: Map<String, Value.Input?>,
+private inline fun OpenArguments.groundedArguments(
+    expectedType: Schema.FieldArguments,
+    ground: (OpenValue?, TypeExpr<Schema.InputType>) -> Value.Input?,
 ): Value.Arguments =
     argumentsOfGround(
-        type,
-        fields.mapValues { (name, value) ->
-            coerceInputValue(type.fields.getValue(name).typeExpr, value)
+        expectedType,
+        fieldExpressions().mapValues { (name, value) ->
+            val typeExpr = expectedType.fields.getValue(name).typeExpr
+            coerceInputValue(typeExpr, ground(value, typeExpr))
         },
     )
 
 context(world: Assumptions)
-private fun OpenValue?.instantiateBindings(): Value.Input? =
+private fun OpenValue?.instantiateBindings(
+    expectedType: TypeExpr<Schema.InputType>,
+): Value.Input? =
     when (this) {
-        null -> null
-        is Value.Input -> this
-        is Value.Variable.Stamped -> world.getBinding(this)
+        null -> coerceInputValue(expectedType, null)
+        is Value.Input -> coerceInputValue(expectedType, this)
+        is Value.Variable.Stamped -> coerceInputValue(expectedType, world.getBinding(this))
         is Value.Variable.Template ->
             error("Variable template $this must be stamped before it can be instantiated")
-        is OpenListValueImpl ->
+        is OpenListValueImpl -> {
+            require(expectedType is TypeExpr.List) {
+                "Open list expression does not match $expectedType"
+            }
             Value.InputList.of(
-                elementType,
-                values.map { value -> value.instantiateBindings() },
+                expectedType.elementType,
+                values.map { value -> value.instantiateBindings(expectedType.elementType) },
             )
-        is OpenInputObjectValueImpl ->
+        }
+        is OpenInputObjectValueImpl -> {
+            val expectedObjectType = (expectedType as? TypeExpr.Named)?.baseType
+            require(expectedObjectType is Schema.InputObjectType) {
+                "Open input object expression does not match $expectedType"
+            }
             Value.InputObject.of(
-                objectType,
-                fieldValues.mapValues { (_, value) -> value.instantiateBindings() },
+                expectedObjectType,
+                fieldValues.mapValues { (name, value) ->
+                    value.instantiateBindings(expectedObjectType.fields.getValue(name).typeExpr)
+                },
             )
+        }
     }
 
 context(world: Assumptions)
-private suspend fun OpenValue?.fetchBindings(): Value.Input? =
+private suspend fun OpenValue?.fetchBindings(
+    expectedType: TypeExpr<Schema.InputType>,
+): Value.Input? =
     when (this) {
-        null -> null
-        is Value.Input -> this
-        is Value.Variable.Stamped -> world.fetchBinding(this)
+        null -> coerceInputValue(expectedType, null)
+        is Value.Input -> coerceInputValue(expectedType, this)
+        is Value.Variable.Stamped -> coerceInputValue(expectedType, world.fetchBinding(this))
         is Value.Variable.Template ->
             error("Variable template $this must be stamped before it can be instantiated")
-        is OpenListValueImpl ->
+        is OpenListValueImpl -> {
+            require(expectedType is TypeExpr.List) {
+                "Open list expression does not match $expectedType"
+            }
             Value.InputList.of(
-                elementType,
-                values.map { value -> value.fetchBindings() },
+                expectedType.elementType,
+                values.map { value -> value.fetchBindings(expectedType.elementType) },
             )
-        is OpenInputObjectValueImpl ->
+        }
+        is OpenInputObjectValueImpl -> {
+            val expectedObjectType = (expectedType as? TypeExpr.Named)?.baseType
+            require(expectedObjectType is Schema.InputObjectType) {
+                "Open input object expression does not match $expectedType"
+            }
             Value.InputObject.of(
-                objectType,
-                fieldValues.mapValues { (_, value) -> value.fetchBindings() },
+                expectedObjectType,
+                fieldValues.mapValues { (name, value) ->
+                    value.fetchBindings(expectedObjectType.fields.getValue(name).typeExpr)
+                },
             )
+        }
     }

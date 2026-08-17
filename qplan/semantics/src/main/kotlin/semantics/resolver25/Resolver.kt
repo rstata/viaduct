@@ -558,7 +558,10 @@ private class ObjectResultOrchestrator(
             val groundedKey =
                 ObjectEngineResult.GroundKey.of(
                     field = specializedKey.field,
-                    arguments = specializedKey.arguments.fetchBindings(),
+                    arguments =
+                        specializedKey.arguments.fetchBindings(
+                            specializedKey.field.arguments,
+                        ),
                 )
             if (index == 0) {
                 fields.getValue(groundedKey.field).awaitGroundedKey(

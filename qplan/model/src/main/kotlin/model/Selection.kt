@@ -232,7 +232,9 @@ suspend fun SelectionForest.mergeWithVariables(
             (selection.key as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
         val specializedKey: ObjectEngineResult.ObjectKey = selection.objectKey(type)
         val groundKey: ObjectEngineResult.GroundKey =
-            specializedKey.ground(specializedKey.arguments.fetchBindings())
+            specializedKey.ground(
+                specializedKey.arguments.fetchBindings(specializedKey.field.arguments),
+            )
         childrenByKey
             .getOrPut(groundKey, ::mutableListOf)
             .add(selection.subselections)
@@ -313,7 +315,10 @@ fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
     val childrenByKey =
         buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
             byKey().values.forEach { selection ->
-                val key = selection.key.ground(selection.key.arguments.instantiateBindings())
+                val key =
+                    selection.key.ground(
+                        selection.key.arguments.instantiateBindings(selection.key.field.arguments),
+                    )
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
             }
         }
@@ -330,7 +335,10 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
     val childrenByKey =
         buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
             byKey().values.forEach { selection ->
-                val key = selection.key.ground(selection.key.arguments.fetchBindings())
+                val key =
+                    selection.key.ground(
+                        selection.key.arguments.fetchBindings(selection.key.field.arguments),
+                    )
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
             }
         }
@@ -420,6 +428,7 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
     val stampedArguments = arguments as? OpenArguments.Stamped
     val localizedArguments =
         stampedArguments?.restamp(
+            field.arguments,
             stampedArguments.selectionStamp.extendThrough(path),
         )
     val baseKey =

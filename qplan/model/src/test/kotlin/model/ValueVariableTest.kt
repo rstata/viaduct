@@ -9,6 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
 
 class ValueVariableTest {
     @Test
@@ -25,7 +26,11 @@ class ValueVariableTest {
         val template = Value.Variable.of(source, "value")
         val arguments = OpenArguments.of(source, mapOf("value" to template))
 
-        val substituted = arguments.substituteTemplates(mapOf(template to null))
+        val substituted =
+            arguments.substituteTemplates(
+                source.arguments,
+                mapOf(template to null),
+            )
 
         assertIs<Value.Arguments>(substituted)
         assertEquals(null, substituted.fieldValues.getValue("value"))
@@ -114,13 +119,13 @@ class ValueVariableTest {
             )
         val path = listOf(ListEngineResult.Index.of(2))
 
-        val stamped = arguments.stampVars(path)
+        val stamped = arguments.stampVars(consume.arguments, path)
         val stampedVariable = template.stamp(path)
         world.declareBinding(stampedVariable)
         world.completeBinding(stampedVariable, Value.Int.of(9))
         val instantiated =
             context(world) {
-                stamped.instantiateBindings()
+                stamped.instantiateBindings(consume.arguments)
             }
         val filter =
             assertIs<Value.InputObject>(instantiated.fieldValues.getValue("filter"))
@@ -157,18 +162,68 @@ class ValueVariableTest {
             OpenArguments.of(
                 consume,
                 mapOf("values" to template),
-            ).stampVars(path)
+            ).stampVars(consume.arguments, path)
         world.declareBinding(variable)
         world.completeBinding(variable, Value.Int.of(9))
 
         val grounded =
             context(world) {
-                arguments.instantiateBindings()
+                arguments.instantiateBindings(consume.arguments)
             }
         val outer = assertIs<Value.InputList>(grounded.fieldValues.getValue("values"))
         val inner = assertIs<Value.InputList>(outer.values.single())
 
         assertEquals(listOf(Value.Int.of(9)), inner.values)
+    }
+
+    @Test
+    fun `grounding uses the supplied argument definition instead of carried metadata`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                input FirstFilter {
+                  value: Int
+                }
+
+                input SecondFilter {
+                  value: Int
+                }
+
+                type Query {
+                  source: Int
+                  first(filter: FirstFilter): Int
+                  second(filter: SecondFilter): Int
+                }
+                """.trimIndent(),
+            ).assumptions
+        val source = world.schema.objectField("Query", "source")
+        val first = world.schema.objectField("Query", "first")
+        val second = world.schema.objectField("Query", "second")
+        val template = Value.Variable.of(source, "value")
+        val path = listOf(ListEngineResult.Index.of(1))
+        val variable = template.stamp(path)
+        val arguments =
+            OpenArguments
+                .of(
+                    first,
+                    mapOf("filter" to mapOf("value" to template)),
+                ).stampVars(first.arguments, path)
+
+        assertSame(first.arguments, arguments.type)
+        world.declareBinding(variable)
+        world.completeBinding(variable, Value.Int.of(9))
+
+        val grounded =
+            context(world) {
+                arguments.instantiateBindings(second.arguments)
+            }
+        val filter =
+            assertIs<Value.InputObject>(
+                grounded.fieldValues.getValue("filter"),
+            )
+
+        assertSame(world.schema.type("SecondFilter"), filter.type)
+        assertEquals(Value.Int.of(9), filter.fieldValues.getValue("value"))
     }
 
     @Test
@@ -187,6 +242,7 @@ class ValueVariableTest {
         val template = Value.Variable.of(source, "value")
         val arguments =
             OpenArguments.Template.of(
+                consume.arguments,
                 OpenArguments.of(consume, mapOf("value" to template)),
             )
         val sourceSelection =
@@ -221,9 +277,9 @@ class ValueVariableTest {
                     .single()
             }
 
-        val first = ground(arguments.stamp(firstStamp))
-        val equalFirst = ground(arguments.stamp(firstStamp))
-        val second = ground(arguments.stamp(secondStamp))
+        val first = ground(arguments.stamp(consume.arguments, firstStamp))
+        val equalFirst = ground(arguments.stamp(consume.arguments, firstStamp))
+        val second = ground(arguments.stamp(consume.arguments, secondStamp))
         val unstamped = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 9))
         val reapplied =
             context(world) {
@@ -263,7 +319,7 @@ class ValueVariableTest {
         val arguments = OpenArguments.of(consume, mapOf("value" to stampedVariable))
 
         assertFailsWith<IllegalArgumentException> {
-            OpenArguments.Template.of(arguments)
+            OpenArguments.Template.of(consume.arguments, arguments)
         }
     }
 
@@ -310,13 +366,15 @@ class ValueVariableTest {
                 )
             val variable = variableTemplate.stamp(selectionStamp)
             val arguments =
-                OpenArguments.Template.of(openArguments).stamp(selectionStamp)
+                OpenArguments.Template
+                    .of(consume.arguments, openArguments)
+                    .stamp(consume.arguments, selectionStamp)
             world.declareBinding(variable)
 
             val fetched =
                 async {
                     context(world) {
-                        arguments.fetchBindings()
+                        arguments.fetchBindings(consume.arguments)
                     }
                 }
 

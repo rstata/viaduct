@@ -432,7 +432,7 @@ class AssumptionsTest {
 
         val instantiated =
             context(assumptions) {
-                arguments.instantiateBindings()
+                arguments.instantiateBindings(node.arguments)
             }
 
         assertEquals(
@@ -449,7 +449,7 @@ class AssumptionsTest {
 
         val instantiated =
             context(assumptions) {
-                arguments.instantiateBindings()
+                arguments.instantiateBindings(node.arguments)
             }
 
         assertSame(Value.Error, instantiated.fieldValues.getValue("filter"))

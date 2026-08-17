@@ -3,6 +3,7 @@ package model.testing
 import model.Schema
 import model.SourceSchemaAdapter
 import model.Value
+import model.fieldExpressions
 import model.objectOf
 import model.registry.VariableDefinition
 import org.junit.jupiter.api.Test
@@ -109,6 +110,73 @@ class ResolverTestDslTest {
             world.resolverRegistry.resolver(failed)(
                 root,
                 Value.Arguments.of(failed, emptyMap()),
+            ),
+        )
+    }
+
+    @Test
+    fun `compiles error sentinels in object-fragment arguments`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  result: Int!
+                    @resolver(
+                      of: "dependency(arg: \"ERROR\")"
+                      result: 1
+                    )
+                  dependency(arg: Int!): Int! @resolver(result: 2)
+                }
+                """.trimIndent(),
+            )
+        val result = world.schema.objectField("Query", "result")
+        val dependency =
+            world.resolverRegistry
+                .resolver(result)
+                .objectFragment
+                .single()
+
+        assertEquals(
+            Value.Error,
+            dependency.key.arguments.fieldExpressions().getValue("arg"),
+        )
+    }
+
+    @Test
+    fun `value expressions preserve integer null and error values`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  echo(input: Int): Int
+                    @resolver(result: "value(${'$'}input)")
+                  echoPath: Int
+                    @resolver(of: "source", result: "value(source)")
+                  source: Int @resolver(result: null)
+                }
+                """.trimIndent(),
+            )
+        val root = world.resolverRegistry.resolveRootQuery()
+        val echo = world.schema.objectField("Query", "echo")
+        val echoResolver = world.resolverRegistry.resolver(echo)
+
+        listOf<Value.Input?>(Value.Int.of(4), null, Value.Error).forEach { value ->
+            assertEquals(
+                value as Value.Output?,
+                echoResolver(
+                    root,
+                    Value.Arguments.of(echo, mapOf("input" to value)),
+                ),
+            )
+        }
+
+        val echoPath = world.schema.objectField("Query", "echoPath")
+        assertNull(
+            world.resolverRegistry.resolver(echoPath)(
+                world.schema.objectOf("Query") {
+                    "source" setTo null
+                },
+                Value.Arguments.of(echoPath, emptyMap()),
             ),
         )
     }

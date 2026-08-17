@@ -2,16 +2,13 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
-import model.Fragment
 import model.Schema
-import model.Selection
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.sameCompletedResultAs
-import model.selectionForestOf
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import semantics.resolver01.resolve as resolveWithResolver01
@@ -288,59 +285,37 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
     @Test
     fun `error-valued resolver argument does not import transitive demand`() {
+        var dependencyApplications = 0
         val testWorld =
-            TestWorld.fromSDL(
+            TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
-                    type Container { helper: Int! }
-                    type Query {
-                      container: Container!
-                      dependency(arg: Int!): Int!
+                    extend type Query {
                       result: Int!
+                        @resolver(
+                          of: "dependency(arg: \"ERROR\")"
+                          result: 1
+                        )
+                      dependency(arg: Int!): Int!
+                        @resolver(
+                          of: "container { helper }"
+                          result: 2
+                        )
+                      container: Container! @resolver(result: {})
+                    }
+
+                    type Container {
+                      helper: Int!
                     }
                     """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val dependency =
-                        schema
-                            .fragmentFrom(
-                                "fragment ignored on Query { dependency(arg: 1) }",
-                            ).subselections
-                            .single()
-                    val errorDependency =
-                        Selection.of(
-                            Value.Key.of(
-                                dependency.key.field,
-                                mapOf("arg" to Value.Error),
-                            ),
-                            dependency.possibleTypes,
-                            dependency.subselections,
-                        )
-                    mapOf(
-                        schema.field("Query", "container") to
-                            model.testing.fieldResolverOf(
-                                schema.emptyFragmentOf("Query"),
-                            ) { _, _ ->
-                                schema.objectOf("Container")
-                            },
-                        schema.field("Query", "dependency") to
-                            model.testing.fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on Query { container { helper } }",
-                                ),
-                            ) { _, _ ->
-                                error("An error-bearing resolver must not be applied")
-                            },
-                        schema.field("Query", "result") to
-                            model.testing.fieldResolverOf(
-                                Fragment.of(
-                                    schema.query,
-                                    selectionForestOf(errorDependency),
-                                ),
-                            ) { _, _ ->
-                                Value.Int.of(1)
-                            },
-                    )
+                applicationObserver = { field, _, _, _ ->
+                    if (
+                        field.containingType.typeName == "Query" &&
+                        field.fieldName == "dependency"
+                    ) {
+                        dependencyApplications += 1
+                    }
                 },
             )
         val world = testWorld.assumptions
@@ -379,6 +354,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             Value.Int.of(1),
             result.getCell(world.schema.contractKey("Query", "result")).get(),
         )
+        assertEquals(0, dependencyApplications)
     }
 
     private fun Value.GroundKey.visibleIdentity() =

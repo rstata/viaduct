@@ -383,11 +383,14 @@ private class Compiler(
                         when {
                             name in argumentNames -> schema.fromArgument(field, name)
                             name in pathVariables ->
-                                schema.fromObjectField(
-                                    objectFragmentSource(field, definition.of),
-                                    pathVariables.getValue(name).path,
-                                    field,
-                                )
+                                preparedObjectFragment(field, definition.of).let { fragment ->
+                                    schema.fromObjectField(
+                                        objectFragmentSource = fragment.source,
+                                        responsePath = pathVariables.getValue(name).path,
+                                        variableField = field,
+                                        bindings = fragment.bindings,
+                                    )
+                                }
                             else ->
                                 throw IllegalArgumentException(
                                     "Variable \$$name on ${definition.typeName}." +
@@ -407,9 +410,13 @@ private class Compiler(
         if (source.isBlank()) {
             schema.emptyFragmentOf(field.containingType.typeName)
         } else {
-            val fragmentSource = objectFragmentSource(field, source)
-            requireNoAliases(fragmentSource)
-            schema.fragmentFrom(fragmentSource, variableField = field)
+            val fragment = preparedObjectFragment(field, source)
+            requireNoAliases(fragment.source)
+            schema.fragmentFrom(
+                source = fragment.source,
+                bindings = fragment.bindings,
+                variableField = field,
+            )
         }
 
     private fun variablesIn(
@@ -417,15 +424,15 @@ private class Compiler(
         field: Schema.ObjectField,
     ): Set<String> {
         if (definition.of.isBlank()) return emptySet()
-        val source = objectFragmentSource(field, definition.of)
-        requireNoAliases(source)
+        val fragment = preparedObjectFragment(field, definition.of)
+        requireNoAliases(fragment.source)
         val variables = linkedSetOf<String>()
         fun visit(node: graphql.language.Node<*>) {
             if (node is VariableReference) variables += node.name
             node.children.forEach(::visit)
         }
-        Parser.parse(source).children.forEach(::visit)
-        return variables
+        Parser.parse(fragment.source).children.forEach(::visit)
+        return variables - fragment.bindings.keys
     }
 
     private fun requireNoAliases(source: String) {
@@ -443,6 +450,35 @@ private class Compiler(
         source: String,
     ): String =
         "fragment ResolverTestDsl on ${field.containingType.typeName} { $source }"
+
+    private fun preparedObjectFragment(
+        field: Schema.ObjectField,
+        source: String,
+    ): PreparedObjectFragment {
+        val fragmentSource = objectFragmentSource(field, source)
+        val occupiedVariableNames = linkedSetOf<String>()
+
+        fun visit(node: graphql.language.Node<*>) {
+            if (node is VariableReference) occupiedVariableNames += node.name
+            node.children.forEach(::visit)
+        }
+        Parser.parse(fragmentSource).children.forEach(::visit)
+
+        var nextBindingIndex = 0
+        val bindings = linkedMapOf<String, Value.Input?>()
+        val preparedSource =
+            ERROR_ARGUMENT_LITERAL.replace(fragmentSource) {
+                val name =
+                    generateSequence {
+                        "${ERROR_VARIABLE_PREFIX}${nextBindingIndex++}"
+                    }.first { candidate ->
+                        candidate !in occupiedVariableNames && candidate !in bindings
+                    }
+                bindings[name] = Value.Error
+                "\$$name"
+            }
+        return PreparedObjectFragment(preparedSource, bindings)
+    }
 
     private fun nodeType(): Schema.InterfaceType =
         schema.type("Node") as? Schema.InterfaceType
@@ -501,7 +537,12 @@ private class ResultEvaluator(
             }
             is TypeExpr.Named ->
                 when (val type = typeExpr.baseType) {
-                    Schema.IntType -> evaluateInt(source, context)
+                    Schema.IntType ->
+                        evaluateInt(source, context).also { result ->
+                            require(result != null || typeExpr.isNullable) {
+                                "null does not conform to $typeExpr"
+                            }
+                        }
                     Schema.IDType ->
                         Value.ID.of(
                             parseResultId(source),
@@ -624,7 +665,7 @@ private class ResultEvaluator(
     private fun evaluateInt(
         source: GraphQLValue<*>,
         context: EvaluationContext,
-    ): Value.Output =
+    ): Value.Output? =
         when (source) {
             is IntValue -> Value.Int.of(source.value.toIntExact("GraphQL Int result"))
             is StringValue -> evaluateExpression(source.requiredValue(), context)
@@ -634,25 +675,33 @@ private class ResultEvaluator(
     private fun evaluateExpression(
         source: String,
         context: EvaluationContext,
-    ): Value.Output {
+    ): Value.Output? {
         val match = EXPRESSION.matchEntire(source)
             ?: throw IllegalArgumentException("Invalid resolver-test expression: $source")
-        val plusOne = match.groupValues[1] == "sumplus1"
+        val operation = match.groupValues[1]
         val terms =
             match.groupValues[2]
                 .takeIf(String::isNotBlank)
                 ?.split(',')
                 ?.map(String::trim)
                 .orEmpty()
-        var sum = if (plusOne) 1 else 0
-        terms.forEach { term ->
-            val values =
-                if (term.startsWith("$")) {
-                    listOf(argumentValue(term.removePrefix("$"), context))
-                } else {
-                    require(PATH.matches(term)) { "Invalid resolver-test value: $term" }
-                    fieldPathValues(context.input, term.split('.'))
+
+        if (operation == "value") {
+            require(terms.size == 1) { "value(...) requires exactly one value" }
+            val values = expressionValues(terms.single(), context, preserveNulls = true)
+            require(values.size == 1) {
+                "value(...) requires exactly one reachable value, found ${values.size}"
+            }
+            return values.single().also { value ->
+                require(value == null || value == Value.Error || value is Value.Int) {
+                    "value(...) result is not an Int"
                 }
+            }
+        }
+
+        var sum = if (operation == "sumplus1") 1 else 0
+        terms.forEach { term ->
+            val values = expressionValues(term, context, preserveNulls = false)
             values.forEach { value ->
                 when (value) {
                     null -> Unit
@@ -667,6 +716,26 @@ private class ResultEvaluator(
         }
         return Value.Int.of(sum)
     }
+
+    private fun expressionValues(
+        term: String,
+        context: EvaluationContext,
+        preserveNulls: Boolean,
+    ): List<Value.Output?> =
+        if (term.startsWith("$")) {
+            val value = argumentValue(term.removePrefix("$"), context)
+            when (value) {
+                null -> listOf(null)
+                is Value.Output -> listOf(value)
+                else ->
+                    throw IllegalArgumentException(
+                        "Resolver-test expression value is not an output value: $term",
+                    )
+            }
+        } else {
+            require(PATH.matches(term)) { "Invalid resolver-test value: $term" }
+            fieldPathValues(context.input, term.split('.'), preserveNulls)
+        }
 
     private fun argumentValue(
         name: String,
@@ -685,13 +754,14 @@ private class ResultEvaluator(
     private fun fieldPathValues(
         input: Value.Object,
         path: List<String>,
+        preserveNulls: Boolean = false,
     ): List<Value.Output?> {
         fun visit(
             value: Value.Output?,
             index: Int,
         ): List<Value.Output?> =
             when {
-                value == null -> emptyList()
+                value == null -> if (preserveNulls) listOf(null) else emptyList()
                 value == Value.Error -> listOf(Value.Error)
                 value is Value.OutputList -> value.values.flatMap { visit(it, index) }
                 index == path.size -> listOf(value)
@@ -761,6 +831,11 @@ private data class EvaluationContext(
     val arguments: Value.Arguments?,
 )
 
+private data class PreparedObjectFragment(
+    val source: String,
+    val bindings: Map<String, Value.Input?>,
+)
+
 private data class DslFieldResolver(
     val typeName: String,
     val fieldName: String,
@@ -810,9 +885,11 @@ private const val PATH_FIELD = "path"
 private const val ID_FIELD = "id"
 private const val TYPENAME_FIELD = "__typename"
 private const val ERROR_SENTINEL = "ERROR"
+private const val ERROR_VARIABLE_PREFIX = "__resolverTestError"
 private val GRAPHQL_NAME = Regex("[_A-Za-z][_0-9A-Za-z]*")
 private val PATH = Regex("[_A-Za-z][_0-9A-Za-z]*(\\.[_A-Za-z][_0-9A-Za-z]*)*")
-private val EXPRESSION = Regex("(sum|sumplus1)\\((.*)\\)")
+private val EXPRESSION = Regex("(sum|sumplus1|value)\\((.*)\\)")
+private val ERROR_ARGUMENT_LITERAL = Regex("\"ERROR\"")
 
 private val BUILT_IN_SCHEMA =
     """

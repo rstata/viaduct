@@ -5,15 +5,17 @@ import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.contract.Resolver25StructuralSignature
+import semantics.contract.assertDistinctArguments
 import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class MixedVariablePhaseRegressionTest {
     @Test
     fun `binds a known resolver argument before its nested path variable`() {
-        var bridgeSeed: Value.Output? = null
+        var observedBridge = false
         val testWorld =
             TestWorld.fromDSL(
                 schemaSDL =
@@ -46,10 +48,12 @@ class MixedVariablePhaseRegressionTest {
                         field.containingType.typeName == "Query" &&
                         field.fieldName == "bridge"
                     ) {
-                        bridgeSeed =
+                        val seed =
                             input.fieldValues.entries
                                 .single { (key, _) -> key.field.fieldName == "seed" }
                                 .value
+                        require(seed == Value.Int.of(7))
+                        observedBridge = true
                     }
                 },
             )
@@ -84,12 +88,25 @@ class MixedVariablePhaseRegressionTest {
                     ),
                 ).getValue().get(),
         )
-        assertEquals(Value.Int.of(7), bridgeSeed)
+        assertTrue(observedBridge)
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Query", "bridge"),
+            mapOf("value" to 7),
+        )
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Query", "seed"),
+            mapOf("value" to 1),
+            mapOf("value" to 7),
+        )
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Item", "consume"),
+            mapOf("value" to 1),
+        )
     }
 
     @Test
     fun `does not let a future distinct key block a ready resolver instance`() {
-        var earlyProducer: Value.Output? = null
+        var observedSource = false
         val testWorld =
             TestWorld.fromDSL(
                 schemaSDL =
@@ -117,10 +134,12 @@ class MixedVariablePhaseRegressionTest {
                         field.containingType.typeName == "Query" &&
                         field.fieldName == "source"
                     ) {
-                        earlyProducer =
+                        val producer =
                             input.fieldValues.entries
                                 .single { (key, _) -> key.field.fieldName == "producer" }
                                 .value
+                        require(producer == Value.Int.of(1))
+                        observedSource = true
                     }
                 },
             )
@@ -155,6 +174,15 @@ class MixedVariablePhaseRegressionTest {
                     ),
                 ).getValue().get(),
         )
-        assertEquals(Value.Int.of(1), earlyProducer)
+        assertTrue(observedSource)
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Query", "dependent"),
+            mapOf("value" to 2),
+        )
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Query", "producer"),
+            mapOf("key" to 1),
+            mapOf("key" to 2),
+        )
     }
 }

@@ -174,11 +174,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             )
 
         val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                fragment,
-            )
+            resolveAndValidate(world, fragment)
 
         assertEquals(Value.Int.of(8), resolved.getCell(resultKey).get())
         when (variableSelectionIdentityPolicy) {

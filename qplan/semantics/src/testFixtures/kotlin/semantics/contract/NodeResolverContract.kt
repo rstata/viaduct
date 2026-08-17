@@ -5,7 +5,6 @@ import model.Schema
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
-import model.fragmentFrom
 import model.objectOf
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
@@ -19,15 +18,14 @@ import kotlin.test.assertIs
 interface NodeResolverContract : ResolverContract {
     @Test
     fun `resolves an empty query through field and node resolvers`() {
-        var viewerId: Value.Input? = null
-        var greetingPrefix: Value.Input? = null
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
                 schemaSDL =
                     """
                     extend type Query {
-                      viewer(id: ID!): User! @resolver(result: {id: "1"})
+                      viewer(id: ID!): User!
+                        @resolver(result: {id: "idFrom(${'$'}id)"})
                     }
 
                     type User implements Node
@@ -38,25 +36,21 @@ interface NodeResolverContract : ResolverContract {
                         @resolver(result: "sumplus1(${'$'}prefix)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, arguments, _ ->
-                    when {
+                applicationObserver = { field, input, _, _ ->
+                    if (
                         field.containingType.typeName == "Query" &&
-                            field.fieldName.startsWith("viewer") -> {
-                            require(input.hasExactlyFields())
-                            viewerId = arguments.fieldValues.getValue("id")
-                        }
+                        field.fieldName.startsWith("viewer") ||
                         field.containingType.typeName == "User" &&
-                            field.fieldName == "greeting" -> {
-                            require(input.hasExactlyFields())
-                            greetingPrefix = arguments.fieldValues.getValue("prefix")
-                        }
+                        field.fieldName == "greeting"
+                    ) {
+                        require(input.hasExactlyFields())
                     }
                 },
             )
         val world = testWorld.assumptions
-        val fragment =
-            world.fragmentFrom(
-                """
+        resolveAndValidate(
+            world,
+            """
                 fragment ignored on Query {
                   viewer(id: "1") {
                     id
@@ -65,11 +59,15 @@ interface NodeResolverContract : ResolverContract {
                   }
                 }
                 """.trimIndent(),
-            )
-
-        resolveAndValidate(world, world.objectOf("Query"), fragment)
-        assertEquals(Value.ID.of("1"), viewerId)
-        assertEquals(Value.Int.of(5), greetingPrefix)
+        )
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Query", "viewer_V_A_node"),
+            mapOf("id" to "1"),
+        )
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("User", "greeting"),
+            mapOf("prefix" to 5),
+        )
     }
 
     @Test
@@ -118,12 +116,11 @@ interface NodeResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val fragment =
-            world.fragmentFrom(
+        val result =
+            resolveAndValidate(
+                world,
                 "fragment ignored on Query { viewer { card { profile { id name } } } }",
             )
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val viewer =
             assertIs<EngineResult.Object>(
                 result.getCell(schema.contractKey("Query", "viewer")).get(),
@@ -225,8 +222,9 @@ interface NodeResolverContract : ResolverContract {
             )
         val world = testWorld.newAssumptions()
         val schema = world.schema
-        val fragment =
-            world.fragmentFrom(
+        val result =
+            resolveAndValidate(
+                world,
                 """
                 fragment ignored on Query {
                   first: nodes(group: "first") {
@@ -238,8 +236,6 @@ interface NodeResolverContract : ResolverContract {
                 }
                 """.trimIndent(),
             )
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
         val bridgeField = schema.objectField("Query", "nodes_V_A_node")
         val bridgeType = schema.contractObjectType("Node_V_A_Bridge")
         val payloadKey = schema.contractKey("Node_V_A_Bridge", "node")
@@ -329,12 +325,8 @@ interface NodeResolverContract : ResolverContract {
             )
         val world = testWorld.newAssumptions()
         val schema = world.schema
-        val fragment =
-            world.fragmentFrom(
-                "fragment ignored on Query { matrix { id name } }",
-            )
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val result =
+            resolveAndValidate(world, "fragment ignored on Query { matrix { id name } }")
         val matrix =
             assertIs<EngineResult.List>(
                 result.getCell(schema.contractKey("Query", "matrix_V_A_node")).get(),

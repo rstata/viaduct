@@ -1,9 +1,11 @@
 package semantics.contract
 
 import model.Value
+import model.emptyFragmentOf
 import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -17,7 +19,6 @@ interface ObjectFragmentFromArgumentResolverContract :
     RecursiveListFromArgumentDemandResolverContract {
     @Test
     fun `resolves input selected with a fromArgument variable`() {
-        val consumeArguments = mutableListOf<Value.Arguments>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -33,11 +34,6 @@ interface ObjectFragmentFromArgumentResolverContract :
                         @resolver(result: "sum(${'$'}value, ${'$'}value)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, arguments, _ ->
-                    if (field.fieldName == "consume") {
-                        consumeArguments += arguments
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Query", "result")
@@ -48,8 +44,9 @@ interface ObjectFragmentFromArgumentResolverContract :
                 mapOf("seed" to 7),
             )
         val secondKey = Value.GroundKey.of(resultField, mapOf("seed" to 8))
-        val fragment =
-            world.fragmentFrom(
+        val resolved =
+            resolveAndValidate(
+                world,
                 """
                 fragment ignored on Query {
                   first: result(seed: 7)
@@ -58,22 +55,12 @@ interface ObjectFragmentFromArgumentResolverContract :
                 """.trimIndent(),
             )
 
-        val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
-
         assertEquals(Value.Int.of(14), resolved.getCell(firstKey).get())
         assertEquals(Value.Int.of(16), resolved.getCell(secondKey).get())
-        assertEquals(
-            listOf(
-                Value.Arguments.of(
-                    world.schema.field("Query", "consume"),
-                    mapOf("value" to 7),
-                ),
-                Value.Arguments.of(
-                    world.schema.field("Query", "consume"),
-                    mapOf("value" to 8),
-                ),
-            ),
-            consumeArguments,
+        testWorld.applicationArguments.assertArguments(
+            world.schema.field("Query", "consume"),
+            mapOf("value" to 7),
+            mapOf("value" to 8),
         )
         val resolver = world.resolverRegistry.resolver(resultField)
         listOf(
@@ -94,6 +81,60 @@ interface ObjectFragmentFromArgumentResolverContract :
                 assertEquals(expectedValue, world.getBinding(boundVariable))
             }
         }
+    }
+
+    @Test
+    fun `resolves a fromArgument variable whose name differs from its argument`() {
+        val resultFragment =
+            """
+            fragment Result on Query {
+              consume(value: ${'$'}argumentValue)
+            }
+            """.trimIndent()
+        // The compact DSL reserves $argname for same-named argument variables.
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      result(value: Int!): Int!
+                      consume(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    val consume = schema.objectField("Query", "consume")
+                    val consumeKey = Value.GroundKey.of(consume, mapOf("value" to 7))
+                    mapOf(
+                        result to
+                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
+                                input.fieldValues.getValue(consumeKey)
+                            },
+                        consume to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value") as Value.Int
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.objectField("Query", "result")
+                    mapOf(
+                        Value.Variable.of(result, "argumentValue") to
+                            schema.fromArgument(result, "value"),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            Value.GroundKey.of(
+                world.schema.objectField("Query", "result"),
+                mapOf("value" to 7),
+            )
+        val resolved =
+            resolveAndValidate(world, "fragment ignored on Query { result(value: 7) }")
+
+        assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
     }
 
     @Test
@@ -119,9 +160,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                 world.schema.objectField("Query", "one"),
                 mapOf("seed" to 7),
             )
-        val fragment = world.fragmentFrom("fragment ignored on Query { one(seed: 7) }")
-
-        val resolved = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { one(seed: 7) }")
 
         assertEquals(Value.Int.of(8), resolved.getCell(oneKey).get())
     }

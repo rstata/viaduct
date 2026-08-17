@@ -5,7 +5,6 @@ import model.Schema
 import model.Value
 import model.fragmentFrom
 import model.merge
-import model.objectOf
 import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
@@ -56,32 +55,16 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 },
             )
         val world = testWorld.assumptions
-        val payloadKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "payload"),
-                emptyMap(),
-            )
-        val computedKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Payload", "computed"),
-                emptyMap(),
-            )
-        val rawKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Payload", "raw"),
-                emptyMap(),
-            )
+        val payloadKey = world.schema.contractKey("Query", "payload")
+        val computedKey = world.schema.contractKey("Payload", "computed")
+        val rawKey = world.schema.contractKey("Payload", "raw")
         val fragment =
             world.fragmentFrom(
                 "fragment Query on Query { payload { computed } }",
             )
 
         val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                fragment,
-            )
+            resolveAndValidate(world, fragment)
         val payload = resolved.getCell(payloadKey).get() as EngineResult.Object
 
         assertEquals(Value.Int.of(7), payload.getCell(computedKey).get())
@@ -141,24 +124,17 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 },
             )
         val world = testWorld.assumptions
-        val triggerKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "trigger"),
-                emptyMap(),
-            )
+        val triggerKey = world.schema.contractKey("Query", "trigger")
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    "fragment Query on Query { trigger }",
-                ),
-            )
+        val resolved = resolveAndValidate(world, "fragment Query on Query { trigger }")
 
         assertEquals(Value.Int.of(2), resolved.getCell(triggerKey).get())
         assertEquals(1, nodeApplications)
         assertEquals(setOf("first", "second"), nodeDemandFields)
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Query", "late"),
+            mapOf("arg" to 1),
+        )
     }
 
     @Test
@@ -206,20 +182,9 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 },
             )
         val world = testWorld.assumptions
-        val lateKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "late"),
-                emptyMap(),
-            )
+        val lateKey = world.schema.contractKey("Query", "late")
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    "fragment Query on Query { late }",
-                ),
-            )
+        val resolved = resolveAndValidate(world, "fragment Query on Query { late }")
 
         assertEquals(Value.Int.of(7), resolved.getCell(lateKey).get())
         assertEquals(1, parentApplications)
@@ -231,6 +196,10 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     setOf("source")
             },
             parentDemandFields,
+        )
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Payload", "computed"),
+            mapOf("value" to 7),
         )
     }
 
@@ -273,20 +242,9 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 },
             )
         val world = testWorld.assumptions
-        val resultKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "result"),
-                emptyMap(),
-            )
+        val resultKey = world.schema.contractKey("Query", "result")
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    "fragment Query on Query { result }",
-                ),
-            )
+        val resolved = resolveAndValidate(world, "fragment Query on Query { result }")
 
         assertEquals(Value.Int.of(7), resolved.getCell(resultKey).get())
         assertEquals(1, holderApplications)
@@ -335,25 +293,10 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 },
             )
         val world = testWorld.assumptions
-        val outerKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "outer"),
-                emptyMap(),
-            )
-        val parentKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "parent"),
-                emptyMap(),
-            )
+        val outerKey = world.schema.contractKey("Query", "outer")
+        val parentKey = world.schema.contractKey("Query", "parent")
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    "fragment ignored on Query { early outer }",
-                ),
-            )
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { early outer }")
         val parent = resolved.getCell(parentKey).get() as EngineResult.Object
 
         assertEquals(Value.Int.of(1), resolved.getCell(outerKey).get())

@@ -197,7 +197,28 @@ type User implements Node
 ```
 
 Any Node-typed field result is a reference containing only `id`. The referenced `NodeResult`
-provides its concrete type and body.
+provides its concrete type and body. A reference ID may be a literal or `idFrom($argumentName)`,
+which reads a non-null ID argument from the resolver field:
+
+```graphql
+extend type Query {
+  viewer(id: ID!): User!
+    @resolver(result: {id: "idFrom($id)"})
+}
+
+type User implements Node
+  @nodeResolver(
+    result: [
+      {id: "user-1", result: {score: 7}},
+      {id: "user-2", result: {score: 8}}
+    ]
+  ) {
+  id: ID!
+  score: Int!
+}
+```
+
+Using an argument in `idFrom` reads it directly and does not define a resolver-registry variable.
 
 An unknown ID, an ID registered for an incompatible Node type, a duplicate global ID, or additional
 fields in a Node reference is rejected.

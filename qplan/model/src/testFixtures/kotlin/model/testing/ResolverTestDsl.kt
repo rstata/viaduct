@@ -9,6 +9,7 @@ import graphql.language.Field
 import graphql.language.FieldDefinition
 import graphql.language.IntValue
 import graphql.language.NullValue
+import graphql.language.Node
 import graphql.language.ObjectField
 import graphql.language.ObjectTypeDefinition
 import graphql.language.ObjectTypeExtensionDefinition
@@ -257,13 +258,6 @@ internal class ResolverTestDsl private constructor(
         private fun Directive.argument(name: String): GraphQLValue<*>? =
             arguments.singleOrNull { it.name == name }?.value
 
-        private fun ObjectValue.uniqueFields(context: String): Map<String, GraphQLValue<*>> {
-            require(objectFields.map(ObjectField::getName).distinct().size == objectFields.size) {
-                "$context contains duplicate fields"
-            }
-            return objectFields.associate { requireNotNull(it.name) to it.value }
-        }
-
         private fun parseId(value: GraphQLValue<*>): String =
             when (value) {
                 is StringValue -> value.requiredValue()
@@ -427,22 +421,18 @@ private class Compiler(
         val fragment = preparedObjectFragment(field, definition.of)
         requireNoAliases(fragment.source)
         val variables = linkedSetOf<String>()
-        fun visit(node: graphql.language.Node<*>) {
+        Parser.parse(fragment.source).visitRecursively { node ->
             if (node is VariableReference) variables += node.name
-            node.children.forEach(::visit)
         }
-        Parser.parse(fragment.source).children.forEach(::visit)
         return variables - fragment.bindings.keys
     }
 
     private fun requireNoAliases(source: String) {
-        fun visit(node: graphql.language.Node<*>) {
+        Parser.parse(source).visitRecursively { node ->
             require(node !is Field || node.alias == null) {
                 "@$RESOLVER_DIRECTIVE.$OF_ARGUMENT does not support aliases"
             }
-            node.children.forEach(::visit)
         }
-        Parser.parse(source).children.forEach(::visit)
     }
 
     private fun objectFragmentSource(
@@ -458,11 +448,9 @@ private class Compiler(
         val fragmentSource = objectFragmentSource(field, source)
         val occupiedVariableNames = linkedSetOf<String>()
 
-        fun visit(node: graphql.language.Node<*>) {
+        Parser.parse(fragmentSource).visitRecursively { node ->
             if (node is VariableReference) occupiedVariableNames += node.name
-            node.children.forEach(::visit)
         }
-        Parser.parse(fragmentSource).children.forEach(::visit)
 
         var nextBindingIndex = 0
         val bindings = linkedMapOf<String, Value.Input?>()
@@ -545,7 +533,7 @@ private class ResultEvaluator(
                         }
                     Schema.IDType ->
                         Value.ID.of(
-                            parseResultId(source),
+                            parseResultId(source, context),
                         )
                     is Schema.SimpleType ->
                         throw IllegalArgumentException(
@@ -576,7 +564,7 @@ private class ResultEvaluator(
             )
         }
         if (isNodeType(declaredType)) {
-            return evaluateNodeReference(declaredType, source)
+            return evaluateNodeReference(declaredType, source, context)
         }
 
         val fields = source.uniqueFields("result for ${declaredType.typeName}")
@@ -645,12 +633,13 @@ private class ResultEvaluator(
     private fun evaluateNodeReference(
         declaredType: Schema.CompositeType,
         source: ObjectValue,
+        context: EvaluationContext,
     ): Value.Object {
         val fields = source.uniqueFields("Node reference")
         require(fields.keys == setOf(ID_FIELD)) {
             "Node-typed results may contain only id"
         }
-        val id = parseResultId(fields.getValue(ID_FIELD))
+        val id = parseResultId(fields.getValue(ID_FIELD), context)
         val entry =
             nodesById[id]
                 ?: throw IllegalArgumentException("No @$NODE_RESOLVER_DIRECTIVE result for id $id")
@@ -806,24 +795,41 @@ private class ResultEvaluator(
         type.possibleTypes.isNotEmpty() &&
             type.possibleTypes.all(nodeType.possibleTypes::contains)
 
-    private fun parseResultId(value: GraphQLValue<*>): String =
+    private fun parseResultId(
+        value: GraphQLValue<*>,
+        context: EvaluationContext,
+    ): String =
         when (value) {
             is StringValue -> {
-                require(value.requiredValue() != ERROR_SENTINEL) {
-                    "$ERROR_SENTINEL is reserved as an error sentinel"
+                val source = value.requiredValue()
+                val match = ID_FROM_ARGUMENT_EXPRESSION.matchEntire(source)
+                if (match == null) {
+                    require(!source.startsWith(ID_FROM_ARGUMENT_PREFIX)) {
+                        "Invalid resolver-test ID expression: $source"
+                    }
+                    require(source != ERROR_SENTINEL) {
+                        "$ERROR_SENTINEL is reserved as an error sentinel"
+                    }
+                    source
+                } else {
+                    val argumentName = match.groupValues[1]
+                    when (val argument = argumentValue(argumentName, context)) {
+                        Value.Error ->
+                            throw IllegalArgumentException(
+                                "idFrom(\$$argumentName) cannot read an error",
+                            )
+                        is Value.ID -> argument.idValue
+                        else ->
+                            throw IllegalArgumentException(
+                                "idFrom(\$$argumentName) requires a non-null ID argument",
+                            )
+                    }
                 }
-                value.requiredValue()
             }
             is IntValue -> value.value.toString()
             else -> throw IllegalArgumentException("Node id must be an ID literal")
         }
 
-    private fun ObjectValue.uniqueFields(context: String): Map<String, GraphQLValue<*>> {
-        require(objectFields.map(ObjectField::getName).distinct().size == objectFields.size) {
-            "$context contains duplicate fields"
-        }
-        return objectFields.associate { requireNotNull(it.name) to it.value }
-    }
 }
 
 private data class EvaluationContext(
@@ -875,6 +881,18 @@ private fun BigInteger.toIntExact(context: String): Int =
 private fun StringValue.requiredValue(): String =
     requireNotNull(value) { "GraphQL string literal has no value" }
 
+private fun ObjectValue.uniqueFields(context: String): Map<String, GraphQLValue<*>> {
+    require(objectFields.map(ObjectField::getName).distinct().size == objectFields.size) {
+        "$context contains duplicate fields"
+    }
+    return objectFields.associate { requireNotNull(it.name) to it.value }
+}
+
+private fun Node<*>.visitRecursively(visitor: (Node<*>) -> Unit) {
+    visitor(this)
+    children.forEach { child -> child.visitRecursively(visitor) }
+}
+
 private const val RESOLVER_DIRECTIVE = "resolver"
 private const val NODE_RESOLVER_DIRECTIVE = "nodeResolver"
 private const val RESULT_ARGUMENT = "result"
@@ -886,9 +904,12 @@ private const val ID_FIELD = "id"
 private const val TYPENAME_FIELD = "__typename"
 private const val ERROR_SENTINEL = "ERROR"
 private const val ERROR_VARIABLE_PREFIX = "__resolverTestError"
+private const val ID_FROM_ARGUMENT_PREFIX = "idFrom("
 private val GRAPHQL_NAME = Regex("[_A-Za-z][_0-9A-Za-z]*")
 private val PATH = Regex("[_A-Za-z][_0-9A-Za-z]*(\\.[_A-Za-z][_0-9A-Za-z]*)*")
 private val EXPRESSION = Regex("(sum|sumplus1|value)\\((.*)\\)")
+private val ID_FROM_ARGUMENT_EXPRESSION =
+    Regex("idFrom\\(\\$(${GRAPHQL_NAME.pattern})\\)")
 private val ERROR_ARGUMENT_LITERAL = Regex("\"ERROR\"")
 
 private val BUILT_IN_SCHEMA =

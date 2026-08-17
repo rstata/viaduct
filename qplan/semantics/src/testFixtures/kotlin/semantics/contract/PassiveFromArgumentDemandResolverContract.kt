@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,7 +8,6 @@ import kotlin.test.assertEquals
 interface PassiveFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `closes potential demand before descending through a passive object`() {
-        val applications = linkedMapOf<String, Int>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -45,28 +42,22 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
                       name: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    applications.merge(field.fieldName, 1, Int::plus)
-                },
             )
         val world = testWorld.assumptions
 
         val resolved =
             resolveAndValidate(
                 world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    """
-                    fragment ignored on Query {
-                      container {
-                        bridge {
-                          load { name }
-                        }
-                      }
-                      result(value: 7)
+                """
+                fragment ignored on Query {
+                  container {
+                    bridge {
+                      load { name }
                     }
-                    """.trimIndent(),
-                ),
+                  }
+                  result(value: 7)
+                }
+                """.trimIndent(),
             )
 
         assertEquals(
@@ -78,7 +69,17 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
                 ),
             ).get(),
         )
-        assertEquals(1, applications.getValue("load"))
-        assertEquals(1, applications.getValue("trigger"))
+        testWorld.applicationArguments.assertApplicationCount(
+            world.schema.objectField("Bridge", "load"),
+            1,
+        )
+        testWorld.applicationArguments.assertApplicationCount(
+            world.schema.objectField("Container", "trigger"),
+            1,
+        )
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Container", "trigger"),
+            mapOf("value" to 7),
+        )
     }
 }

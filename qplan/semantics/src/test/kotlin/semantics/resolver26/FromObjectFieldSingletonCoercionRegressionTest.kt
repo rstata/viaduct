@@ -4,16 +4,15 @@ import model.Value
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
+import semantics.contract.assertArguments
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class FromObjectFieldSingletonCoercionRegressionTest {
     @Test
     fun `singleton coerces a scalar object-field value through two input-list layers`() {
-        var consumedArgument: Value.Input? = null
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = true,
@@ -31,14 +30,6 @@ class FromObjectFieldSingletonCoercionRegressionTest {
                         @resolver(result: 14)
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, arguments, _ ->
-                    if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "consume"
-                    ) {
-                        consumedArgument = arguments.fieldValues.getValue("value")
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey =
@@ -53,10 +44,11 @@ class FromObjectFieldSingletonCoercionRegressionTest {
             context(world) {
                 resolve(fragment.subselections)
             }
-        val outer = assertIs<Value.InputList>(consumedArgument)
-        val inner = assertIs<Value.InputList>(outer.values.single())
 
-        assertEquals(listOf(Value.Int.of(7)), inner.values)
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Query", "consume"),
+            mapOf("value" to listOf(listOf(7))),
+        )
         assertEquals(Value.Int.of(14), resolved.getCell(resultKey).getValue().get())
         assertTrue(context(world) { resolved.correctResolution(fragment) })
     }

@@ -3,8 +3,6 @@ package semantics.contract
 import model.EngineResult
 import model.Schema
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -23,9 +21,7 @@ interface EmptyObjectFragmentResolverContract :
                 schemaSDL = "type Query { value: Int }",
                 selectiveResolvers = selectiveResolvers,
             ).assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { __typename }")
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val result = resolveAndValidate(world, "fragment ignored on Query { __typename }")
 
         assertEquals(
             "Query",
@@ -62,10 +58,7 @@ interface EmptyObjectFragmentResolverContract :
                 },
             )
         val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { items { selected } }")
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
-
+        resolveAndValidate(world, "fragment ignored on Query { items { selected } }")
     }
 
     @Test
@@ -107,9 +100,7 @@ interface EmptyObjectFragmentResolverContract :
                 },
             )
         val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { items { computed } }")
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val result = resolveAndValidate(world, "fragment ignored on Query { items { computed } }")
         val items =
             assertIs<EngineResult.List>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
@@ -120,10 +111,7 @@ interface EmptyObjectFragmentResolverContract :
         assertEquals(
             Value.Int.of(2),
             a.getCell(
-                Value.GroundKey.of(
-                    world.schema.objectField("A", "computed"),
-                    mapOf("factor" to 2),
-                ),
+                world.schema.contractKey("A", "computed", mapOf("factor" to 2)),
             ).get(),
         )
         assertEquals(
@@ -159,19 +147,14 @@ interface EmptyObjectFragmentResolverContract :
                 },
             )
         val world = testWorld.assumptions
-        val fragment =
-            world.fragmentFrom("fragment ignored on Query { item { computed } }")
-
-        val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
+        val result =
+            resolveAndValidate(world, "fragment ignored on Query { item { computed } }")
         val item =
             assertIs<EngineResult.Object>(
                 result.getCell(world.schema.contractKey("Query", "item")).get(),
             )
         val concreteDefaultKey =
-            Value.GroundKey.of(
-                world.schema.objectField("ConcreteItem", "computed"),
-                mapOf("factor" to 7),
-            )
+            world.schema.contractKey("ConcreteItem", "computed", mapOf("factor" to 7))
 
         assertEquals(Value.Int.of(7), item.getCell(concreteDefaultKey).get())
         assertEquals(
@@ -187,8 +170,5 @@ internal fun Schema.contractObjectType(typeName: String): Schema.ObjectType =
 internal fun Schema.contractKey(
     typeName: String,
     fieldName: String,
-): Value.GroundKey =
-    Value.GroundKey.of(
-        objectField(typeName, fieldName),
-        emptyMap(),
-    )
+    arguments: Map<String, Any?> = emptyMap(),
+): Value.GroundKey = Value.GroundKey.of(objectField(typeName, fieldName), arguments)

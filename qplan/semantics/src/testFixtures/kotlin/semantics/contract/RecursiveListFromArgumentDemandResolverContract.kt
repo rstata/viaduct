@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,7 +8,6 @@ import kotlin.test.assertEquals
 interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `deepens an already launched recursive list with typename demand`() {
-        val applications = linkedMapOf<String, Int>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -39,26 +36,20 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
                         )
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    applications.merge(field.fieldName, 1, Int::plus)
-                },
             )
         val world = testWorld.assumptions
 
         val resolved =
             resolveAndValidate(
                 world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    """
-                    fragment ignored on Query {
-                      item {
-                        children { common }
-                      }
-                      result(value: 7)
-                    }
-                    """.trimIndent(),
-                ),
+                """
+                fragment ignored on Query {
+                  item {
+                    children { common }
+                  }
+                  result(value: 7)
+                }
+                """.trimIndent(),
             )
 
         assertEquals(
@@ -70,7 +61,17 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
                 ),
             ).get(),
         )
-        assertEquals(1, applications.getValue("children"))
-        assertEquals(1, applications.getValue("consume"))
+        testWorld.applicationArguments.assertApplicationCount(
+            world.schema.objectField("Item", "children"),
+            1,
+        )
+        testWorld.applicationArguments.assertApplicationCount(
+            world.schema.objectField("Item", "consume"),
+            1,
+        )
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Item", "consume"),
+            mapOf("value" to 7),
+        )
     }
 }

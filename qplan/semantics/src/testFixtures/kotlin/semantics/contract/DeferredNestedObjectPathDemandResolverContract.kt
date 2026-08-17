@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,28 +40,26 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
         val resolved =
             resolveAndValidate(
                 world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    """
-                    fragment ignored on Query {
-                      item {
-                        step { __typename }
-                      }
-                      driver
-                    }
-                    """.trimIndent(),
-                ),
+                """
+                fragment ignored on Query {
+                  item {
+                    step { __typename }
+                  }
+                  driver
+                }
+                """.trimIndent(),
             )
 
         assertEquals(
             Value.Int.of(7),
             resolved
                 .getCell(
-                    Value.GroundKey.of(
-                        world.schema.objectField("Query", "driver"),
-                        emptyMap(),
-                    ),
+                    world.schema.contractKey("Query", "driver"),
                 ).get(),
+        )
+        testWorld.applicationArguments.assertArguments(
+            world.schema.objectField("Item", "result"),
+            mapOf("value" to 7),
         )
     }
 }

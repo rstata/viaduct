@@ -115,8 +115,8 @@ private fun ResolverContract.resolvePassiveOutputFixture(): PassiveOutputFixture
                 """.trimIndent(),
         )
     val world = testWorld.assumptions
-    val fragment = world.fragmentFrom("fragment ignored on Query { user { requested } }")
-    val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
+    val result =
+        resolveAndValidate(world, "fragment ignored on Query { user { requested } }")
     val user =
         assertIs<EngineResult.Object>(
             result.getCell(world.schema.contractKey("Query", "user")).get(),
@@ -168,9 +168,8 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
             },
         )
     val world = testWorld.assumptions
-    val fragment =
-        world.fragmentFrom("fragment ignored on Query { chain { computed } }")
-    val result = resolveAndValidate(world, world.objectOf("Query"), fragment)
+    val result =
+        resolveAndValidate(world, "fragment ignored on Query { chain { computed } }")
     val chain =
         assertIs<EngineResult.Object>(
             result.getCell(world.schema.contractKey("Query", "chain")).get(),

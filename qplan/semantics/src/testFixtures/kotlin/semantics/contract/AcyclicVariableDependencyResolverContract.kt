@@ -2,8 +2,6 @@ package semantics.contract
 
 import model.EngineResult
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,20 +41,19 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
                     """.trimIndent(),
             )
         val world = testWorld.assumptions
-        val cKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "c"),
-                emptyMap(),
-            )
+        val cKey = world.schema.contractKey("Query", "c")
 
-        val resolved =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom("fragment ignored on Query { c }"),
-            )
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { c }")
 
         assertEquals(Value.Int.of(1), resolved.getCell(cKey).get())
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Query", "a"),
+            mapOf("seed" to 1),
+        )
+        testWorld.applicationArguments.assertDistinctArguments(
+            world.schema.objectField("Query", "d"),
+            mapOf("seed" to 1),
+        )
     }
 
     @Test
@@ -89,18 +86,10 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
                     """.trimIndent(),
             )
         val world = testWorld.assumptions
-        val outerKey =
-            Value.GroundKey.of(
-                world.schema.objectField("Query", "outer"),
-                emptyMap(),
-            )
+        val outerKey = world.schema.contractKey("Query", "outer")
 
         val resolved: EngineResult.Object =
-            resolveAndValidate(
-                world,
-                world.objectOf("Query"),
-                world.fragmentFrom("fragment ignored on Query { outer }"),
-            )
+            resolveAndValidate(world, "fragment ignored on Query { outer }")
 
         assertEquals(Value.Int.of(1), resolved.getCell(outerKey).get())
     }

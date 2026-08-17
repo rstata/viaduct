@@ -1,8 +1,6 @@
 package semantics.contract
 
 import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,7 +8,6 @@ import kotlin.test.assertEquals
 interface NestedFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `retains passive demand below an ungrounded nested resolver key`() {
-        val applications = linkedMapOf<String, Int>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -31,24 +28,18 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
                       passive: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    applications.merge(field.fieldName, 1, Int::plus)
-                },
             )
         val world = testWorld.assumptions
 
         val resolved =
             resolveAndValidate(
                 world,
-                world.objectOf("Query"),
-                world.fragmentFrom(
-                    """
-                    fragment ignored on Query {
-                      holder { __typename }
-                      result(value: 7)
-                    }
-                    """.trimIndent(),
-                ),
+                """
+                fragment ignored on Query {
+                  holder { __typename }
+                  result(value: 7)
+                }
+                """.trimIndent(),
             )
 
         assertEquals(
@@ -61,9 +52,14 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
                     ),
                 ).get(),
         )
-        assertEquals(
-            mapOf("holder" to 1, "result" to 1, "consume" to 1),
-            applications,
+        testWorld.applicationArguments.assertApplications(
+            mapOf(
+                world.schema.objectField("Query", "holder") to listOf(emptyMap()),
+                world.schema.objectField("Query", "result") to
+                    listOf(mapOf("value" to 7)),
+                world.schema.objectField("Item", "consume") to
+                    listOf(mapOf("value" to 7)),
+            ),
         )
     }
 }

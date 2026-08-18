@@ -103,7 +103,16 @@ class FieldResolver private constructor(
      */
     fun stampVars(
         path: List<PathComponent>,
-    ): SelectionForest {
+    ): SelectionForest =
+        instantiateObjectFragmentAt(path).constructionSelections
+
+    /**
+     * Instantiates response-preserving and construction views using the legacy path-stamped
+     * variable identity used by the shared resolvers and Resolver25.
+     */
+    fun instantiateObjectFragmentAt(
+        path: List<PathComponent>,
+    ): ResolverObjectFragment {
         val materializeSelections = objectFragmentTemplate.stampVariables(path)
         val stampedFragment: SelectionForest =
             materializeSelections.constructionSelections()
@@ -127,7 +136,10 @@ class FieldResolver private constructor(
                         )
                     }
                 }.concatenateSelectionForests()
-        return stampedFragment + pathVarSelections
+        return ResolverObjectFragmentImpl(
+            materializeSelections = materializeSelections,
+            constructionSelections = stampedFragment + pathVarSelections,
+        )
     }
 
     /**

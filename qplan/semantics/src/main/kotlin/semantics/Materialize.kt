@@ -4,17 +4,18 @@ import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
+import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.ObjectSelectionForest
+import model.ObjectMaterializeSelection
 import model.PathComponent
-import model.SelectionForest
+import model.Selection
 import model.SimpleEngineResult
+import model.Stamp
 import model.Value
-import model.applicableGroundSelections
+import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
-import model.materializedFieldKey
+import model.selectionForestOf
 import model.toValue
-import model.unionOutput
 
 /**
  * Materializes the object value selected by [selections] from this result.
@@ -25,48 +26,29 @@ import model.unionOutput
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal suspend fun ObjectEngineResult.materialize(
-    selections: ObjectSelectionForest,
+    selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
 ): Value.Object {
-    require(type == selections.type) {
-        "Selection type ${selections.type.typeName} does not match result type ${type.typeName}"
-    }
     return materializeSelectedObjectValue(
         selections = selections,
         reader = reader,
         resultPath = reader.dropLast(1),
+        selectionPath = emptyList(),
     )
 }
 
 // Materializes a selection forest rooted at one exact OER path.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
-    selections: SelectionForest,
+    selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
-): Value.Object =
-    materializeSelectedObjectValue(
-        selections = selections.applicableGroundSelections(type),
-        reader = reader,
-        resultPath = resultPath,
-    )
-
-// Materializes stored instances before projecting and unioning their visible GraphQL keys.
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
-private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
-    selections: ObjectSelectionForest,
-    reader: List<PathComponent>,
-    resultPath: List<PathComponent>,
+    selectionPath: List<PathComponent>,
 ): Value.Object {
     val selectedValues =
         linkedMapOf<String, Pair<model.Schema.ObjectField, Value.Output?>>()
-    selections.byGroundKey().forEach { (storedKey, selection) ->
-        val visibleKey =
-            ObjectEngineResult.GroundKey.of(
-                field = storedKey.field,
-                arguments = storedKey.arguments,
-            )
-        val materializedKey = visibleKey.materializedFieldKey()
+    selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
+        val storedKey = selection.materializedGroundKey(selectionPath)
         val cell = getCell(storedKey)
         val promise = cell.getValue()
         runtimeSupport.cycleCheck(reader, cell)
@@ -78,16 +60,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
                     reader = reader,
                     resultPath = resultPath + storedKey,
                 )
-        selectedValues[materializedKey] =
-            if (materializedKey !in selectedValues) {
-                storedKey.field to selectedValue
-            } else {
-                storedKey.field to
-                    selectedValues
-                        .getValue(materializedKey)
-                        .second
-                        .unionOutput(selectedValue)
-            }
+        selectedValues[responseKey] = storedKey.field to selectedValue
     }
     return Value.Object.of(
         type,
@@ -97,10 +70,37 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     )
 }
 
+context(world: Assumptions)
+internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
+    selectionPath: List<PathComponent>,
+): ObjectEngineResult.GroundKey {
+    val arguments = key.arguments.fetchBindings(key.field.arguments)
+    val stamp = key.stamp as? Stamp.Occurrence
+    val groundedKey =
+        if (stamp == null) {
+            ObjectEngineResult.GroundKey.of(key.field, arguments)
+        } else {
+            ObjectEngineResult.GroundKey.of(stamp, key.field, arguments)
+        }
+    if (selectionPath.isEmpty()) return groundedKey
+    val localizedKey =
+        selectionForestOf(
+            Selection.of(
+                key = groundedKey,
+                possibleTypes = setOf(groundedKey.field.containingType),
+                subselections = selectionForestOf(),
+            ),
+        ).localizeTopLevelSelectionStamps(selectionPath)
+        .single()
+        .key
+    return localizedKey as? ObjectEngineResult.GroundKey
+        ?: error("Localized materialize key is not ground: $localizedKey")
+}
+
 // Recursively materializes one selected result while retaining its exact stored path.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun EngineResult?.materializeEngineResultValue(
-    selections: SelectionForest,
+    selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
 ): Value.Output? =
@@ -110,9 +110,10 @@ private suspend fun EngineResult?.materializeEngineResultValue(
         is SimpleEngineResult -> toValue()
         is ObjectEngineResult ->
             materializeSelectedObjectValue(
-                selections = selections.localizeTopLevelSelectionStamps(resultPath),
+                selections = selections,
                 reader = reader,
                 resultPath = resultPath,
+                selectionPath = resultPath,
             )
         is ListEngineResult ->
             Value.OutputList.of(
@@ -129,7 +130,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
 // Materializes each list element at a path containing its concrete list index.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun ListEngineResult.materializeValues(
-    selections: SelectionForest,
+    selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
 ): kotlin.collections.List<Value.Output?> {

@@ -132,7 +132,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                       result(seed: Int!, other: Int!): Int!
                         @resolver(
                           of: "ground: payload(arg: 1) { one } seedValue: payload(arg: ${'$'}seed) { two } seedValue: payload(arg: ${'$'}seed) { two } otherValue: payload(arg: ${'$'}other) { one }"
-                          result: "sum(payload.one, payload.two)"
+                          result: "sum(ground.one, seedValue.two)"
                         )
                       payload(arg: Int!): Payload!
                         @resolver(result: {one: 3, two: 5})

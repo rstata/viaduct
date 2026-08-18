@@ -748,18 +748,13 @@ private class ResultEvaluator(
                 value is Value.OutputList -> value.values.flatMap { visit(it, index) }
                 index == path.size -> listOf(value)
                 value is Value.Object -> {
-                    val field = sourceSchema.field(value.type.typeName, path[index])
-                    require(field is Schema.ObjectField)
-                    val matches =
-                        value.fieldValues.entries.filter { (key, _) ->
-                            key == field.fieldName || key.startsWith("${field.fieldName}(")
-                        }
-                    require(matches.size == 1) {
+                    val responseKey = path[index]
+                    require(responseKey in value.fieldValues) {
                         "Path ${path.joinToString(".")} does not identify one value at " +
-                            "${value.type.typeName}.${path[index]}"
+                            "${value.type.typeName}.$responseKey"
                     }
-                    val selected = matches.single().value
-                    if (schema is GJSchema && schema.isLoweredNodeField(field)) {
+                    val selected = value.fieldValues.getValue(responseKey)
+                    if (schema is GJSchema && selected.containsNodeBridge()) {
                         unwrapNodeBridge(selected).flatMap { visit(it, index + 1) }
                     } else {
                         visit(selected, index + 1)
@@ -773,6 +768,14 @@ private class ResultEvaluator(
 
         return visit(input, 0)
     }
+
+    private fun Value.Output?.containsNodeBridge(): Boolean =
+        when (this) {
+            Value.Error -> false
+            is Value.Object -> type.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
+            is Value.OutputList -> values.any { value -> value.containsNodeBridge() }
+            else -> false
+        }
 
     private fun unwrapNodeBridge(value: Value.Output?): List<Value.Output?> =
         when (value) {

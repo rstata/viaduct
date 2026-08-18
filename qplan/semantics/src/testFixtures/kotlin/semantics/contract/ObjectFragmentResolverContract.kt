@@ -15,6 +15,7 @@ import model.fragmentFrom
 import model.objectOf
 import model.sameCompletedResultAs
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Test
 import semantics.resolver01.resolve as resolveWithResolver01
 import kotlin.test.assertEquals
@@ -25,6 +26,132 @@ import kotlin.test.assertTrue
  * Contract for resolvers with nonempty object fragments and no variables.
  */
 interface ObjectFragmentResolverContract : ResolverContract {
+    @Test
+    fun `materializes aliases and present nulls by response key`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      source: Int!
+                      nullable: Int
+                      result: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val source = schema.objectField("Query", "source")
+                    val nullable = schema.objectField("Query", "nullable")
+                    val result = schema.objectField("Query", "result")
+                    val resultFragment =
+                        schema.fragmentFrom(
+                            """
+                            fragment Result on Query {
+                              first: source
+                              second: source
+                              empty: nullable
+                            }
+                            """.trimIndent(),
+                        )
+                    mapOf(
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                Value.Int.of(7)
+                            },
+                        nullable to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                null
+                            },
+                        result to
+                            fieldResolverOf(resultFragment) { input, _ ->
+                                assertEquals(
+                                    setOf("first", "second", "empty"),
+                                    input.fieldValues.keys,
+                                )
+                                assertEquals(Value.Int.of(7), input.fieldValues.getValue("first"))
+                                assertEquals(Value.Int.of(7), input.fieldValues.getValue("second"))
+                                assertTrue("empty" in input.fieldValues)
+                                assertEquals(null, input.fieldValues.getValue("empty"))
+                                Value.Int.of(1)
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+
+        assertEquals(
+            IntEngineResult.of(1),
+            resolved.getCell(world.schema.contractKey("Query", "result")).get(),
+        )
+    }
+
+    @Test
+    fun `duplicate response groups combine nested aliased subselections`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      container: Container!
+                      result: Int!
+                    }
+
+                    type Container {
+                      one: Int!
+                      two: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val container = schema.objectField("Query", "container")
+                    val result = schema.objectField("Query", "result")
+                    val resultFragment =
+                        schema.fragmentFrom(
+                            """
+                            fragment Result on Query {
+                              payload: container { first: one }
+                              payload: container { second: two }
+                            }
+                            """.trimIndent(),
+                        )
+                    mapOf(
+                        container to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Container") {
+                                    "one" setTo 2
+                                    "two" setTo 3
+                                }
+                            },
+                        result to
+                            fieldResolverOf(resultFragment) { input, _ ->
+                                assertEquals(setOf("payload"), input.fieldValues.keys)
+                                val payload =
+                                    assertIs<Value.Object>(
+                                        input.fieldValues.getValue("payload"),
+                                    )
+                                assertEquals(
+                                    setOf("first", "second"),
+                                    payload.fieldValues.keys,
+                                )
+                                assertEquals(Value.Int.of(2), payload.fieldValues.getValue("first"))
+                                assertEquals(Value.Int.of(3), payload.fieldValues.getValue("second"))
+                                Value.Int.of(5)
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+
+        assertEquals(
+            IntEngineResult.of(5),
+            resolved.getCell(world.schema.contractKey("Query", "result")).get(),
+        )
+    }
+
     @Test
     fun `closes and orders transitive sibling resolver demand`() {
         val testWorld =

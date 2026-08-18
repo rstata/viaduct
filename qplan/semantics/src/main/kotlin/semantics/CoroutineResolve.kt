@@ -102,9 +102,10 @@ private suspend fun resolveSlot(
                     if (key.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(key.field)
                         val coordinate = path + key
+                        val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
                         val input =
                             target.materialize(
-                                selections = resolver.objectFragmentAt(coordinate),
+                                selections = objectFragment.materializeSelections,
                                 reader = coordinate,
                             )
                         if (world.selectiveResolvers) {

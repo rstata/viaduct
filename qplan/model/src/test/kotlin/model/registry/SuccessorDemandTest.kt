@@ -17,9 +17,11 @@ import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
+import model.toSelectionForest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class SuccessorDemandTest {
     @Test
@@ -247,14 +249,15 @@ class SuccessorDemandTest {
         world.completeBinding(first, Value.Int.of(7))
         world.declareBinding(second)
         world.completeBinding(second, Value.Int.of(7))
+        val firstKey =
+            ObjectEngineResult.Key.of(
+                successor,
+                OpenArguments.of(successor, mapOf("value" to first)),
+            )
         val selections =
             selectionForestOf(
                 Selection.of(
-                    key =
-                        ObjectEngineResult.Key.of(
-                            successor,
-                            OpenArguments.of(successor, mapOf("value" to first)),
-                        ),
+                    key = firstKey,
                     possibleTypes = setOf(world.schema.query),
                     subselections = selectionForestOf(),
                 ),
@@ -269,18 +272,51 @@ class SuccessorDemandTest {
                 ),
             )
 
-        val grounded =
+        val fetched =
             runBlocking {
                 context(world) {
-                    val fetched = selections.fetchSuccessorDemandDeferringTemplates()
-                    fetched.single()
-                    fetched.merge(world.schema.query).fetchBindings().groundKeys()
+                    selections.fetchSuccessorDemandDeferringTemplates()
                 }
             }
+        val reversed =
+            runBlocking {
+                context(world) {
+                    val selectionOccurrences = mutableListOf<Selection>()
+                    selections.forEach(selectionOccurrences::add)
+                    selectionOccurrences
+                        .asReversed()
+                        .toSelectionForest()
+                        .fetchSuccessorDemandDeferringTemplates()
+                }
+            }
+        val expectedKey =
+            ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 7))
+        assertEquals(expectedKey, fetched.single().key)
+        assertEquals(expectedKey, reversed.single().key)
         assertEquals(
-            setOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 7))),
-            grounded,
+            setOf(expectedKey),
+            fetched.merge(world.schema.query).groundKeys(),
         )
+
+        val marked =
+            runBlocking {
+                context(world) {
+                    selectionForestOf(
+                        Selection.of(
+                            key =
+                                ObjectEngineResult.VariableKey.of(
+                                    key = firstKey,
+                                    variableDefinedByThisKey = first,
+                                ),
+                            possibleTypes = setOf(world.schema.query),
+                            subselections = selectionForestOf(),
+                        ),
+                    ).fetchSuccessorDemandDeferringTemplates()
+                }
+            }
+        val markedKey = assertIs<ObjectEngineResult.VariableKey>(marked.single().key)
+        assertEquals(first, markedKey.variableDefinedByThisKey)
+        assertEquals(expectedKey.arguments, markedKey.arguments)
     }
 
     @Test

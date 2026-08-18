@@ -38,7 +38,9 @@ Ground inputs implement the opaque `OpenValue` and `OpenArguments` interfaces. G
 
 Simple resolver outputs and simple field results use independent carriers. Convert `Value.Simple` to an `EngineResult` only at result-publication boundaries with `toEngineResult`, and convert a `SimpleEngineResult` back to `Value.Simple` only at resolver-input or materialization boundaries with `toValue`. `Value.Error` corresponds to the separate `ErrorEngineResult` singleton.
 
-`Value.Fields` and `Value.ObjectFields` deliberately throw when indexed outside their lookup domain, including when a missing entry would otherwise be indistinguishable from a present null. Test membership before an optional lookup; use direct indexing only when presence is a precondition.
+Input-object and argument field values use ordinary maps. Use `getValue` when presence is a
+precondition and test membership before an optional lookup so an absent entry remains distinct from
+a present null. `Value.ObjectFields` deliberately throws when indexed outside its lookup domain.
 
 Cells are allocated by their containing OER or LER and use reference identity as their occurrence ID. Object construction is immutable by default. Opt-in mutable objects atomically install each absent exact cell once and throw on unset reads, repeated claims, or repeated writes. Lists have immutable positions and may opt into mutable cell slots.
 

@@ -17,15 +17,7 @@ import model.invariants.conformsToSchemaType
  * [Assumptions.schema] under which that value is interpreted.
  */
 sealed interface Value {
-    /**
-     * A ground GraphQL input value or schema-synthetic field-argument tuple.
-     *
-     * [Input] values are members of [Value], while [Arguments] is an input-like tuple rather than a
-     * GraphQL value.
-     */
-    sealed interface InputLike
-
-    sealed interface Input : Value, InputLike, OpenValue
+    sealed interface Input : Value, OpenValue
 
     sealed interface Output : Value
 
@@ -207,18 +199,10 @@ sealed interface Value {
         }
     }
 
-    /**
-     * A value shaped like a GraphQL input object.
-     *
-     * This common interface is not itself a GraphQL [Value], because [Arguments] is a
-     * schema-synthetic tuple.
-     */
-    sealed interface InputObjectLike : InputLike {
-        val fieldValues: Fields<Input>
-    }
-
     /** A ground input object. */
-    sealed interface InputObject : Input, InputObjectLike {
+    sealed interface InputObject : Input {
+        val fieldValues: Map<kotlin.String, Input?>
+
         companion object {
             /**
              * ### Invariant: input-object-value-factory-schema-conformance
@@ -231,7 +215,7 @@ sealed interface Value {
                 fields: Map<kotlin.String, Any?>,
             ): InputObject =
                 InputObjectValueImpl(
-                    fieldValues = FieldValuesImpl(coerceInputLikeFields(type, fields)),
+                    fieldValues = coerceInputLikeFields(type, fields),
                 )
         }
     }
@@ -243,7 +227,9 @@ sealed interface Value {
      * variables. Equality is structural over its field values. Occurrence identity belongs to
      * [ObjectEngineResult.GroundKey.Stamped], not the grounded argument value.
      */
-    sealed interface Arguments : InputObjectLike, OpenArguments {
+    sealed interface Arguments : OpenArguments {
+        val fieldValues: Map<kotlin.String, Input?>
+
         companion object {
             /**
              * ### Invariant: arguments-value-factory-schema-conformance
@@ -317,20 +303,6 @@ sealed interface Value {
 
         /** @throws MissingFieldException when [key] is not present */
         fun getValue(key: ObjectEngineResult.GroundKey): Output?
-    }
-
-    /**
-     * A map from field names to values.
-     *
-     * Unlike an ordinary [Map], [get] and [getValue] throw [MissingFieldException] when the
-     * requested field does not exist or has not been set.
-     */
-    sealed interface Fields<out V : Value> : Map<kotlin.String, V?> {
-        /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: kotlin.String): V?
-
-        /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: kotlin.String): V?
     }
 
     /**
@@ -567,11 +539,11 @@ private data class ObjectValueImpl(
 ) : Value.Object
 
 private data class InputObjectValueImpl(
-    override val fieldValues: Value.Fields<Value.Input>,
+    override val fieldValues: Map<String, Value.Input?>,
 ) : Value.InputObject
 
 private data class ArgumentsValueImpl(
-    override val fieldValues: Value.Fields<Value.Input>,
+    override val fieldValues: Map<String, Value.Input?>,
 ) : Value.Arguments
 
 private data class TemplateVariableValueImpl(
@@ -673,27 +645,6 @@ private class ObjectFieldValuesImpl(
     override fun toString(): String = backingMap.toString()
 }
 
-private class FieldValuesImpl<out V : Value>(
-    private val backingMap: Map<String, V?>,
-) : Value.Fields<V>,
-    Map<String, V?> by backingMap {
-    override operator fun get(key: String): V? = getValue(key)
-
-    override fun getValue(key: String): V? {
-        if (!backingMap.containsKey(key)) {
-            throw MissingFieldException("\$INPUT", key)
-        }
-        return backingMap[key]
-    }
-
-    override fun equals(other: Any?): Boolean =
-        other is Value.Fields<*> && entries == other.entries
-
-    override fun hashCode(): Int = backingMap.hashCode()
-
-    override fun toString(): String = backingMap.toString()
-}
-
 private fun coerceInputLikeFields(
     type: Schema.InputObjectLike,
     fields: Map<String, Any?>,
@@ -730,7 +681,7 @@ internal fun argumentsOfGround(
         "Ground argument values do not conform to their field definition"
     }
     return ArgumentsValueImpl(
-        fieldValues = FieldValuesImpl(fields),
+        fieldValues = fields,
     )
 }
 

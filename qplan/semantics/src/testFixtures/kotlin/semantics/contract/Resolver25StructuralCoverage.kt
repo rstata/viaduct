@@ -157,7 +157,7 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
         signatures += Resolver25StructuralSignature.STAGGERED_DISTINCT_KEYS
     }
 
-    if (
+    val nestedStampedVariableUse =
         submissions.values.any { submission ->
             submission.stampedVariables().any { variable ->
                 val ownerPath =
@@ -169,7 +169,26 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
                     submission.path.hasPrefix(ownerPath)
             }
         }
-    ) {
+    // Successor closure may eagerly ground a nested key before its demand is submitted.
+    val nestedEagerGroundedVariableUse =
+        grounding.any { event ->
+            val submission = submissions[event.contributionId] ?: return@any false
+            val groundedKey =
+                event.coordinate.lastOrNull() as? ObjectEngineResult.GroundKey
+                    ?: return@any false
+            declarations.values.any { declaration ->
+                val completion =
+                    completions[declaration.variable]
+                        ?: return@any false
+                val ownerPath = declaration.ownerCoordinate.dropLast(1)
+                completion.sequence < submission.sequence &&
+                    submission.sequence < event.sequence &&
+                    submission.path.size > ownerPath.size &&
+                    submission.path.hasPrefix(ownerPath) &&
+                    groundedKey.arguments.containsValue(completion.value)
+            }
+        }
+    if (nestedStampedVariableUse || nestedEagerGroundedVariableUse) {
         signatures += Resolver25StructuralSignature.NESTED_VARIABLE_USE
     }
 
@@ -235,6 +254,21 @@ private fun Resolver25LifecycleEvent.DemandSubmitted.stampedVariables():
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.subselectionFields() =
     selection.subselections.fields()
+
+private fun Value.Arguments.containsValue(value: Value.Input?): Boolean =
+    fieldValues.values.any { argument -> argument.containsValue(value) }
+
+private fun Value.Input?.containsValue(value: Value.Input?): Boolean =
+    when (this) {
+        null -> value == null
+        Value.Error -> value === Value.Error
+        is Value.Simple -> this == value
+        is Value.InputList ->
+            this == value || values.any { element -> element.containsValue(value) }
+        is Value.InputObject ->
+            this == value ||
+                fieldValues.values.any { fieldValue -> fieldValue.containsValue(value) }
+    }
 
 private fun SelectionForest.fields(): Set<Schema.OutputField> =
     buildSet {

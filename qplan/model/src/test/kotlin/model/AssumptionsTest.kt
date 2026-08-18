@@ -67,13 +67,13 @@ class AssumptionsTest {
             assertIs<Value.InputObject>(
                 node.key.arguments.fieldExpressions().getValue("filter"),
             )
-        val role = assertIs<Value.Enum>(filter.fieldValues["role"])
+        val role = assertIs<Value.Enum>(filter.fieldValues.getValue("role"))
         assertEquals(assumptions.schema.type("Role"), role.type)
         assertEquals("ADMIN", role.enumValue)
-        val limit = assertIs<Value.Int>(filter.fieldValues["limit"])
+        val limit = assertIs<Value.Int>(filter.fieldValues.getValue("limit"))
         assertEquals(Schema.IntType, limit.type)
         assertEquals(10, limit.intValue)
-        val tags = assertIs<Value.InputList>(filter.fieldValues["tags"])
+        val tags = assertIs<Value.InputList>(filter.fieldValues.getValue("tags"))
         assertEquals(
             "one",
             assertIs<Value.String>(tags.values.single()).stringValue,
@@ -235,19 +235,20 @@ class AssumptionsTest {
                 field = nodeField,
                 fields = mapOf("filter" to filterValue),
             )
-        assertEquals(filterValue, nodeArguments.fieldValues["filter"])
-        val defaultRole = assertIs<Value.Enum>(filterValue.fieldValues["role"])
+        assertEquals(filterValue, nodeArguments.fieldValues.getValue("filter"))
+        val defaultRole =
+            assertIs<Value.Enum>(filterValue.fieldValues.getValue("role"))
         assertEquals(schema.type("Role"), defaultRole.type)
         assertEquals("MEMBER", defaultRole.enumValue)
         val defaultLimit =
             assertIs<Value.Int>(
-                filterValue.fieldValues["limit"],
+                filterValue.fieldValues.getValue("limit"),
             )
         assertEquals(Schema.IntType, defaultLimit.type)
         assertEquals(10, defaultLimit.intValue)
         val tags =
             assertIs<Value.InputList>(
-                filterValue.fieldValues["tags"],
+                filterValue.fieldValues.getValue("tags"),
             )
         assertEquals(
             "a",
@@ -508,16 +509,19 @@ class AssumptionsTest {
                     ),
             )
 
-        assertEquals(20, assertIs<Value.Int>(filter.fieldValues["limit"]).intValue)
+        assertEquals(
+            20,
+            assertIs<Value.Int>(filter.fieldValues.getValue("limit")).intValue,
+        )
         assertEquals(
             listOf("one", "two"),
-            assertIs<Value.InputList>(filter.fieldValues["tags"])
+            assertIs<Value.InputList>(filter.fieldValues.getValue("tags"))
                 .values
                 .map { assertIs<Value.String>(it).stringValue },
         )
         assertEquals(
             "ADMIN",
-            assertIs<Value.Enum>(filter.fieldValues["role"]).enumValue,
+            assertIs<Value.Enum>(filter.fieldValues.getValue("role")).enumValue,
         )
 
         val nodeField = schema.field("Query", "node_V_A_node")
@@ -534,10 +538,10 @@ class AssumptionsTest {
                     ),
             )
         val nestedFilter =
-            assertIs<Value.InputObject>(arguments.fieldValues["filter"])
+            assertIs<Value.InputObject>(arguments.fieldValues.getValue("filter"))
         assertEquals(
             30,
-            assertIs<Value.Int>(nestedFilter.fieldValues["limit"]).intValue,
+            assertIs<Value.Int>(nestedFilter.fieldValues.getValue("limit")).intValue,
         )
     }
 
@@ -549,21 +553,23 @@ class AssumptionsTest {
 
         assertEquals(
             3,
-            assertIs<Value.Int>(defaultFriendArguments.fieldValues["limit"]).intValue,
+            assertIs<Value.Int>(
+                defaultFriendArguments.fieldValues.getValue("limit"),
+            ).intValue,
         )
 
         val nodeField = schema.field("Query", "node_V_A_node")
         val defaultArguments = Value.Arguments.of(nodeField, emptyMap())
         val defaultFilter =
-            assertIs<Value.InputObject>(defaultArguments.fieldValues["filter"])
+            assertIs<Value.InputObject>(defaultArguments.fieldValues.getValue("filter"))
 
         assertEquals(
             10,
-            assertIs<Value.Int>(defaultFilter.fieldValues["limit"]).intValue,
+            assertIs<Value.Int>(defaultFilter.fieldValues.getValue("limit")).intValue,
         )
         assertEquals(
             "MEMBER",
-            assertIs<Value.Enum>(defaultFilter.fieldValues["role"]).enumValue,
+            assertIs<Value.Enum>(defaultFilter.fieldValues.getValue("role")).enumValue,
         )
 
         val explicitFilter =
@@ -573,10 +579,10 @@ class AssumptionsTest {
             )
         assertEquals(
             20,
-            assertIs<Value.Int>(explicitFilter.fieldValues["limit"]).intValue,
+            assertIs<Value.Int>(explicitFilter.fieldValues.getValue("limit")).intValue,
         )
         assertTrue(explicitFilter.fieldValues.containsKey("role"))
-        assertEquals(null, explicitFilter.fieldValues["role"])
+        assertEquals(null, explicitFilter.fieldValues.getValue("role"))
 
         val explicitNullFriendArguments =
             Value.Arguments.of(
@@ -584,7 +590,7 @@ class AssumptionsTest {
                 fields = mapOf("limit" to null),
             )
         assertTrue(explicitNullFriendArguments.fieldValues.containsKey("limit"))
-        assertEquals(null, explicitNullFriendArguments.fieldValues["limit"])
+        assertEquals(null, explicitNullFriendArguments.fieldValues.getValue("limit"))
     }
 
     @Test

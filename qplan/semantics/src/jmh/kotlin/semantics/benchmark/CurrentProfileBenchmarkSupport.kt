@@ -3,11 +3,13 @@ package semantics.benchmark
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.SelectionForest
 import model.SelectionStamp
+import model.SimpleEngineResult
 import model.Value
 import model.fragmentFrom
 import model.instantiateBindings
@@ -306,7 +308,7 @@ internal class CurrentProfileBenchmarkSupport(
     context(world: Assumptions)
     private fun EngineResult?.shape(depth: Int = 0): ResultShape =
         when (this) {
-            null, is Value.Simple ->
+            null, ErrorEngineResult, is SimpleEngineResult ->
                 ResultShape(
                     fields = 0,
                     activeFields = 0,

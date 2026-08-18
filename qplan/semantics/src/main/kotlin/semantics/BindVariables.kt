@@ -19,11 +19,11 @@ context(world: Assumptions)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     path: List<PathComponent>,
     onDeclared: (
-        Value.Variable.Stamped,
+        Value.Variable,
         VariableDefinition.FromArgument,
     ) -> Unit = { _, _ -> },
     onCompleted: (
-        Value.Variable.Stamped,
+        Value.Variable,
         VariableDefinition.FromArgument,
         Value.Input?,
     ) -> Unit = { _, _, _ -> },

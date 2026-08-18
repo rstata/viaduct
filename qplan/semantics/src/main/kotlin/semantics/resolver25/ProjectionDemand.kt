@@ -36,7 +36,7 @@ private fun SelectionForest.projectionDemandDeferringTemplates(
         .flatMap { selection ->
             if (
                 selection.key.arguments.usedVariables().any { variable ->
-                    variable is Value.Variable.Template
+                    variable.isTemplate
                 }
             ) {
                 selection.possibleTypes.flatMapToSelectionForest { possibleType ->

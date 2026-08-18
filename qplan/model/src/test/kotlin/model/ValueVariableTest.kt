@@ -9,6 +9,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ValueVariableTest {
     @Test
@@ -53,6 +55,9 @@ class ValueVariableTest {
         assertEquals(Value.Variable.of(first, "value"), template)
         assertNotEquals(Value.Variable.of(first, "other"), template)
         assertNotEquals(Value.Variable.of(second, "value"), template)
+        assertTrue(template.isTemplate)
+        assertFalse(template.isStamped)
+        assertNull(template.selectionStamp)
         assertEquals("Variable.Template(name=value, field=Query/first)", "$template")
     }
 
@@ -78,10 +83,33 @@ class ValueVariableTest {
         assertNotEquals(Value.Variable.of(second, "value").stamp(path), stamp)
         assertNotEquals<Value.Variable>(template, stamp)
         assertNotEquals(template.stamp(emptyList()), stamp)
+        assertFalse(stamp.isTemplate)
+        assertTrue(stamp.isStamped)
+        assertNull(stamp.selectionStamp)
+        assertFailsWith<IllegalArgumentException> {
+            stamp.stamp(path)
+        }
         assertEquals(
             "Variable.Stamped(name=value, field=Query/first, path=[index=0])",
             "$stamp",
         )
+    }
+
+    @Test
+    fun `binding storage rejects a variable template`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                }
+                """.trimIndent(),
+            ).assumptions
+        val template = Value.Variable.of(world.schema.objectField("Query", "source"), "value")
+
+        assertFailsWith<IllegalArgumentException> {
+            world.declareBinding(template)
+        }
     }
 
     @Test

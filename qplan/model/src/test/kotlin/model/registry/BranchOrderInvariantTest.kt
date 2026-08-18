@@ -488,7 +488,7 @@ class BranchOrderInvariantTest {
             name: String,
             provider: String,
             responsePath: List<String>,
-        ): Map<Value.Variable.Template, FromObjectField> {
+        ): Map<Value.Variable, FromObjectField> {
             val owner = schema.field("Query", "result") as Schema.ObjectField
             return mapOf(
                 Value.Variable.of(owner, name) to

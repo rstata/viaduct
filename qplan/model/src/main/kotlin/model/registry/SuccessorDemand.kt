@@ -105,7 +105,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
             )
         if (
             selection.key.arguments.usedVariables().any { variable ->
-                variable is Value.Variable.Template
+                variable.isTemplate
             }
         ) {
             deferredSelections += identity
@@ -294,7 +294,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
 }
 
 private fun SelectionForest.substitute(
-    bindings: Map<Value.Variable.Template, Value.Input?>,
+    bindings: Map<Value.Variable, Value.Input?>,
 ): SelectionForest =
     flatMap { selection ->
         selectionForestOf(

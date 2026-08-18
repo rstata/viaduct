@@ -47,7 +47,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                             }
                         if (
                             selectionStamped.usedVariables().all { variable ->
-                                variable is Value.Variable.Stamped && world.isBound(variable)
+                                variable.isStamped && world.isBound(variable)
                             }
                         ) {
                             conformsToSelectionsAt(

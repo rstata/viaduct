@@ -34,7 +34,7 @@ sealed interface OpenArguments {
     /**
      * An argument tuple in a resolver-registry template.
      *
-     * Every variable recursively contained by a template is a [Value.Variable.Template].
+     * Every variable recursively contained by a template has [Value.Variable.isTemplate] set.
      * Stamping replaces every contained variable with one carrying the same [SelectionStamp].
      */
     sealed interface Template : OpenArguments {
@@ -60,7 +60,7 @@ sealed interface OpenArguments {
                 expectedType: Schema.FieldArguments,
                 arguments: OpenArguments,
             ): Template {
-                require(arguments.usedVariables().all { it is Value.Variable.Template }) {
+                require(arguments.usedVariables().all(Value.Variable::isTemplate)) {
                     "A registry argument template cannot contain stamped variables"
                 }
                 val template =
@@ -346,7 +346,7 @@ private fun openArgumentsOf(
 
 private fun OpenValue?.stampVars(path: List<PathComponent>): OpenValue? =
     when (this) {
-        is Value.Variable.Template -> stamp(path)
+        is Value.Variable -> if (isTemplate) stamp(path) else this
         is OpenListValueImpl -> copy(values = values.map { it.stampVars(path) })
         is OpenInputObjectValueImpl ->
             copy(fieldValues = fieldValues.mapValues { (_, value) -> value.stampVars(path) })
@@ -355,7 +355,7 @@ private fun OpenValue?.stampVars(path: List<PathComponent>): OpenValue? =
 
 private fun OpenValue?.stampVariables(selectionStamp: SelectionStamp): OpenValue? =
     when (this) {
-        is Value.Variable.Template -> stamp(selectionStamp)
+        is Value.Variable -> if (isTemplate) stamp(selectionStamp) else this
         is OpenListValueImpl ->
             copy(values = values.map { value -> value.stampVariables(selectionStamp) })
         is OpenInputObjectValueImpl ->
@@ -370,12 +370,16 @@ private fun OpenValue?.stampVariables(selectionStamp: SelectionStamp): OpenValue
 
 private fun OpenValue?.restampVariables(selectionStamp: SelectionStamp): OpenValue? =
     when (this) {
-        is Value.Variable.SelectionStamped ->
-            Value.Variable
-                .of(
-                    field = field,
-                    variableName = variableName,
-                ).stamp(selectionStamp)
+        is Value.Variable ->
+            if (this.selectionStamp == null) {
+                this
+            } else {
+                Value.Variable
+                    .of(
+                        field = field,
+                        variableName = variableName,
+                    ).stamp(selectionStamp)
+            }
         is OpenListValueImpl ->
             copy(values = values.map { value -> value.restampVariables(selectionStamp) })
         is OpenInputObjectValueImpl ->
@@ -390,8 +394,11 @@ private fun OpenValue?.restampVariables(selectionStamp: SelectionStamp): OpenVal
 
 internal fun OpenArguments.substituteTemplates(
     expectedType: Schema.FieldArguments,
-    bindings: Map<Value.Variable.Template, Value.Input?>,
+    bindings: Map<Value.Variable, Value.Input?>,
 ): OpenArguments {
+    require(bindings.keys.all(Value.Variable::isTemplate)) {
+        "Template substitution requires variable templates"
+    }
     val substituted =
         fieldExpressions().mapValues { (_, value) -> value.substituteTemplates(bindings) }
     return if (substituted.values.all { it == null || it is Value.Input }) {
@@ -406,7 +413,7 @@ internal fun OpenArguments.substituteTemplates(
 
 internal fun OpenArguments.mapVariableTemplates(
     expectedType: Schema.FieldArguments,
-    transform: (Value.Variable.Template) -> Value.Variable.Template,
+    transform: (Value.Variable) -> Value.Variable,
 ): OpenArguments {
     val mapped =
         fieldExpressions().mapValues { (_, value) -> value.mapVariableTemplates(transform) }
@@ -421,12 +428,21 @@ internal fun OpenArguments.mapVariableTemplates(
 }
 
 private fun OpenValue?.mapVariableTemplates(
-    transform: (Value.Variable.Template) -> Value.Variable.Template,
+    transform: (Value.Variable) -> Value.Variable,
 ): OpenValue? =
     when (this) {
-        is Value.Variable.Template -> transform(this)
-        is Value.Variable.Stamped ->
-            throw IllegalArgumentException("Pre-reasoning expressions cannot contain stamped variables")
+        is Value.Variable ->
+            if (isTemplate) {
+                transform(this).also { transformed ->
+                    require(transformed.isTemplate) {
+                        "Variable-template mapping must return a template"
+                    }
+                }
+            } else {
+                throw IllegalArgumentException(
+                    "Pre-reasoning expressions cannot contain stamped variables",
+                )
+            }
         is OpenListValueImpl ->
             copy(values = values.map { value -> value.mapVariableTemplates(transform) })
         is OpenInputObjectValueImpl ->
@@ -443,8 +459,8 @@ internal fun OpenArguments.variables(): Set<Value.Variable> =
     fieldExpressions().values.flatMapTo(linkedSetOf()) { value -> value.variables() }
 
 /** Returns the occurrence-specific variables used anywhere in this argument tuple. */
-fun OpenArguments.stampedVariables(): Set<Value.Variable.Stamped> =
-    variables().filterIsInstanceTo(linkedSetOf())
+fun OpenArguments.stampedVariables(): Set<Value.Variable> =
+    variables().filterTo(linkedSetOf(), Value.Variable::isStamped)
 
 /** Returns every variable expression used anywhere in this argument tuple. */
 fun OpenArguments.usedVariables(): Set<Value.Variable> = variables()
@@ -458,8 +474,7 @@ fun OpenArguments.variableArgumentNames(): Set<String> =
 /** Returns the source-selection identities carried by variables in this tuple. */
 fun OpenArguments.variableSourceSelectionStamps(): Set<SelectionStamp> =
     variables()
-        .filterIsInstance<Value.Variable.SelectionStamped>()
-        .mapTo(linkedSetOf()) { variable -> variable.selectionStamp }
+        .mapNotNullTo(linkedSetOf(), Value.Variable::selectionStamp)
 
 private fun OpenValue?.variables(): Set<Value.Variable> =
     when (this) {
@@ -470,8 +485,8 @@ private fun OpenValue?.variables(): Set<Value.Variable> =
         else -> emptySet()
     }
 
-internal fun OpenArguments.variableTemplates(): Set<Value.Variable.Template> =
-    variables().filterIsInstanceTo(linkedSetOf())
+internal fun OpenArguments.variableTemplates(): Set<Value.Variable> =
+    variables().filterTo(linkedSetOf(), Value.Variable::isTemplate)
 
 internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments {
     val retargeted = OpenArguments.of(field, fieldExpressions())
@@ -482,11 +497,12 @@ internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments {
 }
 
 internal fun OpenValue?.matchingVariableTypes(
-    variable: Value.Variable.Template,
+    variable: Value.Variable,
     typeExpr: TypeExpr<Schema.InputType>,
     hasDefault: Boolean,
-): List<Pair<TypeExpr<Schema.InputType>, Boolean>> =
-    when {
+): List<Pair<TypeExpr<Schema.InputType>, Boolean>> {
+    require(variable.isTemplate) { "Variable type matching requires a template" }
+    return when {
         this == variable -> listOf(typeExpr to hasDefault)
         this is OpenListValueImpl && typeExpr is TypeExpr.List ->
             values.flatMap { value ->
@@ -507,6 +523,7 @@ internal fun OpenValue?.matchingVariableTypes(
         }
         else -> emptyList()
     }
+}
 
 /** Returns whether any argument expression recursively contains [Value.Error]. */
 fun OpenArguments.containsErrorValue(): Boolean =
@@ -534,11 +551,11 @@ private fun Value.Input?.containsGroundErrorValue(): Boolean =
     }
 
 private fun OpenValue?.substituteTemplates(
-    bindings: Map<Value.Variable.Template, Value.Input?>,
+    bindings: Map<Value.Variable, Value.Input?>,
 ): OpenValue? =
     when (this) {
-        is Value.Variable.Template ->
-            if (this in bindings) bindings[this] else this
+        is Value.Variable ->
+            if (isTemplate && this in bindings) bindings[this] else this
         is OpenListValueImpl ->
             copy(values = values.map { value -> value.substituteTemplates(bindings) })
         is OpenInputObjectValueImpl ->
@@ -594,9 +611,12 @@ private fun OpenValue?.instantiateBindings(
     when (this) {
         null -> coerceInputValue(expectedType, null)
         is Value.Input -> coerceInputValue(expectedType, this)
-        is Value.Variable.Stamped -> coerceInputValue(expectedType, world.getBinding(this))
-        is Value.Variable.Template ->
-            error("Variable template $this must be stamped before it can be instantiated")
+        is Value.Variable ->
+            if (isStamped) {
+                coerceInputValue(expectedType, world.getBinding(this))
+            } else {
+                error("Variable template $this must be stamped before it can be instantiated")
+            }
         is OpenListValueImpl -> {
             require(expectedType is TypeExpr.List) {
                 "Open list expression does not match $expectedType"
@@ -627,9 +647,12 @@ private suspend fun OpenValue?.fetchBindings(
     when (this) {
         null -> coerceInputValue(expectedType, null)
         is Value.Input -> coerceInputValue(expectedType, this)
-        is Value.Variable.Stamped -> coerceInputValue(expectedType, world.fetchBinding(this))
-        is Value.Variable.Template ->
-            error("Variable template $this must be stamped before it can be instantiated")
+        is Value.Variable ->
+            if (isStamped) {
+                coerceInputValue(expectedType, world.fetchBinding(this))
+            } else {
+                error("Variable template $this must be stamped before it can be instantiated")
+            }
         is OpenListValueImpl -> {
             require(expectedType is TypeExpr.List) {
                 "Open list expression does not match $expectedType"

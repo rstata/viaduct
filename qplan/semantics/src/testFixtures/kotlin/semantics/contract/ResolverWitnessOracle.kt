@@ -125,7 +125,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
         }
     if (
         selectionStamped.usedVariables().all { variable ->
-            variable is Value.Variable.Stamped && world.isBound(variable)
+            variable.isStamped && world.isBound(variable)
         }
     ) {
         val fullyStamped = selectionStamped.applicableGroundSelections(field.containingType)

@@ -217,18 +217,18 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
 context(world: Assumptions)
 suspend fun SelectionForest.mergeWithVariables(
     result: ObjectEngineResult,
-): Pair<ObjectSelectionForest, Map<Value.Variable.Stamped, Value.Input?>> {
+): Pair<ObjectSelectionForest, Map<Value.Variable, Value.Input?>> {
     val type: Schema.ObjectType = result.type
     val childrenByKey: MutableMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> =
         linkedMapOf()
-    val groundKeyByVariable: MutableMap<Value.Variable.Stamped, ObjectEngineResult.GroundKey> =
+    val groundKeyByVariable: MutableMap<Value.Variable, ObjectEngineResult.GroundKey> =
         linkedMapOf()
-    val bindings: MutableMap<Value.Variable.Stamped, Value.Input?> =
+    val bindings: MutableMap<Value.Variable, Value.Input?> =
         linkedMapOf()
     occurrences().forEach { selection ->
         if (type !in selection.possibleTypes) return@forEach
 
-        val variable: Value.Variable.Stamped? =
+        val variable: Value.Variable? =
             (selection.key as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
         val specializedKey: ObjectEngineResult.ObjectKey = selection.objectKey(type)
         val groundKey: ObjectEngineResult.GroundKey =
@@ -447,17 +447,15 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
 }
 
 // Returns this variable with its selection stamp extended through the concrete OER path.
-private fun Value.Variable.Stamped.localizeSelectionStamp(
+private fun Value.Variable.localizeSelectionStamp(
     path: List<PathComponent>,
-): Value.Variable.Stamped =
-    when (this) {
-        is Value.Variable.SelectionStamped ->
+): Value.Variable =
+    selectionStamp
+        ?.let { currentStamp ->
             Value.Variable
                 .of(field = field, variableName = variableName)
-                .stamp(selectionStamp.extendThrough(path))
-
-        else -> this
-    }
+                .stamp(currentStamp.extendThrough(path))
+        } ?: this
 
 // Appends one concrete OER path to this resolver-instance identity.
 private fun SelectionStamp.extendThrough(
@@ -474,16 +472,16 @@ fun ObjectSelection.groundKey(): ObjectEngineResult.GroundKey =
         ?: error("Object selection key contains open arguments: $key")
 
 /** Returns the occurrence-specific variables used by this key's arguments. */
-fun ObjectEngineResult.Key.stampedVariables(): Set<Value.Variable.Stamped> =
+fun ObjectEngineResult.Key.stampedVariables(): Set<Value.Variable> =
     arguments.stampedVariables()
 
 /** Returns the occurrence-specific variables used recursively by this selection. */
-fun Selection.stampedVariables(): Set<Value.Variable.Stamped> =
+fun Selection.stampedVariables(): Set<Value.Variable> =
     key.stampedVariables() + subselections.stampedVariables()
 
 /** Returns the occurrence-specific variables used recursively by this forest. */
-fun SelectionForest.stampedVariables(): Set<Value.Variable.Stamped> {
-    val variables = linkedSetOf<Value.Variable.Stamped>()
+fun SelectionForest.stampedVariables(): Set<Value.Variable> {
+    val variables = linkedSetOf<Value.Variable>()
     forEach { selection -> variables += selection.stampedVariables() }
     return variables
 }

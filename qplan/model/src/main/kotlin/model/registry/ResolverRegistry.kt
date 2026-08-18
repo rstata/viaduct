@@ -21,15 +21,25 @@ import model.variableTemplates
 
 /** One occurrence-specific variable and its occurrence-specific object provider path. */
 data class StampedObjectPathDefinition(
-    val variable: Value.Variable.Stamped,
+    val variable: Value.Variable,
     val path: List<ObjectEngineResult.Key>,
-)
+) {
+    init {
+        require(variable.isStamped) { "An object-path definition requires a stamped variable" }
+    }
+}
 
 /** One selection-specific variable use and the resolver definition that supplies its value. */
 data class SelectionStampedVariableDefinition(
-    val variable: Value.Variable.SelectionStamped,
+    val variable: Value.Variable,
     val definition: VariableDefinition,
-)
+) {
+    init {
+        require(variable.selectionStamp != null) {
+            "A selection-stamped definition requires a selection-stamped variable"
+        }
+    }
+}
 
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
@@ -64,7 +74,7 @@ typealias FieldResolverApplicationObserver =
 class FieldResolver private constructor(
     val field: Schema.ObjectField,
     val objectFragment: SelectionForest,
-    val variables: Map<Value.Variable.Template, VariableDefinition>,
+    val variables: Map<Value.Variable, VariableDefinition>,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
@@ -256,7 +266,7 @@ class FieldResolver private constructor(
         fun of(
             field: Schema.ObjectField,
             objectFragment: SelectionForest,
-            variables: Map<Value.Variable.Template, VariableDefinition>,
+            variables: Map<Value.Variable, VariableDefinition>,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
@@ -270,6 +280,9 @@ class FieldResolver private constructor(
                 "Object fragment must be specialized to ${field.containingType.typeName}"
             }
             variables.forEach { (variable, definition) ->
+                require(variable.isTemplate) {
+                    "Resolver registry variables must be templates"
+                }
                 require(variable.field == field) {
                     "Variable ${variable.variableName} is not defined by a resolver on " +
                         "${field.containingType.typeName}/${field.fieldName}"
@@ -426,7 +439,7 @@ private fun SelectionForest.selectionStampedVariableDefinitions(
     resolverPath: List<PathComponent>,
     occurrencePrefix: List<SelectionOccurrenceId>,
     occurrenceIds: Map<Selection, SelectionOccurrenceId>,
-    definitions: Map<Value.Variable.Template, VariableDefinition>,
+    definitions: Map<Value.Variable, VariableDefinition>,
 ): List<SelectionStampedVariableDefinition> {
     val stampedDefinitions = mutableListOf<SelectionStampedVariableDefinition>()
     forEach { selection ->
@@ -456,7 +469,7 @@ private fun SelectionForest.selectionStampedVariableDefinitions(
 
 private fun SelectionForest.markProviderPath(
     path: List<ObjectEngineResult.Key>,
-    variable: Value.Variable.Stamped,
+    variable: Value.Variable,
 ): SelectionForest {
     val key = path.first()
     val remaining = path.drop(1)
@@ -487,7 +500,7 @@ private fun SelectionForest.markProviderPath(
 
 private fun SelectionForest.markProviderSourcePath(
     sourcePath: List<ObjectEngineResult.Key>,
-    variable: Value.Variable.Stamped,
+    variable: Value.Variable,
 ): SelectionForest {
     val sourceKey = sourcePath.first()
     val remaining = sourcePath.drop(1)
@@ -547,7 +560,7 @@ private fun SelectionForest.containsPath(path: List<ObjectEngineResult.Key>): Bo
  * A canonical object field is an actual resolver coordinate exactly when [contains] returns true.
  * The registry satisfies canonical schema ownership, special-field exclusions, query coverage,
  * resolver-local variable-template names, and acyclicity across object fields and
- * [Value.Variable.Template] values. Acyclicity is intentionally checked over a conservative
+ * variable-template values. Acyclicity is intentionally checked over a conservative
  * coordinate-level possibility relation derived from fixed open fragment shapes. The relation
  * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
  * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences

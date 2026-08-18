@@ -89,14 +89,14 @@ internal sealed interface Resolver25LifecycleEvent {
     data class BindingDeclared(
         override val sequence: Long,
         val ownerCoordinate: List<PathComponent>,
-        val variable: Value.Variable.Stamped,
+        val variable: Value.Variable,
         val source: Resolver25BindingSource,
     ) : Resolver25LifecycleEvent
 
     data class BindingCompleted(
         override val sequence: Long,
         val ownerCoordinate: List<PathComponent>,
-        val variable: Value.Variable.Stamped,
+        val variable: Value.Variable,
         val value: Value.Input?,
     ) : Resolver25LifecycleEvent
 
@@ -254,7 +254,7 @@ internal class Resolver25LifecycleInstrumentation(
 
     fun bindingDeclared(
         ownerCoordinate: List<PathComponent>,
-        variable: Value.Variable.Stamped,
+        variable: Value.Variable,
         source: Resolver25BindingSource,
     ) {
         emit { sequence ->
@@ -269,7 +269,7 @@ internal class Resolver25LifecycleInstrumentation(
 
     fun bindingCompleted(
         ownerCoordinate: List<PathComponent>,
-        variable: Value.Variable.Stamped,
+        variable: Value.Variable,
         value: Value.Input?,
     ) {
         emit { sequence ->

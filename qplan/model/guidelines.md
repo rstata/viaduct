@@ -20,7 +20,7 @@ Use canonical schema relations for GraphQL semantics rather than Kotlin inherita
 
 ## Variables And Keys
 
-`Value.Variable.Template` is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific variable. Request-local `Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read completed bindings, while coroutine operations may suspend for them.
+A variable template is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific variable. Request-local `Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read completed bindings, while coroutine operations may suspend for them.
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
 

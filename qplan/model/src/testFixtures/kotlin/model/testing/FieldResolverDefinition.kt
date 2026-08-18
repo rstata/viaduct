@@ -65,7 +65,7 @@ class FieldResolverDefinition private constructor(
 
     internal fun assemble(
         field: Schema.ObjectField,
-        variables: Map<Value.Variable.Template, VariableDefinition>,
+        variables: Map<Value.Variable, VariableDefinition>,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {
         val objectType = field.containingType

@@ -114,9 +114,7 @@ class ObjectEngineResultKeyTest {
         assertEquals(selectionStamp, specialized.selectionStamp)
         assertEquals(
             selectionStamp,
-            assertIs<Value.Variable.SelectionStamped>(
-                specialized.arguments.usedVariables().single(),
-            ).selectionStamp,
+            specialized.arguments.usedVariables().single().selectionStamp,
         )
     }
 

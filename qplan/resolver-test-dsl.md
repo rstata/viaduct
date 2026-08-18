@@ -68,7 +68,9 @@ metadata.
 ## Field Resolvers
 
 `of` is an optional selection-set string relative to the field's parent object type. An absent or
-empty `of` denotes an empty object fragment. Response-key aliases are not supported.
+empty `of` denotes an empty object fragment. Response-key aliases are preserved in the
+resolver-visible input. Co-applicable selections sharing one response key must identify a
+compatible field invocation.
 The string literal `"ERROR"` in an argument position produces `Value.Error`; it is fixture syntax,
 not a schema-defined string value or resolver variable.
 

@@ -65,7 +65,7 @@ internal fun FieldResolver.boundObjectPathDefinitions(
         selectionStampedDefinitions
             .mapNotNull { stampedDefinition ->
                 (stampedDefinition.definition as? VariableDefinition.FromObjectField)?.let {
-                    StampedObjectPathDefinition(
+                    StampedObjectPathDefinition.of(
                         variable = stampedDefinition.variable,
                         path = it.path,
                     )

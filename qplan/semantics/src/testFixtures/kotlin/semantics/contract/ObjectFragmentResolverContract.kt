@@ -1,5 +1,6 @@
 package semantics.contract
 
+import java.util.concurrent.ConcurrentHashMap
 import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
@@ -26,6 +27,121 @@ import kotlin.test.assertTrue
  * Contract for resolvers with nonempty object fragments and no variables.
  */
 interface ObjectFragmentResolverContract : ResolverContract {
+    @Test
+    fun `DSL materializes argumentless and argument-bearing aliases by response key`() {
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      viewer: User! @resolver(result: {plain: 5})
+                    }
+
+                    type User {
+                      plain: Int!
+                      scaled(factor: Int!): Int!
+                        @resolver(result: "sum(${'$'}factor)")
+                      total: Int!
+                        @resolver(
+                          of: "plainValue: plain byTwo: scaled(factor: 2) byThree: scaled(factor: 3)"
+                          result: "sum(plainValue, byTwo, byThree)"
+                        )
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, input, _, _ ->
+                    if (field.containingType.typeName == "User" && field.fieldName == "total") {
+                        assertEquals(
+                            mapOf(
+                                "plainValue" to Value.Int.of(5),
+                                "byTwo" to Value.Int.of(2),
+                                "byThree" to Value.Int.of(3),
+                            ),
+                            input.fieldValues.toMap(),
+                        )
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+        val result =
+            resolveAndValidate(world, "fragment ignored on Query { viewer { total } }")
+        val viewer =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "viewer")).get(),
+            )
+
+        assertEquals(
+            IntEngineResult.of(10),
+            viewer.getCell(world.schema.contractKey("User", "total")).get(),
+        )
+    }
+
+    @Test
+    fun `DSL collects one alias across non-overlapping concrete types`() {
+        val observed = ConcurrentHashMap<String, Int>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      holders: [Holder!]!
+                        @resolver(
+                          result: [
+                            {item: {__typename: "Alpha", alpha: 4}}
+                            {item: {__typename: "Beta", beta: 7}}
+                          ]
+                        )
+                    }
+
+                    type Holder {
+                      item: Choice!
+                      chosen: Int!
+                        @resolver(
+                          of: "item { ... on Alpha { value: alpha } ... on Beta { value: beta } }"
+                          result: "value(item.value)"
+                        )
+                    }
+
+                    union Choice = Alpha | Beta
+
+                    type Alpha {
+                      alpha: Int!
+                    }
+
+                    type Beta {
+                      beta: Int!
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, input, _, _ ->
+                    if (field.containingType.typeName == "Holder" && field.fieldName == "chosen") {
+                        val item = assertIs<Value.Object>(input.fieldValues.getValue("item"))
+                        assertEquals(setOf("value"), item.fieldValues.keys)
+                        observed[item.type.typeName] =
+                            assertIs<Value.Int>(item.fieldValues.getValue("value")).intValue
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+        val result =
+            resolveAndValidate(world, "fragment ignored on Query { holders { chosen } }")
+        val holders =
+            assertIs<ListEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "holders")).get(),
+            )
+
+        assertEquals(
+            listOf(4, 7),
+            holders.indices.map { index ->
+                val holder = assertIs<ObjectEngineResult>(holders[index].get())
+                assertIs<IntEngineResult>(
+                    holder.getCell(world.schema.contractKey("Holder", "chosen")).get(),
+                ).intValue
+            },
+        )
+        assertEquals(mapOf("Alpha" to 4, "Beta" to 7), observed)
+    }
+
     @Test
     fun `materializes aliases and present nulls by response key`() {
         val testWorld =

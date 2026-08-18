@@ -24,7 +24,10 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 
 - `EmptyObjectFragmentResolverContract` covers empty object fragments, arguments, `__typename`, list occurrences, interfaces, and concrete implementation defaults.
 - `NodeResolverContract` covers source-level node resolution through fixture-lowered `foo_V_A_node` producers and `T_V_A_Bridge.node` loaders.
-- `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
+- `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including
+  response aliases on argumentless and argument-bearing fields, argument-distinct aliases,
+  non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output,
+  defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including a transitive chain.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.

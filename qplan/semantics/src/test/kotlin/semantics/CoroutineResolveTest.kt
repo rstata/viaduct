@@ -227,9 +227,7 @@ class CoroutineResolveTest {
                                     "fragment ignored on Query { failed }",
                                 ),
                             ) { input, _ ->
-                                input.fieldValues.getValue(
-                                    schema.groundKey("Query", "failed"),
-                                )
+                                input.fieldValues.getValue("failed")
                             },
                     )
                 },

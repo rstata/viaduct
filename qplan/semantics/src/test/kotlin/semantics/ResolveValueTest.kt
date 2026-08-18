@@ -11,7 +11,6 @@ import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.materializedFieldKey
 import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -306,14 +305,13 @@ class ResolveValueTest {
                 ).assumptions
         val itemType = world.schema.type("Item") as Schema.ObjectType
         val field = world.schema.objectField("Item", "value")
-        val key = ObjectEngineResult.GroundKey.of(field, mapOf("index" to 1))
         val value =
             Value.Object.of(
                 type = itemType,
                 fields =
                     listOf(
                         Value.Object.FieldValue.of(
-                            key = key.materializedFieldKey(),
+                            key = field.fieldName,
                             field = field,
                             value = Value.String.of("one"),
                         ),

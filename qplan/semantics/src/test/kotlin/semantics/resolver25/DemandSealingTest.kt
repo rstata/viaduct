@@ -1,6 +1,5 @@
 package semantics.resolver25
 
-import semantics.getValue
 import model.EngineResult
 import model.IntEngineResult
 import model.ObjectEngineResult
@@ -105,7 +104,7 @@ class DemandSealingTest {
                     mapOf(
                         schema.objectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(cKey)
+                                input.fieldValues.getValue(cKey.field.fieldName)
                             },
                         schema.objectField("Query", "a") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -127,8 +126,9 @@ class DemandSealingTest {
                                     "fragment C on Query { a { late } }",
                                 ),
                             ) { input, _ ->
-                                val payload = input.fieldValues.getValue(aKey) as Value.Object
-                                payload.fieldValues.getValue(lateKey)
+                                val payload =
+                                    input.fieldValues.getValue(aKey.field.fieldName) as Value.Object
+                                payload.fieldValues.getValue(lateKey.field.fieldName)
                             },
                     )
                 },
@@ -222,8 +222,11 @@ class DemandSealingTest {
                                     input.fieldValues.getValue("exact") as Value.Object
                                 val symbolic =
                                     input.fieldValues.getValue("symbolic") as Value.Object
-                                val one = exact.fieldValues.getValue(oneKey) as Value.Int
-                                val two = symbolic.fieldValues.getValue(twoKey) as Value.Int
+                                val one =
+                                    exact.fieldValues.getValue(oneKey.field.fieldName) as Value.Int
+                                val two =
+                                    symbolic.fieldValues.getValue(twoKey.field.fieldName)
+                                        as Value.Int
                                 Value.Int.of(one.intValue + two.intValue)
                             },
                         schema.objectField("Query", "a") to
@@ -406,7 +409,7 @@ class DemandSealingTest {
                     mapOf(
                         schema.objectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(cKey)
+                                input.fieldValues.getValue(cKey.field.fieldName)
                             },
                         schema.objectField("Query", "a") to
                             fieldResolverOf(
@@ -414,10 +417,13 @@ class DemandSealingTest {
                                     "fragment A on Query { z { early late } }",
                                 ),
                             ) { input, _ ->
-                                val seeds = input.fieldValues.getValue(zKey) as Value.Object
+                                val seeds =
+                                    input.fieldValues.getValue(zKey.field.fieldName) as Value.Object
                                 schema.objectOf("Payload") {
-                                    "early" setTo seeds.fieldValues.getValue(seedEarlyKey)
-                                    "late" setTo seeds.fieldValues.getValue(seedLateKey)
+                                    "early" setTo
+                                        seeds.fieldValues.getValue(seedEarlyKey.field.fieldName)
+                                    "late" setTo
+                                        seeds.fieldValues.getValue(seedLateKey.field.fieldName)
                                 }
                             }.observeApplications { _, _, demand ->
                                 producerApplications += 1
@@ -427,8 +433,10 @@ class DemandSealingTest {
                             fieldResolverOf(
                                 schema.fragmentFrom("fragment B on Query { a { early } }"),
                             ) { input, _ ->
-                                val payload = input.fieldValues.getValue(aKey) as Value.Object
-                                val value = payload.fieldValues.getValue(earlyKey)
+                                val payload =
+                                    input.fieldValues.getValue(aKey.field.fieldName) as Value.Object
+                                val value =
+                                    payload.fieldValues.getValue(earlyKey.field.fieldName)
                                 schema.objectOf("Box") {
                                     "value" setTo value
                                 }
@@ -440,8 +448,9 @@ class DemandSealingTest {
                                 consumerApplications += 1
                                 val value = arguments.fieldValues.getValue("value") as Int
                                 consumerArguments += value
-                                val payload = input.fieldValues.getValue(aKey) as Value.Object
-                                payload.fieldValues.getValue(lateKey)
+                                val payload =
+                                    input.fieldValues.getValue(aKey.field.fieldName) as Value.Object
+                                payload.fieldValues.getValue(lateKey.field.fieldName)
                             },
                         schema.objectField("Query", "z") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->

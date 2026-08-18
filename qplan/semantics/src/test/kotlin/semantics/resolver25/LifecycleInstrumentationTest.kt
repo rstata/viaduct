@@ -1,8 +1,5 @@
 package semantics.resolver25
 
-import semantics.getValue
-import model.ObjectEngineResult
-
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -191,15 +188,8 @@ class LifecycleInstrumentationTest {
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { consume(value: ${'$'}seed) }",
                                 ),
-                            ) { input, arguments ->
-                                val seed =
-                                    arguments.fieldValues.getValue("seed") as Int
-                                input.fieldValues.getValue(
-                                    ObjectEngineResult.GroundKey.of(
-                                        consume,
-                                        mapOf("value" to seed),
-                                    ),
-                                )
+                            ) { input, _ ->
+                                input.fieldValues.getValue(consume.fieldName)
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->

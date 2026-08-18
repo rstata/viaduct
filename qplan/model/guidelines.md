@@ -39,7 +39,7 @@ variable in that key's arguments carries the same stamp. Ordinary key factories 
 identity from stamped variables. Specialization, localization, and grounding preserve an explicit
 occurrence stamp.
 
-Keys belong exclusively to the engine-result domain. `Value.Object` and `Value.ObjectFields` use string keys. Passive objects use canonical argumentless field names; materialized argument-bearing fields temporarily use the private deterministic address returned by `GroundKey.materializedFieldKey()`. That address ignores occurrence stamps and preserves visible field-and-ground-argument equality. It is not parsed by consumers and is not a response key.
+Keys belong exclusively to the engine-result domain. `Value.Object` and `Value.ObjectFields` use string keys. Passive source and resolver-produced objects use canonical argumentless field names. Resolver inputs materialized from object fragments use GraphQL response keys, including aliases. Those response keys select entries in the resolver-visible value only; exact grounded and localized OER keys continue to address cells.
 
 `Value.Object.FieldValue` carries a string key, canonical object field, and value only through object construction so the factory can validate schema conformance before retaining the string map. A completed object does not retain hidden OER keys or schema-field metadata. Argument-bearing passive fields are outside the source and resolver-output domain and must be rejected.
 

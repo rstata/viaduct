@@ -22,6 +22,8 @@ import graphql.language.VariableReference
 import graphql.parser.Parser
 import java.lang.Math.addExact
 import java.math.BigInteger
+import model.EngineIDData
+import model.EngineInputData
 import model.Fragment
 import model.Schema
 import model.SourceSchemaAdapter
@@ -342,11 +344,10 @@ private class Compiler(
                 val id = arguments.fieldValues.getValue(ID_FIELD)
                 when (id) {
                     null -> null
-                    Value.Error -> Value.Error
-                    is Value.ID ->
-                        nodesById[id.idValue]?.let { entry ->
+                    is EngineIDData ->
+                        nodesById[id.id]?.let { entry ->
                             schema.objectOf(entry.type.typeName) {
-                                ID_FIELD setTo id
+                                ID_FIELD setTo id.id
                             }
                         }
                     else -> throw IllegalArgumentException("Query.node id is not an ID")
@@ -455,7 +456,7 @@ private class Compiler(
         }
 
         var nextBindingIndex = 0
-        val bindings = linkedMapOf<String, Value.Input?>()
+        val bindings = linkedMapOf<String, EngineInputData?>()
         val preparedSource =
             ERROR_ARGUMENT_LITERAL.replace(fragmentSource) {
                 val name =
@@ -464,7 +465,7 @@ private class Compiler(
                     }.first { candidate ->
                         candidate !in occupiedVariableNames && candidate !in bindings
                     }
-                bindings[name] = Value.Error
+                bindings[name] = ErroneousVariableValue
                 "\$$name"
             }
         return PreparedObjectFragment(preparedSource, bindings)
@@ -717,7 +718,7 @@ private class ResultEvaluator(
             val value = argumentValue(term.removePrefix("$"), context)
             when (value) {
                 null -> listOf(null)
-                is Value.Output -> listOf(value)
+                is Int -> listOf(Value.Int.of(value))
                 else ->
                     throw IllegalArgumentException(
                         "Resolver-test expression value is not an output value: $term",
@@ -731,7 +732,7 @@ private class ResultEvaluator(
     private fun argumentValue(
         name: String,
         context: EvaluationContext,
-    ): Value.Input? {
+    ): EngineInputData? {
         require(GRAPHQL_NAME.matches(name)) { "Invalid argument reference: \$$name" }
         val arguments =
             context.arguments
@@ -816,11 +817,7 @@ private class ResultEvaluator(
                 } else {
                     val argumentName = match.groupValues[1]
                     when (val argument = argumentValue(argumentName, context)) {
-                        Value.Error ->
-                            throw IllegalArgumentException(
-                                "idFrom(\$$argumentName) cannot read an error",
-                            )
-                        is Value.ID -> argument.idValue
+                        is EngineIDData -> argument.id
                         else ->
                             throw IllegalArgumentException(
                                 "idFrom(\$$argumentName) requires a non-null ID argument",
@@ -841,7 +838,7 @@ private data class EvaluationContext(
 
 private data class PreparedObjectFragment(
     val source: String,
-    val bindings: Map<String, Value.Input?>,
+    val bindings: Map<String, EngineInputData?>,
 )
 
 private data class DslFieldResolver(

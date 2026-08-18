@@ -1,22 +1,13 @@
 package semantics.resolver26
 
-import model.ObjectEngineResult
-
-import model.IntEngineResult
-import model.Value
-import model.fragmentFrom
-import model.objectOf
 import model.testing.TestWorld
-import semantics.contract.assertArguments
-import semantics.correctresolution.correctResolution
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 class FromObjectFieldSingletonCoercionRegressionTest {
     @Test
-    fun `singleton coerces a scalar object-field value through two input-list layers`() {
-        val testWorld =
+    fun `scalar object-field provider is incompatible with a nested input-list location`() {
+        assertFailsWith<IllegalArgumentException> {
             TestWorld.fromDSL(
                 selectiveResolvers = true,
                 schemaSDL =
@@ -34,25 +25,6 @@ class FromObjectFieldSingletonCoercionRegressionTest {
                     }
                     """.trimIndent(),
             )
-        val world = testWorld.assumptions
-        val resultKey =
-            ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
-                emptyMap(),
-            )
-        val fragment =
-            world.fragmentFrom("fragment QueryResult on Query { result }")
-
-        val resolved =
-            context(world) {
-                resolve(fragment.subselections)
-            }
-
-        testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Query", "consume"),
-            mapOf("value" to listOf(listOf(7))),
-        )
-        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        }
     }
 }

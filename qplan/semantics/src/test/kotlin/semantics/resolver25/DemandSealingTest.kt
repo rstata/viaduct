@@ -52,7 +52,7 @@ class DemandSealingTest {
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
         assertEquals(
-            VariableBinding.of(Value.Int.of(7)),
+            VariableBinding.of(7),
             testWorld.assumptions.getBinding(
                 Value.Variable
                     .of(resultKey.field, "value")
@@ -326,7 +326,7 @@ class DemandSealingTest {
             Resolver25StructuralSignature.NESTED_PROVIDER_PATH,
         )
         assertEquals(
-            VariableBinding.of(Value.Int.of(11)),
+            VariableBinding.of(11),
             testWorld.assumptions.getBinding(
                 Value.Variable
                     .of(resultKey.field, "value")
@@ -439,9 +439,8 @@ class DemandSealingTest {
                                 schema.fragmentFrom("fragment C on Query { a { late } }"),
                             ) { input, arguments ->
                                 consumerApplications += 1
-                                val value: Value.Int =
-                                    arguments.fieldValues.getValue("value") as Value.Int
-                                consumerArguments += value.intValue
+                                val value = arguments.fieldValues.getValue("value") as Int
+                                consumerArguments += value
                                 val payload = input.fieldValues.getValue(aKey) as Value.Object
                                 payload.fieldValues.getValue(lateKey)
                             },

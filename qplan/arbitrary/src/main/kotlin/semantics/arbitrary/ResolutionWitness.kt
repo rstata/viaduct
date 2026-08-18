@@ -1,6 +1,11 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.EngineEnumValueData
+import model.EngineIDData
+import model.EngineInputData
+import model.EngineInputListData
+import model.EngineInputObjectData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -484,7 +489,7 @@ private class FingerprintBudget(
                 node(
                     "args(" +
                         arguments.fieldValues.entries
-                            .sortedBy(Map.Entry<String, Value.Input?>::key)
+                            .sortedBy { entry -> entry.key }
                             .joinToString(",") { (name, value) ->
                                 atom(name) +
                                     "=" +
@@ -555,18 +560,17 @@ private class FingerprintBudget(
         )
 
     private fun input(
-        value: Value.Input?,
+        value: EngineInputData?,
         expectedType: TypeExpr<Schema.InputType>,
     ): String {
         if (value == null) return node("null")
-        if (value == Value.Error) return node("error")
 
         return when (expectedType) {
             is TypeExpr.List -> {
-                require(value is Value.InputList)
+                val values = requireType<EngineInputListData>(value)
                 node(
                     "list:${typeExpr(expectedType.elementType)}[" +
-                        value.values.joinToString(separator = ",") { element ->
+                        values.joinToString(separator = ",") { element ->
                             input(element, expectedType.elementType)
                         } +
                         "]",
@@ -574,25 +578,25 @@ private class FingerprintBudget(
             }
             is TypeExpr.Named ->
                 when (val expectedNamedType = expectedType.baseType) {
-                    Schema.IntType -> node("int:${(value as Value.Int).intValue}")
+                    Schema.IntType -> node("int:${value as Int}")
                     Schema.FloatType ->
-                        node("float:${(value as Value.Float).floatValue.toBits()}")
+                        node("float:${(value as Double).toBits()}")
                     Schema.StringType ->
-                        node("string:${atom((value as Value.String).stringValue)}")
+                        node("string:${atom(value as String)}")
                     Schema.BooleanType ->
-                        node("boolean:${(value as Value.Boolean).booleanValue}")
-                    Schema.IDType -> node("id:${atom((value as Value.ID).idValue)}")
+                        node("boolean:${value as Boolean}")
+                    Schema.IDType -> node("id:${atom((value as EngineIDData).id)}")
                     is Schema.EnumType ->
                         node(
                             "enum:${atom(expectedNamedType.typeName)}:" +
-                                atom((value as Value.Enum).enumValue),
+                                atom((value as EngineEnumValueData).value),
                         )
                     is Schema.InputObjectType -> {
-                        require(value is Value.InputObject)
+                        val fields = requireType<EngineInputObjectData>(value)
                         node(
                             "input-object:${atom(expectedNamedType.typeName)}{" +
-                                value.fieldValues.entries
-                                    .sortedBy(Map.Entry<String, Value.Input?>::key)
+                                fields.entries
+                                    .sortedBy(Map.Entry<String, EngineInputData?>::key)
                                     .joinToString(",") { (name, fieldValue) ->
                                         atom(name) +
                                             "=" +
@@ -606,6 +610,11 @@ private class FingerprintBudget(
                     }
                 }
         }
+    }
+
+    private inline fun <reified T> requireType(value: EngineInputData): T {
+        require(value is T)
+        return value
     }
 
     private fun typeExpr(typeExpr: TypeExpr<Schema.Type>): String =

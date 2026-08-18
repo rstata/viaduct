@@ -2,6 +2,7 @@ package model.testing
 
 import model.ObjectEngineResult
 
+import model.EngineIDData
 import model.OpenArguments
 import model.Schema
 import model.SourceSchemaAdapter
@@ -156,9 +157,13 @@ class ResolverTestDslTest {
         val root = world.resolverRegistry.resolveRootQuery()
         val echo = world.schema.objectField("Query", "echo")
 
-        listOf<Value.Input?>(Value.Int.of(4), null, Value.Error).forEach { value ->
+        listOf(
+            4 to Value.Int.of(4),
+            null to null,
+            Value.Error to Value.Error,
+        ).forEach { (value, expected) ->
             assertEquals(
-                value as Value.Output?,
+                expected,
                 world.apply(echo, root, mapOf("input" to value)),
             )
         }
@@ -235,7 +240,7 @@ class ResolverTestDslTest {
         val viewer = schema.objectField("Query", "viewer_V_A_node")
         val bridge =
             assertIs<Value.Object>(
-                world.apply(viewer, arguments = mapOf("id" to Value.ID.of("user-2"))),
+                world.apply(viewer, arguments = mapOf("id" to EngineIDData("user-2"))),
             )
         val node = schema.objectField("User_V_A_Bridge", "node")
         val user =

@@ -3,6 +3,7 @@ package model.registry
 import model.ObjectEngineResult
 
 import model.Assumptions
+import model.EngineInputData
 import model.OpenArguments
 import model.Schema
 import model.Selection
@@ -294,7 +295,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
 }
 
 private fun SelectionForest.substitute(
-    bindings: Map<Value.Variable, Value.Input?>,
+    bindings: Map<Value.Variable, EngineInputData?>,
 ): SelectionForest =
     flatMap { selection ->
         selectionForestOf(

@@ -16,17 +16,14 @@ class ValueVariableTest {
     @Test
     fun `ground open values wrap error-free inputs`() {
         val typeExpr = TypeExpr.Named.of(Schema.IntType)
-        val input = Value.Int.of(7)
+        val input = 7
 
         val ground = assertIs<OpenValue.Ground>(OpenValue.of(typeExpr, input))
 
         assertEquals(input, ground.data)
         assertEquals(OpenValue.Ground.of(typeExpr, input), ground)
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<ClassCastException> {
             OpenValue.Ground.of(typeExpr, Value.Error)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            VariableBinding.of(Value.Error)
         }
     }
 
@@ -167,29 +164,31 @@ class ValueVariableTest {
         val stamped = arguments.stampVars(consume.arguments, path)
         val stampedVariable = template.stamp(path)
         world.declareBinding(stampedVariable)
-        world.completeBinding(stampedVariable, Value.Int.of(9))
+        world.completeBinding(stampedVariable, 9)
         val instantiated =
             context(world) {
                 stamped.instantiateBindings(consume.arguments)
             }
         val groundedArguments = assertIs<Value.Arguments>(instantiated)
         val filter =
-            assertIs<Value.InputObject>(groundedArguments.fieldValues.getValue("filter"))
+            assertIs<EngineInputObjectData>(
+                groundedArguments.fieldValues.getValue("filter"),
+            )
         val nested =
-            assertIs<Value.InputList>(filter.fieldValues.getValue("nested"))
+            assertIs<EngineInputListData>(filter["nested"])
         val values =
-            assertIs<Value.InputList>(groundedArguments.fieldValues.getValue("values"))
+            assertIs<EngineInputListData>(groundedArguments.fieldValues.getValue("values"))
 
-        assertEquals(Value.Int.of(9), filter.fieldValues.getValue("direct"))
-        assertEquals(Value.Int.of(9), nested.values[0])
-        assertEquals(Value.Int.of(1), nested.values[1])
-        assertEquals(Value.Int.of(9), values.values.single())
+        assertEquals(9, filter["direct"])
+        assertEquals(9, nested[0])
+        assertEquals(1, nested[1])
+        assertEquals(9, values.single())
         assertEquals(setOf(template), arguments.variableTemplates())
         assertEquals(setOf(stampedVariable), stamped.stampedVariables())
     }
 
     @Test
-    fun `grounding singleton coerces a variable binding through nested input lists`() {
+    fun `grounding does not coerce a scalar variable binding through nested input lists`() {
         val world =
             TestWorld.fromSDL(
                 """
@@ -210,18 +209,13 @@ class ValueVariableTest {
                 mapOf("values" to template),
             ).stampVars(consume.arguments, path)
         world.declareBinding(variable)
-        world.completeBinding(variable, Value.Int.of(9))
+        world.completeBinding(variable, 9)
 
-        val grounded =
+        assertFailsWith<ClassCastException> {
             context(world) {
                 arguments.instantiateBindings(consume.arguments)
             }
-        val groundedArguments = assertIs<Value.Arguments>(grounded)
-        val outer =
-            assertIs<Value.InputList>(groundedArguments.fieldValues.getValue("values"))
-        val inner = assertIs<Value.InputList>(outer.values.single())
-
-        assertEquals(listOf(Value.Int.of(9)), inner.values)
+        }
     }
 
     @Test
@@ -258,7 +252,7 @@ class ValueVariableTest {
                 ).stampVars(first.arguments, path)
 
         world.declareBinding(variable)
-        world.completeBinding(variable, Value.Int.of(9))
+        world.completeBinding(variable, 9)
 
         val grounded =
             context(world) {
@@ -266,18 +260,15 @@ class ValueVariableTest {
             }
         val groundedArguments = assertIs<Value.Arguments>(grounded)
         val filter =
-            assertIs<Value.InputObject>(
+            assertIs<EngineInputObjectData>(
                 groundedArguments.fieldValues.getValue("filter"),
             )
 
         assertEquals(
-            Value.InputObject.of(
-                assertIs<Schema.InputObjectType>(world.schema.type("FirstFilter")),
-                mapOf("value" to 9),
-            ),
+            mapOf("value" to 9),
             filter,
         )
-        assertEquals(Value.Int.of(9), filter.fieldValues.getValue("value"))
+        assertEquals(9, filter["value"])
     }
 
     @Test
@@ -314,8 +305,8 @@ class ValueVariableTest {
         val secondVariable = template.stamp(secondStamp)
         world.declareBinding(firstVariable)
         world.declareBinding(secondVariable)
-        world.completeBinding(firstVariable, Value.Int.of(9))
-        world.completeBinding(secondVariable, Value.Int.of(9))
+        world.completeBinding(firstVariable, 9)
+        world.completeBinding(secondVariable, 9)
 
         fun stampedKey(selectionStamp: Stamp.Occurrence): ObjectEngineResult.ObjectKey =
             ObjectEngineResult.Key.of(
@@ -370,7 +361,7 @@ class ValueVariableTest {
         assertNotEquals(first, second)
         assertNotEquals<ObjectEngineResult.GroundKey>(first, unstamped)
         assertEquals(
-            Value.Int.of(9),
+            9,
             assertIs<Value.Arguments>(first.arguments).fieldValues.getValue("value"),
         )
     }
@@ -472,17 +463,17 @@ class ValueVariableTest {
                 }
 
             assertFalse(fetched.isCompleted)
-            world.completeBinding(variable, Value.Int.of(9))
+            world.completeBinding(variable, 9)
             val grounded = fetched.await()
             val groundedArguments = assertIs<Value.Arguments>(grounded)
             val filter =
-                assertIs<Value.InputObject>(
+                assertIs<EngineInputObjectData>(
                     groundedArguments.fieldValues.getValue("filter"),
                 )
             val values =
-                assertIs<Value.InputList>(
-                    filter.fieldValues.getValue("values"),
+                assertIs<EngineInputListData>(
+                    filter["values"],
                 )
-            assertEquals(Value.Int.of(9), values.values.single())
+            assertEquals(9, values.single())
         }
 }

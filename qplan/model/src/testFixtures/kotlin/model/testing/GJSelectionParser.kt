@@ -12,6 +12,7 @@ import graphql.schema.GraphQLTypeUtil
 import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import java.util.Locale
+import model.EngineInputData
 import model.Schema
 import model.SourceSchemaAdapter
 import model.SelectionForest
@@ -28,7 +29,7 @@ import model.spec.flatten
  */
 internal class GJSelectionParser(
     private val schema: GJSchema,
-    private val variableValues: Map<String, Value.Input?>,
+    private val variableValues: Map<String, EngineInputData?>,
     private val variableField: Schema.ObjectField? = null,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)

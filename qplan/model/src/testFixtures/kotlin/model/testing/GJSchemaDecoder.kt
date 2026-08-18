@@ -25,6 +25,12 @@ import graphql.schema.GraphQLType
 import graphql.schema.GraphQLTypeUtil
 import graphql.schema.GraphQLUnionType
 import graphql.schema.InputValueWithState
+import model.EngineEnumValueData
+import model.EngineIDData
+import model.EngineInputData
+import model.EngineInputListData
+import model.EngineInputObjectData
+import model.EngineSimpleData
 import model.OpenValue
 import model.Schema
 import model.TypeExpr
@@ -37,6 +43,9 @@ internal const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
 internal const val NODE_BRIDGE_ID_FIELD = "id"
 internal const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
 internal const val TYPED_NODE_ID_PREFIX = "\$node:"
+
+/** Fixture-only variable binding that denotes failure outside the engine-input value domain. */
+internal data object ErroneousVariableValue
 
 internal fun nodeBridgeTypeName(nodeType: Schema.CompositeType): String =
     nodeType.typeName + NODE_BRIDGE_TYPE_SUFFIX
@@ -66,7 +75,7 @@ internal class GJSchemaDecoder(
     private val possibleTypeSets =
         linkedMapOf<Schema.CompositeType, MutableSet<Schema.ObjectType>>()
     private lateinit var schema: Schema
-    private val noVariableValues: Map<String, Value.Input?> = emptyMap()
+    private val noVariableValues: Map<String, EngineInputData?> = emptyMap()
 
     fun decode(): Schema {
         require(graphQLSchema.mutationType == null) {
@@ -451,7 +460,7 @@ internal class GJSchemaDecoder(
 internal fun decodeInputValue(
     type: GraphQLInputType,
     value: InputValueWithState,
-    variableValues: Map<String, Value.Input?>,
+    variableValues: Map<String, EngineInputData?>,
     schema: Schema,
     variableField: Schema.ObjectField? = null,
 ): OpenValue? =
@@ -473,16 +482,21 @@ internal fun decodeInputValue(
 internal fun decodeLiteral(
     type: GraphQLInputType,
     value: GraphQLValue<*>,
-    variableValues: Map<String, Value.Input?>,
+    variableValues: Map<String, EngineInputData?>,
     schema: Schema,
     variableField: Schema.ObjectField? = null,
 ): OpenValue? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
-            OpenValue.of(
-                decodeModelInputType(type, schema),
-                variableValues.getValue(value.name),
-            )
+            val bound = variableValues.getValue(value.name)
+            if (bound === ErroneousVariableValue) {
+                Value.Error
+            } else {
+                OpenValue.of(
+                    decodeModelInputType(type, schema),
+                    bound,
+                )
+            }
         } else {
             requireNotNull(variableField) {
                 "Unbound operation variable \$${value.name}"
@@ -532,9 +546,9 @@ internal fun decodeLiteral(
         is graphql.schema.GraphQLEnumType ->
             OpenValue.of(
                 decodeModelInputType(type, schema),
-                Value.Enum.of(
-                    schema.type(type.name) as Schema.EnumType,
-                    (value as EnumValue).name,
+                EngineEnumValueData(
+                    value = (value as EnumValue).name,
+                    type = schema.type(type.name) as Schema.EnumType,
                 ),
             )
 
@@ -555,23 +569,21 @@ private fun decodeScalarLiteral(
     schema: Schema,
     scalarType: Schema.ScalarType,
     value: GraphQLValue<*>,
-): Value.Input =
+): EngineSimpleData =
     when (scalarType) {
         Schema.IntType ->
-            Value.Int.of((value as IntValue).value.intValueExact())
+            (value as IntValue).value.intValueExact()
         Schema.FloatType ->
-            Value.Float.of(
-                when (value) {
-                    is FloatValue -> value.value.toDouble()
-                    is IntValue -> value.value.toDouble()
-                    else -> error("Invalid Float literal: $value")
-                },
-            )
+            when (value) {
+                is FloatValue -> value.value.toDouble()
+                is IntValue -> value.value.toDouble()
+                else -> error("Invalid Float literal: $value")
+            }
 
-        Schema.StringType -> Value.String.of((value as StringValue).value!!)
-        Schema.BooleanType -> Value.Boolean.of((value as BooleanValue).isValue)
+        Schema.StringType -> (value as StringValue).value!!
+        Schema.BooleanType -> (value as BooleanValue).isValue
         Schema.IDType ->
-            Value.ID.of(
+            EngineIDData(
                 when (value) {
                     is StringValue -> value.value!!
                     is IntValue -> value.value.toString()
@@ -584,7 +596,7 @@ private inline fun decodeInputObjectFields(
     type: GraphQLInputObjectType,
     isFieldSupplied: (String) -> Boolean,
     decodeSupplied: (GraphQLInputType, String) -> OpenValue?,
-    variableValues: Map<String, Value.Input?>,
+    variableValues: Map<String, EngineInputData?>,
     schema: Schema,
 ): OpenValue {
     val fields =
@@ -621,7 +633,7 @@ private inline fun decodeInputObjectFields(
 private fun decodeObjectLiteral(
     type: GraphQLInputObjectType,
     value: ObjectValue,
-    variableValues: Map<String, Value.Input?>,
+    variableValues: Map<String, EngineInputData?>,
     schema: Schema,
     variableField: Schema.ObjectField?,
 ): OpenValue {
@@ -646,9 +658,9 @@ private fun decodeObjectLiteral(
 private fun decodeExternal(
     type: GraphQLInputType,
     value: Any?,
-    variableValues: Map<String, Value.Input?>,
+    variableValues: Map<String, EngineInputData?>,
     schema: Schema,
-): Value.Input? {
+): EngineInputData? {
     if (value == null) {
         return null
     }
@@ -663,17 +675,16 @@ private fun decodeExternal(
             )
         is GraphQLList -> {
             val values = if (value is Iterable<*>) value.toList() else listOf(value)
-            Value.InputList.of(
-                typeExpr = decodeModelInputType(type.wrappedType as GraphQLInputType, schema),
-                values = values.map {
+            val data: EngineInputListData =
+                values.map {
                     decodeExternal(
                         type.wrappedType as GraphQLInputType,
                         it,
                         variableValues,
                         schema,
                     )
-                },
-            )
+                }
+            data
         }
 
         is GraphQLScalarType ->
@@ -683,9 +694,9 @@ private fun decodeExternal(
                 value,
             )
         is graphql.schema.GraphQLEnumType ->
-            Value.Enum.of(
-                schema.type(type.name) as Schema.EnumType,
-                value.toString(),
+            EngineEnumValueData(
+                value = value.toString(),
+                type = schema.type(type.name) as Schema.EnumType,
             )
 
         is GraphQLInputObjectType ->
@@ -698,13 +709,13 @@ private fun decodeScalarExternal(
     schema: Schema,
     scalarType: Schema.ScalarType,
     value: Any,
-): Value.Input =
+): EngineSimpleData =
     when (scalarType) {
-        Schema.IntType -> Value.Int.of((value as Number).toInt())
-        Schema.FloatType -> Value.Float.of((value as Number).toDouble())
-        Schema.StringType -> Value.String.of(value as String)
-        Schema.BooleanType -> Value.Boolean.of(value as Boolean)
-        Schema.IDType -> Value.ID.of(value.toString())
+        Schema.IntType -> (value as Number).toInt()
+        Schema.FloatType -> (value as Number).toDouble()
+        Schema.StringType -> value as String
+        Schema.BooleanType -> value as Boolean
+        Schema.IDType -> EngineIDData(value.toString())
     }
 
 private fun decodeModelInputType(
@@ -782,9 +793,9 @@ internal fun decodeModelOutputType(
 private fun decodeObjectExternal(
     type: GraphQLInputObjectType,
     value: Any,
-    variableValues: Map<String, Value.Input?>,
+    variableValues: Map<String, EngineInputData?>,
     schema: Schema,
-): Value.Input {
+): EngineInputObjectData {
     val valueMap = value as Map<*, *>
     val decoded =
         decodeInputObjectFields(
@@ -800,7 +811,12 @@ private fun decodeObjectExternal(
         schema = schema,
     )
     check(decoded is OpenValue.Ground)
-    return decoded.data
+    return requireType(decoded.data)
+}
+
+private inline fun <reified T> requireType(value: EngineInputData): T {
+    require(value is T)
+    return value
 }
 
 private class EnumTypeImpl(

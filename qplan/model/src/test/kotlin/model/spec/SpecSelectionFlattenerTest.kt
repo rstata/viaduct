@@ -1,5 +1,6 @@
 package model.spec
 
+import model.EngineInputObjectData
 import model.OpenValue
 import model.Schema
 import model.SelectionForest
@@ -56,7 +57,7 @@ class SpecSelectionFlattenerTest {
                     fixture.field(
                         containingType = "Query",
                         fieldName = "release",
-                        arguments = mapOf("channel" to Value.String.of("beta")),
+                        arguments = mapOf("channel" to "beta"),
                     ),
                 ),
             )
@@ -67,11 +68,9 @@ class SpecSelectionFlattenerTest {
         assertEquals(field, release.key.field)
         assertEquals(
             "beta",
-            assertIs<Value.String>(
-                assertIs<OpenValue.Ground>(
-                    release.key.arguments.fieldExpressions()["channel"],
-                ).data,
-            ).stringValue,
+            assertIs<OpenValue.Ground>(
+                release.key.arguments.fieldExpressions()["channel"],
+            ).data,
         )
     }
 
@@ -202,7 +201,7 @@ class SpecSelectionFlattenerTest {
             containingType: String,
             fieldName: String,
             alias: String? = null,
-            arguments: Map<String, Value.Input?> = emptyMap(),
+            arguments: EngineInputObjectData = emptyMap(),
             subselections: List<SpecSelection>? = null,
         ): SpecSelection.Field =
             schema

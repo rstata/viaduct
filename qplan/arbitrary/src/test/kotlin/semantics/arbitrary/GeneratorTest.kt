@@ -814,13 +814,4 @@ private data class ArgumentInvocation(
 )
 
 private fun Value.Arguments.containsErrorValue(): Boolean =
-    fieldValues.values.any { value -> value.containsErrorValue() }
-
-private fun Value.Input?.containsErrorValue(): Boolean =
-    when (this) {
-        Value.Error -> true
-        is Value.InputList -> values.any { value -> value.containsErrorValue() }
-        is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsErrorValue() }
-        else -> false
-    }
+    false

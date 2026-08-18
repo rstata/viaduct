@@ -57,15 +57,16 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).get())
         assertEquals(
-            VariableBinding.of(Value.Int.of(7)),
+            VariableBinding.of(7),
             world.getBinding(boundVariable),
         )
     }
 
     @Test
     fun `binds null and error from nullable provider paths`() {
-        listOf<Value.Input?>(null, Value.Error).forEach { provided ->
-            val dslValue = if (provided == Value.Error) "\"ERROR\"" else "null"
+        listOf(false, true).forEach { isError ->
+            val provided = null
+            val dslValue = if (isError) "\"ERROR\"" else "null"
             var observedResultInput = false
             var consumedArguments: OpenArguments.Ground? = null
             var consumedValue: Value.Output? = null
@@ -113,11 +114,11 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 }
 
             assertEquals<EngineResult?>(
-                if (provided == Value.Error) ErrorEngineResult else null,
+                if (isError) ErrorEngineResult else null,
                 resolved.getCell(resultKey).get(),
             )
             assertEquals(
-                if (provided == Value.Error) {
+                if (isError) {
                     VariableBinding.Error
                 } else {
                     VariableBinding.of(provided)
@@ -125,7 +126,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 world.getBinding(boundVariable),
             )
             assertEquals(
-                if (provided == Value.Error) {
+                if (isError) {
                     OpenArguments.Ground.Error
                 } else {
                     Value.Arguments.of(
@@ -136,7 +137,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 consumedArguments,
             )
             assertEquals(true, observedResultInput)
-            assertEquals(provided as Value.Output?, consumedValue)
+            assertEquals(if (isError) Value.Error else null, consumedValue)
         }
     }
 

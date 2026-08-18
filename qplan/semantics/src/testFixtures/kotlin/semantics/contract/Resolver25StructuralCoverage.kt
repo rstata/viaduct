@@ -1,5 +1,8 @@
 package semantics.contract
 
+import model.EngineInputData
+import model.EngineInputListData
+import model.EngineInputObjectData
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.OpenArguments
@@ -265,20 +268,28 @@ private fun OpenArguments.Ground.containsBinding(binding: VariableBinding): Bool
             binding is VariableBinding.Input && containsValue(binding.value)
     }
 
-private fun Value.Arguments.containsValue(value: Value.Input?): Boolean =
+private fun Value.Arguments.containsValue(value: EngineInputData?): Boolean =
     fieldValues.values.any { argument -> argument.containsValue(value) }
 
-private fun Value.Input?.containsValue(value: Value.Input?): Boolean =
+private fun EngineInputData?.containsValue(value: EngineInputData?): Boolean =
     when (this) {
         null -> value == null
-        Value.Error -> value === Value.Error
-        is Value.Simple -> this == value
-        is Value.InputList ->
-            this == value || values.any { element -> element.containsValue(value) }
-        is Value.InputObject ->
+        is List<*> -> {
+            val elements = requireType<EngineInputListData>(this)
+            this == value || elements.any { element -> element.containsValue(value) }
+        }
+        is Map<*, *> -> {
+            val fields = requireType<EngineInputObjectData>(this)
             this == value ||
-                fieldValues.values.any { fieldValue -> fieldValue.containsValue(value) }
+                fields.values.any { fieldValue -> fieldValue.containsValue(value) }
+        }
+        else -> this == value
     }
+
+private inline fun <reified T> requireType(value: EngineInputData): T {
+    require(value is T)
+    return value
+}
 
 private fun SelectionForest.fields(): Set<Schema.OutputField> =
     buildSet {

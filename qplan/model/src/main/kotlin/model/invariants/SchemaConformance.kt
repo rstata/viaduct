@@ -2,6 +2,11 @@ package model.invariants
 
 import model.Assumptions
 import model.EngineResult
+import model.EngineEnumValueData
+import model.EngineIDData
+import model.EngineInputData
+import model.EngineInputListData
+import model.EngineInputObjectData
 import model.EnumEngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -39,11 +44,10 @@ fun Value.Output.conformsToSchema(): Boolean =
 /**
  * Whether this input value recursively conforms to [typeExpr].
  *
- * Null conforms exactly at a nullable outer layer. [Value.Error] conforms to every input type
- * expression.
+ * Null conforms exactly at a nullable outer layer.
  */
 context(world: Assumptions)
-fun Value.Input?.conformsToSchema(
+fun EngineInputData?.conformsToSchema(
     typeExpr: TypeExpr<Schema.InputType>,
 ): Boolean = conformsToSchemaType(typeExpr)
 
@@ -101,39 +105,62 @@ fun EngineResult.conformsToSchema(): Boolean =
             }
     }
 
-private fun Value.InputObject.conformsToInputObjectType(
+private fun EngineInputData.conformsToInputObjectType(
     expectedType: Schema.InputObjectType,
-): Boolean =
-    fieldValues.all { (fieldName, value) ->
+): Boolean {
+    val fieldValues = asEngineInputObjectDataOrNull() ?: return false
+    if (
+        expectedType.fields.values.any { field ->
+            !field.typeExpr.isNullable &&
+                field.defaultValue == Value.Default.Absent &&
+                field.name !in fieldValues
+        }
+    ) {
+        return false
+    }
+    return fieldValues.all { (fieldName, value) ->
         val field = expectedType.fields[fieldName] ?: return@all false
         value.conformsToSchemaType(field.typeExpr)
     }
+}
 
-internal fun Value.Input?.conformsToSchemaType(
+internal fun EngineInputData?.conformsToSchemaType(
     typeExpr: TypeExpr<Schema.InputType>,
 ): Boolean =
     when {
         this == null -> typeExpr.isNullable
-        this == Value.Error -> true
         typeExpr is TypeExpr.List ->
-            this is Value.InputList &&
-                values.all { value -> value.conformsToSchemaType(typeExpr.elementType) }
+            asEngineInputListDataOrNull()
+                ?.all { value -> value.conformsToSchemaType(typeExpr.elementType) }
+                ?: false
         typeExpr is TypeExpr.Named ->
             when (val expectedType = typeExpr.baseType) {
-                Schema.IntType -> this is Value.Int
-                Schema.FloatType -> this is Value.Float
-                Schema.StringType -> this is Value.String
-                Schema.BooleanType -> this is Value.Boolean
-                Schema.IDType -> this is Value.ID
+                Schema.IntType -> this is Int
+                Schema.FloatType -> this is Double && isFinite()
+                Schema.StringType -> this is String
+                Schema.BooleanType -> this is Boolean
+                Schema.IDType -> this is EngineIDData
                 is Schema.EnumType ->
-                    this is Value.Enum &&
-                        enumValue in expectedType.values
+                    this is EngineEnumValueData &&
+                        type == expectedType
                 is Schema.InputObjectType ->
-                    this is Value.InputObject &&
-                        conformsToInputObjectType(expectedType)
+                    conformsToInputObjectType(expectedType)
             }
         else -> false
     }
+
+private fun EngineInputData.asEngineInputListDataOrNull(): EngineInputListData? {
+    val values = this as? List<*> ?: return null
+    @Suppress("UNCHECKED_CAST")
+    return values as EngineInputListData
+}
+
+private fun EngineInputData.asEngineInputObjectDataOrNull(): EngineInputObjectData? {
+    val fields = this as? Map<*, *> ?: return null
+    if (fields.keys.any { key -> key !is String }) return null
+    @Suppress("UNCHECKED_CAST")
+    return fields as EngineInputObjectData
+}
 
 internal fun Value.Output?.conformsToSchemaType(
     typeExpr: TypeExpr<Schema.OutputType>,

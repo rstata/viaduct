@@ -83,7 +83,7 @@ class IsClosedUnderResolverDemandTest {
         val variable = Value.Variable.of(resultField, "seed")
         val stamped = variable.stamp(listOf(resultKey))
         world.declareBinding(stamped)
-        world.completeBinding(stamped, Value.Int.of(7))
+        world.completeBinding(stamped, 7)
         val result =
             world.engineResultOf("Parent") {
                 "child" resolvesTo

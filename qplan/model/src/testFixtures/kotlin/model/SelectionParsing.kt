@@ -10,12 +10,12 @@ fun Assumptions.selectionsFrom(fragment: String): Pair<Schema.CompositeType, Sel
 /** Parses one post-validation GraphQL fragment into the model fragment used by tests. */
 fun Schema.fragmentFrom(
     source: String,
-    bindings: Map<String, Value?> = emptyMap(),
+    bindings: Map<String, EngineInputData?> = emptyMap(),
     variableField: Schema.ObjectField? = null,
 ): Fragment =
     GJSelectionParser(
         schema = this as GJSchema,
-        variableValues = bindings.validatedVariableValues(),
+        variableValues = bindings,
         variableField = variableField,
     ).fragmentFrom(source)
 
@@ -44,23 +44,3 @@ private fun GJSelectionParser.fragmentFrom(source: String): Fragment {
     val (nominalType, selections) = selectionsFrom(source)
     return Fragment.of(nominalType, selections)
 }
-
-private fun Map<String, Value?>.validatedVariableValues(): Map<String, Value.Input?> =
-    mapValues { (variableName, value) ->
-        require(value == null || value is Value.Input) {
-            "Variable $variableName contains a non-input GraphQL value"
-        }
-        require(value == null || !value.containsVariable()) {
-            "Variable $variableName contains an unresolved variable"
-        }
-        value as Value.Input?
-    }
-
-private fun Value.containsVariable(): Boolean =
-    when (this) {
-        Value.Error -> false
-        is Value.Variable -> true
-        is Value.InputList -> values.any { it?.containsVariable() == true }
-        is Value.InputObject -> fieldValues.values.any { it?.containsVariable() == true }
-        else -> false
-    }

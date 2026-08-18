@@ -388,28 +388,29 @@ private fun SelectionForest.stampVariableSelections(
 ): SelectionForest =
     flatMap { selection ->
         val variableTemplates = selection.key.arguments.variableTemplates()
-        val arguments =
+        val key =
             if (variableTemplates.isEmpty()) {
-                selection.key.arguments
+                selection.key
             } else {
-                OpenArguments.Template
-                    .of(selection.key.field.arguments, selection.key.arguments)
-                    .stamp(
-                        selection.key.field.arguments,
-                        SelectionStamp(
-                            resolverPath = resolverPath,
-                            occurrenceLineage =
-                                occurrencePrefix + occurrenceIds.getValue(selection),
-                        ),
+                val selectionStamp =
+                    SelectionStamp(
+                        resolverPath = resolverPath,
+                        occurrenceLineage =
+                            occurrencePrefix + occurrenceIds.getValue(selection),
                     )
+                val arguments =
+                    OpenArguments.Template
+                        .of(selection.key.field.arguments, selection.key.arguments)
+                        .stamp(selection.key.field.arguments, selectionStamp)
+                ObjectEngineResult.Key.Stamped.of(
+                    selectionStamp = selectionStamp,
+                    field = selection.key.field,
+                    arguments = arguments,
+                )
             }
         selectionForestOf(
             Selection.of(
-                key =
-                    ObjectEngineResult.Key.of(
-                        field = selection.key.field,
-                        arguments = arguments,
-                    ),
+                key = key,
                 possibleTypes = selection.possibleTypes,
                 subselections =
                     selection.subselections.stampVariableSelections(
@@ -519,9 +520,8 @@ private fun SelectionForest.markProviderSourcePath(
 }
 
 private fun Selection.hasSourceKey(sourceKey: ObjectEngineResult.Key): Boolean {
-    val stampedArguments = key.arguments as? OpenArguments.Stamped
     val actualSourceKey =
-        stampedArguments
+        (key as? ObjectEngineResult.Key.Stamped)
             ?.selectionStamp
             ?.occurrenceLineage
             ?.last()

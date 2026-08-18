@@ -197,12 +197,46 @@ sealed interface ObjectEngineResult : EngineResult {
      * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
      *
      * Ordinary-key equality is structural over [field] and [arguments], using canonical schema
-     * equality. [GroundKey.Stamped] additionally includes its opaque selection occurrence stamp;
-     * callers that need resolver-visible identity must explicitly project it to an ordinary key.
+     * equality. [Stamped] keys additionally include their opaque selection occurrence stamp;
+     * callers that need resolver-visible identity must explicitly project them to ordinary keys.
      */
     sealed interface Key {
         val field: Schema.OutputField
         val arguments: OpenArguments
+
+        /**
+         * A key belonging to one variable-bearing source-selection occurrence.
+         *
+         * The stamp participates in structural equality before and after grounding.
+         */
+        sealed interface Stamped : Key {
+            val selectionStamp: SelectionStamp
+
+            companion object {
+                fun of(
+                    selectionStamp: SelectionStamp,
+                    field: Schema.OutputField,
+                    arguments: OpenArguments,
+                ): Stamped {
+                    require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                        "Stamped key arguments do not belong to its output field"
+                    }
+                    return when (field) {
+                        is Schema.ObjectField ->
+                            ObjectKey.Stamped.of(selectionStamp, field, arguments)
+                        else ->
+                            StampedKeyImpl(field, arguments, selectionStamp)
+                    }
+                }
+
+                fun of(
+                    selectionStamp: SelectionStamp,
+                    field: Schema.ObjectField,
+                    arguments: OpenArguments,
+                ): ObjectKey.Stamped =
+                    ObjectKey.Stamped.of(selectionStamp, field, arguments)
+            }
+        }
 
         companion object {
             /**
@@ -263,15 +297,32 @@ sealed interface ObjectEngineResult : EngineResult {
     sealed interface VariableKey : Key {
         val variableDefinedByThisKey: Value.Variable.Stamped
 
+        sealed interface Stamped : VariableKey, Key.Stamped
+
         companion object {
             fun of(
                 key: Key,
                 variableDefinedByThisKey: Value.Variable.Stamped,
             ): VariableKey =
-                VariableKeyImpl(
+                if (key is Key.Stamped) {
+                    of(key, variableDefinedByThisKey)
+                } else {
+                    VariableKeyImpl(
+                        field = key.field,
+                        arguments = key.arguments,
+                        variableDefinedByThisKey = variableDefinedByThisKey,
+                    )
+                }
+
+            fun of(
+                key: Key.Stamped,
+                variableDefinedByThisKey: Value.Variable.Stamped,
+            ): Stamped =
+                StampedVariableKeyImpl(
                     field = key.field,
                     arguments = key.arguments,
                     variableDefinedByThisKey = variableDefinedByThisKey,
+                    selectionStamp = key.selectionStamp,
                 )
         }
     }
@@ -280,11 +331,30 @@ sealed interface ObjectEngineResult : EngineResult {
      * A key whose field belongs to a concrete object type.
      *
      * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Ordinary instances use
-     * structural key equality; [GroundKey.Stamped] additionally retains occurrence identity.
+     * structural key equality; [Stamped] instances additionally retain occurrence identity.
      */
     sealed interface ObjectKey : Key {
         override val field: Schema.ObjectField
         override val arguments: OpenArguments
+
+        sealed interface Stamped : ObjectKey, Key.Stamped {
+            companion object {
+                fun of(
+                    selectionStamp: SelectionStamp,
+                    field: Schema.ObjectField,
+                    arguments: OpenArguments,
+                ): Stamped {
+                    require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                        "Stamped object-key arguments do not belong to its output field"
+                    }
+                    return if (arguments is Value.Arguments) {
+                        GroundKey.Stamped.of(selectionStamp, field, arguments)
+                    } else {
+                        StampedObjectKeyImpl(field, arguments, selectionStamp)
+                    }
+                }
+            }
+        }
 
         companion object {
             fun of(
@@ -320,9 +390,7 @@ sealed interface ObjectEngineResult : EngineResult {
          * [selectionStamp] identifies the variable-bearing source selection that was grounded. It
          * distinguishes different source selections even when their grounded arguments agree.
          */
-        sealed interface Stamped : GroundKey {
-            val selectionStamp: SelectionStamp
-
+        sealed interface Stamped : GroundKey, ObjectKey.Stamped {
             companion object {
                 fun of(
                     selectionStamp: SelectionStamp,
@@ -922,16 +990,35 @@ private data class KeyImpl(
     override val arguments: OpenArguments,
 ) : ObjectEngineResult.Key
 
+private data class StampedKeyImpl(
+    override val field: Schema.OutputField,
+    override val arguments: OpenArguments,
+    override val selectionStamp: SelectionStamp,
+) : ObjectEngineResult.Key.Stamped
+
 private data class VariableKeyImpl(
     override val field: Schema.OutputField,
     override val arguments: OpenArguments,
     override val variableDefinedByThisKey: Value.Variable.Stamped,
 ) : ObjectEngineResult.VariableKey
 
+private data class StampedVariableKeyImpl(
+    override val field: Schema.OutputField,
+    override val arguments: OpenArguments,
+    override val variableDefinedByThisKey: Value.Variable.Stamped,
+    override val selectionStamp: SelectionStamp,
+) : ObjectEngineResult.VariableKey.Stamped
+
 private data class ObjectKeyImpl(
     override val field: Schema.ObjectField,
     override val arguments: OpenArguments,
 ) : ObjectEngineResult.ObjectKey
+
+private data class StampedObjectKeyImpl(
+    override val field: Schema.ObjectField,
+    override val arguments: OpenArguments,
+    override val selectionStamp: SelectionStamp,
+) : ObjectEngineResult.ObjectKey.Stamped
 
 private data class GroundKeyImpl(
     override val field: Schema.ObjectField,

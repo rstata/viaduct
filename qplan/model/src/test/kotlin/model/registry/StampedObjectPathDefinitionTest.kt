@@ -1,11 +1,12 @@
 package model.registry
 
+import model.ListEngineResult
 import model.ObjectEngineResult
 
-import model.OpenArguments
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.localizeTopLevelSelectionStamps
 import model.merge
 import model.stampedVariables
 import model.testing.TestWorld
@@ -75,13 +76,21 @@ class StampedObjectPathDefinitionTest {
         val otherFullyStampedFragment = resolver.stamp(secondPath)
 
         compatibilityFragment.forEach { selection ->
-            assertFalse(selection.key.arguments is OpenArguments.Stamped)
+            assertFalse(selection.key is ObjectEngineResult.Key.Stamped)
         }
         fullyStampedFragment.forEach { selection ->
             if (selection.key.stampedVariables().isEmpty()) {
                 assertIs<Value.Arguments>(selection.key.arguments)
+                assertFalse(selection.key is ObjectEngineResult.Key.Stamped)
             } else {
-                assertIs<OpenArguments.Stamped>(selection.key.arguments)
+                val stampedKey = assertIs<ObjectEngineResult.Key.Stamped>(selection.key)
+                assertEquals(
+                    setOf(stampedKey.selectionStamp),
+                    selection.key
+                        .stampedVariables()
+                        .filterIsInstance<Value.Variable.SelectionStamped>()
+                        .mapTo(linkedSetOf()) { variable -> variable.selectionStamp },
+                )
             }
         }
         assertEquals(
@@ -195,12 +204,43 @@ class StampedObjectPathDefinitionTest {
                 .single { stampedDefinition ->
                     stampedDefinition.variable.variableName == "value"
                 }.variable
-        assertIs<OpenArguments.Stamped>(fullyStampedMarker.key.arguments)
+        val fullyStampedMarkerKey =
+            assertIs<ObjectEngineResult.VariableKey.Stamped>(fullyStampedMarker.key)
         assertEquals(
             selectionStampedValue,
             assertIs<ObjectEngineResult.VariableKey>(
                 fullyStampedMarker.key,
             ).variableDefinedByThisKey,
+        )
+
+        val localizationPath = listOf(ListEngineResult.Index.of(2))
+        val localizedMarker =
+            resolver
+                .stamp(sitePath)
+                .localizeTopLevelSelectionStamps(localizationPath)
+                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
+                .single()
+        val localizedMarkerKey =
+            assertIs<ObjectEngineResult.VariableKey.Stamped>(localizedMarker.key)
+        val localizedMarkerVariable =
+            assertIs<Value.Variable.SelectionStamped>(
+                localizedMarkerKey.variableDefinedByThisKey,
+            )
+
+        assertEquals(
+            fullyStampedMarkerKey.selectionStamp.resolverPath + localizationPath,
+            localizedMarkerKey.selectionStamp.resolverPath,
+        )
+        assertEquals(
+            selectionStampedValue.selectionStamp.resolverPath + localizationPath,
+            localizedMarkerVariable.selectionStamp.resolverPath,
+        )
+        assertEquals(
+            setOf(localizedMarkerKey.selectionStamp),
+            localizedMarkerKey.arguments
+                .stampedVariables()
+                .filterIsInstance<Value.Variable.SelectionStamped>()
+                .mapTo(linkedSetOf()) { variable -> variable.selectionStamp },
         )
     }
 

@@ -12,7 +12,6 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
-import model.OpenArguments
 import model.PathComponent
 import model.Promise
 import model.Schema
@@ -460,10 +459,7 @@ private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variab
 
 // Returns the occurrence stamp carried by an open or already-grounded stamped object key.
 private fun ObjectEngineResult.Key.selectionStamp(): SelectionStamp? =
-    when (this) {
-        is ObjectEngineResult.GroundKey.Stamped -> selectionStamp
-        else -> (arguments as? OpenArguments.Stamped)?.selectionStamp
-    }
+    (this as? ObjectEngineResult.Key.Stamped)?.selectionStamp
 
 // Completes variables defined from this resolver instance's now-ground arguments.
 context(world: Assumptions)

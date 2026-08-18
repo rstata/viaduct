@@ -114,7 +114,7 @@ open class ResolverBenchmark {
                                                     occurrenceStamp =
                                                         (
                                                             event.coordinate.lastOrNull()
-                                                                as? ObjectEngineResult.GroundKey.Stamped
+                                                                as? ObjectEngineResult.GroundKey
                                                         )?.selectionStamp,
                                                     variableArgumentCount =
                                                         variableUse.argumentNames.size,

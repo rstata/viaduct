@@ -163,7 +163,7 @@ private suspend fun orchestrateObject(
                     "Resolver26 closed demand and resolver expansions are misaligned"
                 }
                 val selectionStamps: List<SelectionStamp> =
-                    mergedDemand.keys().mapNotNull { objectKey -> objectKey.selectionStamp() }
+                    mergedDemand.keys().mapNotNull(ObjectEngineResult.Key::selectionStamp)
                 check(selectionStamps.size == selectionStamps.toSet().size) {
                     "Resolver26 closed demand contains duplicate selection stamps"
                 }
@@ -197,7 +197,7 @@ private suspend fun orchestrateObject(
                     }
                     return@forEach
                 }
-                val ownerStamp: SelectionStamp? = objectKey.selectionStamp()
+                val ownerStamp: SelectionStamp? = objectKey.selectionStamp
                 val resolverPath: List<PathComponent> =
                     if (ownerStamp == null) {
                         path + (objectKey as ObjectEngineResult.GroundKey)
@@ -456,10 +456,6 @@ private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variab
         if (marker?.selectionStamp != null) add(marker)
     }
 
-// Returns the occurrence stamp carried by an open or already-grounded stamped object key.
-private fun ObjectEngineResult.Key.selectionStamp(): SelectionStamp? =
-    (this as? ObjectEngineResult.Key.Stamped)?.selectionStamp
-
 // Completes variables defined from this resolver instance's now-ground arguments.
 context(world: Assumptions)
 private fun ResolverExpansion.completeFromArgumentBindings(groundKey: ObjectEngineResult.GroundKey) {
@@ -521,7 +517,7 @@ private suspend fun resolveField(
             suppliedDemand = invocationDemand,
             variableArgumentCount = variableArgumentCount,
             occurrenceStamp =
-                (groundKey as? ObjectEngineResult.GroundKey.Stamped)?.selectionStamp,
+                groundKey.selectionStamp,
             variableSourceSelectionStamps = variableSourceSelectionStamps,
         ),
     )

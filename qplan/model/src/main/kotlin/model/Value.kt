@@ -225,7 +225,7 @@ sealed interface Value {
      *
      * This tuple is ground and inspectable. [OpenArguments] represents a tuple that may contain
      * variables. Equality is structural over its field values. Occurrence identity belongs to
-     * [ObjectEngineResult.GroundKey.Stamped], not the grounded argument value.
+     * [ObjectEngineResult.Key.selectionStamp], not the grounded argument value.
      */
     sealed interface Arguments : OpenArguments {
         val fieldValues: Map<kotlin.String, Input?>

@@ -184,10 +184,11 @@ context(world: Assumptions)
 private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
     if (arguments is Value.Arguments) return this
     val groundedArguments = arguments.fetchBindings(field.arguments)
+    val currentSelectionStamp = selectionStamp
     val groundedKey =
-        if (this is ObjectEngineResult.Key.Stamped) {
-            ObjectEngineResult.Key.Stamped.of(
-                selectionStamp = selectionStamp,
+        if (currentSelectionStamp != null) {
+            ObjectEngineResult.Key.of(
+                selectionStamp = currentSelectionStamp,
                 field = field,
                 arguments = groundedArguments,
             )

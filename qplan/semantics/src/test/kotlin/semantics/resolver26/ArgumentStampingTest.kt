@@ -110,7 +110,7 @@ class ArgumentStampingTest {
         val localizedVariable: Value.Variable =
             localizedDemand.stampedVariables().single()
         val localizedOpenKey =
-            assertIs<ObjectEngineResult.Key.Stamped>(
+            assertIs<ObjectEngineResult.ObjectKey>(
                 localizedDemand.merge(boxType).keys().single(),
             )
         assertEquals(
@@ -130,8 +130,7 @@ class ArgumentStampingTest {
         assertEquals(groundThenLocalize, localizeThenGround)
         assertEquals(
             listOf(resultKey, boxKey),
-            assertIs<ObjectEngineResult.GroundKey.Stamped>(localizeThenGround)
-                .selectionStamp
+            requireNotNull(localizeThenGround.selectionStamp)
                 .resolverPath,
         )
     }
@@ -235,7 +234,7 @@ class ArgumentStampingTest {
                     item.keys.single { groundKey ->
                         groundKey.field.fieldName == "child"
                     }
-                assertIs<ObjectEngineResult.GroundKey.Stamped>(childKey).selectionStamp
+                requireNotNull(childKey.selectionStamp)
             }
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
@@ -469,8 +468,8 @@ class ArgumentStampingTest {
         assertEquals(IntEngineResult.of(5), resolved.getCell(rightKey).getValue().get())
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { groundKey ->
-            val stampedKey = assertIs<ObjectEngineResult.GroundKey.Stamped>(groundKey)
-            assertTrue(stampedKey.selectionStamp.sourceKey !is ObjectEngineResult.Key.Stamped)
+            val selectionStamp = requireNotNull(groundKey.selectionStamp)
+            assertEquals(null, selectionStamp.sourceKey.selectionStamp)
         }
         assertEquals(
             listOf(

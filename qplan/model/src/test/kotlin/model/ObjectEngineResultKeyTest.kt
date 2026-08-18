@@ -93,7 +93,7 @@ class ObjectEngineResultKeyTest {
                 .of(abstractField.arguments, sourceKey.arguments)
                 .stamp(abstractField.arguments, selectionStamp)
         val stampedKey =
-            ObjectEngineResult.Key.Stamped.of(
+            ObjectEngineResult.Key.of(
                 selectionStamp = selectionStamp,
                 field = abstractField,
                 arguments = arguments,
@@ -110,7 +110,7 @@ class ObjectEngineResultKeyTest {
                 .single()
 
         assertFalse(stampedKey is ObjectEngineResult.ObjectKey)
-        assertIs<ObjectEngineResult.ObjectKey.Stamped>(specialized)
+        assertIs<ObjectEngineResult.ObjectKey>(specialized)
         assertEquals(selectionStamp, specialized.selectionStamp)
         assertEquals(
             selectionStamp,

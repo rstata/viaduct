@@ -295,8 +295,8 @@ class ValueVariableTest {
         world.completeBinding(firstVariable, Value.Int.of(9))
         world.completeBinding(secondVariable, Value.Int.of(9))
 
-        fun stampedKey(selectionStamp: SelectionStamp): ObjectEngineResult.ObjectKey.Stamped =
-            ObjectEngineResult.Key.Stamped.of(
+        fun stampedKey(selectionStamp: SelectionStamp): ObjectEngineResult.ObjectKey =
+            ObjectEngineResult.Key.of(
                 selectionStamp = selectionStamp,
                 field = consume,
                 arguments = arguments.stamp(consume.arguments, selectionStamp),
@@ -341,7 +341,8 @@ class ValueVariableTest {
         assertEquals(setOf(firstVariable), firstOpen.stampedVariables())
         assertEquals(firstOpen, equalFirstOpen)
         assertNotEquals(firstOpen, secondOpen)
-        assertIs<ObjectEngineResult.GroundKey.Stamped>(first)
+        assertIs<ObjectEngineResult.GroundKey>(first)
+        requireNotNull(first.selectionStamp)
         assertEquals(firstStamp, first.selectionStamp)
         assertEquals(first, equalFirst)
         assertEquals(first, reapplied)

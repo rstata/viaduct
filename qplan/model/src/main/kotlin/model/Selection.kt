@@ -346,9 +346,10 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
 }
 
 private fun ObjectEngineResult.ObjectKey.ground(arguments: Value.Arguments): ObjectEngineResult.GroundKey {
-    return if (this is ObjectEngineResult.Key.Stamped) {
-        ObjectEngineResult.GroundKey.Stamped.of(
-            selectionStamp = selectionStamp,
+    val currentSelectionStamp = selectionStamp
+    return if (currentSelectionStamp != null) {
+        ObjectEngineResult.GroundKey.of(
+            selectionStamp = currentSelectionStamp,
             field = field,
             arguments = arguments,
         )
@@ -417,8 +418,7 @@ fun SelectionForest.localizeTopLevelSelectionStamps(
 private fun ObjectEngineResult.Key.localizeSelectionStamps(
     path: List<PathComponent>,
 ): ObjectEngineResult.Key {
-    val stampedKey = this as? ObjectEngineResult.Key.Stamped
-    val localizedStamp = stampedKey?.selectionStamp?.extendThrough(path)
+    val localizedStamp = selectionStamp?.extendThrough(path)
     val localizedArguments =
         if (localizedStamp == null) {
             arguments
@@ -429,7 +429,7 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
         if (localizedStamp == null) {
             ObjectEngineResult.Key.of(field = field, arguments = localizedArguments)
         } else {
-            ObjectEngineResult.Key.Stamped.of(
+            ObjectEngineResult.Key.of(
                 selectionStamp = localizedStamp,
                 field = field,
                 arguments = localizedArguments,
@@ -506,9 +506,10 @@ fun SelectionForest.usedVariables(): Set<Value.Variable> {
 fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
     val concreteField = type.fields.getValue(key.field.fieldName)
     val sourceKey = key
-    if (sourceKey is ObjectEngineResult.Key.Stamped) {
-        return ObjectEngineResult.ObjectKey.Stamped.of(
-            selectionStamp = sourceKey.selectionStamp,
+    val selectionStamp = sourceKey.selectionStamp
+    if (selectionStamp != null) {
+        return ObjectEngineResult.ObjectKey.of(
+            selectionStamp = selectionStamp,
             field = concreteField,
             arguments = sourceKey.arguments.retarget(concreteField),
         )

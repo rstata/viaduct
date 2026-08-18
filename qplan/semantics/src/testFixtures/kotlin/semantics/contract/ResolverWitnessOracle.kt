@@ -117,9 +117,10 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     path: List<PathComponent>,
 ): ObjectSelectionForest? {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
+    val selectionStamp = groundKey?.selectionStamp
     val selectionStamped =
-        if (groundKey is ObjectEngineResult.GroundKey.Stamped) {
-            stampFrom(groundKey.selectionStamp)
+        if (selectionStamp != null) {
+            stampFrom(selectionStamp)
         } else {
             stamp(path)
         }

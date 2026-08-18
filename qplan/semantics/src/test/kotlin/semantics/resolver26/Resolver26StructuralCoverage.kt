@@ -35,7 +35,7 @@ internal fun resolver26StructuralSignatures(
     val signatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
     val stampedOccurrences: List<RegisteredResolverOccurrence> =
         occurrences.filter { occurrence ->
-            occurrence.groundKey() is ObjectEngineResult.GroundKey.Stamped
+            occurrence.groundKey().selectionStamp != null
         }
     val activeSourceFields: Set<FieldCoordinate> =
         witness.applications
@@ -50,8 +50,7 @@ internal fun resolver26StructuralSignatures(
     }
     if (
         stampedOccurrences.any { occurrence ->
-            val stampedGroundKey = occurrence.groundKey() as ObjectEngineResult.GroundKey.Stamped
-            stampedGroundKey.selectionStamp.resolverPath.any { component ->
+            requireNotNull(occurrence.groundKey().selectionStamp).resolverPath.any { component ->
                 component is ListEngineResult.Index
             }
         }
@@ -70,7 +69,7 @@ internal fun resolver26StructuralSignatures(
             .any { equalVisibleOccurrences ->
                 equalVisibleOccurrences
                     .map { occurrence ->
-                        (occurrence.groundKey() as ObjectEngineResult.GroundKey.Stamped).selectionStamp
+                        requireNotNull(occurrence.groundKey().selectionStamp)
                     }.toSet()
                     .size > 1
             }

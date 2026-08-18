@@ -76,14 +76,14 @@ class StampedObjectPathDefinitionTest {
         val otherFullyStampedFragment = resolver.stamp(secondPath)
 
         compatibilityFragment.forEach { selection ->
-            assertFalse(selection.key is ObjectEngineResult.Key.Stamped)
+            assertEquals(null, selection.key.selectionStamp)
         }
         fullyStampedFragment.forEach { selection ->
             if (selection.key.stampedVariables().isEmpty()) {
                 assertIs<Value.Arguments>(selection.key.arguments)
-                assertFalse(selection.key is ObjectEngineResult.Key.Stamped)
+                assertEquals(null, selection.key.selectionStamp)
             } else {
-                val stampedKey = assertIs<ObjectEngineResult.Key.Stamped>(selection.key)
+                val stampedKey = selection.key
                 assertEquals(
                     setOf(stampedKey.selectionStamp),
                     selection.key
@@ -204,7 +204,8 @@ class StampedObjectPathDefinitionTest {
                     stampedDefinition.variable.variableName == "value"
                 }.variable
         val fullyStampedMarkerKey =
-            assertIs<ObjectEngineResult.VariableKey.Stamped>(fullyStampedMarker.key)
+            assertIs<ObjectEngineResult.VariableKey>(fullyStampedMarker.key)
+        val fullyStampedMarkerStamp = requireNotNull(fullyStampedMarkerKey.selectionStamp)
         assertEquals(
             selectionStampedValue,
             assertIs<ObjectEngineResult.VariableKey>(
@@ -220,19 +221,20 @@ class StampedObjectPathDefinitionTest {
                 .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
                 .single()
         val localizedMarkerKey =
-            assertIs<ObjectEngineResult.VariableKey.Stamped>(localizedMarker.key)
+            assertIs<ObjectEngineResult.VariableKey>(localizedMarker.key)
+        val localizedMarkerStamp = requireNotNull(localizedMarkerKey.selectionStamp)
         val localizedMarkerVariable = localizedMarkerKey.variableDefinedByThisKey
 
         assertEquals(
-            fullyStampedMarkerKey.selectionStamp.resolverPath + localizationPath,
-            localizedMarkerKey.selectionStamp.resolverPath,
+            fullyStampedMarkerStamp.resolverPath + localizationPath,
+            localizedMarkerStamp.resolverPath,
         )
         assertEquals(
             requireNotNull(selectionStampedValue.selectionStamp).resolverPath + localizationPath,
             requireNotNull(localizedMarkerVariable.selectionStamp).resolverPath,
         )
         assertEquals(
-            setOf(localizedMarkerKey.selectionStamp),
+            setOf(localizedMarkerStamp),
             localizedMarkerKey.arguments
                 .stampedVariables()
                 .mapNotNullTo(linkedSetOf()) { variable -> variable.selectionStamp },

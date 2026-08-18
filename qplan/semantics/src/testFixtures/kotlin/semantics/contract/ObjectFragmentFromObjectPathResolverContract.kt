@@ -6,7 +6,6 @@ import model.ErrorEngineResult
 import model.IntEngineResult
 import model.Value
 import model.VariableBinding
-import model.materializedFieldKey
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,7 +91,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                         ) {
                             val consumed =
                                 input.fieldValues.entries
-                                    .single { (key, _) -> key.startsWith("consume(") }
+                                    .single { (key, _) -> key == "consume" }
                             consumedKey = consumed.key
                             consumedValue = consumed.value
                             observedResultInput = true
@@ -124,21 +123,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 },
                 world.getBinding(boundVariable),
             )
-            val expectedArguments =
-                if (isError) {
-                    model.OpenArguments.Ground.Error
-                } else {
-                    Value.Arguments.of(
-                        world.schema.objectField("Query", "consume"),
-                        mapOf("value" to provided),
-                    )
-                }
-            assertEquals(
-                ObjectEngineResult.GroundKey
-                    .of(world.schema.objectField("Query", "consume"), expectedArguments)
-                    .materializedFieldKey(),
-                consumedKey,
-            )
+            assertEquals("consume", consumedKey)
             assertEquals(true, observedResultInput)
             assertEquals(if (isError) Value.Error else null, consumedValue)
         }

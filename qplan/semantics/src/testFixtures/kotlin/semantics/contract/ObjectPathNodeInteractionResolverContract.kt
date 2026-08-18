@@ -6,6 +6,7 @@ import kotlin.test.Test
 interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
     fun `retains potential demand through a passive node bridge`() {
+        var triggerInputKeys: Set<String>? = null
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -27,7 +28,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                       profile: Profile!
                       trigger(value: Int!): Int!
                         @resolver(
-                          of: "profile { details { related { __typename } } }"
+                          of: "account: profile { details { related { __typename } } }"
                           result: 7
                         )
                     }
@@ -51,6 +52,14 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                       related: Profile!
                     }
                     """.trimIndent(),
+                applicationObserver = { field, input, _, _ ->
+                    if (
+                        field.containingType.typeName == "Item" &&
+                        field.fieldName == "trigger"
+                    ) {
+                        triggerInputKeys = input.fieldValues.keys
+                    }
+                },
             )
         val world = testWorld.assumptions
 
@@ -72,5 +81,6 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
             world.schema.objectField("Query", "driver_V_A_node"),
             1,
         )
+        kotlin.test.assertEquals(setOf("account"), triggerInputKeys)
     }
 }

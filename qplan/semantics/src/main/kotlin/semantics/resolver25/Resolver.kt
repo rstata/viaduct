@@ -17,6 +17,7 @@ import model.EngineInputData
 import model.EngineInputListData
 import model.ErrorEngineResult
 import model.ListEngineResult
+import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
@@ -33,6 +34,7 @@ import model.containsErrorValue
 import model.fetchBindings
 import model.flatMapToSelectionForest
 import model.groundKey
+import model.materializeSelectionForestOf
 import model.merge
 import model.mergeWithVariables
 import model.objectKey
@@ -396,14 +398,16 @@ private class ObjectResultOrchestrator(
             }
 
             groundedKey.field in world.resolverRegistry -> {
-                val resolverInputs = prepareResolverInstance(groundedKey)
+                val preparedResolver = prepareResolverInstance(groundedKey)
                 runtime.instrumentation.keyActivationReady(coordinate)
                 keyState.fringeInstalled.complete(Unit)
                 runtime.scope.launch {
-                    resolverInputs.awaitAll()
+                    preparedResolver.inputInstallations.awaitAll()
                     resolveKey(
                         keyState = keyState,
                         cell = target.getCell(groundedKey),
+                        inputMaterializeSelections =
+                            preparedResolver.inputMaterializeSelections,
                     )
                 }
             }
@@ -484,13 +488,17 @@ private class ObjectResultOrchestrator(
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     private fun prepareResolverInstance(
         groundedKey: ObjectEngineResult.GroundKey,
-    ): List<Deferred<Unit>> {
+    ): PreparedResolverInstance {
         if (groundedKey.arguments.argumentsContainErrorValue()) {
-            return emptyList()
+            return PreparedResolverInstance(
+                inputMaterializeSelections = materializeSelectionForestOf(),
+                inputInstallations = emptyList(),
+            )
         }
 
         val resolver = world.resolverRegistry.resolver(groundedKey.field)
         val coordinate = path + groundedKey
+        val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
         listOf(groundedKey).bindFromArguments(
             path = path,
             onDeclared = { variable, definition ->
@@ -525,7 +533,7 @@ private class ObjectResultOrchestrator(
         }
         val resolverInputs =
             addDemand(
-                resolver.stampVars(coordinate),
+                objectFragment.constructionSelections,
                 consumerCoordinate = coordinate,
             )
         definitions.forEach { definition ->
@@ -542,7 +550,10 @@ private class ObjectResultOrchestrator(
                 )
             }
         }
-        return resolverInputs
+        return PreparedResolverInstance(
+            inputMaterializeSelections = objectFragment.materializeSelections,
+            inputInstallations = resolverInputs,
+        )
     }
 
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
@@ -701,6 +712,7 @@ private class ObjectResultOrchestrator(
     private suspend fun resolveKey(
         keyState: KeyState,
         cell: EngineResult.Cell,
+        inputMaterializeSelections: MaterializeSelectionForest? = null,
     ) {
         val selection = keyState.sealDemandForLaunch()
         val groundedKey = keyState.groundedKey
@@ -725,7 +737,11 @@ private class ObjectResultOrchestrator(
                         val resolver = world.resolverRegistry.resolver(groundedKey.field)
                         val input: Value.Object =
                             target.materialize(
-                                selections = resolver.objectFragmentAt(coordinate),
+                                selections =
+                                    checkNotNull(inputMaterializeSelections) {
+                                        "Resolver25 did not prepare materialize selections for " +
+                                            coordinate
+                                    },
                                 reader = coordinate,
                             )
                         runtime.instrumentation.resolverStarted(coordinate)
@@ -934,6 +950,11 @@ private class ObjectResultOrchestrator(
     private class AvailableKeyOutput(
         val source: Value.Output?,
         val result: EngineResult?,
+    )
+
+    private class PreparedResolverInstance(
+        val inputMaterializeSelections: MaterializeSelectionForest,
+        val inputInstallations: List<Deferred<Unit>>,
     )
 }
 

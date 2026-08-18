@@ -5,17 +5,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
 import model.ListEngineResult
+import model.MaterializeSelection
 import model.ObjectEngineResult
 import model.MissingFieldException
 import model.PathComponent
 import model.Schema
-import model.Selection
 import model.StringEngineResult
 import model.Value
 import model.fragmentFrom
-import model.instantiateBindings
-import model.merge
-import model.selectionForestOf
+import model.materializeSelectionForestOf
 import model.testing.TestWorld
 import model.testing.occurrenceStampOf
 import kotlin.test.Test
@@ -42,13 +40,9 @@ class MaterializeTest {
                     emptyMap(),
                 )
             val selections =
-                context(world) {
-                    world
-                        .fragmentFrom("fragment ignored on Query { value }")
-                        .subselections
-                        .merge(world.schema.query)
-                        .instantiateBindings()
-                }
+                world
+                    .fragmentFrom("fragment ignored on Query { value }")
+                    .materializeSelections
             val result =
                 ObjectEngineResult.of(
                     type = world.schema.query,
@@ -84,13 +78,9 @@ class MaterializeTest {
                     """.trimIndent(),
                 ).assumptions
         val selections =
-            context(world) {
-                world
-                    .fragmentFrom("fragment ignored on Query { value }")
-                    .subselections
-                    .merge(world.schema.query)
-                    .instantiateBindings()
-            }
+            world
+                .fragmentFrom("fragment ignored on Query { value }")
+                .materializeSelections
         val result = ObjectEngineResult.of(world.schema.query)
 
         assertFailsWith<MissingFieldException> {
@@ -136,13 +126,9 @@ class MaterializeTest {
                 values = mapOf(childKey to childResult),
             )
         val selections =
-            context(world) {
-                world
-                    .fragmentFrom("fragment ignored on Query { child { value } }")
-                    .subselections
-                    .merge(world.schema.query)
-                    .instantiateBindings()
-            }
+            world
+                .fragmentFrom("fragment ignored on Query { child { value } }")
+                .materializeSelections
         val cycleCheckingSupport =
             RuntimeSupport.cycleChecking { completedSelections ->
                 completedSelections
@@ -168,7 +154,50 @@ class MaterializeTest {
     }
 
     @Test
-    fun `occurrence-stamped stored keys union under one visible string key`() =
+    fun `distinct response aliases can read one exact stored key`() =
+        runBlocking {
+            val world =
+                TestWorld
+                    .fromSDL(
+                        """
+                        type Query { value: String! }
+                        """.trimIndent(),
+                    ).assumptions
+            val field = world.schema.objectField("Query", "value")
+            val storedKey = ObjectEngineResult.GroundKey.of(field, emptyMap())
+            val selections =
+                materializeSelectionForestOf(
+                    MaterializeSelection.of(
+                        responseKey = "first",
+                        key = storedKey,
+                        possibleTypes = setOf(world.schema.query),
+                        subselections = materializeSelectionForestOf(),
+                    ),
+                    MaterializeSelection.of(
+                        responseKey = "second",
+                        key = storedKey,
+                        possibleTypes = setOf(world.schema.query),
+                        subselections = materializeSelectionForestOf(),
+                    ),
+                )
+            val result =
+                ObjectEngineResult.of(
+                    type = world.schema.query,
+                    values = mapOf(storedKey to StringEngineResult.of("same")),
+                )
+
+            val materialized =
+                context(world, runtimeSupport) {
+                    result.materialize(selections, emptyList())
+                }
+
+            assertEquals(setOf("first", "second"), materialized.fieldValues.keys)
+            assertEquals(Value.String.of("same"), materialized.fieldValues.getValue("first"))
+            assertEquals(Value.String.of("same"), materialized.fieldValues.getValue("second"))
+        }
+
+    @Test
+    fun `distinct response aliases read their exact occurrence keys`() =
         runBlocking {
             val world =
                 TestWorld
@@ -192,17 +221,27 @@ class MaterializeTest {
                     arguments,
                 )
             val selections =
-                selectionForestOf(
-                    Selection.of(first, setOf(world.schema.query), selectionForestOf()),
-                    Selection.of(second, setOf(world.schema.query), selectionForestOf()),
-                ).merge(world.schema.query)
+                materializeSelectionForestOf(
+                    MaterializeSelection.of(
+                        responseKey = "first",
+                        key = first,
+                        possibleTypes = setOf(world.schema.query),
+                        subselections = materializeSelectionForestOf(),
+                    ),
+                    MaterializeSelection.of(
+                        responseKey = "second",
+                        key = second,
+                        possibleTypes = setOf(world.schema.query),
+                        subselections = materializeSelectionForestOf(),
+                    ),
+                )
             val result =
                 ObjectEngineResult.of(
                     type = world.schema.query,
                     values =
                         mapOf(
-                            first to StringEngineResult.of("same"),
-                            second to StringEngineResult.of("same"),
+                            first to StringEngineResult.of("first-value"),
+                            second to StringEngineResult.of("second-value"),
                         ),
                 )
 
@@ -211,7 +250,14 @@ class MaterializeTest {
                     result.materialize(selections, emptyList())
                 }
 
-            assertEquals(setOf("value"), materialized.fieldValues.keys)
-            assertEquals(Value.String.of("same"), materialized.fieldValues.getValue("value"))
+            assertEquals(setOf("first", "second"), materialized.fieldValues.keys)
+            assertEquals(
+                Value.String.of("first-value"),
+                materialized.fieldValues.getValue("first"),
+            )
+            assertEquals(
+                Value.String.of("second-value"),
+                materialized.fieldValues.getValue("second"),
+            )
         }
 }

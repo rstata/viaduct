@@ -205,11 +205,6 @@ class DemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val aKey =
-                        ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Query", "a"),
-                            mapOf("name" to "same"),
-                        )
                     val oneKey =
                         ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "one"),
@@ -223,9 +218,12 @@ class DemandSealingTest {
                     mapOf(
                         schema.objectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val payload = input.fieldValues.getValue(aKey) as Value.Object
-                                val one = payload.fieldValues.getValue(oneKey) as Value.Int
-                                val two = payload.fieldValues.getValue(twoKey) as Value.Int
+                                val exact =
+                                    input.fieldValues.getValue("exact") as Value.Object
+                                val symbolic =
+                                    input.fieldValues.getValue("symbolic") as Value.Object
+                                val one = exact.fieldValues.getValue(oneKey) as Value.Int
+                                val two = symbolic.fieldValues.getValue(twoKey) as Value.Int
                                 Value.Int.of(one.intValue + two.intValue)
                             },
                         schema.objectField("Query", "a") to

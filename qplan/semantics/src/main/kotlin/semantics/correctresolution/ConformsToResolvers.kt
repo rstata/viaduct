@@ -6,7 +6,6 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
 import model.SimpleEngineResult
@@ -16,6 +15,7 @@ import model.applicableGroundSelections
 import model.toValue
 import model.usedVariables
 import model.registry.FieldResolver
+import model.registry.ResolverObjectFragment
 import semantics.RuntimeSupport
 import semantics.materialize
 
@@ -62,7 +62,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                 val input =
                     runBlocking {
                         materialize(
-                            selections = objectFragment,
+                            selections = objectFragment.materializeSelections,
                             reader = coordinate,
                         )
                     }
@@ -83,29 +83,28 @@ context(world: Assumptions)
 private fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
-): ObjectSelectionForest? {
+): ResolverObjectFragment? {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
     val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
-    val selectionStamped =
+    val candidates =
         if (selectionStamp != null) {
-            stampFrom(selectionStamp)
+            listOf(instantiateObjectFragment(selectionStamp))
         } else {
-            stamp(path)
+            listOf(
+                instantiateObjectFragment(Stamp.Occurrence.of(resolverPath = path)),
+                instantiateObjectFragmentAt(path),
+            )
         }
-    if (
-        selectionStamped.usedVariables().all { variable ->
+    return candidates.firstOrNull { objectFragment ->
+        val constructionSelections = objectFragment.constructionSelections
+        constructionSelections.usedVariables().all { variable ->
             variable.isStamped && world.isBound(variable)
-        }
-    ) {
-        val fullyStamped = selectionStamped.applicableGroundSelections(field.containingType)
-        return fullyStamped.takeIf { demand ->
-            result.conformsToSelectionsAt(demand, path.dropLast(1))
-        }
-    }
-
-    val variableStamped = objectFragmentAt(path)
-    return variableStamped.takeIf { demand ->
-        result.conformsToSelectionsAt(demand, path.dropLast(1))
+        } &&
+            result.conformsToSelectionsAt(
+                selections =
+                    constructionSelections.applicableGroundSelections(field.containingType),
+                path = path.dropLast(1),
+            )
     }
 }
 

@@ -116,14 +116,13 @@ internal fun Value.Object.resolveKey(
             val fieldValue =
                 if (key.field in world.resolverRegistry) {
                     val resolver = world.resolverRegistry.resolver(key.field)
-                    val objectFragment =
-                        resolver
-                            .objectFragmentAt(path + key)
+                    val coordinate = path + key
+                    val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
                     val input =
                         runBlocking {
                             resolved.materialize(
-                                selections = objectFragment,
-                                reader = path + key,
+                                selections = objectFragment.materializeSelections,
+                                reader = coordinate,
                             )
                         }
                     if (world.selectiveResolvers) {

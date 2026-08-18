@@ -285,7 +285,6 @@ class ArgumentStampingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val frank = schema.objectField("Query", "frank")
-                    val frankKey = ObjectEngineResult.GroundKey.of(frank, mapOf("arg" to "hi"))
                     val oneKey =
                         ObjectEngineResult.GroundKey.of(
                             schema.objectField("Payload", "one"),
@@ -299,9 +298,12 @@ class ArgumentStampingTest {
                     mapOf(
                         schema.objectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                val payload = input.fieldValues.getValue(frankKey) as Value.Object
-                                val one = payload.fieldValues.getValue(oneKey) as Value.Int
-                                val two = payload.fieldValues.getValue(twoKey) as Value.Int
+                                val ground =
+                                    input.fieldValues.getValue("ground") as Value.Object
+                                val seedValue =
+                                    input.fieldValues.getValue("seedValue") as Value.Object
+                                val one = ground.fieldValues.getValue(oneKey) as Value.Int
+                                val two = seedValue.fieldValues.getValue(twoKey) as Value.Int
                                 Value.Int.of(one.intValue + two.intValue)
                             },
                         frank to

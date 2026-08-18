@@ -4,12 +4,12 @@ import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
-import model.ObjectSelectionForest
 import model.PathComponent
 import model.Stamp
 import model.Value
 import model.applicableGroundSelections
 import model.registry.FieldResolver
+import model.registry.ResolverObjectFragment
 import model.usedVariables
 import semantics.RuntimeSupport
 import semantics.arbitrary.ResolverApplicationIdentity
@@ -50,7 +50,7 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
                         runBlocking {
                             cell.containingObject
                                 .materialize(
-                                    selections = fragment,
+                                    selections = fragment.materializeSelections,
                                     reader = cell.occurrencePath,
                                 ).resolutionFingerprint()
                         },
@@ -86,7 +86,7 @@ fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
                                 runBlocking {
                                     cell.containingObject
                                         .materialize(
-                                            selections = fragment,
+                                            selections = fragment.materializeSelections,
                                             reader = cell.occurrencePath,
                                         ).resolutionFingerprint()
                                 },
@@ -116,28 +116,27 @@ context(world: Assumptions)
 private fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
-): ObjectSelectionForest? {
+): ResolverObjectFragment? {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
     val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
-    val selectionStamped =
+    val candidates =
         if (selectionStamp != null) {
-            stampFrom(selectionStamp)
+            listOf(instantiateObjectFragment(selectionStamp))
         } else {
-            stamp(path)
+            listOf(
+                instantiateObjectFragment(Stamp.Occurrence.of(resolverPath = path)),
+                instantiateObjectFragmentAt(path),
+            )
         }
-    if (
-        selectionStamped.usedVariables().all { variable ->
+    return candidates.firstOrNull { objectFragment ->
+        val constructionSelections = objectFragment.constructionSelections
+        constructionSelections.usedVariables().all { variable ->
             variable.isStamped && world.isBound(variable)
-        }
-    ) {
-        val fullyStamped = selectionStamped.applicableGroundSelections(field.containingType)
-        return fullyStamped.takeIf { demand ->
-            result.conformsToSelectionsAt(demand, path.dropLast(1))
-        }
-    }
-
-    val variableStamped = objectFragmentAt(path)
-    return variableStamped.takeIf { demand ->
-        result.conformsToSelectionsAt(demand, path.dropLast(1))
+        } &&
+            result.conformsToSelectionsAt(
+                selections =
+                    constructionSelections.applicableGroundSelections(field.containingType),
+                path = path.dropLast(1),
+            )
     }
 }

@@ -138,7 +138,7 @@ class ValueVariableTest {
         assertEquals(Value.Int.of(1), nested.values[1])
         assertEquals(Value.Int.of(9), values.values.single())
         assertEquals(setOf(template), arguments.variableTemplates())
-        assertFalse(stamped is OpenArguments.Stamped)
+        assertEquals(setOf(stampedVariable), stamped.stampedVariables())
     }
 
     @Test
@@ -267,11 +267,18 @@ class ValueVariableTest {
         world.completeBinding(firstVariable, Value.Int.of(9))
         world.completeBinding(secondVariable, Value.Int.of(9))
 
-        fun ground(arguments: OpenArguments): ObjectEngineResult.GroundKey =
+        fun stampedKey(selectionStamp: SelectionStamp): ObjectEngineResult.ObjectKey.Stamped =
+            ObjectEngineResult.Key.Stamped.of(
+                selectionStamp = selectionStamp,
+                field = consume,
+                arguments = arguments.stamp(consume.arguments, selectionStamp),
+            )
+
+        fun ground(key: ObjectEngineResult.ObjectKey): ObjectEngineResult.GroundKey =
             context(world) {
                 selectionForestOf(
                     Selection.of(
-                        key = ObjectEngineResult.Key.of(consume, arguments),
+                        key = key,
                         possibleTypes = setOf(world.schema.query),
                         subselections = selectionForestOf(),
                     ),
@@ -281,9 +288,12 @@ class ValueVariableTest {
                     .single()
             }
 
-        val first = ground(arguments.stamp(consume.arguments, firstStamp))
-        val equalFirst = ground(arguments.stamp(consume.arguments, firstStamp))
-        val second = ground(arguments.stamp(consume.arguments, secondStamp))
+        val firstOpen = stampedKey(firstStamp)
+        val equalFirstOpen = stampedKey(firstStamp)
+        val secondOpen = stampedKey(secondStamp)
+        val first = ground(firstOpen)
+        val equalFirst = ground(equalFirstOpen)
+        val second = ground(secondOpen)
         val unstamped = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 9))
         val reapplied =
             context(world) {
@@ -298,7 +308,13 @@ class ValueVariableTest {
                     .single()
             }
 
+        assertEquals(firstStamp, firstOpen.selectionStamp)
+        assertEquals(firstVariable.selectionStamp, firstOpen.selectionStamp)
+        assertEquals(setOf(firstVariable), firstOpen.stampedVariables())
+        assertEquals(firstOpen, equalFirstOpen)
+        assertNotEquals(firstOpen, secondOpen)
         assertIs<ObjectEngineResult.GroundKey.Stamped>(first)
+        assertEquals(firstStamp, first.selectionStamp)
         assertEquals(first, equalFirst)
         assertEquals(first, reapplied)
         assertNotEquals(first, second)

@@ -56,6 +56,71 @@ class ObjectEngineResultKeyTest {
     }
 
     @Test
+    fun `stamped abstract key specializes without losing its occurrence identity`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                interface Item {
+                  computed(factor: Int): Int
+                }
+
+                type ConcreteItem implements Item {
+                  computed(factor: Int): Int
+                }
+
+                type Query {
+                  source: Int
+                  item: Item
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.objectField("Query", "source")
+        val abstractField = schema.field("Item", "computed")
+        val concreteType = schema.type("ConcreteItem") as Schema.ObjectType
+        val variable = Value.Variable.of(source, "factor")
+        val sourceKey =
+            ObjectEngineResult.Key.of(
+                abstractField,
+                OpenArguments.of(abstractField, mapOf("factor" to variable)),
+            )
+        val selectionStamp =
+            SelectionStamp(
+                resolverPath = listOf(ListEngineResult.Index.of(1)),
+                occurrenceLineage = listOf(SelectionOccurrenceId(sourceKey)),
+            )
+        val arguments =
+            OpenArguments.Template
+                .of(abstractField.arguments, sourceKey.arguments)
+                .stamp(abstractField.arguments, selectionStamp)
+        val stampedKey =
+            ObjectEngineResult.Key.Stamped.of(
+                selectionStamp = selectionStamp,
+                field = abstractField,
+                arguments = arguments,
+            )
+        val specialized =
+            selectionForestOf(
+                Selection.of(
+                    key = stampedKey,
+                    possibleTypes = setOf(concreteType),
+                    subselections = selectionForestOf(),
+                ),
+            ).merge(concreteType)
+                .keys()
+                .single()
+
+        assertFalse(stampedKey is ObjectEngineResult.ObjectKey)
+        assertIs<ObjectEngineResult.ObjectKey.Stamped>(specialized)
+        assertEquals(selectionStamp, specialized.selectionStamp)
+        assertEquals(
+            selectionStamp,
+            assertIs<Value.Variable.SelectionStamped>(
+                specialized.arguments.usedVariables().single(),
+            ).selectionStamp,
+        )
+    }
+
+    @Test
     fun `list index rejects negative positions`() {
         ListEngineResult.Index.of(2)
         assertFailsWith<IllegalArgumentException> { ListEngineResult.Index.of(-1) }

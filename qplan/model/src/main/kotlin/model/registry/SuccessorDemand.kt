@@ -183,11 +183,20 @@ private data class SelectionIdentity(
 context(world: Assumptions)
 private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
     if (arguments is Value.Arguments) return this
+    val groundedArguments = arguments.fetchBindings(field.arguments)
     val groundedKey =
-        ObjectEngineResult.Key.of(
-            field = field,
-            arguments = arguments.fetchBindings(field.arguments),
-        )
+        if (this is ObjectEngineResult.Key.Stamped) {
+            ObjectEngineResult.Key.Stamped.of(
+                selectionStamp = selectionStamp,
+                field = field,
+                arguments = groundedArguments,
+            )
+        } else {
+            ObjectEngineResult.Key.of(
+                field = field,
+                arguments = groundedArguments,
+            )
+        }
     val marker =
         (this as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
     return if (marker == null) {

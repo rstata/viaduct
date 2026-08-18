@@ -346,25 +346,17 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
 }
 
 private fun ObjectEngineResult.ObjectKey.ground(arguments: Value.Arguments): ObjectEngineResult.GroundKey {
-    val openArguments = this.arguments
-    return when {
-        this is ObjectEngineResult.GroundKey.Stamped ->
-            ObjectEngineResult.GroundKey.Stamped.of(
-                selectionStamp = selectionStamp,
-                field = field,
-                arguments = arguments,
-            )
-        openArguments is OpenArguments.Stamped ->
-            ObjectEngineResult.GroundKey.Stamped.of(
-                selectionStamp = openArguments.selectionStamp,
-                field = field,
-                arguments = arguments,
-            )
-        else ->
-            ObjectEngineResult.GroundKey.of(
-                field = field,
-                arguments = arguments,
-            )
+    return if (this is ObjectEngineResult.Key.Stamped) {
+        ObjectEngineResult.GroundKey.Stamped.of(
+            selectionStamp = selectionStamp,
+            field = field,
+            arguments = arguments,
+        )
+    } else {
+        ObjectEngineResult.GroundKey.of(
+            field = field,
+            arguments = arguments,
+        )
     }
 }
 
@@ -425,26 +417,23 @@ fun SelectionForest.localizeTopLevelSelectionStamps(
 private fun ObjectEngineResult.Key.localizeSelectionStamps(
     path: List<PathComponent>,
 ): ObjectEngineResult.Key {
-    val stampedArguments = arguments as? OpenArguments.Stamped
+    val stampedKey = this as? ObjectEngineResult.Key.Stamped
+    val localizedStamp = stampedKey?.selectionStamp?.extendThrough(path)
     val localizedArguments =
-        stampedArguments?.restamp(
-            field.arguments,
-            stampedArguments.selectionStamp.extendThrough(path),
-        )
+        if (localizedStamp == null) {
+            arguments
+        } else {
+            arguments.restampSelectionVariables(field.arguments, localizedStamp)
+        }
     val baseKey =
-        when (this) {
-            is ObjectEngineResult.GroundKey.Stamped ->
-                ObjectEngineResult.GroundKey.Stamped.of(
-                    selectionStamp = selectionStamp.extendThrough(path),
-                    field = field,
-                    arguments = arguments,
-                )
-
-            else ->
-                ObjectEngineResult.Key.of(
-                    field = field,
-                    arguments = localizedArguments ?: arguments,
-                )
+        if (localizedStamp == null) {
+            ObjectEngineResult.Key.of(field = field, arguments = localizedArguments)
+        } else {
+            ObjectEngineResult.Key.Stamped.of(
+                selectionStamp = localizedStamp,
+                field = field,
+                arguments = localizedArguments,
+            )
         }
     val marker = (this as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
     return if (marker == null) {
@@ -519,13 +508,11 @@ fun SelectionForest.usedVariables(): Set<Value.Variable> {
 fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
     val concreteField = type.fields.getValue(key.field.fieldName)
     val sourceKey = key
-    if (sourceKey is ObjectEngineResult.GroundKey.Stamped) {
-        val groundedArguments = sourceKey.arguments.retarget(concreteField)
-        check(groundedArguments is Value.Arguments)
-        return ObjectEngineResult.GroundKey.Stamped.of(
+    if (sourceKey is ObjectEngineResult.Key.Stamped) {
+        return ObjectEngineResult.ObjectKey.Stamped.of(
             selectionStamp = sourceKey.selectionStamp,
             field = concreteField,
-            arguments = groundedArguments,
+            arguments = sourceKey.arguments.retarget(concreteField),
         )
     }
     return ObjectEngineResult.ObjectKey.of(

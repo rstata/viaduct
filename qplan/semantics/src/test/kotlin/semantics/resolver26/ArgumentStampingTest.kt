@@ -5,7 +5,6 @@ import model.EngineResult
 import model.IntEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.OpenArguments
 import model.Schema
 import model.SelectionForest
 import model.TypeExpr
@@ -110,6 +109,14 @@ class ArgumentStampingTest {
             childDemand.localizeTopLevelSelectionStamps(listOf(boxKey))
         val localizedVariable: Value.Variable.Stamped =
             localizedDemand.stampedVariables().single()
+        val localizedOpenKey =
+            assertIs<ObjectEngineResult.Key.Stamped>(
+                localizedDemand.merge(boxType).keys().single(),
+            )
+        assertEquals(
+            localizedOpenKey.selectionStamp,
+            assertIs<Value.Variable.SelectionStamped>(localizedVariable).selectionStamp,
+        )
         world.bindVariable(localizedVariable, Value.Int.of(7))
         val localizeThenGround: ObjectEngineResult.GroundKey =
             context(world) {
@@ -463,10 +470,7 @@ class ArgumentStampingTest {
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { groundKey ->
             val stampedKey = assertIs<ObjectEngineResult.GroundKey.Stamped>(groundKey)
-            assertTrue(
-                stampedKey.selectionStamp.sourceKey.arguments !is
-                    OpenArguments.Stamped,
-            )
+            assertTrue(stampedKey.selectionStamp.sourceKey !is ObjectEngineResult.Key.Stamped)
         }
         assertEquals(
             listOf(

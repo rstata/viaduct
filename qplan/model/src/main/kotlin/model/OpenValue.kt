@@ -35,8 +35,7 @@ sealed interface OpenArguments {
      * An argument tuple in a resolver-registry template.
      *
      * Every variable recursively contained by a template is a [Value.Variable.Template].
-     * Stamping creates one occurrence-specific tuple and stamps every contained variable with the
-     * same [SelectionStamp].
+     * Stamping replaces every contained variable with one carrying the same [SelectionStamp].
      */
     sealed interface Template : OpenArguments {
         /**
@@ -49,7 +48,7 @@ sealed interface OpenArguments {
         fun stamp(
             expectedType: Schema.FieldArguments,
             selectionStamp: SelectionStamp,
-        ): Stamped
+        ): OpenArguments
 
         companion object {
             /**
@@ -61,9 +60,6 @@ sealed interface OpenArguments {
                 expectedType: Schema.FieldArguments,
                 arguments: OpenArguments,
             ): Template {
-                require(arguments !is Stamped) {
-                    "A stamped argument tuple cannot become a registry template"
-                }
                 require(arguments.usedVariables().all { it is Value.Variable.Template }) {
                     "A registry argument template cannot contain stamped variables"
                 }
@@ -78,17 +74,6 @@ sealed interface OpenArguments {
                 return template.validatedAgainst(expectedType)
             }
         }
-    }
-
-    /**
-     * An occurrence-specific argument tuple.
-     *
-     * [selectionStamp] participates in structural equality, and every recursively contained
-     * variable carries that same stamp. Grounding preserves the selection stamp through
-     * [ObjectEngineResult.GroundKey.Stamped].
-     */
-    sealed interface Stamped : OpenArguments {
-        val selectionStamp: SelectionStamp
     }
 
     companion object {
@@ -116,20 +101,19 @@ sealed interface OpenArguments {
 }
 
 /**
- * Returns this occurrence-specific tuple checked against [expectedType] under [selectionStamp],
- * replacing the stamp on every recursively contained selection-stamped variable.
+ * Returns this tuple checked against [expectedType], replacing the stamp on every recursively
+ * contained selection-stamped variable.
  */
-fun OpenArguments.Stamped.restamp(
+internal fun OpenArguments.restampSelectionVariables(
     expectedType: Schema.FieldArguments,
     selectionStamp: SelectionStamp,
-): OpenArguments.Stamped =
-    stampedArgumentsOf(
+): OpenArguments =
+    openArgumentsOf(
         expectedType = expectedType,
         fields =
             fieldExpressions().mapValues { (_, value) ->
                 value.restampVariables(selectionStamp)
             },
-        selectionStamp = selectionStamp,
     )
 
 private data class OpenListValueImpl(
@@ -150,21 +134,15 @@ private data class OpenArgumentsTemplateImpl(
     override fun stamp(
         expectedType: Schema.FieldArguments,
         selectionStamp: SelectionStamp,
-    ): OpenArguments.Stamped =
-        stampedArgumentsOf(
+    ): OpenArguments =
+        openArgumentsOf(
             expectedType = expectedType,
             fields =
                 fieldValues.mapValues { (_, value) ->
                     value.stampVariables(selectionStamp)
                 },
-            selectionStamp = selectionStamp,
         )
 }
-
-private data class OpenArgumentsStampedImpl(
-    val fieldValues: Map<String, OpenValue?>,
-    override val selectionStamp: SelectionStamp,
-) : OpenArguments.Stamped
 
 private fun coerceOpenInputLikeFields(
     type: Schema.InputObjectLike,
@@ -327,7 +305,6 @@ internal fun OpenArguments.fieldExpressions(): Map<String, OpenValue?> =
         is Value.Arguments -> fieldValues
         is OpenArgumentsImpl -> fieldValues
         is OpenArgumentsTemplateImpl -> fieldValues
-        is OpenArgumentsStampedImpl -> fieldValues
     }
 
 private fun <T : OpenArguments> T.validatedAgainst(
@@ -354,15 +331,18 @@ internal fun OpenArguments.stampVars(
     }
 }
 
-private fun stampedArgumentsOf(
+private fun openArgumentsOf(
     expectedType: Schema.FieldArguments,
     fields: Map<String, OpenValue?>,
-    selectionStamp: SelectionStamp,
-): OpenArguments.Stamped =
-    OpenArgumentsStampedImpl(
-        fieldValues = fields,
-        selectionStamp = selectionStamp,
-    ).validatedAgainst(expectedType)
+): OpenArguments =
+    if (fields.values.all { it == null || it is Value.Input }) {
+        argumentsOfGround(
+            expectedType,
+            fields.mapValues { (_, value) -> value as Value.Input? },
+        )
+    } else {
+        OpenArgumentsImpl(fields).validatedAgainst(expectedType)
+    }
 
 private fun OpenValue?.stampVars(path: List<PathComponent>): OpenValue? =
     when (this) {
@@ -497,12 +477,6 @@ internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments {
     val retargeted = OpenArguments.of(field, fieldExpressions())
     return when (this) {
         is OpenArguments.Template -> OpenArguments.Template.of(field.arguments, retargeted)
-        is OpenArguments.Stamped ->
-            stampedArgumentsOf(
-                expectedType = field.arguments,
-                fields = retargeted.fieldExpressions(),
-                selectionStamp = selectionStamp,
-            )
         else -> retargeted
     }
 }

@@ -1,0 +1,405 @@
+package model.spec
+
+import model.MaterializeSelection
+import model.MaterializeSelectionForest
+import model.ObjectEngineResult
+import model.OpenValue
+import model.Schema
+import model.Stamp
+import model.Value
+import model.materializeSelectionForestOf
+import model.merge
+import model.testing.GJSchema
+import model.testing.GJSelectionParser
+import model.testing.TestWorld
+import model.usedVariables
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class MaterializeSelectionFlattenerTest {
+    @Test
+    fun `aliases remain response keys while construction retains canonical fields`() {
+        val fixture = SchemaFixture()
+        val selections =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field("Query", "version", alias = "release"),
+                    fixture.field("Query", "version"),
+                ),
+            )
+
+        val collected = selections.collect(fixture.query)
+        assertEquals(setOf("release", "version"), collected.responseKeys())
+        assertEquals(collected["release"].key, collected["version"].key)
+        assertTrue(
+            selections.constructionSelections().all { selection ->
+                selection.key.field == fixture.schema.field("Query", "version")
+            },
+        )
+    }
+
+    @Test
+    fun `duplicate response keys collect once and combine nested source occurrences`() {
+        val fixture = SchemaFixture()
+        val selections =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        "Query",
+                        "item",
+                        alias = "chosen",
+                        subselections = listOf(fixture.field("Item", "name")),
+                    ),
+                    fixture.field(
+                        "Query",
+                        "item",
+                        alias = "chosen",
+                        subselections = listOf(fixture.field("Item", "code")),
+                    ),
+                ),
+            )
+
+        assertEquals(2, selections.size)
+        val collected = selections.collect(fixture.query)
+        assertEquals(1, collected.size)
+
+        val chosen = collected["chosen"]
+        assertEquals(2, chosen.subselections.size)
+        assertEquals(
+            setOf("name", "code"),
+            chosen.subselections.collect(fixture.item).responseKeys(),
+        )
+    }
+
+    @Test
+    fun `co-applicable response-key conflicts fail before open arguments are bound`() {
+        val fixture = SchemaFixture()
+        val firstVariable =
+            Value.Variable.of(
+                field = fixture.schema.objectField("Query", "version"),
+                variableName = "first",
+            )
+        val secondVariable =
+            Value.Variable.of(
+                field = fixture.schema.objectField("Query", "version"),
+                variableName = "second",
+            )
+        val conflictingArguments =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        "Query",
+                        "search",
+                        alias = "result",
+                        arguments = mapOf("term" to firstVariable),
+                    ),
+                    fixture.field(
+                        "Query",
+                        "search",
+                        alias = "result",
+                        arguments = mapOf("term" to secondVariable),
+                    ),
+                ),
+            )
+        val conflictingFields =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field("Query", "version", alias = "result"),
+                    fixture.field("Query", "release", alias = "result"),
+                ),
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            conflictingArguments.collect(fixture.query)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            conflictingFields.collect(fixture.query)
+        }
+    }
+
+    @Test
+    fun `open argument groups remain open through collection`() {
+        val fixture = SchemaFixture()
+        val variable =
+            Value.Variable.of(
+                field = fixture.schema.objectField("Query", "version"),
+                variableName = "term",
+            )
+        val selections =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        "Query",
+                        "search",
+                        alias = "result",
+                        arguments = mapOf("term" to variable),
+                    ),
+                ),
+            )
+
+        val result = selections.collect(fixture.query)["result"]
+        assertFalse(result.key is ObjectEngineResult.GroundKey)
+        assertEquals(setOf(variable), result.key.arguments.usedVariables())
+    }
+
+    @Test
+    fun `construction-only provider markers cannot enter a materialize forest`() {
+        val fixture = SchemaFixture()
+        val field = fixture.schema.objectField("Query", "version")
+        val stamp = Stamp.Occurrence.of(resolverPath = emptyList())
+        val variable =
+            Value.Variable
+                .of(field = field, variableName = "provider")
+                .stamp(stamp)
+        val marker =
+            ObjectEngineResult.VariableKey.of(
+                key = ObjectEngineResult.Key.of(field, emptyMap()),
+                variableDefinedByThisKey = variable,
+            )
+
+        assertFailsWith<IllegalArgumentException> {
+            MaterializeSelection.of(
+                responseKey = "version",
+                key = marker,
+                possibleTypes = setOf(fixture.query),
+                subselections = materializeSelectionForestOf(),
+            )
+        }
+    }
+
+    @Test
+    fun `mutually exclusive alternatives share a response key after concrete filtering`() {
+        val fixture = SchemaFixture()
+        val selections =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        "Query",
+                        "pet",
+                        subselections =
+                            listOf(
+                                fixture.inlineFragment(
+                                    fixture.dog,
+                                    listOf(
+                                        fixture.field(
+                                            "Dog",
+                                            "barkVolume",
+                                            alias = "sound",
+                                        ),
+                                    ),
+                                ),
+                                fixture.inlineFragment(
+                                    fixture.cat,
+                                    listOf(
+                                        fixture.field(
+                                            "Cat",
+                                            "lives",
+                                            alias = "sound",
+                                        ),
+                                    ),
+                                ),
+                            ),
+                    ),
+                ),
+            )
+
+        val alternatives =
+            selections.collect(fixture.query)["pet"].subselections
+        assertEquals(2, alternatives.size)
+        assertEquals(
+            fixture.schema.objectField("Dog", "barkVolume"),
+            alternatives.collect(fixture.dog)["sound"].key.field,
+        )
+        assertEquals(
+            fixture.schema.objectField("Cat", "lives"),
+            alternatives.collect(fixture.cat)["sound"].key.field,
+        )
+    }
+
+    @Test
+    fun `nested list selections retain response keys at every object level`() {
+        val fixture = SchemaFixture()
+        val selections =
+            fixture.flatten(
+                fixture.query,
+                listOf(
+                    fixture.field(
+                        "Query",
+                        "packs",
+                        alias = "bundles",
+                        subselections =
+                            listOf(
+                                fixture.field(
+                                    "Pack",
+                                    "pets",
+                                    alias = "animals",
+                                    subselections =
+                                        listOf(
+                                            fixture.field(
+                                                "Pet",
+                                                "name",
+                                                alias = "label",
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                ),
+            )
+
+        val bundles = selections.collect(fixture.query)["bundles"]
+        assertEquals(fixture.pack, bundles.key.field.typeExpr.baseType)
+        val animals = bundles.subselections.collect(fixture.pack)["animals"]
+        assertEquals(fixture.pet, animals.key.field.typeExpr.baseType)
+        assertEquals(
+            setOf("label"),
+            animals.subselections.collect(fixture.dog).responseKeys(),
+        )
+    }
+
+    @Test
+    fun `lowered Node fields retain their source response key`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                interface Node {
+                  id: ID!
+                }
+
+                type User implements Node {
+                  id: ID!
+                }
+
+                type Query {
+                  user: User!
+                }
+                """.trimIndent(),
+            )
+        val schema = world.schema as GJSchema
+        val parsed =
+            GJSelectionParser(schema, emptyMap())
+                .specSelectionsFrom(
+                    "fragment ResolverInput on Query { account: user { id } }",
+                )
+        val selections =
+            context(world.assumptions) {
+                flattenForMaterialization(parsed.nominalType, parsed.selections)
+            }
+
+        val account = selections.collect(schema.query)["account"]
+        assertEquals("user_V_A_node", account.key.field.fieldName)
+        assertEquals(
+            setOf("user_V_A_node"),
+            selections
+                .constructionSelections()
+                .merge(schema.query)
+                .keys()
+                .mapTo(linkedSetOf()) { key -> key.field.fieldName },
+        )
+
+        val bridge = account.key.field.typeExpr.baseType as Schema.ObjectType
+        val payload = account.subselections.collect(bridge)["node"]
+        assertEquals("node", payload.key.field.fieldName)
+        assertEquals(
+            setOf("id"),
+            payload.subselections
+                .collect(schema.type("User") as Schema.ObjectType)
+                .responseKeys(),
+        )
+    }
+
+    private class SchemaFixture {
+        private val world = TestWorld.fromSDL(SCHEMA_SDL)
+        val assumptions = world.assumptions
+        val schema = world.schema
+
+        val query = schema.query
+        val item = schema.type("Item") as Schema.ObjectType
+        val pack = schema.type("Pack") as Schema.ObjectType
+        val dog = schema.type("Dog") as Schema.ObjectType
+        val cat = schema.type("Cat") as Schema.ObjectType
+        val pet = schema.type("Pet") as Schema.InterfaceType
+
+        fun field(
+            containingType: String,
+            fieldName: String,
+            alias: String? = null,
+            arguments: Map<String, Any?> = emptyMap(),
+            subselections: List<SpecSelection>? = null,
+        ): SpecSelection.Field {
+            val field = schema.field(containingType, fieldName)
+            return SpecSelection.Field.of(
+                alias = alias,
+                field = field,
+                arguments =
+                    arguments.mapValues { (name, value) ->
+                        OpenValue.of(
+                            field.arguments.fields.getValue(name).typeExpr,
+                            value,
+                        )
+                    },
+                subselections = subselections,
+            )
+        }
+
+        fun inlineFragment(
+            typeCondition: Schema.CompositeType?,
+            selections: List<SpecSelection>,
+        ): SpecSelection.InlineFragment =
+            SpecSelection.InlineFragment.of(typeCondition, selections)
+
+        fun flatten(
+            typeInScope: Schema.CompositeType,
+            selectionSet: List<SpecSelection>,
+        ): MaterializeSelectionForest =
+            context(assumptions) {
+                flattenForMaterialization(typeInScope, selectionSet)
+            }
+    }
+
+    private companion object {
+        val SCHEMA_SDL =
+            """
+            interface Pet {
+              name: String!
+            }
+
+            type Dog implements Pet {
+              name: String!
+              barkVolume: Int
+            }
+
+            type Cat implements Pet {
+              name: String!
+              lives: Int
+            }
+
+            type Item {
+              name: String
+              code: String
+            }
+
+            type Pack {
+              pets: [Pet!]!
+            }
+
+            type Query {
+              version: String
+              release(channel: String): String
+              search(term: String): String
+              item: Item
+              pet: Pet
+              packs: [Pack!]!
+            }
+            """.trimIndent()
+    }
+}

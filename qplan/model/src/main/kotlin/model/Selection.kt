@@ -458,8 +458,14 @@ fun SelectionForest.usedVariables(): Set<Value.Variable> {
  * including defaults, of the corresponding canonical object field.
  */
 fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
-    val concreteField = type.fields.getValue(key.field.fieldName)
-    val sourceKey = key
+    return key.objectKey(type)
+}
+
+internal fun ObjectEngineResult.Key.objectKey(
+    type: Schema.ObjectType,
+): ObjectEngineResult.ObjectKey {
+    val concreteField = type.fields.getValue(field.fieldName)
+    val sourceKey = this
     val selectionStamp = sourceKey.stamp as? Stamp.Occurrence
     if (selectionStamp != null) {
         return ObjectEngineResult.ObjectKey.of(
@@ -470,7 +476,7 @@ fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
     }
     return ObjectEngineResult.ObjectKey.of(
         field = concreteField,
-        arguments = key.arguments.retarget(concreteField),
+        arguments = arguments.retarget(concreteField),
     )
 }
 

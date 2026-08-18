@@ -3,12 +3,14 @@ package model.spec
 import model.ObjectEngineResult
 
 import model.Assumptions
+import model.MaterializeSelection
+import model.MaterializeSelectionForest
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Value
-import model.flatMapToSelectionForest
-import model.selectionForestOf
+import model.flatMapToMaterializeSelectionForest
+import model.materializeSelectionForestOf
 
 /**
  * Flattens a spec selection set interpreted with [typeInScope].
@@ -25,7 +27,24 @@ fun flatten(
     typeInScope: Schema.CompositeType,
     selectionSet: List<SpecSelection>,
 ): SelectionForest =
-    flatten(
+    flattenForMaterialization(
+        typeInScope = typeInScope,
+        selectionSet = selectionSet,
+    ).constructionSelections()
+
+/**
+ * Flattens a spec selection set while retaining each field occurrence's GraphQL response key.
+ *
+ * Inline fragments contribute applicability guards without becoming materialize selections.
+ * Source occurrences remain uncollected until a concrete parent type is supplied to
+ * [MaterializeSelectionForest.collect].
+ */
+context(world: Assumptions)
+fun flattenForMaterialization(
+    typeInScope: Schema.CompositeType,
+    selectionSet: List<SpecSelection>,
+): MaterializeSelectionForest =
+    flattenForMaterialization(
         schema = world.schema,
         typeInScope = typeInScope,
         selectionSet = selectionSet,
@@ -35,7 +54,18 @@ internal fun flatten(
     schema: Schema,
     typeInScope: Schema.CompositeType,
     selectionSet: List<SpecSelection>,
-): SelectionForest {
+): SelectionForest =
+    flattenForMaterialization(
+        schema = schema,
+        typeInScope = typeInScope,
+        selectionSet = selectionSet,
+    ).constructionSelections()
+
+internal fun flattenForMaterialization(
+    schema: Schema,
+    typeInScope: Schema.CompositeType,
+    selectionSet: List<SpecSelection>,
+): MaterializeSelectionForest {
     val initialContext =
         SelectionContext(
             nominalType = typeInScope,
@@ -48,11 +78,11 @@ private fun flattenSelectionSet(
     schema: Schema,
     selections: List<SpecSelection>,
     context: SelectionContext,
-): SelectionForest =
-    selections.flatMapToSelectionForest { selection ->
+): MaterializeSelectionForest =
+    selections.flatMapToMaterializeSelectionForest { selection ->
         when (selection) {
             is SpecSelection.Field ->
-                selectionForestOf(selection.flattenField(schema, context))
+                materializeSelectionForestOf(selection.flattenField(schema, context))
             is SpecSelection.InlineFragment -> {
                 val fragmentContext =
                     selection.typeCondition?.let { typeCondition ->
@@ -70,7 +100,7 @@ private fun flattenSelectionSet(
 private fun SpecSelection.Field.flattenField(
     schema: Schema,
     context: SelectionContext,
-): Selection {
+): MaterializeSelection {
     val field =
         schema.field(
             context.nominalType.typeName,
@@ -78,7 +108,7 @@ private fun SpecSelection.Field.flattenField(
         )
     val flattenedSubselections =
         when (val resultType = field.typeExpr.baseType) {
-            is Schema.SimpleType -> selectionForestOf()
+            is Schema.SimpleType -> materializeSelectionForestOf()
 
             is Schema.CompositeType ->
                 flattenSelectionSet(
@@ -91,7 +121,8 @@ private fun SpecSelection.Field.flattenField(
                 )
         }
 
-    return Selection.of(
+    return MaterializeSelection.of(
+        responseKey = alias ?: fieldName,
         key =
             ObjectEngineResult.Key.of(
                 field = field,

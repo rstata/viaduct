@@ -6,11 +6,13 @@ Follow the current explicit prompt first, then this handoff. The immediate work 
 
 ## Immediate Objective
 
-Introduce `MaterializeSelection` and `MaterializeSelectionForest` so resolver object fragments retain GraphQL response keys independently from ordinary construction selections. Settle their source-occurrence versus collected-group representation with executable alias, duplicate-response-key, mutually exclusive type-condition, open-argument, nested-list, and lowered-Node examples before fixing the public factory.
+Make `FieldResolver` privately retain an unstamped `MaterializeSelectionForest` template and instantiate one paired materialization/construction view from a resolver occurrence stamp. The construction view must be derived from the materialize view and append synthetic `FromObjectField` provider markers without exposing them as resolver-visible fields. Do not add the awaitable OER occurrence-key index in the same change.
 
 The string-key carrier checkpoint is complete. `Value.ObjectFields` is `Map<String, Value.Output?>`. Passive source and resolver-produced objects use canonical argumentless field names. Materialized argument-bearing fields use the private deterministic `GroundKey.materializedFieldKey()` address, which ignores occurrence stamps while preserving visible field-and-ground-argument equality. Materialization and construction still consume ordinary `SelectionForest`; aliases are not preserved yet.
 
-The next response-key work must retain one explicit lossless construction view of each materialize forest. Resolver object fragments remain resolver-local fixed input selections and never acquire client or closed demand. Synthetic `FromObjectField` provider markers belong only to the construction view.
+The response-key model checkpoint is also complete. `MaterializeSelection` represents one alias-preserving source field occurrence, and `MaterializeSelectionForest.collect(concreteType)` filters applicability before grouping solely by response key. Co-applicable members must have one syntactically compatible concrete field and open argument tuple before binding; their nested source occurrences are concatenated for collection at the concrete child OER. `ObjectMaterializeSelection` represents the resulting group. Mutually exclusive alternatives remain separate source occurrences until concrete filtering. `constructionSelections()` recursively erases only response keys and preserves every ordinary construction occurrence.
+
+Variable-free aliases share ordinary construction keys and do not require selection stamps. Open response groups will acquire group-specific occurrence identity during registry instantiation. Resolver object fragments remain resolver-local fixed input selections and never acquire client or closed demand.
 
 Do not begin the `EngineObjectData.Sync` migration in the same change. The response-key endpoint should remain on qplan `Value` and typed `ObjectEngineResult` carriers so the later EOD comparison starts from a stable name-keyed value domain.
 
@@ -50,7 +52,7 @@ Runtime `FromObjectField` execution is present in Resolver25 and Resolver26. Doc
 
 ## Migration Sequence
 
-1. Add `MaterializeSelection` and concrete-type response-key collection with focused executable examples.
+1. Complete: add source-occurrence `MaterializeSelection`, concrete-type response-key collection, and focused executable examples.
 2. Make `FieldResolver` privately retain the unstamped materialize template and instantiate paired materialization and construction views from one resolver occurrence stamp.
 3. Add an awaitable OER-owned `(field, occurrence stamp) -> GroundKey` index, with declaration and one-writer publication.
 4. Migrate every maintained resolver to publish that index while preserving its existing scheduling and identity policy.
@@ -68,12 +70,10 @@ TLA+ refinement work is explicitly backlogged until the EOD carrier refactor sta
 
 ## Open Design Questions
 
-- Does one `MaterializeSelection` represent a source occurrence or a collected response-key group?
-- How does collection represent mutually exclusive type-conditioned alternatives?
 - What carrier owns response-group occurrence IDs and source-key compatibility facts?
 - Does resolver-fragment instantiation return a paired view or a materialize forest with one construction-view operation?
 - What planning operation declares the awaitable occurrence-to-ground-key lookup?
-- Do all variable-free response groups remain unstamped while sharing ordinary OER cells?
+- How should the paired instantiation expose construction-only provider markers without allowing materialization to observe them?
 
 ## Validation
 

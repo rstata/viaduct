@@ -1,10 +1,12 @@
 package semantics.contract
 
+import io.kotest.matchers.collections.shouldContainExactly
 import model.EngineResult
 import model.IntEngineResult
 import model.ObjectEngineResult
 import model.Value
 import model.testing.TestWorld
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -94,5 +96,55 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
             resolveAndValidate(world, "fragment ignored on Query { outer }")
 
         assertEquals(IntEngineResult.of(1), resolved.getCell(outerKey).get())
+    }
+
+    @Test
+    fun `orders argument-bearing applications through a path-variable dependency`() {
+        val argumentApplications =
+            ConcurrentLinkedQueue<Pair<String, Value.Arguments>>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "source consume(value: ${'$'}fromSource)"
+                          pathVars: [{name: "fromSource", path: ["source"]}]
+                          result: "sum(consume)"
+                        )
+                      source: Int!
+                        @resolver(of: "first(value: 1)", result: "sum(first)")
+                      first(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value, ${'$'}value)")
+                      consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value, ${'$'}value)")
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, arguments, _ ->
+                    if (field.fieldName == "first" || field.fieldName == "consume") {
+                        argumentApplications += field.fieldName to arguments
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+        val resultKey = world.schema.contractKey("Query", "result")
+
+        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+
+        assertEquals(IntEngineResult.of(4), resolved.getCell(resultKey).get())
+        argumentApplications.toList().shouldContainExactly(
+            "first" to
+                Value.Arguments.of(
+                    world.schema.objectField("Query", "first"),
+                    mapOf("value" to 1),
+                ),
+            "consume" to
+                Value.Arguments.of(
+                    world.schema.objectField("Query", "consume"),
+                    mapOf("value" to 2),
+                ),
+        )
     }
 }

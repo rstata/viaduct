@@ -1,5 +1,6 @@
 package semantics.contract
 
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.Schema
 import model.Value
 import model.testing.ResolverApplicationArguments
@@ -28,9 +29,8 @@ internal fun ResolverApplicationArguments.assertArguments(
     field: Schema.OutputField,
     vararg expected: Map<String, Any?>,
 ) {
-    assertEquals(
+    arguments(field).shouldContainExactlyInAnyOrder(
         expected.map { arguments -> Value.Arguments.of(field, arguments) },
-        arguments(field),
     )
 }
 

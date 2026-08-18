@@ -38,7 +38,7 @@ fun SimpleEngineResult.toEngineSimpleData(): EngineSimpleData =
     }
 
 /** Recursively copies [value] as [EngineInputData] conforming to [expectedType]. */
-fun toEngineInputData(
+internal fun toEngineInputData(
     expectedType: TypeExpr<Schema.InputType>,
     value: EngineInputData?,
 ): EngineInputData? {
@@ -58,7 +58,7 @@ fun toEngineInputData(
 }
 
 /** Converts [value] to canonical [EngineSimpleData] conforming to [expectedType]. */
-fun toEngineSimpleData(
+internal fun toEngineSimpleData(
     expectedType: TypeExpr.Named<Schema.SimpleType>,
     value: EngineSimpleData?,
 ): EngineSimpleData? {
@@ -79,7 +79,7 @@ fun toEngineInputListData(
     }
 
 /** Recursively copies [value] as canonical input-object data conforming to [expectedType]. */
-fun toEngineInputObjectData(
+internal fun toEngineInputObjectData(
     expectedType: Schema.InputObjectType,
     value: EngineInputObjectData,
 ): EngineInputObjectData = toEngineInputFields(expectedType, value)
@@ -129,7 +129,7 @@ private fun EngineEnumValueData.validatedFor(
     return this
 }
 
-internal fun toEngineInputFields(
+private fun toEngineInputFields(
     expectedType: Schema.InputObjectLike,
     fields: EngineInputObjectData,
 ): EngineInputObjectData {

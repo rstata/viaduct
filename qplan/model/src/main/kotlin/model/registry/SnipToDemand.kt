@@ -35,7 +35,7 @@ import model.objectKey
  * @throws IllegalArgumentException when a precondition is not met
  */
 context(world: Assumptions)
-fun Value.Output?.snipToDemand(demand: SelectionForest): Value.Output? =
+internal fun Value.Output?.snipToDemand(demand: SelectionForest): Value.Output? =
     when (this) {
         null,
         Value.Error,

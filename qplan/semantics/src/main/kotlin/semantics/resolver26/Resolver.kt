@@ -516,7 +516,7 @@ private suspend fun resolveField(
     val invocationDemand: SelectionForest = constructionDemand.successorDemand()
     val input: Value.Object =
         target.materializeResolverInput(
-            selections = expansion.inputDemand,
+            selections = expansion.inputMaterializeSelections,
             reader = coordinate,
             resultPath = path,
         )

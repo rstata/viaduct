@@ -347,7 +347,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     }
 
     private fun ObjectEngineResult.GroundKey.visibleIdentity() =
-        field to arguments.fieldValues
+        field to arguments
 
     @Test
     fun `object outputs vary by input and arguments at equal-key list occurrences`() {

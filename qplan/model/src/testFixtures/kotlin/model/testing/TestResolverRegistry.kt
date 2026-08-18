@@ -3,6 +3,7 @@ package model.testing
 import model.ObjectEngineResult
 
 import model.Fragment
+import model.OpenArguments
 import model.Schema
 import model.Selection
 import model.SelectionForest
@@ -588,18 +589,20 @@ private class TestResolverRegistry(
     ): List<VariableUse> =
         buildList {
             this@variableUses.forEach { selection ->
-                selection.key.arguments.fieldExpressions().forEach { (name, value) ->
-                    val argument = selection.key.field.arguments.fields.getValue(name)
-                    addAll(
-                        value
-                            .matchingVariableTypes(
-                                variable = variable,
-                                typeExpr = argument.typeExpr,
-                                hasDefault = argument.defaultValue is Value.Default.Present,
-                            ).map { (typeExpr, hasDefault) ->
-                                VariableUse(typeExpr, hasDefault)
-                            },
-                    )
+                if (selection.key.arguments != OpenArguments.Ground.Error) {
+                    selection.key.arguments.fieldExpressions().forEach { (name, value) ->
+                        val argument = selection.key.field.arguments.fields.getValue(name)
+                        addAll(
+                            value
+                                .matchingVariableTypes(
+                                    variable = variable,
+                                    typeExpr = argument.typeExpr,
+                                    hasDefault = argument.defaultValue is Value.Default.Present,
+                                ).map { (typeExpr, hasDefault) ->
+                                    VariableUse(typeExpr, hasDefault)
+                                },
+                        )
+                    }
                 }
                 addAll(selection.subselections.variableUses(variable))
             }

@@ -3,6 +3,7 @@ package model.registry
 import model.ObjectEngineResult
 
 import model.Assumptions
+import model.OpenArguments
 import model.Schema
 import model.Selection
 import model.SelectionForest
@@ -45,15 +46,13 @@ fun SelectionForest.successorDemand(): SelectionForest =
                                 specializedKey.field.arguments,
                             ),
                     )
-                if (
-                    key.arguments.containsErrorValue() ||
-                    key.field !in world.resolverRegistry
-                ) {
+                val arguments = key.arguments
+                if (arguments !is Value.Arguments || key.field !in world.resolverRegistry) {
                     selectionForestOf()
                 } else {
                     world.resolverRegistry
                         .resolver(key.field)
-                        .objectFragmentWithFromArguments(key.arguments)
+                        .objectFragmentWithFromArguments(arguments)
                         .successorDemand()
                 }
             }
@@ -133,15 +132,16 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
                             specializedKey.field.arguments,
                         ),
                 )
+            val arguments = key.arguments
             if (
-                !key.arguments.containsErrorValue() &&
+                arguments is Value.Arguments &&
                 key.field in world.resolverRegistry &&
                 expandedGroundedKeys.add(key)
             ) {
                 addDemand(
                     world.resolverRegistry
                         .resolver(key.field)
-                        .objectFragmentWithFromArguments(key.arguments),
+                        .objectFragmentWithFromArguments(arguments),
                 )
             }
         }
@@ -243,15 +243,13 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                         specializedKey.field.arguments,
                     ),
             )
-        if (
-            key.arguments.containsErrorValue() ||
-            key.field !in world.resolverRegistry
-        ) {
+        val arguments = key.arguments
+        if (arguments !is Value.Arguments || key.field !in world.resolverRegistry) {
             selectionForestOf()
         } else {
             world.resolverRegistry
                 .resolver(key.field)
-                .objectFragmentWithFromArguments(key.arguments)
+                .objectFragmentWithFromArguments(arguments)
                 .boundarySkeleton()
                 .successorBoundaryDemand()
         }
@@ -314,16 +312,4 @@ private fun SelectionForest.substitute(
                 subselections = selection.subselections.substitute(bindings),
             ),
         )
-    }
-
-private fun Value.Arguments.containsErrorValue(): Boolean =
-    fieldValues.values.any { value -> value.containsErrorValue() }
-
-private fun Value.Input?.containsErrorValue(): Boolean =
-    when (this) {
-        Value.Error -> true
-        is Value.InputList -> values.any { value -> value.containsErrorValue() }
-        is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsErrorValue() }
-        else -> false
     }

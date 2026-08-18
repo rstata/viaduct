@@ -436,8 +436,8 @@ internal class GJSchemaDecoder(
                     noVariableValues,
                     schema,
                 )
-            check(decoded == null || decoded is Value.Input)
-            Value.Default.of(decoded as Value.Input?)
+            check(decoded == null || decoded is OpenValue.Ground)
+            Value.Default.of((decoded as? OpenValue.Ground)?.data)
         }
 
     private fun implementsInterface(
@@ -464,7 +464,10 @@ internal fun decodeInputValue(
             variableField,
         )
     } else {
-        decodeExternal(type, value.value, variableValues, schema)
+        OpenValue.of(
+            decodeModelInputType(type, schema),
+            decodeExternal(type, value.value, variableValues, schema),
+        )
     }
 
 internal fun decodeLiteral(
@@ -476,7 +479,10 @@ internal fun decodeLiteral(
 ): OpenValue? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
-            variableValues.getValue(value.name)
+            OpenValue.of(
+                decodeModelInputType(type, schema),
+                variableValues.getValue(value.name),
+            )
         } else {
             requireNotNull(variableField) {
                 "Unbound operation variable \$${value.name}"
@@ -515,15 +521,21 @@ internal fun decodeLiteral(
         }
 
         is GraphQLScalarType ->
-            decodeScalarLiteral(
-                schema,
-                schema.type(type.name) as Schema.ScalarType,
-                value,
+            OpenValue.of(
+                decodeModelInputType(type, schema),
+                decodeScalarLiteral(
+                    schema,
+                    schema.type(type.name) as Schema.ScalarType,
+                    value,
+                ),
             )
         is graphql.schema.GraphQLEnumType ->
-            Value.Enum.of(
-                schema.type(type.name) as Schema.EnumType,
-                (value as EnumValue).name,
+            OpenValue.of(
+                decodeModelInputType(type, schema),
+                Value.Enum.of(
+                    schema.type(type.name) as Schema.EnumType,
+                    (value as EnumValue).name,
+                ),
             )
 
         is GraphQLInputObjectType ->
@@ -779,13 +791,16 @@ private fun decodeObjectExternal(
         type = type,
         isFieldSupplied = { valueMap.containsKey(it) },
         decodeSupplied = { fieldType, fieldName ->
-            decodeExternal(fieldType, valueMap[fieldName], variableValues, schema)
+            OpenValue.of(
+                decodeModelInputType(fieldType, schema),
+                decodeExternal(fieldType, valueMap[fieldName], variableValues, schema),
+            )
         },
         variableValues = variableValues,
         schema = schema,
     )
-    check(decoded is Value.Input)
-    return decoded
+    check(decoded is OpenValue.Ground)
+    return decoded.data
 }
 
 private class EnumTypeImpl(

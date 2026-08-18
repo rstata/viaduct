@@ -104,14 +104,14 @@ internal fun Value.Object.resolveKey(
 ): ResolvedValue? {
     val key = fieldSelection.groundKey()
     val cell = resolved.reserveCell(key)
-    return when {
-        key.arguments.argumentsContainErrorValue() -> {
+    return when (val arguments = key.arguments) {
+        model.OpenArguments.Ground.Error -> {
             cell.setValue(ErrorEngineResult)
             cell.setAccessAccepted(Value.Error)
             null
         }
 
-        else -> {
+        is Value.Arguments -> {
             val resolutionSelections = runtimeSupport.complete(fieldSelection.subselections)
             val fieldValue =
                 if (key.field in world.resolverRegistry) {
@@ -129,13 +129,13 @@ internal fun Value.Object.resolveKey(
                     if (world.selectiveResolvers) {
                         resolver(
                             input = input,
-                            arguments = key.arguments,
+                            arguments = arguments,
                             selections = resolutionSelections,
                         )
                     } else {
                         resolver(
                             input = input,
-                            arguments = key.arguments,
+                            arguments = arguments,
                         )
                     }
                 } else {

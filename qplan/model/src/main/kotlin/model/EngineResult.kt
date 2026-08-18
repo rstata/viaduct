@@ -276,7 +276,7 @@ sealed interface ObjectEngineResult : EngineResult {
             /** Constructs the precise ground key category. */
             fun of(
                 field: Schema.ObjectField,
-                arguments: Value.Arguments,
+                arguments: OpenArguments.Ground,
             ): GroundKey = GroundKey.of(field, arguments)
         }
     }
@@ -339,7 +339,7 @@ sealed interface ObjectEngineResult : EngineResult {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Stamped object-key arguments do not belong to its output field"
                 }
-                return if (arguments is Value.Arguments) {
+                return if (arguments is OpenArguments.Ground) {
                     GroundKey.of(stamp, field, arguments)
                 } else {
                     StampedObjectKeyImpl(field, arguments, stamp)
@@ -358,7 +358,7 @@ sealed interface ObjectEngineResult : EngineResult {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
                 }
-                return if (arguments is Value.Arguments) {
+                return if (arguments is OpenArguments.Ground) {
                     GroundKeyImpl(field, arguments, Stamp.VariableFreeOccurrence)
                 } else {
                     ObjectKeyImpl(field, arguments, arguments.inferredKeyStamp())
@@ -371,7 +371,7 @@ sealed interface ObjectEngineResult : EngineResult {
      * A concrete-object key whose arguments are ground and which can therefore select an OER field.
      */
     sealed interface GroundKey : ObjectKey, PathComponent {
-        override val arguments: Value.Arguments
+        override val arguments: OpenArguments.Ground
         override val stamp: Stamp
 
         companion object {
@@ -384,7 +384,7 @@ sealed interface ObjectEngineResult : EngineResult {
             fun of(
                 stamp: Stamp.Occurrence,
                 field: Schema.ObjectField,
-                arguments: Value.Arguments,
+                arguments: OpenArguments.Ground,
             ): GroundKey {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Ground arguments do not belong to the stamped selection field"
@@ -399,11 +399,17 @@ sealed interface ObjectEngineResult : EngineResult {
             fun of(
                 field: Schema.ObjectField,
                 arguments: Map<String, Any?>,
-            ): GroundKey = of(field, Value.Arguments.of(field, arguments))
+            ): GroundKey {
+                val grounded = OpenArguments.of(field, arguments)
+                require(grounded is OpenArguments.Ground) {
+                    "Ground-key arguments cannot contain variables"
+                }
+                return of(field, grounded)
+            }
 
             fun of(
                 field: Schema.ObjectField,
-                arguments: Value.Arguments,
+                arguments: OpenArguments.Ground,
             ): GroundKey {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
@@ -1011,13 +1017,13 @@ private data class StampedObjectKeyImpl(
 
 private data class GroundKeyImpl(
     override val field: Schema.ObjectField,
-    override val arguments: Value.Arguments,
+    override val arguments: OpenArguments.Ground,
     override val stamp: Stamp,
 ) : ObjectEngineResult.GroundKey
 
 private data class StampedGroundKeyImpl(
     override val field: Schema.ObjectField,
-    override val arguments: Value.Arguments,
+    override val arguments: OpenArguments.Ground,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.GroundKey
 
@@ -1139,9 +1145,9 @@ private fun validateObjectValue(
     field: ObjectEngineResult.GroundKey,
     value: EngineResult?,
 ) {
-    if (field.arguments.containsErrorValue()) {
+    if (field.arguments == OpenArguments.Ground.Error) {
         require(value == ErrorEngineResult) {
-            "A key containing an argument error must contain an error value"
+            "A key with erroneous arguments must contain an error value"
         }
     }
     require(value.conformsToSchemaType(field.field.typeExpr)) {
@@ -1149,14 +1155,3 @@ private fun validateObjectValue(
             field.field.typeExpr
     }
 }
-
-private fun Value.Arguments.containsErrorValue(): Boolean =
-    fieldValues.values.any { it.containsErrorValue() }
-
-private fun Value.Input?.containsErrorValue(): Boolean =
-    when {
-        this == Value.Error -> true
-        this is Value.InputList -> values.any { it.containsErrorValue() }
-        this is Value.InputObject -> fieldValues.values.any { it.containsErrorValue() }
-        else -> false
-    }

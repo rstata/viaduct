@@ -1,5 +1,6 @@
 package semantics.contract
 
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.EngineResult
 import model.IntEngineResult
 import model.ListEngineResult
@@ -9,6 +10,7 @@ import model.StringEngineResult
 import model.Value
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
@@ -67,7 +69,7 @@ interface EmptyObjectFragmentResolverContract :
 
     @Test
     fun `specializes shared list continuation and concrete argument defaults`() {
-        val applications = mutableListOf<String>()
+        val applications = ConcurrentLinkedQueue<String>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -122,7 +124,7 @@ interface EmptyObjectFragmentResolverContract :
             IntEngineResult.of(3),
             b.getCell(world.schema.contractKey("B", "computed")).get(),
         )
-        assertEquals(listOf("A", "B"), applications)
+        applications.toList().shouldContainExactlyInAnyOrder("A", "B")
     }
 
     @Test

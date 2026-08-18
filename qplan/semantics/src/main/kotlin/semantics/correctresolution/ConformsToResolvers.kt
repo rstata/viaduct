@@ -44,9 +44,10 @@ private fun ObjectEngineResult.objectConformsToResolvers(
     val registry = world.resolverRegistry
     return keys.all { groundKey ->
         val value = getCell(groundKey).getValue().get()
+        val arguments = groundKey.arguments
         val fieldResolverConforms =
             if (
-                groundKey.arguments.argumentsContainErrorValue() ||
+                arguments !is Value.Arguments ||
                 groundKey.field !in registry
             ) {
                 true
@@ -68,7 +69,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                 val resolverArguments =
                     Value.Arguments.of(
                         field = groundKey.field,
-                        fields = groundKey.arguments.fieldValues,
+                        fields = arguments.fieldValues,
                     )
                 val resolverValue = resolver(input, resolverArguments)
                 value.engineResultConformsToResolverValue(resolverValue)

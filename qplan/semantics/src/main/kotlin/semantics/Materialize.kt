@@ -62,7 +62,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
         val visibleKey =
             ObjectEngineResult.GroundKey.of(
                 field = storedKey.field,
-                arguments = storedKey.arguments.fieldValues,
+                arguments = storedKey.arguments,
             )
         val cell = getCell(storedKey)
         val promise = cell.getValue()

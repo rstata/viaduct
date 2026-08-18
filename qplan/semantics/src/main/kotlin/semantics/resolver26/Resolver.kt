@@ -10,6 +10,7 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.OpenArguments
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
@@ -19,6 +20,7 @@ import model.Selection
 import model.SelectionForest
 import model.Stamp
 import model.Value
+import model.VariableBinding
 import model.fetchBindings
 import model.groundKey
 import model.localizeTopLevelSelectionStamps
@@ -298,12 +300,12 @@ private suspend fun orchestrateObject(
                 val reader: List<PathComponent> =
                     requireNotNull(definition.variable.stamp)
                         .resolverPath
-                val value: Value.Input? =
+                val binding: VariableBinding =
                     target.readProvider(
                         definition = definition,
                         reader = reader,
                     )
-                world.completeBinding(definition.variable, value)
+                world.completeBinding(definition.variable, binding)
             }
         }
         closed.demand.byKey().forEach { (objectKey, selection) ->
@@ -391,7 +393,7 @@ private fun CloseInputDemandResult.prepareBindings() {
                     if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
                         world.bindVariable(
                             stampedDefinition.variable,
-                            expansion.ownerKey.arguments.fieldValues.getValue(
+                            expansion.ownerKey.arguments.bindingFor(
                                 definition.argument.argumentName,
                             ),
                         )
@@ -471,7 +473,7 @@ private fun ResolverExpansion.completeFromArgumentBindings(groundKey: ObjectEngi
         val definition = stampedDefinition.definition as VariableDefinition.FromArgument
         world.completeBinding(
             stampedDefinition.variable,
-            groundKey.arguments.fieldValues.getValue(definition.argument.argumentName),
+            groundKey.arguments.bindingFor(definition.argument.argumentName),
         )
     }
 }
@@ -497,6 +499,7 @@ private suspend fun resolveField(
         cell.setAccessAccepted(Value.Error)
         return
     }
+    val resolverArguments = groundKey.arguments as Value.Arguments
 
     val coordinate = path + groundKey
     val constructionDemand: SelectionForest = selection.subselections
@@ -506,11 +509,6 @@ private suspend fun resolveField(
             selections = expansion.inputDemand,
             reader = coordinate,
             resultPath = path,
-        )
-    val resolverArguments: Value.Arguments =
-        Value.Arguments.of(
-            field = groundKey.field,
-            fields = groundKey.arguments.fieldValues,
         )
     runtime.observeApplication(
         Resolver26ApplicationObservation(
@@ -553,6 +551,12 @@ private suspend fun resolveField(
     cell.getValue().complete(resolvedValue.engineResult)
     cell.setAccessAccepted(Value.Boolean.of(true))
 }
+
+private fun OpenArguments.Ground.bindingFor(argumentName: String): VariableBinding =
+    when (this) {
+        OpenArguments.Ground.Error -> VariableBinding.Error
+        is Value.Arguments -> VariableBinding.of(fieldValues.getValue(argumentName))
+    }
 
 // Returns whether this occurrence is a top-level object or list element in one resolver output.
 private fun ObjectResolution.isRootOfOutputAt(

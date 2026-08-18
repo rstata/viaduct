@@ -11,6 +11,7 @@ import model.merge
 import model.objectOf
 import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -29,8 +30,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
 
     @Test
     fun `equal pre-grounded selections merge in fragments and external queries`() {
-        var payloadApplications = 0
-        val suppliedDemandFields = mutableListOf<Set<String>>()
+        val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -57,7 +57,6 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                         field.fieldName == "payload" &&
                         demand != null
                     ) {
-                        payloadApplications += 1
                         suppliedDemandFields +=
                             demand
                                 .merge(field.typeExpr.baseType as Schema.ObjectType)
@@ -80,8 +79,8 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             )
 
         assertEquals(IntEngineResult.of(8), resolvedResult.getCell(resultKey).get())
-        assertEquals(1, payloadApplications)
-        assertEquals(listOf(setOf("one", "two")), suppliedDemandFields)
+        assertEquals(1, suppliedDemandFields.size)
+        assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
 
         val payloadKey =
             ObjectEngineResult.GroundKey.of(
@@ -113,18 +112,17 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
 
         assertEquals(IntEngineResult.of(3), payload.getCell(oneKey).get())
         assertEquals(IntEngineResult.of(5), payload.getCell(twoKey).get())
-        assertEquals(2, payloadApplications)
+        assertEquals(2, suppliedDemandFields.size)
         assertEquals(
             listOf(setOf("one", "two"), setOf("one", "two")),
-            suppliedDemandFields,
+            suppliedDemandFields.toList(),
         )
         assertEquals(Stamp.VariableFreeOccurrence, payloadKey.stamp)
     }
 
     @Test
     fun `applies the configured identity policy after variable selections ground equally`() {
-        var payloadApplications = 0
-        val suppliedDemandFields = mutableListOf<Set<String>>()
+        val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -151,7 +149,6 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                         field.fieldName == "payload" &&
                         demand != null
                     ) {
-                        payloadApplications += 1
                         suppliedDemandFields +=
                             demand
                                 .merge(field.typeExpr.baseType as Schema.ObjectType)
@@ -182,11 +179,11 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         assertEquals(IntEngineResult.of(8), resolved.getCell(resultKey).get())
         when (variableSelectionIdentityPolicy) {
             VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> {
-                assertEquals(1, payloadApplications)
-                assertEquals(listOf(setOf("one", "two")), suppliedDemandFields)
+                assertEquals(1, suppliedDemandFields.size)
+                assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
             }
             VariableSelectionIdentityPolicy.PRESERVE_SELECTION_OCCURRENCES -> {
-                assertEquals(4, payloadApplications)
+                assertEquals(4, suppliedDemandFields.size)
                 assertEquals(
                     mapOf(
                         setOf("one") to 2,

@@ -13,6 +13,7 @@ import model.Selection
 import model.Stamp
 import model.TypeExpr
 import model.Value
+import model.VariableBinding
 import model.instantiateBindings
 import model.objectKey
 import model.registry.FieldResolver
@@ -78,7 +79,7 @@ internal fun FieldResolver.boundObjectPathDefinitions(
 context(world: Assumptions)
 private fun ObjectEngineResult.readCompletedProvider(
     path: List<ObjectEngineResult.Key>,
-): Value.Input? {
+): VariableBinding {
     var current = this
     path.forEachIndexed { index, openKey ->
         val specialized =
@@ -101,9 +102,9 @@ private fun ObjectEngineResult.readCompletedProvider(
                 .groundKeys()
                 .single()
         val value = current.getCell(key).get()
-        if (value == null) return null
-        if (value == ErrorEngineResult) return Value.Error
-        if (index == path.lastIndex) return value.toInputValue()
+        if (value == null) return VariableBinding.of(null)
+        if (value == ErrorEngineResult) return VariableBinding.Error
+        if (index == path.lastIndex) return value.toVariableBinding()
         current =
             value as? ObjectEngineResult
                 ?: error("Completed provider path crossed a non-object at $key")
@@ -111,20 +112,36 @@ private fun ObjectEngineResult.readCompletedProvider(
     error("Provider path must be nonempty")
 }
 
-private fun EngineResult.toInputValue(): Value.Input =
+private fun EngineResult.toVariableBinding(): VariableBinding =
     when (this) {
-        ErrorEngineResult -> Value.Error
-        is model.SimpleEngineResult -> toValue()
-        is ListEngineResult -> toInputList()
+        ErrorEngineResult -> VariableBinding.Error
+        is model.SimpleEngineResult -> VariableBinding.of(toValue())
+        is ListEngineResult -> toInputListBinding()
         is ObjectEngineResult ->
             error("An object-path provider cannot terminate at an object")
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun ListEngineResult.toInputList(): Value.InputList {
+private fun ListEngineResult.toInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType)
-    return Value.InputList.of(
-        typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { cell -> cell.get()?.toInputValue() },
+    val values = mutableListOf<Value.Input?>()
+    indices.forEach { index ->
+        val result = get(index).get()
+        val binding =
+            if (result == null) {
+                VariableBinding.of(null)
+            } else {
+                result.toVariableBinding()
+            }
+        when (binding) {
+            VariableBinding.Error -> return VariableBinding.Error
+            is VariableBinding.Input -> values += binding.value
+        }
+    }
+    return VariableBinding.of(
+        Value.InputList.of(
+            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
+            values = values,
+        ),
     )
 }

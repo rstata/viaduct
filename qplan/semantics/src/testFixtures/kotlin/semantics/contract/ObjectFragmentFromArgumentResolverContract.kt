@@ -4,6 +4,7 @@ import model.ObjectEngineResult
 
 import model.IntEngineResult
 import model.Value
+import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.TestWorld
@@ -81,7 +82,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                         variables.isNotEmpty() && variables.all(world::isBound)
                     } ?: listOf(variable.stamp(path))
             boundVariables.forEach { boundVariable ->
-                assertEquals(expectedValue, world.getBinding(boundVariable))
+                assertEquals(VariableBinding.of(expectedValue), world.getBinding(boundVariable))
             }
         }
     }

@@ -4,6 +4,7 @@ import model.ObjectEngineResult
 
 import kotlinx.coroutines.runBlocking
 import model.Value
+import model.VariableBinding
 import model.emptyFragmentOf
 import model.testing.TestWorld
 import model.testing.fromArgument
@@ -43,9 +44,9 @@ class FromArgumentBindingTest {
             listOf(key).bindFromArguments(emptyList())
             val variable =
                 Value.Variable.of(field, "value").stamp(listOf(key))
-            assertEquals(Value.Int.of(1), world.getBinding(variable))
+            assertEquals(VariableBinding.of(Value.Int.of(1)), world.getBinding(variable))
             assertEquals(
-                Value.Int.of(1),
+                VariableBinding.of(Value.Int.of(1)),
                 runBlocking { world.fetchBinding(variable) },
             )
             assertFailsWith<IllegalStateException> {

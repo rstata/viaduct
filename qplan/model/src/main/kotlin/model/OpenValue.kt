@@ -5,11 +5,39 @@ import model.invariants.conformsToSchemaType
 /**
  * An opaque, schema-checked input expression that may contain variables.
  *
- * Ground [Value.Input] values are also open values. Other implementations expose no structural
- * operations; they can only be embedded in another open expression or instantiated under one
- * [Assumptions].
+ * Other than [Ground], implementations expose no structural operations; they can only be embedded
+ * in another open expression or instantiated under one [Assumptions].
  */
 sealed interface OpenValue {
+    /**
+     * A variable-free input expression.
+     *
+     * Equality is structural over [data]. [data] recursively excludes [Value.Error].
+     */
+    sealed interface Ground : OpenValue {
+        val data: Value.Input
+
+        companion object {
+            /**
+             * Constructs a ground expression checked against [typeExpr].
+             *
+             * ### Invariant: open-ground-input
+             *
+             * Every result contains a schema-conforming [Value.Input] with no recursive
+             * [Value.Error].
+             */
+            fun of(
+                typeExpr: TypeExpr<Schema.InputType>,
+                data: Value.Input,
+            ): Ground {
+                require(!data.containsInputError() && data.conformsToSchemaType(typeExpr)) {
+                    "Ground open value does not conform to $typeExpr"
+                }
+                return GroundOpenValueImpl(data)
+            }
+        }
+    }
+
     companion object {
         /**
          * Constructs one schema-checked open expression.
@@ -31,6 +59,12 @@ sealed interface OpenValue {
  * field-value map.
  */
 sealed interface OpenArguments {
+    /** A fully grounded argument outcome. */
+    sealed interface Ground : OpenArguments {
+        /** The whole argument tuple is erroneous and has no individual argument values. */
+        data object Error : Ground
+    }
+
     /**
      * An argument tuple in a resolver-registry template.
      *
@@ -60,6 +94,9 @@ sealed interface OpenArguments {
                 expectedType: Schema.FieldArguments,
                 arguments: OpenArguments,
             ): Template {
+                require(arguments != Ground.Error) {
+                    "Erroneous arguments cannot become a registry template"
+                }
                 require(arguments.usedVariables().all(Value.Variable::isTemplate)) {
                     "A registry argument template cannot contain stamped variables"
                 }
@@ -80,22 +117,16 @@ sealed interface OpenArguments {
         /**
          * Constructs the schema-checked open argument tuple for [field].
          *
-         * Declared defaults are included. When no supplied expression contains a variable, the
-         * result is a ground [Value.Arguments].
+         * Declared defaults are included. A variable-free result is either ordinary
+         * [Value.Arguments] or [Ground.Error] when any supplied expression recursively contains
+         * [Value.Error].
          */
         fun of(
             field: Schema.OutputField,
             fields: Map<String, Any?>,
         ): OpenArguments {
             val values = coerceOpenInputLikeFields(field.arguments, fields)
-            return if (values.values.all { it == null || it is Value.Input }) {
-                argumentsOfGround(
-                    field.arguments,
-                    values.mapValues { (_, value) -> value as Value.Input? },
-                )
-            } else {
-                OpenArgumentsImpl(values).validatedAgainst(field.arguments)
-            }
+            return openArgumentsOf(field.arguments, values)
         }
     }
 }
@@ -107,14 +138,16 @@ sealed interface OpenArguments {
 internal fun OpenArguments.restampSelectionVariables(
     expectedType: Schema.FieldArguments,
     selectionStamp: Stamp.Occurrence,
-): OpenArguments =
-    openArgumentsOf(
+): OpenArguments {
+    if (this == OpenArguments.Ground.Error) return this
+    return openArgumentsOf(
         expectedType = expectedType,
         fields =
             fieldExpressions().mapValues { (_, value) ->
                 value.restampVariables(selectionStamp)
             },
     )
+}
 
 private data class OpenListValueImpl(
     val values: List<OpenValue?>,
@@ -123,6 +156,10 @@ private data class OpenListValueImpl(
 private data class OpenInputObjectValueImpl(
     val fieldValues: Map<String, OpenValue?>,
 ) : OpenValue
+
+private data class GroundOpenValueImpl(
+    override val data: Value.Input,
+) : OpenValue.Ground
 
 private data class OpenArgumentsImpl(
     val fieldValues: Map<String, OpenValue?>,
@@ -158,7 +195,7 @@ private fun coerceOpenInputLikeFields(
         .mapNotNull { field ->
             val defaultValue = field.defaultValue
             if (defaultValue is Value.Default.Present) {
-                field.name to defaultValue.value
+                field.name to defaultValue.value.toOpenValue()
             } else {
                 null
             }
@@ -177,7 +214,8 @@ private fun coerceOpenInputValue(
     if (value is Value.Variable) return value
     if (value is Value.Input) {
         if (!value.conformsToSchemaType(typeExpr)) throw ClassCastException()
-        return value
+        if (value.containsInputError()) return Value.Error
+        return OpenValue.Ground.of(typeExpr, value)
     }
     if (value is OpenValue) {
         if (!value.conformsToSchemaType(typeExpr)) throw ClassCastException()
@@ -193,14 +231,7 @@ private fun coerceOpenInputValue(
                     else -> throw ClassCastException()
                 }
             val coerced = elements.map { coerceOpenInputValue(typeExpr.elementType, it) }
-            if (coerced.all { it == null || it is Value.Input }) {
-                Value.InputList.of(
-                    typeExpr = typeExpr.elementType,
-                    values = coerced.map { it as Value.Input? },
-                )
-            } else {
-                OpenListValueImpl(coerced)
-            }
+            openListValueOf(typeExpr.elementType, coerced)
         }
     }
 }
@@ -212,32 +243,32 @@ private fun coerceOpenNamedInputValue(
     when (type) {
         Schema.IntType ->
             when (value) {
-                is Int -> Value.Int.of(value)
+                is Int -> GroundOpenValueImpl(Value.Int.of(value))
                 else -> throw ClassCastException()
             }
         Schema.FloatType ->
             when (value) {
-                is Double -> Value.Float.of(value)
+                is Double -> GroundOpenValueImpl(Value.Float.of(value))
                 else -> throw ClassCastException()
             }
         Schema.StringType ->
             when (value) {
-                is String -> Value.String.of(value)
+                is String -> GroundOpenValueImpl(Value.String.of(value))
                 else -> throw ClassCastException()
             }
         Schema.BooleanType ->
             when (value) {
-                is Boolean -> Value.Boolean.of(value)
+                is Boolean -> GroundOpenValueImpl(Value.Boolean.of(value))
                 else -> throw ClassCastException()
             }
         Schema.IDType ->
             when (value) {
-                is String -> Value.ID.of(value)
+                is String -> GroundOpenValueImpl(Value.ID.of(value))
                 else -> throw ClassCastException()
             }
         is Schema.EnumType ->
             when (value) {
-                is String -> Value.Enum.of(type, value)
+                is String -> GroundOpenValueImpl(Value.Enum.of(type, value))
                 else -> throw ClassCastException()
             }
         is Schema.InputObjectType -> {
@@ -251,15 +282,38 @@ private fun coerceOpenNamedInputValue(
                     else -> throw ClassCastException()
                 }
             val coerced = coerceOpenInputLikeFields(type, fields)
-            if (coerced.values.all { it == null || it is Value.Input }) {
-                Value.InputObject.of(
-                    type,
-                    coerced.mapValues { (_, fieldValue) -> fieldValue as Value.Input? },
-                )
-            } else {
-                OpenInputObjectValueImpl(coerced)
-            }
+            openInputObjectValueOf(type, coerced)
         }
+    }
+
+private fun openListValueOf(
+    elementType: TypeExpr<Schema.InputType>,
+    values: List<OpenValue?>,
+): OpenValue =
+    if (values.all { value -> value == null || value is OpenValue.Ground }) {
+        GroundOpenValueImpl(
+            Value.InputList.of(
+                typeExpr = elementType,
+                values = values.map { value -> (value as? OpenValue.Ground)?.data },
+            ),
+        )
+    } else {
+        OpenListValueImpl(values)
+    }
+
+private fun openInputObjectValueOf(
+    type: Schema.InputObjectType,
+    fieldValues: Map<String, OpenValue?>,
+): OpenValue =
+    if (fieldValues.values.all { value -> value == null || value is OpenValue.Ground }) {
+        GroundOpenValueImpl(
+            Value.InputObject.of(
+                type,
+                fieldValues.mapValues { (_, value) -> (value as? OpenValue.Ground)?.data },
+            ),
+        )
+    } else {
+        OpenInputObjectValueImpl(fieldValues)
     }
 
 private fun OpenValue.conformsToSchemaType(
@@ -267,7 +321,7 @@ private fun OpenValue.conformsToSchemaType(
 ): Boolean =
     when (this) {
         Value.Error, is Value.Variable -> true
-        is Value.Input -> this.conformsToSchemaType(typeExpr)
+        is OpenValue.Ground -> data.conformsToSchemaType(typeExpr)
         is OpenListValueImpl ->
             typeExpr is TypeExpr.List &&
                 values.all { value ->
@@ -295,16 +349,29 @@ private fun OpenValue?.conformsToSchemaTypeOrNull(
 internal fun OpenArguments.conformsToArgumentDefinition(
     expectedType: Schema.FieldArguments,
 ): Boolean =
-    fieldExpressions().all { (name, value) ->
-        val field = expectedType.fields[name] ?: return@all false
-        value.conformsToSchemaTypeOrNull(field.typeExpr)
+    when (this) {
+        OpenArguments.Ground.Error -> true
+        else ->
+            fieldExpressions().all { (name, value) ->
+                val field = expectedType.fields[name] ?: return@all false
+                value.conformsToSchemaTypeOrNull(field.typeExpr)
+            }
     }
 
 internal fun OpenArguments.fieldExpressions(): Map<String, OpenValue?> =
     when (this) {
-        is Value.Arguments -> fieldValues
+        OpenArguments.Ground.Error -> error("Erroneous arguments have no field expressions")
+        is Value.Arguments ->
+            fieldValues.mapValues { (_, value) -> value.toOpenValue() }
         is OpenArgumentsImpl -> fieldValues
         is OpenArgumentsTemplateImpl -> fieldValues
+    }
+
+private fun Value.Input?.toOpenValue(): OpenValue? =
+    when {
+        this == null -> null
+        this == Value.Error -> Value.Error
+        else -> GroundOpenValueImpl(this)
     }
 
 private fun <T : OpenArguments> T.validatedAgainst(
@@ -320,28 +387,24 @@ internal fun OpenArguments.stampVars(
     expectedType: Schema.FieldArguments,
     path: List<PathComponent>,
 ): OpenArguments {
+    if (this == OpenArguments.Ground.Error) return this
     val stamped = fieldExpressions().mapValues { (_, value) -> value.stampVars(path) }
-    return if (stamped.values.all { it == null || it is Value.Input }) {
-        argumentsOfGround(
-            expectedType,
-            stamped.mapValues { (_, value) -> value as Value.Input? },
-        )
-    } else {
-        OpenArgumentsImpl(stamped).validatedAgainst(expectedType)
-    }
+    return openArgumentsOf(expectedType, stamped)
 }
 
 private fun openArgumentsOf(
     expectedType: Schema.FieldArguments,
     fields: Map<String, OpenValue?>,
 ): OpenArguments =
-    if (fields.values.all { it == null || it is Value.Input }) {
-        argumentsOfGround(
-            expectedType,
-            fields.mapValues { (_, value) -> value as Value.Input? },
-        )
-    } else {
-        OpenArgumentsImpl(fields).validatedAgainst(expectedType)
+    when {
+        fields.values.any { value -> value.containsErrorValue() } ->
+            OpenArguments.Ground.Error
+        fields.values.all { value -> value == null || value is OpenValue.Ground } ->
+            argumentsOfGround(
+                expectedType,
+                fields.mapValues { (_, value) -> (value as? OpenValue.Ground)?.data },
+            )
+        else -> OpenArgumentsImpl(fields).validatedAgainst(expectedType)
     }
 
 private fun OpenValue?.stampVars(path: List<PathComponent>): OpenValue? =
@@ -396,35 +459,23 @@ internal fun OpenArguments.substituteTemplates(
     expectedType: Schema.FieldArguments,
     bindings: Map<Value.Variable, Value.Input?>,
 ): OpenArguments {
+    if (this == OpenArguments.Ground.Error) return this
     require(bindings.keys.all(Value.Variable::isTemplate)) {
         "Template substitution requires variable templates"
     }
     val substituted =
         fieldExpressions().mapValues { (_, value) -> value.substituteTemplates(bindings) }
-    return if (substituted.values.all { it == null || it is Value.Input }) {
-        argumentsOfGround(
-            expectedType,
-            substituted.mapValues { (_, value) -> value as Value.Input? },
-        )
-    } else {
-        OpenArgumentsImpl(substituted).validatedAgainst(expectedType)
-    }
+    return openArgumentsOf(expectedType, substituted)
 }
 
 internal fun OpenArguments.mapVariableTemplates(
     expectedType: Schema.FieldArguments,
     transform: (Value.Variable) -> Value.Variable,
 ): OpenArguments {
+    if (this == OpenArguments.Ground.Error) return this
     val mapped =
         fieldExpressions().mapValues { (_, value) -> value.mapVariableTemplates(transform) }
-    return if (mapped.values.all { it == null || it is Value.Input }) {
-        argumentsOfGround(
-            expectedType,
-            mapped.mapValues { (_, value) -> value as Value.Input? },
-        )
-    } else {
-        OpenArgumentsImpl(mapped).validatedAgainst(expectedType)
-    }
+    return openArgumentsOf(expectedType, mapped)
 }
 
 private fun OpenValue?.mapVariableTemplates(
@@ -456,7 +507,11 @@ private fun OpenValue?.mapVariableTemplates(
     }
 
 internal fun OpenArguments.variables(): Set<Value.Variable> =
-    fieldExpressions().values.flatMapTo(linkedSetOf()) { value -> value.variables() }
+    if (this == OpenArguments.Ground.Error) {
+        emptySet()
+    } else {
+        fieldExpressions().values.flatMapTo(linkedSetOf()) { value -> value.variables() }
+    }
 
 /** Returns the occurrence-specific variables used anywhere in this argument tuple. */
 fun OpenArguments.stampedVariables(): Set<Value.Variable> =
@@ -467,9 +522,13 @@ fun OpenArguments.usedVariables(): Set<Value.Variable> = variables()
 
 /** Returns the argument names whose values recursively contain at least one variable expression. */
 fun OpenArguments.variableArgumentNames(): Set<String> =
-    fieldExpressions()
-        .filterValues { value -> value.variables().isNotEmpty() }
-        .keys
+    if (this == OpenArguments.Ground.Error) {
+        emptySet()
+    } else {
+        fieldExpressions()
+            .filterValues { value -> value.variables().isNotEmpty() }
+            .keys
+    }
 
 /** Returns the source-selection identities carried by variables in this tuple. */
 fun OpenArguments.variableSourceSelectionStamps(): Set<Stamp.Occurrence> =
@@ -491,6 +550,7 @@ internal fun OpenArguments.variableTemplates(): Set<Value.Variable> =
     variables().filterTo(linkedSetOf(), Value.Variable::isTemplate)
 
 internal fun OpenArguments.retarget(field: Schema.OutputField): OpenArguments {
+    if (this == OpenArguments.Ground.Error) return this
     val retargeted = OpenArguments.of(field, fieldExpressions())
     return when (this) {
         is OpenArguments.Template -> OpenArguments.Template.of(field.arguments, retargeted)
@@ -527,28 +587,16 @@ internal fun OpenValue?.matchingVariableTypes(
     }
 }
 
-/** Returns whether any argument expression recursively contains [Value.Error]. */
-fun OpenArguments.containsErrorValue(): Boolean =
-    fieldExpressions().values.any { value -> value.containsErrorValue() }
+/** Returns whether this entire ground argument outcome is erroneous. */
+fun OpenArguments.containsErrorValue(): Boolean = this == OpenArguments.Ground.Error
 
 private fun OpenValue?.containsErrorValue(): Boolean =
     when (this) {
         Value.Error -> true
-        is Value.InputList -> values.any { value -> value.containsGroundErrorValue() }
-        is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsGroundErrorValue() }
+        is OpenValue.Ground -> data.containsInputError()
         is OpenListValueImpl -> values.any { value -> value.containsErrorValue() }
         is OpenInputObjectValueImpl ->
             fieldValues.values.any { value -> value.containsErrorValue() }
-        else -> false
-    }
-
-private fun Value.Input?.containsGroundErrorValue(): Boolean =
-    when (this) {
-        Value.Error -> true
-        is Value.InputList -> values.any { value -> value.containsGroundErrorValue() }
-        is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsGroundErrorValue() }
         else -> false
     }
 
@@ -557,7 +605,7 @@ private fun OpenValue?.substituteTemplates(
 ): OpenValue? =
     when (this) {
         is Value.Variable ->
-            if (isTemplate && this in bindings) bindings[this] else this
+            if (isTemplate && this in bindings) bindings[this].toOpenValue() else this
         is OpenListValueImpl ->
             copy(values = values.map { value -> value.substituteTemplates(bindings) })
         is OpenInputObjectValueImpl ->
@@ -578,7 +626,8 @@ private fun OpenValue?.substituteTemplates(
 context(world: Assumptions)
 internal fun OpenArguments.instantiateBindings(
     expectedType: Schema.FieldArguments,
-): Value.Arguments {
+): OpenArguments.Ground {
+    if (this == OpenArguments.Ground.Error) return OpenArguments.Ground.Error
     return groundedArguments(expectedType) { value, typeExpr ->
         value.instantiateBindings(typeExpr)
     }
@@ -588,7 +637,8 @@ internal fun OpenArguments.instantiateBindings(
 context(world: Assumptions)
 suspend fun OpenArguments.fetchBindings(
     expectedType: Schema.FieldArguments,
-): Value.Arguments {
+): OpenArguments.Ground {
+    if (this == OpenArguments.Ground.Error) return OpenArguments.Ground.Error
     return groundedArguments(expectedType) { value, typeExpr ->
         value.fetchBindings(typeExpr)
     }
@@ -596,26 +646,32 @@ suspend fun OpenArguments.fetchBindings(
 
 private inline fun OpenArguments.groundedArguments(
     expectedType: Schema.FieldArguments,
-    ground: (OpenValue?, TypeExpr<Schema.InputType>) -> Value.Input?,
-): Value.Arguments =
-    argumentsOfGround(
-        expectedType,
-        fieldExpressions().mapValues { (name, value) ->
-            val typeExpr = expectedType.fields.getValue(name).typeExpr
-            coerceInputValue(typeExpr, ground(value, typeExpr))
-        },
-    )
+    ground: (OpenValue?, TypeExpr<Schema.InputType>) -> VariableBinding,
+): OpenArguments.Ground {
+    val fields = linkedMapOf<String, Value.Input?>()
+    fieldExpressions().forEach { (name, value) ->
+        val typeExpr = expectedType.fields.getValue(name).typeExpr
+        when (val binding = ground(value, typeExpr)) {
+            VariableBinding.Error -> return OpenArguments.Ground.Error
+            is VariableBinding.Input ->
+                fields[name] = coerceInputValue(typeExpr, binding.value)
+        }
+    }
+    return argumentsOfGround(expectedType, fields)
+}
 
 context(world: Assumptions)
 private fun OpenValue?.instantiateBindings(
     expectedType: TypeExpr<Schema.InputType>,
-): Value.Input? =
+): VariableBinding =
     when (this) {
-        null -> coerceInputValue(expectedType, null)
-        is Value.Input -> coerceInputValue(expectedType, this)
+        null -> VariableBinding.of(coerceInputValue(expectedType, null))
+        Value.Error -> VariableBinding.Error
+        is OpenValue.Ground ->
+            VariableBinding.of(coerceInputValue(expectedType, data))
         is Value.Variable ->
             if (isStamped) {
-                coerceInputValue(expectedType, world.getBinding(this))
+                world.getBinding(this).coerceTo(expectedType)
             } else {
                 error("Variable template $this must be stamped before it can be instantiated")
             }
@@ -623,9 +679,18 @@ private fun OpenValue?.instantiateBindings(
             require(expectedType is TypeExpr.List) {
                 "Open list expression does not match $expectedType"
             }
-            Value.InputList.of(
-                expectedType.elementType,
-                values.map { value -> value.instantiateBindings(expectedType.elementType) },
+            val grounded = mutableListOf<Value.Input?>()
+            values.forEach { value ->
+                when (val binding = value.instantiateBindings(expectedType.elementType)) {
+                    VariableBinding.Error -> return VariableBinding.Error
+                    is VariableBinding.Input -> grounded += binding.value
+                }
+            }
+            VariableBinding.of(
+                Value.InputList.of(
+                    expectedType.elementType,
+                    grounded,
+                ),
             )
         }
         is OpenInputObjectValueImpl -> {
@@ -633,11 +698,19 @@ private fun OpenValue?.instantiateBindings(
             require(expectedObjectType is Schema.InputObjectType) {
                 "Open input object expression does not match $expectedType"
             }
-            Value.InputObject.of(
-                expectedObjectType,
-                fieldValues.mapValues { (name, value) ->
-                    value.instantiateBindings(expectedObjectType.fields.getValue(name).typeExpr)
-                },
+            val grounded = linkedMapOf<String, Value.Input?>()
+            fieldValues.forEach { (name, value) ->
+                val fieldType = expectedObjectType.fields.getValue(name).typeExpr
+                when (val binding = value.instantiateBindings(fieldType)) {
+                    VariableBinding.Error -> return VariableBinding.Error
+                    is VariableBinding.Input -> grounded[name] = binding.value
+                }
+            }
+            VariableBinding.of(
+                Value.InputObject.of(
+                    expectedObjectType,
+                    grounded,
+                ),
             )
         }
     }
@@ -645,13 +718,15 @@ private fun OpenValue?.instantiateBindings(
 context(world: Assumptions)
 private suspend fun OpenValue?.fetchBindings(
     expectedType: TypeExpr<Schema.InputType>,
-): Value.Input? =
+): VariableBinding =
     when (this) {
-        null -> coerceInputValue(expectedType, null)
-        is Value.Input -> coerceInputValue(expectedType, this)
+        null -> VariableBinding.of(coerceInputValue(expectedType, null))
+        Value.Error -> VariableBinding.Error
+        is OpenValue.Ground ->
+            VariableBinding.of(coerceInputValue(expectedType, data))
         is Value.Variable ->
             if (isStamped) {
-                coerceInputValue(expectedType, world.fetchBinding(this))
+                world.fetchBinding(this).coerceTo(expectedType)
             } else {
                 error("Variable template $this must be stamped before it can be instantiated")
             }
@@ -659,9 +734,18 @@ private suspend fun OpenValue?.fetchBindings(
             require(expectedType is TypeExpr.List) {
                 "Open list expression does not match $expectedType"
             }
-            Value.InputList.of(
-                expectedType.elementType,
-                values.map { value -> value.fetchBindings(expectedType.elementType) },
+            val grounded = mutableListOf<Value.Input?>()
+            values.forEach { value ->
+                when (val binding = value.fetchBindings(expectedType.elementType)) {
+                    VariableBinding.Error -> return VariableBinding.Error
+                    is VariableBinding.Input -> grounded += binding.value
+                }
+            }
+            VariableBinding.of(
+                Value.InputList.of(
+                    expectedType.elementType,
+                    grounded,
+                ),
             )
         }
         is OpenInputObjectValueImpl -> {
@@ -669,11 +753,28 @@ private suspend fun OpenValue?.fetchBindings(
             require(expectedObjectType is Schema.InputObjectType) {
                 "Open input object expression does not match $expectedType"
             }
-            Value.InputObject.of(
-                expectedObjectType,
-                fieldValues.mapValues { (name, value) ->
-                    value.fetchBindings(expectedObjectType.fields.getValue(name).typeExpr)
-                },
+            val grounded = linkedMapOf<String, Value.Input?>()
+            fieldValues.forEach { (name, value) ->
+                val fieldType = expectedObjectType.fields.getValue(name).typeExpr
+                when (val binding = value.fetchBindings(fieldType)) {
+                    VariableBinding.Error -> return VariableBinding.Error
+                    is VariableBinding.Input -> grounded[name] = binding.value
+                }
+            }
+            VariableBinding.of(
+                Value.InputObject.of(
+                    expectedObjectType,
+                    grounded,
+                ),
             )
         }
+    }
+
+private fun VariableBinding.coerceTo(
+    expectedType: TypeExpr<Schema.InputType>,
+): VariableBinding =
+    when (this) {
+        VariableBinding.Error -> this
+        is VariableBinding.Input ->
+            VariableBinding.of(coerceInputValue(expectedType, value))
     }

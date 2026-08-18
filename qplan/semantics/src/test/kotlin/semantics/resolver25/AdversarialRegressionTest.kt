@@ -5,6 +5,7 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.Value
+import model.VariableBinding
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
@@ -40,7 +41,12 @@ class AdversarialRegressionTest {
         provided: Value.Output?,
         passiveIntermediate: Boolean,
     ) {
-        val expectedInput = provided as Value.Input?
+        val expectedBinding =
+            if (provided == Value.Error) {
+                VariableBinding.Error
+            } else {
+                VariableBinding.of(provided as Value.Input?)
+            }
         val expectedResult = if (provided == Value.Error) ErrorEngineResult else null
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {
             val providerSelection =
@@ -118,7 +124,7 @@ class AdversarialRegressionTest {
 
             assertEquals<EngineResult?>(expectedResult, resolved.getCell(resultKey).getValue().get())
             assertEquals(
-                expectedInput,
+                expectedBinding,
                 world.getBinding(
                     Value.Variable
                         .of(resultKey.field, "value")

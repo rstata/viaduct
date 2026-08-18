@@ -388,7 +388,7 @@ class SelectionMergeTest {
         val markerOnly:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable, Value.Input?>,
+                Map<Value.Variable, VariableBinding>,
             > =
             runBlocking {
                 context(fixture.world) {
@@ -397,12 +397,12 @@ class SelectionMergeTest {
             }
 
         assertEquals(setOf(groundKey), markerOnly.first.groundKeys())
-        assertEquals(mapOf(firstVariable to value), markerOnly.second)
+        assertEquals(mapOf(firstVariable to VariableBinding.of(value)), markerOnly.second)
 
         val combined:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable, Value.Input?>,
+                Map<Value.Variable, VariableBinding>,
             > =
             runBlocking {
                 context(fixture.world) {
@@ -414,8 +414,8 @@ class SelectionMergeTest {
         assertEquals(1, combined.first.size)
         assertEquals(
             mapOf(
-                firstVariable to value,
-                secondVariable to value,
+                firstVariable to VariableBinding.of(value),
+                secondVariable to VariableBinding.of(value),
             ),
             combined.second,
         )
@@ -509,7 +509,7 @@ class SelectionMergeTest {
             }
 
         assertTrue(continued.second.isEmpty())
-        assertEquals(mapOf(variable to leafValue), terminal.second)
+        assertEquals(mapOf(variable to VariableBinding.of(leafValue)), terminal.second)
 
         listOf<EngineResult?>(null, ErrorEngineResult).forEach { prematureValue ->
             val prematureResult =
@@ -525,9 +525,13 @@ class SelectionMergeTest {
                     }
             }
             assertEquals(
-                mapOf<Value.Variable, Value.Input?>(
+                mapOf<Value.Variable, VariableBinding>(
                     variable to
-                        if (prematureValue == ErrorEngineResult) Value.Error else null,
+                        if (prematureValue == ErrorEngineResult) {
+                            VariableBinding.Error
+                        } else {
+                            VariableBinding.of(null)
+                        },
                 ),
                 premature.second,
             )

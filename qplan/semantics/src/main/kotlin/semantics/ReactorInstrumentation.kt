@@ -178,10 +178,14 @@ internal fun List<PathComponent>.renderReactorPath(): String =
             when (component) {
                 is ObjectEngineResult.GroundKey ->
                     "${component.field.containingType.typeName}.${component.field.fieldName}" +
-                        component.arguments.fieldValues.entries.joinToString(
-                            prefix = "(",
-                            postfix = ")",
-                        ) { (name, value) -> "$name=$value" }
+                        when (val arguments = component.arguments) {
+                            model.OpenArguments.Ground.Error -> "(error)"
+                            is Value.Arguments ->
+                                arguments.fieldValues.entries.joinToString(
+                                    prefix = "(",
+                                    postfix = ")",
+                                ) { (name, value) -> "$name=$value" }
+                        }
                 is ListEngineResult.Index -> "[${component.index}]"
             }
         }

@@ -90,12 +90,12 @@ private suspend fun resolveSlot(
 ) {
     val key = selection.groundKey()
     val valuePromise = cell.getValue()
-    when {
-        key.arguments.argumentsContainErrorValue() -> {
+    when (val arguments = key.arguments) {
+        model.OpenArguments.Ground.Error -> {
             valuePromise.complete(ErrorEngineResult)
             cell.setAccessAccepted(Value.Error)
         }
-        else ->
+        is Value.Arguments ->
             coroutineScope {
                 val resolutionSelections = runtimeSupport.complete(selection.subselections)
                 val fieldValue =
@@ -110,13 +110,13 @@ private suspend fun resolveSlot(
                         if (world.selectiveResolvers) {
                             resolver(
                                 input = input,
-                                arguments = key.arguments,
+                                arguments = arguments,
                                 selections = resolutionSelections,
                             )
                         } else {
                             resolver(
                                 input = input,
-                                arguments = key.arguments,
+                                arguments = arguments,
                             )
                         }
                     } else {

@@ -63,37 +63,30 @@ class ObjectConstructionTest {
     }
 
     @Test
-    fun `field references preserve distinct named argument tuples`() {
+    fun `object construction rejects argument-bearing passive fields`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val schema = world.schema
-        val friend = schema.objectOf("User")
+        val friend = world.schema.objectOf("User")
 
-        val user =
+        assertFailsWith<IllegalArgumentException> {
             world.objectOf("User") {
                 field("friend", "limit" to 1) setTo friend
-                field("friend", "limit" to 2) setTo null
             }
-
-        val first = key(schema, "friend", "limit" to 1)
-        val second = key(schema, "friend", "limit" to 2)
-        assertEquals(setOf(first, second), user.fieldValues.keys)
-        assertEquals(friend, user.fieldValues[first])
-        assertEquals(null, user.fieldValues[second])
+        }
     }
 
     @Test
     fun `object values retain only explicitly supplied fields`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
-        val typenameKey = key(schema, "__typename")
+        val typenameKey = "__typename"
         val typenameValue = Value.String.of("User")
 
         val implicit = Value.Object.of(userType)
         val explicit = Value.Object.of(userType, mapOf(typenameKey to typenameValue))
 
-        assertEquals(emptyMap<ObjectEngineResult.GroundKey, Value.Output?>(), implicit.fieldValues)
+        assertEquals(emptyMap<String, Value.Output?>(), implicit.fieldValues)
         assertEquals(
-            mapOf<ObjectEngineResult.GroundKey, Value.Output?>(typenameKey to typenameValue),
+            mapOf<String, Value.Output?>(typenameKey to typenameValue),
             explicit.fieldValues,
         )
     }
@@ -148,12 +141,15 @@ class ObjectConstructionTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
         val user = schema.objectOf("User")
-        val viewerKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "viewer"), emptyMap())
+        val viewerField = schema.objectField("Query", "viewer")
 
         assertFailsWith<IllegalArgumentException> {
             Value.Object.of(
                 type = userType,
-                fields = mapOf(viewerKey to user),
+                fields =
+                    listOf(
+                        Value.Object.FieldValue.of("viewer", viewerField, user),
+                    ),
             )
         }
     }
@@ -182,12 +178,10 @@ class ObjectConstructionTest {
     private fun key(
         schema: Schema,
         fieldName: String,
-        vararg arguments: Pair<String, Any?>,
-    ): ObjectEngineResult.GroundKey =
-        ObjectEngineResult.GroundKey.of(
-            field = schema.objectField("User", fieldName),
-            arguments = arguments.toMap(),
-        )
+    ): String {
+        schema.objectField("User", fieldName)
+        return fieldName
+    }
 
     private companion object {
         val SCHEMA_SDL =

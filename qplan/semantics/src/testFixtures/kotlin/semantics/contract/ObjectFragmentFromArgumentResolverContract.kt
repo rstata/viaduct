@@ -9,6 +9,7 @@ import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import model.materializedFieldKey
 import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -113,7 +114,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue(consumeKey)
+                                input.fieldValues.getValue(consumeKey.materializedFieldKey())
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->

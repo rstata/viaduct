@@ -30,7 +30,7 @@ class ObjectValueScope internal constructor(
     private val type: Schema.ObjectType,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val fields = linkedMapOf<ObjectEngineResult.GroundKey, Value.Output?>()
+    private val fields = linkedMapOf<String, Value.Object.FieldValue>()
     private var isBuilt = false
 
     /** Selects a field coordinate on this scope's object type. */
@@ -69,13 +69,23 @@ class ObjectValueScope internal constructor(
         require(scope === this@ObjectValueScope) {
             "A field reference cannot be assigned in another object scope"
         }
-        require(key !in fields) {
+        val arguments = key.arguments
+        require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+            "Passive object field ${type.typeName}/${key.field.fieldName} must be argumentless"
+        }
+        val fieldName = key.field.fieldName
+        require(fieldName !in fields) {
             "Duplicate object field ${type.typeName}/${key.field.fieldName}"
         }
-        fields[key] =
-            sourceSchema.lowerOutput(
-                key.field,
-                coerceOutputValue(sourceTypeExpr, value),
+        fields[fieldName] =
+            Value.Object.FieldValue.of(
+                key = fieldName,
+                field = key.field,
+                value =
+                    sourceSchema.lowerOutput(
+                        key.field,
+                        coerceOutputValue(sourceTypeExpr, value),
+                    ),
             )
     }
 
@@ -89,7 +99,7 @@ class ObjectValueScope internal constructor(
         isBuilt = true
         return Value.Object.of(
             type = type,
-            fields = fields.toMap(),
+            fields = fields.values,
         )
     }
 }

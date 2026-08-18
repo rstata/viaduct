@@ -53,8 +53,9 @@ class MixedVariablePhaseRegressionTest {
                     ) {
                         val seed =
                             input.fieldValues.entries
-                                .single { (key, _) -> key.field.fieldName == "seed" }
-                                .value
+                                .single { (key, _) ->
+                                    key == "seed" || key.startsWith("seed(")
+                                }.value
                         require(seed == Value.Int.of(7))
                         observedBridge = true
                     }
@@ -139,8 +140,9 @@ class MixedVariablePhaseRegressionTest {
                     ) {
                         val producer =
                             input.fieldValues.entries
-                                .single { (key, _) -> key.field.fieldName == "producer" }
-                                .value
+                                .single { (key, _) ->
+                                    key == "producer" || key.startsWith("producer(")
+                                }.value
                         require(producer == Value.Int.of(1))
                         observedSource = true
                     }

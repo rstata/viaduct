@@ -91,10 +91,12 @@ private fun Value.Object.resolveObjectValue(
     val mergedResolverDemand = resolverDemand.applicableGroundSelections(type)
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     if (world.selectiveResolvers) {
-        val unselectedKeys = fieldValues.keys - resolverDemandByKey.keys
+        val selectedFieldNames =
+            resolverDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.fieldName }
+        val unselectedKeys = fieldValues.keys - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${type.typeName} contains unselected fields: " +
-                unselectedKeys.joinToString { key -> key.field.fieldName }
+                unselectedKeys.joinToString()
         }
     }
 
@@ -104,9 +106,15 @@ private fun Value.Object.resolveObjectValue(
                 .filter { key -> key.field !in world.resolverRegistry }
                 .toSet()
         } else {
-            fieldValues.keys.filter { key ->
-                key.field !in world.resolverRegistry
-            }.toSet()
+            fieldValues.keys
+                .map { fieldName ->
+                    val field = type.fields.getValue(fieldName)
+                    require(field.arguments.fields.isEmpty()) {
+                        "Passive object field ${type.typeName}/$fieldName must be argumentless"
+                    }
+                    ObjectEngineResult.GroundKey.of(field, emptyMap())
+                }.filter { key -> key.field !in world.resolverRegistry }
+                .toSet()
         }
     val resolved =
         selectedKeys.fold(
@@ -116,9 +124,13 @@ private fun Value.Object.resolveObjectValue(
                 objectOccurrences = emptyList(),
             ),
         ) { result, key ->
+            val arguments = key.arguments
+            require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+                "Passive object field ${type.typeName}/${key.field.fieldName} must be argumentless"
+            }
             val fieldValue =
                 fieldValues
-                    .getValue(key)
+                    .getValue(key.field.fieldName)
                     .resolveValue(
                         path = path + key,
                         resolverDemand =

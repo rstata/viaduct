@@ -57,10 +57,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                             ) { input, _ ->
                                 val base =
                                     input.fieldValues.getValue(
-                                        ObjectEngineResult.GroundKey.of(
-                                            schema.objectField("Item", "base"),
-                                            emptyMap(),
-                                        ),
+                                        "base",
                                     ) as Value.String
                                 Value.String.of("computed:${base.stringValue}")
                             },

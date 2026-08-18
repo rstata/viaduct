@@ -6,17 +6,13 @@ Follow the current explicit prompt first, then this handoff. The immediate work 
 
 ## Immediate Objective
 
-Stabilize the source-to-model schema boundary before changing qplan object carriers. The fixture retains an unchanged GraphQL-Java source schema for source validation and derives a separate model-only schema for field resolution. In that model schema, a source Node field `foo: W<T>` is omitted and represented only by `foo_V_A_node: W<T_V_A_Bridge>`, where each concrete bridge has ordinary `id` and `node` fields and no generated hierarchy. Source schema names containing `V_A` are reserved and rejected. Object implementations that narrow the named return type of a Node-valued interface field are also rejected because supporting that covariance would require a bridge hierarchy or a different bridge representation.
+Introduce `MaterializeSelection` and `MaterializeSelectionForest` so resolver object fragments retain GraphQL response keys independently from ordinary construction selections. Settle their source-occurrence versus collected-group representation with executable alias, duplicate-response-key, mutually exclusive type-condition, open-argument, nested-list, and lowered-Node examples before fixing the public factory.
 
-`Value.Object` remains the canonical lowered carrier for this step. Source-facing fixture builders and resolver adapters accept node references and populate bridge fields; semantic reasoning never sees the omitted source coordinate. Future `execution2` materialization and resolver invocation will own the equivalent raise/lower boundary against tenant APIs.
+The string-key carrier checkpoint is complete. `Value.ObjectFields` is `Map<String, Value.Output?>`. Passive source and resolver-produced objects use canonical argumentless field names. Materialized argument-bearing fields use the private deterministic `GroundKey.materializedFieldKey()` address, which ignores occurrence stamps while preserving visible field-and-ground-argument equality. Materialization and construction still consume ordinary `SelectionForest`; aliases are not preserved yet.
 
-Tests follow a canonical-weighted boundary rule. Ordinary model and semantics setup, assertions, and resolver oracles name canonical model fields directly with `Schema.field` or `Schema.objectField`; they explicitly use names such as `foo_V_A_node` where lowering changed a coordinate. Source-name translation is available only through the explicit `SourceSchemaAdapter` at GraphQL parsing, source-facing object construction, source declaration compilation, resolver adaptation, arbitrary source-recipe materialization, and focused adapter tests.
+The next response-key work must retain one explicit lossless construction view of each materialize forest. Resolver object fragments remain resolver-local fixed input selections and never acquire client or closed demand. Synthetic `FromObjectField` provider markers belong only to the construction view.
 
-After this schema boundary is stable, refactor every maintained qplan resolver to use Viaduct engine API carriers where they express the same semantic facts as qplan's current types. `EngineObjectData.Sync` is the first important carrier boundary because the intended integration domain uses already-resolved synchronous partial object data and must distinguish an absent selection from a present null value.
-
-The later carrier migration applies to Resolver01-03, Resolver06-08, Resolver21-23, Resolver25, and Resolver26. Earlier versions remain the semantic and execution-structure comparison grid; they must not be left on a separate qplan-only carrier model while only Resolver26 moves forward.
-
-Resolver26 is the primary algorithm and eventual implementation blueprint. The purpose of the qplan refactor is to reduce the distance between a formally reasoned model and a future Viaduct implementation, not to maintain two independently shaped designs.
+Do not begin the `EngineObjectData.Sync` migration in the same change. The response-key endpoint should remain on qplan `Value` and typed `ObjectEngineResult` carriers so the later EOD comparison starts from a stable name-keyed value domain.
 
 ## Longer-Term Context
 
@@ -30,7 +26,9 @@ The qplan `model` project already depends on `viaduct.engine.api`, but qplan sou
 
 The resolver-value and engine-result domains are now distinct at every GraphQL output shape. Resolver inputs and outputs use `Value`, while completed fields use `IntEngineResult`, `FloatEngineResult`, `StringEngineResult`, `BooleanEngineResult`, `IDEngineResult`, `EnumEngineResult`, `ObjectEngineResult`, `ListEngineResult`, or `ErrorEngineResult`. `toEngineResult` and `toValue` mark crossings for simple values. This temporary parallel hierarchy keeps result semantics independent while the resolver-value side moves toward the engine API's future `EngineValueData` boundary.
 
-The complete key hierarchy now belongs to `ObjectEngineResult`: `Key`, `VariableKey`, `ObjectKey`, and `GroundKey`. `Value.Object` temporarily stores `ObjectEngineResult.GroundKey` entries so this ownership move does not also change object-value behavior. The later `EngineObjectData` alignment should replace that value-domain storage with response keys and no explicit key arguments; it must not reintroduce value-domain key types.
+The complete key hierarchy belongs to `ObjectEngineResult`: `Key`, `VariableKey`, `ObjectKey`, and `GroundKey`. `Value.Object` stores only strings. Its construction-time `FieldValue` entries retain a schema field long enough to validate a value and then forget that metadata. Generic object union and schema conformance therefore reason over already-validated string-keyed content rather than reconstructing OER identity.
+
+At the current checkpoint, resolver-visible materialization uses canonical field names for argumentless fields and deterministic private materialized-field addresses for argument-bearing fields. Equal visible keys with different occurrence stamps union under one string. Passive object construction rejects argument-bearing fields, and `ResolveValue` joins passive demand to source values by canonical field name before writing exact ground keys into the OER.
 
 Schema alignment is deliberately independent of this carrier migration. GraphQL-Java remains the source-facing schema representation, while qplan's lowered `Schema` is used exclusively for field-resolution reasoning. Do not transform the GraphQL-Java schema or make tenant-visible APIs expose bridge coordinates.
 
@@ -38,7 +36,7 @@ Schema alignment is deliberately independent of this carrier migration. GraphQL-
 
 The refactor must decide which qplan responsibilities move directly to engine API carriers and which remain model structure around them. Preserve exact-key validation, occurrence identity, selection-occurrence identity, and the difference between result values and access decisions even when the underlying object storage changes.
 
-Response aliases are outside the intended integration scope. Qplan may therefore use canonical field names at the EOD boundary; it does not need to model alias-keyed input EODs for this work.
+Response aliases are materialization facts, not OER identity. The next phase must preserve aliases from resolver object fragments and eventually replace temporary materialized-field addresses with GraphQL response keys. Aliases must never become exact result-path or OER key components.
 
 ## Resolver State
 
@@ -52,14 +50,13 @@ Runtime `FromObjectField` execution is present in Resolver25 and Resolver26. Doc
 
 ## Migration Sequence
 
-1. Keep the source GraphQL-Java schema and lowered model schema boundary executable through focused schema, object-construction, provider-path, node-contract, and arbitrary-generation tests.
-2. Define the exact correspondence between qplan result carriers and `EngineObjectData.Sync`, including absent, present-null, error, nested object, list, and access-decision behavior.
-3. Introduce the shared model boundary first, with focused carrier tests that make the correspondence executable.
-4. Migrate the recursive Resolver01-03 progression and its contracts.
-5. Carry the same boundary through Resolver06-08 and Resolver21-23 without introducing resolver-specific adapter models.
-6. Migrate Resolver25 and Resolver26 while preserving their distinct identity and demand policies.
-7. Update arbitrary generation, witnesses, correctness judgments, and examples to the resulting shared vocabulary.
-8. Keep the complete ordinary test matrix green at each shared step; use Resolver03/08/23 comparisons to localize semantic regressions before diagnosing advanced resolver behavior.
+1. Add `MaterializeSelection` and concrete-type response-key collection with focused executable examples.
+2. Make `FieldResolver` privately retain the unstamped materialize template and instantiate paired materialization and construction views from one resolver occurrence stamp.
+3. Add an awaitable OER-owned `(field, occurrence stamp) -> GroundKey` index, with declaration and one-writer publication.
+4. Migrate every maintained resolver to publish that index while preserving its existing scheduling and identity policy.
+5. Switch shared and Resolver26 materialization to response-key collection and exact indexed OER lookup.
+6. Update resolver observations, witnesses, arbitrary generation, examples, and design documents for aliases and duplicate response-key groups.
+7. Run the complete qplan gate before beginning any `EngineObjectData.Sync` carrier work.
 
 ## Backlogged TLA+ Refinement
 
@@ -71,12 +68,12 @@ TLA+ refinement work is explicitly backlogged until the EOD carrier refactor sta
 
 ## Open Design Questions
 
-- Does `EngineObjectData.Sync` become the object result carrier itself, or does qplan retain a typed occurrence wrapper around it?
-- Where should schema conformance and exact `GroundKey` validation live once field storage is name-keyed?
-- How should cell occurrence identity and write-once promise ownership be represented without relying on the current `ObjectEngineResult` implementation?
-- Should `accessAccepted` remain a separate qplan cell fact, or map to an existing engine API concept outside EOD?
-- Which conversions belong to the model artifact and which are test-fixture or future integration adapters?
-- How should the TLA+ extraction boundary name the aligned carriers without claiming a refinement that has not been proved?
+- Does one `MaterializeSelection` represent a source occurrence or a collected response-key group?
+- How does collection represent mutually exclusive type-conditioned alternatives?
+- What carrier owns response-group occurrence IDs and source-key compatibility facts?
+- Does resolver-fragment instantiation return a paired view or a materialize forest with one construction-view operation?
+- What planning operation declares the awaitable occurrence-to-ground-key lookup?
+- Do all variable-free response groups remain unstamped while sharing ordinary OER cells?
 
 ## Validation
 

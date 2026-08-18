@@ -95,7 +95,7 @@ class WorldInjectionTest {
         assertEquals(
             "field",
             assertIs<Value.ID>(
-                field.fieldValues[schema.key(user, "id")],
+                field.fieldValues["id"],
             ).idValue,
         )
 

@@ -11,6 +11,7 @@ import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.materializedFieldKey
 import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -286,6 +287,51 @@ class ResolveValueTest {
 
         val result = assertIs<ObjectEngineResult>(resolved.engineResult)
         assertEquals(setOf(typeNameKey, selectedKey, extraKey), result.keys)
+    }
+
+    @Test
+    fun `rejects an argument-bearing passive object field`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Item {
+                      value(index: Int): String
+                    }
+
+                    type Query {
+                      item: Item
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val itemType = world.schema.type("Item") as Schema.ObjectType
+        val field = world.schema.objectField("Item", "value")
+        val key = ObjectEngineResult.GroundKey.of(field, mapOf("index" to 1))
+        val value =
+            Value.Object.of(
+                type = itemType,
+                fields =
+                    listOf(
+                        Value.Object.FieldValue.of(
+                            key = key.materializedFieldKey(),
+                            field = field,
+                            value = Value.String.of("one"),
+                        ),
+                    ),
+            )
+        val selections =
+            world.fragmentFrom(
+                "fragment ignored on Item { value(index: 1) }",
+            ).subselections
+
+        assertFailsWith<IllegalArgumentException> {
+            context(world) {
+                value.resolveValue(
+                    path = emptyList(),
+                    resolverDemand = selections,
+                )
+            }
+        }
     }
 
     @Test

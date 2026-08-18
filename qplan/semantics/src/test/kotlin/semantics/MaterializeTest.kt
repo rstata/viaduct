@@ -4,16 +4,20 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.MissingFieldException
 import model.PathComponent
 import model.Schema
+import model.Selection
 import model.StringEngineResult
 import model.Value
 import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
+import model.selectionForestOf
 import model.testing.TestWorld
+import model.testing.occurrenceStampOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -162,4 +166,52 @@ class MaterializeTest {
 
         assertEquals(listOf(reader, reader), failure.cycle)
     }
+
+    @Test
+    fun `occurrence-stamped stored keys union under one visible string key`() =
+        runBlocking {
+            val world =
+                TestWorld
+                    .fromSDL(
+                        """
+                        type Query { value: String! }
+                        """.trimIndent(),
+                    ).assumptions
+            val field = world.schema.objectField("Query", "value")
+            val arguments = Value.Arguments.of(field, emptyMap())
+            val first =
+                ObjectEngineResult.GroundKey.of(
+                    occurrenceStampOf(listOf(ListEngineResult.Index.of(0))),
+                    field,
+                    arguments,
+                )
+            val second =
+                ObjectEngineResult.GroundKey.of(
+                    occurrenceStampOf(listOf(ListEngineResult.Index.of(1))),
+                    field,
+                    arguments,
+                )
+            val selections =
+                selectionForestOf(
+                    Selection.of(first, setOf(world.schema.query), selectionForestOf()),
+                    Selection.of(second, setOf(world.schema.query), selectionForestOf()),
+                ).merge(world.schema.query)
+            val result =
+                ObjectEngineResult.of(
+                    type = world.schema.query,
+                    values =
+                        mapOf(
+                            first to StringEngineResult.of("same"),
+                            second to StringEngineResult.of("same"),
+                        ),
+                )
+
+            val materialized =
+                context(world, runtimeSupport) {
+                    result.materialize(selections, emptyList())
+                }
+
+            assertEquals(setOf("value"), materialized.fieldValues.keys)
+            assertEquals(Value.String.of("same"), materialized.fieldValues.getValue("value"))
+        }
 }

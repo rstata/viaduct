@@ -208,9 +208,7 @@ class ResolverTestDslTest {
         assertEquals("Person", result.type.typeName)
         assertEquals(
             Value.Int.of(9),
-            result.fieldValues.getValue(
-                ObjectEngineResult.GroundKey.of(world.schema.objectField("Person", "value"), emptyMap()),
-            ),
+            result.fieldValues.getValue("value"),
         )
     }
 
@@ -250,15 +248,11 @@ class ResolverTestDslTest {
 
         assertEquals(
             Value.ID.of("user-2"),
-            user.fieldValues.getValue(
-                ObjectEngineResult.GroundKey.of(schema.objectField("User", "id"), emptyMap()),
-            ),
+            user.fieldValues.getValue("id"),
         )
         assertEquals(
             Value.Int.of(8),
-            user.fieldValues.getValue(
-                ObjectEngineResult.GroundKey.of(schema.objectField("User", "score"), emptyMap()),
-            ),
+            user.fieldValues.getValue("score"),
         )
         val sourceSchema = SourceSchemaAdapter(schema)
         assertEquals(viewer, sourceSchema.field("Query", "viewer"))

@@ -34,10 +34,8 @@ internal fun Value.Output.conformsToSchema(): Boolean =
             values.all { value -> value.conformsToSchema(typeExpr) }
         is Value.Object ->
             fieldValues.containingType == type &&
-                fieldValues.all { (key, value) ->
-                    key.field.containingType == type &&
-                        key.conformsToSchema() &&
-                        value.conformsToSchema(key.field.typeExpr)
+                fieldValues.values.all { value ->
+                    value == null || value.conformsToSchema()
                 }
     }
 

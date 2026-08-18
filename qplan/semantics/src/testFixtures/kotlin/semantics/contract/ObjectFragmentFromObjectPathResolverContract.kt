@@ -1,13 +1,12 @@
 package semantics.contract
 
 import model.ObjectEngineResult
-import model.OpenArguments
-
 import model.EngineResult
 import model.ErrorEngineResult
 import model.IntEngineResult
 import model.Value
 import model.VariableBinding
+import model.materializedFieldKey
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,7 +67,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val provided = null
             val dslValue = if (isError) "\"ERROR\"" else "null"
             var observedResultInput = false
-            var consumedArguments: OpenArguments.Ground? = null
+            var consumedKey: String? = null
             var consumedValue: Value.Output? = null
             val testWorld =
                 TestWorld.fromDSL(
@@ -93,8 +92,8 @@ interface ObjectFragmentFromObjectPathResolverContract :
                         ) {
                             val consumed =
                                 input.fieldValues.entries
-                                    .single { (key, _) -> key.field.fieldName == "consume" }
-                            consumedArguments = consumed.key.arguments
+                                    .single { (key, _) -> key.startsWith("consume(") }
+                            consumedKey = consumed.key
                             consumedValue = consumed.value
                             observedResultInput = true
                         }
@@ -125,16 +124,20 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 },
                 world.getBinding(boundVariable),
             )
-            assertEquals(
+            val expectedArguments =
                 if (isError) {
-                    OpenArguments.Ground.Error
+                    model.OpenArguments.Ground.Error
                 } else {
                     Value.Arguments.of(
                         world.schema.objectField("Query", "consume"),
                         mapOf("value" to provided),
                     )
-                },
-                consumedArguments,
+                }
+            assertEquals(
+                ObjectEngineResult.GroundKey
+                    .of(world.schema.objectField("Query", "consume"), expectedArguments)
+                    .materializedFieldKey(),
+                consumedKey,
             )
             assertEquals(true, observedResultInput)
             assertEquals(if (isError) Value.Error else null, consumedValue)

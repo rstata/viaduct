@@ -16,9 +16,18 @@ import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ResolverBroadStressCampaignConfigurationTest {
+    @Test
+    fun `multiple-owner deep stress does not require unrelated argument-variable activation`() {
+        assertFalse(
+            resolver25StressRequiresArgumentVariableActivation("multiple-variable-owners"),
+        )
+        assertTrue(resolver25StressRequiresArgumentVariableActivation("nested-provider-null"))
+    }
+
     @Test
     fun `campaign manifest records one million diverse executions`() {
         val rounds = Resolver25BroadStressCampaign.rounds

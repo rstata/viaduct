@@ -166,13 +166,19 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
     if (type != resolverValue.type) return false
 
     return keys.all { groundKey ->
+        val fieldName = groundKey.field.fieldName
+        val arguments = groundKey.arguments
         if (!fieldBelongsToResolver(groundKey.field)) {
             true
-        } else if (!resolverValue.fieldValues.containsKey(groundKey)) {
+        } else if (
+            arguments !is Value.Arguments ||
+                arguments.fieldValues.isNotEmpty() ||
+                !resolverValue.fieldValues.containsKey(fieldName)
+        ) {
             false
         } else {
             getCell(groundKey).getValue().get().engineResultConformsToResolverValue(
-                resolverValue.fieldValues.getValue(groundKey),
+                resolverValue.fieldValues.getValue(fieldName),
             )
         }
     }

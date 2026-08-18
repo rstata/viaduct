@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.getValue
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult

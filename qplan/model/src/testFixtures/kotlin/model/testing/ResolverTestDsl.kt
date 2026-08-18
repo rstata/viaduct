@@ -761,7 +761,9 @@ private class ResultEvaluator(
                     val field = sourceSchema.field(value.type.typeName, path[index])
                     require(field is Schema.ObjectField)
                     val matches =
-                        value.fieldValues.entries.filter { (key, _) -> key.field == field }
+                        value.fieldValues.entries.filter { (key, _) ->
+                            key == field.fieldName || key.startsWith("${field.fieldName}(")
+                        }
                     require(matches.size == 1) {
                         "Path ${path.joinToString(".")} does not identify one value at " +
                             "${value.type.typeName}.${path[index]}"
@@ -789,7 +791,7 @@ private class ResultEvaluator(
             is Value.OutputList -> value.values.flatMap(::unwrapNodeBridge)
             is Value.Object -> {
                 val payload = schema.objectField(value.type.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
-                listOf(value.fieldValues.getValue(ObjectEngineResult.GroundKey.of(payload, emptyMap())))
+                listOf(value.fieldValues.getValue(payload.fieldName))
             }
             else -> throw IllegalArgumentException("Malformed lowered Node bridge")
         }

@@ -298,8 +298,8 @@ class BranchOrderInvariantTest {
                                     schema.fragmentFrom(
                                         """
                                         fragment ignored on Query {
-                                          child(id: 1) { value }
-                                          child(id: 2) { consume(arg: ${'$'}value) }
+                                          providerChild: child(id: 1) { value }
+                                          consumerChild: child(id: 2) { consume(arg: ${'$'}value) }
                                         }
                                         """.trimIndent(),
                                     ),
@@ -314,8 +314,9 @@ class BranchOrderInvariantTest {
                         variable(
                             schema = schema,
                             name = "value",
-                            provider = "fragment ignored on Query { child(id: 1) { value } }",
-                            responsePath = listOf("child", "value"),
+                            provider =
+                                "fragment ignored on Query { providerChild: child(id: 1) { value } }",
+                            responsePath = listOf("providerChild", "value"),
                         )
                     },
                 )

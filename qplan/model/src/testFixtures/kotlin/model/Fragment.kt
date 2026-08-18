@@ -5,13 +5,14 @@ package model
  *
  * ### Invariant: fragment-selection-context
  *
- * [subselections] are the flattened field occurrences of a post-validation selection set
- * interpreted with [nominalType].
+ * [materializeSelections] are the response-key-preserving flattened field occurrences of a
+ * post-validation selection set interpreted with [nominalType]. [subselections] is their ordinary
+ * construction view.
  *
  * ### Invariant: fragment-well-foundedness
  *
- * A fragment and its [subselections] form a finite, well-founded value. The subselections may be
- * empty.
+ * A fragment and its [materializeSelections] form a finite, well-founded value. The selections may
+ * be empty.
  *
  * Test-fixture field-resolver definitions use fragments while fixture preparation preserves source
  * guards and occurrence shape. Canonical registry assembly specializes the root to its concrete
@@ -21,18 +22,31 @@ sealed interface Fragment {
     /** The nominal type carried by this fragment. */
     val nominalType: Schema.CompositeType
 
-    /** The selections nested within this fragment. */
+    /** The response-key-preserving selections nested within this fragment. */
+    val materializeSelections: MaterializeSelectionForest
+
+    /** The ordinary construction view of [materializeSelections]. */
     val subselections: SelectionForest
+        get() = materializeSelections.constructionSelections()
 
     companion object {
         fun of(
             nominalType: Schema.CompositeType,
+            materializeSelections: MaterializeSelectionForest,
+        ): Fragment = FragmentImpl(nominalType, materializeSelections)
+
+        fun of(
+            nominalType: Schema.CompositeType,
             subselections: SelectionForest,
-        ): Fragment = FragmentImpl(nominalType, subselections)
+        ): Fragment =
+            FragmentImpl(
+                nominalType,
+                subselections.toCanonicalMaterializeSelectionForest(),
+            )
     }
 }
 
 private class FragmentImpl(
     override val nominalType: Schema.CompositeType,
-    override val subselections: SelectionForest,
+    override val materializeSelections: MaterializeSelectionForest,
 ) : Fragment

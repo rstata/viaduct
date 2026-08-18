@@ -171,6 +171,22 @@ fun <T : Any> Iterable<T>.flatMapToMaterializeSelectionForest(
         },
     )
 
+/** Returns an alias-free materialize forest for an existing ordinary construction forest. */
+fun SelectionForest.toCanonicalMaterializeSelectionForest(): MaterializeSelectionForest {
+    val selections = mutableListOf<MaterializeSelection>()
+    forEach { selection ->
+        selections +=
+            MaterializeSelection.of(
+                responseKey = selection.key.field.fieldName,
+                key = selection.key,
+                possibleTypes = selection.possibleTypes,
+                subselections =
+                    selection.subselections.toCanonicalMaterializeSelectionForest(),
+            )
+    }
+    return selections.toMaterializeSelectionForest()
+}
+
 private class MaterializeSelectionImpl(
     override val responseKey: String,
     override val key: ObjectEngineResult.Key,

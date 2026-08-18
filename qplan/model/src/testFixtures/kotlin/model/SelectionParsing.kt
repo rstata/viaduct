@@ -41,6 +41,9 @@ private fun Schema.selectionParser(): GJSelectionParser =
     )
 
 private fun GJSelectionParser.fragmentFrom(source: String): Fragment {
-    val (nominalType, selections) = selectionsFrom(source)
-    return Fragment.of(nominalType, selections)
+    val (nominalType, selections) = materializeSelectionsFrom(source)
+    return Fragment.of(
+        nominalType = nominalType,
+        materializeSelections = selections,
+    )
 }

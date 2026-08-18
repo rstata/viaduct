@@ -3,9 +3,12 @@ package model.testing
 import model.ObjectEngineResult
 
 import model.Fragment
+import model.MaterializeSelection
+import model.MaterializeSelectionForest
 import model.Selection
 import model.SelectionForest
 import model.Value
+import model.materializeSelectionForestOf
 import model.mapVariableTemplates
 import model.selectionForestOf
 
@@ -14,7 +17,7 @@ internal fun Fragment.mapVariables(
 ): Fragment =
     Fragment.of(
         nominalType = nominalType,
-        subselections = subselections.mapVariables(transform),
+        materializeSelections = materializeSelections.mapVariables(transform),
     )
 
 internal fun List<ObjectEngineResult.Key>.mapVariables(
@@ -33,6 +36,28 @@ private fun SelectionForest.mapVariables(
     flatMap { selection ->
         selectionForestOf(
             Selection.of(
+                key =
+                    ObjectEngineResult.Key.of(
+                        field = selection.key.field,
+                        arguments =
+                            selection.key.arguments.mapVariableTemplates(
+                                selection.key.field.arguments,
+                                transform,
+                            ),
+                    ),
+                possibleTypes = selection.possibleTypes,
+                subselections = selection.subselections.mapVariables(transform),
+            ),
+        )
+    }
+
+private fun MaterializeSelectionForest.mapVariables(
+    transform: (Value.Variable) -> Value.Variable,
+): MaterializeSelectionForest =
+    flatMap { selection ->
+        materializeSelectionForestOf(
+            MaterializeSelection.of(
+                responseKey = selection.responseKey,
                 key =
                     ObjectEngineResult.Key.of(
                         field = selection.key.field,

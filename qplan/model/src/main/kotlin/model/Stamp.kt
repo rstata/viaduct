@@ -1,9 +1,28 @@
 package model
 
 /** An identity assigned once to a selection occurrence in a resolver registry. */
-class SelectionOccurrenceId internal constructor(
-    val sourceKey: ObjectEngineResult.Key,
-)
+class SelectionOccurrenceId private constructor(
+    private val sourceKeys: Set<ObjectEngineResult.Key>,
+) {
+    internal constructor(sourceKey: ObjectEngineResult.Key) : this(setOf(sourceKey))
+
+    val sourceKey: ObjectEngineResult.Key
+        get() = sourceKeys.first()
+
+    internal fun represents(sourceKey: ObjectEngineResult.Key): Boolean =
+        sourceKey in sourceKeys
+
+    companion object {
+        internal fun forResponseGroup(
+            sourceKeys: Set<ObjectEngineResult.Key>,
+        ): SelectionOccurrenceId {
+            require(sourceKeys.isNotEmpty()) {
+                "A response-group occurrence requires at least one source key"
+            }
+            return SelectionOccurrenceId(sourceKeys)
+        }
+    }
+}
 
 /**
  * Runtime treatment of a key or variable template.
@@ -25,7 +44,7 @@ sealed interface Stamp {
         val sourceKey: ObjectEngineResult.Key?
 
         companion object {
-            internal fun of(
+            fun of(
                 resolverPath: List<PathComponent>,
                 occurrenceLineage: List<SelectionOccurrenceId> = emptyList(),
             ): Occurrence = OccurrenceStampImpl(resolverPath, occurrenceLineage)

@@ -9,6 +9,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
+import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.OpenArguments
 import model.ObjectSelection
@@ -24,6 +25,7 @@ import model.VariableBinding
 import model.fetchBindings
 import model.groundKey
 import model.localizeTopLevelSelectionStamps
+import model.materializeSelectionForestOf
 import model.merge
 import model.selectionForestOf
 import model.toEngineResult
@@ -31,6 +33,7 @@ import model.usedVariables
 import model.variableArgumentNames
 import model.variableSourceSelectionStamps
 import model.registry.FieldResolver
+import model.registry.ResolverObjectFragment
 import model.registry.SelectionStampedVariableDefinition
 import model.registry.StampedObjectPathDefinition
 import model.registry.VariableDefinition
@@ -191,6 +194,7 @@ private suspend fun orchestrateObject(
                                 ownerKey = objectKey,
                                 resolver = resolver,
                                 inputDemand = selectionForestOf(),
+                                inputMaterializeSelections = materializeSelectionForestOf(),
                                 variableDefinitions = emptyList(),
                             ),
                         ) == null,
@@ -206,12 +210,11 @@ private suspend fun orchestrateObject(
                     } else {
                         ownerStamp.resolverPath
                     }
-                val inputDemand: SelectionForest =
-                    if (ownerStamp == null) {
-                        resolver.stamp(resolverPath)
-                    } else {
-                        resolver.stampFrom(ownerStamp)
-                    }
+                val resolverStamp: Stamp.Occurrence =
+                    ownerStamp
+                        ?: Stamp.Occurrence.of(resolverPath = resolverPath)
+                val objectFragment: ResolverObjectFragment =
+                    resolver.instantiateObjectFragment(resolverStamp)
                 val definitions: List<SelectionStampedVariableDefinition> =
                     if (ownerStamp == null) {
                         resolver.selectionStampedVariableDefinitions(resolverPath)
@@ -222,7 +225,8 @@ private suspend fun orchestrateObject(
                     ResolverExpansion(
                         ownerKey = objectKey,
                         resolver = resolver,
-                        inputDemand = inputDemand,
+                        inputDemand = objectFragment.constructionSelections,
+                        inputMaterializeSelections = objectFragment.materializeSelections,
                         variableDefinitions = definitions,
                     )
                 check(expansions.put(objectKey, expansion) == null) {
@@ -248,7 +252,7 @@ private suspend fun orchestrateObject(
                         }
                     }
                 }
-                accumulatedDemand += inputDemand
+                accumulatedDemand += objectFragment.constructionSelections
             }
         }
     }
@@ -636,6 +640,7 @@ private data class ResolverExpansion(
     val ownerKey: ObjectEngineResult.ObjectKey,
     val resolver: FieldResolver,
     val inputDemand: SelectionForest,
+    val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<SelectionStampedVariableDefinition>,
 )
 

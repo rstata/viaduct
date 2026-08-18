@@ -4,6 +4,8 @@ import model.ObjectEngineResult
 
 import java.util.IdentityHashMap
 import model.Assumptions
+import model.MaterializeSelection
+import model.MaterializeSelectionForest
 import model.ObjectSelectionForest
 import model.OpenArguments
 import model.PathComponent
@@ -15,8 +17,10 @@ import model.Stamp
 import model.Value
 import model.applicableGroundSelections
 import model.concatenateSelectionForests
+import model.materializeSelectionForestOf
 import model.selectionForestOf
 import model.stampVars
+import model.toCanonicalMaterializeSelectionForest
 import model.variableTemplates
 
 /** One occurrence-specific variable and its occurrence-specific object provider path. */
@@ -49,6 +53,12 @@ typealias FieldResolverFunction =
 typealias FieldResolverApplicationObserver =
     (Value.Object, Value.Arguments, SelectionForest?) -> Unit
 
+/** Paired resolver-object-fragment views instantiated from one resolver occurrence. */
+sealed interface ResolverObjectFragment {
+    val materializeSelections: MaterializeSelectionForest
+    val constructionSelections: SelectionForest
+}
+
 /**
  * A field resolver supplied by the reasoning world's external resolver registry.
  *
@@ -73,14 +83,17 @@ typealias FieldResolverApplicationObserver =
  */
 class FieldResolver private constructor(
     val field: Schema.ObjectField,
-    val objectFragment: SelectionForest,
+    private val objectFragmentTemplate: MaterializeSelectionForest,
     val variables: Map<Value.Variable, VariableDefinition>,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
-    private val selectionOccurrenceIds: Map<Selection, SelectionOccurrenceId> =
-        objectFragment.selectionOccurrenceIds()
+    val objectFragment: SelectionForest =
+        objectFragmentTemplate.constructionSelections()
+
+    private val selectionOccurrenceIds: Map<MaterializeSelection, SelectionOccurrenceId> =
+        objectFragmentTemplate.selectionOccurrenceIds()
 
     /**
      * Returns the exact object fragment with every variable template stamped at [path], while
@@ -91,7 +104,9 @@ class FieldResolver private constructor(
     fun stampVars(
         path: List<PathComponent>,
     ): SelectionForest {
-        val stampedFragment: SelectionForest = objectFragment.stampVariables(path)
+        val materializeSelections = objectFragmentTemplate.stampVariables(path)
+        val stampedFragment: SelectionForest =
+            materializeSelections.constructionSelections()
         val pathVarSelections: SelectionForest =
             variables.entries
                 .mapNotNull { (variable, definition) ->
@@ -138,36 +153,50 @@ class FieldResolver private constructor(
     fun stampFrom(
         ownerStamp: Stamp.Occurrence,
     ): SelectionForest =
-        stamp(
-            resolverPath = ownerStamp.resolverPath,
-            occurrencePrefix = ownerStamp.occurrenceLineage,
-        )
+        instantiateObjectFragment(ownerStamp).constructionSelections
 
-    private fun stamp(
-        resolverPath: List<PathComponent>,
-        occurrencePrefix: List<SelectionOccurrenceId>,
-    ): SelectionForest {
-        val stampedFragment =
-            objectFragment.stampVariableSelections(
-                resolverPath = resolverPath,
-                occurrencePrefix = occurrencePrefix,
+    /**
+     * Instantiates response-preserving and construction views from one resolver occurrence.
+     *
+     * Variable-bearing response groups extend [resolverStamp] with one registry-owned occurrence
+     * identity. Provider markers are appended only to [ResolverObjectFragment.constructionSelections].
+     */
+    fun instantiateObjectFragment(
+        resolverStamp: Stamp.Occurrence,
+    ): ResolverObjectFragment {
+        val materializeSelections =
+            objectFragmentTemplate.stampVariableSelections(
+                resolverPath = resolverStamp.resolverPath,
+                occurrencePrefix = resolverStamp.occurrenceLineage,
                 occurrenceIds = selectionOccurrenceIds,
             )
+        val constructionBase = materializeSelections.constructionSelections()
         val pathVarSelections: SelectionForest =
-            selectionStampedVariableDefinitions(
-                resolverPath = resolverPath,
-                occurrencePrefix = occurrencePrefix,
-            )
+            selectionStampedVariableDefinitions(resolverStamp)
                 .mapNotNull { stampedDefinition ->
                     (stampedDefinition.definition as? VariableDefinition.FromObjectField)?.let {
-                        stampedFragment.markProviderSourcePath(
+                        constructionBase.markProviderSourcePath(
                             sourcePath = it.path,
                             variable = stampedDefinition.variable,
                         )
                     }
                 }.concatenateSelectionForests()
-        return stampedFragment + pathVarSelections
+        return ResolverObjectFragmentImpl(
+            materializeSelections = materializeSelections,
+            constructionSelections = constructionBase + pathVarSelections,
+        )
     }
+
+    private fun stamp(
+        resolverPath: List<PathComponent>,
+        occurrencePrefix: List<SelectionOccurrenceId>,
+    ): SelectionForest =
+        instantiateObjectFragment(
+            Stamp.Occurrence.of(
+                resolverPath = resolverPath,
+                occurrenceLineage = occurrencePrefix,
+            ),
+        ).constructionSelections
 
     /** Returns every variable definition instantiated once per source selection that uses it. */
     fun selectionStampedVariableDefinitions(
@@ -182,16 +211,21 @@ class FieldResolver private constructor(
     fun selectionStampedVariableDefinitionsFrom(
         ownerStamp: Stamp.Occurrence,
     ): List<SelectionStampedVariableDefinition> =
+        selectionStampedVariableDefinitions(ownerStamp)
+
+    private fun selectionStampedVariableDefinitions(
+        resolverStamp: Stamp.Occurrence,
+    ): List<SelectionStampedVariableDefinition> =
         selectionStampedVariableDefinitions(
-            resolverPath = ownerStamp.resolverPath,
-            occurrencePrefix = ownerStamp.occurrenceLineage,
+            resolverPath = resolverStamp.resolverPath,
+            occurrencePrefix = resolverStamp.occurrenceLineage,
         )
 
     private fun selectionStampedVariableDefinitions(
         resolverPath: List<PathComponent>,
         occurrencePrefix: List<SelectionOccurrenceId>,
     ): List<SelectionStampedVariableDefinition> =
-        objectFragment.selectionStampedVariableDefinitions(
+        objectFragmentTemplate.selectionStampedVariableDefinitions(
             resolverPath = resolverPath,
             occurrencePrefix = occurrencePrefix,
             occurrenceIds = selectionOccurrenceIds,
@@ -265,7 +299,7 @@ class FieldResolver private constructor(
          */
         fun of(
             field: Schema.ObjectField,
-            objectFragment: SelectionForest,
+            objectFragment: MaterializeSelectionForest,
             variables: Map<Value.Variable, VariableDefinition>,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
@@ -279,6 +313,7 @@ class FieldResolver private constructor(
             ) {
                 "Object fragment must be specialized to ${field.containingType.typeName}"
             }
+            objectFragment.collect(field.containingType)
             variables.forEach { (variable, definition) ->
                 require(variable.isTemplate) {
                     "Resolver registry variables must be templates"
@@ -300,7 +335,7 @@ class FieldResolver private constructor(
                         }
                     }
                     is VariableDefinition.FromObjectField -> {
-                        require(objectFragment.containsPath(definition.path)) {
+                        require(objectFragment.constructionSelections().containsPath(definition.path)) {
                             "Variable ${variable.variableName} object-field path is not contained " +
                                 "by ${variable.field.containingType.typeName}/" +
                                 "${variable.field.fieldName} object fragment"
@@ -310,15 +345,37 @@ class FieldResolver private constructor(
             }
             return FieldResolver(
                 field = field,
-                objectFragment = objectFragment,
+                objectFragmentTemplate = objectFragment,
                 variables = variables,
                 function = function,
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,
             )
         }
+
+        fun of(
+            field: Schema.ObjectField,
+            objectFragment: SelectionForest,
+            variables: Map<Value.Variable, VariableDefinition>,
+            function: FieldResolverFunction,
+            projectionDemand: (SelectionForest) -> SelectionForest = { it },
+            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+        ): FieldResolver =
+            of(
+                field = field,
+                objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
+                variables = variables,
+                function = function,
+                projectionDemand = projectionDemand,
+                applicationObserver = applicationObserver,
+            )
     }
 }
+
+private class ResolverObjectFragmentImpl(
+    override val materializeSelections: MaterializeSelectionForest,
+    override val constructionSelections: SelectionForest,
+) : ResolverObjectFragment
 
 /**
  * Recursively supplies the canonical passive `__typename` field of every resolver-produced object.
@@ -355,12 +412,13 @@ private fun Value.Output?.synthesizeTypenames(): Value.Output? =
         }
     }
 
-private fun SelectionForest.stampVariables(
+private fun MaterializeSelectionForest.stampVariables(
     path: List<PathComponent>,
-): SelectionForest =
+): MaterializeSelectionForest =
     flatMap { selection ->
-        selectionForestOf(
-            Selection.of(
+        materializeSelectionForestOf(
+            MaterializeSelection.of(
+                responseKey = selection.responseKey,
                 key =
                     ObjectEngineResult.Key.of(
                         field = selection.key.field,
@@ -376,13 +434,31 @@ private fun SelectionForest.stampVariables(
         )
     }
 
-private fun SelectionForest.selectionOccurrenceIds(): Map<Selection, SelectionOccurrenceId> {
-    val result = IdentityHashMap<Selection, SelectionOccurrenceId>()
+private fun MaterializeSelectionForest.selectionOccurrenceIds():
+    Map<MaterializeSelection, SelectionOccurrenceId> {
+    val result = IdentityHashMap<MaterializeSelection, SelectionOccurrenceId>()
 
-    fun register(forest: SelectionForest) {
+    fun register(forest: MaterializeSelectionForest) {
+        val selectionsByResponseKey =
+            linkedMapOf<String, MutableList<MaterializeSelection>>()
         forest.forEach { selection ->
-            check(result.put(selection, SelectionOccurrenceId(selection.key)) == null)
-            register(selection.subselections)
+            selectionsByResponseKey
+                .getOrPut(selection.responseKey, ::mutableListOf)
+                .add(selection)
+        }
+        selectionsByResponseKey.values.forEach { selections ->
+            val occurrenceId =
+                SelectionOccurrenceId.forResponseGroup(
+                    selections.mapTo(linkedSetOf()) { selection -> selection.key },
+                )
+            selections.forEach { selection ->
+                check(result.put(selection, occurrenceId) == null)
+            }
+            val children =
+                selections.fold(materializeSelectionForestOf()) { forestSoFar, selection ->
+                    forestSoFar + selection.subselections
+                }
+            register(children)
         }
     }
 
@@ -390,11 +466,11 @@ private fun SelectionForest.selectionOccurrenceIds(): Map<Selection, SelectionOc
     return result
 }
 
-private fun SelectionForest.stampVariableSelections(
+private fun MaterializeSelectionForest.stampVariableSelections(
     resolverPath: List<PathComponent>,
     occurrencePrefix: List<SelectionOccurrenceId>,
-    occurrenceIds: Map<Selection, SelectionOccurrenceId>,
-): SelectionForest =
+    occurrenceIds: Map<MaterializeSelection, SelectionOccurrenceId>,
+): MaterializeSelectionForest =
     flatMap { selection ->
         val variableTemplates = selection.key.arguments.variableTemplates()
         val key =
@@ -417,8 +493,9 @@ private fun SelectionForest.stampVariableSelections(
                     arguments = arguments,
                 )
             }
-        selectionForestOf(
-            Selection.of(
+        materializeSelectionForestOf(
+            MaterializeSelection.of(
+                responseKey = selection.responseKey,
                 key = key,
                 possibleTypes = selection.possibleTypes,
                 subselections =
@@ -431,36 +508,44 @@ private fun SelectionForest.stampVariableSelections(
         )
     }
 
-private fun SelectionForest.selectionStampedVariableDefinitions(
+private fun MaterializeSelectionForest.selectionStampedVariableDefinitions(
     resolverPath: List<PathComponent>,
     occurrencePrefix: List<SelectionOccurrenceId>,
-    occurrenceIds: Map<Selection, SelectionOccurrenceId>,
+    occurrenceIds: Map<MaterializeSelection, SelectionOccurrenceId>,
     definitions: Map<Value.Variable, VariableDefinition>,
 ): List<SelectionStampedVariableDefinition> {
-    val stampedDefinitions = mutableListOf<SelectionStampedVariableDefinition>()
+    val stampedDefinitions =
+        linkedMapOf<Pair<SelectionOccurrenceId, Value.Variable>, SelectionStampedVariableDefinition>()
     forEach { selection ->
+        val occurrenceId = occurrenceIds.getValue(selection)
         val selectionStamp =
             Stamp.Occurrence.of(
                 resolverPath = resolverPath,
                 occurrenceLineage =
-                    occurrencePrefix + occurrenceIds.getValue(selection),
+                    occurrencePrefix + occurrenceId,
             )
         selection.key.arguments.variableTemplates().forEach { variable ->
-            stampedDefinitions +=
+            stampedDefinitions[occurrenceId to variable] =
                 SelectionStampedVariableDefinition(
                     variable = variable.stamp(selectionStamp),
                     definition = definitions.getValue(variable),
                 )
         }
-        stampedDefinitions +=
-            selection.subselections.selectionStampedVariableDefinitions(
+        selection.subselections
+            .selectionStampedVariableDefinitions(
                 resolverPath = resolverPath,
                 occurrencePrefix = occurrencePrefix,
                 occurrenceIds = occurrenceIds,
                 definitions = definitions,
-            )
+            ).forEach { definition ->
+                val id = definition.variable.stamp!!.occurrenceLineage.last()
+                stampedDefinitions[id to Value.Variable.of(
+                    definition.variable.field,
+                    definition.variable.variableName,
+                )] = definition
+            }
     }
-    return stampedDefinitions
+    return stampedDefinitions.values.toList()
 }
 
 private fun SelectionForest.markProviderPath(
@@ -529,13 +614,11 @@ private fun SelectionForest.markProviderSourcePath(
 }
 
 private fun Selection.hasSourceKey(sourceKey: ObjectEngineResult.Key): Boolean {
-    val actualSourceKey =
+    val occurrenceId =
         (key.stamp as? Stamp.Occurrence)
             ?.occurrenceLineage
             ?.last()
-            ?.sourceKey
-            ?: key
-    return actualSourceKey == sourceKey
+    return occurrenceId?.represents(sourceKey) ?: (key == sourceKey)
 }
 
 private fun SelectionForest.containsPath(path: List<ObjectEngineResult.Key>): Boolean {

@@ -11,7 +11,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SelectionOccurrenceId
-import model.SelectionStamp
+import model.Stamp
 import model.Value
 import model.applicableGroundSelections
 import model.concatenateSelectionForests
@@ -35,7 +35,7 @@ data class SelectionStampedVariableDefinition(
     val definition: VariableDefinition,
 ) {
     init {
-        require(variable.selectionStamp != null) {
+        require(variable.stamp?.occurrenceLineage?.isNotEmpty() == true) {
             "A selection-stamped definition requires a selection-stamped variable"
         }
     }
@@ -119,7 +119,7 @@ class FieldResolver private constructor(
      * Returns the object fragment with each variable-bearing source selection stamped at [path].
      *
      * Already-ground argument tuples remain ordinary and can coalesce. Each selection containing a
-     * variable receives its own [SelectionStamp], which survives grounding and prevents that
+     * variable receives its own [Stamp.Occurrence], which survives grounding and prevents that
      * selection from coalescing with any other occurrence. Synthetic provider-path copies mark
      * every selection-specific path-variable definition.
      */
@@ -136,7 +136,7 @@ class FieldResolver private constructor(
      * selection carrying [ownerStamp].
      */
     fun stampFrom(
-        ownerStamp: SelectionStamp,
+        ownerStamp: Stamp.Occurrence,
     ): SelectionForest =
         stamp(
             resolverPath = ownerStamp.resolverPath,
@@ -180,7 +180,7 @@ class FieldResolver private constructor(
 
     /** Returns variable definitions contributed through one ungrounded resolver occurrence. */
     fun selectionStampedVariableDefinitionsFrom(
-        ownerStamp: SelectionStamp,
+        ownerStamp: Stamp.Occurrence,
     ): List<SelectionStampedVariableDefinition> =
         selectionStampedVariableDefinitions(
             resolverPath = ownerStamp.resolverPath,
@@ -406,7 +406,7 @@ private fun SelectionForest.stampVariableSelections(
                 selection.key
             } else {
                 val selectionStamp =
-                    SelectionStamp(
+                    Stamp.Occurrence.of(
                         resolverPath = resolverPath,
                         occurrenceLineage =
                             occurrencePrefix + occurrenceIds.getValue(selection),
@@ -416,7 +416,7 @@ private fun SelectionForest.stampVariableSelections(
                         .of(selection.key.field.arguments, selection.key.arguments)
                         .stamp(selection.key.field.arguments, selectionStamp)
                 ObjectEngineResult.Key.of(
-                    selectionStamp = selectionStamp,
+                    stamp = selectionStamp,
                     field = selection.key.field,
                     arguments = arguments,
                 )
@@ -444,7 +444,7 @@ private fun SelectionForest.selectionStampedVariableDefinitions(
     val stampedDefinitions = mutableListOf<SelectionStampedVariableDefinition>()
     forEach { selection ->
         val selectionStamp =
-            SelectionStamp(
+            Stamp.Occurrence.of(
                 resolverPath = resolverPath,
                 occurrenceLineage =
                     occurrencePrefix + occurrenceIds.getValue(selection),
@@ -534,7 +534,7 @@ private fun SelectionForest.markProviderSourcePath(
 
 private fun Selection.hasSourceKey(sourceKey: ObjectEngineResult.Key): Boolean {
     val actualSourceKey =
-        key.selectionStamp
+        (key.stamp as? Stamp.Occurrence)
             ?.occurrenceLineage
             ?.last()
             ?.sourceKey

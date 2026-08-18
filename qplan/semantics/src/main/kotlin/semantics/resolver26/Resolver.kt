@@ -17,7 +17,7 @@ import model.Promise
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.SelectionStamp
+import model.Stamp
 import model.Value
 import model.fetchBindings
 import model.groundKey
@@ -43,7 +43,7 @@ import kotlin.coroutines.CoroutineContext
  * Resolves selective demand once per ordinary or occurrence-stamped resolver instance.
  *
  * Pre-grounded selections coalesce by ordinary ground key. Every variable-bearing selection in a
- * resolver object fragment retains its opaque occurrence lineage and therefore resolves
+ * resolver object fragment retains its occurrence lineage and therefore resolves
  * independently.
  */
 context(world: Assumptions)
@@ -162,8 +162,8 @@ private suspend fun orchestrateObject(
                 ) {
                     "Resolver26 closed demand and resolver expansions are misaligned"
                 }
-                val selectionStamps: List<SelectionStamp> =
-                    mergedDemand.keys().mapNotNull(ObjectEngineResult.Key::selectionStamp)
+                val selectionStamps: List<Stamp.Occurrence> =
+                    mergedDemand.keys().mapNotNull { key -> key.stamp as? Stamp.Occurrence }
                 check(selectionStamps.size == selectionStamps.toSet().size) {
                     "Resolver26 closed demand contains duplicate selection stamps"
                 }
@@ -197,7 +197,7 @@ private suspend fun orchestrateObject(
                     }
                     return@forEach
                 }
-                val ownerStamp: SelectionStamp? = objectKey.selectionStamp
+                val ownerStamp: Stamp.Occurrence? = objectKey.stamp as? Stamp.Occurrence
                 val resolverPath: List<PathComponent> =
                     if (ownerStamp == null) {
                         path + (objectKey as ObjectEngineResult.GroundKey)
@@ -296,7 +296,7 @@ private suspend fun orchestrateObject(
         closed.pathVariableDefinitions.forEach { definition ->
             launch {
                 val reader: List<PathComponent> =
-                    requireNotNull(definition.variable.selectionStamp)
+                    requireNotNull(definition.variable.stamp)
                         .resolverPath
                 val value: Value.Input? =
                     target.readProvider(
@@ -451,9 +451,13 @@ private fun SelectionForest.localizeTopLevelStamps(
 // Returns every selection-stamped argument or provider-marker variable carried by this key.
 private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variable> =
     buildSet {
-        addAll(arguments.usedVariables().filter { variable -> variable.selectionStamp != null })
+        addAll(
+            arguments
+                .usedVariables()
+                .filter { variable -> variable.stamp?.sourceKey != null },
+        )
         val marker = (this@selectionStampedVariables as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
-        if (marker?.selectionStamp != null) add(marker)
+        if (marker?.stamp?.sourceKey != null) add(marker)
     }
 
 // Completes variables defined from this resolver instance's now-ground arguments.
@@ -481,7 +485,7 @@ private suspend fun resolveField(
     target: ObjectEngineResult,
     cell: EngineResult.Cell,
     variableArgumentCount: Int,
-    variableSourceSelectionStamps: Set<SelectionStamp>,
+    variableSourceSelectionStamps: Set<Stamp.Occurrence>,
     runtime: ResolverRuntime,
 ) {
     val groundKey = selection.groundKey()
@@ -517,7 +521,7 @@ private suspend fun resolveField(
             suppliedDemand = invocationDemand,
             variableArgumentCount = variableArgumentCount,
             occurrenceStamp =
-                groundKey.selectionStamp,
+                groundKey.stamp as? Stamp.Occurrence,
             variableSourceSelectionStamps = variableSourceSelectionStamps,
         ),
     )

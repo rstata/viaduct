@@ -8,7 +8,7 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.SelectionForest
-import model.SelectionStamp
+import model.Stamp
 import model.SimpleEngineResult
 import model.Value
 import model.fragmentFrom
@@ -59,10 +59,10 @@ internal fun interface ObservedResolverBenchmarkSubject {
 
 internal data class ResolverBenchmarkApplicationObservation(
     val occurrencePath: List<model.PathComponent>,
-    val occurrenceStamp: SelectionStamp?,
+    val occurrenceStamp: Stamp.Occurrence?,
     val variableArgumentCount: Int,
     val variableSourceOccurrencePaths: Set<List<model.PathComponent>>,
-    val variableSourceSelectionStamps: Set<SelectionStamp>,
+    val variableSourceSelectionStamps: Set<Stamp.Occurrence>,
 )
 
 internal class CurrentProfileBenchmarkSupport(
@@ -466,7 +466,7 @@ internal class CurrentProfileBenchmarkSupport(
         ) : ResolverOccurrenceIdentity
 
         data class Stamped(
-            val stamp: SelectionStamp,
+            val stamp: Stamp.Occurrence,
         ) : ResolverOccurrenceIdentity
     }
 

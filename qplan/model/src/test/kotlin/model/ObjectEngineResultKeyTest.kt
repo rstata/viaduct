@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
@@ -25,6 +26,7 @@ class ObjectEngineResultKeyTest {
 
         assertIs<ObjectEngineResult.GroundKey>(general)
         assertEquals(precise, general)
+        assertEquals(Stamp.VariableFreeOccurrence, general.stamp)
         assertSame(field, general.field)
     }
 
@@ -52,7 +54,90 @@ class ObjectEngineResultKeyTest {
 
         assertIs<ObjectEngineResult.ObjectKey>(key)
         assertFalse(key is ObjectEngineResult.GroundKey)
+        assertNull(key.stamp)
         assertSame(field, key.field)
+    }
+
+    @Test
+    fun `key stamps distinguish templates ordinary occurrences and explicit selection occurrences`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.objectField("Query", "source")
+        val consume = schema.objectField("Query", "consume")
+        val variable = Value.Variable.of(source, "value")
+        val templateKey =
+            ObjectEngineResult.Key.of(
+                consume,
+                OpenArguments.of(consume, mapOf("value" to variable)),
+            )
+        val ordinaryKey = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 7))
+        val occurrence =
+            Stamp.Occurrence.of(
+                resolverPath = listOf(ordinaryKey),
+                occurrenceLineage = listOf(SelectionOccurrenceId(templateKey)),
+            )
+        val occurrenceKey =
+            ObjectEngineResult.GroundKey.of(
+                stamp = occurrence,
+                field = consume,
+                arguments = ordinaryKey.arguments,
+            )
+        val equalOccurrenceKey =
+            ObjectEngineResult.GroundKey.of(
+                stamp = occurrence,
+                field = consume,
+                arguments = ordinaryKey.arguments,
+            )
+        val otherOccurrenceKey =
+            ObjectEngineResult.GroundKey.of(
+                stamp =
+                    Stamp.Occurrence.of(
+                        resolverPath = listOf(ordinaryKey),
+                        occurrenceLineage = listOf(SelectionOccurrenceId(templateKey)),
+                    ),
+                field = consume,
+                arguments = ordinaryKey.arguments,
+            )
+
+        assertNull(templateKey.stamp)
+        assertEquals(Stamp.VariableFreeOccurrence, ordinaryKey.stamp)
+        assertEquals(occurrence, occurrenceKey.stamp)
+        assertEquals(occurrenceKey, equalOccurrenceKey)
+        assertNotEquals(ordinaryKey, occurrenceKey)
+        assertNotEquals(occurrenceKey, otherOccurrenceKey)
+    }
+
+    @Test
+    fun `ordinary key factories do not infer occurrence identity from stamped variables`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.objectField("Query", "source")
+        val consume = schema.objectField("Query", "consume")
+        val stampedVariable =
+            Value.Variable
+                .of(source, "value")
+                .stamp(listOf(ListEngineResult.Index.of(0)))
+        val key =
+            ObjectEngineResult.Key.of(
+                consume,
+                OpenArguments.of(consume, mapOf("value" to stampedVariable)),
+            )
+
+        assertEquals(Stamp.VariableFreeOccurrence, key.stamp)
     }
 
     @Test
@@ -84,7 +169,7 @@ class ObjectEngineResultKeyTest {
                 OpenArguments.of(abstractField, mapOf("factor" to variable)),
             )
         val selectionStamp =
-            SelectionStamp(
+            Stamp.Occurrence.of(
                 resolverPath = listOf(ListEngineResult.Index.of(1)),
                 occurrenceLineage = listOf(SelectionOccurrenceId(sourceKey)),
             )
@@ -94,7 +179,7 @@ class ObjectEngineResultKeyTest {
                 .stamp(abstractField.arguments, selectionStamp)
         val stampedKey =
             ObjectEngineResult.Key.of(
-                selectionStamp = selectionStamp,
+                stamp = selectionStamp,
                 field = abstractField,
                 arguments = arguments,
             )
@@ -111,10 +196,10 @@ class ObjectEngineResultKeyTest {
 
         assertFalse(stampedKey is ObjectEngineResult.ObjectKey)
         assertIs<ObjectEngineResult.ObjectKey>(specialized)
-        assertEquals(selectionStamp, specialized.selectionStamp)
+        assertEquals(selectionStamp, specialized.stamp)
         assertEquals(
             selectionStamp,
-            specialized.arguments.usedVariables().single().selectionStamp,
+            specialized.arguments.usedVariables().single().stamp,
         )
     }
 

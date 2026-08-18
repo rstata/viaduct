@@ -7,6 +7,7 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.SimpleEngineResult
+import model.Stamp
 import model.Value
 import model.applicableGroundSelections
 import model.usedVariables
@@ -39,7 +40,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                     .resolver(groundKey.field)
                     .let { resolver ->
                         val coordinate = path + groundKey
-                        val selectionStamp = groundKey.selectionStamp
+                        val selectionStamp = groundKey.stamp as? Stamp.Occurrence
                         val selectionStamped =
                             if (selectionStamp != null) {
                                 resolver.stampFrom(selectionStamp)

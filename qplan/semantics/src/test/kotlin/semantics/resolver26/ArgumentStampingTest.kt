@@ -7,6 +7,7 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
+import model.Stamp
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
@@ -23,6 +24,7 @@ import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ArgumentStampingTest {
@@ -114,8 +116,8 @@ class ArgumentStampingTest {
                 localizedDemand.merge(boxType).keys().single(),
             )
         assertEquals(
-            localizedOpenKey.selectionStamp,
-            localizedVariable.selectionStamp,
+            localizedOpenKey.stamp,
+            localizedVariable.stamp,
         )
         world.bindVariable(localizedVariable, Value.Int.of(7))
         val localizeThenGround: ObjectEngineResult.GroundKey =
@@ -130,7 +132,7 @@ class ArgumentStampingTest {
         assertEquals(groundThenLocalize, localizeThenGround)
         assertEquals(
             listOf(resultKey, boxKey),
-            requireNotNull(localizeThenGround.selectionStamp)
+            assertIs<Stamp.Occurrence>(localizeThenGround.stamp)
                 .resolverPath,
         )
     }
@@ -234,7 +236,7 @@ class ArgumentStampingTest {
                     item.keys.single { groundKey ->
                         groundKey.field.fieldName == "child"
                     }
-                requireNotNull(childKey.selectionStamp)
+                assertIs<Stamp.Occurrence>(childKey.stamp)
             }
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
@@ -468,8 +470,9 @@ class ArgumentStampingTest {
         assertEquals(IntEngineResult.of(5), resolved.getCell(rightKey).getValue().get())
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { groundKey ->
-            val selectionStamp = requireNotNull(groundKey.selectionStamp)
-            assertEquals(null, selectionStamp.sourceKey.selectionStamp)
+            val selectionStamp = assertIs<Stamp.Occurrence>(groundKey.stamp)
+            val sourceKey = assertNotNull(selectionStamp.sourceKey)
+            assertEquals(null, sourceKey.stamp)
         }
         assertEquals(
             listOf(

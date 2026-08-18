@@ -35,7 +35,7 @@ sealed interface OpenArguments {
      * An argument tuple in a resolver-registry template.
      *
      * Every variable recursively contained by a template has [Value.Variable.isTemplate] set.
-     * Stamping replaces every contained variable with one carrying the same [SelectionStamp].
+     * Stamping replaces every contained variable with one carrying the same [Stamp.Occurrence].
      */
     sealed interface Template : OpenArguments {
         /**
@@ -47,7 +47,7 @@ sealed interface OpenArguments {
          */
         fun stamp(
             expectedType: Schema.FieldArguments,
-            selectionStamp: SelectionStamp,
+            selectionStamp: Stamp.Occurrence,
         ): OpenArguments
 
         companion object {
@@ -106,7 +106,7 @@ sealed interface OpenArguments {
  */
 internal fun OpenArguments.restampSelectionVariables(
     expectedType: Schema.FieldArguments,
-    selectionStamp: SelectionStamp,
+    selectionStamp: Stamp.Occurrence,
 ): OpenArguments =
     openArgumentsOf(
         expectedType = expectedType,
@@ -133,7 +133,7 @@ private data class OpenArgumentsTemplateImpl(
 ) : OpenArguments.Template {
     override fun stamp(
         expectedType: Schema.FieldArguments,
-        selectionStamp: SelectionStamp,
+        selectionStamp: Stamp.Occurrence,
     ): OpenArguments =
         openArgumentsOf(
             expectedType = expectedType,
@@ -353,7 +353,7 @@ private fun OpenValue?.stampVars(path: List<PathComponent>): OpenValue? =
         else -> this
     }
 
-private fun OpenValue?.stampVariables(selectionStamp: SelectionStamp): OpenValue? =
+private fun OpenValue?.stampVariables(selectionStamp: Stamp.Occurrence): OpenValue? =
     when (this) {
         is Value.Variable -> if (isTemplate) stamp(selectionStamp) else this
         is OpenListValueImpl ->
@@ -368,10 +368,10 @@ private fun OpenValue?.stampVariables(selectionStamp: SelectionStamp): OpenValue
         else -> this
     }
 
-private fun OpenValue?.restampVariables(selectionStamp: SelectionStamp): OpenValue? =
+private fun OpenValue?.restampVariables(selectionStamp: Stamp.Occurrence): OpenValue? =
     when (this) {
         is Value.Variable ->
-            if (this.selectionStamp == null) {
+            if (stamp?.occurrenceLineage.isNullOrEmpty()) {
                 this
             } else {
                 Value.Variable
@@ -472,9 +472,11 @@ fun OpenArguments.variableArgumentNames(): Set<String> =
         .keys
 
 /** Returns the source-selection identities carried by variables in this tuple. */
-fun OpenArguments.variableSourceSelectionStamps(): Set<SelectionStamp> =
+fun OpenArguments.variableSourceSelectionStamps(): Set<Stamp.Occurrence> =
     variables()
-        .mapNotNullTo(linkedSetOf(), Value.Variable::selectionStamp)
+        .mapNotNullTo(linkedSetOf()) { variable ->
+            variable.stamp?.takeIf { stamp -> stamp.occurrenceLineage.isNotEmpty() }
+        }
 
 private fun OpenValue?.variables(): Set<Value.Variable> =
     when (this) {

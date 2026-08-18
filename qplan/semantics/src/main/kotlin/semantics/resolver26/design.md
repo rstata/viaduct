@@ -10,7 +10,11 @@ The exercise assumes every field resolver completes normally, including with res
 
 Pre-grounded external selections and variable-free resolver-fragment selections use ordinary ground-key identity and coalesce when their keys are equal.
 
-Every variable-bearing selection introduced from a resolver object fragment carries a `SelectionStamp`. The stamp combines the concrete resolver path with an opaque lineage of registry-assigned `SelectionOccurrenceId` values. Selection equality is undefined; the opaque occurrence IDs provide stable identity without treating selection content as provenance.
+Every variable-bearing selection introduced from a resolver object fragment carries a
+`Stamp.Occurrence`. The stamp combines the concrete resolver path with a nonempty lineage of
+registry-assigned `SelectionOccurrenceId` values. Selection equality is undefined; the occurrence
+IDs provide stable identity. Registry template keys have a null stamp, and ordinary concrete keys
+carry `Stamp.VariableFreeOccurrence`.
 
 When demand descends into an object or list occurrence, its top-level stamps localize through that exact result path. Distinct list positions and object occurrences therefore remain distinct. Stamped keys never coalesce with ordinary keys or with another occurrence lineage, even when they eventually have equal visible arguments.
 

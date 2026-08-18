@@ -225,7 +225,7 @@ sealed interface Value {
      *
      * This tuple is ground and inspectable. [OpenArguments] represents a tuple that may contain
      * variables. Equality is structural over its field values. Occurrence identity belongs to
-     * [ObjectEngineResult.Key.selectionStamp], not the grounded argument value.
+     * [ObjectEngineResult.Key.stamp], not the grounded argument value.
      */
     sealed interface Arguments : OpenArguments {
         val fieldValues: Map<kotlin.String, Input?>
@@ -321,11 +321,11 @@ sealed interface Value {
         /** Whether this is the registry template rather than an occurrence-specific variable. */
         val isTemplate: kotlin.Boolean
 
-        /** The source-selection stamp, or null for a template or path-stamped variable. */
-        val selectionStamp: SelectionStamp?
+        /** The occurrence stamp, or null for a registry template. */
+        val stamp: Stamp.Occurrence?
 
         val isStamped: kotlin.Boolean
-            get() = !isTemplate
+            get() = stamp != null
 
         /**
          * Returns this variable template at [path].
@@ -340,13 +340,17 @@ sealed interface Value {
          */
         fun stamp(path: kotlin.collections.List<PathComponent>): Variable {
             require(isTemplate) { "Only variable templates can be stamped" }
-            return StampedVariableValueImpl(variableName, field, path)
+            return OccurrenceVariableValueImpl(
+                variableName,
+                field,
+                Stamp.Occurrence.of(path),
+            )
         }
 
         /** Returns this variable template at one variable-bearing source selection. */
-        fun stamp(selectionStamp: SelectionStamp): Variable {
+        fun stamp(stamp: Stamp.Occurrence): Variable {
             require(isTemplate) { "Only variable templates can be stamped" }
-            return SelectionStampedVariableValueImpl(variableName, field, selectionStamp)
+            return OccurrenceVariableValueImpl(variableName, field, stamp)
         }
 
         companion object {
@@ -549,7 +553,7 @@ private data class TemplateVariableValueImpl(
     override val isTemplate: Boolean
         get() = true
 
-    override val selectionStamp: SelectionStamp?
+    override val stamp: Stamp.Occurrence?
         get() = null
 
     override fun toString(): String =
@@ -559,38 +563,20 @@ private data class TemplateVariableValueImpl(
             ")"
 }
 
-private data class StampedVariableValueImpl(
+private data class OccurrenceVariableValueImpl(
     override val variableName: String,
     override val field: Schema.ObjectField,
-    private val path: kotlin.collections.List<PathComponent>,
-) : Value.Variable {
-    override val isTemplate: Boolean
-        get() = false
-
-    override val selectionStamp: SelectionStamp?
-        get() = null
-
-    override fun toString(): String =
-        "Variable.Stamped(" +
-            "name=$variableName, " +
-            "field=${field.containingType.typeName}/${field.fieldName}, " +
-            "path=${path.renderVariablePath()}" +
-            ")"
-}
-
-private data class SelectionStampedVariableValueImpl(
-    override val variableName: String,
-    override val field: Schema.ObjectField,
-    override val selectionStamp: SelectionStamp,
+    override val stamp: Stamp.Occurrence,
 ) : Value.Variable {
     override val isTemplate: Boolean
         get() = false
 
     override fun toString(): String =
-        "Variable.SelectionStamped(" +
+        "Variable.Occurrence(" +
             "name=$variableName, " +
             "field=${field.containingType.typeName}/${field.fieldName}, " +
-            "resolverPath=${selectionStamp.resolverPath.renderVariablePath()}" +
+            "path=${stamp.resolverPath.renderVariablePath()}, " +
+            "lineage=${stamp.occurrenceLineage.size}" +
             ")"
 }
 

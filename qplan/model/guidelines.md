@@ -20,16 +20,24 @@ Use canonical schema relations for GraphQL semantics rather than Kotlin inherita
 
 ## Variables And Keys
 
-A variable template is identified by its local name and defining concrete resolver field. Stamping at an exact OER path creates an occurrence-specific variable. Request-local `Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read completed bindings, while coroutine operations may suspend for them.
+A variable template is identified by its local name and defining concrete resolver field. Its `stamp`
+is null. Stamping at an exact OER path creates an occurrence-specific variable carrying a
+`Stamp.Occurrence`. Resolver1 through Resolver25 use an empty occurrence lineage; Resolver26 adds
+selection-occurrence lineage as it crosses ungrounded resolver boundaries. Request-local
+`Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read
+completed bindings, while coroutine operations may suspend for them.
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
 
 `ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
 
-`ObjectEngineResult.Key.selectionStamp` carries the occurrence identity of one variable-bearing
-resolver-fragment selection before and after grounding. Every selection-stamped variable in that
-key's arguments carries the same `SelectionStamp`; the argument tuple itself has no occurrence
-identity. Specialization, localization, and grounding preserve the key's stamp.
+`ObjectEngineResult.Key.stamp` distinguishes three states. A variable-bearing registry template has
+a null stamp. An ordinary concrete key carries `Stamp.VariableFreeOccurrence`, meaning that its
+selection occurrence needs no variable-derived identity. Resolver26 explicitly assigns
+`Stamp.Occurrence` to a variable-bearing resolver-fragment selection; every occurrence-stamped
+variable in that key's arguments carries the same stamp. Ordinary key factories never infer this
+identity from stamped variables. Specialization, localization, and grounding preserve an explicit
+occurrence stamp.
 
 Keys belong to the engine-result domain even where a value-domain carrier temporarily consumes them. `Value.Object` and `Value.ObjectFields` currently use `ObjectEngineResult.GroundKey` while the value-domain object representation still stores canonical fields and explicit arguments. They must not define a parallel key hierarchy.
 

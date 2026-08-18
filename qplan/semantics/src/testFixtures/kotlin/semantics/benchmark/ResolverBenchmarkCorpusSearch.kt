@@ -268,7 +268,7 @@ object ResolverBenchmarkCorpusSearch {
         ) : ResolverOccurrenceIdentity
 
         data class Stamped(
-            val stamp: model.SelectionStamp,
+            val stamp: model.Stamp.Occurrence,
         ) : ResolverOccurrenceIdentity
     }
 

@@ -1,53 +1,56 @@
 package model
 
-/** An opaque identity assigned once to a selection occurrence in a resolver registry. */
+/** An identity assigned once to a selection occurrence in a resolver registry. */
 class SelectionOccurrenceId internal constructor(
-    internal val sourceKey: ObjectEngineResult.Key,
+    val sourceKey: ObjectEngineResult.Key,
 )
 
 /**
- * The concrete resolver occurrence and opaque lineage of one variable-bearing selection.
+ * Runtime treatment of a key or variable template.
  *
- * [resolverPath] anchors the stamp at a concrete resolver occurrence. [occurrenceLineage] contains
- * registry-assigned identities crossed through ungrounded resolver boundaries. Selection equality
- * is undefined, so stamps compare only these stable opaque identities.
+ * Equality is structural. [VariableFreeOccurrence] is one singleton value. Two [Occurrence] stamps
+ * are equal when their resolver paths and occurrence-ID sequences are equal; occurrence IDs use
+ * reference identity.
  */
-class SelectionStamp internal constructor(
-    val resolverPath: List<PathComponent>,
-    internal val occurrenceLineage: List<SelectionOccurrenceId>,
-) {
-    /** The original registry key represented by the final occurrence in this lineage. */
-    val sourceKey: ObjectEngineResult.Key
-        get() = occurrenceLineage.last().sourceKey
+sealed interface Stamp {
+    /** A key whose selection contains no variables requiring occurrence identity. */
+    data object VariableFreeOccurrence : Stamp
 
-    init {
-        require(occurrenceLineage.isNotEmpty()) {
-            "Selection-stamp occurrence lineage must be nonempty"
+    /** One concrete resolver occurrence, optionally refined by Resolver26's selection lineage. */
+    sealed interface Occurrence : Stamp {
+        val resolverPath: List<PathComponent>
+        val occurrenceLineage: List<SelectionOccurrenceId>
+
+        /** The registry key represented by the final lineage member, when one exists. */
+        val sourceKey: ObjectEngineResult.Key?
+
+        companion object {
+            internal fun of(
+                resolverPath: List<PathComponent>,
+                occurrenceLineage: List<SelectionOccurrenceId> = emptyList(),
+            ): Occurrence = OccurrenceStampImpl(resolverPath, occurrenceLineage)
         }
     }
+}
 
-    override fun equals(other: Any?): Boolean =
-        this === other ||
-            other is SelectionStamp &&
-            resolverPath == other.resolverPath &&
-            occurrenceLineage == other.occurrenceLineage
-
-    override fun hashCode(): Int = 31 * resolverPath.hashCode() + occurrenceLineage.hashCode()
-
-    override fun toString(): String =
-        "SelectionStamp(resolverPath=$resolverPath, occurrences=${occurrenceLineage.size})"
+private data class OccurrenceStampImpl(
+    override val resolverPath: List<PathComponent>,
+    override val occurrenceLineage: List<SelectionOccurrenceId>,
+) : Stamp.Occurrence {
+    override val sourceKey: ObjectEngineResult.Key?
+        get() = occurrenceLineage.lastOrNull()?.sourceKey
 }
 
 /**
  * Returns the stamped resolver occurrence that owns this source selection, or null when the owner
- * is the ordinary resolver occurrence identified directly by [SelectionStamp.resolverPath].
+ * is the resolver occurrence identified directly by [Stamp.Occurrence.resolverPath].
  */
-fun SelectionStamp.ownerResolverStamp(): SelectionStamp? =
+fun Stamp.Occurrence.ownerResolverStamp(): Stamp.Occurrence? =
     occurrenceLineage
         .dropLast(1)
         .takeIf { lineage -> lineage.isNotEmpty() }
         ?.let { lineage ->
-            SelectionStamp(
+            Stamp.Occurrence.of(
                 resolverPath = resolverPath,
                 occurrenceLineage = lineage,
             )
@@ -346,10 +349,10 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
 }
 
 private fun ObjectEngineResult.ObjectKey.ground(arguments: Value.Arguments): ObjectEngineResult.GroundKey {
-    val currentSelectionStamp = selectionStamp
+    val currentSelectionStamp = stamp as? Stamp.Occurrence
     return if (currentSelectionStamp != null) {
         ObjectEngineResult.GroundKey.of(
-            selectionStamp = currentSelectionStamp,
+            stamp = currentSelectionStamp,
             field = field,
             arguments = arguments,
         )
@@ -418,7 +421,7 @@ fun SelectionForest.localizeTopLevelSelectionStamps(
 private fun ObjectEngineResult.Key.localizeSelectionStamps(
     path: List<PathComponent>,
 ): ObjectEngineResult.Key {
-    val localizedStamp = selectionStamp?.extendThrough(path)
+    val localizedStamp = (stamp as? Stamp.Occurrence)?.extendThrough(path)
     val localizedArguments =
         if (localizedStamp == null) {
             arguments
@@ -430,7 +433,7 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
             ObjectEngineResult.Key.of(field = field, arguments = localizedArguments)
         } else {
             ObjectEngineResult.Key.of(
-                selectionStamp = localizedStamp,
+                stamp = localizedStamp,
                 field = field,
                 arguments = localizedArguments,
             )
@@ -450,7 +453,7 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
 private fun Value.Variable.localizeSelectionStamp(
     path: List<PathComponent>,
 ): Value.Variable =
-    selectionStamp
+    stamp
         ?.let { currentStamp ->
             Value.Variable
                 .of(field = field, variableName = variableName)
@@ -458,10 +461,10 @@ private fun Value.Variable.localizeSelectionStamp(
         } ?: this
 
 // Appends one concrete OER path to this resolver-instance identity.
-private fun SelectionStamp.extendThrough(
+private fun Stamp.Occurrence.extendThrough(
     path: List<PathComponent>,
-): SelectionStamp =
-    SelectionStamp(
+): Stamp.Occurrence =
+    Stamp.Occurrence.of(
         resolverPath = resolverPath + path,
         occurrenceLineage = occurrenceLineage,
     )
@@ -506,10 +509,10 @@ fun SelectionForest.usedVariables(): Set<Value.Variable> {
 fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
     val concreteField = type.fields.getValue(key.field.fieldName)
     val sourceKey = key
-    val selectionStamp = sourceKey.selectionStamp
+    val selectionStamp = sourceKey.stamp as? Stamp.Occurrence
     if (selectionStamp != null) {
         return ObjectEngineResult.ObjectKey.of(
-            selectionStamp = selectionStamp,
+            stamp = selectionStamp,
             field = concreteField,
             arguments = sourceKey.arguments.retarget(concreteField),
         )

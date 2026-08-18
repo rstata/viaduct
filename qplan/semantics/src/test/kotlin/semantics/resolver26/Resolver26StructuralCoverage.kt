@@ -3,6 +3,7 @@ package semantics.resolver26
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.Stamp
 import model.Value
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.FieldCoordinate
@@ -35,7 +36,7 @@ internal fun resolver26StructuralSignatures(
     val signatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
     val stampedOccurrences: List<RegisteredResolverOccurrence> =
         occurrences.filter { occurrence ->
-            occurrence.groundKey().selectionStamp != null
+            (occurrence.groundKey().stamp as? Stamp.Occurrence)?.sourceKey != null
         }
     val activeSourceFields: Set<FieldCoordinate> =
         witness.applications
@@ -50,9 +51,11 @@ internal fun resolver26StructuralSignatures(
     }
     if (
         stampedOccurrences.any { occurrence ->
-            requireNotNull(occurrence.groundKey().selectionStamp).resolverPath.any { component ->
+            (occurrence.groundKey().stamp as? Stamp.Occurrence)
+                ?.resolverPath
+                ?.any { component ->
                 component is ListEngineResult.Index
-            }
+                } == true
         }
     ) {
         signatures += Resolver26StructuralSignature.LIST_LOCALIZED_STAMP
@@ -68,9 +71,9 @@ internal fun resolver26StructuralSignatures(
             }.values
             .any { equalVisibleOccurrences ->
                 equalVisibleOccurrences
-                    .map { occurrence ->
-                        requireNotNull(occurrence.groundKey().selectionStamp)
-                    }.toSet()
+                    .map { occurrence -> occurrence.groundKey().stamp }
+                    .filterIsInstance<Stamp.Occurrence>()
+                    .toSet()
                     .size > 1
             }
     ) {

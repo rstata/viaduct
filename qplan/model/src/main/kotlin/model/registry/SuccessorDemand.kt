@@ -6,6 +6,7 @@ import model.Assumptions
 import model.Schema
 import model.Selection
 import model.SelectionForest
+import model.Stamp
 import model.Value
 import model.concatenateSelectionForests
 import model.fetchBindings
@@ -184,11 +185,11 @@ context(world: Assumptions)
 private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
     if (arguments is Value.Arguments) return this
     val groundedArguments = arguments.fetchBindings(field.arguments)
-    val currentSelectionStamp = selectionStamp
+    val currentSelectionStamp = stamp as? Stamp.Occurrence
     val groundedKey =
         if (currentSelectionStamp != null) {
             ObjectEngineResult.Key.of(
-                selectionStamp = currentSelectionStamp,
+                stamp = currentSelectionStamp,
                 field = field,
                 arguments = groundedArguments,
             )

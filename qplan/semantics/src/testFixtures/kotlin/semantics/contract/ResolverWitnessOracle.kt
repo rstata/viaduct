@@ -6,6 +6,7 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
+import model.Stamp
 import model.Value
 import model.applicableGroundSelections
 import model.registry.FieldResolver
@@ -117,7 +118,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     path: List<PathComponent>,
 ): ObjectSelectionForest? {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
-    val selectionStamp = groundKey?.selectionStamp
+    val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
     val selectionStamped =
         if (selectionStamp != null) {
             stampFrom(selectionStamp)

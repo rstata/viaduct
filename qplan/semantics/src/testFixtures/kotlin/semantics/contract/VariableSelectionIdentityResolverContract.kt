@@ -4,6 +4,7 @@ import model.EngineResult
 import model.IntEngineResult
 import model.ObjectEngineResult
 import model.Schema
+import model.Stamp
 import model.Value
 import model.fragmentFrom
 import model.merge
@@ -117,7 +118,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             listOf(setOf("one", "two"), setOf("one", "two")),
             suppliedDemandFields,
         )
-        assertEquals(null, payloadKey.selectionStamp)
+        assertEquals(Stamp.VariableFreeOccurrence, payloadKey.stamp)
     }
 
     @Test

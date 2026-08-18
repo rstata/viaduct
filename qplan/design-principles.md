@@ -26,7 +26,8 @@ The semantic identity of work is an occurrence in the result tree. Equal node ID
 
 Cells are allocated by their containing OER or LER. Cell reference identity is the cell occurrence identity; a parallel numeric cell identifier would duplicate and risk disagreeing with the carrier.
 
-Resolver26 additionally preserves the identity of variable-bearing source selections through opaque `SelectionOccurrenceId` lineage. That identity is not explanatory provenance and should not be reconstructed from incidental selection content.
+Resolver26 additionally preserves the identity of variable-bearing source selections through
+`SelectionOccurrenceId` lineage.
 
 ## One-Shot Correctness Is Producer-Specific
 

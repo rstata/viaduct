@@ -57,12 +57,12 @@ class ValueVariableTest {
         assertNotEquals(Value.Variable.of(second, "value"), template)
         assertTrue(template.isTemplate)
         assertFalse(template.isStamped)
-        assertNull(template.selectionStamp)
+        assertNull(template.stamp)
         assertEquals("Variable.Template(name=value, field=Query/first)", "$template")
     }
 
     @Test
-    fun `stamp identity contains its template and opaque occurrence path`() {
+    fun `stamp identity contains its template and occurrence path`() {
         val schema =
             TestWorld.fromSDL(
                 """
@@ -85,12 +85,13 @@ class ValueVariableTest {
         assertNotEquals(template.stamp(emptyList()), stamp)
         assertFalse(stamp.isTemplate)
         assertTrue(stamp.isStamped)
-        assertNull(stamp.selectionStamp)
+        assertEquals(path, stamp.stamp?.resolverPath)
+        assertEquals(emptyList(), stamp.stamp?.occurrenceLineage)
         assertFailsWith<IllegalArgumentException> {
             stamp.stamp(path)
         }
         assertEquals(
-            "Variable.Stamped(name=value, field=Query/first, path=[index=0])",
+            "Variable.Occurrence(name=value, field=Query/first, path=[index=0], lineage=0)",
             "$stamp",
         )
     }
@@ -286,8 +287,8 @@ class ValueVariableTest {
         val firstPath = listOf(ListEngineResult.Index.of(1))
         val secondPath = listOf(ListEngineResult.Index.of(2))
         val occurrenceId = SelectionOccurrenceId(sourceSelection.key)
-        val firstStamp = SelectionStamp(firstPath, listOf(occurrenceId))
-        val secondStamp = SelectionStamp(secondPath, listOf(occurrenceId))
+        val firstStamp = Stamp.Occurrence.of(firstPath, listOf(occurrenceId))
+        val secondStamp = Stamp.Occurrence.of(secondPath, listOf(occurrenceId))
         val firstVariable = template.stamp(firstStamp)
         val secondVariable = template.stamp(secondStamp)
         world.declareBinding(firstVariable)
@@ -295,9 +296,9 @@ class ValueVariableTest {
         world.completeBinding(firstVariable, Value.Int.of(9))
         world.completeBinding(secondVariable, Value.Int.of(9))
 
-        fun stampedKey(selectionStamp: SelectionStamp): ObjectEngineResult.ObjectKey =
+        fun stampedKey(selectionStamp: Stamp.Occurrence): ObjectEngineResult.ObjectKey =
             ObjectEngineResult.Key.of(
-                selectionStamp = selectionStamp,
+                stamp = selectionStamp,
                 field = consume,
                 arguments = arguments.stamp(consume.arguments, selectionStamp),
             )
@@ -336,14 +337,13 @@ class ValueVariableTest {
                     .single()
             }
 
-        assertEquals(firstStamp, firstOpen.selectionStamp)
-        assertEquals(firstVariable.selectionStamp, firstOpen.selectionStamp)
+        assertEquals(firstStamp, firstOpen.stamp)
+        assertEquals(firstVariable.stamp, firstOpen.stamp)
         assertEquals(setOf(firstVariable), firstOpen.stampedVariables())
         assertEquals(firstOpen, equalFirstOpen)
         assertNotEquals(firstOpen, secondOpen)
         assertIs<ObjectEngineResult.GroundKey>(first)
-        requireNotNull(first.selectionStamp)
-        assertEquals(firstStamp, first.selectionStamp)
+        assertEquals(firstStamp, first.stamp)
         assertEquals(first, equalFirst)
         assertEquals(first, reapplied)
         assertNotEquals(first, second)
@@ -429,7 +429,7 @@ class ValueVariableTest {
                     subselections = selectionForestOf(),
                 )
             val selectionStamp =
-                SelectionStamp(
+                Stamp.Occurrence.of(
                     stamp,
                     listOf(SelectionOccurrenceId(sourceSelection.key)),
                 )

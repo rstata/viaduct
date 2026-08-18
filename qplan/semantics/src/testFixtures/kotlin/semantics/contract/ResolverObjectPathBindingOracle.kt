@@ -10,6 +10,7 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
 import model.Selection
+import model.Stamp
 import model.TypeExpr
 import model.Value
 import model.instantiateBindings
@@ -50,7 +51,7 @@ internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
 ): List<StampedObjectPathDefinition> {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
-    val selectionStamp = groundKey?.selectionStamp
+    val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
     val selectionStampedDefinitions =
         if (selectionStamp != null) {
             selectionStampedVariableDefinitionsFrom(selectionStamp)

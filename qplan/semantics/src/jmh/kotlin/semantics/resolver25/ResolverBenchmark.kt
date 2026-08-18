@@ -19,7 +19,7 @@ import org.openjdk.jmh.annotations.Warmup
 import org.openjdk.jmh.infra.BenchmarkParams
 import org.openjdk.jmh.infra.Blackhole
 import model.PathComponent
-import model.SelectionStamp
+import model.Stamp
 import model.Value
 import model.variableArgumentNames
 import model.variableSourceSelectionStamps
@@ -115,7 +115,7 @@ open class ResolverBenchmark {
                                                         (
                                                             event.coordinate.lastOrNull()
                                                                 as? ObjectEngineResult.GroundKey
-                                                        )?.selectionStamp,
+                                                        )?.stamp as? Stamp.Occurrence,
                                                     variableArgumentCount =
                                                         variableUse.argumentNames.size,
                                                     variableSourceOccurrencePaths =
@@ -136,7 +136,7 @@ open class ResolverBenchmark {
     private data class VariableUse(
         val argumentNames: Set<String>,
         val sourceOccurrencePaths: Set<List<PathComponent>>,
-        val sourceSelectionStamps: Set<SelectionStamp>,
+        val sourceSelectionStamps: Set<Stamp.Occurrence>,
     ) {
         operator fun plus(other: VariableUse): VariableUse =
             VariableUse(

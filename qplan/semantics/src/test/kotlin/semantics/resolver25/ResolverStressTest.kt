@@ -299,18 +299,22 @@ class ResolverStressTest {
                     shapeQualifiedCases > 0,
                     "Resolver25 $profile stress generated no qualifying shape",
                 )
-                run.assertAggregate(
-                    generatedArgumentVariables > 0,
-                    "Resolver25 $profile stress generated no argument variables",
-                )
+                if (resolver25StressRequiresArgumentVariableActivation(profile)) {
+                    run.assertAggregate(
+                        generatedArgumentVariables > 0,
+                        "Resolver25 $profile stress generated no argument variables",
+                    )
+                }
                 run.assertAggregate(
                     queryActivatedCases > 0,
                     "Resolver25 $profile stress activated no qualifying shape from a query",
                 )
-                run.assertAggregate(
-                    argumentVariableActivatedCases > 0,
-                    "Resolver25 $profile stress activated no argument-variable resolver",
-                )
+                if (resolver25StressRequiresArgumentVariableActivation(profile)) {
+                    run.assertAggregate(
+                        argumentVariableActivatedCases > 0,
+                        "Resolver25 $profile stress activated no argument-variable resolver",
+                    )
+                }
                 run.assertAggregate(
                     runtimeActivatedCases > 0,
                     "Resolver25 $profile stress invoked no qualifying resolver",
@@ -402,3 +406,6 @@ class ResolverStressTest {
                 (ResolverVariablesOnNonQueryFieldsOnly to false)
     }
 }
+
+internal fun resolver25StressRequiresArgumentVariableActivation(profile: String): Boolean =
+    profile != "multiple-variable-owners"

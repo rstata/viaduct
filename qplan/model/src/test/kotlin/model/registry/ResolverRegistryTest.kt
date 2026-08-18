@@ -94,7 +94,7 @@ class ResolverRegistryTest {
         assertEquals(bridgeType, bridgeObject.type)
         assertIs<Value.ID>(
             bridgeObject.fieldValues.getValue(
-                ObjectEngineResult.GroundKey.of(bridgeIdField, emptyMap()),
+                bridgeIdField.fieldName,
             ),
         )
         val payloadResolver = registry.resolver(payloadField)
@@ -125,11 +125,7 @@ class ResolverRegistryTest {
     fun `root resolver supplies only canonical query typename`() {
         val fixture = Fixture()
         val root = fixture.assumptions.resolverRegistry.resolveRootQuery()
-        val typenameKey =
-            ObjectEngineResult.GroundKey.of(
-                fixture.schema.objectField("Query", "__typename"),
-                emptyMap(),
-            )
+        val typenameKey = "__typename"
 
         assertEquals(fixture.schema.query, root.type)
         assertEquals(setOf(typenameKey), root.fieldValues.keys)
@@ -559,26 +555,26 @@ class ResolverRegistryTest {
 
         assertEquals(
             setOf(
-                key("id"),
-                key("friend"),
-                key("peers"),
+                "id",
+                "friend",
+                "peers",
             ),
             result.fieldValues.keys,
         )
         assertEquals(
             "target",
-            assertIs<Value.ID>(result.fieldValues[key("id")]).idValue,
+            assertIs<Value.ID>(result.fieldValues["id"]).idValue,
         )
         val snippedFriend =
-            assertIs<Value.Object>(result.fieldValues[key("friend")])
+            assertIs<Value.Object>(result.fieldValues["friend"])
         assertEquals(
-            setOf(key("id")),
+            setOf("id"),
             snippedFriend.fieldValues.keys,
         )
-        val peers = assertIs<Value.OutputList>(result.fieldValues[key("peers")])
+        val peers = assertIs<Value.OutputList>(result.fieldValues["peers"])
         val snippedPeer = assertIs<Value.Object>(peers.values.first())
         assertEquals(
-            setOf(key("name")),
+            setOf("name"),
             snippedPeer.fieldValues.keys,
         )
         assertEquals(null, peers.values.last())
@@ -727,7 +723,7 @@ class ResolverRegistryTest {
             )
 
         assertEquals(
-            setOf(fixture.key("name")),
+            setOf("name"),
             result.fieldValues.keys,
         )
     }

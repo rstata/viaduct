@@ -12,6 +12,7 @@ import model.SimpleEngineResult
 import model.Value
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
+import model.materializedFieldKey
 import model.merge
 import model.toValue
 import model.unionOutput
@@ -37,13 +38,15 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
 ): Value.Object {
-    val selectedValues = linkedMapOf<ObjectEngineResult.GroundKey, Value.Output?>()
+    val selectedValues =
+        linkedMapOf<String, Pair<model.Schema.ObjectField, Value.Output?>>()
     selections.byGroundKey().forEach { (storedGroundKey, selection) ->
         val visibleGroundKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(
                 field = storedGroundKey.field,
                 arguments = storedGroundKey.arguments,
             )
+        val materializedKey = visibleGroundKey.materializedFieldKey()
         val cell = reserveCell(storedGroundKey)
         diagnosticInstrumentation.cycleCheck(reader, cell)
         val selectedValue: Value.Output? =
@@ -55,16 +58,23 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                     reader = reader,
                     resultPath = resultPath + storedGroundKey,
                 )
-        selectedValues[visibleGroundKey] =
-            if (visibleGroundKey !in selectedValues) {
-                selectedValue
+        selectedValues[materializedKey] =
+            if (materializedKey !in selectedValues) {
+                storedGroundKey.field to selectedValue
             } else {
-                selectedValues.getValue(visibleGroundKey).unionOutput(selectedValue)
+                storedGroundKey.field to
+                    selectedValues
+                        .getValue(materializedKey)
+                        .second
+                        .unionOutput(selectedValue)
             }
     }
     return Value.Object.of(
         type = type,
-        fields = selectedValues,
+        fields =
+            selectedValues.map { (key, fieldAndValue) ->
+                Value.Object.FieldValue.of(key, fieldAndValue.first, fieldAndValue.second)
+            },
     )
 }
 

@@ -522,7 +522,7 @@ private class FingerprintBudget(
                     "object:${atom(value.type.typeName)}{" +
                         value.fieldValues.entries
                             .map { (key, fieldValue) ->
-                                canonicalKey(key) + "=" + output(fieldValue)
+                                atom(key) + "=" + output(fieldValue)
                             }.sorted()
                             .joinToString(",") +
                         "}",

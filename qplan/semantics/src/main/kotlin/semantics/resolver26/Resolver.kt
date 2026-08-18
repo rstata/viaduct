@@ -264,7 +264,13 @@ private suspend fun orchestrateObject(
             val groundKey: ObjectEngineResult.GroundKey =
                 objectKey as? ObjectEngineResult.GroundKey
                     ?: error("Resolver26 found open arguments on passive key $objectKey")
-            val sourceValue: Value.Output? = source.fieldValues.getValue(groundKey)
+            val arguments = groundKey.arguments
+            require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+                "Resolver26 passive field ${groundKey.field.containingType.typeName}/" +
+                    "${groundKey.field.fieldName} must be argumentless"
+            }
+            val sourceValue: Value.Output? =
+                source.fieldValues.getValue(groundKey.field.fieldName)
             if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(

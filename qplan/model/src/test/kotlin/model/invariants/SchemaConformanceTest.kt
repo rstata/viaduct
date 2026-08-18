@@ -54,20 +54,11 @@ class SchemaConformanceTest {
                 type = user,
                 fields =
                     mapOf(
-                        schema.key(user, "name") to Value.Int.of(1),
+                        "name" to Value.Int.of(1),
                     ),
             )
         }
     }
-
-    private fun Schema.key(
-        type: Schema.ObjectType,
-        fieldName: String,
-    ): ObjectEngineResult.GroundKey =
-        ObjectEngineResult.GroundKey.of(
-            field = objectField(type.typeName, fieldName),
-            arguments = emptyMap(),
-        )
 
     private companion object {
         val SCHEMA_SDL =

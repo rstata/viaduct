@@ -250,7 +250,7 @@ private class NodeResolverLowering(
                 loadNode(
                     typedId =
                         input.fieldValues.getValue(
-                            ObjectEngineResult.GroundKey.of(idField, emptyMap()),
+                            idField.fieldName,
                         ),
                     nodeOutputType = nodeOutputType,
                 )
@@ -283,7 +283,7 @@ private class NodeResolverLowering(
         }
         val returnedId =
             result.fieldValues.getValue(
-                ObjectEngineResult.GroundKey.of(validateNodeIdField(type), emptyMap()),
+                validateNodeIdField(type).fieldName,
             )
         require(returnedId == id) {
             "Node resolver for ${type.typeName} did not repeat its input ID"
@@ -501,14 +501,9 @@ private class TestResolverRegistry(
 
     override fun resolveRootQuery(): Value.Object {
         val query = schema.query
-        val typename =
-            ObjectEngineResult.GroundKey.of(
-                field = query.fields.getValue("__typename"),
-                arguments = emptyMap(),
-            )
         return Value.Object.of(
             type = query,
-            fields = mapOf(typename to Value.String.of(query.typeName)),
+            fields = mapOf("__typename" to Value.String.of(query.typeName)),
         )
     }
 

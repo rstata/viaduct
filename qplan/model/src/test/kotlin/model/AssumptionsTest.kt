@@ -503,47 +503,14 @@ class AssumptionsTest {
     }
 
     @Test
-    fun `object values use concrete argument-sensitive keys`() {
+    fun `object values reject argument-bearing passive fields`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val profile = schema.type("Profile") as Schema.ObjectType
-        val friend = schema.objectField("Profile", "friend")
-        val firstKey = ObjectEngineResult.GroundKey.of(friend, mapOf("limit" to 1))
-        val secondKey = ObjectEngineResult.GroundKey.of(friend, mapOf("limit" to 2))
         val friendValue = schema.objectOf("Profile")
 
-        val value =
+        assertFailsWith<IllegalArgumentException> {
             schema.objectOf("Profile") {
                 field("friend", "limit" to 1) setTo friendValue
-                field("friend", "limit" to 2) setTo null
             }
-
-        assertEquals(
-            setOf(
-                firstKey,
-                secondKey,
-            ),
-            value.fieldValues.keys,
-        )
-        assertEquals(friendValue, value.fieldValues[firstKey])
-        assertEquals(null, value.fieldValues[secondKey])
-
-        assertFailsWith<IllegalArgumentException> {
-            Value.Object.of(
-                type = profile,
-                fields =
-                    mapOf(
-                        ObjectEngineResult.GroundKey.of(
-                            friend,
-                            mapOf(
-                                "limit" to
-                                    Value.Variable.of(
-                                        schema.objectField("Query", "node_V_A_node"),
-                                        "limit",
-                                    ),
-                            ),
-                        ) to friendValue,
-                    ),
-            )
         }
     }
 

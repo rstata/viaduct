@@ -46,10 +46,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
-                    val actualFields =
-                        input.fieldValues.keys.mapTo(linkedSetOf()) { key ->
-                            key.field.fieldName
-                        }
+                    val actualFields = input.fieldValues.keys
                     when (field.containingType.typeName to field.fieldName) {
                         "User" to "display" ->
                             require(actualFields == setOf("first", "last"))
@@ -102,21 +99,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     when (field.containingType.typeName to field.fieldName) {
                         "Profile" to "rendered" ->
                             require(
-                                input.fieldValues.keys
-                                    .mapTo(linkedSetOf()) { key -> key.field.fieldName } ==
-                                    setOf("raw"),
+                                input.fieldValues.keys == setOf("raw"),
                             )
                         "User" to "message" -> {
                             require(
-                                input.fieldValues.keys
-                                    .mapTo(linkedSetOf()) { key -> key.field.fieldName } ==
-                                    setOf("profile"),
+                                input.fieldValues.keys == setOf("profile"),
                             )
                             val profile = input.fieldValues.values.single() as Value.Object
                             require(
-                                profile.fieldValues.keys
-                                    .mapTo(linkedSetOf()) { key -> key.field.fieldName } ==
-                                    setOf("rendered"),
+                                profile.fieldValues.keys == setOf("rendered"),
                             )
                         }
                     }
@@ -390,7 +381,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             computedApplications += 1
                             val base =
                                 input.fieldValues.getValue(
-                                    schema.contractKey(typeName, "base"),
+                                    "base",
                                 ) as Value.Int
                             Value.Int.of(
                                 base.intValue *
@@ -422,7 +413,8 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    (input.fieldValues.getValue(seedKey) as Value.Int).intValue
+                                    (input.fieldValues.getValue(seedKey.field.fieldName) as Value.Int)
+                                        .intValue
                                 val factor =
                                     arguments.fieldValues.getValue("factor") as Int
                                 productApplications += seed to factor
@@ -551,7 +543,8 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    (input.fieldValues.getValue(seedKey) as Value.Int).intValue
+                                    (input.fieldValues.getValue(seedKey.field.fieldName) as Value.Int)
+                                        .intValue
                                 val count =
                                     arguments.fieldValues.getValue("count") as Int
                                 applications += seed to count
@@ -572,7 +565,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             ) { input, _ ->
                                 renderedApplications += 1
                                 val raw =
-                                    input.fieldValues.getValue(rawKey) as Value.Int
+                                    input.fieldValues.getValue(rawKey.field.fieldName) as Value.Int
                                 Value.String.of("entry-${raw.intValue}")
                             },
                     )

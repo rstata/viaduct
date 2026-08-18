@@ -12,6 +12,7 @@ import model.SimpleEngineResult
 import model.Value
 import model.applicableGroundSelections
 import model.localizeTopLevelSelectionStamps
+import model.materializedFieldKey
 import model.toValue
 import model.unionOutput
 
@@ -57,13 +58,15 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
 ): Value.Object {
-    val selectedValues = linkedMapOf<ObjectEngineResult.GroundKey, Value.Output?>()
+    val selectedValues =
+        linkedMapOf<String, Pair<model.Schema.ObjectField, Value.Output?>>()
     selections.byGroundKey().forEach { (storedKey, selection) ->
         val visibleKey =
             ObjectEngineResult.GroundKey.of(
                 field = storedKey.field,
                 arguments = storedKey.arguments,
             )
+        val materializedKey = visibleKey.materializedFieldKey()
         val cell = getCell(storedKey)
         val promise = cell.getValue()
         runtimeSupport.cycleCheck(reader, cell)
@@ -75,14 +78,23 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
                     reader = reader,
                     resultPath = resultPath + storedKey,
                 )
-        selectedValues[visibleKey] =
-            if (visibleKey !in selectedValues) {
-                selectedValue
+        selectedValues[materializedKey] =
+            if (materializedKey !in selectedValues) {
+                storedKey.field to selectedValue
             } else {
-                selectedValues.getValue(visibleKey).unionOutput(selectedValue)
+                storedKey.field to
+                    selectedValues
+                        .getValue(materializedKey)
+                        .second
+                        .unionOutput(selectedValue)
             }
     }
-    return Value.Object.of(type, selectedValues)
+    return Value.Object.of(
+        type,
+        selectedValues.map { (key, fieldAndValue) ->
+            Value.Object.FieldValue.of(key, fieldAndValue.first, fieldAndValue.second)
+        },
+    )
 }
 
 // Recursively materializes one selected result while retaining its exact stored path.

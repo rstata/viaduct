@@ -139,7 +139,7 @@ internal fun Value.Object.resolveKey(
                         )
                     }
                 } else {
-                    fieldValues.getValue(key)
+                    fieldValues.getValue(key.field.fieldName)
                 }
             val resolvedValue =
                 fieldValue.resolveValue(

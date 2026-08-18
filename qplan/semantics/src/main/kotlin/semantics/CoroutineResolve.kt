@@ -120,7 +120,7 @@ private suspend fun resolveSlot(
                             )
                         }
                     } else {
-                        source.fieldValues.getValue(key)
+                        source.fieldValues.getValue(key.field.fieldName)
                     }
                 val resolvedValue =
                     fieldValue.resolveValue(

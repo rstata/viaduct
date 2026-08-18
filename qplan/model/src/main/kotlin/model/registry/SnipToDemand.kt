@@ -70,15 +70,23 @@ private fun Value.Object.snipObjectToDemand(
             .byGroundKey()
             .map { (key, selection) ->
                 val concreteField = key.field
-                val value = fieldValues.getValue(key)
+                val arguments = key.arguments
+                require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+                    "Passive object field ${type.typeName}/${concreteField.fieldName} " +
+                        "must be argumentless"
+                }
+                val value = fieldValues.getValue(concreteField.fieldName)
                 val selectedValue =
                     if (concreteField.typeExpr.baseType is Schema.SimpleType) {
                         value
                     } else {
                         value.snipToDemand(selection.subselections)
                     }
-                key to selectedValue
+                Value.Object.FieldValue.of(
+                    key = concreteField.fieldName,
+                    field = concreteField,
+                    value = selectedValue,
+                )
             }
-            .toMap()
     return Value.Object.of(type, selectedFields)
 }

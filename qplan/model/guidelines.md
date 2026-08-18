@@ -29,7 +29,7 @@ completed bindings, while coroutine operations may suspend for them.
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
 
-`ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
+`ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to OER cells, exact paths, materialization lookup, dependency ordering, and resolver application.
 
 `ObjectEngineResult.Key.stamp` distinguishes three states. A variable-bearing registry template has
 a null stamp. An ordinary concrete key carries `Stamp.VariableFreeOccurrence`, meaning that its
@@ -39,7 +39,9 @@ variable in that key's arguments carries the same stamp. Ordinary key factories 
 identity from stamped variables. Specialization, localization, and grounding preserve an explicit
 occurrence stamp.
 
-Keys belong to the engine-result domain even where a value-domain carrier temporarily consumes them. `Value.Object` and `Value.ObjectFields` currently use `ObjectEngineResult.GroundKey` while the value-domain object representation still stores canonical fields and explicit arguments. They must not define a parallel key hierarchy.
+Keys belong exclusively to the engine-result domain. `Value.Object` and `Value.ObjectFields` use string keys. Passive objects use canonical argumentless field names; materialized argument-bearing fields temporarily use the private deterministic address returned by `GroundKey.materializedFieldKey()`. That address ignores occurrence stamps and preserves visible field-and-ground-argument equality. It is not parsed by consumers and is not a response key.
+
+`Value.Object.FieldValue` carries a string key, canonical object field, and value only through object construction so the factory can validate schema conformance before retaining the string map. A completed object does not retain hidden OER keys or schema-field metadata. Argument-bearing passive fields are outside the source and resolver-output domain and must be rejected.
 
 `OpenValue.Ground` wraps canonical `EngineInputData`; other open values contain variables. `OpenArguments.Ground` is either an error-free `Value.Arguments` or one tuple-level error. Variable bindings likewise distinguish error-free engine input data from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
 
@@ -59,7 +61,7 @@ Cells are allocated by their containing OER or LER and use reference identity as
 
 An exact result path contains only `ObjectEngineResult.GroundKey` object steps and `ListEngineResult.Index` list steps. Open keys, schema fields, response keys, and aliases are not path components.
 
-Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to source/response processing and must not create parallel semantic field identities.
+Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to resolver-input materialization and must not create parallel OER or exact-path identities.
 
 The fixture retains an unchanged GraphQL-Java source schema for validation and derives a separate model-only lowered schema. Source Node-valued fields are absent from that model schema: `foo: W<T>` is represented only by `foo_V_A_node: W<T_V_A_Bridge>`, and each concrete bridge has ordinary `id` and `node` fields with no generated hierarchy. Source schema names containing `V_A` are rejected. Because there is no bridge hierarchy, fixture composition also rejects object implementations that narrow the named return type of a Node-valued interface field.
 

@@ -206,9 +206,8 @@ sealed interface Value {
      *
      * ### Invariant: object-value-owner
      *
-     * `fieldValues.containingType == type`. Every present [ObjectEngineResult.GroundKey] carries a
-     * field owned by [type]. Object values are partial; resolver behavior is responsible for
-     * supplying passive fields, including canonical `__typename`.
+     * `fieldValues.containingType == type`. Object values are partial; resolver behavior is
+     * responsible for supplying passive fields, including canonical `__typename`.
      */
     sealed interface Object : Output, Typed {
         override val type: Schema.ObjectType
@@ -216,44 +215,93 @@ sealed interface Value {
 
         companion object {
             /**
+             * Constructs a passive object whose keys are canonical argumentless field names.
+             *
+             * ### Invariant: passive-object-fields
+             *
+             * Every key names an argumentless object field owned by [type].
+             *
              * ### Invariant: object-value-factory-schema-conformance
              *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
+             * Every supplied value conforms to the corresponding schema field.
              */
             fun of(
                 type: Schema.ObjectType,
-                fields: Map<ObjectEngineResult.GroundKey, Output?> = emptyMap(),
+                fields: Map<kotlin.String, Output?> = emptyMap(),
+            ): Object =
+                of(
+                    type = type,
+                    fields =
+                        fields.map { (name, value) ->
+                            val field = type.fields[name]
+                            require(field is Schema.ObjectField) {
+                                "${type.typeName} has no canonical object field named $name"
+                            }
+                            require(field.arguments.fields.isEmpty()) {
+                                "Passive object field ${type.typeName}/$name must be argumentless"
+                            }
+                            FieldValue.of(name, field, value)
+                        },
+                )
+
+            /**
+             * Constructs an object from entries whose producers retain each key's schema field
+             * through validation. The resulting object stores only string keys and values.
+             */
+            fun of(
+                type: Schema.ObjectType,
+                fields: Iterable<FieldValue>,
             ): Object {
-                fields.forEach { (key, value) ->
-                    require(value.conformsToSchemaType(key.field.typeExpr)) {
-                        "${type.typeName}/${key.field.fieldName} value does not conform to " +
-                            key.field.typeExpr
+                val entries = fields.toList()
+                entries.forEach { entry ->
+                    require(entry.field.containingType == type) {
+                        "${type.typeName} cannot contain output field " +
+                            "${entry.field.containingType.typeName}/${entry.field.fieldName}"
+                    }
+                    require(entry.value.conformsToSchemaType(entry.field.typeExpr)) {
+                        "${type.typeName}/${entry.field.fieldName} value does not conform to " +
+                            entry.field.typeExpr
                     }
                 }
-                return ObjectValueImpl(
-                    type = type,
-                    fieldValues = ObjectFieldValuesImpl(type, fields),
-                )
+                val values = entries.associate { entry -> entry.key to entry.value }
+                require(values.size == entries.size) {
+                    "Object ${type.typeName} contains duplicate string field keys"
+                }
+                return objectValueOfValidatedFields(type, values)
+            }
+        }
+
+        /** One construction-time object entry whose schema field is forgotten after validation. */
+        sealed interface FieldValue {
+            val key: kotlin.String
+            val field: Schema.ObjectField
+            val value: Output?
+
+            companion object {
+                fun of(
+                    key: kotlin.String,
+                    field: Schema.ObjectField,
+                    value: Output?,
+                ): FieldValue = ObjectFieldValueImpl(key, field, value)
             }
         }
     }
 
     /**
-     * A finite map from exact object-field coordinates to values.
+     * A finite map from materialized string field addresses to values.
      *
      * ### Invariant: object-field-values-owner
      *
-     * [containingType] is the concrete object type whose fields these values inhabit. Every present
-     * [ObjectEngineResult.GroundKey] carries a field owned by [containingType].
+     * [containingType] is the concrete object type whose fields these values inhabit.
      */
-    sealed interface ObjectFields : Map<ObjectEngineResult.GroundKey, Output?> {
+    sealed interface ObjectFields : Map<kotlin.String, Output?> {
         val containingType: Schema.ObjectType
 
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: ObjectEngineResult.GroundKey): Output?
+        override operator fun get(key: kotlin.String): Output?
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: ObjectEngineResult.GroundKey): Output?
+        fun getValue(key: kotlin.String): Output?
     }
 
     /**
@@ -417,17 +465,17 @@ fun Value.Output?.unionOutput(other: Value.Output?): Value.Output? {
                 "Cannot union object output values of different types"
             }
             val fields =
-                (fieldValues.keys + other.fieldValues.keys).associateWith { groundKey ->
+                (fieldValues.keys + other.fieldValues.keys).associateWith { fieldKey ->
                     when {
-                        groundKey !in fieldValues -> other.fieldValues.getValue(groundKey)
-                        groundKey !in other.fieldValues -> fieldValues.getValue(groundKey)
+                        fieldKey !in fieldValues -> other.fieldValues.getValue(fieldKey)
+                        fieldKey !in other.fieldValues -> fieldValues.getValue(fieldKey)
                         else ->
                             fieldValues
-                                .getValue(groundKey)
-                                .unionOutput(other.fieldValues.getValue(groundKey))
+                                .getValue(fieldKey)
+                                .unionOutput(other.fieldValues.getValue(fieldKey))
                     }
                 }
-            Value.Object.of(type = type, fields = fields)
+            objectValueOfValidatedFields(type = type, fields = fields)
         }
 
         is Value.OutputList -> {
@@ -482,6 +530,12 @@ private data class ObjectValueImpl(
     override val type: Schema.ObjectType,
     override val fieldValues: Value.ObjectFields,
 ) : Value.Object
+
+private data class ObjectFieldValueImpl(
+    override val key: String,
+    override val field: Schema.ObjectField,
+    override val value: Value.Output?,
+) : Value.Object.FieldValue
 
 private data class ArgumentsValueImpl(
     override val fieldValues: EngineInputObjectData,
@@ -544,25 +598,14 @@ private data class PresentDefaultValueImpl(
 
 private class ObjectFieldValuesImpl(
     override val containingType: Schema.ObjectType,
-    private val backingMap: Map<ObjectEngineResult.GroundKey, Value.Output?>,
+    private val backingMap: Map<String, Value.Output?>,
 ) : Value.ObjectFields,
-    Map<ObjectEngineResult.GroundKey, Value.Output?> by backingMap {
-    init {
-        require(backingMap.keys.all { it.field.containingType == containingType }) {
-            val foreignFields =
-                backingMap.keys
-                    .filter { it.field.containingType != containingType }
-                    .map { "${it.field.containingType.typeName}/${it.field.fieldName}" }
-            "${containingType.typeName} cannot contain output fields " +
-                foreignFields.sorted().joinToString()
-        }
-    }
+    Map<String, Value.Output?> by backingMap {
+    override operator fun get(key: String): Value.Output? = getValue(key)
 
-    override operator fun get(key: ObjectEngineResult.GroundKey): Value.Output? = getValue(key)
-
-    override fun getValue(key: ObjectEngineResult.GroundKey): Value.Output? {
+    override fun getValue(key: String): Value.Output? {
         if (!backingMap.containsKey(key)) {
-            throw MissingFieldException(containingType.typeName, key.field.fieldName)
+            throw MissingFieldException(containingType.typeName, key)
         }
         return backingMap[key]
     }
@@ -576,6 +619,15 @@ private class ObjectFieldValuesImpl(
 
     override fun toString(): String = backingMap.toString()
 }
+
+private fun objectValueOfValidatedFields(
+    type: Schema.ObjectType,
+    fields: Map<String, Value.Output?>,
+): Value.Object =
+    ObjectValueImpl(
+        type = type,
+        fieldValues = ObjectFieldValuesImpl(type, fields.toMap()),
+    )
 
 internal fun argumentsOfGround(
     fields: EngineInputObjectData,

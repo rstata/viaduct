@@ -337,11 +337,7 @@ private fun Value.Output?.synthesizeTypenames(): Value.Output? =
             )
 
         is Value.Object -> {
-            val typenameKey =
-                ObjectEngineResult.GroundKey.of(
-                    field = type.fields.getValue("__typename"),
-                    arguments = emptyMap(),
-                )
+            val typenameKey = "__typename"
             val typenameValue = Value.String.of(type.typeName)
             if (typenameKey in fieldValues) {
                 val supplied = fieldValues.getValue(typenameKey)

@@ -65,7 +65,9 @@ class AssumptionsTest {
 
         val filter =
             assertIs<Value.InputObject>(
-                node.key.arguments.fieldExpressions().getValue("filter"),
+                assertIs<OpenValue.Ground>(
+                    node.key.arguments.fieldExpressions().getValue("filter"),
+                ).data,
             )
         val role = assertIs<Value.Enum>(filter.fieldValues.getValue("role"))
         assertEquals(assumptions.schema.type("Role"), role.type)
@@ -128,7 +130,11 @@ class AssumptionsTest {
 
         assertEquals(
             filter,
-            fragment.subselections.single().key.arguments.fieldExpressions().getValue("filter"),
+            assertIs<OpenValue.Ground>(
+                fragment.subselections.single().key.arguments
+                    .fieldExpressions()
+                    .getValue("filter"),
+            ).data,
         )
     }
 
@@ -260,7 +266,12 @@ class AssumptionsTest {
                 arguments = mapOf("filter" to filterValue),
             )
         assertEquals(nodeField, nodeKey.field)
-        assertEquals(filterValue, nodeKey.arguments.fieldExpressions()["filter"])
+        assertEquals(
+            filterValue,
+            assertIs<OpenValue.Ground>(
+                nodeKey.arguments.fieldExpressions()["filter"],
+            ).data,
+        )
         assertEquals(
             nodeKey,
             ObjectEngineResult.Key.of(
@@ -324,8 +335,8 @@ class AssumptionsTest {
             assumptions.completeBinding(variable, null)
 
             assertTrue(assumptions.isBound(variable))
-            assertNull(assumptions.getBinding(variable))
-            assertNull(fetched.await())
+            assertEquals(VariableBinding.of(null), assumptions.getBinding(variable))
+            assertEquals(VariableBinding.of(null), fetched.await())
             assertFalse(
                 assumptions.isBound(
                     Value.Variable.of(field, "value")
@@ -352,7 +363,7 @@ class AssumptionsTest {
             assumptions.completeBinding(variable, Value.Int.of(2))
         }
 
-        assertEquals(first, assumptions.getBinding(variable))
+        assertEquals(VariableBinding.of(first), assumptions.getBinding(variable))
     }
 
     @Test
@@ -366,8 +377,8 @@ class AssumptionsTest {
             assumptions.bindVariable(variable, value)
 
             assertTrue(assumptions.isBound(variable))
-            assertEquals(value, assumptions.getBinding(variable))
-            assertEquals(value, assumptions.fetchBinding(variable))
+            assertEquals(VariableBinding.of(value), assumptions.getBinding(variable))
+            assertEquals(VariableBinding.of(value), assumptions.fetchBinding(variable))
             assertFailsWith<IllegalStateException> {
                 assumptions.bindVariable(variable, Value.Int.of(2))
             }
@@ -403,7 +414,7 @@ class AssumptionsTest {
         assumptions.declareBinding(binding)
         assumptions.completeBinding(binding, filter)
 
-        assertEquals(filter, assumptions.getBinding(binding))
+        assertEquals(VariableBinding.of(filter), assumptions.getBinding(binding))
     }
 
     @Test
@@ -429,14 +440,15 @@ class AssumptionsTest {
                 arguments.instantiateBindings(node.arguments)
             }
 
+        val grounded = assertIs<Value.Arguments>(instantiated)
         assertEquals(
             filter,
-            instantiated.fieldValues.getValue("filter"),
+            grounded.fieldValues.getValue("filter"),
         )
     }
 
     @Test
-    fun `argument instantiation preserves the error value`() {
+    fun `argument instantiation preserves the argument error`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val node = assumptions.schema.objectField("Query", "node_V_A_node")
         val arguments = OpenArguments.of(node, mapOf("filter" to Value.Error))
@@ -446,7 +458,74 @@ class AssumptionsTest {
                 arguments.instantiateBindings(node.arguments)
             }
 
-        assertSame(Value.Error, instantiated.fieldValues.getValue("filter"))
+        assertSame(OpenArguments.Ground.Error, instantiated)
+    }
+
+    @Test
+    fun `nested input errors become an argument error`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val node = schema.objectField("Query", "node_V_A_node")
+        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val tagsType =
+            assertIs<TypeExpr.List<Schema.InputType>>(
+                filterType.fields.getValue("tags").typeExpr,
+            )
+        val prebuiltFilter =
+            Value.InputObject.of(
+                filterType,
+                mapOf(
+                    "tags" to
+                        Value.InputList.of(
+                            tagsType.elementType,
+                            listOf(Value.Error),
+                        ),
+                ),
+            )
+
+        listOf(
+            mapOf(
+                "tags" to listOf(Value.Error),
+            ),
+            prebuiltFilter,
+        ).forEach { filter ->
+            val arguments =
+                OpenArguments.of(
+                    node,
+                    mapOf(
+                        "filter" to filter,
+                    ),
+                )
+
+            assertSame(OpenArguments.Ground.Error, arguments)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            VariableBinding.of(prebuiltFilter)
+        }
+    }
+
+    @Test
+    fun `nested erroneous variable bindings become an argument error`() {
+        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val node = assumptions.schema.objectField("Query", "node_V_A_node")
+        val variable = Value.Variable.of(node, "tag").stamp(emptyList())
+        val arguments =
+            OpenArguments.of(
+                node,
+                mapOf(
+                    "filter" to
+                        mapOf(
+                            "tags" to listOf(variable),
+                        ),
+                ),
+            )
+        assumptions.bindVariable(variable, VariableBinding.Error)
+
+        val instantiated =
+            context(assumptions) {
+                arguments.instantiateBindings(node.arguments)
+            }
+
+        assertSame(OpenArguments.Ground.Error, instantiated)
     }
 
     @Test

@@ -6,6 +6,7 @@ import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.instantiateBindings
@@ -51,7 +52,7 @@ class DemandSealingTest {
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
         assertEquals(
-            Value.Int.of(7),
+            VariableBinding.of(Value.Int.of(7)),
             testWorld.assumptions.getBinding(
                 Value.Variable
                     .of(resultKey.field, "value")
@@ -325,7 +326,7 @@ class DemandSealingTest {
             Resolver25StructuralSignature.NESTED_PROVIDER_PATH,
         )
         assertEquals(
-            Value.Int.of(11),
+            VariableBinding.of(Value.Int.of(11)),
             testWorld.assumptions.getBinding(
                 Value.Variable
                     .of(resultKey.field, "value")

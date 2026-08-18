@@ -17,7 +17,7 @@ import model.invariants.conformsToSchemaType
  * [Assumptions.schema] under which that value is interpreted.
  */
 sealed interface Value {
-    sealed interface Input : Value, OpenValue
+    sealed interface Input : Value
 
     sealed interface Output : Value
 
@@ -227,7 +227,7 @@ sealed interface Value {
      * variables. Equality is structural over its field values. Occurrence identity belongs to
      * [ObjectEngineResult.Key.stamp], not the grounded argument value.
      */
-    sealed interface Arguments : OpenArguments {
+    sealed interface Arguments : OpenArguments.Ground {
         val fieldValues: Map<kotlin.String, Input?>
 
         companion object {
@@ -243,7 +243,7 @@ sealed interface Value {
             ): Arguments {
                 val arguments = OpenArguments.of(field, fields)
                 require(arguments is Arguments) {
-                    "Ground arguments cannot contain variables"
+                    "Ground arguments cannot contain variables or errors"
                 }
                 return arguments
             }
@@ -585,10 +585,14 @@ private fun kotlin.collections.List<PathComponent>.renderVariablePath(): String 
         when (component) {
             is ObjectEngineResult.GroundKey ->
                 "${component.field.containingType.typeName}/${component.field.fieldName}" +
-                    component.arguments.fieldValues
-                        .takeIf { arguments -> arguments.isNotEmpty() }
-                        ?.let { arguments -> "($arguments)" }
-                        .orEmpty()
+                    when (val arguments = component.arguments) {
+                        OpenArguments.Ground.Error -> "(error)"
+                        is Value.Arguments ->
+                            arguments.fieldValues
+                                .takeIf { fields -> fields.isNotEmpty() }
+                                ?.let { fields -> "($fields)" }
+                                .orEmpty()
+                    }
             is ListEngineResult.Index -> "index=${component.index}"
         }
     }
@@ -662,7 +666,7 @@ internal fun argumentsOfGround(
     require(
         fields.all { (name, value) ->
             val field = type.fields[name] ?: return@all false
-            value.conformsToSchemaType(field.typeExpr)
+            !value.containsInputError() && value.conformsToSchemaType(field.typeExpr)
         },
     ) {
         "Ground argument values do not conform to their field definition"
@@ -671,6 +675,15 @@ internal fun argumentsOfGround(
         fieldValues = fields,
     )
 }
+
+internal fun Value.Input?.containsInputError(): Boolean =
+    when (this) {
+        Value.Error -> true
+        is Value.InputList -> values.any { value -> value.containsInputError() }
+        is Value.InputObject ->
+            fieldValues.values.any { value -> value.containsInputError() }
+        else -> false
+    }
 
 internal fun coerceInputValue(
     typeExpr: TypeExpr<Schema.InputType>,

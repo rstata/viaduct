@@ -2,6 +2,7 @@ package model.testing
 
 import model.ObjectEngineResult
 
+import model.OpenArguments
 import model.Schema
 import model.SourceSchemaAdapter
 import model.Value
@@ -133,8 +134,8 @@ class ResolverTestDslTest {
                 .single()
 
         assertEquals(
-            Value.Error,
-            dependency.key.arguments.fieldExpressions().getValue("arg"),
+            OpenArguments.Ground.Error,
+            dependency.key.arguments,
         )
     }
 
@@ -301,7 +302,8 @@ private fun TestWorld.apply(
     input: Value.Object = resolverRegistry.resolveRootQuery(),
     arguments: Map<String, Any?> = emptyMap(),
 ): Value.Output? =
-    resolverRegistry.resolver(field)(
-        input,
-        Value.Arguments.of(field, arguments),
-    )
+    when (val grounded = OpenArguments.of(field, arguments)) {
+        OpenArguments.Ground.Error -> Value.Error
+        is Value.Arguments -> resolverRegistry.resolver(field)(input, grounded)
+        else -> error("Direct resolver application requires ground arguments")
+    }

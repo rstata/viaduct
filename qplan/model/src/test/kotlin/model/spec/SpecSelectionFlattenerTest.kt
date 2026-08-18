@@ -1,5 +1,6 @@
 package model.spec
 
+import model.OpenValue
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -67,7 +68,9 @@ class SpecSelectionFlattenerTest {
         assertEquals(
             "beta",
             assertIs<Value.String>(
-                release.key.arguments.fieldExpressions()["channel"],
+                assertIs<OpenValue.Ground>(
+                    release.key.arguments.fieldExpressions()["channel"],
+                ).data,
             ).stringValue,
         )
     }
@@ -202,12 +205,22 @@ class SpecSelectionFlattenerTest {
             arguments: Map<String, Value.Input?> = emptyMap(),
             subselections: List<SpecSelection>? = null,
         ): SpecSelection.Field =
-            SpecSelection.Field.of(
-                alias = alias,
-                field = schema.field(containingType, fieldName),
-                arguments = arguments,
-                subselections = subselections,
-            )
+            schema
+                .field(containingType, fieldName)
+                .let { field ->
+                    SpecSelection.Field.of(
+                        alias = alias,
+                        field = field,
+                        arguments =
+                            arguments.mapValues { (name, value) ->
+                                OpenValue.of(
+                                    field.arguments.fields.getValue(name).typeExpr,
+                                    value,
+                                )
+                            },
+                        subselections = subselections,
+                    )
+                }
 
         fun inlineFragment(
             typeCondition: Schema.CompositeType?,

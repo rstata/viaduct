@@ -1,11 +1,13 @@
 package semantics.contract
 
 import model.ObjectEngineResult
+import model.OpenArguments
 
 import model.EngineResult
 import model.ErrorEngineResult
 import model.IntEngineResult
 import model.Value
+import model.VariableBinding
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,7 +57,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).get())
         assertEquals(
-            Value.Int.of(7),
+            VariableBinding.of(Value.Int.of(7)),
             world.getBinding(boundVariable),
         )
     }
@@ -65,7 +67,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         listOf<Value.Input?>(null, Value.Error).forEach { provided ->
             val dslValue = if (provided == Value.Error) "\"ERROR\"" else "null"
             var observedResultInput = false
-            var consumedArguments: Value.Arguments? = null
+            var consumedArguments: OpenArguments.Ground? = null
             var consumedValue: Value.Output? = null
             val testWorld =
                 TestWorld.fromDSL(
@@ -115,14 +117,22 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 resolved.getCell(resultKey).get(),
             )
             assertEquals(
-                provided,
+                if (provided == Value.Error) {
+                    VariableBinding.Error
+                } else {
+                    VariableBinding.of(provided)
+                },
                 world.getBinding(boundVariable),
             )
             assertEquals(
-                Value.Arguments.of(
-                    world.schema.objectField("Query", "consume"),
-                    mapOf("value" to provided),
-                ),
+                if (provided == Value.Error) {
+                    OpenArguments.Ground.Error
+                } else {
+                    Value.Arguments.of(
+                        world.schema.objectField("Query", "consume"),
+                        mapOf("value" to provided),
+                    )
+                },
                 consumedArguments,
             )
             assertEquals(true, observedResultInput)

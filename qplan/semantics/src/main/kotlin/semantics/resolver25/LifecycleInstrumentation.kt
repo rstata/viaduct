@@ -7,6 +7,7 @@ import model.PathComponent
 import model.Schema
 import model.Selection
 import model.Value
+import model.VariableBinding
 
 internal sealed interface Resolver25BindingSource {
     data class FromArgument(
@@ -97,7 +98,7 @@ internal sealed interface Resolver25LifecycleEvent {
         override val sequence: Long,
         val ownerCoordinate: List<PathComponent>,
         val variable: Value.Variable,
-        val value: Value.Input?,
+        val binding: VariableBinding,
     ) : Resolver25LifecycleEvent
 
     data class ResolverStarted(
@@ -270,14 +271,14 @@ internal class Resolver25LifecycleInstrumentation(
     fun bindingCompleted(
         ownerCoordinate: List<PathComponent>,
         variable: Value.Variable,
-        value: Value.Input?,
+        binding: VariableBinding,
     ) {
         emit { sequence ->
             Resolver25LifecycleEvent.BindingCompleted(
                 sequence,
                 ownerCoordinate.toList(),
                 variable,
-                value,
+                binding,
             )
         }
     }

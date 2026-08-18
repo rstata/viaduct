@@ -220,13 +220,13 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
 context(world: Assumptions)
 suspend fun SelectionForest.mergeWithVariables(
     result: ObjectEngineResult,
-): Pair<ObjectSelectionForest, Map<Value.Variable, Value.Input?>> {
+): Pair<ObjectSelectionForest, Map<Value.Variable, VariableBinding>> {
     val type: Schema.ObjectType = result.type
     val childrenByKey: MutableMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> =
         linkedMapOf()
     val groundKeyByVariable: MutableMap<Value.Variable, ObjectEngineResult.GroundKey> =
         linkedMapOf()
-    val bindings: MutableMap<Value.Variable, Value.Input?> =
+    val bindings: MutableMap<Value.Variable, VariableBinding> =
         linkedMapOf()
     occurrences().forEach { selection ->
         if (type !in selection.possibleTypes) return@forEach
@@ -256,11 +256,11 @@ suspend fun SelectionForest.mergeWithVariables(
                 selection.subselections.occurrences().any { child ->
                     (child.key as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey == variable
                 }
-            val binding: Value.Input? =
+            val binding: VariableBinding =
                 if (continues) {
                     when (value) {
-                        null -> null
-                        ErrorEngineResult -> Value.Error
+                        null -> VariableBinding.of(null)
+                        ErrorEngineResult -> VariableBinding.Error
                         is ObjectEngineResult -> return@forEach
                         else ->
                             error(
@@ -268,7 +268,7 @@ suspend fun SelectionForest.mergeWithVariables(
                             )
                     }
                 } else {
-                    value.toPathVariableInput()
+                    value.toPathVariableBinding()
                 }
             if (bindings.containsKey(variable)) {
                 require(bindings[variable] == binding) {
@@ -283,24 +283,33 @@ suspend fun SelectionForest.mergeWithVariables(
     return normalizedObjectSelectionForest(type, childrenByKey) to bindings
 }
 
-private fun EngineResult?.toPathVariableInput(): Value.Input? =
+private fun EngineResult?.toPathVariableBinding(): VariableBinding =
     when (this) {
-        null -> null
-        ErrorEngineResult -> Value.Error
-        is SimpleEngineResult -> toValue()
-        is ListEngineResult -> toPathVariableInputList()
+        null -> VariableBinding.of(null)
+        ErrorEngineResult -> VariableBinding.Error
+        is SimpleEngineResult -> VariableBinding.of(toValue())
+        is ListEngineResult -> toPathVariableInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun ListEngineResult.toPathVariableInputList(): Value.InputList {
+private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }
-    return Value.InputList.of(
-        typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { cell -> cell.getValue().get().toPathVariableInput() },
+    val values = mutableListOf<Value.Input?>()
+    indices.forEach { index ->
+        when (val binding = get(index).getValue().get().toPathVariableBinding()) {
+            VariableBinding.Error -> return VariableBinding.Error
+            is VariableBinding.Input -> values += binding.value
+        }
+    }
+    return VariableBinding.of(
+        Value.InputList.of(
+            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
+            values = values,
+        ),
     )
 }
 
@@ -348,7 +357,9 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
     return normalizedObjectSelectionForest(type, childrenByKey)
 }
 
-private fun ObjectEngineResult.ObjectKey.ground(arguments: Value.Arguments): ObjectEngineResult.GroundKey {
+private fun ObjectEngineResult.ObjectKey.ground(
+    arguments: OpenArguments.Ground,
+): ObjectEngineResult.GroundKey {
     val currentSelectionStamp = stamp as? Stamp.Occurrence
     return if (currentSelectionStamp != null) {
         ObjectEngineResult.GroundKey.of(

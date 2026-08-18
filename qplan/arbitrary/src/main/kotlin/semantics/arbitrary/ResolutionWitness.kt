@@ -324,17 +324,14 @@ fun EngineResult?.registeredResolverOccurrences(
                     .forEach { key ->
                         val canonicalField = key.field.fieldCoordinate()
                         val fieldPath = path + key
-                        if (key.field in registry && !key.arguments.containsErrorValue()) {
+                        val arguments = key.arguments as? Value.Arguments
+                        if (key.field in registry && arguments != null) {
                             result +=
                                 RegisteredResolverOccurrence(
                                     applicationKey =
                                         ResolverApplicationKey(
                                             field = key.field.fieldCoordinate(),
-                                            arguments =
-                                                Value.Arguments.of(
-                                                    field = key.field,
-                                                    fields = key.arguments.fieldValues,
-                                                ),
+                                            arguments = arguments,
                                         ),
                                     canonicalField = canonicalField,
                                     occurrencePath = fieldPath,
@@ -370,18 +367,6 @@ fun EngineResult?.registeredResolverOccurrenceCounts(
     registeredResolverOccurrences(registry, bounds)
         .groupingBy(RegisteredResolverOccurrence::applicationKey)
         .eachCount()
-
-private fun Value.Arguments.containsErrorValue(): Boolean =
-    fieldValues.values.any { value -> value.containsErrorValue() }
-
-private fun Value.Input?.containsErrorValue(): Boolean =
-    when {
-        this == Value.Error -> true
-        this is Value.InputList -> values.any { value -> value.containsErrorValue() }
-        this is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsErrorValue() }
-        else -> false
-    }
 
 /** Resolver fields conservatively reachable from fields directly selected by an operation. */
 data class AllowedResolverClosure(
@@ -493,20 +478,21 @@ private class FingerprintBudget(
         arguments: OpenArguments,
         expectedType: Schema.FieldArguments,
     ): String =
-        if (arguments is Value.Arguments) {
-            node(
-                "args(" +
-                    arguments.fieldValues.entries
-                        .sortedBy(Map.Entry<String, Value.Input?>::key)
-                        .joinToString(",") { (name, value) ->
-                            atom(name) +
-                                "=" +
-                                input(value, expectedType.fields.getValue(name).typeExpr)
-                        } +
-                    ")",
-            )
-        } else {
-            node("open-args:${arguments.hashCode()}")
+        when (arguments) {
+            OpenArguments.Ground.Error -> node("error-args")
+            is Value.Arguments ->
+                node(
+                    "args(" +
+                        arguments.fieldValues.entries
+                            .sortedBy(Map.Entry<String, Value.Input?>::key)
+                            .joinToString(",") { (name, value) ->
+                                atom(name) +
+                                    "=" +
+                                    input(value, expectedType.fields.getValue(name).typeExpr)
+                            } +
+                        ")",
+                )
+            else -> node("open-args:${arguments.hashCode()}")
         }
 
     fun output(value: Value.Output?): String =
@@ -656,7 +642,7 @@ private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
     ResolutionFingerprint(
         "${field.containingType.typeName.length}:${field.containingType.typeName}/" +
             "${field.fieldName.length}:${field.fieldName};" +
-            arguments.resolutionFingerprint(field.arguments, bounds).value,
+            FingerprintBudget(bounds).arguments(arguments, field.arguments),
     )
 
 private fun Schema.OutputField.fieldCoordinate(): FieldCoordinate =

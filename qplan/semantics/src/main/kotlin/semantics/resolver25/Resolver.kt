@@ -26,6 +26,7 @@ import model.SelectionForest
 import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
+import model.VariableBinding
 import model.containsErrorValue
 import model.fetchBindings
 import model.flatMapToSelectionForest
@@ -504,7 +505,7 @@ private class ObjectResultOrchestrator(
                 runtime.instrumentation.bindingCompleted(
                     ownerCoordinate = coordinate,
                     variable = variable,
-                    value = value,
+                    binding = VariableBinding.of(value),
                 )
             },
         )
@@ -531,7 +532,7 @@ private class ObjectResultOrchestrator(
                 runtime.instrumentation.bindingCompleted(
                     ownerCoordinate = coordinate,
                     variable = definition.variable,
-                    value = value,
+                    binding = value,
                 )
                 world.completeBinding(
                     definition.variable,
@@ -546,7 +547,7 @@ private class ObjectResultOrchestrator(
     private suspend fun readProvider(
         definition: StampedObjectPathDefinition,
         reader: List<PathComponent>,
-    ): Value.Input? {
+    ): VariableBinding {
         var current = target
         definition.path.forEachIndexed { index, openKey ->
             val specializedKey =
@@ -575,10 +576,10 @@ private class ObjectResultOrchestrator(
             val cell = current.getCell(groundedKey)
             diagnosticInstrumentation.cycleCheck(reader, cell)
             val value = cell.getValue().await()
-            if (value == null) return null
-            if (value == ErrorEngineResult) return Value.Error
+            if (value == null) return VariableBinding.of(null)
+            if (value == ErrorEngineResult) return VariableBinding.Error
             if (index == definition.path.lastIndex) {
-                return value.toProviderInput()
+                return value.toProviderBinding()
             }
             current =
                 value as? ObjectEngineResult
@@ -716,6 +717,7 @@ private class ObjectResultOrchestrator(
             else -> {
                 val resolutionSelections: SelectionForest =
                     selection.subselections.fetchSuccessorDemandDeferringTemplates()
+                val arguments = groundedKey.arguments as Value.Arguments
                 val fieldValue: Value.Output? =
                     if (groundedKey.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(groundedKey.field)
@@ -727,7 +729,7 @@ private class ObjectResultOrchestrator(
                         runtime.instrumentation.resolverStarted(coordinate)
                         resolver(
                             input = input,
-                            arguments = groundedKey.arguments,
+                            arguments = arguments,
                             selections = resolutionSelections,
                         ).also {
                             runtime.instrumentation.resolverFinished(coordinate)
@@ -1082,22 +1084,38 @@ private class ResolvedField(
     val value: ResolvedValue,
 )
 
-private fun EngineResult.toProviderInput(): Value.Input =
+private fun EngineResult.toProviderBinding(): VariableBinding =
     when (this) {
-        ErrorEngineResult -> Value.Error
-        is SimpleEngineResult -> toValue()
-        is ListEngineResult -> toProviderInputList()
+        ErrorEngineResult -> VariableBinding.Error
+        is SimpleEngineResult -> VariableBinding.of(toValue())
+        is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun ListEngineResult.toProviderInputList(): Value.InputList {
+private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }
-    return Value.InputList.of(
-        typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-        values = map { cell -> cell.getValue().get()?.toProviderInput() },
+    val values = mutableListOf<Value.Input?>()
+    indices.forEach { index ->
+        val result = get(index).getValue().get()
+        val binding =
+            if (result == null) {
+                VariableBinding.of(null)
+            } else {
+                result.toProviderBinding()
+            }
+        when (binding) {
+            VariableBinding.Error -> return VariableBinding.Error
+            is VariableBinding.Input -> values += binding.value
+        }
+    }
+    return VariableBinding.of(
+        Value.InputList.of(
+            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
+            values = values,
+        ),
     )
 }

@@ -5,6 +5,7 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.OpenArguments
 import model.PathComponent
 import model.SimpleEngineResult
 import model.Stamp
@@ -92,17 +93,5 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
             }
     }
 
-internal fun Value.Arguments.argumentsContainErrorValue(): Boolean =
-    fieldValues.values.any { value -> value.inputValueContainsErrorValue() }
-
-private fun Value.Input?.inputValueContainsErrorValue(): Boolean =
-    when {
-        this == Value.Error -> true
-        this is Value.InputList ->
-            values.any { element -> element.inputValueContainsErrorValue() }
-
-        this is Value.InputObject ->
-            fieldValues.values.any { value -> value.inputValueContainsErrorValue() }
-
-        else -> false
-    }
+internal fun OpenArguments.Ground.argumentsContainErrorValue(): Boolean =
+    this == OpenArguments.Ground.Error

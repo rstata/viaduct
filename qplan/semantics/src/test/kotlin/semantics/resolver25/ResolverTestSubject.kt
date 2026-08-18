@@ -71,7 +71,7 @@ private fun Resolver25LifecycleEvent.debugSummary(): String =
         is Resolver25LifecycleEvent.BindingDeclared ->
             "$sequence bind ${ownerCoordinate.debugSummary()} $variable source=$source"
         is Resolver25LifecycleEvent.BindingCompleted ->
-            "$sequence bound ${ownerCoordinate.debugSummary()} $variable value=$value"
+            "$sequence bound ${ownerCoordinate.debugSummary()} $variable binding=$binding"
         is Resolver25LifecycleEvent.ResolverStarted ->
             "$sequence start ${coordinate.debugSummary()}"
         is Resolver25LifecycleEvent.OutputAvailable ->

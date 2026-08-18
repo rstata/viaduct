@@ -30,6 +30,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
 ) {
     forEach { key ->
         if (key.field !in world.resolverRegistry) return@forEach
+        val arguments = key.arguments as? Value.Arguments ?: return@forEach
 
         world.resolverRegistry
             .resolver(key.field)
@@ -38,7 +39,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                 if (definition is VariableDefinition.FromArgument) {
                     val stamped = variable.stamp(path + key)
                     val value =
-                        key.arguments.fieldValues.getValue(
+                        arguments.fieldValues.getValue(
                             definition.argument.argumentName,
                         )
                     onDeclared(stamped, definition)

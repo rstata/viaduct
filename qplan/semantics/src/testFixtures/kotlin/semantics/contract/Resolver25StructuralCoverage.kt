@@ -2,10 +2,12 @@ package semantics.contract
 
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.OpenArguments
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.VariableBinding
 import model.usedVariables
 import semantics.resolver25.Resolver25BindingSource
 import semantics.resolver25.Resolver25KeyKind
@@ -185,7 +187,7 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
                     submission.sequence < event.sequence &&
                     submission.path.size > ownerPath.size &&
                     submission.path.hasPrefix(ownerPath) &&
-                    groundedKey.arguments.containsValue(completion.value)
+                    groundedKey.arguments.containsBinding(completion.binding)
             }
         }
     if (nestedStampedVariableUse || nestedEagerGroundedVariableUse) {
@@ -235,12 +237,13 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
         .filter { event -> event.source is Resolver25BindingSource.FromObjectField }
         .mapNotNull { declaration -> completions[declaration.variable] }
         .forEach { completion ->
-            when (completion.value) {
-                null ->
-                    signatures += Resolver25StructuralSignature.PROVIDER_NULL_SHORT_CIRCUIT
-                Value.Error ->
+            when (val binding = completion.binding) {
+                is VariableBinding.Input ->
+                    if (binding.value == null) {
+                        signatures += Resolver25StructuralSignature.PROVIDER_NULL_SHORT_CIRCUIT
+                    }
+                VariableBinding.Error ->
                     signatures += Resolver25StructuralSignature.PROVIDER_ERROR_SHORT_CIRCUIT
-                else -> Unit
             }
         }
     return signatures
@@ -254,6 +257,13 @@ private fun Resolver25LifecycleEvent.DemandSubmitted.stampedVariables():
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.subselectionFields() =
     selection.subselections.fields()
+
+private fun OpenArguments.Ground.containsBinding(binding: VariableBinding): Boolean =
+    when (this) {
+        OpenArguments.Ground.Error -> binding == VariableBinding.Error
+        is Value.Arguments ->
+            binding is VariableBinding.Input && containsValue(binding.value)
+    }
 
 private fun Value.Arguments.containsValue(value: Value.Input?): Boolean =
     fieldValues.values.any { argument -> argument.containsValue(value) }

@@ -42,7 +42,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
         val visibleGroundKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(
                 field = storedGroundKey.field,
-                arguments = storedGroundKey.arguments.fieldValues,
+                arguments = storedGroundKey.arguments,
             )
         val cell = reserveCell(storedGroundKey)
         diagnosticInstrumentation.cycleCheck(reader, cell)

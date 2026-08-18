@@ -18,7 +18,11 @@ carry `Stamp.VariableFreeOccurrence`.
 
 When demand descends into an object or list occurrence, its top-level stamps localize through that exact result path. Distinct list positions and object occurrences therefore remain distinct. Stamped keys never coalesce with ordinary keys or with another occurrence lineage, even when they eventually have equal visible arguments.
 
-Resolver input materialization removes storage-only occurrence identity only after reading each exact occurrence. Equal visible values can then combine in the materialized GraphQL input.
+Resolver input materialization filters source occurrences to the concrete object type and collects
+them by response key. Each response group grounds and localizes its construction key, then reads
+the exact OER cell. Duplicate occurrences in one response-key group contribute one input entry
+with their combined subselections. Distinct aliases remain distinct input entries even when they
+read the same OER cell.
 
 ## Request And Task Ownership
 

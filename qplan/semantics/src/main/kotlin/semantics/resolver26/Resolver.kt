@@ -245,7 +245,7 @@ private suspend fun orchestrateObject(
                                 "Resolver26 requires argument-free FromObjectField provider paths"
                             }
                             pathVariableDefinitions +=
-                                StampedObjectPathDefinition(
+                                StampedObjectPathDefinition.of(
                                     variable = stampedDefinition.variable,
                                     path = definition.path,
                                 )

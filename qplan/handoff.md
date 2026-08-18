@@ -66,7 +66,10 @@ TLA+ refinement work is explicitly backlogged until the EOD carrier refactor sta
 
 ## Cleanup TODOs
 
-- [ ] Replace the public `StampedObjectPathDefinition` and `SelectionStampedVariableDefinition` data classes with public abstractions backed by private implementations and controlled factories. Define their equality contracts explicitly and update model, resolver, fixture, and oracle call sites without changing provider or occurrence semantics.
+- [x] Replace the public `StampedObjectPathDefinition` and
+  `SelectionStampedVariableDefinition` data classes with public abstractions backed by private
+  implementations and controlled factories. Their equality is structural; provider and occurrence
+  semantics are unchanged.
 
 ## Validation
 

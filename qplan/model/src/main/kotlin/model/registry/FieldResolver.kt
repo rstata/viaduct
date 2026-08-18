@@ -23,28 +23,6 @@ import model.stampVars
 import model.toCanonicalMaterializeSelectionForest
 import model.variableTemplates
 
-/** One occurrence-specific variable and its occurrence-specific object provider path. */
-data class StampedObjectPathDefinition(
-    val variable: Value.Variable,
-    val path: List<ObjectEngineResult.Key>,
-) {
-    init {
-        require(variable.isStamped) { "An object-path definition requires a stamped variable" }
-    }
-}
-
-/** One selection-specific variable use and the resolver definition that supplies its value. */
-data class SelectionStampedVariableDefinition(
-    val variable: Value.Variable,
-    val definition: VariableDefinition,
-) {
-    init {
-        require(variable.stamp?.occurrenceLineage?.isNotEmpty() == true) {
-            "A selection-stamped definition requires a selection-stamped variable"
-        }
-    }
-}
-
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
     (Value.Object, Value.Arguments) -> Value.Output?
@@ -250,7 +228,7 @@ class FieldResolver private constructor(
     ): List<StampedObjectPathDefinition> =
         variables.mapNotNull { (variable, definition) ->
             (definition as? VariableDefinition.FromObjectField)?.let {
-                StampedObjectPathDefinition(
+                StampedObjectPathDefinition.of(
                     variable = variable.stamp(sitePath),
                     path =
                         it.path.map { key ->
@@ -538,7 +516,7 @@ private fun MaterializeSelectionForest.selectionStampedVariableDefinitions(
             )
         selection.key.arguments.variableTemplates().forEach { variable ->
             stampedDefinitions[occurrenceId to variable] =
-                SelectionStampedVariableDefinition(
+                SelectionStampedVariableDefinition.of(
                     variable = variable.stamp(selectionStamp),
                     definition = definitions.getValue(variable),
                 )

@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 
 enum class VariableSelectionIdentityPolicy {
     MERGE_EQUAL_GROUNDED_KEYS,
-    PRESERVE_SELECTION_OCCURRENCES,
+    PRESERVE_RESPONSE_GROUP_OCCURRENCES,
 }
 
 /**
@@ -131,7 +131,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     extend type Query {
                       result(seed: Int!, other: Int!): Int!
                         @resolver(
-                          of: "payload(arg: 1) { one } payload(arg: ${'$'}seed) { two } payload(arg: ${'$'}seed) { two } payload(arg: ${'$'}other) { one }"
+                          of: "ground: payload(arg: 1) { one } seedValue: payload(arg: ${'$'}seed) { two } seedValue: payload(arg: ${'$'}seed) { two } otherValue: payload(arg: ${'$'}other) { one }"
                           result: "sum(payload.one, payload.two)"
                         )
                       payload(arg: Int!): Payload!
@@ -182,12 +182,12 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 assertEquals(1, suppliedDemandFields.size)
                 assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
             }
-            VariableSelectionIdentityPolicy.PRESERVE_SELECTION_OCCURRENCES -> {
-                assertEquals(4, suppliedDemandFields.size)
+            VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES -> {
+                assertEquals(3, suppliedDemandFields.size)
                 assertEquals(
                     mapOf(
                         setOf("one") to 2,
-                        setOf("two") to 2,
+                        setOf("two") to 1,
                     ),
                     suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
                 )

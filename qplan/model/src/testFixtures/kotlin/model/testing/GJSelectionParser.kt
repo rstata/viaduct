@@ -13,12 +13,14 @@ import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import java.util.Locale
 import model.EngineInputData
+import model.MaterializeSelectionForest
 import model.Schema
 import model.SourceSchemaAdapter
 import model.SelectionForest
 import model.Value
 import model.spec.SpecSelection
 import model.spec.flatten
+import model.spec.flattenForMaterialization
 
 /**
  * Parses and validates external GraphQL fragment text against the unaugmented source schema.
@@ -38,6 +40,15 @@ internal class GJSelectionParser(
     fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
         val parsed = specSelectionsFrom(fragment)
         val selections = flatten(schema, parsed.nominalType, parsed.selections)
+        return parsed.nominalType to selections
+    }
+
+    fun materializeSelectionsFrom(
+        fragment: String,
+    ): Pair<Schema.CompositeType, MaterializeSelectionForest> {
+        val parsed = specSelectionsFrom(fragment)
+        val selections =
+            flattenForMaterialization(schema, parsed.nominalType, parsed.selections)
         return parsed.nominalType to selections
     }
 

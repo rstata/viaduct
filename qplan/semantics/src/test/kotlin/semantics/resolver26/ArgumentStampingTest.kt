@@ -257,16 +257,16 @@ class ArgumentStampingTest {
     }
 
     @Test
-    fun `every variable selection remains separate after grounding`() {
+    fun `distinct response groups remain separate after grounding`() {
         var frankApplications = 0
         val frankDemandFields = mutableListOf<Set<String>>()
         val resultFragment =
             """
             fragment Result on Query {
-              frank(arg: "hi") { one }
-              frank(arg: ${'$'}seed) { two }
-              frank(arg: ${'$'}seed) { two }
-              frank(arg: ${'$'}other) { one }
+              ground: frank(arg: "hi") { one }
+              seedValue: frank(arg: ${'$'}seed) { two }
+              seedValue: frank(arg: ${'$'}seed) { two }
+              otherValue: frank(arg: ${'$'}other) { one }
             }
             """.trimIndent()
         val testWorld =
@@ -355,11 +355,11 @@ class ArgumentStampingTest {
             }
 
         assertEquals(IntEngineResult.of(8), resolved.getCell(resultKey).getValue().get())
-        assertEquals(4, frankApplications)
+        assertEquals(3, frankApplications)
         assertEquals(
             mapOf(
                 setOf("one") to 2,
-                setOf("two") to 2,
+                setOf("two") to 1,
             ),
             frankDemandFields.groupingBy { fields -> fields }.eachCount(),
         )

@@ -312,7 +312,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
         val expectedChildApplications =
             when (variableSelectionIdentityPolicy) {
                 VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> 1
-                VariableSelectionIdentityPolicy.PRESERVE_SELECTION_OCCURRENCES -> 2
+                VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES -> 2
             }
         assertEquals(expectedChildApplications, childApplications)
         assertEquals(

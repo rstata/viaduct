@@ -8,6 +8,8 @@ import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
 import model.Fragment
+import model.MaterializeSelection
+import model.MaterializeSelectionForest
 import model.Schema
 import model.Selection
 import model.SelectionForest
@@ -16,6 +18,7 @@ import model.TypeExpr
 import model.Value
 import model.fragmentFrom
 import model.objectOf
+import model.toMaterializeSelectionForest
 import model.testing.CanonicalFieldResolverApplicationObserver
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -1554,7 +1557,8 @@ internal data class FragmentPlan(
             val parsed = schema.fragmentFrom(source(), variableField = variableField)
             Fragment.of(
                 nominalType = parsed.nominalType,
-                subselections = selections.materialize(schema, parsed.subselections),
+                materializeSelections =
+                    selections.materialize(schema, parsed.materializeSelections),
             )
         }
 
@@ -1637,8 +1641,8 @@ internal data class FragmentSelectionPlan(
 
 private fun List<FragmentSelectionPlan>.materialize(
     schema: Schema,
-    parsedSelections: model.SelectionForest,
-): model.SelectionForest {
+    parsedSelections: MaterializeSelectionForest,
+): MaterializeSelectionForest {
     val parsed =
         buildList {
             parsedSelections.forEach(::add)
@@ -1655,12 +1659,14 @@ private fun List<FragmentSelectionPlan>.materialize(
             ).let { materializedSelection ->
                 if (materializedSelection.key.field.fieldName.endsWith("_V_A_node")) {
                     val payload = materializedSelection.subselections.single()
-                    return@let Selection.of(
+                    return@let MaterializeSelection.of(
+                        responseKey = materializedSelection.responseKey,
                         key = materializedSelection.key,
                         possibleTypes = materializedSelection.possibleTypes,
                         subselections =
-                            model.selectionForestOf(
-                                Selection.of(
+                            model.materializeSelectionForestOf(
+                                MaterializeSelection.of(
+                                    responseKey = payload.responseKey,
                                     key = payload.key,
                                     possibleTypes = payload.possibleTypes,
                                     subselections =
@@ -1669,17 +1675,18 @@ private fun List<FragmentSelectionPlan>.materialize(
                                             payload.subselections,
                                         ),
                                 ),
-                            ),
+                        ),
                     )
                 }
-                Selection.of(
+                MaterializeSelection.of(
+                    responseKey = materializedSelection.responseKey,
                     key = materializedSelection.key,
                     possibleTypes = selection.possibleTypes,
                     subselections =
                         plan.subselections.materialize(schema, selection.subselections),
                 )
             }
-        }.toSelectionForest()
+        }.toMaterializeSelectionForest()
 }
 
 internal sealed interface InputValuePlan {

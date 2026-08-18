@@ -408,7 +408,6 @@ private class Compiler(
             schema.emptyFragmentOf(field.containingType.typeName)
         } else {
             val fragment = preparedObjectFragment(field, source)
-            requireNoAliases(fragment.source)
             schema.fragmentFrom(
                 source = fragment.source,
                 bindings = fragment.bindings,
@@ -422,20 +421,11 @@ private class Compiler(
     ): Set<String> {
         if (definition.of.isBlank()) return emptySet()
         val fragment = preparedObjectFragment(field, definition.of)
-        requireNoAliases(fragment.source)
         val variables = linkedSetOf<String>()
         Parser.parse(fragment.source).visitRecursively { node ->
             if (node is VariableReference) variables += node.name
         }
         return variables - fragment.bindings.keys
-    }
-
-    private fun requireNoAliases(source: String) {
-        Parser.parse(source).visitRecursively { node ->
-            require(node !is Field || node.alias == null) {
-                "@$RESOLVER_DIRECTIVE.$OF_ARGUMENT does not support aliases"
-            }
-        }
     }
 
     private fun objectFragmentSource(

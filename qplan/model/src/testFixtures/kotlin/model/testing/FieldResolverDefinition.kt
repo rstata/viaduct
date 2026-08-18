@@ -1,9 +1,13 @@
 package model.testing
 
 import model.Fragment
+import model.MaterializeSelection
+import model.MaterializeSelectionForest
 import model.Schema
 import model.SelectionForest
 import model.Value
+import model.materializeSelectionForestOf
+import model.objectKey
 import model.registry.FieldResolver
 import model.registry.FieldResolverApplicationObserver
 import model.registry.FieldResolverFunction
@@ -73,22 +77,24 @@ class FieldResolverDefinition private constructor(
         fun normalize(
             fragment: Fragment,
             role: String,
-        ): SelectionForest {
+        ): MaterializeSelectionForest {
             require(fragment.nominalType == objectType) {
                 "$role type ${fragment.nominalType.typeName} does not match ${objectType.typeName}"
             }
-            val preGroundedSelections =
-                fragment.subselections.filter { selection ->
-                    selection.key.arguments.variableTemplates().isEmpty()
+            return fragment.materializeSelections.flatMap { selection ->
+                if (objectType !in selection.possibleTypes) {
+                    materializeSelectionForestOf()
+                } else {
+                    materializeSelectionForestOf(
+                        MaterializeSelection.of(
+                            responseKey = selection.responseKey,
+                            key = selection.key.objectKey(objectType),
+                            possibleTypes = setOf(objectType),
+                            subselections = selection.subselections,
+                        ),
+                    )
                 }
-            val variableSelections =
-                fragment.subselections.filter { selection ->
-                    selection.key.arguments.variableTemplates().isNotEmpty()
-                }
-            return preGroundedSelections.merge(objectType) +
-                variableSelections.flatMap { selection ->
-                    selectionForestOf(selection).merge(objectType)
-                }
+            }
         }
 
         validateObjectFragment(objectFragment)

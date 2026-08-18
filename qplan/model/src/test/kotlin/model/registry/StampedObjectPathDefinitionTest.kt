@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class StampedObjectPathDefinitionTest {
     @Test
@@ -26,8 +27,8 @@ class StampedObjectPathDefinitionTest {
         val fragment =
             """
             fragment Result on Query {
-              consume(value: 3)
-              consume(value: ${'$'}seed)
+              literal: consume(value: 3)
+              symbolic: consume(value: ${'$'}seed)
             }
             """.trimIndent()
         val testWorld =
@@ -169,6 +170,27 @@ class StampedObjectPathDefinitionTest {
                 mapOf("seed" to 3),
             )
         val sitePath = listOf(resultKey)
+        val objectFragment =
+            resolver.instantiateObjectFragment(
+                Stamp.Occurrence.of(resolverPath = sitePath),
+            )
+        assertEquals(
+            setOf("source", "consume"),
+            objectFragment.materializeSelections
+                .collect(testWorld.schema.query)
+                .responseKeys(),
+        )
+        assertTrue(
+            objectFragment.materializeSelections.all { selection ->
+                selection.key !is ObjectEngineResult.VariableKey
+            },
+        )
+        assertEquals(
+            1,
+            objectFragment.constructionSelections
+                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
+                .size,
+        )
         val definition = resolver.stampedPathVarDefinitions(sitePath).single()
         val seed =
             Value.Variable.of(

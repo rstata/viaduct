@@ -10,6 +10,7 @@ import model.TypeExpr
 import model.Value
 import model.spec.SpecSelection
 import model.spec.flatten
+import model.spec.flattenForMaterialization
 
 /**
  * One external `fromObjectField` declaration compiled for canonical registry construction.
@@ -79,7 +80,12 @@ class FromObjectField private constructor(
                 objectFragment =
                     Fragment.of(
                         nominalType = parsed.nominalType,
-                        subselections = flatten(schema, parsed.nominalType, parsed.selections),
+                        materializeSelections =
+                            flattenForMaterialization(
+                                schema,
+                                parsed.nominalType,
+                                parsed.selections,
+                            ),
                     ),
                 keyPath = compiled.keys,
                 terminalType = compiled.terminalType,

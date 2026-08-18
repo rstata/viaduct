@@ -30,7 +30,7 @@ class ResolverContractTest :
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
     override val variableSelectionIdentityPolicy: VariableSelectionIdentityPolicy
-        get() = VariableSelectionIdentityPolicy.PRESERVE_SELECTION_OCCURRENCES
+        get() = VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES
 
     override val lateAncestorDemandPolicy: LateAncestorDemandPolicy
         get() = LateAncestorDemandPolicy.CONTRIBUTE_PASSIVE_PREDECESSORS

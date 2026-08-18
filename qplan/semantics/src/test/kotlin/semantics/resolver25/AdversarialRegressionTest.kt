@@ -45,7 +45,7 @@ class AdversarialRegressionTest {
             if (provided == Value.Error) {
                 VariableBinding.Error
             } else {
-                VariableBinding.of(provided as Value.Input?)
+                VariableBinding.of(null)
             }
         val expectedResult = if (provided == Value.Error) ErrorEngineResult else null
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {

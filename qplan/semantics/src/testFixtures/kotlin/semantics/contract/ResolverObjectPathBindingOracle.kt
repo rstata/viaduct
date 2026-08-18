@@ -1,6 +1,7 @@
 package semantics.contract
 
 import model.Assumptions
+import model.EngineInputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -20,7 +21,8 @@ import model.registry.FieldResolver
 import model.registry.StampedObjectPathDefinition
 import model.registry.VariableDefinition
 import model.selectionForestOf
-import model.toValue
+import model.toEngineInputListData
+import model.toEngineSimpleData
 import semantics.arbitrary.registeredResolverOccurrences
 import kotlin.test.assertEquals
 
@@ -115,7 +117,8 @@ private fun ObjectEngineResult.readCompletedProvider(
 private fun EngineResult.toVariableBinding(): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
-        is model.SimpleEngineResult -> VariableBinding.of(toValue())
+        is model.SimpleEngineResult ->
+            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toInputListBinding()
         is ObjectEngineResult ->
             error("An object-path provider cannot terminate at an object")
@@ -124,7 +127,7 @@ private fun EngineResult.toVariableBinding(): VariableBinding =
 @Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType)
-    val values = mutableListOf<Value.Input?>()
+    val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         val result = get(index).get()
         val binding =
@@ -139,9 +142,13 @@ private fun ListEngineResult.toInputListBinding(): VariableBinding {
         }
     }
     return VariableBinding.of(
-        Value.InputList.of(
-            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-            values = values,
+        toEngineInputListData(
+            expectedType =
+                TypeExpr.List.of(
+                    elementType = typeExpr as TypeExpr<Schema.InputType>,
+                    isNullable = false,
+                ),
+            value = values,
         ),
     )
 }

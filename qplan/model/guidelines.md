@@ -41,7 +41,7 @@ occurrence stamp.
 
 Keys belong to the engine-result domain even where a value-domain carrier temporarily consumes them. `Value.Object` and `Value.ObjectFields` currently use `ObjectEngineResult.GroundKey` while the value-domain object representation still stores canonical fields and explicit arguments. They must not define a parallel key hierarchy.
 
-`OpenValue.Ground` wraps one error-free `Value.Input`; other open values contain variables. `OpenArguments.Ground` is either an error-free `Value.Arguments` or one tuple-level error. Variable bindings likewise distinguish an error-free input from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
+`OpenValue.Ground` wraps canonical `EngineInputData`; other open values contain variables. `OpenArguments.Ground` is either an error-free `Value.Arguments` or one tuple-level error. Variable bindings likewise distinguish error-free engine input data from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
 
 ## Result Representation
 

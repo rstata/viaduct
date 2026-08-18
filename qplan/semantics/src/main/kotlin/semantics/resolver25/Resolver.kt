@@ -13,6 +13,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.EngineInputData
+import model.EngineInputListData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -36,7 +38,7 @@ import model.mergeWithVariables
 import model.objectKey
 import model.selectionForestOf
 import model.toEngineResult
-import model.toValue
+import model.toEngineSimpleData
 import model.registry.StampedObjectPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
 import semantics.RuntimeSupport
@@ -1087,18 +1089,18 @@ private class ResolvedField(
 private fun EngineResult.toProviderBinding(): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
-        is SimpleEngineResult -> VariableBinding.of(toValue())
+        is SimpleEngineResult ->
+            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
-@Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }
-    val values = mutableListOf<Value.Input?>()
+    val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         val result = get(index).getValue().get()
         val binding =
@@ -1112,10 +1114,6 @@ private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
             is VariableBinding.Input -> values += binding.value
         }
     }
-    return VariableBinding.of(
-        Value.InputList.of(
-            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-            values = values,
-        ),
-    )
+    val data: EngineInputListData = values.toList()
+    return VariableBinding.of(data)
 }

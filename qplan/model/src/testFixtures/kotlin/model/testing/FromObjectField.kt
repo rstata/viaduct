@@ -3,6 +3,7 @@ package model.testing
 import model.ObjectEngineResult
 
 import model.Fragment
+import model.EngineInputData
 import model.Schema
 import model.SourceSchemaAdapter
 import model.TypeExpr
@@ -52,7 +53,7 @@ class FromObjectField private constructor(
             objectFragmentSource: String,
             responsePath: List<String>,
             variableField: Schema.ObjectField?,
-            bindings: Map<String, Value.Input?>,
+            bindings: Map<String, EngineInputData?>,
         ): FromObjectField {
             require(responsePath.isNotEmpty()) {
                 "fromObjectField path must contain at least one response key"
@@ -93,7 +94,7 @@ fun Schema.fromObjectField(
     objectFragmentSource: String,
     responsePath: List<String>,
     variableField: Schema.ObjectField? = null,
-    bindings: Map<String, Value.Input?> = emptyMap(),
+    bindings: Map<String, EngineInputData?> = emptyMap(),
 ): FromObjectField =
     FromObjectField.compile(
         schema = this as GJSchema,
@@ -307,15 +308,10 @@ private tailrec fun compatibleTypes(
         }
 
         locationType is TypeExpr.List -> {
-            val sourceElement =
-                if (sourceType is TypeExpr.List) {
-                    sourceType.elementType
-                } else {
-                    sourceType.withNullable(false)
-                }
+            if (sourceType !is TypeExpr.List) return false
             compatibleTypes(
                 locationType = locationType.elementType,
-                sourceType = sourceElement,
+                sourceType = sourceType.elementType,
                 nullableTraversal = false,
                 locationHasDefault = false,
             )

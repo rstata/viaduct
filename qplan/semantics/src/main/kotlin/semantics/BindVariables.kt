@@ -3,6 +3,7 @@ package semantics
 import model.ObjectEngineResult
 
 import model.Assumptions
+import model.EngineInputData
 import model.PathComponent
 import model.Value
 import model.registry.VariableDefinition
@@ -25,7 +26,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     onCompleted: (
         Value.Variable,
         VariableDefinition.FromArgument,
-        Value.Input?,
+        EngineInputData?,
     ) -> Unit = { _, _, _ -> },
 ) {
     forEach { key ->

@@ -2,6 +2,8 @@ package semantics.resolver26
 
 import model.Assumptions
 import model.EngineResult
+import model.EngineInputData
+import model.EngineInputListData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -15,7 +17,7 @@ import model.VariableBinding
 import model.fetchBindings
 import model.objectKey
 import model.selectionForestOf
-import model.toValue
+import model.toEngineSimpleData
 import model.registry.StampedObjectPathDefinition
 import semantics.RuntimeSupport
 
@@ -62,29 +64,25 @@ private fun EngineResult?.toProviderBinding(): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
         ErrorEngineResult -> VariableBinding.Error
-        is SimpleEngineResult -> VariableBinding.of(toValue())
+        is SimpleEngineResult ->
+            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
 // Converts a provider list to an input list after checking its element type.
-@Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }
-    val values = mutableListOf<Value.Input?>()
+    val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         when (val binding = get(index).getValue().get().toProviderBinding()) {
             VariableBinding.Error -> return VariableBinding.Error
             is VariableBinding.Input -> values += binding.value
         }
     }
-    return VariableBinding.of(
-        Value.InputList.of(
-            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-            values = values,
-        ),
-    )
+    val data: EngineInputListData = values.toList()
+    return VariableBinding.of(data)
 }

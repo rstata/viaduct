@@ -192,19 +192,19 @@ class LifecycleInstrumentationTest {
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    arguments.fieldValues.getValue("seed") as Value.Int
+                                    arguments.fieldValues.getValue("seed") as Int
                                 input.fieldValues.getValue(
                                     ObjectEngineResult.GroundKey.of(
                                         consume,
-                                        mapOf("value" to seed.intValue),
+                                        mapOf("value" to seed),
                                     ),
                                 )
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
                                 val value =
-                                    arguments.fieldValues.getValue("value") as Value.Int
-                                Value.Int.of(value.intValue * 2)
+                                    arguments.fieldValues.getValue("value") as Int
+                                Value.Int.of(value * 2)
                             },
                     )
                 },

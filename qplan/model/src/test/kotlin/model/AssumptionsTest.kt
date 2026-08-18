@@ -64,21 +64,20 @@ class AssumptionsTest {
         assertEquals("node_V_A_node", node.key.field.fieldName)
 
         val filter =
-            assertIs<Value.InputObject>(
+            assertIs<EngineInputObjectData>(
                 assertIs<OpenValue.Ground>(
                     node.key.arguments.fieldExpressions().getValue("filter"),
                 ).data,
             )
-        val role = assertIs<Value.Enum>(filter.fieldValues.getValue("role"))
+        val role = assertIs<EngineEnumValueData>(filter["role"])
         assertEquals(assumptions.schema.type("Role"), role.type)
-        assertEquals("ADMIN", role.enumValue)
-        val limit = assertIs<Value.Int>(filter.fieldValues.getValue("limit"))
-        assertEquals(Schema.IntType, limit.type)
-        assertEquals(10, limit.intValue)
-        val tags = assertIs<Value.InputList>(filter.fieldValues.getValue("tags"))
+        assertEquals("ADMIN", role.value)
+        val limit = assertIs<Int>(filter["limit"])
+        assertEquals(10, limit)
+        val tags = assertIs<EngineInputListData>(filter["tags"])
         assertEquals(
             "one",
-            assertIs<Value.String>(tags.values.single()).stringValue,
+            assertIs<String>(tags.single()),
         )
 
         val payload = node.subselections.single()
@@ -110,9 +109,9 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val filter =
-            Value.InputObject.of(
-                type = filterType,
-                fields = mapOf("limit" to Value.Int.of(5)),
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value = mapOf("limit" to 5),
             )
 
         val fragment =
@@ -145,9 +144,9 @@ class AssumptionsTest {
         val variableField = schema.objectField("Query", "node_V_A_node")
 
         assertFailsWith<ClassCastException> {
-            Value.InputObject.of(
-                type = filterType,
-                fields =
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value =
                     mapOf(
                         "limit" to Value.Variable.of(variableField, "nested"),
                     ),
@@ -235,7 +234,7 @@ class AssumptionsTest {
         assertFalse(filterArgument.isRequired)
         val filterDefault =
             assertIs<Value.Default.Present>(filterArgument.defaultValue)
-        val filterValue = assertIs<Value.InputObject>(filterDefault.value)
+        val filterValue = assertIs<EngineInputObjectData>(filterDefault.value)
         val nodeArguments =
             Value.Arguments.of(
                 field = nodeField,
@@ -243,22 +242,18 @@ class AssumptionsTest {
             )
         assertEquals(filterValue, nodeArguments.fieldValues.getValue("filter"))
         val defaultRole =
-            assertIs<Value.Enum>(filterValue.fieldValues.getValue("role"))
+            assertIs<EngineEnumValueData>(filterValue["role"])
         assertEquals(schema.type("Role"), defaultRole.type)
-        assertEquals("MEMBER", defaultRole.enumValue)
-        val defaultLimit =
-            assertIs<Value.Int>(
-                filterValue.fieldValues.getValue("limit"),
-            )
-        assertEquals(Schema.IntType, defaultLimit.type)
-        assertEquals(10, defaultLimit.intValue)
+        assertEquals("MEMBER", defaultRole.value)
+        val defaultLimit = assertIs<Int>(filterValue["limit"])
+        assertEquals(10, defaultLimit)
         val tags =
-            assertIs<Value.InputList>(
-                filterValue.fieldValues.getValue("tags"),
+            assertIs<EngineInputListData>(
+                filterValue["tags"],
             )
         assertEquals(
             "a",
-            assertIs<Value.String>(tags.values.single()).stringValue,
+            assertIs<String>(tags.single()),
         )
         val nodeKey =
             ObjectEngineResult.Key.of(
@@ -350,7 +345,7 @@ class AssumptionsTest {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val field = assumptions.schema.objectField("Query", "node_V_A_node")
         val variable = Value.Variable.of(field, "value").stamp(emptyList())
-        val first = Value.Int.of(1)
+        val first = 1
 
         assumptions.declareBinding(variable)
         assertFailsWith<IllegalStateException> {
@@ -360,7 +355,7 @@ class AssumptionsTest {
         }
         assumptions.completeBinding(variable, first)
         assertFailsWith<IllegalStateException> {
-            assumptions.completeBinding(variable, Value.Int.of(2))
+            assumptions.completeBinding(variable, 2)
         }
 
         assertEquals(VariableBinding.of(first), assumptions.getBinding(variable))
@@ -372,7 +367,7 @@ class AssumptionsTest {
             val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
             val field = assumptions.schema.objectField("Query", "node_V_A_node")
             val variable = Value.Variable.of(field, "value").stamp(emptyList())
-            val value = Value.Int.of(1)
+            val value = 1
 
             assumptions.bindVariable(variable, value)
 
@@ -380,7 +375,7 @@ class AssumptionsTest {
             assertEquals(VariableBinding.of(value), assumptions.getBinding(variable))
             assertEquals(VariableBinding.of(value), assumptions.fetchBinding(variable))
             assertFailsWith<IllegalStateException> {
-                assumptions.bindVariable(variable, Value.Int.of(2))
+                assumptions.bindVariable(variable, 2)
             }
             assertFailsWith<IllegalStateException> {
                 assumptions.declareBinding(variable)
@@ -406,9 +401,9 @@ class AssumptionsTest {
         val field = assumptions.schema.objectField("Query", "node_V_A_node")
         val binding = Value.Variable.of(field, "binding").stamp(emptyList())
         val filter =
-            Value.InputObject.of(
-                type = assumptions.schema.type("Filter") as Schema.InputObjectType,
-                fields = mapOf("limit" to 1),
+            toEngineInputObjectData(
+                expectedType = assumptions.schema.type("Filter") as Schema.InputObjectType,
+                value = mapOf("limit" to 1),
             )
 
         assumptions.declareBinding(binding)
@@ -423,9 +418,9 @@ class AssumptionsTest {
         val node = assumptions.schema.objectField("Query", "node_V_A_node")
         val variable = Value.Variable.of(node, "filter").stamp(emptyList())
         val filter =
-            Value.InputObject.of(
-                type = assumptions.schema.type("Filter") as Schema.InputObjectType,
-                fields = mapOf("limit" to 3),
+            toEngineInputObjectData(
+                expectedType = assumptions.schema.type("Filter") as Schema.InputObjectType,
+                value = mapOf("limit" to 3),
             )
         val arguments =
             OpenArguments.of(
@@ -465,28 +460,10 @@ class AssumptionsTest {
     fun `nested input errors become an argument error`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val node = schema.objectField("Query", "node_V_A_node")
-        val filterType = schema.type("Filter") as Schema.InputObjectType
-        val tagsType =
-            assertIs<TypeExpr.List<Schema.InputType>>(
-                filterType.fields.getValue("tags").typeExpr,
-            )
-        val prebuiltFilter =
-            Value.InputObject.of(
-                filterType,
-                mapOf(
-                    "tags" to
-                        Value.InputList.of(
-                            tagsType.elementType,
-                            listOf(Value.Error),
-                        ),
-                ),
-            )
-
         listOf(
             mapOf(
                 "tags" to listOf(Value.Error),
             ),
-            prebuiltFilter,
         ).forEach { filter ->
             val arguments =
                 OpenArguments.of(
@@ -497,9 +474,6 @@ class AssumptionsTest {
                 )
 
             assertSame(OpenArguments.Ground.Error, arguments)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            VariableBinding.of(prebuiltFilter)
         }
     }
 
@@ -578,9 +552,9 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val filter =
-            Value.InputObject.of(
-                type = filterType,
-                fields =
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value =
                     mapOf(
                         "limit" to 20,
                         "tags" to listOf("one", "two"),
@@ -590,17 +564,15 @@ class AssumptionsTest {
 
         assertEquals(
             20,
-            assertIs<Value.Int>(filter.fieldValues.getValue("limit")).intValue,
+            filter.getValue("limit"),
         )
         assertEquals(
             listOf("one", "two"),
-            assertIs<Value.InputList>(filter.fieldValues.getValue("tags"))
-                .values
-                .map { assertIs<Value.String>(it).stringValue },
+            filter.getValue("tags"),
         )
         assertEquals(
             "ADMIN",
-            assertIs<Value.Enum>(filter.fieldValues.getValue("role")).enumValue,
+            assertIs<EngineEnumValueData>(filter.getValue("role")).value,
         )
 
         val nodeField = schema.field("Query", "node_V_A_node")
@@ -617,10 +589,10 @@ class AssumptionsTest {
                     ),
             )
         val nestedFilter =
-            assertIs<Value.InputObject>(arguments.fieldValues.getValue("filter"))
+            assertIs<EngineInputObjectData>(arguments.fieldValues.getValue("filter"))
         assertEquals(
             30,
-            assertIs<Value.Int>(nestedFilter.fieldValues.getValue("limit")).intValue,
+            nestedFilter["limit"],
         )
     }
 
@@ -632,36 +604,34 @@ class AssumptionsTest {
 
         assertEquals(
             3,
-            assertIs<Value.Int>(
-                defaultFriendArguments.fieldValues.getValue("limit"),
-            ).intValue,
+            defaultFriendArguments.fieldValues.getValue("limit"),
         )
 
         val nodeField = schema.field("Query", "node_V_A_node")
         val defaultArguments = Value.Arguments.of(nodeField, emptyMap())
         val defaultFilter =
-            assertIs<Value.InputObject>(defaultArguments.fieldValues.getValue("filter"))
+            assertIs<EngineInputObjectData>(defaultArguments.fieldValues.getValue("filter"))
 
         assertEquals(
             10,
-            assertIs<Value.Int>(defaultFilter.fieldValues.getValue("limit")).intValue,
+            defaultFilter["limit"],
         )
         assertEquals(
             "MEMBER",
-            assertIs<Value.Enum>(defaultFilter.fieldValues.getValue("role")).enumValue,
+            assertIs<EngineEnumValueData>(defaultFilter["role"]).value,
         )
 
         val explicitFilter =
-            Value.InputObject.of(
-                type = schema.type("Filter") as Schema.InputObjectType,
-                fields = mapOf("limit" to 20, "role" to null),
+            toEngineInputObjectData(
+                expectedType = schema.type("Filter") as Schema.InputObjectType,
+                value = mapOf("limit" to 20, "role" to null),
             )
         assertEquals(
             20,
-            assertIs<Value.Int>(explicitFilter.fieldValues.getValue("limit")).intValue,
+            explicitFilter.getValue("limit"),
         )
-        assertTrue(explicitFilter.fieldValues.containsKey("role"))
-        assertEquals(null, explicitFilter.fieldValues.getValue("role"))
+        assertTrue(explicitFilter.containsKey("role"))
+        assertEquals(null, explicitFilter.getValue("role"))
 
         val explicitNullFriendArguments =
             Value.Arguments.of(
@@ -677,27 +647,27 @@ class AssumptionsTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
         val otherRole =
-            Value.Enum.of(
-                schema.type("OtherRole") as Schema.EnumType,
+            EngineEnumValueData(
                 "MEMBER",
+                schema.type("OtherRole") as Schema.EnumType,
             )
 
         assertFailsWith<ClassCastException> {
-            Value.InputObject.of(
-                type = filterType,
-                fields = mapOf("limit" to "twenty"),
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value = mapOf("limit" to "twenty"),
             )
         }
         assertFailsWith<ClassCastException> {
-            Value.InputObject.of(
-                type = filterType,
-                fields = mapOf("tags" to listOf(null)),
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value = mapOf("tags" to listOf(null)),
             )
         }
         assertFailsWith<ClassCastException> {
-            Value.InputObject.of(
-                type = filterType,
-                fields = mapOf("missing" to 1),
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value = mapOf("missing" to 1),
             )
         }
         assertFailsWith<ClassCastException> {
@@ -707,9 +677,9 @@ class AssumptionsTest {
             )
         }
         assertFailsWith<ClassCastException> {
-            Value.InputObject.of(
-                type = filterType,
-                fields = mapOf("role" to otherRole),
+            toEngineInputObjectData(
+                expectedType = filterType,
+                value = mapOf("role" to otherRole),
             )
         }
     }

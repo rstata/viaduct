@@ -44,9 +44,9 @@ class FromArgumentBindingTest {
             listOf(key).bindFromArguments(emptyList())
             val variable =
                 Value.Variable.of(field, "value").stamp(listOf(key))
-            assertEquals(VariableBinding.of(Value.Int.of(1)), world.getBinding(variable))
+            assertEquals(VariableBinding.of(1), world.getBinding(variable))
             assertEquals(
-                VariableBinding.of(Value.Int.of(1)),
+                VariableBinding.of(1),
                 runBlocking { world.fetchBinding(variable) },
             )
             assertFailsWith<IllegalStateException> {

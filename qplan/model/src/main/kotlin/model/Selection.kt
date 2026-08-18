@@ -287,30 +287,26 @@ private fun EngineResult?.toPathVariableBinding(): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
         ErrorEngineResult -> VariableBinding.Error
-        is SimpleEngineResult -> VariableBinding.of(toValue())
+        is SimpleEngineResult ->
+            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toPathVariableInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
     }
 
-@Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
     require(typeExpr.baseType is Schema.InputType) {
         "A path-variable provider list must contain input-compatible simple values"
     }
-    val values = mutableListOf<Value.Input?>()
+    val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         when (val binding = get(index).getValue().get().toPathVariableBinding()) {
             VariableBinding.Error -> return VariableBinding.Error
             is VariableBinding.Input -> values += binding.value
         }
     }
-    return VariableBinding.of(
-        Value.InputList.of(
-            typeExpr = typeExpr as TypeExpr<Schema.InputType>,
-            values = values,
-        ),
-    )
+    val data: EngineInputListData = values.toList()
+    return VariableBinding.of(data)
 }
 
 /**

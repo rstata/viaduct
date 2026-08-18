@@ -246,9 +246,9 @@ class SuccessorDemandTest {
                 listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 2))),
             )
         world.declareBinding(first)
-        world.completeBinding(first, Value.Int.of(7))
+        world.completeBinding(first, 7)
         world.declareBinding(second)
-        world.completeBinding(second, Value.Int.of(7))
+        world.completeBinding(second, 7)
         val firstKey =
             ObjectEngineResult.Key.of(
                 successor,

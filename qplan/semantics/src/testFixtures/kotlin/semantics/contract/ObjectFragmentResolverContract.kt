@@ -424,7 +424,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 val seed =
                                     (input.fieldValues.getValue(seedKey) as Value.Int).intValue
                                 val factor =
-                                    (arguments.fieldValues.getValue("factor") as Value.Int).intValue
+                                    arguments.fieldValues.getValue("factor") as Int
                                 productApplications += seed to factor
                                 val base = seed * factor
                                 schema.objectOf(
@@ -553,7 +553,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 val seed =
                                     (input.fieldValues.getValue(seedKey) as Value.Int).intValue
                                 val count =
-                                    (arguments.fieldValues.getValue("count") as Value.Int).intValue
+                                    arguments.fieldValues.getValue("count") as Int
                                 applications += seed to count
                                 Value.OutputList.of(
                                     entryElement,

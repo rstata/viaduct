@@ -68,8 +68,8 @@ interface ObjectFragmentFromArgumentResolverContract :
         )
         val resolver = world.resolverRegistry.resolver(resultField)
         listOf(
-            firstKey to Value.Int.of(7),
-            secondKey to Value.Int.of(8),
+            firstKey to 7,
+            secondKey to 8,
         ).forEach { (groundKey, expectedValue) ->
             val path = listOf(groundKey)
             val selectionStampedVariables =
@@ -117,7 +117,9 @@ interface ObjectFragmentFromArgumentResolverContract :
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
+                                Value.Int.of(
+                                    arguments.fieldValues.getValue("value") as Int,
+                                )
                             },
                     )
                 },

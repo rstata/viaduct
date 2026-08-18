@@ -208,15 +208,15 @@ interface NodeResolverContract : ResolverContract {
                             ) { input, arguments ->
                                 require(input.hasExactlyFields())
                                 val group =
-                                    arguments.fieldValues.getValue("group") as Value.String
+                                    arguments.fieldValues.getValue("group") as String
                                 Value.OutputList.of(
                                     elementType,
                                     listOf(
                                         schema.objectOf("User") {
-                                            "id" setTo "${group.stringValue}-user"
+                                            "id" setTo "$group-user"
                                         },
                                         schema.objectOf("Admin") {
-                                            "id" setTo "${group.stringValue}-admin"
+                                            "id" setTo "$group-admin"
                                         },
                                     ),
                                 )

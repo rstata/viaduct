@@ -10,7 +10,7 @@ import model.registry.ResolverRegistry
  */
 sealed interface VariableBinding {
     sealed interface Input : VariableBinding {
-        val value: Value.Input?
+        val value: EngineInputData?
     }
 
     data object Error : VariableBinding
@@ -18,22 +18,13 @@ sealed interface VariableBinding {
     companion object {
         /**
          * Constructs a successful variable binding.
-         *
-         * ### Invariant: variable-binding-input
-         *
-         * [value] contains no recursive [Value.Error].
          */
-        fun of(value: Value.Input?): Input {
-            require(!value.containsInputError()) {
-                "A successful variable binding cannot contain Value.Error"
-            }
-            return InputVariableBindingImpl(value)
-        }
+        fun of(value: EngineInputData?): Input = InputVariableBindingImpl(value)
     }
 }
 
 private data class InputVariableBindingImpl(
-    override val value: Value.Input?,
+    override val value: EngineInputData?,
 ) : VariableBinding.Input
 
 /**
@@ -79,7 +70,7 @@ sealed interface Assumptions {
 
     fun bindVariable(
         variable: Value.Variable,
-        value: Value.Input?,
+        value: EngineInputData?,
     ) = bindVariable(variable, VariableBinding.of(value))
 
     /**
@@ -94,7 +85,7 @@ sealed interface Assumptions {
 
     fun completeBinding(
         variable: Value.Variable,
-        value: Value.Input?,
+        value: EngineInputData?,
     ) = completeBinding(variable, VariableBinding.of(value))
 
     /**

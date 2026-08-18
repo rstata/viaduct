@@ -63,7 +63,9 @@ class ArgumentStampingTest {
                             },
                         schema.objectField("Box", "child") to
                             fieldResolverOf(schema.emptyFragmentOf("Box")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
+                                Value.Int.of(
+                                    arguments.fieldValues.getValue("value") as Int,
+                                )
                             },
                     )
                 },
@@ -95,7 +97,7 @@ class ArgumentStampingTest {
                 .subselections
         val sourceVariable: Value.Variable =
             childDemand.stampedVariables().single()
-        world.bindVariable(sourceVariable, Value.Int.of(7))
+        world.bindVariable(sourceVariable, 7)
 
         val groundThenLocalize: ObjectEngineResult.GroundKey =
             context(world) {
@@ -119,7 +121,7 @@ class ArgumentStampingTest {
             localizedOpenKey.stamp,
             localizedVariable.stamp,
         )
-        world.bindVariable(localizedVariable, Value.Int.of(7))
+        world.bindVariable(localizedVariable, 7)
         val localizeThenGround: ObjectEngineResult.GroundKey =
             context(world) {
                 localizedDemand
@@ -195,7 +197,9 @@ class ArgumentStampingTest {
                             },
                         child to
                             fieldResolverOf(schema.emptyFragmentOf("Item")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Value.Int
+                                Value.Int.of(
+                                    arguments.fieldValues.getValue("value") as Int,
+                                )
                             },
                     )
                 },

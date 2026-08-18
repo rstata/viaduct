@@ -309,7 +309,7 @@ class SelectionMergeTest {
                 mapOf("values" to listOf(1)),
             )
         fixture.world.declareBinding(variable)
-        fixture.world.completeBinding(variable, Value.Int.of(1))
+        fixture.world.completeBinding(variable, 1)
 
         val merged =
             context(fixture.world) {
@@ -377,7 +377,7 @@ class SelectionMergeTest {
                 subselections = ordinary.subselections,
             )
         val groundKey = ordinary.key as ObjectEngineResult.GroundKey
-        val value = Value.Int.of(9)
+        val value = 9
         val resultValue = IntEngineResult.of(9)
         val result =
             ObjectEngineResult.of(
@@ -481,7 +481,7 @@ class SelectionMergeTest {
             )
         val intermediateKey = intermediate.key as ObjectEngineResult.GroundKey
         val leafKey = leaf.key as ObjectEngineResult.GroundKey
-        val leafValue = Value.Int.of(7)
+        val leafValue = 7
         val leafResult = IntEngineResult.of(7)
         val child =
             ObjectEngineResult.of(

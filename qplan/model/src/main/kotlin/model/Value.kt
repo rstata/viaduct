@@ -17,15 +17,13 @@ import model.invariants.conformsToSchemaType
  * [Assumptions.schema] under which that value is interpreted.
  */
 sealed interface Value {
-    sealed interface Input : Value
-
     sealed interface Output : Value
 
     sealed interface Typed : Value {
         val type: Schema.Type
     }
 
-    sealed interface Simple : Input, Output {
+    sealed interface Simple : Output {
         val type: Schema.SimpleType
     }
 
@@ -151,35 +149,9 @@ sealed interface Value {
         }
     }
 
-    sealed interface List<out T : Schema.Type> : Value {
-        val typeExpr: TypeExpr<T>
-        val values: kotlin.collections.List<Value?>
-    }
-
-    /** An input list with structural equality over its type expression and elements. */
-    sealed interface InputList : Input, List<Schema.InputType> {
-        override val values: kotlin.collections.List<Input?>
-
-        companion object {
-            /**
-             * ### Invariant: input-list-value-factory-schema-conformance
-             *
-             * Every result recursively conforms to the supplied element type expression.
-             */
-            fun of(
-                typeExpr: TypeExpr<Schema.InputType>,
-                values: kotlin.collections.List<Input?>,
-            ): InputList {
-                require(values.all { it.conformsToSchemaType(typeExpr) }) {
-                    "Input list element does not conform to $typeExpr"
-                }
-                return InputListValueImpl(typeExpr, values)
-            }
-        }
-    }
-
-    sealed interface OutputList : Output, List<Schema.OutputType> {
-        override val values: kotlin.collections.List<Output?>
+    sealed interface OutputList : Output {
+        val typeExpr: TypeExpr<Schema.OutputType>
+        val values: kotlin.collections.List<Output?>
 
         companion object {
             /**
@@ -199,27 +171,6 @@ sealed interface Value {
         }
     }
 
-    /** A ground input object. */
-    sealed interface InputObject : Input {
-        val fieldValues: Map<kotlin.String, Input?>
-
-        companion object {
-            /**
-             * ### Invariant: input-object-value-factory-schema-conformance
-             *
-             * Every result recursively conforms to [type].
-             * Declared defaults are materialized for fields absent from [fields].
-             */
-            fun of(
-                type: Schema.InputObjectType,
-                fields: Map<kotlin.String, Any?>,
-            ): InputObject =
-                InputObjectValueImpl(
-                    fieldValues = coerceInputLikeFields(type, fields),
-                )
-        }
-    }
-
     /**
      * The values supplied for one output field's complete argument definition.
      *
@@ -228,7 +179,7 @@ sealed interface Value {
      * [ObjectEngineResult.Key.stamp], not the grounded argument value.
      */
     sealed interface Arguments : OpenArguments.Ground {
-        val fieldValues: Map<kotlin.String, Input?>
+        val fieldValues: EngineInputObjectData
 
         companion object {
             /**
@@ -382,7 +333,6 @@ sealed interface Value {
         Boolean,
         ID,
         Enum,
-        InputObject,
         Object,
         OpenValue {
         override val type: Nothing
@@ -428,11 +378,11 @@ sealed interface Value {
         data object Absent : Default
 
         sealed interface Present : Default {
-            val value: Input?
+            val value: EngineInputData?
         }
 
         companion object {
-            fun of(value: Input?): Present = PresentDefaultValueImpl(value)
+            fun of(value: EngineInputData?): Present = PresentDefaultValueImpl(value)
         }
     }
 }
@@ -523,11 +473,6 @@ private data class EnumValueImpl(
     override val enumValue: String,
 ) : Value.Enum
 
-private data class InputListValueImpl(
-    override val typeExpr: TypeExpr<Schema.InputType>,
-    override val values: kotlin.collections.List<Value.Input?>,
-) : Value.InputList
-
 private data class OutputListValueImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
     override val values: kotlin.collections.List<Value.Output?>,
@@ -538,12 +483,8 @@ private data class ObjectValueImpl(
     override val fieldValues: Value.ObjectFields,
 ) : Value.Object
 
-private data class InputObjectValueImpl(
-    override val fieldValues: Map<String, Value.Input?>,
-) : Value.InputObject
-
 private data class ArgumentsValueImpl(
-    override val fieldValues: Map<String, Value.Input?>,
+    override val fieldValues: EngineInputObjectData,
 ) : Value.Arguments
 
 private data class TemplateVariableValueImpl(
@@ -598,7 +539,7 @@ private fun kotlin.collections.List<PathComponent>.renderVariablePath(): String 
     }
 
 private data class PresentDefaultValueImpl(
-    override val value: Value.Input?,
+    override val value: EngineInputData?,
 ) : Value.Default.Present
 
 private class ObjectFieldValuesImpl(
@@ -636,145 +577,9 @@ private class ObjectFieldValuesImpl(
     override fun toString(): String = backingMap.toString()
 }
 
-private fun coerceInputLikeFields(
-    type: Schema.InputObjectLike,
-    fields: Map<String, Any?>,
-): Map<String, Value.Input?> {
-    val suppliedFields =
-        fields.mapValues { (fieldName, value) ->
-            val field =
-                type.fields[fieldName]
-                    ?: throw ClassCastException()
-            coerceInputValue(field.typeExpr, value)
-        }
-
-    return buildMap {
-        type.fields.values.forEach { field ->
-            val defaultValue = field.defaultValue
-            if (defaultValue is Value.Default.Present) {
-                put(field.name, defaultValue.value)
-            }
-        }
-        putAll(suppliedFields)
-    }
-}
-
 internal fun argumentsOfGround(
-    type: Schema.FieldArguments,
-    fields: Map<String, Value.Input?>,
-): Value.Arguments {
-    require(
-        fields.all { (name, value) ->
-            val field = type.fields[name] ?: return@all false
-            !value.containsInputError() && value.conformsToSchemaType(field.typeExpr)
-        },
-    ) {
-        "Ground argument values do not conform to their field definition"
-    }
-    return ArgumentsValueImpl(
+    fields: EngineInputObjectData,
+): Value.Arguments =
+    ArgumentsValueImpl(
         fieldValues = fields,
     )
-}
-
-internal fun Value.Input?.containsInputError(): Boolean =
-    when (this) {
-        Value.Error -> true
-        is Value.InputList -> values.any { value -> value.containsInputError() }
-        is Value.InputObject ->
-            fieldValues.values.any { value -> value.containsInputError() }
-        else -> false
-    }
-
-internal fun coerceInputValue(
-    typeExpr: TypeExpr<Schema.InputType>,
-    value: Any?,
-): Value.Input? {
-    if (value == null) {
-        if (!typeExpr.isNullable) throw ClassCastException()
-        return null
-    }
-    if (value == Value.Error) return Value.Error
-
-    return when (typeExpr) {
-        is TypeExpr.Named -> coerceNamedInputValue(typeExpr.baseType, value)
-        is TypeExpr.List -> {
-            val elements =
-                when (value) {
-                    is Value.InputList -> value.values
-                    is kotlin.collections.List<*> -> value
-                    else -> listOf(value)
-                }
-            Value.InputList.of(
-                typeExpr = typeExpr.elementType,
-                values = elements.map { coerceInputValue(typeExpr.elementType, it) },
-            )
-        }
-    }
-}
-
-private fun coerceNamedInputValue(
-    type: Schema.InputType,
-    value: Any,
-): Value.Input =
-    when (type) {
-        Schema.IntType ->
-            when (value) {
-                is Value.Int -> value
-                is Int -> Value.Int.of(value)
-                else -> throw ClassCastException()
-            }
-
-        Schema.FloatType ->
-            when (value) {
-                is Value.Float -> value
-                is Double -> Value.Float.of(value)
-                else -> throw ClassCastException()
-            }
-
-        Schema.StringType ->
-            when (value) {
-                is Value.String -> value
-                is String -> Value.String.of(value)
-                else -> throw ClassCastException()
-            }
-
-        Schema.BooleanType ->
-            when (value) {
-                is Value.Boolean -> value
-                is Boolean -> Value.Boolean.of(value)
-                else -> throw ClassCastException()
-            }
-
-        Schema.IDType ->
-            when (value) {
-                is Value.ID -> value
-                is String -> Value.ID.of(value)
-                else -> throw ClassCastException()
-            }
-
-        is Schema.EnumType ->
-            when (value) {
-                is Value.Enum ->
-                    if (value.type == type) value else throw ClassCastException()
-                is String -> Value.Enum.of(type, value)
-                else -> throw ClassCastException()
-            }
-
-        is Schema.InputObjectType ->
-            when (value) {
-                is Value.InputObject ->
-                    if (value.conformsToSchemaType(TypeExpr.Named.of(type))) {
-                        value
-                    } else {
-                        throw ClassCastException()
-                    }
-                is Map<*, *> -> Value.InputObject.of(type, value.toStringKeyedMap())
-                else -> throw ClassCastException()
-            }
-    }
-
-private fun Map<*, *>.toStringKeyedMap(): Map<String, Any?> =
-    entries.associate { (key, value) ->
-        if (key !is String) throw ClassCastException()
-        key to value
-    }

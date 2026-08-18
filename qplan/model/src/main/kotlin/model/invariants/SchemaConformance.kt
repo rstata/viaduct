@@ -101,13 +101,13 @@ fun EngineResult.conformsToSchema(): Boolean =
             }
     }
 
-private fun Value.InputObjectLike.inputLikeConformsToSchema(
-    expectedType: Schema.InputObjectLike,
+private fun Value.InputObject.conformsToInputObjectType(
+    expectedType: Schema.InputObjectType,
 ): Boolean =
     fieldValues.all { (fieldName, value) ->
-            val field = expectedType.fields[fieldName] ?: return@all false
-            value.conformsToSchemaType(field.typeExpr)
-        }
+        val field = expectedType.fields[fieldName] ?: return@all false
+        value.conformsToSchemaType(field.typeExpr)
+    }
 
 internal fun Value.Input?.conformsToSchemaType(
     typeExpr: TypeExpr<Schema.InputType>,
@@ -130,7 +130,7 @@ internal fun Value.Input?.conformsToSchemaType(
                         enumValue in expectedType.values
                 is Schema.InputObjectType ->
                     this is Value.InputObject &&
-                        inputLikeConformsToSchema(expectedType)
+                        conformsToInputObjectType(expectedType)
             }
         else -> false
     }

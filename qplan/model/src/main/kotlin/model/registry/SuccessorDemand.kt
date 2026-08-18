@@ -64,7 +64,8 @@ fun SelectionForest.successorDemand(): SelectionForest =
  *
  * A template-bearing branch belongs to a resolver occurrence whose exact path is not yet available.
  * Stamped branches retain ordinary full successor closure after their bindings complete. Branches
- * whose fetched keys are equal coalesce while one original key retains its variable provenance.
+ * whose fetched keys are equal coalesce to that ground key. Provider-path markers remain attached
+ * to their grounded keys.
  */
 context(world: Assumptions)
 suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionForest {
@@ -147,8 +148,6 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
 
     val groundedChildrenBySelection =
         linkedMapOf<SelectionIdentity, MutableList<SelectionForest>>()
-    val representativeKeyByGroundedSelection =
-        linkedMapOf<SelectionIdentity, ObjectEngineResult.Key>()
     childrenBySelection.forEach { (identity, children) ->
         if (identity !in deferredSelections) {
             val groundedIdentity =
@@ -156,7 +155,6 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
                     key = identity.key.fetchStampedBindings(),
                     possibleTypes = identity.possibleTypes,
                 )
-            representativeKeyByGroundedSelection.putIfAbsent(groundedIdentity, identity.key)
             groundedChildrenBySelection
                 .getOrPut(groundedIdentity, ::mutableListOf)
                 .add(children.concatenateSelectionForests())
@@ -165,7 +163,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
     return groundedChildrenBySelection
         .map { (identity, children) ->
             Selection.of(
-                key = representativeKeyByGroundedSelection.getValue(identity),
+                key = identity.key,
                 possibleTypes = identity.possibleTypes,
                 subselections =
                     children
@@ -184,11 +182,22 @@ private data class SelectionIdentity(
 
 context(world: Assumptions)
 private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
-    if (this is ObjectEngineResult.VariableKey || arguments is Value.Arguments) return this
-    return ObjectEngineResult.Key.of(
-        field = field,
-        arguments = arguments.fetchBindings(field.arguments),
-    )
+    if (arguments is Value.Arguments) return this
+    val groundedKey =
+        ObjectEngineResult.Key.of(
+            field = field,
+            arguments = arguments.fetchBindings(field.arguments),
+        )
+    val marker =
+        (this as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
+    return if (marker == null) {
+        groundedKey
+    } else {
+        ObjectEngineResult.VariableKey.of(
+            key = groundedKey,
+            variableDefinedByThisKey = marker,
+        )
+    }
 }
 
 /**

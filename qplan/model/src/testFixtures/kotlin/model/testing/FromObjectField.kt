@@ -25,7 +25,7 @@ class FromObjectField private constructor(
     private val nullableTraversal: Boolean,
 ) : VariableDeclaration {
     internal fun mapVariables(
-        transform: (Value.Variable.Template) -> Value.Variable.Template,
+        transform: (Value.Variable) -> Value.Variable,
     ): FromObjectField =
         FromObjectField(
             responsePath = responsePath,

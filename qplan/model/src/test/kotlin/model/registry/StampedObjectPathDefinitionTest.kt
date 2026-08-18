@@ -88,8 +88,7 @@ class StampedObjectPathDefinitionTest {
                     setOf(stampedKey.selectionStamp),
                     selection.key
                         .stampedVariables()
-                        .filterIsInstance<Value.Variable.SelectionStamped>()
-                        .mapTo(linkedSetOf()) { variable -> variable.selectionStamp },
+                        .mapNotNullTo(linkedSetOf()) { variable -> variable.selectionStamp },
                 )
             }
         }
@@ -222,25 +221,21 @@ class StampedObjectPathDefinitionTest {
                 .single()
         val localizedMarkerKey =
             assertIs<ObjectEngineResult.VariableKey.Stamped>(localizedMarker.key)
-        val localizedMarkerVariable =
-            assertIs<Value.Variable.SelectionStamped>(
-                localizedMarkerKey.variableDefinedByThisKey,
-            )
+        val localizedMarkerVariable = localizedMarkerKey.variableDefinedByThisKey
 
         assertEquals(
             fullyStampedMarkerKey.selectionStamp.resolverPath + localizationPath,
             localizedMarkerKey.selectionStamp.resolverPath,
         )
         assertEquals(
-            selectionStampedValue.selectionStamp.resolverPath + localizationPath,
-            localizedMarkerVariable.selectionStamp.resolverPath,
+            requireNotNull(selectionStampedValue.selectionStamp).resolverPath + localizationPath,
+            requireNotNull(localizedMarkerVariable.selectionStamp).resolverPath,
         )
         assertEquals(
             setOf(localizedMarkerKey.selectionStamp),
             localizedMarkerKey.arguments
                 .stampedVariables()
-                .filterIsInstance<Value.Variable.SelectionStamped>()
-                .mapTo(linkedSetOf()) { variable -> variable.selectionStamp },
+                .mapNotNullTo(linkedSetOf()) { variable -> variable.selectionStamp },
         )
     }
 

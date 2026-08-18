@@ -10,7 +10,7 @@ import model.mapVariableTemplates
 import model.selectionForestOf
 
 internal fun Fragment.mapVariables(
-    transform: (Value.Variable.Template) -> Value.Variable.Template,
+    transform: (Value.Variable) -> Value.Variable,
 ): Fragment =
     Fragment.of(
         nominalType = nominalType,
@@ -18,7 +18,7 @@ internal fun Fragment.mapVariables(
     )
 
 internal fun List<ObjectEngineResult.Key>.mapVariables(
-    transform: (Value.Variable.Template) -> Value.Variable.Template,
+    transform: (Value.Variable) -> Value.Variable,
 ): List<ObjectEngineResult.Key> =
     map { key ->
         ObjectEngineResult.Key.of(
@@ -28,7 +28,7 @@ internal fun List<ObjectEngineResult.Key>.mapVariables(
     }
 
 private fun SelectionForest.mapVariables(
-    transform: (Value.Variable.Template) -> Value.Variable.Template,
+    transform: (Value.Variable) -> Value.Variable,
 ): SelectionForest =
     flatMap { selection ->
         selectionForestOf(

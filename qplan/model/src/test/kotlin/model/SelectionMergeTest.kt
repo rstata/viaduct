@@ -388,7 +388,7 @@ class SelectionMergeTest {
         val markerOnly:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable.Stamped, Value.Input?>,
+                Map<Value.Variable, Value.Input?>,
             > =
             runBlocking {
                 context(fixture.world) {
@@ -402,7 +402,7 @@ class SelectionMergeTest {
         val combined:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable.Stamped, Value.Input?>,
+                Map<Value.Variable, Value.Input?>,
             > =
             runBlocking {
                 context(fixture.world) {
@@ -525,7 +525,7 @@ class SelectionMergeTest {
                     }
             }
             assertEquals(
-                mapOf<Value.Variable.Stamped, Value.Input?>(
+                mapOf<Value.Variable, Value.Input?>(
                     variable to
                         if (prematureValue == ErrorEngineResult) Value.Error else null,
                 ),

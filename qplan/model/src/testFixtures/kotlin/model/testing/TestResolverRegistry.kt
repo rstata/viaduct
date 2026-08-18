@@ -38,15 +38,15 @@ internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
-    variableProviders: Map<Value.Variable.Template, VariableDeclaration>,
+    variableProviders: Map<Value.Variable, VariableDeclaration>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
     val variablesByField =
         variableProviders.keys
-            .groupBy(Value.Variable.Template::field)
+            .groupBy(Value.Variable::field)
             .mapValues { (_, variables) ->
-                variables.associateBy(Value.Variable.Template::variableName)
+                variables.associateBy(Value.Variable::variableName)
             }
     val registryResolvers =
         lowering.fieldResolvers.mapValues { (field, resolver) ->
@@ -353,14 +353,14 @@ private sealed interface DependencyVertex {
     ) : DependencyVertex
 
     data class Variable(
-        val variable: Value.Variable.Template,
+        val variable: Value.Variable,
     ) : DependencyVertex
 }
 
 private class TestResolverRegistry(
     private val schema: Schema,
     fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
-    variableDeclarations: Map<Value.Variable.Template, VariableDeclaration>,
+    variableDeclarations: Map<Value.Variable, VariableDeclaration>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
@@ -541,7 +541,7 @@ private class TestResolverRegistry(
     }
 
     private fun validateVariableUses(
-        variable: Value.Variable.Template,
+        variable: Value.Variable,
         declaration: FromObjectField,
         fragment: Fragment,
     ) {
@@ -584,7 +584,7 @@ private class TestResolverRegistry(
     )
 
     private fun model.SelectionForest.variableUses(
-        variable: Value.Variable.Template,
+        variable: Value.Variable,
     ): List<VariableUse> =
         buildList {
             this@variableUses.forEach { selection ->

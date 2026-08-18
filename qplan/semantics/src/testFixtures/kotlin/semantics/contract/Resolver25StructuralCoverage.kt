@@ -247,10 +247,10 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
 }
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.stampedVariables():
-    Set<Value.Variable.Stamped> =
+    Set<Value.Variable> =
     selection.key.arguments
         .usedVariables()
-        .filterIsInstanceTo(linkedSetOf())
+        .filterTo(linkedSetOf(), Value.Variable::isStamped)
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.subselectionFields() =
     selection.subselections.fields()

@@ -91,7 +91,7 @@ class ArgumentStampingTest {
                 .stamp(listOf(resultKey))
                 .merge(world.schema.type("Query") as Schema.ObjectType)[boxKey]
                 .subselections
-        val sourceVariable: Value.Variable.Stamped =
+        val sourceVariable: Value.Variable =
             childDemand.stampedVariables().single()
         world.bindVariable(sourceVariable, Value.Int.of(7))
 
@@ -107,7 +107,7 @@ class ArgumentStampingTest {
             }
         val localizedDemand: SelectionForest =
             childDemand.localizeTopLevelSelectionStamps(listOf(boxKey))
-        val localizedVariable: Value.Variable.Stamped =
+        val localizedVariable: Value.Variable =
             localizedDemand.stampedVariables().single()
         val localizedOpenKey =
             assertIs<ObjectEngineResult.Key.Stamped>(
@@ -115,7 +115,7 @@ class ArgumentStampingTest {
             )
         assertEquals(
             localizedOpenKey.selectionStamp,
-            assertIs<Value.Variable.SelectionStamped>(localizedVariable).selectionStamp,
+            localizedVariable.selectionStamp,
         )
         world.bindVariable(localizedVariable, Value.Int.of(7))
         val localizeThenGround: ObjectEngineResult.GroundKey =

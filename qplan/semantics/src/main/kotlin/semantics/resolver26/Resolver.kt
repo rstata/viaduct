@@ -296,8 +296,7 @@ private suspend fun orchestrateObject(
         closed.pathVariableDefinitions.forEach { definition ->
             launch {
                 val reader: List<PathComponent> =
-                    (definition.variable as Value.Variable.SelectionStamped)
-                        .selectionStamp
+                    requireNotNull(definition.variable.selectionStamp)
                         .resolverPath
                 val value: Value.Input? =
                     target.readProvider(
@@ -422,14 +421,14 @@ private fun SelectionForest.localizeTopLevelStamps(
                     .localizeTopLevelSelectionStamps(path)
                     .single()
             val sourceVariables:
-                Map<Pair<Schema.ObjectField, String>, Value.Variable.SelectionStamped> =
+                Map<Pair<Schema.ObjectField, String>, Value.Variable> =
                 selection.key
                     .selectionStampedVariables()
                     .associateBy { variable -> variable.field to variable.variableName }
             localizedSelection.key
                 .selectionStampedVariables()
                 .forEach { localizedVariable ->
-                    val sourceVariable: Value.Variable.SelectionStamped =
+                    val sourceVariable: Value.Variable =
                         sourceVariables.getValue(
                             localizedVariable.field to localizedVariable.variableName,
                         )
@@ -450,11 +449,11 @@ private fun SelectionForest.localizeTopLevelStamps(
 }
 
 // Returns every selection-stamped argument or provider-marker variable carried by this key.
-private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variable.SelectionStamped> =
+private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variable> =
     buildSet {
-        addAll(arguments.usedVariables().filterIsInstance<Value.Variable.SelectionStamped>())
+        addAll(arguments.usedVariables().filter { variable -> variable.selectionStamp != null })
         val marker = (this@selectionStampedVariables as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
-        if (marker is Value.Variable.SelectionStamped) add(marker)
+        if (marker?.selectionStamp != null) add(marker)
     }
 
 // Returns the occurrence stamp carried by an open or already-grounded stamped object key.
@@ -645,6 +644,6 @@ private data class LocalizeTopLevelStampsResult(
 )
 
 private data class BindingAlias(
-    val sourceVariable: Value.Variable.SelectionStamped,
-    val localizedVariable: Value.Variable.SelectionStamped,
+    val sourceVariable: Value.Variable,
+    val localizedVariable: Value.Variable,
 )

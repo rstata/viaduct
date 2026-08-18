@@ -7,9 +7,9 @@ import model.invariants.conformsToSchemaType
  *
  * Implementations are mathematical values: equality is value equality over the properties exposed
  * by the interface. No implementation contains a [Variable]. Variables are nested here for
- * namespacing but inhabit [OpenValue] rather than [Value]. [Variable.Template] equality is
- * structural over its name and defining field; [Variable.Stamped] equality additionally
- * distinguishes its occurrence.
+ * namespacing but inhabit [OpenValue] rather than [Value]. Template-variable equality is structural
+ * over its name and defining field; stamped-variable equality additionally distinguishes its
+ * occurrence.
  *
  * ### Invariant: schema-value-canonicality
  *
@@ -309,48 +309,44 @@ sealed interface Value {
      * Identifier of an execution variable.
      *
      * Each field with a resolver can define variables from one of that field's arguments or from a
-     * value resolved along a path in its object fragment. The registry contains [Template]
-     * variables associated with the resolver. During resolution, those templates are [Stamped] as
-     * they enter occurrence-specific resolution structures. A resolver can occur multiple times in
-     * one resolution; stamping distinguishes the variable instances belonging to those
-     * occurrences.
+     * value resolved along a path in its object fragment. The registry contains variable templates
+     * associated with the resolver. During resolution, those templates are stamped as they enter
+     * occurrence-specific resolution structures. A resolver can occur multiple times in one
+     * resolution; stamping distinguishes the variable instances belonging to those occurrences.
      */
     sealed interface Variable : OpenValue {
         val field: Schema.ObjectField
         val variableName: kotlin.String
 
-        /**
-         * A variable in the [ResolverRegistry]. A template is stamped during resolution to create
-         * a distinct variable for one occurrence of its defining resolver.
-         *
-         * Exact [ObjectEngineResult] paths stamp templates. Stamps are otherwise opaque and
-         * uninterpreted except for equality; paths provide uniqueness and useful diagnostics
-         * without becoming an observable dimension of [Stamped].
-         */
-        sealed interface Template : Variable {
-            /**
-             * Returns the variable for this template at [path].
-             *
-             * Equal templates stamped with equal paths yield equal results. A result is unequal to
-             * every other variable except an equal template stamped with the same path.
-             *
-             * ### Invariant: stamped-variable-value-factory-schema-conformance
-             *
-             * Every [PathComponent] in [path] belongs to the template's reasoning world, and every
-             * result satisfies `result.conformsToSchema()` in that world.
-             */
-            fun stamp(path: kotlin.collections.List<PathComponent>): Stamped
+        /** Whether this is the registry template rather than an occurrence-specific variable. */
+        val isTemplate: kotlin.Boolean
 
-            /** Returns this variable template at one variable-bearing source selection. */
-            fun stamp(selectionStamp: SelectionStamp): SelectionStamped
+        /** The source-selection stamp, or null for a template or path-stamped variable. */
+        val selectionStamp: SelectionStamp?
+
+        val isStamped: kotlin.Boolean
+            get() = !isTemplate
+
+        /**
+         * Returns this variable template at [path].
+         *
+         * Equal templates stamped with equal paths yield equal results. A result is unequal to
+         * every other variable except an equal template stamped with the same path.
+         *
+         * ### Invariant: stamped-variable-value-factory-schema-conformance
+         *
+         * Every [PathComponent] in [path] belongs to the template's reasoning world, and every
+         * result satisfies `result.conformsToSchema()` in that world.
+         */
+        fun stamp(path: kotlin.collections.List<PathComponent>): Variable {
+            require(isTemplate) { "Only variable templates can be stamped" }
+            return StampedVariableValueImpl(variableName, field, path)
         }
 
-        /** An opaque occurrence-specific variable created by stamping a [Template]. */
-        sealed interface Stamped : Variable
-
-        /** A variable use identified by its source selection and defining resolver occurrence. */
-        sealed interface SelectionStamped : Stamped {
-            val selectionStamp: SelectionStamp
+        /** Returns this variable template at one variable-bearing source selection. */
+        fun stamp(selectionStamp: SelectionStamp): Variable {
+            require(isTemplate) { "Only variable templates can be stamped" }
+            return SelectionStampedVariableValueImpl(variableName, field, selectionStamp)
         }
 
         companion object {
@@ -366,7 +362,7 @@ sealed interface Value {
             fun of(
                 field: Schema.ObjectField,
                 variableName: kotlin.String,
-            ): Template = TemplateVariableValueImpl(variableName, field)
+            ): Variable = TemplateVariableValueImpl(variableName, field)
         }
     }
 
@@ -549,16 +545,12 @@ private data class ArgumentsValueImpl(
 private data class TemplateVariableValueImpl(
     override val variableName: String,
     override val field: Schema.ObjectField,
-) : Value.Variable.Template {
-    override fun stamp(
-        path: kotlin.collections.List<PathComponent>,
-    ): Value.Variable.Stamped =
-        StampedVariableValueImpl(variableName, field, path)
+) : Value.Variable {
+    override val isTemplate: Boolean
+        get() = true
 
-    override fun stamp(
-        selectionStamp: SelectionStamp,
-    ): Value.Variable.SelectionStamped =
-        SelectionStampedVariableValueImpl(variableName, field, selectionStamp)
+    override val selectionStamp: SelectionStamp?
+        get() = null
 
     override fun toString(): String =
         "Variable.Template(" +
@@ -571,7 +563,13 @@ private data class StampedVariableValueImpl(
     override val variableName: String,
     override val field: Schema.ObjectField,
     private val path: kotlin.collections.List<PathComponent>,
-) : Value.Variable.Stamped {
+) : Value.Variable {
+    override val isTemplate: Boolean
+        get() = false
+
+    override val selectionStamp: SelectionStamp?
+        get() = null
+
     override fun toString(): String =
         "Variable.Stamped(" +
             "name=$variableName, " +
@@ -584,7 +582,10 @@ private data class SelectionStampedVariableValueImpl(
     override val variableName: String,
     override val field: Schema.ObjectField,
     override val selectionStamp: SelectionStamp,
-) : Value.Variable.SelectionStamped {
+) : Value.Variable {
+    override val isTemplate: Boolean
+        get() = false
+
     override fun toString(): String =
         "Variable.SelectionStamped(" +
             "name=$variableName, " +

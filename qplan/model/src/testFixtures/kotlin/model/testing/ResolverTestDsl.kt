@@ -45,7 +45,7 @@ internal class ResolverTestDsl private constructor(
     fun fieldResolvers(schema: Schema): Map<Schema.OutputField, FieldResolverDefinition> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).fieldResolvers()
 
-    fun variableProviders(schema: Schema): Map<Value.Variable.Template, VariableDeclaration> =
+    fun variableProviders(schema: Schema): Map<Value.Variable, VariableDeclaration> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).variableProviders()
 
     companion object {
@@ -355,7 +355,7 @@ private class Compiler(
         return compiled
     }
 
-    fun variableProviders(): Map<Value.Variable.Template, VariableDeclaration> =
+    fun variableProviders(): Map<Value.Variable, VariableDeclaration> =
         buildMap {
             fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)

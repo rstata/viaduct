@@ -295,16 +295,19 @@ sealed interface ObjectEngineResult : EngineResult {
      * and reports a binding when the path terminates at this component.
      */
     sealed interface VariableKey : Key {
-        val variableDefinedByThisKey: Value.Variable.Stamped
+        val variableDefinedByThisKey: Value.Variable
 
         sealed interface Stamped : VariableKey, Key.Stamped
 
         companion object {
             fun of(
                 key: Key,
-                variableDefinedByThisKey: Value.Variable.Stamped,
-            ): VariableKey =
-                if (key is Key.Stamped) {
+                variableDefinedByThisKey: Value.Variable,
+            ): VariableKey {
+                require(variableDefinedByThisKey.isStamped) {
+                    "A provider-path key must define a stamped variable"
+                }
+                return if (key is Key.Stamped) {
                     of(key, variableDefinedByThisKey)
                 } else {
                     VariableKeyImpl(
@@ -313,17 +316,22 @@ sealed interface ObjectEngineResult : EngineResult {
                         variableDefinedByThisKey = variableDefinedByThisKey,
                     )
                 }
+            }
 
             fun of(
                 key: Key.Stamped,
-                variableDefinedByThisKey: Value.Variable.Stamped,
-            ): Stamped =
-                StampedVariableKeyImpl(
+                variableDefinedByThisKey: Value.Variable,
+            ): Stamped {
+                require(variableDefinedByThisKey.isStamped) {
+                    "A provider-path key must define a stamped variable"
+                }
+                return StampedVariableKeyImpl(
                     field = key.field,
                     arguments = key.arguments,
                     variableDefinedByThisKey = variableDefinedByThisKey,
                     selectionStamp = key.selectionStamp,
                 )
+            }
         }
     }
 
@@ -999,13 +1007,13 @@ private data class StampedKeyImpl(
 private data class VariableKeyImpl(
     override val field: Schema.OutputField,
     override val arguments: OpenArguments,
-    override val variableDefinedByThisKey: Value.Variable.Stamped,
+    override val variableDefinedByThisKey: Value.Variable,
 ) : ObjectEngineResult.VariableKey
 
 private data class StampedVariableKeyImpl(
     override val field: Schema.OutputField,
     override val arguments: OpenArguments,
-    override val variableDefinedByThisKey: Value.Variable.Stamped,
+    override val variableDefinedByThisKey: Value.Variable,
     override val selectionStamp: SelectionStamp,
 ) : ObjectEngineResult.VariableKey.Stamped
 

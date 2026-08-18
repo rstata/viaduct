@@ -42,8 +42,8 @@ internal object Resolver25LifecycleTraceValidators {
             val promises = mutableSetOf<List<PathComponent>>()
             val sealed = mutableSetOf<List<PathComponent>>()
             val declaredBindings =
-                mutableSetOf<Pair<List<PathComponent>, Value.Variable.Stamped>>()
-            val completedBindingVariables = mutableSetOf<Value.Variable.Stamped>()
+                mutableSetOf<Pair<List<PathComponent>, Value.Variable>>()
+            val completedBindingVariables = mutableSetOf<Value.Variable>()
             val contributionsByConsumer =
                 mutableMapOf<List<PathComponent>, MutableSet<DemandContributionId>>()
             val installedContributionIds = mutableSetOf<DemandContributionId>()
@@ -114,7 +114,7 @@ internal object Resolver25LifecycleTraceValidators {
                             val unboundVariables =
                                 submission.selection.key.arguments
                                     .usedVariables()
-                                    .filterIsInstance<Value.Variable.Stamped>()
+                                    .filter(Value.Variable::isStamped)
                                     .filterNot(completedBindingVariables::contains)
                             if (unboundVariables.isNotEmpty()) {
                                 violations +=

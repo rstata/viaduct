@@ -26,10 +26,10 @@ Registry assembly compiles `FromObjectField` declarations to contained canonical
 
 `ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to `Value.Object`, OER cells, exact paths, materialization, dependency ordering, and resolver application.
 
-`ObjectEngineResult.Key.Stamped` carries the occurrence identity of one variable-bearing
+`ObjectEngineResult.Key.selectionStamp` carries the occurrence identity of one variable-bearing
 resolver-fragment selection before and after grounding. Every selection-stamped variable in that
 key's arguments carries the same `SelectionStamp`; the argument tuple itself has no occurrence
-identity. Specialization, localization, and grounding preserve the stamped-key category.
+identity. Specialization, localization, and grounding preserve the key's stamp.
 
 Keys belong to the engine-result domain even where a value-domain carrier temporarily consumes them. `Value.Object` and `Value.ObjectFields` currently use `ObjectEngineResult.GroundKey` while the value-domain object representation still stores canonical fields and explicit arguments. They must not define a parallel key hierarchy.
 

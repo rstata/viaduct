@@ -39,9 +39,10 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                     .resolver(groundKey.field)
                     .let { resolver ->
                         val coordinate = path + groundKey
+                        val selectionStamp = groundKey.selectionStamp
                         val selectionStamped =
-                            if (groundKey is ObjectEngineResult.GroundKey.Stamped) {
-                                resolver.stampFrom(groundKey.selectionStamp)
+                            if (selectionStamp != null) {
+                                resolver.stampFrom(selectionStamp)
                             } else {
                                 resolver.stamp(coordinate)
                             }

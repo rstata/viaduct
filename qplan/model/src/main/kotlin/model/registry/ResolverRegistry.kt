@@ -415,7 +415,7 @@ private fun SelectionForest.stampVariableSelections(
                     OpenArguments.Template
                         .of(selection.key.field.arguments, selection.key.arguments)
                         .stamp(selection.key.field.arguments, selectionStamp)
-                ObjectEngineResult.Key.Stamped.of(
+                ObjectEngineResult.Key.of(
                     selectionStamp = selectionStamp,
                     field = selection.key.field,
                     arguments = arguments,
@@ -534,8 +534,7 @@ private fun SelectionForest.markProviderSourcePath(
 
 private fun Selection.hasSourceKey(sourceKey: ObjectEngineResult.Key): Boolean {
     val actualSourceKey =
-        (key as? ObjectEngineResult.Key.Stamped)
-            ?.selectionStamp
+        key.selectionStamp
             ?.occurrenceLineage
             ?.last()
             ?.sourceKey

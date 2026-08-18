@@ -117,7 +117,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             listOf(setOf("one", "two"), setOf("one", "two")),
             suppliedDemandFields,
         )
-        assertTrue(payloadKey !is ObjectEngineResult.GroundKey.Stamped)
+        assertEquals(null, payloadKey.selectionStamp)
     }
 
     @Test

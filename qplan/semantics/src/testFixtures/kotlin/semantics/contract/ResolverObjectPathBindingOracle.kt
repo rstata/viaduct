@@ -50,9 +50,10 @@ internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
 ): List<StampedObjectPathDefinition> {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
+    val selectionStamp = groundKey?.selectionStamp
     val selectionStampedDefinitions =
-        if (groundKey is ObjectEngineResult.GroundKey.Stamped) {
-            selectionStampedVariableDefinitionsFrom(groundKey.selectionStamp)
+        if (selectionStamp != null) {
+            selectionStampedVariableDefinitionsFrom(selectionStamp)
         } else {
             selectionStampedVariableDefinitions(path)
         }

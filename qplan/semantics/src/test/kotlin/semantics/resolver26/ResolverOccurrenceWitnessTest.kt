@@ -1,6 +1,5 @@
 package semantics.resolver26
 
-import semantics.getValue
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -69,7 +68,7 @@ class ResolverOccurrenceWitnessTest {
                                     "fragment PayloadInput on Payload { base }",
                                 ),
                             ) { input, _ ->
-                                input.fieldValues.getValue(baseKey)
+                                input.fieldValues.getValue(baseKey.field.fieldName)
                             },
                     )
                 },

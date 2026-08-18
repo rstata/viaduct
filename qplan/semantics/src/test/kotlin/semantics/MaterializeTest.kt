@@ -64,7 +64,7 @@ class MaterializeTest {
 
             assertEquals(
                 Value.String.of("ready"),
-                materialized.await().fieldValues.getValue(field),
+                materialized.await().fieldValues.getValue("value"),
             )
         }
 

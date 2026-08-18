@@ -1,6 +1,5 @@
 package semantics.resolver26
 
-import semantics.getValue
 import model.Assumptions
 import model.EngineResult
 import model.IntEngineResult
@@ -175,12 +174,15 @@ class ArgumentStampingTest {
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val itemValues =
-                                    input.fieldValues.getValue(itemsKey) as Value.OutputList
+                                    input.fieldValues.getValue(itemsKey.field.fieldName)
+                                        as Value.OutputList
                                 Value.Int.of(
                                     itemValues.values.sumOf { value ->
                                         val item = value as Value.Object
                                         val childValue =
-                                            item.fieldValues.getValue(visibleChildKey) as Value.Int
+                                            item.fieldValues.getValue(
+                                                visibleChildKey.field.fieldName,
+                                            ) as Value.Int
                                         childValue.intValue
                                     },
                                 )
@@ -302,8 +304,11 @@ class ArgumentStampingTest {
                                     input.fieldValues.getValue("ground") as Value.Object
                                 val seedValue =
                                     input.fieldValues.getValue("seedValue") as Value.Object
-                                val one = ground.fieldValues.getValue(oneKey) as Value.Int
-                                val two = seedValue.fieldValues.getValue(twoKey) as Value.Int
+                                val one =
+                                    ground.fieldValues.getValue(oneKey.field.fieldName) as Value.Int
+                                val two =
+                                    seedValue.fieldValues.getValue(twoKey.field.fieldName)
+                                        as Value.Int
                                 Value.Int.of(one.intValue + two.intValue)
                             },
                         frank to
@@ -408,13 +413,17 @@ class ArgumentStampingTest {
                     mapOf(
                         schema.objectField("Query", "left") to
                             fieldResolverOf(schema.fragmentFrom(leftFragment)) { input, _ ->
-                                val payload = input.fieldValues.getValue(frankKey) as Value.Object
-                                payload.fieldValues.getValue(oneKey)
+                                val payload =
+                                    input.fieldValues.getValue(frankKey.field.fieldName)
+                                        as Value.Object
+                                payload.fieldValues.getValue(oneKey.field.fieldName)
                             },
                         schema.objectField("Query", "right") to
                             fieldResolverOf(schema.fragmentFrom(rightFragment)) { input, _ ->
-                                val payload = input.fieldValues.getValue(frankKey) as Value.Object
-                                payload.fieldValues.getValue(twoKey)
+                                val payload =
+                                    input.fieldValues.getValue(frankKey.field.fieldName)
+                                        as Value.Object
+                                payload.fieldValues.getValue(twoKey.field.fieldName)
                             },
                         frank to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->

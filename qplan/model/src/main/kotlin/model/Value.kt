@@ -288,7 +288,10 @@ sealed interface Value {
     }
 
     /**
-     * A finite map from materialized string field addresses to values.
+     * A finite map from externally visible string keys to values.
+     *
+     * Passive and resolver-produced objects use canonical argumentless field names. Resolver
+     * inputs materialized from object fragments use GraphQL response keys.
      *
      * ### Invariant: object-field-values-owner
      *
@@ -431,67 +434,6 @@ sealed interface Value {
 
         companion object {
             fun of(value: EngineInputData?): Present = PresentDefaultValueImpl(value)
-        }
-    }
-}
-
-/**
- * Returns the structural union of two nullable output values.
- *
- * The union is defined only for equal leaves, equal list shapes, and objects of the same type.
- */
-fun Value.Output?.unionOutput(other: Value.Output?): Value.Output? {
-    if (this == null) {
-        require(other == null) { "Cannot union null and non-null output values" }
-        return null
-    }
-    require(other != null) { "Cannot union null and non-null output values" }
-
-    return when (this) {
-        Value.Error -> {
-            require(other == Value.Error) { "Cannot union error and non-error output values" }
-            Value.Error
-        }
-
-        is Value.Simple -> {
-            require(other is Value.Simple && this == other) {
-                "Cannot union unequal simple output values"
-            }
-            this
-        }
-
-        is Value.Object -> {
-            require(other is Value.Object && type == other.type) {
-                "Cannot union object output values of different types"
-            }
-            val fields =
-                (fieldValues.keys + other.fieldValues.keys).associateWith { fieldKey ->
-                    when {
-                        fieldKey !in fieldValues -> other.fieldValues.getValue(fieldKey)
-                        fieldKey !in other.fieldValues -> fieldValues.getValue(fieldKey)
-                        else ->
-                            fieldValues
-                                .getValue(fieldKey)
-                                .unionOutput(other.fieldValues.getValue(fieldKey))
-                    }
-                }
-            objectValueOfValidatedFields(type = type, fields = fields)
-        }
-
-        is Value.OutputList -> {
-            require(other is Value.OutputList && typeExpr == other.typeExpr) {
-                "Cannot union output lists of different types"
-            }
-            require(values.size == other.values.size) {
-                "Cannot union output lists of different lengths"
-            }
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values =
-                    values.indices.map { index ->
-                        values[index].unionOutput(other.values[index])
-                    },
-            )
         }
     }
 }

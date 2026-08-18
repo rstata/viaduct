@@ -1,6 +1,5 @@
 package semantics.resolver25
 
-import semantics.getValue
 import model.EngineResult
 import model.IntEngineResult
 import model.ObjectEngineResult
@@ -137,10 +136,12 @@ class NestedDescendantVariableUseRegressionTest {
                         schema.objectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val holder =
-                                    input.fieldValues.getValue(holderKey) as Value.Object
+                                    input.fieldValues.getValue(holderKey.field.fieldName)
+                                        as Value.Object
                                 val payload =
-                                    holder.fieldValues.getValue(consumeKey) as Value.Object
-                                payload.fieldValues.getValue(twoKey)
+                                    holder.fieldValues.getValue(consumeKey.field.fieldName)
+                                        as Value.Object
+                                payload.fieldValues.getValue(twoKey.field.fieldName)
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Holder")) { _, _ ->

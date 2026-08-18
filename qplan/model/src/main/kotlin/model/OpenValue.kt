@@ -480,7 +480,7 @@ internal fun OpenArguments.variables(): Set<Value.Variable> =
     }
 
 /** Returns the occurrence-specific variables used anywhere in this argument tuple. */
-fun OpenArguments.stampedVariables(): Set<Value.Variable> =
+internal fun OpenArguments.stampedVariables(): Set<Value.Variable> =
     variables().filterTo(linkedSetOf(), Value.Variable::isStamped)
 
 /** Returns every variable expression used anywhere in this argument tuple. */

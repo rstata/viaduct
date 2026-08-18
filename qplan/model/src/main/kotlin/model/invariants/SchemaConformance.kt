@@ -25,7 +25,7 @@ import model.conformsToArgumentDefinition
  * context fixes the canonical schema under which those carried definitions are interpreted.
  */
 context(world: Assumptions)
-fun Value.Output.conformsToSchema(): Boolean =
+internal fun Value.Output.conformsToSchema(): Boolean =
     when (this) {
         Value.Error -> true
         is Value.Enum -> enumValue in type.values
@@ -47,7 +47,7 @@ fun Value.Output.conformsToSchema(): Boolean =
  * Null conforms exactly at a nullable outer layer.
  */
 context(world: Assumptions)
-fun EngineInputData?.conformsToSchema(
+internal fun EngineInputData?.conformsToSchema(
     typeExpr: TypeExpr<Schema.InputType>,
 ): Boolean = conformsToSchemaType(typeExpr)
 
@@ -58,7 +58,7 @@ fun EngineInputData?.conformsToSchema(
  * expression.
  */
 context(world: Assumptions)
-fun Value.Output?.conformsToSchema(
+internal fun Value.Output?.conformsToSchema(
     typeExpr: TypeExpr<Schema.OutputType>,
 ): Boolean =
     conformsToSchemaType(typeExpr) &&
@@ -66,13 +66,13 @@ fun Value.Output?.conformsToSchema(
 
 /** Whether this argument tuple recursively conforms to [expectedType]. */
 context(world: Assumptions)
-fun Value.Arguments.conformsToSchema(
+internal fun Value.Arguments.conformsToSchema(
     expectedType: Schema.FieldArguments,
 ): Boolean = conformsToArgumentDefinition(expectedType)
 
 /** Whether this key's arguments recursively conform to its output field. */
 context(world: Assumptions)
-fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
+internal fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
     val keyArguments = arguments
     return keyArguments.conformsToArgumentDefinition(field.arguments)
 }
@@ -84,7 +84,7 @@ fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
  * This relation is universally true of engine results constructed by their model factories.
  */
 context(world: Assumptions)
-fun EngineResult.conformsToSchema(): Boolean =
+internal fun EngineResult.conformsToSchema(): Boolean =
     when (this) {
         ErrorEngineResult -> true
         is EnumEngineResult -> enumValue in type.values

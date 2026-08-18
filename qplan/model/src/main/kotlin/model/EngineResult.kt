@@ -16,7 +16,7 @@ sealed interface PathComponent
  * A null path or any path containing a [ListEngineResult.Index] has no corresponding selection
  * path and yields null.
  */
-fun kotlin.collections.List<PathComponent>?.toSelectionPath():
+internal fun kotlin.collections.List<PathComponent>?.toSelectionPath():
     kotlin.collections.List<ObjectEngineResult.GroundKey>? =
     this?.map { component -> component as? ObjectEngineResult.GroundKey ?: return null }
 
@@ -612,7 +612,7 @@ private fun EngineResult.Cell.hasSameCompletedCellAs(other: EngineResult.Cell): 
  *
  * @throws IllegalArgumentException when the union is undefined
  */
-fun EngineResult?.union(other: EngineResult?): EngineResult? {
+internal fun EngineResult?.union(other: EngineResult?): EngineResult? {
     if (this == null) {
         require(other == null) { "Cannot union null and non-null engine results" }
         return null
@@ -668,7 +668,7 @@ private fun CompletedCell.union(other: CompletedCell): CompletedCell =
  *
  * @throws IllegalArgumentException when the object types differ or any shared cell has no union
  */
-fun ObjectEngineResult.union(other: ObjectEngineResult): ObjectEngineResult {
+internal fun ObjectEngineResult.union(other: ObjectEngineResult): ObjectEngineResult {
     require(type == other.type) {
         "Cannot union object engine results of different types"
     }
@@ -694,7 +694,7 @@ fun ObjectEngineResult.union(other: ObjectEngineResult): ObjectEngineResult {
  * @throws IllegalArgumentException when the type expressions or lengths differ, or when any
  * corresponding cells have no union
  */
-fun ListEngineResult.union(other: ListEngineResult): ListEngineResult {
+internal fun ListEngineResult.union(other: ListEngineResult): ListEngineResult {
     require(typeExpr == other.typeExpr) {
         "Cannot union list engine results with different element types"
     }

@@ -40,7 +40,7 @@ Keys belong exclusively to the engine-result domain. `EngineObjectData.Sync` use
 
 ## Result Representation
 
-The `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `Schema.ID`, canonical `Schema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
+The `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `EngineIDResult`, canonical `Schema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
 
 Every object-field and list-element value slot contains `EngineResult?`. Null represents GraphQL null. Every non-null child is another member of the result domain. Schema conformance admits `ErrorEngineResult` at every output type expression, including non-null types, so an error may occupy any value location in a result tree. `ErrorEngineResult` is an inhabited sentinel rather than Kotlin's bottom type and exposes no scalar, object, or list properties.
 
@@ -50,9 +50,9 @@ Every object-field and list-element value slot contains `EngineResult?`. Null re
 
 `EngineOutputData` represents resolver output without result cells or access decisions. Its members are production-compatible scalar representations, recursive `List<EngineOutputData?>`, `EngineObjectData.Sync`, and the singleton `EngineErrorData`. `EngineErrorData` belongs to the broad output domain but not to narrower simple, list, or object categories. Do not collapse resolver output and engine result into one carrier merely because they contain corresponding successful values.
 
-Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `Schema.ID` for ID, and the canonical `Schema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the model.
+Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `EngineIDResult` for ID, and the canonical `Schema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the model.
 
-`Schema.EnumType` owns a name-keyed map of canonical `Schema.EnumValue` definitions. Each enum value exposes its name and containing enum type and uses the schema-canonical equality documented by `Schema`; same-named values of different enum types are distinct. `Schema.ID` is a structurally equal runtime value containing one string, not a canonical schema definition.
+`Schema.EnumType` owns a name-keyed map of canonical `Schema.EnumValue` definitions. Each enum value exposes its name and containing enum type and uses the schema-canonical equality documented by `Schema`; same-named values of different enum types are distinct. `EngineIDResult` is a structurally equal runtime value containing one string, not a canonical schema definition.
 
 Input-object and argument field values use ordinary maps. Use `getValue` when presence is a precondition and test membership before an optional lookup so an absent entry remains distinct from a present null. EOD uses `isPresent` for passive presence tests and strict `get` when presence is a precondition.
 
@@ -84,9 +84,9 @@ Missing OER cells are not unset EOD selections. They are internal result-tree lo
 
 A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `Schema.Type`, or intensionally by a checked `Any` typealias, such as `EngineResult`.
 
-A concrete variant is one particular form of value in a nominal category, such as `TypeExpr.List` within `TypeExpr`. A semantic union member is one admitted representation in an intentional `Any`-represented domain, such as `Schema.ID` within `EngineResult`.
+A concrete variant is one particular form of value in a nominal category, such as `TypeExpr.List` within `TypeExpr`. A semantic union member is one admitted representation in an intentional `Any`-represented domain, such as `EngineIDResult` within `EngineResult`.
 
-A pre-domain type is an unambiguous runtime representation that may be admitted by one or more semantic domains. A pre-domain type does not inherit from or otherwise nominally belong to those domains. Kotlin primitives, `String`, `Schema.ID`, and `Schema.EnumValue` are examples.
+A pre-domain type is an unambiguous runtime representation that may be admitted by one or more semantic domains. A pre-domain type does not inherit from or otherwise nominally belong to those domains. Kotlin primitives, `String`, `EngineIDResult`, and `Schema.EnumValue` are examples.
 
 A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `ObjectEngineResult`, `Promise`, `ObjectEngineResult.Key`, and `FieldResolver` are examples.
 
@@ -110,7 +110,7 @@ Public nominal semantic categories are sealed interfaces unless the category its
 
 Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `ObjectEngineResult` is sealed around its private implementation, while externally implemented `Schema.ObjectType` is an open leaf. Its enclosing category, `Schema.Type`, remains sealed.
 
-Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `Schema.DefaultValue.Absent`, and built-in scalar type definitions are examples.
+Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `CoercedDefaultValue.Absent`, and built-in scalar type definitions are examples.
 
 Public enums represent finite scalar sets of unique values, such as the five possible results of `Schema.TypeRelation`. They are not used as substitutes for algebraic categories or checked semantic unions.
 
@@ -146,7 +146,7 @@ Prefer a private data-class implementation when its generated structural equalit
 
 Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned field-resolver wrappers are logic-constructible; `Schema` and `ResolverRegistry` are externally supplied. Field-resolver functions are supplied during pre-reasoning assembly and encapsulated by `FieldResolver` behind a model-owned factory and public demand-projection operation. External raw node lookups, when accepted by composition infrastructure, are lowered to field resolvers before the canonical registry is exposed.
 
-Every independently constructible non-singleton semantic type has a public factory, conventionally named `of`. For example, `ObjectEngineResult`, `Schema.ID`, `Promise`, and `FieldResolver` have factories. `EngineResultCell` is deliberately not independently constructible: OER and LER factories allocate their cells so a cell cannot be shared by two containers. Pre-domain Kotlin values and abstract semantic domains need no domain-wide factory.
+Every independently constructible non-singleton semantic type has a public factory, conventionally named `of`. For example, `ObjectEngineResult`, `EngineIDResult`, `Promise`, and `FieldResolver` have factories. `EngineResultCell` is deliberately not independently constructible: OER and LER factories allocate their cells so a cell cannot be shared by two containers. Pre-domain Kotlin values and abstract semantic domains need no domain-wide factory.
 
 Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `ObjectEngineResult.Key` and `GroundKeyImpl` implementing `ObjectEngineResult.GroundKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
@@ -156,9 +156,9 @@ Keep schema decoding, GraphQL parsing, resolver-function definitions, registry a
 
 Constructors are private where possible and otherwise internal. Internal model code may call an internal constructor directly, but factory use remains preferred.
 
-Factories return the most precise public type available. For example, a factory that always creates `Schema.DefaultValue.Present` returns `Present`, not the broader `Schema.DefaultValue`.
+Factories return the most precise public type available. For example, a factory that always creates `CoercedDefaultValue.Present` returns `Present`, not the broader `CoercedDefaultValue`.
 
-Place a factory on the highest semantic category where its meaning remains coherent and Kotlin overload resolution remains unambiguous. For example, `Schema.DefaultValue.of(value)` belongs on `Schema.DefaultValue`, while resolved argument construction belongs on `Arguments.Resolved`. Prefer overloads that select precise variants when their parameter types are unambiguous.
+Place a factory on the highest semantic category where its meaning remains coherent and Kotlin overload resolution remains unambiguous. For example, `CoercedDefaultValue.of(value)` belongs on `CoercedDefaultValue`, while resolved argument construction belongs on `Arguments.Resolved`. Prefer overloads that select precise variants when their parameter types are unambiguous.
 
 An `of` factory normally accepts already semantic components. For example, `Promise.of` accepts the semantic value it immediately contains. Parsing GraphQL text and decoding SDL are pre-reasoning infrastructure rather than `of` factory behavior.
 

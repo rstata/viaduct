@@ -9,7 +9,9 @@ import model.EngineResult
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
+import model.EngineIDResult
 import model.ErrorEngineResult
+import model.CoercedDefaultValue
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -97,7 +99,7 @@ internal fun EngineResult.conformsToSchema(): Boolean =
         is Int,
         is Boolean,
         is String,
-        is Schema.ID,
+        is EngineIDResult,
         -> true
         else -> false
     }
@@ -109,7 +111,7 @@ private fun EngineInputData.conformsToInputObjectType(
     if (
         expectedType.fields.values.any { field ->
             !field.typeExpr.isNullable &&
-                field.defaultValue == Schema.DefaultValue.Absent &&
+                field.defaultValue == CoercedDefaultValue.Absent &&
                 field.name !in fieldValues
         }
     ) {
@@ -229,7 +231,7 @@ internal fun EngineResult?.conformsToResultSchemaType(
                 typeExpr.baseType == Schema.FloatType
         is String -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.StringType
         is Boolean -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.BooleanType
-        is Schema.ID -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IDType
+        is EngineIDResult -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IDType
         is Schema.EnumValue ->
             typeExpr is TypeExpr.Named &&
                 typeExpr.baseType == containingType &&

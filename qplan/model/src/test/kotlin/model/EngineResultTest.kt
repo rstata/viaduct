@@ -621,7 +621,7 @@ class EngineResultTest {
                 Triple(2.5, 2.5, Schema.FloatType),
                 Triple("three", "three", Schema.StringType),
                 Triple(true, true, Schema.BooleanType),
-                Triple("four", Schema.ID.of("four"), Schema.IDType),
+                Triple("four", EngineIDResult.of("four"), Schema.IDType),
                 Triple(
                     "READY",
                     status.values.getValue("READY"),
@@ -634,7 +634,7 @@ class EngineResultTest {
             assertEquals(expectedResult, result)
             assertEquals(value, result.toEngineOutputData(type))
         }
-        assertEquals(Schema.ID.of("four"), Schema.ID.of("four"))
+        assertEquals(EngineIDResult.of("four"), EngineIDResult.of("four"))
         assertSame(status.values.getValue("READY"), cases.last().second)
     }
 

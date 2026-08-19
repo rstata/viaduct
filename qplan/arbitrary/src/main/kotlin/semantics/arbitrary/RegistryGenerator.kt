@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.Arguments
+import model.CoercedDefaultValue
 
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
@@ -373,7 +374,7 @@ class ArbitraryRegistry internal constructor(
                             function = { input, arguments ->
                                 field.arguments.fields.values
                                     .filter { argument ->
-                                        argument.defaultValue is Schema.DefaultValue.Present
+                                        argument.defaultValue is CoercedDefaultValue.Present
                                     }.forEach { argument ->
                                         require(argument.name in arguments.fieldValues) {
                                             "Concrete default ${coordinate.typeName}/" +

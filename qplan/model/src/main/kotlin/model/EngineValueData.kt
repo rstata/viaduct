@@ -18,6 +18,29 @@ typealias EngineInputObjectData = Map<String, EngineInputData?>
 typealias EngineInputData = Any
 
 /**
+ * An optional, fully coerced semantic schema default.
+ *
+ * [Absent] means that no default is declared. [Present.value] may be null, denoting an explicit
+ * GraphQL null; absence and explicit null are distinct. When attached to a field or argument,
+ * [Present] is valid for its declaring [TypeExpr]. Default values use structural equality.
+ */
+sealed interface CoercedDefaultValue {
+    data object Absent : CoercedDefaultValue
+
+    sealed interface Present : CoercedDefaultValue {
+        val value: EngineInputData?
+    }
+
+    companion object {
+        fun of(value: EngineInputData?): Present = PresentCoercedDefaultValueImpl(value)
+    }
+}
+
+private data class PresentCoercedDefaultValueImpl(
+    override val value: EngineInputData?,
+) : CoercedDefaultValue.Present
+
+/**
  * Int, finite Double, Boolean, String, [EngineObjectData.Sync], or [EngineOutputListData].
  *
  * String represents GraphQL String, ID, and enum values; the expected schema type disambiguates
@@ -43,7 +66,7 @@ fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleType): EngineSimp
         Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> cast<String>()
         Schema.BooleanType -> cast<Boolean>()
-        Schema.IDType -> cast<Schema.ID>().value
+        Schema.IDType -> cast<EngineIDResult>().value
         is Schema.EnumType -> {
             val value = cast<Schema.EnumValue>()
             if (value.containingType != expectedType) throw ClassCastException()
@@ -135,7 +158,7 @@ fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleType): EngineResu
         Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> cast<String>()
         Schema.BooleanType -> cast<Boolean>()
-        Schema.IDType -> Schema.ID.of(cast())
+        Schema.IDType -> EngineIDResult.of(cast())
         is Schema.EnumType -> expectedType.values.getValue(cast())
     }
 
@@ -146,7 +169,7 @@ fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleType): EngineOutp
         Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> cast<String>()
         Schema.BooleanType -> cast<Boolean>()
-        Schema.IDType -> cast<Schema.ID>().value
+        Schema.IDType -> cast<EngineIDResult>().value
         is Schema.EnumType -> {
             val value = cast<Schema.EnumValue>()
             if (value.containingType != expectedType) throw ClassCastException()
@@ -167,7 +190,7 @@ private fun toEngineInputFields(
     return buildMap {
         expectedType.fields.values.forEach { field ->
             val defaultValue = field.defaultValue
-            if (defaultValue is Schema.DefaultValue.Present) {
+            if (defaultValue is CoercedDefaultValue.Present) {
                 put(field.name, defaultValue.value)
             }
         }
@@ -179,7 +202,7 @@ private fun toEngineInputFields(
 internal fun Schema.InputObjectLike.requiredFieldNames(): Set<String> =
     fields.values
         .filterTo(linkedSetOf()) { field ->
-            !field.typeExpr.isNullable && field.defaultValue == Schema.DefaultValue.Absent
+            !field.typeExpr.isNullable && field.defaultValue == CoercedDefaultValue.Absent
         }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
 
 private fun Map<*, *>.toStringKeyedMap(): EngineInputObjectData =

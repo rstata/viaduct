@@ -5,12 +5,25 @@ import model.invariants.conformsToResultSchemaType
 /**
  * A finite, well-founded field-resolution result.
  *
- * The semantic union contains Int, finite Double, Boolean, String, [Schema.ID],
+ * The semantic union contains Int, finite Double, Boolean, String, [EngineIDResult],
  * [Schema.EnumValue], [ObjectEngineResult], [ListEngineResult], or [ErrorEngineResult]. Nullable
  * uses additionally represent GraphQL null. Membership and schema compatibility are enforced by
  * result constructors and cell completion boundaries.
  */
 typealias EngineResult = Any
+
+/** A structurally equal GraphQL ID result value. */
+sealed interface EngineIDResult {
+    val value: String
+
+    companion object {
+        fun of(value: String): EngineIDResult = EngineIDResultImpl(value)
+    }
+}
+
+private data class EngineIDResultImpl(
+    override val value: String,
+) : EngineIDResult
 
 /**
  * One step in an exact path through an engine-result tree.
@@ -1031,7 +1044,7 @@ private fun EngineResult.isScalarResultMember(): Boolean =
         this is Double && isFinite() ||
         this is Boolean ||
         this is String ||
-        this is Schema.ID ||
+        this is EngineIDResult ||
         this is Schema.EnumValue
 
 private fun validateAccessResult(result: EngineResult) {

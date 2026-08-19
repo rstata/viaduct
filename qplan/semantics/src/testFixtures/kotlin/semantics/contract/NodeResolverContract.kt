@@ -1,6 +1,7 @@
 package semantics.contract
 
 import model.EngineResult
+import model.EngineIDResult
 import model.EngineOutputListData
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -142,11 +143,11 @@ interface NodeResolverContract : ResolverContract {
 
         assertEquals(expectedPassiveResultKeys(card.type, setOf(bridgeKey)), card.keys)
         assertEquals(
-            Schema.ID.of("\$node:7:Profileprofile-1"),
+            EngineIDResult.of("\$node:7:Profileprofile-1"),
             bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "id")).get(),
         )
         assertEquals(
-            Schema.ID.of("profile-1"),
+            EngineIDResult.of("profile-1"),
             profile.getCell(schema.contractKey("Profile", "id")).get(),
         )
         assertEquals(

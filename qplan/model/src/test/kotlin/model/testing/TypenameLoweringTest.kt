@@ -20,7 +20,7 @@ class TypenameLoweringTest {
         val schema = world.schema
         val top = assertIs<Schema.InterfaceType>(schema.type("V_I_Top"))
         val objectTypes =
-            listOf("Query", "A", "B", "A_V_A_Bridge", "Node_V_A_Bridge")
+            listOf("Query", "A", "B")
                 .map { name -> schema.type(name) as Schema.ObjectType }
 
         assertEquals(objectTypes.toSet(), top.possibleTypes)
@@ -31,14 +31,17 @@ class TypenameLoweringTest {
             "Node",
             "A",
             "B",
-            "A_V_A_Bridge",
-            "Node_V_A_Bridge",
         ).forEach { typeName ->
             val field = schema.field(typeName, "V_I_typename")
             assertEquals(typeName, field.containingType.typeName)
             assertEquals(Schema.NoArguments, field.arguments)
             assertEquals(Schema.StringType, field.typeExpr.baseType)
             assertTrue(!field.typeExpr.isNullable)
+        }
+        listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
+            assertFailsWith<Schema.MissingSchemaElementException> {
+                schema.field(typeName, "V_I_typename")
+            }
         }
         assertTrue((schema.type("Choice") as Schema.UnionType).fields.isEmpty())
         listOf(

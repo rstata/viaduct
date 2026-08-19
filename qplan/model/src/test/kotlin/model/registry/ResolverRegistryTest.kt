@@ -168,7 +168,7 @@ class ResolverRegistryTest {
         }
 
         val userBridge = schema.type("User_V_A_Bridge") as Schema.ObjectType
-        assertEquals(setOf("V_I_typename", "id", "node"), userBridge.fields.keys)
+        assertEquals(setOf("id", "node"), userBridge.fields.keys)
         val matrixBridge = schema.field("Query", "matrix_V_A_node")
         val outer = assertIs<TypeExpr.List<Schema.OutputType>>(matrixBridge.typeExpr)
         val inner = assertIs<TypeExpr.List<Schema.OutputType>>(outer.elementType)

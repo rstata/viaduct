@@ -1,7 +1,9 @@
 package semantics
 
+import model.requireType
+import model.requireField
+import model.requireObjectField
 import viaduct.engine.api.EngineObjectData
-
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -46,15 +48,15 @@ class ResolveValueTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "user") to
+                        schema.requireField("Query", "user") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> schema.objectOf("User") },
-                        schema.field("User", "computed") to
+                        schema.requireField("User", "computed") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
                             ) { _, _ -> "computed" },
-                        schema.field("Profile", "rendered") to
+                        schema.requireField("Profile", "rendered") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Profile"),
                             ) { _, _ -> "rendered" },
@@ -63,16 +65,16 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val userType = schema.type("User") as Schema.ObjectType
-        val profileType = schema.type("Profile") as Schema.ObjectType
+        val userType = schema.requireType("User") as Schema.Object
+        val profileType = schema.requireType("Profile") as Schema.Object
         val typeNameKey =
             ObjectEngineResult.GroundKey.of(
-                schema.objectField("User", "V_I_typename"),
+                schema.requireObjectField("User", "V_I_typename"),
                 emptyMap(),
             )
-        val computedKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "computed"), emptyMap())
-        val profileKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
-        val rawKey = ObjectEngineResult.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
+        val computedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("User", "computed"), emptyMap())
+        val profileKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("User", "profile"), emptyMap())
+        val rawKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "name" setTo "Ada"
@@ -99,7 +101,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.objectField("Query", "user").typeExpr,
+                    expectedType = world.schema.requireObjectField("Query", "user").type,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -151,15 +153,15 @@ class ResolveValueTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "user") to
+                        schema.requireField("Query", "user") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> schema.objectOf("User") },
-                        schema.field("User", "computed") to
+                        schema.requireField("User", "computed") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
                             ) { _, _ -> "computed" },
-                        schema.field("Profile", "rendered") to
+                        schema.requireField("Profile", "rendered") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Profile"),
                             ) { _, _ -> "rendered" },
@@ -168,9 +170,9 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val nameKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "name"), emptyMap())
-        val profileKey = ObjectEngineResult.GroundKey.of(schema.objectField("User", "profile"), emptyMap())
-        val rawKey = ObjectEngineResult.GroundKey.of(schema.objectField("Profile", "raw"), emptyMap())
+        val nameKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("User", "name"), emptyMap())
+        val profileKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("User", "profile"), emptyMap())
+        val rawKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Profile", "raw"), emptyMap())
         val value =
             schema.objectOf("User") {
                 "name" setTo "Ada"
@@ -187,7 +189,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.objectField("Query", "user").typeExpr,
+                    expectedType = world.schema.requireObjectField("Query", "user").type,
                     path = emptyList(),
                     resolverDemand = resolverDemand,
                 )
@@ -233,7 +235,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.objectField("Query", "user").typeExpr,
+                    expectedType = world.schema.requireObjectField("Query", "user").type,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -259,8 +261,8 @@ class ResolveValueTest {
                 selectiveResolvers = false,
             )
         val world = testWorld.assumptions
-        val selectedKey = ObjectEngineResult.GroundKey.of(world.schema.objectField("User", "selected"), emptyMap())
-        val extraKey = ObjectEngineResult.GroundKey.of(world.schema.objectField("User", "extra"), emptyMap())
+        val selectedKey = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("User", "selected"), emptyMap())
+        val extraKey = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("User", "extra"), emptyMap())
         val value =
             world.schema.objectOf("User") {
                 "selected" setTo "kept"
@@ -274,7 +276,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.objectField("Query", "user").typeExpr,
+                    expectedType = world.schema.requireObjectField("Query", "user").type,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -299,15 +301,15 @@ class ResolveValueTest {
                     }
                     """.trimIndent(),
                 ).assumptions
-        val itemType = world.schema.type("Item") as Schema.ObjectType
-        val field = world.schema.objectField("Item", "value")
+        val itemType = world.schema.requireType("Item") as Schema.Object
+        val field = world.schema.requireObjectField("Item", "value")
         val value =
             engineObjectDataOf(
                 schemaType = itemType,
                 fields =
                     listOf(
                         EngineObjectDataEntry.of(
-                            selection = field.fieldName,
+                            selection = field.name,
                             field = field,
                             value = "one",
                         ),
@@ -321,7 +323,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.objectField("Query", "item").typeExpr,
+                    expectedType = world.schema.requireObjectField("Query", "item").type,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -353,15 +355,15 @@ class ResolveValueTest {
                     val emptyItem = schema.emptyFragmentOf("Item")
                     val emptyNested = schema.emptyFragmentOf("Nested")
                     mapOf(
-                        schema.field("Query", "items") to
+                        schema.requireField("Query", "items") to
                             fieldResolverOf(emptyQuery) { _, _ ->
                                 error("Not invoked")
                             },
-                        schema.field("Item", "computed") to
+                        schema.requireField("Item", "computed") to
                             fieldResolverOf(emptyItem) { _, _ ->
                                 error("Not invoked")
                             },
-                        schema.field("Nested", "rendered") to
+                        schema.requireField("Nested", "rendered") to
                             fieldResolverOf(emptyNested) { _, _ ->
                                 error("Not invoked")
                             },
@@ -370,7 +372,7 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val itemsField = schema.objectField("Query", "items")
+        val itemsField = schema.requireObjectField("Query", "items")
         val output =
             listOf(
                         schema.objectOf("Item") {
@@ -392,9 +394,9 @@ class ResolveValueTest {
                 """.trimIndent(),
             ).subselections
         val itemsKey = ObjectEngineResult.GroundKey.of(itemsField, emptyMap())
-        val nestedKey = ObjectEngineResult.GroundKey.of(schema.objectField("Item", "nested"), emptyMap())
-        val computedKey = ObjectEngineResult.GroundKey.of(schema.objectField("Item", "computed"), emptyMap())
-        val renderedKey = ObjectEngineResult.GroundKey.of(schema.objectField("Nested", "rendered"), emptyMap())
+        val nestedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Item", "nested"), emptyMap())
+        val computedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Item", "computed"), emptyMap())
+        val renderedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Nested", "rendered"), emptyMap())
         val rootPath = listOf<PathComponent>(itemsKey)
         val expectedPaths =
             setOf(
@@ -407,7 +409,7 @@ class ResolveValueTest {
         val resolvedValue =
             context(world) {
                 output.resolveValue(
-                    expectedType = itemsField.typeExpr,
+                    expectedType = itemsField.type,
                     path = rootPath,
                     resolverDemand = selections,
                 )
@@ -416,7 +418,7 @@ class ResolveValueTest {
         val replayed =
             resolvedValue.resolveObjects { objectResolution ->
                 callbackPaths += objectResolution.path
-                when (objectResolution.target.type.typeName) {
+                when (objectResolution.target.type.name) {
                     "Item" ->
                         objectResolution.target.reserveCell(computedKey).also { cell ->
                             cell.setValue(1)

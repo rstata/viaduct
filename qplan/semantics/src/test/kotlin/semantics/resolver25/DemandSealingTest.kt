@@ -1,7 +1,8 @@
 package semantics.resolver25
 
+import model.requireType
+import model.requireObjectField
 import model.Arguments
-
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -47,7 +48,7 @@ class DemandSealingTest {
             )
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
 
@@ -93,23 +94,23 @@ class DemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val aKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
+                    val aKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Query", "a"), emptyMap())
                     val cKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Query", "c"),
+                            schema.requireObjectField("Query", "c"),
                             mapOf("value" to 4),
                         )
                     val lateKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "late"),
+                            schema.requireObjectField("Payload", "late"),
                             emptyMap(),
                         )
                     mapOf(
-                        schema.objectField("Query", "result") to
+                        schema.requireObjectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.selectionValues().getValue(cKey.field.fieldName)
+                                input.selectionValues().getValue(cKey.field.name)
                             },
-                        schema.objectField("Query", "a") to
+                        schema.requireObjectField("Query", "a") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Payload") {
                                     "early" setTo 1
@@ -119,24 +120,24 @@ class DemandSealingTest {
                                 producerApplications += 1
                                 producerDemand = demand
                             },
-                        schema.objectField("Query", "b") to
+                        schema.requireObjectField("Query", "b") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 4
                             },
-                        schema.objectField("Query", "c") to
+                        schema.requireObjectField("Query", "c") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment C on Query { a { late } }",
                                 ),
                             ) { input, _ ->
                                 val payload =
-                                    input.selectionValues().getValue(aKey.field.fieldName) as EngineObjectData.Sync
-                                payload.selectionValues().getValue(lateKey.field.fieldName)
+                                    input.selectionValues().getValue(aKey.field.name) as EngineObjectData.Sync
+                                payload.selectionValues().getValue(lateKey.field.name)
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(resultFragment, listOf("b")),
@@ -146,7 +147,7 @@ class DemandSealingTest {
 
         val observation = observeResult(testWorld)
         val resolved = observation.result
-        val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
+        val payloadType = testWorld.schema.requireType("Payload") as Schema.Object
         val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
 
         assertEquals(1, producerApplications)
@@ -165,7 +166,7 @@ class DemandSealingTest {
                     .merge(payloadType)
                     .instantiateBindings()
                     .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+                    .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
         assertEquals(
@@ -173,7 +174,7 @@ class DemandSealingTest {
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        testWorld.schema.objectField("Query", "result"),
+                        testWorld.schema.requireObjectField("Query", "result"),
                         emptyMap(),
                     ),
                 ).getValue().get(),
@@ -210,28 +211,28 @@ class DemandSealingTest {
                 fieldResolvers = { schema ->
                     val oneKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "one"),
+                            schema.requireObjectField("Payload", "one"),
                             emptyMap(),
                         )
                     val twoKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "two"),
+                            schema.requireObjectField("Payload", "two"),
                             emptyMap(),
                         )
                     mapOf(
-                        schema.objectField("Query", "result") to
+                        schema.requireObjectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val exact =
                                     input.selectionValues().getValue("exact") as EngineObjectData.Sync
                                 val symbolic =
                                     input.selectionValues().getValue("symbolic") as EngineObjectData.Sync
                                 val one =
-                                    exact.selectionValues().getValue(oneKey.field.fieldName) as Int
+                                    exact.selectionValues().getValue(oneKey.field.name) as Int
                                 val two =
-                                    symbolic.selectionValues().getValue(twoKey.field.fieldName) as Int
+                                    symbolic.selectionValues().getValue(twoKey.field.name) as Int
                                 one + two
                             },
-                        schema.objectField("Query", "a") to
+                        schema.requireObjectField("Query", "a") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Payload") {
                                     "one" setTo 3
@@ -241,14 +242,14 @@ class DemandSealingTest {
                                 producerApplications += 1
                                 producerDemand = demand
                             },
-                        schema.objectField("Query", "b") to
+                        schema.requireObjectField("Query", "b") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 "same"
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "name") to
                             schema.fromObjectField(resultFragment, listOf("b")),
@@ -258,7 +259,7 @@ class DemandSealingTest {
 
         val observation = observeResult(testWorld)
         val resolved = observation.result
-        val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
+        val payloadType = testWorld.schema.requireType("Payload") as Schema.Object
 
         assertEquals(1, producerApplications)
         assertContains(
@@ -272,14 +273,14 @@ class DemandSealingTest {
                     .merge(payloadType)
                     .instantiateBindings()
                     .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+                    .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
         assertTrue(
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        testWorld.schema.objectField("Query", "result"),
+                        testWorld.schema.requireObjectField("Query", "result"),
                         emptyMap(),
                     ),
                 ).getValue().get() == 8,
@@ -320,7 +321,7 @@ class DemandSealingTest {
         val resolved = observation.result
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
 
@@ -381,69 +382,69 @@ class DemandSealingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val aKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "a"), emptyMap())
-                    val zKey = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "z"), emptyMap())
+                    val aKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Query", "a"), emptyMap())
+                    val zKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Query", "z"), emptyMap())
                     val earlyKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "early"),
+                            schema.requireObjectField("Payload", "early"),
                             emptyMap(),
                         )
                     val lateKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "late"),
+                            schema.requireObjectField("Payload", "late"),
                             emptyMap(),
                         )
                     val seedEarlyKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Seeds", "early"),
+                            schema.requireObjectField("Seeds", "early"),
                             emptyMap(),
                         )
                     val seedLateKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Seeds", "late"),
+                            schema.requireObjectField("Seeds", "late"),
                             emptyMap(),
                         )
                     val cKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Query", "c"),
+                            schema.requireObjectField("Query", "c"),
                             mapOf("value" to 4),
                         )
                     mapOf(
-                        schema.objectField("Query", "result") to
+                        schema.requireObjectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.selectionValues().getValue(cKey.field.fieldName)
+                                input.selectionValues().getValue(cKey.field.name)
                             },
-                        schema.objectField("Query", "a") to
+                        schema.requireObjectField("Query", "a") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment A on Query { z { early late } }",
                                 ),
                             ) { input, _ ->
                                 val seeds =
-                                    input.selectionValues().getValue(zKey.field.fieldName) as EngineObjectData.Sync
+                                    input.selectionValues().getValue(zKey.field.name) as EngineObjectData.Sync
                                 schema.objectOf("Payload") {
                                     "early" setTo
-                                        seeds.selectionValues().getValue(seedEarlyKey.field.fieldName)
+                                        seeds.selectionValues().getValue(seedEarlyKey.field.name)
                                     "late" setTo
-                                        seeds.selectionValues().getValue(seedLateKey.field.fieldName)
+                                        seeds.selectionValues().getValue(seedLateKey.field.name)
                                 }
                             }.observeApplications { _, _, demand ->
                                 producerApplications += 1
                                 producerDemand = demand
                             },
-                        schema.objectField("Query", "b") to
+                        schema.requireObjectField("Query", "b") to
                             fieldResolverOf(
                                 schema.fragmentFrom("fragment B on Query { a { early } }"),
                             ) { input, _ ->
                                 val payload =
-                                    input.selectionValues().getValue(aKey.field.fieldName) as EngineObjectData.Sync
+                                    input.selectionValues().getValue(aKey.field.name) as EngineObjectData.Sync
                                 val value =
-                                    payload.selectionValues().getValue(earlyKey.field.fieldName)
+                                    payload.selectionValues().getValue(earlyKey.field.name)
                                 schema.objectOf("Box") {
                                     "value" setTo value
                                 }
                             },
-                        schema.objectField("Query", "c") to
+                        schema.requireObjectField("Query", "c") to
                             fieldResolverOf(
                                 schema.fragmentFrom("fragment C on Query { a { late } }"),
                             ) { input, arguments ->
@@ -451,10 +452,10 @@ class DemandSealingTest {
                                 val value = arguments.fieldValues.getValue("value") as Int
                                 consumerArguments += value
                                 val payload =
-                                    input.selectionValues().getValue(aKey.field.fieldName) as EngineObjectData.Sync
-                                payload.selectionValues().getValue(lateKey.field.fieldName)
+                                    input.selectionValues().getValue(aKey.field.name) as EngineObjectData.Sync
+                                payload.selectionValues().getValue(lateKey.field.name)
                             },
-                        schema.objectField("Query", "z") to
+                        schema.requireObjectField("Query", "z") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Seeds") {
                                     "early" setTo 4
@@ -467,7 +468,7 @@ class DemandSealingTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(
@@ -487,8 +488,8 @@ class DemandSealingTest {
                         ),
                 )
             }
-        val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
-        val seedsType = testWorld.schema.type("Seeds") as Schema.ObjectType
+        val payloadType = testWorld.schema.requireType("Payload") as Schema.Object
+        val seedsType = testWorld.schema.requireType("Seeds") as Schema.Object
 
         assertEquals(2, consumerApplications)
         assertEquals(setOf(4, 7), consumerArguments)
@@ -500,7 +501,7 @@ class DemandSealingTest {
                     .merge(payloadType)
                     .instantiateBindings()
                     .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+                    .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
         assertEquals(1, transitiveProducerApplications)
@@ -511,7 +512,7 @@ class DemandSealingTest {
                     .merge(seedsType)
                     .instantiateBindings()
                     .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+                    .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
         assertEquals(
@@ -519,7 +520,7 @@ class DemandSealingTest {
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        testWorld.schema.objectField("Query", "result"),
+                        testWorld.schema.requireObjectField("Query", "result"),
                         emptyMap(),
                     ),
                 ).getValue().get(),

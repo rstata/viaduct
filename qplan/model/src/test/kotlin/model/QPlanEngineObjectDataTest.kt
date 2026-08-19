@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class QPlanEngineObjectDataTest {
     private val fixture = GJSchema.fromSDL(SCHEMA_SDL)
     private val schema: Schema = fixture
-    private val userType = schema.type("User") as Schema.ObjectType
+    private val userType = schema.requireType("User") as Schema.Object
     private val graphQLUserType = requireNotNull(fixture.graphQLSchema.getObjectType("User"))
 
     @Test
@@ -123,7 +123,7 @@ class QPlanEngineObjectDataTest {
 
     @Test
     fun `rejects entries owned by another object type`() {
-        val queryField = schema.objectField("Query", "viewer")
+        val queryField = schema.requireObjectField("Query", "viewer")
 
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(
@@ -201,7 +201,7 @@ class QPlanEngineObjectDataTest {
     ): EngineObjectDataEntry =
         EngineObjectDataEntry.of(
             selection = selection,
-            field = schema.objectField("User", fieldName),
+            field = schema.requireObjectField("User", fieldName),
             value = value,
         )
 

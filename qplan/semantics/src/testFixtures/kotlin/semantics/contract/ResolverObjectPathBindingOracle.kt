@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.Assumptions
 import model.EngineInputData
 import model.EngineResult
@@ -33,7 +34,7 @@ fun ObjectEngineResult.validateObjectPathBindings() {
     this.registeredResolverOccurrences(world.resolverRegistry).forEach { cell ->
         val resolver =
             world.resolverRegistry.resolver(
-                world.schema.objectField(
+                world.schema.requireObjectField(
                     cell.canonicalField.typeName,
                     cell.canonicalField.fieldName,
                 ),
@@ -106,7 +107,7 @@ private fun ObjectEngineResult.readCompletedProvider(
         if (value == null) return VariableBinding.of(null)
         if (value == ErrorEngineResult) return VariableBinding.Error
         if (index == path.lastIndex) {
-            return value.toVariableBinding(key.field.typeExpr)
+            return value.toVariableBinding(key.field.type)
         }
         current =
             value as? ObjectEngineResult
@@ -116,7 +117,7 @@ private fun ObjectEngineResult.readCompletedProvider(
 }
 
 private fun EngineResult.toVariableBinding(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
@@ -125,13 +126,13 @@ private fun EngineResult.toVariableBinding(
             error("An object-path provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseType as Schema.SimpleType),
+                toEngineSimpleData(expectedType.baseType as Schema.SimpleTypeDef),
             )
     }
 
 @Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputType)
+    require(typeExpr.baseType is Schema.InputTypeDef)
     val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         val result = get(index).get()
@@ -150,7 +151,7 @@ private fun ListEngineResult.toInputListBinding(): VariableBinding {
         toEngineInputListData(
             expectedType =
                 TypeExpr.List.of(
-                    elementType = typeExpr as TypeExpr<Schema.InputType>,
+                    elementType = typeExpr as TypeExpr<Schema.InputTypeDef>,
                     isNullable = false,
                 ),
             value = values,

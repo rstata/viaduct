@@ -11,8 +11,8 @@ class EngineValueDataTest {
     @Test
     fun `simple casts use production-compatible strings for String ID and enum`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val role = schema.type("Role") as Schema.EnumType
-        val otherRole = schema.type("OtherRole") as Schema.EnumType
+        val role = schema.requireType("Role") as Schema.Enum
+        val otherRole = schema.requireType("OtherRole") as Schema.Enum
 
         assertEquals(
             "same",
@@ -35,7 +35,7 @@ class EngineValueDataTest {
     @Test
     fun `casts reject non-finite floats and unknown enum names`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val role = schema.type("Role") as Schema.EnumType
+        val role = schema.requireType("Role") as Schema.Enum
 
         assertFailsWith<ClassCastException> {
             toEngineSimpleData(TypeExpr.Named.of(Schema.FloatType), Double.NaN)
@@ -54,7 +54,7 @@ class EngineValueDataTest {
     @Test
     fun `input casts recursively copy and schema-check lists and objects`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filter = schema.type("Filter") as Schema.InputObjectType
+        val filter = schema.requireType("Filter") as Schema.Input
         val ids = mutableListOf<Any?>("first")
         val source = mutableMapOf<String, Any?>("ids" to ids, "role" to "ADMIN")
 

@@ -22,7 +22,7 @@ class ContextParametersTest {
 
         assertIs<EngineObjectData.Sync>(result)
         assertEquals(source, result)
-        assertEquals(world.schema.query, result.schemaType)
+        assertEquals(world.schema.requireQueryTypeDef(), result.schemaType)
     }
 
     @Test
@@ -50,7 +50,7 @@ class ContextParametersTest {
                 },
             )
 
-        assertEquals(world.schema.query, result.schemaType)
+        assertEquals(world.schema.requireQueryTypeDef(), result.schemaType)
         assertEquals(
             emptyList(),
             result.getSelections().toList(),
@@ -72,8 +72,8 @@ class ContextParametersTest {
             schemaSDL = SCHEMA_SDL,
             fieldResolvers = { schema ->
                 val fragment = schema.emptyFragmentOf("Query")
-                schema.query.fields.values
-                    .filter { it.fieldName != "V_I_typename" }
+                schema.requireQueryTypeDef().fields
+                    .filter { it.name != "V_I_typename" }
                     .associateWith {
                         fieldResolverOf(
                             objectFragment = fragment,

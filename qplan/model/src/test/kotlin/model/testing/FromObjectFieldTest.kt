@@ -1,9 +1,9 @@
 package model.testing
 
+import model.requireQueryTypeDef
+import model.requireField
 import model.Arguments
-
 import model.ObjectEngineResult
-
 import model.Schema
 import model.EngineErrorData
 import model.emptyFragmentOf
@@ -44,9 +44,9 @@ class FromObjectFieldTest {
 
         assertEquals(
             listOf(
-                ObjectEngineResult.Key.of(schema.field("Query", "profile"), emptyMap()),
+                ObjectEngineResult.Key.of(schema.requireField("Query", "profile"), emptyMap()),
                 ObjectEngineResult.Key.of(
-                    schema.field("Profile", "commonName"),
+                    schema.requireField("Profile", "commonName"),
                     mapOf("style" to 2),
                 ),
             ),
@@ -79,7 +79,7 @@ class FromObjectFieldTest {
             )
 
         assertEquals(
-            listOf(ObjectEngineResult.Key.of(schema.field("Query", "z"), mapOf("w" to 2))),
+            listOf(ObjectEngineResult.Key.of(schema.requireField("Query", "z"), mapOf("w" to 2))),
             provider.keyPath,
         )
     }
@@ -163,7 +163,7 @@ class FromObjectFieldTest {
             )
 
         assertEquals(
-            listOf(ObjectEngineResult.Key.of(schema.field("Named", "name"), emptyMap())),
+            listOf(ObjectEngineResult.Key.of(schema.requireField("Named", "name"), emptyMap())),
             provider.keyPath,
         )
     }
@@ -359,22 +359,22 @@ class FromObjectFieldTest {
         TestWorld.fromSDL(
             schemaSDL = schemaSDL,
             fieldResolvers = { schema ->
-                schema.query.fields.values
-                    .filter { field -> field.fieldName != "V_I_typename" }
+                schema.requireQueryTypeDef().fields
+                    .filter { field -> field.name != "V_I_typename" }
                     .associateWith {
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                             EngineErrorData
                         }
                     } +
                     mapOf(
-                        schema.field("Query", "result") to
+                        schema.requireField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(objectFragment)) { _, _ ->
                                 1
                             },
                     )
             },
             variableProviders = { schema ->
-                val owner = schema.field("Query", "result") as Schema.ObjectField
+                val owner = schema.requireField("Query", "result") as Schema.ObjectField
                 mapOf(
                     Arguments.Variable.of(owner, "value") to
                         schema.fromObjectField(objectFragment, responsePath),

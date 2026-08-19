@@ -179,7 +179,7 @@ internal fun List<PathComponent>.renderReactorPath(): String =
         joinToString(separator = "/") { component ->
             when (component) {
                 is ObjectEngineResult.GroundKey ->
-                    "${component.field.containingType.typeName}.${component.field.fieldName}" +
+                    "${component.field.containingDef.name}.${component.field.name}" +
                         when (val arguments = component.arguments) {
                             Arguments.Error -> "(error)"
                             is Arguments.Resolved ->

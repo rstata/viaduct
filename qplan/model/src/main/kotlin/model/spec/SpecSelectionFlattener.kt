@@ -1,7 +1,6 @@
 package model.spec
 
 import model.ObjectEngineResult
-
 import model.Assumptions
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
@@ -10,6 +9,7 @@ import model.Selection
 import model.SelectionForest
 import model.flatMapToMaterializeSelectionForest
 import model.materializeSelectionForestOf
+import model.requireField
 
 /**
  * Flattens a spec selection set interpreted with [typeInScope].
@@ -23,7 +23,7 @@ import model.materializeSelectionForestOf
  */
 context(world: Assumptions)
 fun flatten(
-    typeInScope: Schema.CompositeType,
+    typeInScope: Schema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): SelectionForest =
     flattenForMaterialization(
@@ -40,7 +40,7 @@ fun flatten(
  */
 context(world: Assumptions)
 fun flattenForMaterialization(
-    typeInScope: Schema.CompositeType,
+    typeInScope: Schema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): MaterializeSelectionForest =
     flattenForMaterialization(
@@ -51,7 +51,7 @@ fun flattenForMaterialization(
 
 internal fun flatten(
     schema: Schema,
-    typeInScope: Schema.CompositeType,
+    typeInScope: Schema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): SelectionForest =
     flattenForMaterialization(
@@ -62,13 +62,13 @@ internal fun flatten(
 
 internal fun flattenForMaterialization(
     schema: Schema,
-    typeInScope: Schema.CompositeType,
+    typeInScope: Schema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): MaterializeSelectionForest {
     val initialContext =
         SelectionContext(
             nominalType = typeInScope,
-            possibleTypes = typeInScope.possibleTypes,
+            possibleTypes = typeInScope.possibleObjectTypes,
         )
     return flattenSelectionSet(schema, selectionSet, initialContext)
 }
@@ -88,7 +88,7 @@ private fun flattenSelectionSet(
                         SelectionContext(
                             nominalType = typeCondition,
                             possibleTypes =
-                                context.possibleTypes intersect typeCondition.possibleTypes,
+                                context.possibleTypes intersect typeCondition.possibleObjectTypes,
                         )
                     } ?: context
                 flattenSelectionSet(schema, selection.selections, fragmentContext)
@@ -102,18 +102,19 @@ private fun SpecSelection.Field.flattenField(
 ): MaterializeSelection {
     val field = schemaField
     val flattenedSubselections =
-        when (val resultType = field.typeExpr.baseType) {
-            is Schema.SimpleType -> materializeSelectionForestOf()
+        when (val resultType = field.type.baseType) {
+            is Schema.SimpleTypeDef -> materializeSelectionForestOf()
 
-            is Schema.CompositeType ->
+            is Schema.CompositeTypeDef ->
                 flattenSelectionSet(
                     schema,
                     subselections.orEmpty(),
                     SelectionContext(
                         nominalType = resultType,
-                        possibleTypes = resultType.possibleTypes,
+                        possibleTypes = resultType.possibleObjectTypes,
                     ),
                 )
+            else -> error("Output field has a non-output type")
         }
 
     return MaterializeSelection.of(
@@ -129,6 +130,6 @@ private fun SpecSelection.Field.flattenField(
 }
 
 private class SelectionContext(
-    val nominalType: Schema.CompositeType,
-    val possibleTypes: Set<Schema.ObjectType>,
+    val nominalType: Schema.CompositeTypeDef,
+    val possibleTypes: Set<Schema.Object>,
 )

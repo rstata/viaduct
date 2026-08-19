@@ -290,7 +290,7 @@ private inline fun <reified T> requireType(value: EngineInputData): T {
     return value
 }
 
-private fun SelectionForest.fields(): Set<Schema.OutputField> =
+private fun SelectionForest.fields(): Set<Schema.Field> =
     buildSet {
         this@fields.forEach { selection -> add(selection.key.field) }
     }

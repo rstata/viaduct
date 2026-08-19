@@ -44,7 +44,7 @@ sealed interface SelectionForest {
  * `possibleTypes == setOf(type)`, and whose key occurs exactly once.
  */
 sealed interface ObjectSelectionForest : SelectionForest {
-    val type: Schema.ObjectType
+    val type: Schema.Object
 
     override fun filter(predicate: (Selection) -> Boolean): ObjectSelectionForest
 
@@ -78,7 +78,7 @@ sealed interface ObjectSelectionForest : SelectionForest {
     companion object {
         /** Constructs a normalized forest satisfying [ObjectSelectionForest]'s invariant. */
         fun of(
-            type: Schema.ObjectType,
+            type: Schema.Object,
             selections: Iterable<ObjectSelection>,
         ): ObjectSelectionForest {
             val occurrences =
@@ -89,11 +89,11 @@ sealed interface ObjectSelectionForest : SelectionForest {
                 buildMap {
                     occurrences.forEach { selection ->
                         require(
-                            selection.key.field.containingType == type &&
+                            selection.key.field.containingDef == type &&
                                 selection.possibleTypes.size == 1 &&
                                 type in selection.possibleTypes,
                         ) {
-                            "Object selections must belong exclusively to ${type.typeName}"
+                            "Object selections must belong exclusively to ${type.name}"
                         }
                         require(put(selection.key, selection) == null) {
                             "Object selection keys must be unique"
@@ -141,7 +141,7 @@ fun Iterable<SelectionForest>.concatenateSelectionForests(): SelectionForest =
  * formerly distinct argument tuples equal. Subselections are not recursively merged because their
  * concrete runtime parent type is not yet known.
  */
-fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
+fun SelectionForest.merge(type: Schema.Object): ObjectSelectionForest {
     val childrenByKey =
         buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
             occurrences().forEach { selection ->
@@ -167,7 +167,7 @@ context(world: Assumptions)
 suspend fun SelectionForest.mergeWithVariables(
     result: ObjectEngineResult,
 ): Pair<ObjectSelectionForest, Map<Arguments.Variable, VariableBinding>> {
-    val type: Schema.ObjectType = result.type
+    val type: Schema.Object = result.type
     val childrenByKey: MutableMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> =
         linkedMapOf()
     val groundKeyByVariable: MutableMap<Arguments.Variable, ObjectEngineResult.GroundKey> =
@@ -214,7 +214,7 @@ suspend fun SelectionForest.mergeWithVariables(
                             )
                     }
                 } else {
-                    value.toPathVariableBinding(groundKey.field.typeExpr)
+                    value.toPathVariableBinding(groundKey.field.type)
                 }
             if (bindings.containsKey(variable)) {
                 require(bindings[variable] == binding) {
@@ -230,7 +230,7 @@ suspend fun SelectionForest.mergeWithVariables(
 }
 
 private fun EngineResult?.toPathVariableBinding(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
@@ -240,14 +240,14 @@ private fun EngineResult?.toPathVariableBinding(
             error("A path-variable provider cannot terminate at an object")
         else -> {
             val simpleType =
-                (expectedType as? TypeExpr.Named)?.baseType as? Schema.SimpleType
+                (expectedType as? TypeExpr.Named)?.baseType as? Schema.SimpleTypeDef
                     ?: error("A path-variable provider has a non-simple terminal type")
             VariableBinding.of(toEngineSimpleData(simpleType))
         }
     }
 
 private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputType) {
+    require(typeExpr.baseType is Schema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()
@@ -324,7 +324,7 @@ private fun ObjectEngineResult.ObjectKey.ground(
 }
 
 private fun normalizedObjectSelectionForest(
-    type: Schema.ObjectType,
+    type: Schema.Object,
     childrenByKey: Map<ObjectEngineResult.ObjectKey, List<SelectionForest>>,
 ): ObjectSelectionForest {
     // Specialization preserves local validity; grouping establishes normalized unique keys.
@@ -352,7 +352,7 @@ private fun normalizedObjectSelectionForest(
  */
 context(world: Assumptions)
 fun SelectionForest.applicableGroundSelections(
-    type: Schema.ObjectType,
+    type: Schema.Object,
 ): ObjectSelectionForest =
     merge(type).instantiateBindings()
 
@@ -465,14 +465,14 @@ fun SelectionForest.usedVariables(): Set<Arguments.Variable> {
  * This operation preserves open argument expressions while applying the argument definition,
  * including defaults, of the corresponding canonical object field.
  */
-fun Selection.objectKey(type: Schema.ObjectType): ObjectEngineResult.ObjectKey {
+fun Selection.objectKey(type: Schema.Object): ObjectEngineResult.ObjectKey {
     return key.objectKey(type)
 }
 
 internal fun ObjectEngineResult.Key.objectKey(
-    type: Schema.ObjectType,
+    type: Schema.Object,
 ): ObjectEngineResult.ObjectKey {
-    val concreteField = type.fields.getValue(field.fieldName)
+    val concreteField = type.requireField(field.name)
     val sourceKey = this
     val selectionStamp = sourceKey.stamp as? Stamp.Occurrence
     if (selectionStamp != null) {
@@ -530,9 +530,9 @@ sealed interface Selection {
      * its containing type records the immediate field-lookup context. Non-variable argument values
      * are in their coerced semantic form. An argument may contain a [Arguments.Variable]. Variables
      * compare by name. Because a selection key is outside an OER or [EngineObjectData.Sync], its field may
-     * belong to an abstract [Schema.InterfaceType] or [Schema.UnionType], and its arguments may
+     * belong to an abstract [Schema.Interface] or [Schema.Union], and its arguments may
      * contain variables. Before a key is present in either value, its field must belong to the
-     * applicable concrete [Schema.ObjectType] and its variables must be instantiated.
+     * applicable concrete [Schema.Object] and its variables must be instantiated.
      *
      * Compared to GraphQL selections, model selections use an alias-free schema field coordinate
      * rather than a GraphQL response key.
@@ -550,7 +550,7 @@ sealed interface Selection {
      * selection, this is the true intersection: even when a "broadening" type condition is
      * applied in the GraphQL selection, we won't broaden this corresponding type condition.
      */
-    val possibleTypes: Set<Schema.ObjectType>
+    val possibleTypes: Set<Schema.Object>
 
     /**
      * The subselections on the value this selection selects.
@@ -587,7 +587,7 @@ sealed interface Selection {
      * The field's type expression may wrap that base type in lists or non-null constraints.
      */
     val isLeaf: Boolean
-        get() = key.field.typeExpr.baseType is Schema.SimpleType
+        get() = key.field.type.baseType is Schema.SimpleTypeDef
 
     companion object {
         /**
@@ -595,7 +595,7 @@ sealed interface Selection {
          */
         fun of(
             key: ObjectEngineResult.Key,
-            possibleTypes: Set<Schema.ObjectType>,
+            possibleTypes: Set<Schema.Object>,
             subselections: SelectionForest,
         ): Selection {
             validateSelection(key, possibleTypes, subselections)
@@ -618,7 +618,7 @@ sealed interface Selection {
         /** Constructs the precise selection category for a concrete-object field key. */
         fun of(
             key: ObjectEngineResult.ObjectKey,
-            possibleTypes: Set<Schema.ObjectType>,
+            possibleTypes: Set<Schema.Object>,
             subselections: SelectionForest,
         ): ObjectSelection = ObjectSelection.of(key, possibleTypes, subselections)
     }
@@ -631,7 +631,7 @@ sealed interface ObjectSelection : Selection {
     companion object {
         fun of(
             key: ObjectEngineResult.ObjectKey,
-            possibleTypes: Set<Schema.ObjectType>,
+            possibleTypes: Set<Schema.Object>,
             subselections: SelectionForest,
         ): ObjectSelection {
             validateSelection(key, possibleTypes, subselections)
@@ -642,29 +642,29 @@ sealed interface ObjectSelection : Selection {
 
 private fun validateSelection(
     key: ObjectEngineResult.Key,
-    possibleTypes: Set<Schema.ObjectType>,
+    possibleTypes: Set<Schema.Object>,
     subselections: SelectionForest,
 ) {
-    val fieldOwner = key.field.containingType
-    require(possibleTypes.all { it in fieldOwner.possibleTypes }) {
-        "Selection possible types must be contained by ${fieldOwner.typeName}"
+    val fieldOwner = key.field.containingDef
+    require(possibleTypes.all { it in fieldOwner.possibleObjectTypes }) {
+        "Selection possible types must be contained by ${fieldOwner.name}"
     }
     require(
-        key.field.typeExpr.baseType is Schema.CompositeType || subselections.isEmpty(),
+        key.field.type.baseType is Schema.CompositeTypeDef || subselections.isEmpty(),
     ) {
-        "Leaf selection ${fieldOwner.typeName}.${key.field.fieldName} has subselections"
+        "Leaf selection ${fieldOwner.name}.${key.field.name} has subselections"
     }
 }
 
 private class SelectionImpl(
     override val key: ObjectEngineResult.Key,
-    override val possibleTypes: Set<Schema.ObjectType>,
+    override val possibleTypes: Set<Schema.Object>,
     override val subselections: SelectionForest,
 ) : Selection
 
 private class ObjectSelectionImpl(
     override val key: ObjectEngineResult.ObjectKey,
-    override val possibleTypes: Set<Schema.ObjectType>,
+    override val possibleTypes: Set<Schema.Object>,
     override val subselections: SelectionForest,
 ) : ObjectSelection
 
@@ -699,7 +699,7 @@ private class SelectionForestImpl(
 ) : AbstractSelectionForest(occurrences)
 
 private class ObjectSelectionForestImpl(
-    override val type: Schema.ObjectType,
+    override val type: Schema.Object,
     private val selectionsByKey: Map<ObjectEngineResult.ObjectKey, ObjectSelection>,
     occurrences: List<ObjectSelection> = selectionsByKey.values.toList(),
 ) : AbstractSelectionForest(occurrences),

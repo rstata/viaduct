@@ -124,7 +124,7 @@ private fun SelectionForest.passivePredecessorDemand(
 
 private data class ProjectionSelectionIdentity(
     val key: ObjectEngineResult.Key,
-    val possibleTypes: Set<Schema.ObjectType>,
+    val possibleTypes: Set<Schema.Object>,
 )
 
 private fun SelectionForest.coalesceEquivalentSelections(): SelectionForest {

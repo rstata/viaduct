@@ -252,7 +252,7 @@ class FieldResolver private constructor(
         path: List<PathComponent>,
     ): ObjectSelectionForest =
         stampVars(path)
-            .applicableGroundSelections(field.containingType)
+            .applicableGroundSelections(field.containingDef)
 
     /**
      * Applies this field resolver and projects its selection-independent result to
@@ -297,38 +297,38 @@ class FieldResolver private constructor(
         ): FieldResolver {
             require(
                 objectFragment.all { selection ->
-                    selection.key.field.containingType == field.containingType &&
-                        selection.possibleTypes == setOf(field.containingType)
+                    selection.key.field.containingDef == field.containingDef &&
+                        selection.possibleTypes == setOf(field.containingDef)
                 },
             ) {
-                "Object fragment must be specialized to ${field.containingType.typeName}"
+                "Object fragment must be specialized to ${field.containingDef.name}"
             }
-            objectFragment.collect(field.containingType)
+            objectFragment.collect(field.containingDef)
             variables.forEach { (variable, definition) ->
                 require(variable.isTemplate) {
                     "Resolver registry variables must be templates"
                 }
                 require(variable.field == field) {
                     "Variable ${variable.variableName} is not defined by a resolver on " +
-                        "${field.containingType.typeName}/${field.fieldName}"
+                        "${field.containingDef.name}/${field.name}"
                 }
                 when (definition) {
                     is VariableDefinition.FromArgument -> {
                         val argument = definition.argument
                         require(
-                            argument.containingType == variable.field.arguments &&
-                                variable.field.arguments.fields[argument.argumentName] == argument,
+                            argument.containingDef == variable.field.arguments &&
+                                variable.field.arguments.field(argument.name) == argument,
                         ) {
-                            "Variable ${variable.variableName} argument ${argument.argumentName} " +
-                                "does not belong to ${variable.field.containingType.typeName}/" +
-                                variable.field.fieldName
+                            "Variable ${variable.variableName} argument ${argument.name} " +
+                                "does not belong to ${variable.field.containingDef.name}/" +
+                                variable.field.name
                         }
                     }
                     is VariableDefinition.FromObjectField -> {
                         require(objectFragment.constructionSelections().containsPath(definition.path)) {
                             "Variable ${variable.variableName} object-field path is not contained " +
-                                "by ${variable.field.containingType.typeName}/" +
-                                "${variable.field.fieldName} object fragment"
+                                "by ${variable.field.containingDef.name}/" +
+                                "${variable.field.name} object fragment"
                         }
                     }
                 }

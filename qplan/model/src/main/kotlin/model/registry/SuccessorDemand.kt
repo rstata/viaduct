@@ -1,7 +1,6 @@
 package model.registry
 
 import model.ObjectEngineResult
-
 import model.Assumptions
 import model.EngineInputData
 import model.Arguments
@@ -14,6 +13,7 @@ import model.fetchBindings
 import model.flatMapToSelectionForest
 import model.instantiateBindings
 import model.objectKey
+import model.requireField
 import model.selectionForestOf
 import model.substituteTemplates
 import model.toSelectionForest
@@ -178,7 +178,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
 // demand avoids expanding the same resolver-demand DAG once per incoming path.
 private data class SelectionIdentity(
     val key: ObjectEngineResult.Key,
-    val possibleTypes: Set<Schema.ObjectType>,
+    val possibleTypes: Set<Schema.Object>,
 )
 
 context(world: Assumptions)
@@ -261,7 +261,7 @@ private fun SelectionForest.boundarySkeleton(): SelectionForest =
         val nested = selection.subselections.boundarySkeleton()
         val isResolverBoundary =
             selection.possibleTypes.any { possibleType ->
-                val field = possibleType.fields.getValue(selection.key.field.fieldName)
+                val field = possibleType.requireField(selection.key.field.name)
                 field in world.resolverRegistry
             }
 
@@ -286,7 +286,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
             (definition as? VariableDefinition.FromArgument)?.let {
                 variable to
                     arguments.fieldValues.getValue(
-                        definition.argument.argumentName,
+                        definition.argument.name,
                     )
             }
         }.toMap()

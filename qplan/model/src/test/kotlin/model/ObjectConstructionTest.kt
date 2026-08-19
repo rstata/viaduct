@@ -79,7 +79,7 @@ class ObjectConstructionTest {
     @Test
     fun `object values retain only explicitly supplied fields`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val userType = schema.type("User") as Schema.ObjectType
+        val userType = schema.requireType("User") as Schema.Object
         val typenameKey = "V_I_typename"
         val typenameValue = "User"
 
@@ -141,9 +141,9 @@ class ObjectConstructionTest {
     @Test
     fun `object fields reject keys owned by another concrete object type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val userType = schema.type("User") as Schema.ObjectType
+        val userType = schema.requireType("User") as Schema.Object
         val user = schema.objectOf("User")
-        val viewerField = schema.objectField("Query", "viewer")
+        val viewerField = schema.requireObjectField("Query", "viewer")
 
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(
@@ -181,7 +181,7 @@ class ObjectConstructionTest {
         schema: Schema,
         fieldName: String,
     ): String {
-        schema.objectField("User", fieldName)
+        schema.requireObjectField("User", fieldName)
         return fieldName
     }
 

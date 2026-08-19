@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,8 +56,8 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     if (
-                        field.containingType.typeName == "Item" &&
-                        field.fieldName == "trigger"
+                        field.containingDef.name == "Item" &&
+                        field.name == "trigger"
                     ) {
                         triggerInputKeys = input.selectionValues().keys
                     }
@@ -79,7 +80,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
         )
 
         testWorld.applicationArguments.assertApplicationCount(
-            world.schema.objectField("Query", "driver_V_A_node"),
+            world.schema.requireObjectField("Query", "driver_V_A_node"),
             1,
         )
         assertEquals(setOf("account"), triggerInputKeys)

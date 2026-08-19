@@ -1,5 +1,9 @@
 package model.registry
 
+import model.requireQueryTypeDef
+import model.requireObjectField
+import model.requireField
+import model.requireType
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineErrorData
@@ -47,13 +51,13 @@ class SuccessorDemandTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "root") to
+                        schema.requireField("Query", "root") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 EngineErrorData
                             },
-                        schema.field("Root", "consumer") to
+                        schema.requireField("Root", "consumer") to
                             fieldResolverOf(
                                 objectFragment =
                                     schema.fragmentFrom(
@@ -71,7 +75,7 @@ class SuccessorDemandTest {
                             ) { _, _ ->
                                 "consumer"
                             },
-                        schema.field("Box", "computed") to
+                        schema.requireField("Box", "computed") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Box"),
                             ) { _, _ ->
@@ -88,15 +92,15 @@ class SuccessorDemandTest {
 
         val full =
             context(world) {
-                selections.successorDemand().merge(schema.query).instantiateBindings()
-            }[schema.key(schema.query, "root")]
+                selections.successorDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
+            }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
         val boundaries =
             context(world) {
-                selections.successorBoundaryDemand().merge(schema.query).instantiateBindings()
-            }[schema.key(schema.query, "root")]
+                selections.successorBoundaryDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
+            }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
-        val rootType = schema.type("Root") as Schema.ObjectType
+        val rootType = schema.requireType("Root") as Schema.Object
         val fullRoot = context(world) { full.merge(rootType).instantiateBindings() }
         val boundaryRoot = context(world) { boundaries.merge(rootType).instantiateBindings() }
 
@@ -109,7 +113,7 @@ class SuccessorDemandTest {
             boundaryRoot.groundKeys().fieldNames(),
         )
 
-        val boxType = schema.type("Box") as Schema.ObjectType
+        val boxType = schema.requireType("Box") as Schema.Object
         val fullBox = fullRoot[schema.key(rootType, "box")]
         val boundaryBox = boundaryRoot[schema.key(rootType, "box")]
         assertEquals(
@@ -160,11 +164,11 @@ class SuccessorDemandTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.objectField("Query", "item") to
+                        schema.requireObjectField("Query", "item") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 EngineErrorData
                             },
-                        schema.objectField("Item", "consume") to
+                        schema.requireObjectField("Item", "consume") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment Consume on Item { fixed }",
@@ -172,14 +176,14 @@ class SuccessorDemandTest {
                             ) { _, _ ->
                                 EngineErrorData
                             },
-                        schema.objectField("Item", "result") to
+                        schema.requireObjectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
                                 EngineErrorData
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Item", "result")
+                    val result = schema.requireObjectField("Item", "result")
                     mapOf(
                         Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(resultFragment, listOf("source")),
@@ -202,10 +206,10 @@ class SuccessorDemandTest {
                     selections.fetchSuccessorDemandDeferringTemplates()
                 }
             }
-        val itemType = world.schema.type("Item") as Schema.ObjectType
+        val itemType = world.schema.requireType("Item") as Schema.Object
         val itemSelections =
             deferred
-                .merge(world.schema.query)
+                .merge(world.schema.requireQueryTypeDef())
                 .single()
                 .subselections
                 .merge(itemType)
@@ -228,14 +232,14 @@ class SuccessorDemandTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.objectField("Query", "successor") to
+                        schema.requireObjectField("Query", "successor") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 0
                             },
                     )
                 },
             ).assumptions
-        val successor = world.schema.objectField("Query", "successor")
+        val successor = world.schema.requireObjectField("Query", "successor")
         val variable = Arguments.Variable.of(successor, "value")
         val first =
             variable.stamp(
@@ -258,7 +262,7 @@ class SuccessorDemandTest {
             selectionForestOf(
                 Selection.of(
                     key = firstKey,
-                    possibleTypes = setOf(world.schema.query),
+                    possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                     subselections = selectionForestOf(),
                 ),
                 Selection.of(
@@ -267,7 +271,7 @@ class SuccessorDemandTest {
                             successor,
                             Arguments.of(successor, mapOf("value" to second)),
                         ),
-                    possibleTypes = setOf(world.schema.query),
+                    possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                     subselections = selectionForestOf(),
                 ),
             )
@@ -295,7 +299,7 @@ class SuccessorDemandTest {
         assertEquals(expectedKey, reversed.single().key)
         assertEquals(
             setOf(expectedKey),
-            fetched.merge(world.schema.query).groundKeys(),
+            fetched.merge(world.schema.requireQueryTypeDef()).groundKeys(),
         )
 
         val marked =
@@ -308,7 +312,7 @@ class SuccessorDemandTest {
                                     key = firstKey,
                                     variableDefinedByThisKey = first,
                                 ),
-                            possibleTypes = setOf(world.schema.query),
+                            possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                             subselections = selectionForestOf(),
                         ),
                     ).fetchSuccessorDemandDeferringTemplates()
@@ -342,7 +346,7 @@ class SuccessorDemandTest {
                 fieldResolvers = { schema ->
                     buildMap {
                         put(
-                            schema.objectField("Query", "item"),
+                            schema.requireObjectField("Query", "item"),
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 EngineErrorData
                             },
@@ -363,14 +367,14 @@ class SuccessorDemandTest {
                                     )
                                 }
                             put(
-                                schema.objectField("Item", field),
+                                schema.requireObjectField("Item", field),
                                 fieldResolverOf(objectFragment) { _, _ ->
                                     0
                                 },
                             )
                         }
                         put(
-                            schema.objectField("Item", "sink"),
+                            schema.requireObjectField("Item", "sink"),
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     """
@@ -408,14 +412,14 @@ class SuccessorDemandTest {
     }
 
     private fun Set<ObjectEngineResult.GroundKey>.fieldNames(): Set<String> =
-        mapTo(mutableSetOf()) { key -> key.field.fieldName }
+        mapTo(mutableSetOf()) { key -> key.field.name }
 
     private fun Schema.key(
-        type: Schema.ObjectType,
+        type: Schema.Object,
         fieldName: String,
     ): ObjectEngineResult.GroundKey =
         ObjectEngineResult.GroundKey.of(
-            field = objectField(type.typeName, fieldName),
+            field = requireObjectField(type.name, fieldName),
             arguments = emptyMap(),
         )
 }

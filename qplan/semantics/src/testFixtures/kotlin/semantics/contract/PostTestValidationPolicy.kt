@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireQueryTypeDef
 import viaduct.engine.api.EngineObjectData
-
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
@@ -52,7 +52,7 @@ private object ContractPostTestState {
                 context(validation.world) {
                     validation.result.correctResolution(
                         validation.selections
-                            .merge(validation.world.schema.query)
+                            .merge(validation.world.schema.requireQueryTypeDef())
                             .instantiateBindings(),
                     )
                 },

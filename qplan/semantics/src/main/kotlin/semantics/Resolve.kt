@@ -28,7 +28,7 @@ internal fun EngineObjectData.Sync.orchestrateKeys(
     resolved: ObjectEngineResult,
 ): ObjectEngineResult {
     require(resolved.type == schemaType) {
-        "Initial result type ${resolved.type.typeName} does not match $schemaType"
+        "Initial result type ${resolved.type.name} does not match $schemaType"
     }
 
     val closedDemand = schemaType.closeResolverDemand(path, selections)
@@ -64,7 +64,7 @@ internal fun EngineObjectData.Sync.dependencyOrder(
             dependenciesOf(path, key, keys).isEmpty()
         }.toSet()
     require(ready.isNotEmpty()) {
-        "Resolver dependencies on ${schemaType.typeName} contain a cycle"
+        "Resolver dependencies on ${schemaType.name} contain a cycle"
     }
     return dependencyOrder(
         path = path,
@@ -140,11 +140,11 @@ internal fun EngineObjectData.Sync.resolveKey(
                         )
                     }
                 } else {
-                    get(key.field.fieldName)
+                    get(key.field.name)
                 }
             val resolvedValue =
                 fieldValue.resolveValue(
-                    expectedType = key.field.typeExpr,
+                    expectedType = key.field.type,
                     path = path + key,
                     resolverDemand = resolutionSelections,
                 )

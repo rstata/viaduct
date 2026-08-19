@@ -2,7 +2,6 @@ package model.testing
 
 import model.ObjectEngineResult
 import model.CoercedDefaultValue
-
 import model.Fragment
 import model.EngineErrorData
 import model.EngineOutputData
@@ -16,6 +15,10 @@ import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fieldExpressions
 import model.matchingVariableTypes
+import model.requireField
+import model.requireObjectField
+import model.requireQueryTypeDef
+import model.requireType
 import model.schemaType
 import model.registry.FieldResolver
 import model.registry.MissingResolverException
@@ -39,12 +42,12 @@ typealias NodeResolverFunction = (String) -> EngineOutputData?
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
 
 typealias CanonicalFieldResolverApplicationObserver =
-    (Schema.OutputField, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
+    (Schema.Field, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
 
 internal fun resolverRegistryOf(
     schema: GJSchema,
-    nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-    fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
+    nodeResolvers: Map<Schema.Object, NodeResolverFunction>,
+    fieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
     variableProviders: Map<Arguments.Variable, VariableDeclaration>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
@@ -109,22 +112,22 @@ internal fun resolverRegistryOf(
  */
 private class NodeResolverLowering(
     private val schema: GJSchema,
-    private val nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
-    rawFieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
+    private val nodeResolvers: Map<Schema.Object, NodeResolverFunction>,
+    rawFieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val nodeType: Schema.InterfaceType? = canonicalNodeType()
+    private val nodeType: Schema.Interface? = canonicalNodeType()
     private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
-    private val payloadTypes: Set<Schema.CompositeType> =
+    private val payloadTypes: Set<Schema.CompositeTypeDef> =
         loweredFields
             .mapTo(linkedSetOf()) { field ->
-                sourceSchema.typeExpr(field).baseType as Schema.CompositeType
+                sourceSchema.typeExpr(field).baseType as Schema.CompositeTypeDef
             }.filterTo(linkedSetOf()) { type ->
-                type.possibleTypes.isNotEmpty() &&
-                    type.possibleTypes.all { it in nodeResolvers }
+                type.possibleObjectTypes.isNotEmpty() &&
+                    type.possibleObjectTypes.all { it in nodeResolvers }
             }
 
-    val fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>
+    val fieldResolvers: Map<Schema.Field, FieldResolverDefinition>
 
     init {
         validateRawFieldResolvers(rawFieldResolvers)
@@ -149,14 +152,14 @@ private class NodeResolverLowering(
                 payload to payloadResolver(type)
             }
         val typenameResolvers =
-            (schema.type(TYPENAME_TOP_TYPE) as Schema.InterfaceType)
-                .possibleTypes
+            (schema.requireType(TYPENAME_TOP_TYPE) as Schema.Interface)
+                .possibleObjectTypes
                 .associate { type ->
-                    val field = schema.objectField(type.typeName, LOWERED_TYPENAME_FIELD)
+                    val field = schema.requireObjectField(type.name, LOWERED_TYPENAME_FIELD)
                     field to
                         FieldResolverDefinition.of(
-                            objectFragment = schema.emptyFragmentOf(type.typeName),
-                            function = { _, _ -> type.typeName },
+                            objectFragment = schema.emptyFragmentOf(type.name),
+                            function = { _, _ -> type.name },
                         )
                 }
 
@@ -164,15 +167,15 @@ private class NodeResolverLowering(
             ordinaryResolvers + bridgeResolvers + payloadResolvers + typenameResolvers
     }
 
-    private fun canonicalNodeType(): Schema.InterfaceType? {
+    private fun canonicalNodeType(): Schema.Interface? {
         val candidate =
             try {
-                schema.type("Node")
+                schema.requireType("Node")
             } catch (_: Schema.MissingSchemaElementException) {
                 null
             }
         if (candidate == null && nodeResolvers.isEmpty()) return null
-        return candidate as? Schema.InterfaceType
+        return candidate as? Schema.Interface
             ?: throw IllegalArgumentException("Node resolvers require a canonical Node interface")
     }
 
@@ -185,18 +188,18 @@ private class NodeResolverLowering(
                     schema.sourceCompositeType(type),
                 ) == GraphQLTypeRelation.WiderThan,
             ) {
-                "Node-resolver type ${type.typeName} does not implement Node"
+                "Node-resolver type ${type.name} does not implement Node"
             }
             validateNodeIdField(type)
         }
 
         return schema.objectTypes
-            .flatMap { it.fields.values }
+            .flatMap { it.fields }
             .mapNotNullTo(linkedSetOf()) { field ->
                 if (!schema.isLoweredNodeField(field)) return@mapNotNullTo null
                 val outputType =
-                    sourceSchema.typeExpr(field).baseType as Schema.CompositeType
-                val registeredTypes = outputType.possibleTypes.filterTo(linkedSetOf()) {
+                    sourceSchema.typeExpr(field).baseType as Schema.CompositeTypeDef
+                val registeredTypes = outputType.possibleObjectTypes.filterTo(linkedSetOf()) {
                     it in nodeResolvers
                 }
                 val isDeclaredNode =
@@ -210,14 +213,14 @@ private class NodeResolverLowering(
                             GraphQLTypeRelation.WiderThan,
                         )
                 require(isDeclaredNode) {
-                    "Synthetic bridge ${field.containingType.typeName}/${field.fieldName} " +
+                    "Synthetic bridge ${field.containingDef.name}/${field.name} " +
                         "does not correspond to a Node-valued source field"
                 }
                 require(
                     registeredTypes.isEmpty() ||
-                        registeredTypes == outputType.possibleTypes,
+                        registeredTypes == outputType.possibleObjectTypes,
                 ) {
-                    "Field ${field.containingType.typeName}/${field.fieldName} mixes node-resolved " +
+                    "Field ${field.containingDef.name}/${field.name} mixes node-resolved " +
                         "and inline object values; declare a Node output whose every possible type " +
                         "has a node resolver"
                 }
@@ -226,38 +229,38 @@ private class NodeResolverLowering(
     }
 
     private fun validateRawFieldResolvers(
-        fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
+        fieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
     ) {
         val nodeIdFields = nodeResolvers.keys.mapTo(linkedSetOf(), ::validateNodeIdField)
         fieldResolvers.forEach { (field, resolver) ->
             validateCanonicalField(field, "field-resolver field")
-            val typeName = field.containingType.typeName
-            require(field.containingType is Schema.ObjectType) {
-                "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
+            val typeName = field.containingDef.name
+            require(field.containingDef is Schema.Object) {
+                "Field resolver $typeName/${field.name} must belong to a concrete object type"
             }
-            require(!field.containingType.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)) {
-                "Synthetic node bridge field $typeName/${field.fieldName} cannot be supplied directly"
+            require(!field.containingDef.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX)) {
+                "Synthetic node bridge field $typeName/${field.name} cannot be supplied directly"
             }
             require(field !in nodeIdFields) {
-                "Node id field $typeName/${field.fieldName} cannot have a field resolver"
+                "Node id field $typeName/${field.name} cannot have a field resolver"
             }
-            require(field.fieldName != LOWERED_TYPENAME_FIELD) {
+            require(field.name != LOWERED_TYPENAME_FIELD) {
                 "Generated field $typeName/$LOWERED_TYPENAME_FIELD cannot be supplied directly"
             }
             val fragmentType = resolver.objectFragment.nominalType
-            require(schema.type(fragmentType.typeName) == fragmentType) {
-                "${fragmentType.typeName} is not canonical in this registry's schema"
+            require(schema.requireType(fragmentType.name) == fragmentType) {
+                "${fragmentType.name} is not canonical in this registry's schema"
             }
-            require(fragmentType == field.containingType) {
-                "Object fragment type ${fragmentType.typeName} does not match " +
-                    "$typeName/${field.fieldName}"
+            require(fragmentType == field.containingDef) {
+                "Object fragment type ${fragmentType.name} does not match " +
+                    "$typeName/${field.name}"
             }
         }
     }
 
-    private fun payloadResolver(nodeOutputType: Schema.CompositeType): FieldResolverDefinition {
+    private fun payloadResolver(nodeOutputType: Schema.CompositeTypeDef): FieldResolverDefinition {
         val bridgeType = schema.nodeBridgeType(nodeOutputType)
-        val idField = schema.objectField(bridgeType.typeName, NODE_BRIDGE_ID_FIELD)
+        val idField = schema.requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
         val objectFragment =
             Fragment.of(
                 nominalType = bridgeType,
@@ -276,7 +279,7 @@ private class NodeResolverLowering(
                 loadNode(
                     typedId =
                         input.get(
-                            idField.fieldName,
+                            idField.name,
                         ),
                     nodeOutputType = nodeOutputType,
                 )
@@ -286,45 +289,45 @@ private class NodeResolverLowering(
 
     private fun loadNode(
         typedId: EngineOutputData?,
-        nodeOutputType: Schema.CompositeType,
+        nodeOutputType: Schema.CompositeTypeDef,
     ): EngineOutputData? {
         if (typedId == null || typedId == EngineErrorData) return typedId
         require(typedId is String) {
             "Node bridge ${nodeBridgeTypeName(nodeOutputType)} did not contain an ID"
         }
         val (type, id) = decodeTypedId(typedId)
-        require(type in nodeOutputType.possibleTypes) {
-            "Typed node ID ${type.typeName} is not valid for ${nodeOutputType.typeName}"
+        require(type in nodeOutputType.possibleObjectTypes) {
+            "Typed node ID ${type.name} is not valid for ${nodeOutputType.name}"
         }
         val resolver =
             nodeResolvers[type]
-                ?: throw IllegalArgumentException("No fixture node resolver for ${type.typeName}")
+                ?: throw IllegalArgumentException("No fixture node resolver for ${type.name}")
         val result = resolver(id)
         if (result == null || result == EngineErrorData) return result
         require(result is EngineObjectData.Sync) {
-            "Node resolver for ${type.typeName} returned a non-object value"
+            "Node resolver for ${type.name} returned a non-object value"
         }
         val resultType = result.schemaType
         require(resultType == type) {
-            "Node resolver for ${type.typeName} returned ${resultType.typeName}"
+            "Node resolver for ${type.name} returned ${resultType.name}"
         }
         val returnedId =
             result.get(
-                validateNodeIdField(type).fieldName,
+                validateNodeIdField(type).name,
             )
         require(returnedId == id) {
-            "Node resolver for ${type.typeName} did not repeat its input ID"
+            "Node resolver for ${type.name} did not repeat its input ID"
         }
         return result
     }
 
-    private fun payloadField(nodeOutputType: Schema.CompositeType): Schema.ObjectField =
-        schema.objectField(
+    private fun payloadField(nodeOutputType: Schema.CompositeTypeDef): Schema.ObjectField =
+        schema.requireObjectField(
             nodeBridgeTypeName(nodeOutputType),
             NODE_BRIDGE_PAYLOAD_FIELD,
         )
 
-    private fun decodeTypedId(id: String): Pair<Schema.ObjectType, String> {
+    private fun decodeTypedId(id: String): Pair<Schema.Object, String> {
         require(id.startsWith(TYPED_NODE_ID_PREFIX)) {
             "Synthetic node-ID bridge contains an untyped ID"
         }
@@ -335,41 +338,41 @@ private class NodeResolverLowering(
         val typeNameStart = separator + 1
         val typeNameEnd = typeNameStart + typeNameLength
         require(typeNameEnd <= encoded.length) { "Malformed typed node ID" }
-        val type = schema.type(encoded.substring(typeNameStart, typeNameEnd)) as Schema.ObjectType
+        val type = schema.requireType(encoded.substring(typeNameStart, typeNameEnd)) as Schema.Object
         return type to encoded.substring(typeNameEnd)
     }
 
-    private fun validateNodeIdField(type: Schema.ObjectType): Schema.ObjectField {
+    private fun validateNodeIdField(type: Schema.Object): Schema.ObjectField {
         val idField =
-            type.fields["id"]
+            type.field("id")
                 ?: throw IllegalArgumentException(
-                    "Node-resolver type ${type.typeName} has no id field",
+                    "Node-resolver type ${type.name} has no id field",
                 )
-        require(schema.field(type.typeName, "id") == idField) {
-            "${type.typeName}/id is not canonical in this registry's schema"
+        require(schema.requireField(type.name, "id") == idField) {
+            "${type.name}/id is not canonical in this registry's schema"
         }
         require(idField.arguments == Schema.NoArguments) {
-            "Node id field ${type.typeName}/id must take no arguments"
+            "Node id field ${type.name}/id must take no arguments"
         }
-        require(idField.typeExpr.baseType == Schema.IDType) {
-            "Node id field ${type.typeName}/id must be ID-typed"
+        require(idField.type.baseType == Schema.IDType) {
+            "Node id field ${type.name}/id must be ID-typed"
         }
         return idField
     }
 
-    private fun validateCanonicalType(type: Schema.ObjectType) {
-        require(schema.type(type.typeName) == type) {
-            "${type.typeName} is not canonical in this registry's schema"
+    private fun validateCanonicalType(type: Schema.Object) {
+        require(schema.requireType(type.name) == type) {
+            "${type.name} is not canonical in this registry's schema"
         }
     }
 
     private fun validateCanonicalField(
-        field: Schema.OutputField,
+        field: Schema.Field,
         role: String = "field",
     ) {
-        val typeName = field.containingType.typeName
-        require(schema.field(typeName, field.fieldName) == field) {
-            "$typeName/${field.fieldName} is not the canonical $role in this registry's schema"
+        val typeName = field.containingDef.name
+        require(schema.requireField(typeName, field.name) == field) {
+            "$typeName/${field.name} is not the canonical $role in this registry's schema"
         }
     }
 
@@ -387,11 +390,11 @@ private sealed interface DependencyVertex {
 
 private class TestResolverRegistry(
     private val schema: Schema,
-    fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
+    fieldResolverDefinitions: Map<Schema.Field, FieldResolverDefinition>,
     variableDeclarations: Map<Arguments.Variable, VariableDeclaration>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
-    private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
+    private val fieldResolvers: Map<Schema.Field, FieldResolver>
     private val variableDefinitions =
         variableDeclarations.mapValues { (_, declaration) ->
             when (declaration) {
@@ -406,25 +409,25 @@ private class TestResolverRegistry(
     init {
         fieldResolverDefinitions.forEach { (field, resolver) ->
             validateCanonicalField(field, "field-resolver field")
-            val typeName = field.containingType.typeName
-            require(field.containingType is Schema.ObjectType) {
-                "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
+            val typeName = field.containingDef.name
+            require(field.containingDef is Schema.Object) {
+                "Field resolver $typeName/${field.name} must belong to a concrete object type"
             }
             val fragmentType = resolver.objectFragment.nominalType
-            require(schema.type(fragmentType.typeName) == fragmentType) {
-                "${fragmentType.typeName} is not canonical in this registry's schema"
+            require(schema.requireType(fragmentType.name) == fragmentType) {
+                "${fragmentType.name} is not canonical in this registry's schema"
             }
-            require(fragmentType == field.containingType) {
-                "Object fragment type ${fragmentType.typeName} does not match " +
-                    "$typeName/${field.fieldName}"
+            require(fragmentType == field.containingDef) {
+                "Object fragment type ${fragmentType.name} does not match " +
+                    "$typeName/${field.name}"
             }
         }
         val missingQueryFields =
-            schema.query.fields.values
+            schema.requireQueryTypeDef().fields
                 .filter { it !in fieldResolverDefinitions }
         require(missingQueryFields.isEmpty()) {
             "Query fields without field resolvers: " +
-                missingQueryFields.map { it.fieldName }.sorted().joinToString()
+                missingQueryFields.map { it.name }.sorted().joinToString()
         }
 
         variableDeclarations.forEach { (variable, declaration) ->
@@ -434,16 +437,16 @@ private class TestResolverRegistry(
             }
             when (declaration) {
                 is FromArgument -> {
-                    require(declaration.argument.containingType == variable.field.arguments) {
+                    require(declaration.argument.containingDef == variable.field.arguments) {
                         "Variable ${variable.variableName} argument " +
-                            "${declaration.argument.argumentName} does not belong to " +
-                            "${variable.field.containingType.typeName}/${variable.field.fieldName}"
+                            "${declaration.argument.name} does not belong to " +
+                            "${variable.field.containingDef.name}/${variable.field.name}"
                     }
                 }
                 is FromObjectField -> {
-                    require(declaration.objectFragment.nominalType == variable.field.containingType) {
+                    require(declaration.objectFragment.nominalType == variable.field.containingDef) {
                         "Variable ${variable.variableName} declaration is not relative to " +
-                            "${variable.field.containingType.typeName}/${variable.field.fieldName}"
+                            "${variable.field.containingDef.name}/${variable.field.name}"
                     }
                     validateProviderContainment(
                         variable.field,
@@ -476,10 +479,10 @@ private class TestResolverRegistry(
                             is VariableDefinition.FromObjectField ->
                                 implicatedVertices(
                                     Fragment.of(
-                                        variable.field.containingType,
+                                        variable.field.containingDef,
                                         selectionForestOf(
                                             definition.path.toSelection(
-                                                setOf(variable.field.containingType),
+                                                setOf(variable.field.containingDef),
                                             ),
                                         ),
                                     ),
@@ -489,7 +492,7 @@ private class TestResolverRegistry(
                     )
                 }
             }
-        val assembledResolvers = mutableMapOf<Schema.OutputField, FieldResolver>()
+        val assembledResolvers = mutableMapOf<Schema.Field, FieldResolver>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
                 is DependencyVertex.Field -> {
@@ -521,14 +524,14 @@ private class TestResolverRegistry(
     }
 
     override fun resolveRootQuery(): EngineObjectData.Sync {
-        val query = schema.query
+        val query = schema.requireQueryTypeDef()
         return engineObjectDataOf(schemaType = query)
     }
 
     override fun resolver(field: Schema.ObjectField): FieldResolver {
         validateCanonicalField(field)
         return fieldResolvers[field]
-            ?: throw MissingResolverException(field.containingType.typeName, field.fieldName)
+            ?: throw MissingResolverException(field.containingDef.name, field.name)
     }
 
     override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> {
@@ -549,7 +552,7 @@ private class TestResolverRegistry(
             if (definition !is VariableDefinition.FromObjectField) return@forEach
             require(fragment.subselections.containsProviderPath(definition.path)) {
                 "Variable ${variable.variableName} provider path is not contained by " +
-                    "${field.containingType.typeName}/${field.fieldName} object fragment"
+                    "${field.containingDef.name}/${field.name} object fragment"
             }
         }
     }
@@ -593,7 +596,7 @@ private class TestResolverRegistry(
         }
 
     private data class VariableUse(
-        val typeExpr: TypeExpr<Schema.InputType>,
+        val typeExpr: TypeExpr<Schema.InputTypeDef>,
         val hasDefault: Boolean,
     )
 
@@ -604,12 +607,12 @@ private class TestResolverRegistry(
             this@variableUses.forEach { selection ->
                 if (selection.key.arguments != Arguments.Error) {
                     selection.key.arguments.fieldExpressions().forEach { (name, value) ->
-                        val argument = selection.key.field.arguments.fields.getValue(name)
+                        val argument = selection.key.field.arguments.requireField(name)
                         addAll(
                             value
                                 .matchingVariableTypes(
                                     variable = variable,
-                                    typeExpr = argument.typeExpr,
+                                    typeExpr = argument.type,
                                     hasDefault = argument.defaultValue is CoercedDefaultValue.Present,
                                 ).map { (typeExpr, hasDefault) ->
                                     VariableUse(typeExpr, hasDefault)
@@ -622,21 +625,21 @@ private class TestResolverRegistry(
         }
 
     private fun validateCanonicalField(
-        field: Schema.OutputField,
+        field: Schema.Field,
         role: String = "field",
     ) {
-        val typeName = field.containingType.typeName
-        require(schema.field(typeName, field.fieldName) == field) {
-            "$typeName/${field.fieldName} is not the canonical $role in this registry's schema"
+        val typeName = field.containingDef.name
+        require(schema.requireField(typeName, field.name) == field) {
+            "$typeName/${field.name} is not the canonical $role in this registry's schema"
         }
     }
 
     private fun List<ObjectEngineResult.Key>.toSelection(
-        possibleTypes: Set<Schema.ObjectType>,
+        possibleTypes: Set<Schema.Object>,
     ): Selection {
         val key = first()
         val remaining = drop(1)
-        val outputType = key.field.typeExpr.baseType
+        val outputType = key.field.type.baseType
         return Selection.of(
             key = key,
             possibleTypes = possibleTypes,
@@ -644,8 +647,8 @@ private class TestResolverRegistry(
                 if (remaining.isEmpty()) {
                     selectionForestOf()
                 } else {
-                    require(outputType is Schema.CompositeType)
-                    selectionForestOf(remaining.toSelection(outputType.possibleTypes))
+                    require(outputType is Schema.CompositeTypeDef)
+                    selectionForestOf(remaining.toSelection(outputType.possibleObjectTypes))
                 },
         )
     }
@@ -666,7 +669,7 @@ private class TestResolverRegistry(
         ownerField: Schema.ObjectField,
     ) {
         selection.possibleTypes.forEach { possibleType ->
-            possibleType.fields[selection.key.field.fieldName]
+            possibleType.field(selection.key.field.name)
                 ?.takeIf { it in sourceFieldResolvers }
                 ?.let { add(DependencyVertex.Field(it as Schema.ObjectField)) }
         }
@@ -676,7 +679,7 @@ private class TestResolverRegistry(
             }
             require(variable.field == ownerField) {
                 "Variable \$${variable.variableName} is not defined by " +
-                    "${ownerField.containingType.typeName}/${ownerField.fieldName}"
+                    "${ownerField.containingDef.name}/${ownerField.name}"
             }
             add(DependencyVertex.Variable(variable))
         }

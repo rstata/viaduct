@@ -1,5 +1,6 @@
 package model.testing
 
+import model.requireObjectField
 import model.ArgumentResolutionError
 import model.EngineErrorData
 import model.EngineOutputData
@@ -43,12 +44,12 @@ class ResolverTestDslTest {
                 """.trimIndent(),
             )
         val schema = world.schema
-        val containerField = schema.objectField("Query", "container")
+        val containerField = schema.requireObjectField("Query", "container")
         val container =
             assertIs<EngineObjectData.Sync>(
                 world.apply(containerField),
             )
-        val total = schema.objectField("Container", "total")
+        val total = schema.requireObjectField("Container", "total")
 
         val result = world.apply(total, container, mapOf("extra" to 4))
 
@@ -58,7 +59,7 @@ class ResolverTestDslTest {
             world.applicationArguments.arguments(total),
         )
         assertEquals(
-            mapOf<Schema.OutputField, List<Arguments.Resolved>>(
+            mapOf<Schema.Field, List<Arguments.Resolved>>(
                 containerField to
                     listOf(Arguments.Resolved.of(containerField, emptyMap())),
                 total to listOf(Arguments.Resolved.of(total, mapOf("extra" to 4))),
@@ -85,7 +86,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val result = world.schema.objectField("Query", "result")
+        val result = world.schema.requireObjectField("Query", "result")
         val resolver = world.resolverRegistry.resolver(result)
         val seed = Arguments.Variable.of(result, "seed")
         val fromSource = Arguments.Variable.of(result, "fromSource")
@@ -106,8 +107,8 @@ class ResolverTestDslTest {
                 """.trimIndent(),
             )
         val root = world.resolverRegistry.resolveRootQuery()
-        val nullable = world.schema.objectField("Query", "nullable")
-        val failed = world.schema.objectField("Query", "failed")
+        val nullable = world.schema.requireObjectField("Query", "nullable")
+        val failed = world.schema.requireObjectField("Query", "failed")
 
         assertNull(world.apply(nullable, root))
         assertEquals(EngineErrorData, world.apply(failed, root))
@@ -128,7 +129,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val result = world.schema.objectField("Query", "result")
+        val result = world.schema.requireObjectField("Query", "result")
         val dependency =
             world.resolverRegistry
                 .resolver(result)
@@ -156,7 +157,7 @@ class ResolverTestDslTest {
                 """.trimIndent(),
             )
         val root = world.resolverRegistry.resolveRootQuery()
-        val echo = world.schema.objectField("Query", "echo")
+        val echo = world.schema.requireObjectField("Query", "echo")
 
         listOf(
             4 to 4,
@@ -169,7 +170,7 @@ class ResolverTestDslTest {
             )
         }
 
-        val echoPath = world.schema.objectField("Query", "echoPath")
+        val echoPath = world.schema.requireObjectField("Query", "echoPath")
         assertNull(
             world.apply(
                 echoPath,
@@ -199,7 +200,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val subject = world.schema.objectField("Query", "subject")
+        val subject = world.schema.requireObjectField("Query", "subject")
 
         val result =
             assertIs<EngineObjectData.Sync>(
@@ -236,12 +237,12 @@ class ResolverTestDslTest {
                 """.trimIndent(),
             )
         val schema = world.schema
-        val viewer = schema.objectField("Query", "viewer_V_A_node")
+        val viewer = schema.requireObjectField("Query", "viewer_V_A_node")
         val bridge =
             assertIs<EngineObjectData.Sync>(
                 world.apply(viewer, arguments = mapOf("id" to "user-2")),
             )
-        val node = schema.objectField("User_V_A_Bridge", "node")
+        val node = schema.requireObjectField("User_V_A_Bridge", "node")
         val user =
             assertIs<EngineObjectData.Sync>(
                 world.apply(node, bridge),
@@ -270,7 +271,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val value = world.schema.objectField("Query", "value")
+        val value = world.schema.requireObjectField("Query", "value")
 
         val exception =
             assertThrows<IllegalArgumentException> {
@@ -310,7 +311,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val item = world.schema.objectField("Query", "item")
+        val item = world.schema.requireObjectField("Query", "item")
 
         assertThrows<IllegalArgumentException> {
             world.apply(item)

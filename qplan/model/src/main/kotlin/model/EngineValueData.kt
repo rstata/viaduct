@@ -60,23 +60,23 @@ typealias EngineOutputListData = List<EngineOutputData?>
 data object EngineErrorData
 
 /** Converts a simple engine result to production-compatible engine input data. */
-fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleType): EngineSimpleData =
+fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleTypeDef): EngineSimpleData =
     when (expectedType) {
         Schema.IntType -> cast<Int>()
         Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> cast<String>()
         Schema.BooleanType -> cast<Boolean>()
         Schema.IDType -> cast<EngineIDResult>().value
-        is Schema.EnumType -> {
+        is Schema.Enum -> {
             val value = cast<Schema.EnumValue>()
-            if (value.containingType != expectedType) throw ClassCastException()
+            if (value.containingDef != expectedType) throw ClassCastException()
             value.name
         }
     }
 
 /** Recursively copies [value] as [EngineInputData] conforming to [expectedType]. */
 internal fun toEngineInputData(
-    expectedType: TypeExpr<Schema.InputType>,
+    expectedType: TypeExpr<Schema.InputTypeDef>,
     value: EngineInputData?,
 ): EngineInputData? {
     if (value == null) {
@@ -95,7 +95,7 @@ internal fun toEngineInputData(
 
 /** Converts [value] to canonical [EngineSimpleData] conforming to [expectedType]. */
 internal fun toEngineSimpleData(
-    expectedType: TypeExpr.Named<Schema.SimpleType>,
+    expectedType: TypeExpr.Named<Schema.SimpleTypeDef>,
     value: EngineSimpleData?,
 ): EngineSimpleData? {
     if (value == null) {
@@ -107,7 +107,7 @@ internal fun toEngineSimpleData(
 
 /** Recursively copies [value] as canonical list data conforming to [expectedType]. */
 fun toEngineInputListData(
-    expectedType: TypeExpr.List<Schema.InputType>,
+    expectedType: TypeExpr.List<Schema.InputTypeDef>,
     value: EngineInputListData,
 ): EngineInputListData =
     value.map { element ->
@@ -116,24 +116,24 @@ fun toEngineInputListData(
 
 /** Recursively copies [value] as canonical input-object data conforming to [expectedType]. */
 internal fun toEngineInputObjectData(
-    expectedType: Schema.InputObjectType,
+    expectedType: Schema.Input,
     value: EngineInputObjectData,
 ): EngineInputObjectData = toEngineInputFields(expectedType, value)
 
 private fun toEngineNamedInputData(
-    expectedType: Schema.InputType,
+    expectedType: Schema.InputTypeDef,
     value: EngineInputData,
 ): EngineInputData =
     when (expectedType) {
-        is Schema.SimpleType -> toEngineSimpleData(expectedType, value)
-        is Schema.InputObjectType -> {
+        is Schema.SimpleTypeDef -> toEngineSimpleData(expectedType, value)
+        is Schema.Input -> {
             val fields = value as? Map<*, *> ?: throw ClassCastException()
             toEngineInputObjectData(expectedType, fields.toStringKeyedMap())
         }
     }
 
 private fun toEngineSimpleData(
-    expectedType: Schema.SimpleType,
+    expectedType: Schema.SimpleTypeDef,
     value: EngineSimpleData,
 ): EngineSimpleData =
     when (expectedType) {
@@ -143,36 +143,36 @@ private fun toEngineSimpleData(
         Schema.StringType -> value.cast<String>()
         Schema.BooleanType -> value.cast<Boolean>()
         Schema.IDType -> value.cast<String>()
-        is Schema.EnumType ->
+        is Schema.Enum ->
             value.cast<String>().also {
-                if (it !in expectedType.values) throw ClassCastException()
+                if (expectedType.value(it) == null) throw ClassCastException()
             }
     }
 
 private inline fun <reified T> Any.cast(): T = this as? T ?: throw ClassCastException()
 
 /** Converts simple resolver output to the result representation selected by [expectedType]. */
-fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleType): EngineResult =
+fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleTypeDef): EngineResult =
     when (expectedType) {
         Schema.IntType -> cast<Int>()
         Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> cast<String>()
         Schema.BooleanType -> cast<Boolean>()
         Schema.IDType -> EngineIDResult.of(cast())
-        is Schema.EnumType -> expectedType.values.getValue(cast())
+        is Schema.Enum -> expectedType.requireValue(cast())
     }
 
 /** Converts a simple engine result to production-compatible resolver output. */
-fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleType): EngineOutputData =
+fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleTypeDef): EngineOutputData =
     when (expectedType) {
         Schema.IntType -> cast<Int>()
         Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> cast<String>()
         Schema.BooleanType -> cast<Boolean>()
         Schema.IDType -> cast<EngineIDResult>().value
-        is Schema.EnumType -> {
+        is Schema.Enum -> {
             val value = cast<Schema.EnumValue>()
-            if (value.containingType != expectedType) throw ClassCastException()
+            if (value.containingDef != expectedType) throw ClassCastException()
             value.name
         }
     }
@@ -183,12 +183,12 @@ private fun toEngineInputFields(
 ): EngineInputObjectData {
     val supplied =
         fields.mapValues { (name, value) ->
-            val field = expectedType.fields[name] ?: throw ClassCastException()
-            toEngineInputData(field.typeExpr, value)
+            val field = expectedType.field(name) ?: throw ClassCastException()
+            toEngineInputData(field.type, value)
         }
 
     return buildMap {
-        expectedType.fields.values.forEach { field ->
+        expectedType.fields.forEach { field ->
             val defaultValue = field.defaultValue
             if (defaultValue is CoercedDefaultValue.Present) {
                 put(field.name, defaultValue.value)
@@ -200,9 +200,9 @@ private fun toEngineInputFields(
 }
 
 internal fun Schema.InputObjectLike.requiredFieldNames(): Set<String> =
-    fields.values
+    fields
         .filterTo(linkedSetOf()) { field ->
-            !field.typeExpr.isNullable && field.defaultValue == CoercedDefaultValue.Absent
+            !field.type.isNullable && field.defaultValue == CoercedDefaultValue.Absent
         }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
 
 private fun Map<*, *>.toStringKeyedMap(): EngineInputObjectData =

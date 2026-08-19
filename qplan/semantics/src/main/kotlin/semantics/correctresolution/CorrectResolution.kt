@@ -4,6 +4,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
+import model.requireQueryTypeDef
 
 /**
  * Whether this Query-rooted result is a correct field-resolution result for [selections].
@@ -23,7 +24,7 @@ import model.ObjectSelectionForest
  */
 context(world: Assumptions)
 fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean {
-    require(selections.type == world.schema.query) {
+    require(selections.type == world.schema.requireQueryTypeDef()) {
         "Correct-resolution selections must be rooted at Query"
     }
     selections.byGroundKey()

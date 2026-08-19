@@ -35,11 +35,11 @@ sealed interface SpecSelection {
         val alias: String?
 
         /** The canonical schema field selected at this source occurrence. */
-        val schemaField: Schema.OutputField
+        val schemaField: Schema.Field
 
         /** The schema field name. */
         val fieldName: String
-            get() = schemaField.fieldName
+            get() = schemaField.name
 
         /**
          * The schema-checked field argument tuple.
@@ -56,8 +56,8 @@ sealed interface SpecSelection {
          *
          * ### Invariant: spec-field-shape
          *
-         * This is null exactly when the field's base type is a [Schema.SimpleType]. When the base
-         * type is a [Schema.CompositeType], this is non-null. It may be empty after an external
+         * This is null exactly when the field's base type is a [Schema.SimpleTypeDef]. When the base
+         * type is a [Schema.CompositeTypeDef], this is non-null. It may be empty after an external
          * operation's `__typename` selections have been erased.
          */
         val subselections: List<SpecSelection>?
@@ -72,20 +72,20 @@ sealed interface SpecSelection {
             @JvmStatic
             fun of(
                 alias: String?,
-                field: Schema.OutputField,
+                field: Schema.Field,
                 arguments: Map<String, Any?>,
                 subselections: List<SpecSelection>?,
             ): Field {
-                when (field.typeExpr.baseType) {
-                    is Schema.SimpleType ->
+                when (field.type.baseType) {
+                    is Schema.SimpleTypeDef ->
                         require(subselections == null) {
-                            "Simple field ${field.containingType.typeName}.${field.fieldName} " +
+                            "Simple field ${field.containingDef.name}.${field.name} " +
                                 "must not have subselections"
                         }
 
-                    is Schema.CompositeType ->
+                    is Schema.CompositeTypeDef ->
                         require(subselections != null) {
-                            "Composite field ${field.containingType.typeName}.${field.fieldName} " +
+                            "Composite field ${field.containingDef.name}.${field.name} " +
                                 "requires a selection set"
                         }
                 }
@@ -119,7 +119,7 @@ sealed interface SpecSelection {
          * A null condition leaves the surrounding type condition unchanged. A non-null condition is
          * a definition in [Assumptions.schema].
          */
-        val typeCondition: Schema.CompositeType?
+        val typeCondition: Schema.CompositeTypeDef?
 
         /**
          * ### Invariant: spec-inline-fragment-shape
@@ -136,7 +136,7 @@ sealed interface SpecSelection {
              */
             @JvmStatic
             fun of(
-                typeCondition: Schema.CompositeType?,
+                typeCondition: Schema.CompositeTypeDef?,
                 selections: List<SpecSelection>,
             ): InlineFragment {
                 require(selections.isNotEmpty()) {
@@ -150,12 +150,12 @@ sealed interface SpecSelection {
 
 private class FieldImpl(
     override val alias: String?,
-    override val schemaField: Schema.OutputField,
+    override val schemaField: Schema.Field,
     override val arguments: Arguments,
     override val subselections: List<SpecSelection>?,
 ) : SpecSelection.Field
 
 private class InlineFragmentImpl(
-    override val typeCondition: Schema.CompositeType?,
+    override val typeCondition: Schema.CompositeTypeDef?,
     override val selections: List<SpecSelection>,
 ) : SpecSelection.InlineFragment

@@ -16,7 +16,7 @@ internal fun ReactorEvent.toContractObservation(): ResolverTaskObservation? =
         is ReactorEvent.ResolverStarted -> {
             val key = coordinate.last() as ObjectEngineResult.GroundKey
             ResolverTaskObservation.SlotResolver(
-                fieldName = key.field.fieldName,
+                fieldName = key.field.name,
                 path = coordinate.dropLast(1).toContractObservationPath(),
             )
         }
@@ -27,7 +27,7 @@ internal fun ReactorEvent.toContractObservation(): ResolverTaskObservation? =
 private fun List<PathComponent>.toContractObservationPath(): List<String> =
     map { component ->
         when (component) {
-            is ObjectEngineResult.GroundKey -> component.field.fieldName
+            is ObjectEngineResult.GroundKey -> component.field.name
             is ListEngineResult.Index -> "[${component.index}]"
         }
     }

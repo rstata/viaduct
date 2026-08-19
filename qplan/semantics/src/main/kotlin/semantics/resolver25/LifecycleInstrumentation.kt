@@ -155,13 +155,13 @@ internal class Resolver25LifecycleInstrumentation(
 
     fun orchestratorCreated(
         path: List<PathComponent>,
-        objectType: Schema.ObjectType,
+        objectType: Schema.Object,
     ) {
         emit { sequence ->
             Resolver25LifecycleEvent.OrchestratorCreated(
                 sequence = sequence,
                 path = path.toList(),
-                objectType = objectType.typeName,
+                objectType = objectType.name,
             )
         }
     }

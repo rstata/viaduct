@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.requireQueryTypeDef
+import model.requireObjectField
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -45,17 +47,17 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "foo" &&
+                        field.containingDef.name == "Query" &&
+                        field.name == "foo" &&
                         demand != null
                     ) {
                         fooApplications += 1
                         fooDemandFields =
                             demand
-                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .merge(field.type.baseType as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { groundKey ->
-                                    groundKey.field.fieldName
+                                    groundKey.field.name
                                 }
                     }
                 },
@@ -81,7 +83,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
             context(world) {
                 resolved.correctResolution(
                     selections
-                        .merge(world.schema.query)
+                        .merge(world.schema.requireQueryTypeDef())
                         .instantiateBindings(),
                 )
             },
@@ -123,17 +125,17 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (
-                        field.containingType.typeName == "Mid" &&
-                        field.fieldName == "node" &&
+                        field.containingDef.name == "Mid" &&
+                        field.name == "node" &&
                         demand != null
                     ) {
                         nodeApplications += 1
                         nodeDemandFields =
                             demand
-                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .merge(field.type.baseType as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { groundKey ->
-                                    groundKey.field.fieldName
+                                    groundKey.field.name
                                 }
                     }
                 },
@@ -147,7 +149,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
         assertEquals(1, nodeApplications)
         assertEquals(setOf("first", "second"), nodeDemandFields)
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Query", "late"),
+            world.schema.requireObjectField("Query", "late"),
             mapOf("arg" to 1),
         )
     }
@@ -180,17 +182,17 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "parent" &&
+                        field.containingDef.name == "Query" &&
+                        field.name == "parent" &&
                         demand != null
                     ) {
                         parentApplications += 1
                         parentDemandFields =
                             linkedSetOf<String>().also { fields ->
                                 demand
-                                    .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                    .merge(field.type.baseType as Schema.Object)
                                     .forEach { selection ->
-                                        fields += selection.key.field.fieldName
+                                        fields += selection.key.field.name
                                     }
                             }
                     }
@@ -213,7 +215,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
             parentDemandFields,
         )
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Payload", "computed"),
+            world.schema.requireObjectField("Payload", "computed"),
             mapOf("value" to 7),
         )
     }
@@ -249,7 +251,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (demand != null) {
-                        when (field.containingType.typeName to field.fieldName) {
+                        when (field.containingDef.name to field.name) {
                             "Query" to "holder" -> holderApplications += 1
                             "Nested" to "computed" -> computedApplications += 1
                         }
@@ -300,7 +302,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (demand != null) {
-                        when (field.containingType.typeName to field.fieldName) {
+                        when (field.containingDef.name to field.name) {
                             "Query" to "parent" -> parentApplications += 1
                             "Parent" to "child" -> childApplications += 1
                         }
@@ -324,7 +326,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
         assertEquals(expectedChildApplications, childApplications)
         assertEquals(
             expectedChildApplications,
-            parent.keys.count { groundKey -> groundKey.field.fieldName == "child" },
+            parent.keys.count { groundKey -> groundKey.field.name == "child" },
         )
     }
 }

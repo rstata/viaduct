@@ -1,5 +1,6 @@
 package semantics.correctresolution
 
+import model.requireType
 import model.ObjectSelectionForest
 import model.Schema
 import model.engineResultOf
@@ -14,7 +15,7 @@ class CorrectResolutionTest {
         val result = world.engineResultOf("Query")
         val profileSelections =
             ObjectSelectionForest.of(
-                type = world.schema.type("Profile") as Schema.ObjectType,
+                type = world.schema.requireType("Profile") as Schema.Object,
                 selections = emptyList(),
             )
 

@@ -1,11 +1,13 @@
 package semantics.arbitrary
 
 import model.Arguments
-
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.objectOf
+import model.requireObjectField
+import model.requireQueryTypeDef
+import model.requireField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -25,7 +27,7 @@ class GeneratorTest {
 
             val (nominalType, selections) = world.selectionsFrom(query.source)
 
-            assertEquals(world.schema.query, nominalType)
+            assertEquals(world.schema.requireQueryTypeDef(), nominalType)
             assertFalse(selections.isEmpty())
         }
     }
@@ -61,7 +63,7 @@ class GeneratorTest {
                 captureResolutionWitness = false,
             ).assumptions
         val field =
-            countWorld.schema.objectField(
+            countWorld.schema.requireObjectField(
                 coordinate.typeName,
                 coordinate.fieldName,
             )
@@ -333,7 +335,7 @@ class GeneratorTest {
                     return@forEach
                 }
 
-                val field = world.schema.objectField(coordinate.typeName, coordinate.fieldName)
+                val field = world.schema.requireObjectField(coordinate.typeName, coordinate.fieldName)
                 val input = world.schema.objectOf(coordinate.typeName)
                 val arguments = Arguments.Resolved.of(field, emptyMap())
                 val resolver = world.resolverRegistry.resolver(field)
@@ -353,31 +355,31 @@ class GeneratorTest {
     fun `generated hash values are deterministic and seed and salt sensitive`() {
         val schema = Arb.schema().next(RandomSource.seeded(4815162344L))
         val world = schema.registry().next(RandomSource.seeded(4815162345L)).world(schema).assumptions
-        val hashField = world.schema.field("Object0", GENERATED_HASH_FIELD)
+        val hashField = world.schema.requireField("Object0", GENERATED_HASH_FIELD)
         val plan = GeneratedHashPlan(salt = 17)
 
         val first =
             plan.materialize(
                 schema = world.schema,
-                typeExpr = hashField.typeExpr,
+                typeExpr = hashField.type,
                 generatedHashSeed = 23,
             )
         val repeated =
             plan.materialize(
                 schema = world.schema,
-                typeExpr = hashField.typeExpr,
+                typeExpr = hashField.type,
                 generatedHashSeed = 23,
             )
         val different =
             plan.materialize(
                 schema = world.schema,
-                typeExpr = hashField.typeExpr,
+                typeExpr = hashField.type,
                 generatedHashSeed = 24,
             )
         val differentSalt =
             GeneratedHashPlan(salt = 18).materialize(
                 schema = world.schema,
-                typeExpr = hashField.typeExpr,
+                typeExpr = hashField.type,
                 generatedHashSeed = 23,
             )
 

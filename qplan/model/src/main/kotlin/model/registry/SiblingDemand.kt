@@ -1,10 +1,10 @@
 package model.registry
 
 import model.ObjectEngineResult
-
 import model.Assumptions
 import model.PathComponent
 import model.Schema
+import model.requireField
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its
@@ -26,13 +26,13 @@ fun ObjectEngineResult.GroundKey.demandsFromSibling(
     path: List<PathComponent> = emptyList(),
 ): Boolean {
     val field = this.field
-    val objectType = field.containingType
+    val objectType = field.containingDef
     val sibling = siblingKey.field
-    require(sibling.containingType == objectType) {
+    require(sibling.containingDef == objectType) {
         "Sibling demand is defined only for fields on the same concrete object type"
     }
-    require(world.schema.field(objectType.typeName, sibling.fieldName) == sibling) {
-        "${objectType.typeName}/${sibling.fieldName} is not canonical in this world"
+    require(world.schema.requireField(objectType.name, sibling.name) == sibling) {
+        "${objectType.name}/${sibling.name} is not canonical in this world"
     }
     return siblingKey in
         world.resolverRegistry

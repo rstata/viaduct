@@ -1,7 +1,7 @@
 package semantics.resolver25
 
+import model.requireObjectField
 import model.Arguments
-
 import java.time.Duration
 import model.EngineResult
 import model.EngineErrorData
@@ -100,7 +100,7 @@ class AdversarialRegressionTest {
             val world = testWorld.assumptions
             val resultKey =
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.objectField("Query", "result"),
+                    world.schema.requireObjectField("Query", "result"),
                     emptyMap(),
                 )
 

@@ -1,7 +1,8 @@
 package semantics.contract
 
+import model.requireField
+import model.requireObjectField
 import viaduct.engine.api.EngineObjectData
-
 import java.util.concurrent.ConcurrentHashMap
 import model.Assumptions
 import model.EngineResult
@@ -50,7 +51,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
-                    if (field.containingType.typeName == "User" && field.fieldName == "total") {
+                    if (field.containingDef.name == "User" && field.name == "total") {
                         assertEquals(
                             mapOf(
                                 "plainValue" to 5,
@@ -114,7 +115,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
-                    if (field.containingType.typeName == "Holder" && field.fieldName == "chosen") {
+                    if (field.containingDef.name == "Holder" && field.name == "chosen") {
                         val item = assertIs<EngineObjectData.Sync>(input.selectionValues().getValue("item"))
                         assertEquals(setOf("value"), item.selectionValues().keys)
                         observed[item.type.name] =
@@ -154,9 +155,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val source = schema.objectField("Query", "source")
-                    val nullable = schema.objectField("Query", "nullable")
-                    val result = schema.objectField("Query", "result")
+                    val source = schema.requireObjectField("Query", "source")
+                    val nullable = schema.requireObjectField("Query", "nullable")
+                    val result = schema.requireObjectField("Query", "result")
                     val resultFragment =
                         schema.fragmentFrom(
                             """
@@ -219,8 +220,8 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val container = schema.objectField("Query", "container")
-                    val result = schema.objectField("Query", "result")
+                    val container = schema.requireObjectField("Query", "container")
+                    val result = schema.requireObjectField("Query", "result")
                     val resultFragment =
                         schema.fragmentFrom(
                             """
@@ -288,7 +289,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     val actualFields = input.selectionValues().keys
-                    when (field.containingType.typeName to field.fieldName) {
+                    when (field.containingDef.name to field.name) {
                         "User" to "display" ->
                             require(actualFields == setOf("first", "last"))
                         "User" to "greeting" ->
@@ -306,7 +307,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
         assertEquals(
             expectedPassiveResultFieldNames("first", "last", "display", "greeting"),
-            viewer.keys.map { it.field.fieldName }.toSet(),
+            viewer.keys.map { it.field.name }.toSet(),
         )
     }
 
@@ -337,7 +338,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
-                    when (field.containingType.typeName to field.fieldName) {
+                    when (field.containingDef.name to field.name) {
                         "Profile" to "rendered" ->
                             require(
                                 input.selectionValues().keys == setOf("raw"),
@@ -368,7 +369,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
         assertEquals(
             expectedPassiveResultFieldNames("raw", "rendered"),
-            profile.keys.map { it.field.fieldName }.toSet(),
+            profile.keys.map { it.field.name }.toSet(),
         )
     }
 
@@ -412,7 +413,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 chain.getCell(world.schema.contractKey("Chain", "next")).get(),
             )
 
-        assertTrue("label" in next.keys.map { it.field.fieldName })
+        assertTrue("label" in next.keys.map { it.field.name })
         assertEquals(
             2,
             chain.getCell(world.schema.contractKey("Chain", "computed")).get(),
@@ -481,7 +482,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
-                    when (field.containingType.typeName to field.fieldName) {
+                    when (field.containingDef.name to field.name) {
                         "Query" to "items" -> {
                             require(input.hasExactlyFields())
                             itemsApplications += 1
@@ -573,7 +574,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             result.getCell(world.schema.contractKey("Query", "result")).get(),
         )
         testWorld.applicationArguments.assertApplicationCount(
-            world.schema.objectField("Query", "dependency"),
+            world.schema.requireObjectField("Query", "dependency"),
             0,
         )
     }
@@ -608,9 +609,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     type Query { groups: [Group!]! }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val groups = schema.field("Query", "groups")
+                    val groups = schema.requireField("Query", "groups")
                     val groupElement =
-                        (groups.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
+                        (groups.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
                     val seedKey = schema.contractKey("Group", "seed")
 
                     fun computedResolver(typeName: String) =
@@ -638,14 +639,14 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                         },
                                     )
                             },
-                        schema.field("Group", "product") to
+                        schema.requireField("Group", "product") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Group { seed }",
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    input.selectionValues().getValue(seedKey.field.fieldName) as Int
+                                    input.selectionValues().getValue(seedKey.field.name) as Int
                                 val factor =
                                     arguments.fieldValues.getValue("factor") as Int
                                 productApplications += seed to factor
@@ -657,9 +658,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     "base" setTo base
                                 }
                             },
-                        schema.field("EvenProduct", "computed") to
+                        schema.requireField("EvenProduct", "computed") to
                             computedResolver("EvenProduct"),
-                        schema.field("OddProduct", "computed") to
+                        schema.requireField("OddProduct", "computed") to
                             computedResolver("OddProduct"),
                     )
                 },
@@ -697,7 +698,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     assertIs<ObjectEngineResult>(
                         group.getCell(
                             ObjectEngineResult.GroundKey.of(
-                                world.schema.objectField("Group", "product"),
+                                world.schema.requireObjectField("Group", "product"),
                                 mapOf("factor" to factor),
                             ),
                         ).get(),
@@ -705,7 +706,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 val base = seed * factor
                 val typeName =
                     if (base % 2 == 0) "EvenProduct" else "OddProduct"
-                assertEquals(typeName, product.type.typeName)
+                assertEquals(typeName, product.type.name)
                 assertEquals(
                     "${seed}x$factor",
                     product.getCell(world.schema.contractKey(typeName, "label")).get(),
@@ -742,12 +743,12 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     type Query { groups: [Group!]! }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val groups = schema.field("Query", "groups")
+                    val groups = schema.requireField("Query", "groups")
                     val groupElement =
-                        (groups.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    val entries = schema.field("Group", "entries")
+                        (groups.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val entries = schema.requireField("Group", "entries")
                     val entryElement =
-                        (entries.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
+                        (entries.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
                     val seedKey = schema.contractKey("Group", "seed")
                     val rawKey = schema.contractKey("Entry", "raw")
                     mapOf(
@@ -771,7 +772,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    input.selectionValues().getValue(seedKey.field.fieldName) as Int
+                                    input.selectionValues().getValue(seedKey.field.name) as Int
                                 val count =
                                     arguments.fieldValues.getValue("count") as Int
                                 applications += seed to count
@@ -781,7 +782,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                         }
                                     }
                             },
-                        schema.field("Entry", "rendered") to
+                        schema.requireField("Entry", "rendered") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Entry { raw }",
@@ -789,7 +790,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             ) { input, _ ->
                                 renderedApplications += 1
                                 val raw =
-                                    input.selectionValues().getValue(rawKey.field.fieldName) as Int
+                                    input.selectionValues().getValue(rawKey.field.name) as Int
                                 "entry-$raw"
                             },
                     )
@@ -820,7 +821,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     assertIs<ListEngineResult>(
                         group.getCell(
                             ObjectEngineResult.GroundKey.of(
-                                world.schema.objectField("Group", "entries"),
+                                world.schema.requireObjectField("Group", "entries"),
                                 mapOf("count" to count),
                             ),
                         ).get(),

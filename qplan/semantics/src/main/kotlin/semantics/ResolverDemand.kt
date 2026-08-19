@@ -18,7 +18,7 @@ import semantics.correctresolution.argumentsContainErrorValue
  * resolver occurrences, and stamps those occurrences' direct object fragments at their exact paths.
  */
 context(world: Assumptions)
-fun Schema.ObjectType.closeResolverDemand(
+fun Schema.Object.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
 ): ObjectSelectionForest =
@@ -29,7 +29,7 @@ fun Schema.ObjectType.closeResolverDemand(
     )
 
 context(world: Assumptions)
-private fun Schema.ObjectType.closeResolverDemand(
+private fun Schema.Object.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
     expanded: Set<ObjectEngineResult.GroundKey>,

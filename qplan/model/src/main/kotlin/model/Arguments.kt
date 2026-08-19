@@ -33,7 +33,7 @@ sealed interface Arguments {
              * defaults are materialized for arguments absent from [fields].
              */
             fun of(
-                field: Schema.OutputField,
+                field: Schema.Field,
                 fields: Map<String, Any?>,
             ): Resolved {
                 val arguments = Arguments.of(field, fields)
@@ -132,7 +132,7 @@ sealed interface Arguments {
          * when any supplied expression recursively contains [ArgumentResolutionError].
          */
         fun of(
-            field: Schema.OutputField,
+            field: Schema.Field,
             fields: Map<String, Any?>,
         ): Arguments = argumentsOf(field, fields)
     }
@@ -163,7 +163,7 @@ private data class TemplateVariableImpl(
     override fun toString(): String =
         "Variable.Template(" +
             "name=$variableName, " +
-            "field=${field.containingType.typeName}/${field.fieldName}" +
+            "field=${field.containingDef.name}/${field.name}" +
             ")"
 }
 
@@ -178,7 +178,7 @@ private data class OccurrenceVariableImpl(
     override fun toString(): String =
         "Variable.Occurrence(" +
             "name=$variableName, " +
-            "field=${field.containingType.typeName}/${field.fieldName}, " +
+            "field=${field.containingDef.name}/${field.name}, " +
             "path=${stamp.resolverPath.renderVariablePath()}, " +
             "lineage=${stamp.occurrenceLineage.size}" +
             ")"
@@ -188,7 +188,7 @@ private fun List<PathComponent>.renderVariablePath(): String =
     joinToString(prefix = "[", postfix = "]") { component ->
         when (component) {
             is ObjectEngineResult.GroundKey ->
-                "${component.field.containingType.typeName}/${component.field.fieldName}" +
+                "${component.field.containingDef.name}/${component.field.name}" +
                     when (val arguments = component.arguments) {
                         Arguments.Error -> "(error)"
                         is Arguments.Resolved ->

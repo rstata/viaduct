@@ -1,9 +1,7 @@
 package model.testing
 
 import model.Arguments
-
 import model.ObjectEngineResult
-
 import graphql.language.ArrayValue
 import graphql.language.AstPrinter
 import graphql.language.Definition
@@ -34,6 +32,8 @@ import model.TypeExpr
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.requireObjectField
+import model.requireType
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 
@@ -45,10 +45,10 @@ internal class ResolverTestDsl private constructor(
     private val fieldDefinitions: List<DslFieldResolver>,
     private val nodeDefinitions: List<DslNodeResolver>,
 ) {
-    fun nodeResolvers(schema: Schema): Map<Schema.ObjectType, NodeResolverFunction> =
+    fun nodeResolvers(schema: Schema): Map<Schema.Object, NodeResolverFunction> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).nodeResolvers()
 
-    fun fieldResolvers(schema: Schema): Map<Schema.OutputField, FieldResolverDefinition> =
+    fun fieldResolvers(schema: Schema): Map<Schema.Field, FieldResolverDefinition> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).fieldResolvers()
 
     fun variableProviders(schema: Schema): Map<Arguments.Variable, VariableDeclaration> =
@@ -285,11 +285,11 @@ private class Compiler(
         fieldDefinitions.mapTo(linkedSetOf()) { it.typeName to it.fieldName }
     private val nodeEntries: List<CompiledNodeResult> =
         nodeDefinitions.flatMap { definition ->
-            val type = schema.type(definition.typeName) as? Schema.ObjectType
+            val type = schema.requireType(definition.typeName) as? Schema.Object
                 ?: throw IllegalArgumentException(
                     "@$NODE_RESOLVER_DIRECTIVE requires an object type: ${definition.typeName}",
                 )
-            require(type in nodeType().possibleTypes) {
+            require(type in nodeType().possibleObjectTypes) {
                 "${definition.typeName} does not implement Node"
             }
             definition.results.map { result ->
@@ -309,7 +309,7 @@ private class Compiler(
             nodesById = nodesById,
         )
 
-    fun nodeResolvers(): Map<Schema.ObjectType, NodeResolverFunction> =
+    fun nodeResolvers(): Map<Schema.Object, NodeResolverFunction> =
         nodeEntries
             .groupBy(CompiledNodeResult::type)
             .mapValues { (type, entries) ->
@@ -321,8 +321,8 @@ private class Compiler(
                 }
             }
 
-    fun fieldResolvers(): Map<Schema.OutputField, FieldResolverDefinition> {
-        val compiled = mutableMapOf<Schema.OutputField, FieldResolverDefinition>()
+    fun fieldResolvers(): Map<Schema.Field, FieldResolverDefinition> {
+        val compiled = mutableMapOf<Schema.Field, FieldResolverDefinition>()
         fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)
                 require(field is Schema.ObjectField) {
@@ -350,7 +350,7 @@ private class Compiler(
                     null -> null
                     is String ->
                         nodesById[id]?.let { entry ->
-                            schema.objectOf(entry.type.typeName) {
+                            schema.objectOf(entry.type.name) {
                                 ID_FIELD setTo id
                             }
                         }
@@ -365,7 +365,7 @@ private class Compiler(
             fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)
                 require(field is Schema.ObjectField)
-                val argumentNames = field.arguments.fields.keys
+                val argumentNames = field.arguments.fields.mapTo(linkedSetOf(), Schema.InputLikeField::name)
                 val pathVariables = definition.pathVariables.associateBy(DslPathVariable::name)
                 require(pathVariables.keys.intersect(argumentNames).isEmpty()) {
                     "${definition.typeName}.${definition.fieldName} $PATH_VARS_ARGUMENT may not " +
@@ -409,7 +409,7 @@ private class Compiler(
         source: String,
     ): Fragment =
         if (source.isBlank()) {
-            schema.emptyFragmentOf(field.containingType.typeName)
+            schema.emptyFragmentOf(field.containingDef.name)
         } else {
             val fragment = preparedObjectFragment(field, source)
             schema.fragmentFrom(
@@ -436,7 +436,7 @@ private class Compiler(
         field: Schema.ObjectField,
         source: String,
     ): String =
-        "fragment ResolverTestDsl on ${field.containingType.typeName} { $source }"
+        "fragment ResolverTestDsl on ${field.containingDef.name} { $source }"
 
     private fun preparedObjectFragment(
         field: Schema.ObjectField,
@@ -465,8 +465,8 @@ private class Compiler(
         return PreparedObjectFragment(preparedSource, bindings)
     }
 
-    private fun nodeType(): Schema.InterfaceType =
-        schema.type("Node") as? Schema.InterfaceType
+    private fun nodeType(): Schema.Interface =
+        schema.requireType("Node") as? Schema.Interface
             ?: throw IllegalArgumentException("The resolver-test DSL requires interface Node")
 }
 
@@ -476,7 +476,7 @@ private class ResultEvaluator(
     private val nodesById: Map<String, CompiledNodeResult>,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val nodeType = schema.type("Node") as Schema.InterfaceType
+    private val nodeType = schema.requireType("Node") as Schema.Interface
 
     fun evaluateFieldResult(
         field: Schema.ObjectField,
@@ -494,12 +494,12 @@ private class ResultEvaluator(
         evaluate(
             typeExpr = TypeExpr.Named.of(entry.type, isNullable = true),
             source = entry.result,
-            context = EvaluationContext(schema.objectOf(entry.type.typeName), null, null),
+            context = EvaluationContext(schema.objectOf(entry.type.name), null, null),
             nodeRoot = entry,
         )
 
     private fun evaluate(
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         source: GraphQLValue<*>,
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult? = null,
@@ -525,24 +525,24 @@ private class ResultEvaluator(
                             }
                         }
                     Schema.IDType -> parseResultId(source, context)
-                    is Schema.SimpleType ->
+                    is Schema.SimpleTypeDef ->
                         throw IllegalArgumentException(
-                            "Resolver-test DSL leaves must be Int, not ${type.typeName}",
+                            "Resolver-test DSL leaves must be Int, not ${type.name}",
                         )
-                    is Schema.CompositeType ->
+                    is Schema.CompositeTypeDef ->
                         evaluateComposite(type, source, context, nodeRoot)
                 }
         }
     }
 
     private fun evaluateComposite(
-        declaredType: Schema.CompositeType,
+        declaredType: Schema.CompositeTypeDef,
         source: GraphQLValue<*>,
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult?,
     ): EngineOutputData? {
         require(source is ObjectValue) {
-            "Expected an object result for ${declaredType.typeName}"
+            "Expected an object result for ${declaredType.name}"
         }
         if (nodeRoot != null) {
             require(declaredType == nodeRoot.type)
@@ -557,26 +557,26 @@ private class ResultEvaluator(
             return evaluateNodeReference(declaredType, source, context)
         }
 
-        val fields = source.uniqueFields("result for ${declaredType.typeName}")
+        val fields = source.uniqueFields("result for ${declaredType.name}")
         val concreteType =
             when (declaredType) {
-                is Schema.ObjectType -> {
+                is Schema.Object -> {
                     require(TYPENAME_FIELD !in fields) {
-                        "__typename may not be supplied for object type ${declaredType.typeName}"
+                        "__typename may not be supplied for object type ${declaredType.name}"
                     }
                     declaredType
                 }
                 else -> {
                     val typename = fields[TYPENAME_FIELD]
                     require(typename is StringValue) {
-                        "Result for abstract type ${declaredType.typeName} requires __typename"
+                        "Result for abstract type ${declaredType.name} requires __typename"
                     }
-                    val concrete = schema.type(typename.requiredValue()) as? Schema.ObjectType
+                    val concrete = schema.requireType(typename.requiredValue()) as? Schema.Object
                         ?: throw IllegalArgumentException(
                             "${typename.requiredValue()} is not an object type",
                         )
-                    require(concrete in declaredType.possibleTypes) {
-                        "${concrete.typeName} is not a possible ${declaredType.typeName}"
+                    require(concrete in declaredType.possibleObjectTypes) {
+                        "${concrete.name} is not a possible ${declaredType.name}"
                     }
                     concrete
                 }
@@ -585,30 +585,30 @@ private class ResultEvaluator(
     }
 
     private fun evaluateObject(
-        type: Schema.ObjectType,
+        type: Schema.Object,
         source: ObjectValue,
         context: EvaluationContext,
         injectedNodeId: String? = null,
     ): EngineObjectData.Sync {
-        val fields = source.uniqueFields("result for ${type.typeName}")
+        val fields = source.uniqueFields("result for ${type.name}")
         if (injectedNodeId != null) {
             require(ID_FIELD !in fields) {
-                "@$NODE_RESOLVER_DIRECTIVE result for ${type.typeName} may not contain id"
+                "@$NODE_RESOLVER_DIRECTIVE result for ${type.name} may not contain id"
             }
             require(TYPENAME_FIELD !in fields) {
-                "@$NODE_RESOLVER_DIRECTIVE result for ${type.typeName} may not contain __typename"
+                "@$NODE_RESOLVER_DIRECTIVE result for ${type.name} may not contain __typename"
             }
         }
-        return schema.objectOf(type.typeName) {
+        return schema.objectOf(type.name) {
             if (injectedNodeId != null) {
                 ID_FIELD setTo injectedNodeId
             }
             fields.forEach { (fieldName, fieldValue) ->
                 if (fieldName == TYPENAME_FIELD) return@forEach
-                require((type.typeName to fieldName) !in resolverCoordinates) {
-                    "Result for ${type.typeName} may not supply resolver field $fieldName"
+                require((type.name to fieldName) !in resolverCoordinates) {
+                    "Result for ${type.name} may not supply resolver field $fieldName"
                 }
-                val field = sourceSchema.field(type.typeName, fieldName)
+                val field = sourceSchema.field(type.name, fieldName)
                 require(field is Schema.ObjectField)
                 field(fieldName) setTo
                     evaluate(
@@ -621,7 +621,7 @@ private class ResultEvaluator(
     }
 
     private fun evaluateNodeReference(
-        declaredType: Schema.CompositeType,
+        declaredType: Schema.CompositeTypeDef,
         source: ObjectValue,
         context: EvaluationContext,
     ): EngineObjectData.Sync {
@@ -633,10 +633,10 @@ private class ResultEvaluator(
         val entry =
             nodesById[id]
                 ?: throw IllegalArgumentException("No @$NODE_RESOLVER_DIRECTIVE result for id $id")
-        require(entry.type in declaredType.possibleTypes) {
-            "Node id $id has type ${entry.type.typeName}, not ${declaredType.typeName}"
+        require(entry.type in declaredType.possibleObjectTypes) {
+            "Node id $id has type ${entry.type.name}, not ${declaredType.name}"
         }
-        return schema.objectOf(entry.type.typeName) {
+        return schema.objectOf(entry.type.name) {
             ID_FIELD setTo id
         }
     }
@@ -782,15 +782,15 @@ private class ResultEvaluator(
             is EngineObjectData.Sync -> {
                 val schemaType = value.schemaType
                 val payload =
-                    schema.objectField(schemaType.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
-                listOf(value.get(payload.fieldName))
+                    schema.requireObjectField(schemaType.name, NODE_BRIDGE_PAYLOAD_FIELD)
+                listOf(value.get(payload.name))
             }
             else -> throw IllegalArgumentException("Malformed lowered Node bridge")
         }
 
-    private fun isNodeType(type: Schema.CompositeType): Boolean =
-        type.possibleTypes.isNotEmpty() &&
-            type.possibleTypes.all(nodeType.possibleTypes::contains)
+    private fun isNodeType(type: Schema.CompositeTypeDef): Boolean =
+        type.possibleObjectTypes.isNotEmpty() &&
+            type.possibleObjectTypes.all(nodeType.possibleObjectTypes::contains)
 
     private fun parseResultId(
         value: GraphQLValue<*>,
@@ -812,9 +812,8 @@ private class ResultEvaluator(
                     val argumentName = match.groupValues[1]
                     val argumentType =
                         context.argumentDefinitions
-                            ?.fields
-                            ?.get(argumentName)
-                            ?.typeExpr
+                            ?.field(argumentName)
+                            ?.type
                     when {
                         argumentType !is TypeExpr.Named ||
                             argumentType.baseType != Schema.IDType ->
@@ -870,7 +869,7 @@ private data class DslNodeResult(
 )
 
 private data class CompiledNodeResult(
-    val type: Schema.ObjectType,
+    val type: Schema.Object,
     val id: String,
     val result: GraphQLValue<*>,
 )

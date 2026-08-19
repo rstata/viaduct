@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.EngineResult
 import model.ObjectEngineResult
 import model.testing.TestWorld
@@ -42,7 +43,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
         val item =
             resolved.getCell(
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.objectField("Query", "item"),
+                    world.schema.requireObjectField("Query", "item"),
                     emptyMap(),
                 ),
             ).get() as ObjectEngineResult
@@ -51,7 +52,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
             11,
             item.getCell(
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.objectField("Item", "result"),
+                    world.schema.requireObjectField("Item", "result"),
                     emptyMap(),
                 ),
             ).get(),

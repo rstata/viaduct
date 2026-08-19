@@ -199,8 +199,8 @@ class ResolverGeneratedTest :
                         .any { event ->
                             event.source is Resolver25BindingSource.FromObjectField &&
                                 passiveOwners.any { owner ->
-                                    owner.typeName == event.variable.field.containingType.typeName &&
-                                        owner.fieldName == event.variable.field.fieldName
+                                    owner.typeName == event.variable.field.containingDef.name &&
+                                        owner.fieldName == event.variable.field.name
                                 }
                         }
                 if (

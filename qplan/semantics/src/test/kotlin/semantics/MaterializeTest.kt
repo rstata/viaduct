@@ -1,9 +1,10 @@
 package semantics
 
+import model.requireQueryTypeDef
+import model.requireType
+import model.requireObjectField
 import model.Arguments
-
 import semantics.contract.selectionValues
-
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -37,7 +38,7 @@ class MaterializeTest {
                     ).assumptions
             val field =
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.objectField("Query", "value"),
+                    world.schema.requireObjectField("Query", "value"),
                     emptyMap(),
                 )
             val selections =
@@ -46,7 +47,7 @@ class MaterializeTest {
                     .materializeSelections
             val result =
                 ObjectEngineResult.of(
-                    type = world.schema.query,
+                    type = world.schema.requireQueryTypeDef(),
                     mutable = true,
                 )
             val promise = result.reserveCell(field).createValuePromise()
@@ -82,7 +83,7 @@ class MaterializeTest {
             world
                 .fragmentFrom("fragment ignored on Query { value }")
                 .materializeSelections
-        val result = ObjectEngineResult.of(world.schema.query)
+        val result = ObjectEngineResult.of(world.schema.requireQueryTypeDef())
 
         assertFailsWith<NoSuchElementException> {
             runBlocking {
@@ -106,15 +107,15 @@ class MaterializeTest {
                     type Child { value: String! }
                     """.trimIndent(),
                 ).assumptions
-        val childType = world.schema.type("Child") as Schema.ObjectType
+        val childType = world.schema.requireType("Child") as Schema.Object
         val childKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "child"),
+                world.schema.requireObjectField("Query", "child"),
                 emptyMap(),
             )
         val valueKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Child", "value"),
+                world.schema.requireObjectField("Child", "value"),
                 emptyMap(),
             )
         val reader: List<PathComponent> = listOf(childKey, valueKey)
@@ -123,7 +124,7 @@ class MaterializeTest {
         valueCell.createValuePromise()
         val result =
             ObjectEngineResult.of(
-                type = world.schema.query,
+                type = world.schema.requireQueryTypeDef(),
                 values = mapOf(childKey to childResult),
             )
         val selections =
@@ -164,26 +165,26 @@ class MaterializeTest {
                         type Query { value: String! }
                         """.trimIndent(),
                     ).assumptions
-            val field = world.schema.objectField("Query", "value")
+            val field = world.schema.requireObjectField("Query", "value")
             val storedKey = ObjectEngineResult.GroundKey.of(field, emptyMap())
             val selections =
                 materializeSelectionForestOf(
                     MaterializeSelection.of(
                         responseKey = "first",
                         key = storedKey,
-                        possibleTypes = setOf(world.schema.query),
+                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = materializeSelectionForestOf(),
                     ),
                     MaterializeSelection.of(
                         responseKey = "second",
                         key = storedKey,
-                        possibleTypes = setOf(world.schema.query),
+                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = materializeSelectionForestOf(),
                     ),
                 )
             val result =
                 ObjectEngineResult.of(
-                    type = world.schema.query,
+                    type = world.schema.requireQueryTypeDef(),
                     values = mapOf(storedKey to "same"),
                 )
 
@@ -207,7 +208,7 @@ class MaterializeTest {
                         type Query { value: String! }
                         """.trimIndent(),
                     ).assumptions
-            val field = world.schema.objectField("Query", "value")
+            val field = world.schema.requireObjectField("Query", "value")
             val arguments = Arguments.Resolved.of(field, emptyMap())
             val first =
                 ObjectEngineResult.GroundKey.of(
@@ -226,19 +227,19 @@ class MaterializeTest {
                     MaterializeSelection.of(
                         responseKey = "first",
                         key = first,
-                        possibleTypes = setOf(world.schema.query),
+                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = materializeSelectionForestOf(),
                     ),
                     MaterializeSelection.of(
                         responseKey = "second",
                         key = second,
-                        possibleTypes = setOf(world.schema.query),
+                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = materializeSelectionForestOf(),
                     ),
                 )
             val result =
                 ObjectEngineResult.of(
-                    type = world.schema.query,
+                    type = world.schema.requireQueryTypeDef(),
                     values =
                         mapOf(
                             first to "first-value",

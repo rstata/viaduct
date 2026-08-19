@@ -1,7 +1,6 @@
 package model.testing
 
 import model.ObjectEngineResult
-
 import graphql.language.NamedNode
 import graphql.language.Node
 import graphql.parser.Parser
@@ -22,6 +21,9 @@ import model.EngineErrorData
 import model.EngineOutputData
 import model.TypeExpr
 import model.engineObjectDataOf
+import model.requireField
+import model.requireObjectField
+import model.requireType
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.utils.GraphQLTypeRelation
@@ -41,26 +43,26 @@ internal class GJSchema private constructor(
     internal val typeRelations: GraphQLTypeRelations,
     private val decodedSchema: Schema,
 ) : Schema by decodedSchema {
-    internal fun sourceCompositeType(type: Schema.CompositeType): GraphQLCompositeType {
-        require(type(type.typeName) == type) {
-            "${type.typeName} is not canonical in this schema"
+    internal fun sourceCompositeType(type: Schema.CompositeTypeDef): GraphQLCompositeType {
+        require(requireType(type.name) == type) {
+            "${type.name} is not canonical in this schema"
         }
-        return graphQLSchema.getType(type.typeName) as? GraphQLCompositeType
-            ?: throw IllegalArgumentException("${type.typeName} is not a source composite type")
+        return graphQLSchema.getType(type.name) as? GraphQLCompositeType
+            ?: throw IllegalArgumentException("${type.name} is not a source composite type")
     }
 
     /** The canonical concrete object types available to fixture registry lowering. */
-    internal val objectTypes: List<Schema.ObjectType>
+    internal val objectTypes: List<Schema.Object>
         get() =
             graphQLSchema.allTypesAsList
                 .filterIsInstance<GraphQLObjectType>()
                 .filterNot { it.name.startsWith("__") }
-                .map { type(it.name) as Schema.ObjectType }
+                .map { requireType(it.name) as Schema.Object }
 
     internal fun fieldFromSource(
         typeName: String,
         fieldName: String,
-    ): Schema.OutputField {
+    ): Schema.Field {
         if (fieldName == "__typename") {
             val sourceType = graphQLSchema.getType(typeName)
             val canonicalOwner =
@@ -69,7 +71,7 @@ internal class GJSchema private constructor(
                 } else {
                     typeName
                 }
-            return field(canonicalOwner, LOWERED_TYPENAME_FIELD)
+            return requireField(canonicalOwner, LOWERED_TYPENAME_FIELD)
         }
         val sourceField =
             (graphQLSchema.getType(typeName) as? GraphQLFieldsContainer)
@@ -81,40 +83,40 @@ internal class GJSchema private constructor(
             } else {
                 fieldName
             }
-        return field(typeName, canonicalName)
+        return requireField(typeName, canonicalName)
     }
 
-    internal fun sourceTypeExpr(field: Schema.OutputField): TypeExpr<Schema.OutputType> {
-        val sourceField = sourceField(field) ?: return field.typeExpr
+    internal fun sourceTypeExpr(field: Schema.Field): TypeExpr<Schema.OutputTypeDef> {
+        val sourceField = sourceField(field) ?: return field.type
         return decodeModelOutputType(sourceField.type, this)
     }
 
-    internal fun isLoweredNodeField(field: Schema.OutputField): Boolean =
+    internal fun isLoweredNodeField(field: Schema.Field): Boolean =
         sourceField(field)?.isNodeValued() == true &&
-            field.fieldName.endsWith(NODE_BRIDGE_FIELD_SUFFIX)
+            field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)
 
     internal fun lowerSourceOutput(
-        field: Schema.OutputField,
+        field: Schema.Field,
         output: EngineOutputData?,
     ): EngineOutputData? {
         if (!isLoweredNodeField(field)) return output
         return lowerNodeReferences(
             output = output,
             sourceTypeExpr = sourceTypeExpr(field),
-            bridgeTypeExpr = field.typeExpr,
+            bridgeTypeExpr = field.type,
         )
     }
 
     private fun sourceField(
-        field: Schema.OutputField,
+        field: Schema.Field,
     ): GraphQLFieldDefinition? {
         val sourceContainer =
-            graphQLSchema.getType(field.containingType.typeName) as? GraphQLFieldsContainer
+            graphQLSchema.getType(field.containingDef.name) as? GraphQLFieldsContainer
                 ?: return null
-        sourceContainer.getFieldDefinition(field.fieldName)?.let { return it }
-        if (!field.fieldName.endsWith(NODE_BRIDGE_FIELD_SUFFIX)) return null
+        sourceContainer.getFieldDefinition(field.name)?.let { return it }
+        if (!field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)) return null
         return sourceContainer
-            .getFieldDefinition(field.fieldName.removeSuffix(NODE_BRIDGE_FIELD_SUFFIX))
+            .getFieldDefinition(field.name.removeSuffix(NODE_BRIDGE_FIELD_SUFFIX))
             ?.takeIf { it.isNodeValued() }
     }
 
@@ -127,8 +129,8 @@ internal class GJSchema private constructor(
 
     private fun lowerNodeReferences(
         output: EngineOutputData?,
-        sourceTypeExpr: TypeExpr<Schema.OutputType>,
-        bridgeTypeExpr: TypeExpr<Schema.OutputType>,
+        sourceTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+        bridgeTypeExpr: TypeExpr<Schema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
             output == null || output == EngineErrorData -> output
@@ -149,20 +151,20 @@ internal class GJSchema private constructor(
                     "Node field resolver did not return a node reference"
                 }
                 val outputType = output.schemaType
-                val idField = objectField(outputType.typeName, "id")
-                val id = output.get(idField.fieldName)
+                val idField = requireObjectField(outputType.name, "id")
+                val id = output.get(idField.name)
                 require(id != EngineErrorData && id is String) {
-                    "Node reference ${outputType.typeName}/id must contain a non-error ID"
+                    "Node reference ${outputType.name}/id must contain a non-error ID"
                 }
-                val bridgeType = bridgeTypeExpr.baseType as Schema.ObjectType
-                val bridgeId = objectField(bridgeType.typeName, NODE_BRIDGE_ID_FIELD)
+                val bridgeType = bridgeTypeExpr.baseType as Schema.Object
+                val bridgeId = requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
                 engineObjectDataOf(
                     schemaType = bridgeType,
                     fields =
                         mapOf(
-                            bridgeId.fieldName to
-                                "$TYPED_NODE_ID_PREFIX${outputType.typeName.length}:" +
-                                    "${outputType.typeName}$id",
+                            bridgeId.name to
+                                "$TYPED_NODE_ID_PREFIX${outputType.name.length}:" +
+                                    "${outputType.name}$id",
                         ),
                 )
             }

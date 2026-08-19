@@ -1,9 +1,8 @@
 package semantics.resolver25
 
+import model.requireObjectField
 import model.Arguments
-
 import semantics.contract.selectionValues
-
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -184,15 +183,15 @@ class LifecycleInstrumentationTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val consume = schema.objectField("Query", "consume")
+                    val consume = schema.requireObjectField("Query", "consume")
                     mapOf(
-                        schema.objectField("Query", "result") to
+                        schema.requireObjectField("Query", "result") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { consume(value: ${'$'}seed) }",
                                 ),
                             ) { input, _ ->
-                                input.selectionValues().getValue(consume.fieldName)
+                                input.selectionValues().getValue(consume.name)
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
@@ -203,7 +202,7 @@ class LifecycleInstrumentationTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),

@@ -1,7 +1,6 @@
 package semantics.resolver25
 
 import model.Arguments
-
 import java.util.Collections
 import java.util.IdentityHashMap
 import kotlinx.coroutines.CompletableDeferred
@@ -43,6 +42,7 @@ import model.materializeSelectionForestOf
 import model.merge
 import model.mergeWithVariables
 import model.objectKey
+import model.requireField
 import model.selectionForestOf
 import model.toEngineResult
 import model.toEngineSimpleData
@@ -158,7 +158,7 @@ private class ResolverRuntime(
 // Closes demand under each activated resolver field's fixed object fragment. A resolver field is
 // expanded once regardless of how many open or ground keys currently select it.
 context(world: Assumptions)
-private fun Schema.ObjectType.closeStructuralDemand(
+private fun Schema.Object.closeStructuralDemand(
     incoming: SelectionForest,
 ): ObjectSelectionForest {
     var demand = incoming
@@ -185,7 +185,7 @@ private fun Schema.ObjectType.closeStructuralDemand(
     }
 }
 
-private fun Schema.ObjectType.newObjectResult(): ObjectEngineResult =
+private fun Schema.Object.newObjectResult(): ObjectEngineResult =
     ObjectEngineResult.of(
         type = this,
         mutable = true,
@@ -208,7 +208,7 @@ private class ObjectResultOrchestrator(
     val orchestrationReady: CompletableDeferred<Unit> = CompletableDeferred()
 
     private val fields: Map<Schema.ObjectField, FieldState> =
-        target.type.fields.values.associateWith(::FieldState)
+        target.type.fields.associateWith(::FieldState)
 
     private val activationLock = Any()
     private var pendingActivations: Int = 0
@@ -220,7 +220,7 @@ private class ObjectResultOrchestrator(
         demand.forEach { selection ->
             if (target.type in selection.possibleTypes) {
                 val field =
-                    target.type.fields.getValue(selection.key.field.fieldName)
+                    target.type.requireField(selection.key.field.name)
                 fields.getValue(field).addPotentialSelection(selection)
             }
         }
@@ -343,7 +343,7 @@ private class ObjectResultOrchestrator(
                 coordinate = coordinate,
                 beforeLaunch = activation.mergedBeforeLaunch,
             )
-            if (source.isPresent(groundedKey.field.fieldName)) {
+            if (source.isPresent(groundedKey.field.name)) {
                 return launchMergedPassiveDemand(
                     keyState = activation.keyState,
                     demand = groundedSelection.subselections,
@@ -365,7 +365,7 @@ private class ObjectResultOrchestrator(
                 existing -> Resolver25KeyKind.PREEXISTING
                 groundedKey.arguments.argumentsContainErrorValue() ->
                     Resolver25KeyKind.ERROR
-                source.isPresent(groundedKey.field.fieldName) ->
+                source.isPresent(groundedKey.field.name) ->
                     Resolver25KeyKind.PASSIVE
                 else -> Resolver25KeyKind.FIELD_RESOLVER
             }
@@ -389,7 +389,7 @@ private class ObjectResultOrchestrator(
             existing -> {
                 val nestedFringe: List<Deferred<Unit>> =
                     source
-                        .get(groundedKey.field.fieldName)
+                        .get(groundedKey.field.name)
                         .launchNestedFringe(
                             result = target.getCell(groundedKey).getValue().get(),
                             path = coordinate,
@@ -418,7 +418,7 @@ private class ObjectResultOrchestrator(
                 }
             }
 
-            source.isPresent(groundedKey.field.fieldName) -> {
+            source.isPresent(groundedKey.field.name) -> {
                 runtime.instrumentation.keyActivationReady(coordinate)
                 keyState.fringeInstalled.complete(Unit)
                 runtime.scope.launch {
@@ -432,8 +432,8 @@ private class ObjectResultOrchestrator(
             else ->
                 error(
                     "Resolver25 cannot activate absent passive key " +
-                        "${groundedKey.field.containingType.typeName}/" +
-                        groundedKey.field.fieldName,
+                        "${groundedKey.field.containingDef.name}/" +
+                        groundedKey.field.name,
                 )
         }
         return keyState.fringeInstalled
@@ -449,7 +449,7 @@ private class ObjectResultOrchestrator(
         runtime.scope.launch {
             keyState.promiseInstalled.await()
             source
-                .get(groundedKey.field.fieldName)
+                .get(groundedKey.field.name)
                 .launchNestedFringe(
                     result = target.getCell(groundedKey).getValue().await(),
                     path = path + groundedKey,
@@ -513,7 +513,7 @@ private class ObjectResultOrchestrator(
                     variable = variable,
                     source =
                         Resolver25BindingSource.FromArgument(
-                            definition.argument.argumentName,
+                            definition.argument.name,
                         ),
                 )
             },
@@ -598,7 +598,7 @@ private class ObjectResultOrchestrator(
             if (value == null) return VariableBinding.of(null)
             if (value == ErrorEngineResult) return VariableBinding.Error
             if (index == definition.path.lastIndex) {
-                return value.toProviderBinding(groundedKey.field.typeExpr)
+                return value.toProviderBinding(groundedKey.field.type)
             }
             current =
                 value as? ObjectEngineResult
@@ -674,16 +674,16 @@ private class ObjectResultOrchestrator(
                                 path.joinToString("/") { component ->
                                     when (component) {
                                         is ObjectEngineResult.GroundKey ->
-                                            "${component.field.containingType.typeName}/" +
-                                                component.field.fieldName
+                                            "${component.field.containingDef.name}/" +
+                                                component.field.name
                                         is ListEngineResult.Index -> "[${component.index}]"
                                     }
                                 } +
                                 " has no demanded value promise for " +
-                                "${groundedKey.field.containingType.typeName}/" +
-                                groundedKey.field.fieldName
+                                "${groundedKey.field.containingDef.name}/" +
+                                groundedKey.field.name
                         }
-                        get(groundedKey.field.fieldName)
+                        get(groundedKey.field.name)
                             .launchNestedFringe(
                                 result = resultObject.getCell(groundedKey).getValue().get(),
                                 path = path + groundedKey,
@@ -761,11 +761,11 @@ private class ObjectResultOrchestrator(
                             runtime.instrumentation.resolverFinished(coordinate)
                         }
                     } else {
-                        source.get(groundedKey.field.fieldName)
+                        source.get(groundedKey.field.name)
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(
-                        expectedType = groundedKey.field.typeExpr,
+                        expectedType = groundedKey.field.type,
                         path = path + groundedKey,
                         resolverDemand = resolutionSelections,
                         potentialDemand =
@@ -820,7 +820,7 @@ private class ObjectResultOrchestrator(
         fun activate(
             groundedKey: ObjectEngineResult.GroundKey,
             groundedSelection: ObjectSelection,
-            concreteType: Schema.ObjectType,
+            concreteType: Schema.Object,
         ): KeyActivation {
             groundedKeys[groundedKey]?.let { keyState ->
                 return KeyActivation(
@@ -924,7 +924,7 @@ private class ObjectResultOrchestrator(
         @Synchronized
         fun mergeDemandBeforeLaunch(
             groundedSelection: ObjectSelection,
-            concreteType: Schema.ObjectType,
+            concreteType: Schema.Object,
         ): Boolean {
             if (sealedDemand != null) return false
             openDemand =
@@ -973,7 +973,7 @@ private class ObjectResultOrchestrator(
  */
 context(world: Assumptions)
 private suspend fun EngineOutputData?.resolveValue(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
@@ -1015,7 +1015,7 @@ private suspend fun EngineOutputData?.resolveValue(
             ResolvedValue(
                 engineResult =
                     toEngineResult(
-                        (expectedType as TypeExpr.Named).baseType as Schema.SimpleType,
+                        (expectedType as TypeExpr.Named).baseType as Schema.SimpleTypeDef,
                     ),
                 objectsNeedingResolution = emptyList(),
             )
@@ -1049,10 +1049,10 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
                 }
             }
     val demandedFieldNames: Set<String> =
-        resolverDemandByGroundedKey.keys.mapTo(linkedSetOf()) { key -> key.field.fieldName }
+        resolverDemandByGroundedKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
     val unselectedFieldNames: Set<String> = getSelections().toSet() - demandedFieldNames
     require(unselectedFieldNames.isEmpty()) {
-        "Selective resolver output ${schemaType.typeName} contains unselected fields: " +
+        "Selective resolver output ${schemaType.name} contains unselected fields: " +
             unselectedFieldNames.joinToString()
     }
 
@@ -1065,13 +1065,13 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
         selectedGroundedKeys.map { groundedKey ->
             val arguments = groundedKey.arguments
             require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-                "Passive object field ${schemaType.typeName}/${groundedKey.field.fieldName} " +
+                "Passive object field ${schemaType.name}/${groundedKey.field.name} " +
                     "must be argumentless"
             }
             val resolvedValue: ResolvedValue =
-                get(groundedKey.field.fieldName)
+                get(groundedKey.field.name)
                     .resolveValue(
-                        expectedType = groundedKey.field.typeExpr,
+                        expectedType = groundedKey.field.type,
                         path = path + groundedKey,
                         resolverDemand =
                             resolverDemandByGroundedKey
@@ -1135,7 +1135,7 @@ private class ResolvedField(
 )
 
 private fun EngineResult.toProviderBinding(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
@@ -1144,12 +1144,12 @@ private fun EngineResult.toProviderBinding(
             error("A path-variable provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseType as Schema.SimpleType),
+                toEngineSimpleData(expectedType.baseType as Schema.SimpleTypeDef),
             )
     }
 
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputType) {
+    require(typeExpr.baseType is Schema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()

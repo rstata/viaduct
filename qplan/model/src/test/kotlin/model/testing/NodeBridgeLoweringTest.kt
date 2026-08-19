@@ -1,5 +1,8 @@
 package model.testing
 
+import model.requireQueryTypeDef
+import model.requireField
+import model.requireType
 import model.Schema
 import model.SourceSchemaAdapter
 import model.gjDef
@@ -38,15 +41,18 @@ class NodeBridgeLoweringTest {
         assertNull(schema.graphQLSchema.getType("User_V_A_Bridge"))
 
         assertFailsWith<Schema.MissingSchemaElementException> {
-            schema.field("Query", "user")
+            schema.requireField("Query", "user")
         }
-        val producer = schema.field("Query", "user_V_A_node")
-        val bridge = schema.type("User_V_A_Bridge") as Schema.ObjectType
-        assertEquals(bridge, producer.typeExpr.baseType)
-        assertEquals(setOf("id", "node"), bridge.fields.keys)
-        assertEquals(setOf(bridge), bridge.possibleTypes)
+        val producer = schema.requireField("Query", "user_V_A_node")
+        val bridge = schema.requireType("User_V_A_Bridge") as Schema.Object
+        assertEquals(bridge, producer.type.baseType)
+        assertEquals(
+            setOf("id", "node"),
+            bridge.fields.mapTo(linkedSetOf(), Schema.Field::name),
+        )
+        assertEquals(setOf(bridge), bridge.possibleObjectTypes)
 
-        val query = schema.query
+        val query = schema.requireQueryTypeDef()
         val sourceQuery = schema.graphQLSchema.queryType
         assertSame(query.gjDef, query.gjDef)
         assertTrue(query.gjDef !== sourceQuery)
@@ -59,7 +65,7 @@ class NodeBridgeLoweringTest {
             bridge.gjDef.fieldDefinitions.mapTo(linkedSetOf()) { it.name },
         )
 
-        val user = schema.type("User") as Schema.ObjectType
+        val user = schema.requireType("User") as Schema.Object
         assertTrue(schema.graphQLSchema.getObjectType("User") !== user.gjDef)
         assertNotNull(user.gjDef.getFieldDefinition("V_I_typename"))
     }
@@ -201,7 +207,7 @@ class NodeBridgeLoweringTest {
                     }
                     """.trimIndent(),
                 nodeResolvers = { schema ->
-                    val user = schema.type("User") as Schema.ObjectType
+                    val user = schema.requireType("User") as Schema.Object
                     mapOf(user to nodeResolverOf { error("Not invoked") })
                 },
             )
@@ -209,9 +215,9 @@ class NodeBridgeLoweringTest {
         val bridge = SourceSchemaAdapter(schema).field("Query", "user")
 
         assertFailsWith<Schema.MissingSchemaElementException> {
-            schema.field("Query", "user")
+            schema.requireField("Query", "user")
         }
         assertSame(bridge, schema.nodeBridgeFieldOrNull(bridge))
-        assertNull(schema.nodeBridgeFieldOrNull(schema.field("Query", "seed")))
+        assertNull(schema.nodeBridgeFieldOrNull(schema.requireField("Query", "seed")))
     }
 }

@@ -85,17 +85,17 @@ private fun EngineObjectData.Sync.snipObjectToDemand(
                 val concreteField = key.field
                 val arguments = key.arguments
                 require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-                    "Passive object field ${schemaType.typeName}/${concreteField.fieldName} " +
+                    "Passive object field ${schemaType.name}/${concreteField.name} " +
                         "must be argumentless"
                 }
-                val value = get(concreteField.fieldName)
+                val value = get(concreteField.name)
                 val selectedValue =
-                    if (concreteField.typeExpr.baseType is Schema.SimpleType) {
+                    if (concreteField.type.baseType is Schema.SimpleTypeDef) {
                         value
                     } else {
                         value.snipToDemand(selection.subselections)
                     }
-                concreteField.fieldName to selectedValue
+                concreteField.name to selectedValue
             }
             .toMap()
     return engineObjectDataOf(schemaType, selectedFields)

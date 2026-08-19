@@ -1,13 +1,12 @@
 package semantics.arbitrary
 
 import model.Arguments
-
 import viaduct.engine.api.EngineObjectData
-
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.objectOf
+import model.requireObjectField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -41,7 +40,7 @@ class ResolverCoverageAdversarialTest {
 
         val registry = schema.registry(config).next(random)
         val world = registry.world(schema).assumptions
-        val canonicalField = world.schema.objectField("Query", field.name)
+        val canonicalField = world.schema.requireObjectField("Query", field.name)
         val value =
             world.resolverRegistry.resolver(canonicalField)(
                 world.schema.objectOf("Query"),
@@ -98,9 +97,9 @@ class ResolverCoverageAdversarialTest {
                     .fields
                     .single { field -> field.name == sourceField.fieldName }
             val bridgeField =
-                world.schema.objectField(sourceField.typeName, sourceField.fieldName + "_V_A_node")
+                world.schema.requireObjectField(sourceField.typeName, sourceField.fieldName + "_V_A_node")
             val payloadField =
-                world.schema.objectField(
+                world.schema.requireObjectField(
                     sourceDefinition.type.namedType + "_V_A_Bridge",
                     "node",
                 )

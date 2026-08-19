@@ -1,5 +1,8 @@
 package model.spec
 
+import model.requireQueryTypeDef
+import model.requireField
+import model.requireType
 import model.EngineInputObjectData
 import model.Schema
 import model.SelectionForest
@@ -22,7 +25,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val version = result.single()
-        assertEquals(fixture.schema.field("Query", "version"), version.key.field)
+        assertEquals(fixture.schema.requireField("Query", "version"), version.key.field)
         assertEquals(emptyMap(), version.key.arguments.fieldExpressions())
         assertEquals(setOf(fixture.query), version.possibleTypes)
         assertTrue(version.isLeaf)
@@ -40,7 +43,7 @@ class SpecSelectionFlattenerTest {
                     fixture.field("Query", "version"),
                 ),
             )
-        val versionField = fixture.schema.field("Query", "version")
+        val versionField = fixture.schema.requireField("Query", "version")
 
         assertEquals(2, result.size)
         assertTrue(result.all { it.key.field == versionField })
@@ -62,7 +65,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val release = result.single()
-        val field = fixture.schema.field("Query", "release")
+        val field = fixture.schema.requireField("Query", "release")
 
         assertEquals(field, release.key.field)
         assertEquals(
@@ -110,13 +113,13 @@ class SpecSelectionFlattenerTest {
 
         val pet = result.single()
         val name =
-            pet.subselections.filter { it.key.field.fieldName == "name" }.single()
+            pet.subselections.filter { it.key.field.name == "name" }.single()
         val barkVolume =
-            pet.subselections.filter { it.key.field.fieldName == "barkVolume" }.single()
+            pet.subselections.filter { it.key.field.name == "barkVolume" }.single()
 
-        assertEquals(fixture.pet, name.key.field.containingType)
+        assertEquals(fixture.pet, name.key.field.containingDef)
         assertEquals(setOf(fixture.dog), name.possibleTypes)
-        assertEquals(fixture.dog, barkVolume.key.field.containingType)
+        assertEquals(fixture.dog, barkVolume.key.field.containingDef)
         assertEquals(setOf(fixture.dog), barkVolume.possibleTypes)
     }
 
@@ -147,9 +150,9 @@ class SpecSelectionFlattenerTest {
         val friend = result.single()
         val name = friend.subselections.single()
 
-        assertEquals(fixture.dog, friend.key.field.containingType)
+        assertEquals(fixture.dog, friend.key.field.containingDef)
         assertEquals(setOf(fixture.dog), friend.possibleTypes)
-        assertEquals(fixture.pet, name.key.field.containingType)
+        assertEquals(fixture.pet, name.key.field.containingDef)
         assertEquals(setOf(fixture.dog, fixture.cat), name.possibleTypes)
     }
 
@@ -177,7 +180,7 @@ class SpecSelectionFlattenerTest {
             )
 
         val x = result.single()
-        assertEquals(fixture.i3, x.key.field.containingType)
+        assertEquals(fixture.i3, x.key.field.containingDef)
         assertTrue(x.possibleTypes.isEmpty())
     }
 
@@ -186,13 +189,13 @@ class SpecSelectionFlattenerTest {
         val assumptions = world.assumptions
         val schema = world.schema
 
-        val query = schema.query
-        val dog = schema.type("Dog") as Schema.ObjectType
-        val cat = schema.type("Cat") as Schema.ObjectType
-        val pet = schema.type("Pet") as Schema.InterfaceType
-        val i1 = schema.type("I1") as Schema.InterfaceType
-        val i2 = schema.type("I2") as Schema.InterfaceType
-        val i3 = schema.type("I3") as Schema.InterfaceType
+        val query = schema.requireQueryTypeDef()
+        val dog = schema.requireType("Dog") as Schema.Object
+        val cat = schema.requireType("Cat") as Schema.Object
+        val pet = schema.requireType("Pet") as Schema.Interface
+        val i1 = schema.requireType("I1") as Schema.Interface
+        val i2 = schema.requireType("I2") as Schema.Interface
+        val i3 = schema.requireType("I3") as Schema.Interface
 
         fun field(
             containingType: String,
@@ -202,7 +205,7 @@ class SpecSelectionFlattenerTest {
             subselections: List<SpecSelection>? = null,
         ): SpecSelection.Field =
             schema
-                .field(containingType, fieldName)
+                .requireField(containingType, fieldName)
                 .let { field ->
                     SpecSelection.Field.of(
                         alias = alias,
@@ -213,13 +216,13 @@ class SpecSelectionFlattenerTest {
                 }
 
         fun inlineFragment(
-            typeCondition: Schema.CompositeType?,
+            typeCondition: Schema.CompositeTypeDef?,
             selections: List<SpecSelection>,
         ): SpecSelection.InlineFragment =
             SpecSelection.InlineFragment.of(typeCondition, selections)
 
         fun flatten(
-            typeInScope: Schema.CompositeType,
+            typeInScope: Schema.CompositeTypeDef,
             selectionSet: List<SpecSelection>,
         ): SelectionForest =
             context(assumptions) {

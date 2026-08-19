@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.requireType
+import model.requireObjectField
 import model.Schema
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -36,11 +38,11 @@ class DeferredSuccessorOutputDemandRegressionTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.objectField("Query", "item") to
+                        schema.requireObjectField("Query", "item") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Item")
                             },
-                        schema.objectField("Item", "driver") to
+                        schema.requireObjectField("Item", "driver") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     """
@@ -54,7 +56,7 @@ class DeferredSuccessorOutputDemandRegressionTest {
                             ) { _, _ ->
                                 1
                             },
-                        schema.objectField("Branch", "target") to
+                        schema.requireObjectField("Branch", "target") to
                             fieldResolverOf(schema.emptyFragmentOf("Branch")) { _, _ ->
                                 schema.objectOf("Payload") {
                                     "late" setTo 2
@@ -71,21 +73,21 @@ class DeferredSuccessorOutputDemandRegressionTest {
                     "fragment Demand on Item { driver }",
                 ).subselections.projectionDemandDeferringTemplates()
             }
-        val item = world.schema.type("Item") as Schema.ObjectType
-        val branch = world.schema.type("Branch") as Schema.ObjectType
-        val payload = world.schema.type("Payload") as Schema.ObjectType
+        val item = world.schema.requireType("Item") as Schema.Object
+        val branch = world.schema.requireType("Branch") as Schema.Object
+        val payload = world.schema.requireType("Payload") as Schema.Object
         val branchSelection =
             projected
                 .merge(item)
                 .byKey()
                 .values
-                .single { selection -> selection.key.field.fieldName == "branch" }
+                .single { selection -> selection.key.field.name == "branch" }
         val targetSelection =
             branchSelection.subselections
                 .merge(branch)
                 .byKey()
                 .values
-                .single { selection -> selection.key.field.fieldName == "target" }
+                .single { selection -> selection.key.field.name == "target" }
 
         assertEquals(
             setOf("late"),
@@ -94,7 +96,7 @@ class DeferredSuccessorOutputDemandRegressionTest {
                 .byKey()
                 .values
                 .mapTo(linkedSetOf()) { selection ->
-                    selection.key.field.fieldName
+                    selection.key.field.name
                 },
         )
     }

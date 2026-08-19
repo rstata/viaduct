@@ -1,5 +1,6 @@
 package semantics.resolver25
 
+import model.requireObjectField
 import model.ObjectEngineResult
 import model.objectOf
 import model.operationSelectionsFrom
@@ -46,8 +47,8 @@ class MixedVariablePhaseRegressionTest {
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "bridge"
+                        field.containingDef.name == "Query" &&
+                        field.name == "bridge"
                     ) {
                         val seed =
                             input.selectionValues().entries
@@ -85,23 +86,23 @@ class MixedVariablePhaseRegressionTest {
             result
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        world.schema.objectField("Query", "result"),
+                        world.schema.requireObjectField("Query", "result"),
                         emptyMap(),
                     ),
                 ).getValue().get(),
         )
         assertTrue(observedBridge)
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Query", "bridge"),
+            world.schema.requireObjectField("Query", "bridge"),
             mapOf("value" to 7),
         )
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Query", "seed"),
+            world.schema.requireObjectField("Query", "seed"),
             mapOf("value" to 1),
             mapOf("value" to 7),
         )
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Item", "consume"),
+            world.schema.requireObjectField("Item", "consume"),
             mapOf("value" to 1),
         )
     }
@@ -133,8 +134,8 @@ class MixedVariablePhaseRegressionTest {
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "source"
+                        field.containingDef.name == "Query" &&
+                        field.name == "source"
                     ) {
                         val producer =
                             input.selectionValues().entries
@@ -172,18 +173,18 @@ class MixedVariablePhaseRegressionTest {
             result
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        world.schema.objectField("Query", "result"),
+                        world.schema.requireObjectField("Query", "result"),
                         emptyMap(),
                     ),
                 ).getValue().get(),
         )
         assertTrue(observedSource)
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Query", "dependent"),
+            world.schema.requireObjectField("Query", "dependent"),
             mapOf("value" to 2),
         )
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Query", "producer"),
+            world.schema.requireObjectField("Query", "producer"),
             mapOf("key" to 1),
             mapOf("key" to 2),
         )

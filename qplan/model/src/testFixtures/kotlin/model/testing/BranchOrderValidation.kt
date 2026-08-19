@@ -1,19 +1,19 @@
 package model.testing
 
 import model.Arguments
-
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.registry.FieldResolver
 import model.registry.VariableDefinition
 import model.variables
+import model.requireField
 
 /**
  * Validates the argument-insensitive structural branch order before semantic reasoning begins.
  */
 internal class BranchOrderValidator(
-    private val fieldResolvers: Map<Schema.OutputField, FieldResolver>,
+    private val fieldResolvers: Map<Schema.Field, FieldResolver>,
 ) {
     private data class Edge(
         val prerequisite: Schema.ObjectField,
@@ -46,7 +46,7 @@ internal class BranchOrderValidator(
 
     private val graphs =
         fieldResolvers.keys
-            .map { field -> field.containingType as Schema.ObjectType }
+            .map { field -> field.containingDef as Schema.Object }
             .distinct()
             .associateWith { BranchGraph(it) }
 
@@ -59,9 +59,9 @@ internal class BranchOrderValidator(
     private fun addResolverInputEdges() {
         fieldResolvers.forEach { (outputField, resolver) ->
             val consumer = outputField as Schema.ObjectField
-            val graph = graphs.getValue(consumer.containingType)
+            val graph = graphs.getValue(consumer.containingDef)
             resolver.objectFragment.forEach { selection ->
-                selection.branchOn(consumer.containingType)?.let { prerequisite ->
+                selection.branchOn(consumer.containingDef)?.let { prerequisite ->
                     graph.add(
                         Edge(prerequisite, consumer),
                         EdgeReason.ResolverInput(consumer),
@@ -79,13 +79,13 @@ internal class BranchOrderValidator(
                 resolver.variables.forEach variables@{ (variable, definition) ->
                     if (definition !is VariableDefinition.FromObjectField) return@variables
                     val providerPath = definition.path
-                    val type = variable.field.containingType
+                    val type = variable.field.containingDef
                     val graph = graphs.getValue(type)
                     val providerBranch =
-                        type.fields.getValue(providerPath.first().field.fieldName)
+                        type.requireField(providerPath.first().field.name)
                     val productionPaths = graph.prerequisitePathsTo(providerBranch)
                     val renderedProviderPath =
-                        providerPath.joinToString("/") { key -> key.field.fieldName }
+                        providerPath.joinToString("/") { key -> key.field.name }
                     val uses =
                         resolver.objectFragment.variableUsePaths(variable, type)
 
@@ -98,7 +98,7 @@ internal class BranchOrderValidator(
                                             variable = variable,
                                             providerPath = renderedProviderPath,
                                             productionPath =
-                                                productionPath.joinToString(" -> ") { it.fieldName },
+                                                productionPath.joinToString(" -> ") { it.name },
                                             usePath = usePath,
                                         )
                             }
@@ -108,14 +108,14 @@ internal class BranchOrderValidator(
             }
             changed =
                 additions.fold(false) { result, (edge, reason) ->
-                    graphs.getValue(edge.consumer.containingType).add(edge, reason) || result
+                    graphs.getValue(edge.consumer.containingDef).add(edge, reason) || result
                 }
             if (changed) graphs.values.forEach(BranchGraph::requireAcyclic)
         } while (changed)
     }
 
     private class BranchGraph(
-        private val type: Schema.ObjectType,
+        private val type: Schema.Object,
     ) {
         private val reasons = linkedMapOf<Edge, MutableSet<EdgeReason>>()
 
@@ -124,8 +124,8 @@ internal class BranchOrderValidator(
             reason: EdgeReason,
         ): Boolean {
             require(
-                edge.prerequisite.containingType == type &&
-                    edge.consumer.containingType == type,
+                edge.prerequisite.containingDef == type &&
+                    edge.consumer.containingDef == type,
             )
             val isNew = edge !in reasons
             reasons.getOrPut(edge, ::linkedSetOf).add(reason)
@@ -157,14 +157,14 @@ internal class BranchOrderValidator(
             val cycle = findCycle() ?: return
             val cycleEdges = cycle.zipWithNext().map { (from, to) -> Edge(from, to) }
             val renderedCycle =
-                cycle.joinToString(" -> ") { branch -> branch.fieldName }
+                cycle.joinToString(" -> ") { branch -> branch.name }
             val renderedReasons =
                 cycleEdges.joinToString("; ") { edge ->
-                    "${edge.prerequisite.fieldName} -> ${edge.consumer.fieldName}: " +
+                    "${edge.prerequisite.name} -> ${edge.consumer.name}: " +
                         reasons.getValue(edge).joinToString(" and ") { it.describe() }
                 }
             throw IllegalArgumentException(
-                "Depth-first variable branch order on ${type.typeName} contains a cycle " +
+                "Depth-first variable branch order on ${type.name} contains a cycle " +
                     "$renderedCycle. Edges: $renderedReasons",
             )
         }
@@ -177,7 +177,7 @@ internal class BranchOrderValidator(
                 reasons.keys
                     .flatMap { edge -> listOf(edge.prerequisite, edge.consumer) }
                     .distinct()
-                    .sortedBy(Schema.ObjectField::fieldName)
+                    .sortedBy(Schema.ObjectField::name)
 
             fun visit(vertex: Schema.ObjectField): List<Schema.ObjectField>? {
                 if (vertex in active) {
@@ -193,7 +193,7 @@ internal class BranchOrderValidator(
                         .filter { edge -> edge.prerequisite == vertex }
                         .map(Edge::consumer)
                         .distinct()
-                        .sortedBy(Schema.ObjectField::fieldName)
+                        .sortedBy(Schema.ObjectField::name)
                         .firstNotNullOfOrNull(::visit)
                 path.removeAt(path.lastIndex)
                 active -= vertex
@@ -205,16 +205,16 @@ internal class BranchOrderValidator(
     }
 }
 
-private fun Selection.branchOn(type: Schema.ObjectType): Schema.ObjectField? =
+private fun Selection.branchOn(type: Schema.Object): Schema.ObjectField? =
     if (type in possibleTypes) {
-        type.fields.getValue(key.field.fieldName) as Schema.ObjectField
+        type.requireField(key.field.name)
     } else {
         null
     }
 
 private fun SelectionForest.variableUsePaths(
     variable: Arguments.Variable,
-    type: Schema.ObjectType,
+    type: Schema.Object,
 ): Map<Schema.ObjectField, Set<String>> {
     val result = linkedMapOf<Schema.ObjectField, MutableSet<String>>()
     forEach { selection ->
@@ -230,7 +230,7 @@ private fun Selection.pathsContaining(
     variable: Arguments.Variable,
     prefix: List<String> = emptyList(),
 ): Set<String> {
-    val path = prefix + key.field.fieldName
+    val path = prefix + key.field.name
     val result = linkedSetOf<String>()
     if (variable in key.arguments.variables()) {
         result += path.joinToString("/")
@@ -242,4 +242,4 @@ private fun Selection.pathsContaining(
 }
 
 private fun Schema.ObjectField.coordinate(): String =
-    "${containingType.typeName}/$fieldName"
+    "${containingDef.name}/$name"

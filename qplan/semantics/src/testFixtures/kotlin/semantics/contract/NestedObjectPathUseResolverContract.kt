@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.ObjectEngineResult
-
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +35,7 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
 

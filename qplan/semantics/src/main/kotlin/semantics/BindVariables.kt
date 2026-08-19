@@ -42,7 +42,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                     val stamped = variable.stamp(path + key)
                     val value =
                         arguments.fieldValues.getValue(
-                            definition.argument.argumentName,
+                            definition.argument.name,
                         )
                     onDeclared(stamped, definition)
                     world.declareBinding(stamped)

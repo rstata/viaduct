@@ -70,12 +70,12 @@ class PromiseTest {
                 ).schema
         val field =
             ObjectEngineResult.GroundKey.of(
-                schema.objectField("Query", "required"),
+                schema.requireObjectField("Query", "required"),
                 emptyMap(),
             )
         val promise =
             ObjectEngineResult
-                .of(schema.query, mutable = true)
+                .of(schema.requireQueryTypeDef(), mutable = true)
                 .reserveCell(field)
                 .createValuePromise()
 

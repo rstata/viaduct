@@ -9,7 +9,7 @@ import model.Schema
  */
 class ResolverApplicationArguments internal constructor() {
     private val argumentsByField =
-        linkedMapOf<Schema.OutputField, MutableList<Arguments.Resolved>>()
+        linkedMapOf<Schema.Field, MutableList<Arguments.Resolved>>()
 
     internal fun observer(
         also: CanonicalFieldResolverApplicationObserver?,
@@ -22,13 +22,13 @@ class ResolverApplicationArguments internal constructor() {
         }
 
     /** Returns the arguments in application order, including duplicate applications. */
-    fun arguments(field: Schema.OutputField): List<Arguments.Resolved> =
+    fun arguments(field: Schema.Field): List<Arguments.Resolved> =
         synchronized(argumentsByField) {
             argumentsByField[field].orEmpty().toList()
         }
 
     /** Returns an immutable snapshot of every field's arguments in application order. */
-    fun all(): Map<Schema.OutputField, List<Arguments.Resolved>> =
+    fun all(): Map<Schema.Field, List<Arguments.Resolved>> =
         synchronized(argumentsByField) {
             argumentsByField.mapValuesTo(linkedMapOf()) { (_, arguments) ->
                 arguments.toList()

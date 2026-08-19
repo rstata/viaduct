@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireQueryTypeDef
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
@@ -67,7 +68,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                         context(world) {
                             countListPassiveDeepening(
                                 fragment.subselections,
-                                world.schema.query,
+                                world.schema.requireQueryTypeDef(),
                             )
                         }
                     registry.clearResolutionWitness()
@@ -99,7 +100,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
 context(world: Assumptions)
 private fun countListPassiveDeepening(
     selections: SelectionForest,
-    type: Schema.ObjectType,
+    type: Schema.Object,
 ): Int {
     val incoming = selections.merge(type).instantiateBindings()
     val incomingByKey = incoming.byGroundKey()
@@ -117,11 +118,11 @@ private fun countListPassiveDeepening(
             .byGroundKey()
             .forEach { (requiredKey, requiredPassive) ->
                 val passiveField = requiredKey.field
-                val passiveType = passiveField.typeExpr.baseType as? Schema.CompositeType
+                val passiveType = passiveField.type.baseType as? Schema.CompositeTypeDef
                     ?: return@forEach
                 if (
                     passiveField in world.resolverRegistry ||
-                    passiveField.typeExpr !is TypeExpr.List
+                    passiveField.type !is TypeExpr.List
                 ) {
                     return@forEach
                 }
@@ -131,7 +132,7 @@ private fun countListPassiveDeepening(
                     hasMissingDemand(
                         requiredPassive.subselections,
                         selectedPassive.subselections,
-                        passiveType.possibleTypes,
+                        passiveType.possibleObjectTypes,
                     )
                 ) {
                     count += 1
@@ -140,9 +141,9 @@ private fun countListPassiveDeepening(
     }
 
     incoming.byGroundKey().forEach { (key, selection) ->
-        val childType = key.field.typeExpr.baseType as? Schema.CompositeType
+        val childType = key.field.type.baseType as? Schema.CompositeTypeDef
             ?: return@forEach
-        childType.possibleTypes.forEach { possibleType ->
+        childType.possibleObjectTypes.forEach { possibleType ->
             count += countListPassiveDeepening(selection.subselections, possibleType)
         }
     }
@@ -153,7 +154,7 @@ context(world: Assumptions)
 private fun hasMissingDemand(
     required: SelectionForest,
     selected: SelectionForest,
-    possibleTypes: Set<Schema.ObjectType>,
+    possibleTypes: Set<Schema.Object>,
 ): Boolean =
     possibleTypes.any { possibleType ->
         val available = selected.merge(possibleType).instantiateBindings().byGroundKey()
@@ -166,12 +167,12 @@ private fun hasMissingDemand(
                 if (match == null) {
                     false
                 } else {
-                    val childType = requirementKey.field.typeExpr.baseType as? Schema.CompositeType
+                    val childType = requirementKey.field.type.baseType as? Schema.CompositeTypeDef
                     childType == null ||
                         !hasMissingDemand(
                             requirement.subselections,
                             match.subselections,
-                            childType.possibleTypes,
+                            childType.possibleObjectTypes,
                         )
                 }
             }

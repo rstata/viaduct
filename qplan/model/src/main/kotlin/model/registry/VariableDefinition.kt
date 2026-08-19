@@ -14,11 +14,11 @@ import model.TypeExpr
 sealed interface VariableDefinition {
     /** A variable whose value is taken from an argument of its defining resolver field. */
     sealed interface FromArgument : VariableDefinition {
-        val argument: Schema.FieldArgument
+        val argument: Schema.FieldArg
 
         companion object {
             /** Returns the definition that reads [argument]. */
-            fun of(argument: Schema.FieldArgument): FromArgument =
+            fun of(argument: Schema.FieldArg): FromArgument =
                 FromArgumentImpl(argument)
         }
     }
@@ -42,17 +42,17 @@ sealed interface VariableDefinition {
                 }
                 path.dropLast(1).forEach { key ->
                     require(
-                        key.field.typeExpr is TypeExpr.Named &&
-                            key.field.typeExpr.baseType is Schema.CompositeType,
+                        key.field.type is TypeExpr.Named &&
+                            key.field.type.baseType is Schema.CompositeTypeDef,
                     ) {
                         "From-object-field variable path cannot cross list or simple field " +
-                            "${key.field.containingType.typeName}/${key.field.fieldName}"
+                            "${key.field.containingDef.name}/${key.field.name}"
                     }
                 }
                 val terminal = path.last().field
-                require(terminal.typeExpr.baseType is Schema.SimpleType) {
+                require(terminal.type.baseType is Schema.SimpleTypeDef) {
                     "From-object-field variable path must end at a simple field, not " +
-                        "${terminal.containingType.typeName}/${terminal.fieldName}"
+                        "${terminal.containingDef.name}/${terminal.name}"
                 }
                 return FromObjectFieldImpl(path)
             }
@@ -61,7 +61,7 @@ sealed interface VariableDefinition {
 }
 
 private data class FromArgumentImpl(
-    override val argument: Schema.FieldArgument,
+    override val argument: Schema.FieldArg,
 ) : VariableDefinition.FromArgument
 
 private data class FromObjectFieldImpl(

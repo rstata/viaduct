@@ -1,13 +1,14 @@
 package model.testing
 
 import model.Schema
+import model.requireObjectField
 
 /** One external `fromArgument` declaration accepted by test-fixture composition. */
 class FromArgument private constructor(
-    internal val argument: Schema.FieldArgument,
+    internal val argument: Schema.FieldArg,
 ) : VariableDeclaration {
     companion object {
-        internal fun of(argument: Schema.FieldArgument): FromArgument =
+        internal fun of(argument: Schema.FieldArg): FromArgument =
             FromArgument(argument)
     }
 }
@@ -17,13 +18,13 @@ fun Schema.fromArgument(
     field: Schema.ObjectField,
     argumentName: String,
 ): FromArgument {
-    require(objectField(field.containingType.typeName, field.fieldName) == field) {
-        "${field.containingType.typeName}/${field.fieldName} is not canonical in this schema"
+    require(requireObjectField(field.containingDef.name, field.name) == field) {
+        "${field.containingDef.name}/${field.name} is not canonical in this schema"
     }
     val argument =
-        field.arguments.fields[argumentName] as? Schema.FieldArgument
+        field.arguments.field(argumentName) as? Schema.FieldArg
             ?: throw IllegalArgumentException(
-                "${field.containingType.typeName}/${field.fieldName} has no argument $argumentName",
+                "${field.containingDef.name}/${field.name} has no argument $argumentName",
             )
     return FromArgument.of(argument)
 }

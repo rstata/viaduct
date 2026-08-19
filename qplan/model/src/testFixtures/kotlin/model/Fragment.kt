@@ -20,7 +20,7 @@ package model
  */
 sealed interface Fragment {
     /** The nominal type carried by this fragment. */
-    val nominalType: Schema.CompositeType
+    val nominalType: Schema.CompositeTypeDef
 
     /** The response-key-preserving selections nested within this fragment. */
     val materializeSelections: MaterializeSelectionForest
@@ -31,12 +31,12 @@ sealed interface Fragment {
 
     companion object {
         fun of(
-            nominalType: Schema.CompositeType,
+            nominalType: Schema.CompositeTypeDef,
             materializeSelections: MaterializeSelectionForest,
         ): Fragment = FragmentImpl(nominalType, materializeSelections)
 
         fun of(
-            nominalType: Schema.CompositeType,
+            nominalType: Schema.CompositeTypeDef,
             subselections: SelectionForest,
         ): Fragment =
             FragmentImpl(
@@ -47,6 +47,6 @@ sealed interface Fragment {
 }
 
 private class FragmentImpl(
-    override val nominalType: Schema.CompositeType,
+    override val nominalType: Schema.CompositeTypeDef,
     override val materializeSelections: MaterializeSelectionForest,
 ) : Fragment

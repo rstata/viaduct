@@ -61,7 +61,7 @@ internal interface DepthFirstReactor {
 }
 
 private class PriorityQueueDepthFirstReactor(
-    schemaType: Schema.ObjectType,
+    schemaType: Schema.Object,
     eventObserver: ReactorEventObserver,
 ) : DepthFirstReactor {
     private val result = ObjectEngineResult.of(schemaType, emptyMap(), mutable = true)
@@ -111,7 +111,7 @@ private class PriorityQueueDepthFirstReactor(
     context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun DepthFirstReactor.SlotOrchestrator.execute() {
         require(target.type == source.schemaType) {
-            "Initial result type ${target.type.typeName} does not match ${source.schemaType}"
+            "Initial result type ${target.type.name} does not match ${source.schemaType}"
         }
 
         val closedDemand = source.schemaType.closeResolverDemand(path, selections)
@@ -152,7 +152,7 @@ private class PriorityQueueDepthFirstReactor(
             is DepthFirstReactor.SlotOrchestrator ->
                 instrumentation.orchestratorLaunched(
                     path = task.path,
-                    objectType = task.source.schemaType.typeName,
+                    objectType = task.source.schemaType.name,
                 )
 
             is DepthFirstReactor.SlotResolver ->

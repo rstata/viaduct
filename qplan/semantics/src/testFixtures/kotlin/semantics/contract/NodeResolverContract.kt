@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.requireField
+import model.requireObjectField
 import model.EngineResult
 import model.EngineIDResult
 import model.EngineOutputListData
@@ -9,6 +11,7 @@ import model.Schema
 import model.TypeExpr
 import model.emptyFragmentOf
 import model.objectOf
+import model.requireType
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -43,10 +46,10 @@ interface NodeResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName.startsWith("viewer") ||
-                        field.containingType.typeName == "User" &&
-                        field.fieldName == "greeting"
+                        field.containingDef.name == "Query" &&
+                        field.name.startsWith("viewer") ||
+                        field.containingDef.name == "User" &&
+                        field.name == "greeting"
                     ) {
                         require(input.hasExactlyFields())
                     }
@@ -66,11 +69,11 @@ interface NodeResolverContract : ResolverContract {
                 """.trimIndent(),
         )
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Query", "viewer_V_A_node"),
+            world.schema.requireObjectField("Query", "viewer_V_A_node"),
             mapOf("id" to "1"),
         )
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("User", "greeting"),
+            world.schema.requireObjectField("User", "greeting"),
             mapOf("prefix" to 5),
         )
     }
@@ -101,7 +104,7 @@ interface NodeResolverContract : ResolverContract {
                 },
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "viewer") to
+                        schema.requireField("Query", "viewer") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
@@ -187,7 +190,7 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val nodes = schema.field("Query", "nodes_V_A_node")
+                    val nodes = schema.requireField("Query", "nodes_V_A_node")
                     mapOf(
                         nodes to
                             fieldResolverOf(
@@ -224,7 +227,7 @@ interface NodeResolverContract : ResolverContract {
                 }
                 """.trimIndent(),
             )
-        val bridgeField = schema.objectField("Query", "nodes_V_A_node")
+        val bridgeField = schema.requireObjectField("Query", "nodes_V_A_node")
         val bridgeType = schema.contractObjectType("Node_V_A_Bridge")
         val payloadKey = schema.contractKey("Node_V_A_Bridge", "node")
         val firstKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "first"))
@@ -242,7 +245,7 @@ interface NodeResolverContract : ResolverContract {
                 assertEquals(bridgeType, bridge.type)
                 assertIs<ObjectEngineResult>(
                     bridge.getCell(payloadKey).get(),
-                ).type.typeName
+                ).type.name
             },
         )
     }
@@ -260,7 +263,7 @@ interface NodeResolverContract : ResolverContract {
                     type Query { matrix: [[User!]!]! }
                     """.trimIndent(),
                 applicationObserver = { field, _, _, _ ->
-                    observedFields += field.fieldName
+                    observedFields += field.name
                 },
                 nodeResolvers = { schema ->
                     mapOf(
@@ -274,12 +277,12 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val matrix = schema.field("Query", "matrix_V_A_node")
+                    val matrix = schema.requireField("Query", "matrix_V_A_node")
                     val outer =
                         TypeExpr.List.of(
                             TypeExpr.List.of(
                                 TypeExpr.Named.of(
-                                    schema.type("User") as Schema.OutputType,
+                                    schema.requireType("User") as Schema.OutputTypeDef,
                                     isNullable = false,
                                 ),
                                 isNullable = false,
@@ -317,7 +320,7 @@ interface NodeResolverContract : ResolverContract {
                     val bridge = assertIs<ObjectEngineResult>(bridgeCell.get())
                     assertIs<ObjectEngineResult>(
                         bridge.getCell(schema.contractKey("User_V_A_Bridge", "node")).get(),
-                    ).type.typeName
+                    ).type.name
                 }
             }.flatten()
 

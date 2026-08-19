@@ -1,9 +1,8 @@
 package semantics.correctresolution
 
+import model.requireObjectField
 import model.Arguments
-
 import model.ObjectEngineResult
-
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
@@ -45,9 +44,9 @@ class IsClosedUnderResolverDemandTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Parent", "result")
-                    val consume = schema.objectField("Child", "consume")
-                    val parent = schema.objectField("Query", "parent")
+                    val result = schema.requireObjectField("Parent", "result")
+                    val consume = schema.requireObjectField("Child", "consume")
+                    val parent = schema.requireObjectField("Query", "parent")
                     mapOf(
                         result to
                             fieldResolverOf(
@@ -72,7 +71,7 @@ class IsClosedUnderResolverDemandTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Parent", "result")
+                    val result = schema.requireObjectField("Parent", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
@@ -80,7 +79,7 @@ class IsClosedUnderResolverDemandTest {
                 },
             )
         val world = testWorld.assumptions
-        val resultField = world.schema.objectField("Parent", "result")
+        val resultField = world.schema.requireObjectField("Parent", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
         val variable = Arguments.Variable.of(resultField, "seed")
         val stamped = variable.stamp(listOf(resultKey))

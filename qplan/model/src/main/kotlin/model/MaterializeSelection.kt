@@ -21,14 +21,14 @@ sealed interface MaterializeSelection {
     val key: ObjectEngineResult.Key
 
     /** The concrete runtime parent types for which this source occurrence applies. */
-    val possibleTypes: Set<Schema.ObjectType>
+    val possibleTypes: Set<Schema.Object>
 
     /** Response-key-preserving selections on this field's result. */
     val subselections: MaterializeSelectionForest
 
     /** Whether this selection's field has a simple base output type. */
     val isLeaf: Boolean
-        get() = key.field.typeExpr.baseType is Schema.SimpleType
+        get() = key.field.type.baseType is Schema.SimpleTypeDef
 
     companion object {
         /**
@@ -40,7 +40,7 @@ sealed interface MaterializeSelection {
         fun of(
             responseKey: String,
             key: ObjectEngineResult.Key,
-            possibleTypes: Set<Schema.ObjectType>,
+            possibleTypes: Set<Schema.Object>,
             subselections: MaterializeSelectionForest,
         ): MaterializeSelection {
             require(responseKey.isNotEmpty()) {
@@ -49,14 +49,14 @@ sealed interface MaterializeSelection {
             require(key !is ObjectEngineResult.VariableKey) {
                 "Construction-only provider markers cannot be materialize selections"
             }
-            val fieldOwner = key.field.containingType
-            require(possibleTypes.all { it in fieldOwner.possibleTypes }) {
-                "Materialize selection possible types must be contained by ${fieldOwner.typeName}"
+            val fieldOwner = key.field.containingDef
+            require(possibleTypes.all { it in fieldOwner.possibleObjectTypes }) {
+                "Materialize selection possible types must be contained by ${fieldOwner.name}"
             }
             require(
-                key.field.typeExpr.baseType is Schema.CompositeType || subselections.isEmpty(),
+                key.field.type.baseType is Schema.CompositeTypeDef || subselections.isEmpty(),
             ) {
-                "Leaf materialize selection ${fieldOwner.typeName}.${key.field.fieldName} " +
+                "Leaf materialize selection ${fieldOwner.name}.${key.field.name} " +
                     "has subselections"
             }
             return MaterializeSelectionImpl(
@@ -116,7 +116,7 @@ sealed interface MaterializeSelectionForest {
      * @throws IllegalArgumentException when one co-applicable response-key group contains
      * incompatible field invocations
      */
-    fun collect(type: Schema.ObjectType): ObjectMaterializeSelectionForest
+    fun collect(type: Schema.Object): ObjectMaterializeSelectionForest
 }
 
 /**
@@ -131,12 +131,12 @@ sealed interface ObjectMaterializeSelection {
     val subselections: MaterializeSelectionForest
 
     val isLeaf: Boolean
-        get() = key.field.typeExpr.baseType is Schema.SimpleType
+        get() = key.field.type.baseType is Schema.SimpleTypeDef
 }
 
 /** A concrete-parent materialize forest containing one group per response key. */
 sealed interface ObjectMaterializeSelectionForest {
-    val type: Schema.ObjectType
+    val type: Schema.Object
     val size: Int
 
     fun isEmpty(): Boolean
@@ -177,7 +177,7 @@ fun SelectionForest.toCanonicalMaterializeSelectionForest(): MaterializeSelectio
     forEach { selection ->
         selections +=
             MaterializeSelection.of(
-                responseKey = selection.key.field.fieldName,
+                responseKey = selection.key.field.name,
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
                 subselections =
@@ -190,7 +190,7 @@ fun SelectionForest.toCanonicalMaterializeSelectionForest(): MaterializeSelectio
 private class MaterializeSelectionImpl(
     override val responseKey: String,
     override val key: ObjectEngineResult.Key,
-    override val possibleTypes: Set<Schema.ObjectType>,
+    override val possibleTypes: Set<Schema.Object>,
     override val subselections: MaterializeSelectionForest,
 ) : MaterializeSelection
 
@@ -240,7 +240,7 @@ private class MaterializeSelectionForestImpl(
                 )
             }.toSelectionForest()
 
-    override fun collect(type: Schema.ObjectType): ObjectMaterializeSelectionForest {
+    override fun collect(type: Schema.Object): ObjectMaterializeSelectionForest {
         val membersByResponseKey =
             linkedMapOf<
                 String,
@@ -263,7 +263,7 @@ private class MaterializeSelectionForestImpl(
                     },
                 ) {
                     "Response key $responseKey has incompatible field invocations on " +
-                        type.typeName
+                        type.name
                 }
                 ObjectMaterializeSelectionImpl(
                     responseKey = responseKey,
@@ -281,7 +281,7 @@ private class MaterializeSelectionForestImpl(
 }
 
 private class ObjectMaterializeSelectionForestImpl(
-    override val type: Schema.ObjectType,
+    override val type: Schema.Object,
     private val selectionsByResponseKey: Map<String, ObjectMaterializeSelection>,
 ) : ObjectMaterializeSelectionForest {
     override val size: Int

@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.ObjectEngineResult
-
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -57,21 +57,21 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
             1,
             resolved.getCell(
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.objectField("Query", "result"),
+                    world.schema.requireObjectField("Query", "result"),
                     mapOf("value" to 7),
                 ),
             ).get(),
         )
         testWorld.applicationArguments.assertApplicationCount(
-            world.schema.objectField("Item", "children"),
+            world.schema.requireObjectField("Item", "children"),
             1,
         )
         testWorld.applicationArguments.assertApplicationCount(
-            world.schema.objectField("Item", "consume"),
+            world.schema.requireObjectField("Item", "consume"),
             1,
         )
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Item", "consume"),
+            world.schema.requireObjectField("Item", "consume"),
             mapOf("value" to 7),
         )
     }

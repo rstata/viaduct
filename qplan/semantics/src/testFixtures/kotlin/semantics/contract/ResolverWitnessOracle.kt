@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireObjectField
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
@@ -33,7 +34,7 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
         registeredResolverOccurrences(world.resolverRegistry)
             .map { cell ->
                 val field =
-                    world.schema.objectField(
+                    world.schema.requireObjectField(
                         cell.canonicalField.typeName,
                         cell.canonicalField.fieldName,
                     )
@@ -66,7 +67,7 @@ fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
         registeredResolverOccurrences(world.resolverRegistry)
             .map { cell ->
                 val field =
-                    world.schema.objectField(
+                    world.schema.requireObjectField(
                         cell.canonicalField.typeName,
                         cell.canonicalField.fieldName,
                     )
@@ -100,7 +101,7 @@ fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolv
     registeredResolverOccurrences(world.resolverRegistry)
         .filter { cell ->
             val field =
-                world.schema.objectField(
+                world.schema.requireObjectField(
                     cell.canonicalField.typeName,
                     cell.canonicalField.fieldName,
                 )
@@ -134,7 +135,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
         } &&
             result.conformsToSelectionsAt(
                 selections =
-                    constructionSelections.applicableGroundSelections(field.containingType),
+                    constructionSelections.applicableGroundSelections(field.containingDef),
                 path = path.dropLast(1),
             )
     }

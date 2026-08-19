@@ -54,7 +54,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                             conformsToSelectionsAt(
                                 selections =
                                     selectionStamped.applicableGroundSelections(
-                                        groundKey.field.containingType,
+                                        groundKey.field.containingDef,
                                     ),
                                 path = path,
                             )

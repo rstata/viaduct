@@ -1,7 +1,7 @@
 package semantics.resolver25
 
+import model.requireObjectField
 import model.ObjectEngineResult
-
 import model.objectOf
 import model.operationSelectionsFrom
 import model.testing.TestWorld
@@ -41,7 +41,7 @@ class PhasePlanRegressionTest {
         val world = testWorld.assumptions
         val outerKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "outer"),
+                world.schema.requireObjectField("Query", "outer"),
                 emptyMap(),
             )
 
@@ -62,7 +62,7 @@ class PhasePlanRegressionTest {
         )
         assertEquals(7, resolved.getCell(outerKey).getValue().get())
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Query", "middle"),
+            world.schema.requireObjectField("Query", "middle"),
             mapOf("value" to 7),
         )
     }

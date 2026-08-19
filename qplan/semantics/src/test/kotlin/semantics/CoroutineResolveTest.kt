@@ -1,5 +1,7 @@
 package semantics
 
+import model.requireField
+import model.requireObjectField
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
@@ -38,11 +40,11 @@ class CoroutineResolveTest {
                 selectiveResolvers = false,
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "first") to
+                        schema.requireField("Query", "first") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> 1 },
-                        schema.field("Query", "second") to
+                        schema.requireField("Query", "second") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> 2 },
@@ -97,15 +99,15 @@ class CoroutineResolveTest {
                 selectiveResolvers = false,
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "child") to
+                        schema.requireField("Query", "child") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> schema.objectOf("Child") },
-                        schema.field("Child", "first") to
+                        schema.requireField("Child", "first") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ -> 1 },
-                        schema.field("Child", "second") to
+                        schema.requireField("Child", "second") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ -> 2 },
@@ -166,21 +168,21 @@ class CoroutineResolveTest {
                 selectiveResolvers = false,
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "first") to
+                        schema.requireField("Query", "first") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { second }",
                                 ),
                             ) { _, _ -> 1 },
-                        schema.field("Query", "second") to
+                        schema.requireField("Query", "second") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> 2 },
                     )
                 },
             )
-        val first = testWorld.schema.objectField("Query", "first")
-        val second = testWorld.schema.objectField("Query", "second")
+        val first = testWorld.schema.requireObjectField("Query", "first")
+        val second = testWorld.schema.requireObjectField("Query", "second")
         val malformedRegistry =
             registryOverride(testWorld.resolverRegistry) { field, delegate ->
                 when (field) {
@@ -218,11 +220,11 @@ class CoroutineResolveTest {
                 selectiveResolvers = false,
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "failed") to
+                        schema.requireField("Query", "failed") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> throw failure },
-                        schema.field("Query", "waiting") to
+                        schema.requireField("Query", "waiting") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { failed }",
@@ -258,7 +260,7 @@ class CoroutineResolveTest {
                     """.trimIndent(),
                 selectiveResolvers = false,
                 fieldResolvers = { schema ->
-                    val items = schema.field("Query", "items")
+                    val items = schema.requireField("Query", "items")
                     mapOf(
                         items to
                             fieldResolverOf(
@@ -269,7 +271,7 @@ class CoroutineResolveTest {
                                     schema.objectOf("Item"),
                                 )
                             },
-                        schema.field("Item", "value") to
+                        schema.requireField("Item", "value") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Item"),
                             ) { _, _ -> 7 },
@@ -326,7 +328,7 @@ private fun registryOverride(
             resolver(field, delegate)
                 ?: error(
                     "Missing overridden resolver: " +
-                        "${field.containingType.typeName}.${field.fieldName}",
+                        "${field.containingDef.name}.${field.name}",
                 )
 
         override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> =
@@ -338,7 +340,7 @@ private fun Schema.groundKey(
     fieldName: String,
 ): ObjectEngineResult.GroundKey =
     ObjectEngineResult.GroundKey.of(
-        objectField(typeName, fieldName),
+        requireObjectField(typeName, fieldName),
         emptyMap(),
     )
 

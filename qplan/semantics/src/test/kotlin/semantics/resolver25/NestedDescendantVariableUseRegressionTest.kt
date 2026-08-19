@@ -1,7 +1,8 @@
 package semantics.resolver25
 
+import model.requireType
+import model.requireObjectField
 import model.Arguments
-
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -55,12 +56,12 @@ class NestedDescendantVariableUseRegressionTest {
         val world = testWorld.assumptions
         val itemKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "item"),
+                world.schema.requireObjectField("Query", "item"),
                 emptyMap(),
             )
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Item", "result"),
+                world.schema.requireObjectField("Item", "result"),
                 emptyMap(),
             )
 
@@ -118,33 +119,33 @@ class NestedDescendantVariableUseRegressionTest {
                 fieldResolvers = { schema ->
                     val holderKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Item", "holder"),
+                            schema.requireObjectField("Item", "holder"),
                             emptyMap(),
                         )
-                    val consume = schema.objectField("Holder", "consume")
+                    val consume = schema.requireObjectField("Holder", "consume")
                     val consumeKey = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 7))
                     val twoKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "two"),
+                            schema.requireObjectField("Payload", "two"),
                             emptyMap(),
                         )
                     mapOf(
-                        schema.objectField("Query", "item") to
+                        schema.requireObjectField("Query", "item") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Item") {
                                     "source" setTo 7
                                     "holder" setTo schema.objectOf("Holder")
                                 }
                             },
-                        schema.objectField("Item", "result") to
+                        schema.requireObjectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val holder =
-                                    input.selectionValues().getValue(holderKey.field.fieldName)
+                                    input.selectionValues().getValue(holderKey.field.name)
                                         as EngineObjectData.Sync
                                 val payload =
-                                    holder.selectionValues().getValue(consumeKey.field.fieldName)
+                                    holder.selectionValues().getValue(consumeKey.field.name)
                                         as EngineObjectData.Sync
-                                payload.selectionValues().getValue(twoKey.field.fieldName)
+                                payload.selectionValues().getValue(twoKey.field.name)
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Holder")) { _, _ ->
@@ -159,7 +160,7 @@ class NestedDescendantVariableUseRegressionTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Item", "result")
+                    val result = schema.requireObjectField("Item", "result")
                     mapOf(
                         Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(resultFragment, listOf("source")),
@@ -169,12 +170,12 @@ class NestedDescendantVariableUseRegressionTest {
         val world = testWorld.assumptions
         val itemKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "item"),
+                world.schema.requireObjectField("Query", "item"),
                 emptyMap(),
             )
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Item", "result"),
+                world.schema.requireObjectField("Item", "result"),
                 emptyMap(),
             )
 
@@ -214,7 +215,7 @@ class NestedDescendantVariableUseRegressionTest {
             Resolver25StructuralSignature.DESCENDANT_VARIABLE_OWNER,
         )
         val item = resolved.getCell(itemKey).getValue().get() as ObjectEngineResult
-        val payloadType = world.schema.type("Payload") as Schema.ObjectType
+        val payloadType = world.schema.requireType("Payload") as Schema.Object
 
         assertEquals(5, item.getCell(resultKey).getValue().get())
         assertEquals(1, consumeApplications)
@@ -225,7 +226,7 @@ class NestedDescendantVariableUseRegressionTest {
                     .merge(payloadType)
                     .instantiateBindings()
                     .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+                    .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
     }

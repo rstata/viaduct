@@ -1,7 +1,8 @@
 package semantics.resolver26
 
+import model.requireType
+import model.requireObjectField
 import model.Arguments
-
 import model.Assumptions
 import model.EngineResult
 import model.ListEngineResult
@@ -55,22 +56,22 @@ class ArgumentStampingTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.objectField("Query", "result") to
+                        schema.requireObjectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
                                 0
                             },
-                        schema.objectField("Query", "box") to
+                        schema.requireObjectField("Query", "box") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Box")
                             },
-                        schema.objectField("Box", "child") to
+                        schema.requireObjectField("Box", "child") to
                             fieldResolverOf(schema.emptyFragmentOf("Box")) { _, arguments ->
                                 arguments.fieldValues.getValue("value") as Int
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
@@ -79,21 +80,21 @@ class ArgumentStampingTest {
             )
         val world: Assumptions = testWorld.assumptions
         val resultField: Schema.ObjectField =
-            world.schema.objectField("Query", "result")
+            world.schema.requireObjectField("Query", "result")
         val resultKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
-        val boxType: Schema.ObjectType =
-            world.schema.type("Box") as Schema.ObjectType
+        val boxType: Schema.Object =
+            world.schema.requireType("Box") as Schema.Object
         val boxKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "box"),
+                world.schema.requireObjectField("Query", "box"),
                 emptyMap(),
             )
         val childDemand: SelectionForest =
             world.resolverRegistry
                 .resolver(resultField)
                 .stamp(listOf(resultKey))
-                .merge(world.schema.type("Query") as Schema.ObjectType)[boxKey]
+                .merge(world.schema.requireType("Query") as Schema.Object)[boxKey]
                 .subselections
         val sourceVariable: Arguments.Variable =
             childDemand.stampedVariables().single()
@@ -163,23 +164,23 @@ class ArgumentStampingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    val items = schema.objectField("Query", "items")
+                    val result = schema.requireObjectField("Query", "result")
+                    val items = schema.requireObjectField("Query", "items")
                     val itemsKey = ObjectEngineResult.GroundKey.of(items, emptyMap())
                     val itemType =
-                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
-                    val child = schema.objectField("Item", "child")
+                        (items.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val child = schema.requireObjectField("Item", "child")
                     val visibleChildKey = ObjectEngineResult.GroundKey.of(child, mapOf("value" to 7))
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val itemValues =
-                                    input.selectionValues().getValue(itemsKey.field.fieldName) as List<*>
+                                    input.selectionValues().getValue(itemsKey.field.name) as List<*>
                                 itemValues.sumOf { value ->
                                         val item = value as EngineObjectData.Sync
                                         val childValue =
                                             item.selectionValues().getValue(
-                                                visibleChildKey.field.fieldName,
+                                                visibleChildKey.field.name,
                                             ) as Int
                                         childValue
                                     }
@@ -198,7 +199,7 @@ class ArgumentStampingTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
@@ -208,12 +209,12 @@ class ArgumentStampingTest {
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 mapOf("seed" to 7),
             )
         val itemsKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "items"),
+                world.schema.requireObjectField("Query", "items"),
                 emptyMap(),
             )
         val fragment =
@@ -232,7 +233,7 @@ class ArgumentStampingTest {
                     assertIs<ObjectEngineResult>(items[index].getValue().get())
                 val childKey =
                     item.keys.single { groundKey ->
-                        groundKey.field.fieldName == "child"
+                        groundKey.field.name == "child"
                     }
                 assertIs<Stamp.Occurrence>(childKey.stamp)
             }
@@ -277,28 +278,28 @@ class ArgumentStampingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val frank = schema.objectField("Query", "frank")
+                    val frank = schema.requireObjectField("Query", "frank")
                     val oneKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "one"),
+                            schema.requireObjectField("Payload", "one"),
                             emptyMap(),
                         )
                     val twoKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "two"),
+                            schema.requireObjectField("Payload", "two"),
                             emptyMap(),
                         )
                     mapOf(
-                        schema.objectField("Query", "result") to
+                        schema.requireObjectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val ground =
                                     input.selectionValues().getValue("ground") as EngineObjectData.Sync
                                 val seedValue =
                                     input.selectionValues().getValue("seedValue") as EngineObjectData.Sync
                                 val one =
-                                    ground.selectionValues().getValue(oneKey.field.fieldName) as Int
+                                    ground.selectionValues().getValue(oneKey.field.name) as Int
                                 val two =
-                                    seedValue.selectionValues().getValue(twoKey.field.fieldName) as Int
+                                    seedValue.selectionValues().getValue(twoKey.field.name) as Int
                                 one + two
                             },
                         frank to
@@ -313,17 +314,17 @@ class ArgumentStampingTest {
                                     frankDemandFields +=
                                         demand
                                             .merge(
-                                                schema.type("Payload") as Schema.ObjectType,
+                                                schema.requireType("Payload") as Schema.Object,
                                             ).groundKeys()
                                             .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.fieldName
+                                                groundKey.field.name
                                             }
                                 }
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
@@ -335,7 +336,7 @@ class ArgumentStampingTest {
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 mapOf(
                     "seed" to "hi",
                     "other" to "hi",
@@ -387,33 +388,33 @@ class ArgumentStampingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val payloadType = schema.type("Payload") as Schema.ObjectType
-                    val frank = schema.objectField("Query", "frank")
+                    val payloadType = schema.requireType("Payload") as Schema.Object
+                    val frank = schema.requireObjectField("Query", "frank")
                     val frankKey = ObjectEngineResult.GroundKey.of(frank, mapOf("arg" to "hi"))
                     val oneKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "one"),
+                            schema.requireObjectField("Payload", "one"),
                             emptyMap(),
                         )
                     val twoKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "two"),
+                            schema.requireObjectField("Payload", "two"),
                             emptyMap(),
                         )
                     mapOf(
-                        schema.objectField("Query", "left") to
+                        schema.requireObjectField("Query", "left") to
                             fieldResolverOf(schema.fragmentFrom(leftFragment)) { input, _ ->
                                 val payload =
-                                    input.selectionValues().getValue(frankKey.field.fieldName)
+                                    input.selectionValues().getValue(frankKey.field.name)
                                         as EngineObjectData.Sync
-                                payload.selectionValues().getValue(oneKey.field.fieldName)
+                                payload.selectionValues().getValue(oneKey.field.name)
                             },
-                        schema.objectField("Query", "right") to
+                        schema.requireObjectField("Query", "right") to
                             fieldResolverOf(schema.fragmentFrom(rightFragment)) { input, _ ->
                                 val payload =
-                                    input.selectionValues().getValue(frankKey.field.fieldName)
+                                    input.selectionValues().getValue(frankKey.field.name)
                                         as EngineObjectData.Sync
-                                payload.selectionValues().getValue(twoKey.field.fieldName)
+                                payload.selectionValues().getValue(twoKey.field.name)
                             },
                         frank to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -429,15 +430,15 @@ class ArgumentStampingTest {
                                             .merge(payloadType)
                                             .groundKeys()
                                             .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.fieldName
+                                                groundKey.field.name
                                             }
                                 }
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val left = schema.objectField("Query", "left")
-                    val right = schema.objectField("Query", "right")
+                    val left = schema.requireObjectField("Query", "left")
+                    val right = schema.requireObjectField("Query", "right")
                     mapOf(
                         Arguments.Variable.of(left, "seed") to schema.fromArgument(left, "seed"),
                         Arguments.Variable.of(right, "seed") to schema.fromArgument(right, "seed"),
@@ -447,12 +448,12 @@ class ArgumentStampingTest {
         val world = testWorld.assumptions
         val leftKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "left"),
+                world.schema.requireObjectField("Query", "left"),
                 mapOf("seed" to "hi"),
             )
         val rightKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "right"),
+                world.schema.requireObjectField("Query", "right"),
                 mapOf("seed" to "hi"),
             )
         val fragment =
@@ -470,7 +471,7 @@ class ArgumentStampingTest {
                 resolve(fragment.subselections)
             }
         val frankKeys =
-            resolved.keys.filter { groundKey -> groundKey.field.fieldName == "frank" }
+            resolved.keys.filter { groundKey -> groundKey.field.name == "frank" }
 
         assertEquals(3, resolved.getCell(leftKey).getValue().get())
         assertEquals(5, resolved.getCell(rightKey).getValue().get())
@@ -483,11 +484,11 @@ class ArgumentStampingTest {
         assertEquals(
             listOf(
                 Arguments.Resolved.of(
-                    world.schema.objectField("Query", "frank"),
+                    world.schema.requireObjectField("Query", "frank"),
                     mapOf("arg" to "hi"),
                 ),
                 Arguments.Resolved.of(
-                    world.schema.objectField("Query", "frank"),
+                    world.schema.requireObjectField("Query", "frank"),
                     mapOf("arg" to "hi"),
                 ),
             ),

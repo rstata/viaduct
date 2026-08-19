@@ -13,7 +13,7 @@ import model.testing.GJSelectionParser
 import model.testing.GJSchema
 
 /** Parses one post-validation fragment as test-fixture preparation outside semantic model logic. */
-fun Assumptions.selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> =
+fun Assumptions.selectionsFrom(fragment: String): Pair<Schema.CompositeTypeDef, SelectionForest> =
     schema.selectionParser().selectionsFrom(fragment)
 
 /**
@@ -103,7 +103,7 @@ fun Assumptions.fragmentFrom(source: String): Fragment =
 /** Constructs the model-only empty fragment that GraphQL text cannot express. */
 fun Schema.emptyFragmentOf(typeName: String): Fragment =
     Fragment.of(
-        nominalType = type(typeName) as Schema.CompositeType,
+        nominalType = requireType(typeName) as Schema.CompositeTypeDef,
         subselections = selectionForestOf(),
     )
 

@@ -123,7 +123,7 @@ private fun ResolverContract.resolvePassiveOutputFixture(): PassiveOutputFixture
             result.getCell(world.schema.contractKey("Query", "user")).get(),
         )
     return PassiveOutputFixtureResult(
-        fieldNames = user.keys.map { it.field.fieldName }.toSet(),
+        fieldNames = user.keys.map { it.field.name }.toSet(),
     )
 }
 
@@ -161,8 +161,8 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
                 """.trimIndent(),
             applicationObserver = { field, input, _, _ ->
                 if (
-                    field.containingType.typeName == "Query" &&
-                    field.fieldName == "chain"
+                    field.containingDef.name == "Query" &&
+                    field.name == "chain"
                 ) {
                     require(input.hasExactlyFields())
                 }
@@ -181,7 +181,7 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
         )
     val nextKey = world.schema.contractKey("Chain", "next")
     return RecursiveOutputFixtureResult(
-        fieldNames = next.keys.map { it.field.fieldName }.toSet(),
+        fieldNames = next.keys.map { it.field.name }.toSet(),
         hasNext = nextKey in next.keys,
         nextValue = next.keys.takeIf { nextKey in it }?.let { next.getCell(nextKey).get() },
     )

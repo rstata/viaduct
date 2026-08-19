@@ -1,7 +1,6 @@
 package semantics.arbitrary
 
 import model.Arguments
-
 import model.EngineResult
 import model.EngineErrorData
 import model.ListEngineResult
@@ -11,6 +10,8 @@ import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
 import model.objectOf
+import model.requireField
+import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import java.util.concurrent.Executors
@@ -25,7 +26,7 @@ class ResolutionWitnessTest {
     fun `fingerprints ignore permutations and discriminate semantic input differences`() {
         val world = fingerprintWorld()
         val schema = world.schema
-        val search = schema.field("Query", "search")
+        val search = schema.requireField("Query", "search")
         val baseArguments =
             arguments(
                 search,
@@ -125,7 +126,7 @@ class ResolutionWitnessTest {
     fun `application log preserves exact multiplicity snapshots and bounds`() {
         val world = fingerprintWorld()
         val schema = world.schema
-        val search = schema.field("Query", "search")
+        val search = schema.requireField("Query", "search")
         val firstArguments = arguments(search, limit = 3, rank = 7, tags = listOf(1, 2))
         val secondArguments = arguments(search, limit = 4, rank = 7, tags = listOf(1, 2))
         val input =
@@ -184,7 +185,7 @@ class ResolutionWitnessTest {
     @Test
     fun `application log can suspend and restore recording`() {
         val world = fingerprintWorld()
-        val field = world.schema.field("Query", "search")
+        val field = world.schema.requireField("Query", "search")
         val arguments = arguments(field, limit = 3, rank = 7, tags = listOf(1, 2))
         val input = world.schema.objectOf("Query")
         val coordinate = FieldCoordinate("Query", "search")
@@ -202,7 +203,7 @@ class ResolutionWitnessTest {
     @Test
     fun `application log records concurrent resolver applications exactly`() {
         val world = fingerprintWorld()
-        val field = world.schema.field("Query", "search")
+        val field = world.schema.requireField("Query", "search")
         val arguments = arguments(field, limit = 3, rank = 7, tags = listOf(1, 2))
         val input = world.schema.objectOf("Query")
         val coordinate = FieldCoordinate("Query", "search")
@@ -251,23 +252,23 @@ class ResolutionWitnessTest {
         val itemKey =
             ResolverApplicationKey(
                 FieldCoordinate("Query", "item"),
-                Arguments.Resolved.of(schema.field("Query", "item"), emptyMap()),
+                Arguments.Resolved.of(schema.requireField("Query", "item"), emptyMap()),
             )
         val itemsKey =
             ResolverApplicationKey(
                 FieldCoordinate("Query", "items"),
-                Arguments.Resolved.of(schema.field("Query", "items"), emptyMap()),
+                Arguments.Resolved.of(schema.requireField("Query", "items"), emptyMap()),
             )
         val helperKey =
             ResolverApplicationKey(
                 FieldCoordinate("Query", "helper"),
-                Arguments.Resolved.of(schema.field("Query", "helper"), emptyMap()),
+                Arguments.Resolved.of(schema.requireField("Query", "helper"), emptyMap()),
             )
         val computedOneKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
                 Arguments.Resolved.of(
-                    schema.field("Payload", "computed"),
+                    schema.requireField("Payload", "computed"),
                     mapOf("scale" to 1),
                 ),
             )
@@ -275,14 +276,14 @@ class ResolutionWitnessTest {
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
                 Arguments.Resolved.of(
-                    schema.field("Payload", "computed"),
+                    schema.requireField("Payload", "computed"),
                     mapOf("scale" to 2),
                 ),
             )
         val baseKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "base"),
-                Arguments.Resolved.of(schema.field("Payload", "base"), emptyMap()),
+                Arguments.Resolved.of(schema.requireField("Payload", "base"), emptyMap()),
             )
 
         assertEquals(
@@ -341,7 +342,7 @@ class ResolutionWitnessTest {
         log.record(FieldCoordinate("Query", "item"), itemKey.arguments, queryInput)
         log.record(
             FieldCoordinate("Query", "dead"),
-            Arguments.Resolved.of(schema.field("Query", "dead"), emptyMap()),
+            Arguments.Resolved.of(schema.requireField("Query", "dead"), emptyMap()),
             queryInput,
         )
         assertEquals(
@@ -356,7 +357,7 @@ class ResolutionWitnessTest {
     fun `application count oracle distinguishes value-distinct equal-key list occurrences`() {
         val world = traversalWorld()
         val schema = world.schema
-        val computedField = schema.field("Payload", "computed")
+        val computedField = schema.requireField("Payload", "computed")
         val computedKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
@@ -416,10 +417,10 @@ class ResolutionWitnessTest {
         val schema = world.schema
         val itemsKey =
             ObjectEngineResult.GroundKey.of(
-                schema.objectField("Query", "items"),
+                schema.requireObjectField("Query", "items"),
                 emptyMap(),
             )
-        val computedField = schema.objectField("Payload", "computed")
+        val computedField = schema.requireObjectField("Payload", "computed")
         val computedGroundKey =
             ObjectEngineResult.GroundKey.of(
                 computedField,
@@ -493,7 +494,7 @@ class ResolutionWitnessTest {
         )
 
     private fun arguments(
-        field: Schema.OutputField,
+        field: Schema.Field,
         limit: Int,
         rank: Int,
         tags: List<Int>,
@@ -560,21 +561,21 @@ class ResolutionWitnessTest {
                         "fragment ignored on Payload { base }",
                     )
                 mapOf(
-                    schema.field("Query", "item") to
+                    schema.requireField("Query", "item") to
                         fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData },
-                    schema.field("Query", "items") to
+                    schema.requireField("Query", "items") to
                         fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData },
-                    schema.field("Query", "helper") to
+                    schema.requireField("Query", "helper") to
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                             EngineErrorData
                         },
-                    schema.field("Query", "dead") to
+                    schema.requireField("Query", "dead") to
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                             EngineErrorData
                         },
-                    schema.field("Payload", "computed") to
+                    schema.requireField("Payload", "computed") to
                         fieldResolverOf(payloadNeedsBase) { _, _ -> EngineErrorData },
-                    schema.field("Payload", "base") to
+                    schema.requireField("Payload", "base") to
                         fieldResolverOf(schema.emptyFragmentOf("Payload")) { _, _ ->
                             EngineErrorData
                         },
@@ -583,5 +584,5 @@ class ResolutionWitnessTest {
         )
 
     private fun coordinate(field: Schema.ObjectField): FieldCoordinate =
-        FieldCoordinate(field.containingType.typeName, field.fieldName)
+        FieldCoordinate(field.containingDef.name, field.name)
 }

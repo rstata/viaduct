@@ -28,11 +28,11 @@ suspend fun Arguments.fetchBindings(
 
 private inline fun Arguments.groundedArguments(
     expectedType: Schema.FieldArguments,
-    ground: (ArgumentExpression?, TypeExpr<Schema.InputType>) -> VariableBinding,
+    ground: (ArgumentExpression?, TypeExpr<Schema.InputTypeDef>) -> VariableBinding,
 ): Arguments.Ground {
     val fields = linkedMapOf<String, EngineInputData?>()
     fieldExpressions().forEach { (name, value) ->
-        val typeExpr = expectedType.fields.getValue(name).typeExpr
+        val typeExpr = expectedType.requireField(name).type
         when (val binding = ground(value, typeExpr)) {
             VariableBinding.Error -> return Arguments.Error
             is VariableBinding.Input -> fields[name] = binding.value
@@ -43,7 +43,7 @@ private inline fun Arguments.groundedArguments(
 
 context(world: Assumptions)
 private fun ArgumentExpression?.instantiateBindings(
-    expectedType: TypeExpr<Schema.InputType>,
+    expectedType: TypeExpr<Schema.InputTypeDef>,
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
@@ -69,12 +69,12 @@ private fun ArgumentExpression?.instantiateBindings(
         }
         is Map<*, *> -> {
             val expectedObjectType = (expectedType as? TypeExpr.Named)?.baseType
-            require(expectedObjectType is Schema.InputObjectType) {
+            require(expectedObjectType is Schema.Input) {
                 "Argument input-object expression does not match $expectedType"
             }
             val grounded = linkedMapOf<String, EngineInputData?>()
             toStringKeyedArgumentMap().forEach { (name, value) ->
-                val fieldType = expectedObjectType.fields.getValue(name).typeExpr
+                val fieldType = expectedObjectType.requireField(name).type
                 when (val binding = value.instantiateBindings(fieldType)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded[name] = binding.value
@@ -87,7 +87,7 @@ private fun ArgumentExpression?.instantiateBindings(
 
 context(world: Assumptions)
 private suspend fun ArgumentExpression?.fetchBindings(
-    expectedType: TypeExpr<Schema.InputType>,
+    expectedType: TypeExpr<Schema.InputTypeDef>,
 ): VariableBinding {
     return when (this) {
         null -> VariableBinding.of(null)
@@ -113,12 +113,12 @@ private suspend fun ArgumentExpression?.fetchBindings(
         }
         is Map<*, *> -> {
             val expectedObjectType = (expectedType as? TypeExpr.Named)?.baseType
-            require(expectedObjectType is Schema.InputObjectType) {
+            require(expectedObjectType is Schema.Input) {
                 "Argument input-object expression does not match $expectedType"
             }
             val grounded = linkedMapOf<String, EngineInputData?>()
             for ((name, value) in toStringKeyedArgumentMap()) {
-                val fieldType = expectedObjectType.fields.getValue(name).typeExpr
+                val fieldType = expectedObjectType.requireField(name).type
                 when (val binding = value.fetchBindings(fieldType)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded[name] = binding.value
@@ -131,7 +131,7 @@ private suspend fun ArgumentExpression?.fetchBindings(
 }
 
 private fun VariableBinding.coerceTo(
-    expectedType: TypeExpr<Schema.InputType>,
+    expectedType: TypeExpr<Schema.InputTypeDef>,
 ): VariableBinding =
     when (this) {
         VariableBinding.Error -> this

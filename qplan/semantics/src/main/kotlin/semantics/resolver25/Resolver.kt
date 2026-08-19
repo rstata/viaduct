@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.EngineResultCell
 import model.EngineInputData
 import model.EngineInputListData
 import model.ErrorEngineResult
@@ -26,7 +27,6 @@ import model.Promise
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.VariableBinding
@@ -592,7 +592,7 @@ private class ObjectResultOrchestrator(
             if (value == null) return VariableBinding.of(null)
             if (value == ErrorEngineResult) return VariableBinding.Error
             if (index == definition.path.lastIndex) {
-                return value.toProviderBinding()
+                return value.toProviderBinding(groundedKey.field.typeExpr)
             }
             current =
                 value as? ObjectEngineResult
@@ -711,7 +711,7 @@ private class ObjectResultOrchestrator(
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     private suspend fun resolveKey(
         keyState: KeyState,
-        cell: EngineResult.Cell,
+        cell: EngineResultCell,
         inputMaterializeSelections: MaterializeSelectionForest? = null,
     ) {
         val selection = keyState.sealDemandForLaunch()
@@ -726,7 +726,7 @@ private class ObjectResultOrchestrator(
                 )
                 runtime.instrumentation.valuePublished(coordinate)
                 cell.getValue().complete(ErrorEngineResult)
-                cell.setAccessAccepted(Value.Error)
+                cell.setAccessResult(ErrorEngineResult)
             }
             else -> {
                 val resolutionSelections: SelectionForest =
@@ -784,7 +784,7 @@ private class ObjectResultOrchestrator(
                 descendantsNeedingResolution.awaitAll()
                 runtime.instrumentation.valuePublished(coordinate)
                 cell.getValue().complete(resolvedValue.engineResult)
-                cell.setAccessAccepted(Value.Boolean.of(true))
+                cell.setAccessResult(true)
             }
         }
     }
@@ -1063,7 +1063,7 @@ private suspend fun Value.Object.resolveObjectValue(
     resolvedFields.forEach { resolvedField ->
         engineResult.reserveCell(resolvedField.groundedKey).also { cell ->
             cell.setValue(resolvedField.value.engineResult)
-            cell.setAccessAccepted(Value.Boolean.of(true))
+            cell.setAccessResult(true)
         }
     }
     val localResolution: ObjectResolution? =
@@ -1111,14 +1111,18 @@ private class ResolvedField(
     val value: ResolvedValue,
 )
 
-private fun EngineResult.toProviderBinding(): VariableBinding =
+private fun EngineResult.toProviderBinding(
+    expectedType: TypeExpr<Schema.OutputType>,
+): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
-        is SimpleEngineResult ->
-            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
+        else ->
+            VariableBinding.of(
+                toEngineSimpleData(expectedType.baseType as Schema.SimpleType),
+            )
     }
 
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
@@ -1132,7 +1136,7 @@ private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
             if (result == null) {
                 VariableBinding.of(null)
             } else {
-                result.toProviderBinding()
+                result.toProviderBinding(typeExpr)
             }
         when (binding) {
             VariableBinding.Error -> return VariableBinding.Error

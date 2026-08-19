@@ -7,7 +7,8 @@ import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.PathComponent
-import model.SimpleEngineResult
+import model.Schema
+import model.TypeExpr
 import model.Value
 import model.toValue
 import semantics.RuntimeSupport
@@ -46,6 +47,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                 .reserveValue()
                 .await()
                 .materializeSelectedValue(
+                    expectedType = storedGroundKey.field.typeExpr,
                     selections = selection.subselections,
                     reader = reader,
                     resultPath = resultPath + storedGroundKey,
@@ -64,6 +66,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
 // Recursively materializes one selected engine result while preserving null, error, and list shape.
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
 private suspend fun EngineResult?.materializeSelectedValue(
+    expectedType: TypeExpr<Schema.OutputType>,
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -71,7 +74,6 @@ private suspend fun EngineResult?.materializeSelectedValue(
     return when (this) {
         null -> null
         ErrorEngineResult -> Value.Error
-        is SimpleEngineResult -> toValue()
         is ObjectEngineResult -> {
             materializeSelectedObject(
                 selections = selections,
@@ -86,11 +88,13 @@ private suspend fun EngineResult?.materializeSelectedValue(
                 values =
                     indices.map { index ->
                         get(index).getValue().await().materializeSelectedValue(
+                            expectedType = typeExpr,
                             selections = selections,
                             reader = reader,
                             resultPath = resultPath + ListEngineResult.Index.of(index),
                         )
                     },
             )
+        else -> toValue(expectedType.baseType as Schema.SimpleType)
     }
 }

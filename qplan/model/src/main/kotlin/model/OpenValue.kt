@@ -1,6 +1,6 @@
 package model
 
-import model.invariants.conformsToSchemaType
+import model.invariants.conformsToInputSchemaType
 
 /**
  * An opaque, schema-checked input expression that may contain variables.
@@ -285,7 +285,7 @@ private fun OpenValue.conformsToOpenSchemaType(
 ): Boolean =
     when (this) {
         Value.Error, is Value.Variable -> true
-        is OpenValue.Ground -> data.conformsToSchemaType(typeExpr)
+        is OpenValue.Ground -> data.conformsToInputSchemaType(typeExpr)
         is OpenListValueImpl ->
             typeExpr is TypeExpr.List &&
                 values.all { value ->

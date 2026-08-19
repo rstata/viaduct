@@ -7,7 +7,6 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.OpenArguments
 import model.PathComponent
-import model.SimpleEngineResult
 import model.Stamp
 import model.Value
 import model.applicableGroundSelections
@@ -81,7 +80,6 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
     when (this) {
         null,
         ErrorEngineResult,
-        is SimpleEngineResult,
         -> true
 
         is ObjectEngineResult -> objectIsClosedUnderResolverDemand(path)
@@ -91,6 +89,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
                     path + ListEngineResult.Index.of(index),
                 )
             }
+        else -> true
     }
 
 internal fun OpenArguments.Ground.argumentsContainErrorValue(): Boolean =

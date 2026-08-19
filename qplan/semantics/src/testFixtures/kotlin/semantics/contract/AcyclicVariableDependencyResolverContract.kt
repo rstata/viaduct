@@ -2,7 +2,6 @@ package semantics.contract
 
 import io.kotest.matchers.collections.shouldContainExactly
 import model.EngineResult
-import model.IntEngineResult
 import model.ObjectEngineResult
 import model.Value
 import model.testing.TestWorld
@@ -49,7 +48,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { c }")
 
-        assertEquals(IntEngineResult.of(1), resolved.getCell(cKey).get())
+        assertEquals(1, resolved.getCell(cKey).get())
         testWorld.applicationArguments.assertDistinctArguments(
             world.schema.objectField("Query", "a"),
             mapOf("seed" to 1),
@@ -95,7 +94,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
         val resolved: ObjectEngineResult =
             resolveAndValidate(world, "fragment ignored on Query { outer }")
 
-        assertEquals(IntEngineResult.of(1), resolved.getCell(outerKey).get())
+        assertEquals(1, resolved.getCell(outerKey).get())
     }
 
     @Test
@@ -133,7 +132,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(IntEngineResult.of(4), resolved.getCell(resultKey).get())
+        assertEquals(4, resolved.getCell(resultKey).get())
         argumentApplications.toList().shouldContainExactly(
             "first" to
                 Value.Arguments.of(

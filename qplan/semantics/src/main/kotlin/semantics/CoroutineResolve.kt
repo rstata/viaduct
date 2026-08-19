@@ -6,6 +6,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import model.Assumptions
 import model.EngineResult
+import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
@@ -86,14 +87,14 @@ private suspend fun resolveSlot(
     source: Value.Object,
     selection: ObjectSelection,
     target: ObjectEngineResult,
-    cell: EngineResult.Cell,
+    cell: EngineResultCell,
 ) {
     val key = selection.groundKey()
     val valuePromise = cell.getValue()
     when (val arguments = key.arguments) {
         model.OpenArguments.Ground.Error -> {
             valuePromise.complete(ErrorEngineResult)
-            cell.setAccessAccepted(Value.Error)
+            cell.setAccessResult(ErrorEngineResult)
         }
         is Value.Arguments ->
             coroutineScope {
@@ -138,7 +139,7 @@ private suspend fun resolveSlot(
                     )
                 }
                 valuePromise.complete(resolvedValue.engineResult)
-                cell.setAccessAccepted(Value.Boolean.of(true))
+                cell.setAccessResult(true)
             }
     }
 }

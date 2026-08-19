@@ -1,7 +1,6 @@
 package semantics.resolver25
 
 import model.EngineResult
-import model.IntEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Value
@@ -78,7 +77,7 @@ class DescendantVariableOwnerRegressionTest {
                     ),
                 ).getValue().get() as ListEngineResult
         assertEquals(
-            listOf(IntEngineResult.of(13), IntEngineResult.of(25)),
+            listOf(13, 25),
             items.map { cell ->
                 val item = cell.getValue().get() as ObjectEngineResult
                 item

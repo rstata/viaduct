@@ -2,7 +2,6 @@ package semantics.resolver25
 
 import model.ObjectEngineResult
 
-import model.IntEngineResult
 import model.Value
 import model.fragmentFrom
 import model.objectOf
@@ -62,7 +61,7 @@ class PhasePlanRegressionTest {
             observation.lifecycleEvents.resolver25StructuralSignatures(),
             Resolver25StructuralSignature.MULTIPLE_OBJECT_PATH_OWNERS,
         )
-        assertEquals(IntEngineResult.of(7), resolved.getCell(outerKey).getValue().get())
+        assertEquals(7, resolved.getCell(outerKey).getValue().get())
         testWorld.applicationArguments.assertArguments(
             world.schema.objectField("Query", "middle"),
             mapOf("value" to 7),

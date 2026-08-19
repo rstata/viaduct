@@ -1,7 +1,6 @@
 package semantics.contract
 
 import model.EngineResult
-import model.IntEngineResult
 import model.ObjectEngineResult
 import model.Value
 import model.testing.TestWorld
@@ -50,7 +49,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
             ).get() as ObjectEngineResult
 
         assertEquals(
-            IntEngineResult.of(11),
+            11,
             item.getCell(
                 ObjectEngineResult.GroundKey.of(
                     world.schema.objectField("Item", "result"),

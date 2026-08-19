@@ -58,7 +58,7 @@ Resolver inputs must install before the consumer launches. Provider reads use ex
 
 Resolver output is converted to passive engine-result shape. `outputAvailable` publishes the raw output and its result tree so later descendant demand can traverse it. Child orchestrators become ready before the containing value promise is completed, preserving install-before-parent-publication.
 
-Argument errors complete the value and access result directly. Successful values complete the exact cell once and set `accessAccepted` to true.
+Argument errors complete both the value and access-result slots with `ErrorEngineResult`. Successful values complete the exact cell once and set its access result to the Boolean result `true`.
 
 ## OER Readiness
 

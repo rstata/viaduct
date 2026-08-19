@@ -378,7 +378,7 @@ class SelectionMergeTest {
             )
         val groundKey = ordinary.key as ObjectEngineResult.GroundKey
         val value = 9
-        val resultValue = IntEngineResult.of(9)
+        val resultValue = 9
         val result =
             ObjectEngineResult.of(
                 fixture.query,
@@ -482,7 +482,7 @@ class SelectionMergeTest {
         val intermediateKey = intermediate.key as ObjectEngineResult.GroundKey
         val leafKey = leaf.key as ObjectEngineResult.GroundKey
         val leafValue = 7
-        val leafResult = IntEngineResult.of(7)
+        val leafResult = 7
         val child =
             ObjectEngineResult.of(
                 fixture.item,

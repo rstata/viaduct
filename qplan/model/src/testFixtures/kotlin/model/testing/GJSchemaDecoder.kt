@@ -25,8 +25,6 @@ import graphql.schema.GraphQLType
 import graphql.schema.GraphQLTypeUtil
 import graphql.schema.GraphQLUnionType
 import graphql.schema.InputValueWithState
-import model.EngineEnumValueData
-import model.EngineIDData
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
@@ -130,7 +128,7 @@ internal class GJSchemaDecoder(
                         types[graphQLType.name] =
                             EnumTypeImpl(
                                 typeName = graphQLType.name,
-                                values = graphQLType.values.mapTo(linkedSetOf()) { it.name },
+                                valueNames = graphQLType.values.mapTo(linkedSetOf()) { it.name },
                             )
 
                     is GraphQLInputObjectType -> {
@@ -546,10 +544,7 @@ internal fun decodeLiteral(
         is graphql.schema.GraphQLEnumType ->
             OpenValue.of(
                 decodeModelInputType(type, schema),
-                EngineEnumValueData(
-                    value = (value as EnumValue).name,
-                    type = schema.type(type.name) as Schema.EnumType,
-                ),
+                (value as EnumValue).name,
             )
 
         is GraphQLInputObjectType ->
@@ -583,13 +578,11 @@ private fun decodeScalarLiteral(
         Schema.StringType -> (value as StringValue).value!!
         Schema.BooleanType -> (value as BooleanValue).isValue
         Schema.IDType ->
-            EngineIDData(
-                when (value) {
-                    is StringValue -> value.value!!
-                    is IntValue -> value.value.toString()
-                    else -> error("Invalid ID literal: $value")
-                },
-            )
+            when (value) {
+                is StringValue -> value.value!!
+                is IntValue -> value.value.toString()
+                else -> error("Invalid ID literal: $value")
+            }
     }
 
 private inline fun decodeInputObjectFields(
@@ -693,11 +686,7 @@ private fun decodeExternal(
                 schema.type(type.name) as Schema.ScalarType,
                 value,
             )
-        is graphql.schema.GraphQLEnumType ->
-            EngineEnumValueData(
-                value = value.toString(),
-                type = schema.type(type.name) as Schema.EnumType,
-            )
+        is graphql.schema.GraphQLEnumType -> value.toString()
 
         is GraphQLInputObjectType ->
             decodeObjectExternal(type, value, variableValues, schema)
@@ -715,7 +704,7 @@ private fun decodeScalarExternal(
         Schema.FloatType -> (value as Number).toDouble()
         Schema.StringType -> value as String
         Schema.BooleanType -> value as Boolean
-        Schema.IDType -> EngineIDData(value.toString())
+        Schema.IDType -> value.toString()
     }
 
 private fun decodeModelInputType(
@@ -821,8 +810,16 @@ private inline fun <reified T> requireType(value: EngineInputData): T {
 
 private class EnumTypeImpl(
     override val typeName: String,
-    override val values: Set<String>,
-) : Schema.EnumType
+    valueNames: Set<String>,
+) : Schema.EnumType {
+    override val values: Map<String, Schema.EnumValue> =
+        valueNames.associateWith { name -> EnumValueImpl(name, this) }
+}
+
+private class EnumValueImpl(
+    override val name: String,
+    override val containingType: Schema.EnumType,
+) : Schema.EnumValue
 
 private class ObjectTypeImpl(
     override val typeName: String,

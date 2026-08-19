@@ -212,7 +212,7 @@ suspend fun SelectionForest.mergeWithVariables(
                             )
                     }
                 } else {
-                    value.toPathVariableBinding()
+                    value.toPathVariableBinding(groundKey.field.typeExpr)
                 }
             if (bindings.containsKey(variable)) {
                 require(bindings[variable] == binding) {
@@ -227,15 +227,21 @@ suspend fun SelectionForest.mergeWithVariables(
     return normalizedObjectSelectionForest(type, childrenByKey) to bindings
 }
 
-private fun EngineResult?.toPathVariableBinding(): VariableBinding =
+private fun EngineResult?.toPathVariableBinding(
+    expectedType: TypeExpr<Schema.OutputType>,
+): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
         ErrorEngineResult -> VariableBinding.Error
-        is SimpleEngineResult ->
-            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toPathVariableInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
+        else -> {
+            val simpleType =
+                (expectedType as? TypeExpr.Named)?.baseType as? Schema.SimpleType
+                    ?: error("A path-variable provider has a non-simple terminal type")
+            VariableBinding.of(toEngineSimpleData(simpleType))
+        }
     }
 
 private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
@@ -244,7 +250,7 @@ private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
     }
     val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
-        when (val binding = get(index).getValue().get().toPathVariableBinding()) {
+        when (val binding = get(index).getValue().get().toPathVariableBinding(typeExpr)) {
             VariableBinding.Error -> return VariableBinding.Error
             is VariableBinding.Input -> values += binding.value
         }

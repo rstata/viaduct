@@ -2,7 +2,6 @@ package model.testing
 
 import model.ObjectEngineResult
 
-import model.EngineIDData
 import model.OpenArguments
 import model.Schema
 import model.SourceSchemaAdapter
@@ -238,7 +237,7 @@ class ResolverTestDslTest {
         val viewer = schema.objectField("Query", "viewer_V_A_node")
         val bridge =
             assertIs<Value.Object>(
-                world.apply(viewer, arguments = mapOf("id" to EngineIDData("user-2"))),
+                world.apply(viewer, arguments = mapOf("id" to "user-2")),
             )
         val node = schema.objectField("User_V_A_Bridge", "node")
         val user =
@@ -256,6 +255,27 @@ class ResolverTestDslTest {
         )
         val sourceSchema = SourceSchemaAdapter(schema)
         assertEquals(viewer, sourceSchema.field("Query", "viewer"))
+    }
+
+    @Test
+    fun `rejects an ID result expression backed by a String argument`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  value(text: String!): ID!
+                    @resolver(result: "idFrom(${'$'}text)")
+                }
+                """.trimIndent(),
+            )
+        val value = world.schema.objectField("Query", "value")
+
+        val exception =
+            assertThrows<IllegalArgumentException> {
+                world.apply(value, arguments = mapOf("text" to "same"))
+            }
+
+        assertEquals(true, exception.message.orEmpty().contains("requires an ID argument"))
     }
 
     @Test

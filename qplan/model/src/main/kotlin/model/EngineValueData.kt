@@ -1,6 +1,9 @@
 package model
 
-/** Int, finite Double, Boolean, String, [EngineIDData], or [EngineEnumValueData]. */
+/**
+ * Int, finite Double, Boolean, or String. String represents GraphQL String, ID, and enum values;
+ * the expected schema type disambiguates them.
+ */
 typealias EngineSimpleData = Any
 
 /** A recursively validated list of nullable engine input values. */
@@ -12,29 +15,19 @@ typealias EngineInputObjectData = Map<String, EngineInputData?>
 /** [EngineSimpleData], [EngineInputListData], or [EngineInputObjectData]. */
 typealias EngineInputData = Any
 
-/** A GraphQL ID, kept distinct from a GraphQL String in engine input data. */
-data class EngineIDData(
-    val id: String,
-)
-
-/** A GraphQL enum member and its canonical enum definition. */
-data class EngineEnumValueData(
-    val value: String,
-    val type: Schema.EnumType,
-) {
-    init {
-        require(value in type.values) { "$value is not a value of ${type.typeName}" }
-    }
-}
-
-fun SimpleEngineResult.toEngineSimpleData(): EngineSimpleData =
-    when (this) {
-        is IntEngineResult -> intValue
-        is FloatEngineResult -> floatValue
-        is StringEngineResult -> stringValue
-        is BooleanEngineResult -> booleanValue
-        is IDEngineResult -> EngineIDData(idValue)
-        is EnumEngineResult -> EngineEnumValueData(enumValue, type)
+/** Converts a simple engine result to production-compatible engine input data. */
+fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleType): EngineSimpleData =
+    when (expectedType) {
+        Schema.IntType -> cast<Int>()
+        Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
+        Schema.StringType -> cast<String>()
+        Schema.BooleanType -> cast<Boolean>()
+        Schema.IDType -> cast<Schema.ID>().value
+        is Schema.EnumType -> {
+            val value = cast<Schema.EnumValue>()
+            if (value.containingType != expectedType) throw ClassCastException()
+            value.name
+        }
     }
 
 /** Recursively copies [value] as [EngineInputData] conforming to [expectedType]. */
@@ -106,28 +99,14 @@ private fun toEngineSimpleData(
             value.cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
         Schema.StringType -> value.cast<String>()
         Schema.BooleanType -> value.cast<Boolean>()
-        Schema.IDType ->
-            when (value) {
-                is EngineIDData -> value
-                is String -> EngineIDData(value)
-                else -> throw ClassCastException()
-            }
+        Schema.IDType -> value.cast<String>()
         is Schema.EnumType ->
-            when (value) {
-                is EngineEnumValueData -> value.validatedFor(expectedType)
-                is String -> EngineEnumValueData(value, expectedType)
-                else -> throw ClassCastException()
+            value.cast<String>().also {
+                if (it !in expectedType.values) throw ClassCastException()
             }
     }
 
 private inline fun <reified T> Any.cast(): T = this as? T ?: throw ClassCastException()
-
-private fun EngineEnumValueData.validatedFor(
-    expectedType: Schema.EnumType,
-): EngineEnumValueData {
-    if (type != expectedType) throw ClassCastException()
-    return this
-}
 
 private fun toEngineInputFields(
     expectedType: Schema.InputObjectLike,

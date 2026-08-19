@@ -2,7 +2,6 @@ package semantics.resolver25
 
 import model.ObjectEngineResult
 
-import model.IntEngineResult
 import model.Value
 import model.fragmentFrom
 import model.objectOf
@@ -83,7 +82,7 @@ class MixedVariablePhaseRegressionTest {
         )
 
         assertEquals(
-            IntEngineResult.of(1),
+            1,
             result
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
@@ -170,7 +169,7 @@ class MixedVariablePhaseRegressionTest {
         )
 
         assertEquals(
-            IntEngineResult.of(2),
+            2,
             result
                 .getCell(
                     ObjectEngineResult.GroundKey.of(

@@ -2,6 +2,7 @@ package semantics
 
 import model.Assumptions
 import model.EngineResult
+import model.EngineResultCell
 import model.PathComponent
 import model.SelectionForest
 import model.Value
@@ -20,13 +21,13 @@ internal fun interface RuntimeSupport {
     fun complete(selections: SelectionForest): SelectionForest
 
     fun registerWriter(
-        cell: EngineResult.Cell,
+        cell: EngineResultCell,
         writer: List<PathComponent>,
     ) {}
 
     fun cycleCheck(
         reader: List<PathComponent>,
-        cell: EngineResult.Cell,
+        cell: EngineResultCell,
     ) {}
 
     companion object {
@@ -53,7 +54,7 @@ private class CycleCheckingRuntimeSupport(
     private val completionSupport: RuntimeSupport,
 ) : RuntimeSupport {
     private val writersByCell =
-        ConcurrentHashMap<EngineResult.Cell, List<PathComponent>>()
+        ConcurrentHashMap<EngineResultCell, List<PathComponent>>()
     private val readsByReader =
         ConcurrentHashMap<List<PathComponent>, MutableSet<List<PathComponent>>>()
 
@@ -62,7 +63,7 @@ private class CycleCheckingRuntimeSupport(
         completionSupport.complete(selections)
 
     override fun registerWriter(
-        cell: EngineResult.Cell,
+        cell: EngineResultCell,
         writer: List<PathComponent>,
     ) {
         val previous = writersByCell.putIfAbsent(cell, writer.toList())
@@ -73,7 +74,7 @@ private class CycleCheckingRuntimeSupport(
 
     override fun cycleCheck(
         reader: List<PathComponent>,
-        cell: EngineResult.Cell,
+        cell: EngineResultCell,
     ) {
         val writer = writersByCell[cell] ?: return
         val stableReader = reader.toList()

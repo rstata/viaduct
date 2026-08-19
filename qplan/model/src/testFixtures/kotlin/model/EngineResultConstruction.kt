@@ -1,5 +1,7 @@
 package model
 
+import model.invariants.conformsToResultSchemaType
+
 /** Constructs an object engine result by resolving type and field names in this reasoning world. */
 fun Assumptions.engineResultOf(
     typeName: String,
@@ -46,7 +48,7 @@ class EngineResultScope internal constructor(
     private val type: Schema.ObjectType,
 ) {
     private val values = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult?>()
-    private val accessAccepted = linkedMapOf<ObjectEngineResult.GroundKey, Value.Boolean>()
+    private val accessResults = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult>()
 
     /** Selects a field coordinate on this scope's object type. */
     fun field(
@@ -70,29 +72,29 @@ class EngineResultScope internal constructor(
         field(this).resolvesTo(value)
     }
 
-    /** Resolves this argumentless field to [value], with [accept] determining access acceptance. */
+    /** Resolves this argumentless field to [value], with [accessResult] determining access. */
     fun String.resolvesTo(
         value: Any?,
-        accept: Value.Boolean,
+        accessResult: EngineResult,
     ) {
-        field(this).resolvesTo(value, accept)
+        field(this).resolvesTo(value, accessResult)
     }
 
     /** Resolves this exact field coordinate to [value] with accepted access. */
     infix fun EngineResultFieldReference.resolvesTo(value: Any?) {
-        resolvesTo(value, Value.Boolean.of(true))
+        resolvesTo(value, true)
     }
 
-    /** Resolves this exact field coordinate to [value], with [accept] determining access acceptance. */
+    /** Resolves this exact field coordinate to [value], with [accessResult] determining access. */
     fun EngineResultFieldReference.resolvesTo(
         value: Any?,
-        accept: Value.Boolean,
+        accessResult: EngineResult,
     ) {
         require(key !in values) {
             "Duplicate engine-result field ${type.typeName}/${key.field.fieldName}"
         }
         values[key] = coerceEngineResult(key.field.typeExpr, value)
-        accessAccepted[key] = accept
+        accessResults[key] = accessResult
     }
 
     /** Constructs a nested object engine result using the same schema. */
@@ -105,7 +107,7 @@ class EngineResultScope internal constructor(
         ObjectEngineResult.of(
             type = type,
             values = values.toMap(),
-            accessAccepted = accessAccepted.toMap(),
+            accessResults = accessResults.toMap(),
         )
 }
 
@@ -118,7 +120,7 @@ private fun coerceEngineResult(
     typeExpr: TypeExpr<Schema.OutputType>,
     value: Any?,
 ): EngineResult? {
-    if (value == null || value is EngineResult) return value
+    if (value.conformsToResultSchemaType(typeExpr)) return value
 
     return when (typeExpr) {
         is TypeExpr.List -> {
@@ -136,7 +138,8 @@ private fun coerceEngineResult(
 
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
-                is Schema.SimpleType -> coerceSimpleValue(type, value).toEngineResult()
+                is Schema.SimpleType ->
+                    coerceSimpleValue(type, requireNotNull(value)).toEngineResult()
                 is Schema.CompositeType ->
                     throw IllegalArgumentException(
                         "Expected an object engine result for ${type.typeName}",

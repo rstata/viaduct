@@ -1,7 +1,6 @@
 package semantics.contract
 
 import model.EngineResult
-import model.IntEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.Stamp
@@ -78,7 +77,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 resultQuery,
             )
 
-        assertEquals(IntEngineResult.of(8), resolvedResult.getCell(resultKey).get())
+        assertEquals(8, resolvedResult.getCell(resultKey).get())
         assertEquals(1, suppliedDemandFields.size)
         assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
 
@@ -110,8 +109,8 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 resolvedExternal.getCell(payloadKey).get(),
             )
 
-        assertEquals(IntEngineResult.of(3), payload.getCell(oneKey).get())
-        assertEquals(IntEngineResult.of(5), payload.getCell(twoKey).get())
+        assertEquals(3, payload.getCell(oneKey).get())
+        assertEquals(5, payload.getCell(twoKey).get())
         assertEquals(2, suppliedDemandFields.size)
         assertEquals(
             listOf(setOf("one", "two"), setOf("one", "two")),
@@ -176,7 +175,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         val resolved =
             resolveAndValidate(world, fragment)
 
-        assertEquals(IntEngineResult.of(8), resolved.getCell(resultKey).get())
+        assertEquals(8, resolved.getCell(resultKey).get())
         when (variableSelectionIdentityPolicy) {
             VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> {
                 assertEquals(1, suppliedDemandFields.size)

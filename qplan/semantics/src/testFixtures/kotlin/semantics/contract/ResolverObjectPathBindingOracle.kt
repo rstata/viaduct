@@ -31,7 +31,7 @@ import kotlin.test.assertEquals
  */
 context(world: Assumptions)
 fun ObjectEngineResult.validateObjectPathBindings() {
-    registeredResolverOccurrences(world.resolverRegistry).forEach { cell ->
+    this.registeredResolverOccurrences(world.resolverRegistry).forEach { cell ->
         val resolver =
             world.resolverRegistry.resolver(
                 world.schema.objectField(
@@ -106,7 +106,9 @@ private fun ObjectEngineResult.readCompletedProvider(
         val value = current.getCell(key).get()
         if (value == null) return VariableBinding.of(null)
         if (value == ErrorEngineResult) return VariableBinding.Error
-        if (index == path.lastIndex) return value.toVariableBinding()
+        if (index == path.lastIndex) {
+            return value.toVariableBinding(key.field.typeExpr)
+        }
         current =
             value as? ObjectEngineResult
                 ?: error("Completed provider path crossed a non-object at $key")
@@ -114,14 +116,18 @@ private fun ObjectEngineResult.readCompletedProvider(
     error("Provider path must be nonempty")
 }
 
-private fun EngineResult.toVariableBinding(): VariableBinding =
+private fun EngineResult.toVariableBinding(
+    expectedType: TypeExpr<Schema.OutputType>,
+): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
-        is model.SimpleEngineResult ->
-            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toInputListBinding()
         is ObjectEngineResult ->
             error("An object-path provider cannot terminate at an object")
+        else ->
+            VariableBinding.of(
+                toEngineSimpleData(expectedType.baseType as Schema.SimpleType),
+            )
     }
 
 @Suppress("UNCHECKED_CAST")
@@ -134,7 +140,7 @@ private fun ListEngineResult.toInputListBinding(): VariableBinding {
             if (result == null) {
                 VariableBinding.of(null)
             } else {
-                result.toVariableBinding()
+                result.toVariableBinding(typeExpr)
             }
         when (binding) {
             VariableBinding.Error -> return VariableBinding.Error

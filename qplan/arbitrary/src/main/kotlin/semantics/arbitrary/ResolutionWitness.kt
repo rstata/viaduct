@@ -1,8 +1,6 @@
 package semantics.arbitrary
 
 import model.EngineResult
-import model.EngineEnumValueData
-import model.EngineIDData
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
@@ -14,7 +12,6 @@ import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.registry.ResolverRegistry
@@ -320,7 +317,7 @@ fun EngineResult?.registeredResolverOccurrences(
                 bounds.maxResultNodes,
             )
         }
-        if (value == null || value == ErrorEngineResult || value is SimpleEngineResult) return
+        if (value == null || value == ErrorEngineResult) return
 
         when (value) {
             is ObjectEngineResult -> {
@@ -355,9 +352,7 @@ fun EngineResult?.registeredResolverOccurrences(
                     )
                 }
 
-            ErrorEngineResult,
-            is SimpleEngineResult,
-            -> Unit
+            else -> Unit
         }
     }
 
@@ -585,11 +580,11 @@ private class FingerprintBudget(
                         node("string:${atom(value as String)}")
                     Schema.BooleanType ->
                         node("boolean:${value as Boolean}")
-                    Schema.IDType -> node("id:${atom((value as EngineIDData).id)}")
+                    Schema.IDType -> node("id:${atom(value as String)}")
                     is Schema.EnumType ->
                         node(
                             "enum:${atom(expectedNamedType.typeName)}:" +
-                                atom((value as EngineEnumValueData).value),
+                                atom(value as String),
                         )
                     is Schema.InputObjectType -> {
                         val fields = requireType<EngineInputObjectData>(value)

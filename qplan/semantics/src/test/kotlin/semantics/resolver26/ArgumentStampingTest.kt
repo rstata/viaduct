@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import model.Assumptions
 import model.EngineResult
-import model.IntEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -246,7 +245,7 @@ class ArgumentStampingTest {
                 assertIs<Stamp.Occurrence>(childKey.stamp)
             }
 
-        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
+        assertEquals(14, resolved.getCell(resultKey).getValue().get())
         assertEquals(
             listOf(
                 listOf(resultKey, itemsKey, ListEngineResult.Index.of(0)),
@@ -361,7 +360,7 @@ class ArgumentStampingTest {
                 resolve(fragment.subselections)
             }
 
-        assertEquals(IntEngineResult.of(8), resolved.getCell(resultKey).getValue().get())
+        assertEquals(8, resolved.getCell(resultKey).getValue().get())
         assertEquals(3, frankApplications)
         assertEquals(
             mapOf(
@@ -482,8 +481,8 @@ class ArgumentStampingTest {
         val frankKeys =
             resolved.keys.filter { groundKey -> groundKey.field.fieldName == "frank" }
 
-        assertEquals(IntEngineResult.of(3), resolved.getCell(leftKey).getValue().get())
-        assertEquals(IntEngineResult.of(5), resolved.getCell(rightKey).getValue().get())
+        assertEquals(3, resolved.getCell(leftKey).getValue().get())
+        assertEquals(5, resolved.getCell(rightKey).getValue().get())
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { groundKey ->
             val selectionStamp = assertIs<Stamp.Occurrence>(groundKey.stamp)

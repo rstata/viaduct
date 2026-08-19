@@ -3,13 +3,13 @@ package semantics
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
+import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
-import model.SimpleEngineResult
 import model.UncompletedPromiseException
 import model.Value
 import model.emptyFragmentOf
@@ -65,7 +65,7 @@ class CoroutineResolveTest {
                 }
 
                 override fun registerWriter(
-                    cell: EngineResult.Cell,
+                    cell: EngineResultCell,
                     writer: List<PathComponent>,
                 ) {
                     registeredKeys += writer.last() as ObjectEngineResult.GroundKey
@@ -119,7 +119,7 @@ class CoroutineResolveTest {
             )
         val expectedChildResultKeys =
             expectedChildKeys + world.schema.groundKey("Child", "__typename")
-        var rootCell: EngineResult.Cell? = null
+        var rootCell: EngineResultCell? = null
         val childRegistrations = linkedSetOf<ObjectEngineResult.GroundKey>()
         val runtimeSupport =
             object : RuntimeSupport {
@@ -127,7 +127,7 @@ class CoroutineResolveTest {
                 override fun complete(selections: SelectionForest): SelectionForest = selections
 
                 override fun registerWriter(
-                    cell: EngineResult.Cell,
+                    cell: EngineResultCell,
                     writer: List<PathComponent>,
                 ) {
                     if (writer.size == 1) {
@@ -299,7 +299,6 @@ private fun assertCompletedAndWriteOnce(result: EngineResult?) {
     when (result) {
         null,
         ErrorEngineResult,
-        is SimpleEngineResult,
         -> Unit
         is ListEngineResult ->
             result.indices.forEach { index ->
@@ -314,6 +313,7 @@ private fun assertCompletedAndWriteOnce(result: EngineResult?) {
                 }
                 assertCompletedAndWriteOnce(value)
             }
+        else -> Unit
     }
 }
 

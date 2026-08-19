@@ -1,6 +1,7 @@
 package semantics.contract
 
 import model.EngineResult
+import model.EngineResultCell
 
 /** Returns the completed value slot for concise result-shape assertions. */
-internal fun EngineResult.Cell.get(): EngineResult? = getValue().get()
+internal fun EngineResultCell.get(): EngineResult? = getValue().get()

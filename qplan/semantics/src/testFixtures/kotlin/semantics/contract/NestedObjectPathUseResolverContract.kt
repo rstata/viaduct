@@ -2,7 +2,6 @@ package semantics.contract
 
 import model.ObjectEngineResult
 
-import model.IntEngineResult
 import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -43,6 +42,6 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(IntEngineResult.of(7), resolved.getCell(resultKey).get())
+        assertEquals(7, resolved.getCell(resultKey).get())
     }
 }

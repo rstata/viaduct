@@ -22,7 +22,6 @@ import graphql.language.VariableReference
 import graphql.parser.Parser
 import java.lang.Math.addExact
 import java.math.BigInteger
-import model.EngineIDData
 import model.EngineInputData
 import model.Fragment
 import model.Schema
@@ -344,10 +343,10 @@ private class Compiler(
                 val id = arguments.fieldValues.getValue(ID_FIELD)
                 when (id) {
                     null -> null
-                    is EngineIDData ->
-                        nodesById[id.id]?.let { entry ->
+                    is String ->
+                        nodesById[id]?.let { entry ->
                             schema.objectOf(entry.type.typeName) {
-                                ID_FIELD setTo id.id
+                                ID_FIELD setTo id
                             }
                         }
                     else -> throw IllegalArgumentException("Query.node id is not an ID")
@@ -483,14 +482,14 @@ private class ResultEvaluator(
         evaluate(
             typeExpr = sourceSchema.typeExpr(field),
             source = result,
-            context = EvaluationContext(input, arguments),
+            context = EvaluationContext(input, arguments, field.arguments),
         )
 
     fun evaluateNodeResult(entry: CompiledNodeResult): Value.Output? =
         evaluate(
             typeExpr = TypeExpr.Named.of(entry.type, isNullable = true),
             source = entry.result,
-            context = EvaluationContext(schema.objectOf(entry.type.typeName), null),
+            context = EvaluationContext(schema.objectOf(entry.type.typeName), null, null),
             nodeRoot = entry,
         )
 
@@ -811,12 +810,22 @@ private class ResultEvaluator(
                     source
                 } else {
                     val argumentName = match.groupValues[1]
-                    when (val argument = argumentValue(argumentName, context)) {
-                        is EngineIDData -> argument.id
-                        else ->
+                    val argumentType =
+                        context.argumentDefinitions
+                            ?.fields
+                            ?.get(argumentName)
+                            ?.typeExpr
+                    when {
+                        argumentType !is TypeExpr.Named ||
+                            argumentType.baseType != Schema.IDType ->
                             throw IllegalArgumentException(
-                                "idFrom(\$$argumentName) requires a non-null ID argument",
+                                "idFrom(\$$argumentName) requires an ID argument",
                             )
+                        else ->
+                            argumentValue(argumentName, context) as? String
+                                ?: throw IllegalArgumentException(
+                                    "idFrom(\$$argumentName) requires a non-null ID argument",
+                                )
                     }
                 }
             }
@@ -829,6 +838,7 @@ private class ResultEvaluator(
 private data class EvaluationContext(
     val input: Value.Object,
     val arguments: Value.Arguments?,
+    val argumentDefinitions: Schema.FieldArguments?,
 )
 
 private data class PreparedObjectFragment(

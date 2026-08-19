@@ -8,8 +8,8 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
-import model.SimpleEngineResult
 import model.Stamp
+import model.TypeExpr
 import model.Value
 import model.applicableGroundSelections
 import model.toValue
@@ -72,7 +72,10 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                         fields = arguments.fieldValues,
                     )
                 val resolverValue = resolver(input, resolverArguments)
-                value.engineResultConformsToResolverValue(resolverValue)
+                value.engineResultConformsToResolverValue(
+                    resolverValue = resolverValue,
+                    expectedType = groundKey.field.typeExpr,
+                )
             }
 
         fieldResolverConforms && value.engineResultConformsToResolvers(path + groundKey)
@@ -115,7 +118,6 @@ private fun EngineResult?.engineResultConformsToResolvers(
     when (this) {
         null,
         ErrorEngineResult,
-        is SimpleEngineResult,
         -> true
 
         is ObjectEngineResult -> objectConformsToResolvers(path)
@@ -125,16 +127,17 @@ private fun EngineResult?.engineResultConformsToResolvers(
                     path + ListEngineResult.Index.of(index),
                 )
             }
+        else -> true
     }
 
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolverValue(
     resolverValue: Value.Output?,
+    expectedType: TypeExpr<Schema.OutputType>,
 ): Boolean =
     when (this) {
         null -> resolverValue == null
         ErrorEngineResult -> resolverValue == Value.Error
-        is SimpleEngineResult -> toValue() == resolverValue
 
         is ObjectEngineResult ->
             resolverValue != Value.Error &&
@@ -153,8 +156,10 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                 indices.all { index ->
                     get(index).getValue().get().engineResultConformsToResolverValue(
                         resolverValue.values[index],
+                        typeExpr,
                     )
                 }
+        else -> toValue(expectedType.baseType as Schema.SimpleType) == resolverValue
     }
 
 context(world: Assumptions)
@@ -178,6 +183,7 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
         } else {
             getCell(groundKey).getValue().get().engineResultConformsToResolverValue(
                 resolverValue.fieldValues.getValue(fieldName),
+                groundKey.field.typeExpr,
             )
         }
     }

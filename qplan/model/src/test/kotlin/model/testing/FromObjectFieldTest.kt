@@ -1,10 +1,11 @@
 package model.testing
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
 import model.Schema
 import model.EngineErrorData
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import kotlin.test.Test
@@ -375,7 +376,7 @@ class FromObjectFieldTest {
             variableProviders = { schema ->
                 val owner = schema.field("Query", "result") as Schema.ObjectField
                 mapOf(
-                    Value.Variable.of(owner, "value") to
+                    Arguments.Variable.of(owner, "value") to
                         schema.fromObjectField(objectFragment, responsePath),
                 )
             },

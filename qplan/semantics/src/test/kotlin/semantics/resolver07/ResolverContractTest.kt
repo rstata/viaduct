@@ -1,10 +1,13 @@
 package semantics.resolver07
 
+import semantics.resolver07.resolve
+
+import viaduct.engine.api.EngineObjectData
+
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.Value
 import semantics.contract.CompleteObjectFragmentOutputPolicyContract
 import semantics.contract.CompleteResolverOutputPolicyContract
 import semantics.contract.CorrectResolutionPostTestPolicy
@@ -27,21 +30,21 @@ class ResolverContractTest :
     CorrectResolutionPostTestPolicy {
     override fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
         context(world) {
-            semantics.resolver07.resolve(selections)
+            resolve(selections)
         }
 
     override fun resolveAndObserveTasks(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
     ): ObjectEngineResult =
         context(world) {
-            semantics.resolver07.resolve(
+            resolve(
                 selections = selections,
                 eventObserver = { event ->
                     event.toContractObservation()?.let(taskObserver)

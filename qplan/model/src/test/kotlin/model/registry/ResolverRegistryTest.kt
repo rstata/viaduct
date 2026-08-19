@@ -1,25 +1,30 @@
 package model.registry
 
-import model.ObjectEngineResult
+import model.Arguments
 
-import model.Fragment
 import model.EngineErrorData
+import model.Fragment
+import model.ObjectEngineResult
 import model.Schema
 import model.Selection
+import model.SelectionForest
 import model.TypeExpr
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.schemaType
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.nodeResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import viaduct.engine.api.EngineObjectData
 
 class ResolverRegistryTest {
     @Test
@@ -35,7 +40,7 @@ class ResolverRegistryTest {
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf(
                         user to
-                            model.testing.nodeResolverOf { id ->
+                            nodeResolverOf { id ->
                                 assertEquals("42", id)
                                 schema.objectOf("User") {
                                     "id" setTo id
@@ -48,7 +53,7 @@ class ResolverRegistryTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         userField to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { parent, arguments ->
                                     assertEquals(
@@ -86,15 +91,17 @@ class ResolverRegistryTest {
         assertTrue(registry.mayDemandFrom(bridgeField).isEmpty())
         assertTrue(registry.mayDemandFrom(payloadField).isEmpty())
         val bridgeValue =
-            registry
-                .resolver(bridgeField)(
-                    input = query,
-                    arguments = Value.Arguments.of(bridgeField, emptyMap()),
-                )
-        val bridgeObject = assertIs<Value.Object>(bridgeValue)
+            context(assumptions) {
+                registry
+                    .resolver(bridgeField)(
+                        input = query,
+                        arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
+                    )
+            }
+        val bridgeObject = assertIs<EngineObjectData.Sync>(bridgeValue)
         assertEquals(bridgeType, bridgeObject.schemaType)
         assertIs<String>(
-            bridgeObject.fieldValues.getValue(
+            bridgeObject.get(
                 bridgeIdField.fieldName,
             ),
         )
@@ -107,7 +114,7 @@ class ResolverRegistryTest {
             context(assumptions) {
                 payloadResolver(
                     input = bridgeObject,
-                    arguments = Value.Arguments.of(payloadField, emptyMap()),
+                    arguments = Arguments.Resolved.of(payloadField, emptyMap()),
                     selections =
                         schema.fragmentFrom(
                             """
@@ -129,8 +136,8 @@ class ResolverRegistryTest {
         val typenameKey = "__typename"
 
         assertEquals(fixture.schema.query, root.schemaType)
-        assertEquals(setOf(typenameKey), root.fieldValues.keys)
-        assertEquals("Query", root.fieldValues.getValue(typenameKey))
+        assertEquals(setOf(typenameKey), root.getSelections().toSet())
+        assertEquals("Query", root.get(typenameKey))
     }
 
     @Test
@@ -194,18 +201,18 @@ class ResolverRegistryTest {
                     """.trimIndent(),
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
+                    mapOf(user to nodeResolverOf { error("Not invoked") })
                 },
                 fieldResolvers = { schema ->
                     val user = schema.field("Query", "user_V_A_node")
                     mapOf(
                         schema.field("Query", "seed") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { _, _ -> error("Not invoked") },
                             ),
                         user to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment =
                                     schema.fragmentFrom(
                                         "fragment ignored on Query { seed }",
@@ -245,15 +252,15 @@ class ResolverRegistryTest {
                     val fragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         schema.field("Query", "scalar") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> "value" },
+                            fieldResolverOf(fragment) { _, _ -> "value" },
                         schema.field("Query", "list") to
-                            model.testing.fieldResolverOf(fragment) { _, _ ->
+                            fieldResolverOf(fragment) { _, _ ->
                                 listOf("value", null)
                             },
                         schema.field("Query", "nullable") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> null },
+                            fieldResolverOf(fragment) { _, _ -> null },
                         schema.field("Query", "failed") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> EngineErrorData },
+                            fieldResolverOf(fragment) { _, _ -> EngineErrorData },
                     )
                 },
             )
@@ -266,7 +273,7 @@ class ResolverRegistryTest {
                     world.resolverRegistry
                         .resolver(field)(
                             input = parent,
-                            arguments = Value.Arguments.of(field, emptyMap()),
+                            arguments = Arguments.Resolved.of(field, emptyMap()),
                             selections = selectionForestOf(),
                         )
                 }
@@ -333,7 +340,7 @@ class ResolverRegistryTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = {
-                    mapOf(foreignUser to model.testing.nodeResolverOf { error("Not invoked") })
+                    mapOf(foreignUser to nodeResolverOf { error("Not invoked") })
                 },
             )
         }
@@ -344,7 +351,7 @@ class ResolverRegistryTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf(
                         foreignUserField to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
@@ -370,7 +377,7 @@ class ResolverRegistryTest {
                     """.trimIndent(),
                 nodeResolvers = { schema ->
                     val user = schema.type("User") as Schema.ObjectType
-                    mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
+                    mapOf(user to nodeResolverOf { error("Not invoked") })
                 },
             )
         }
@@ -401,7 +408,7 @@ class ResolverRegistryTest {
                     """.trimIndent(),
                 nodeResolvers = { schema ->
                     val other = schema.type("Other") as Schema.ObjectType
-                    mapOf(other to model.testing.nodeResolverOf { error("Not invoked") })
+                    mapOf(other to nodeResolverOf { error("Not invoked") })
                 },
             )
         }
@@ -417,12 +424,12 @@ class ResolverRegistryTest {
                     val nodeFragment = schema.emptyFragmentOf("Node")
                     mapOf(
                         schema.field("Query", "user_V_A_node") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
                         schema.field("Node", "name") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = nodeFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
@@ -450,13 +457,13 @@ class ResolverRegistryTest {
                     schemaSDL = SCHEMA_SDL,
                     nodeResolvers = { schema ->
                         val user = schema.type("User") as Schema.ObjectType
-                        mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
+                        mapOf(user to nodeResolverOf { error("Not invoked") })
                     },
                     fieldResolvers = { schema ->
                         val fragment = schema.emptyFragmentOf("User")
                         mapOf(
                             schema.field("User", fieldName) to
-                                model.testing.fieldResolverOf(
+                                fieldResolverOf(
                                     objectFragment = fragment,
                                     function = { _, _ -> error("Not invoked") },
                                 ),
@@ -493,7 +500,7 @@ class ResolverRegistryTest {
             )
         fun selection(
             fieldName: String,
-            subselections: model.SelectionForest = selectionForestOf(),
+            subselections: SelectionForest = selectionForestOf(),
         ): Selection =
             Selection.of(
                 key = key(fieldName),
@@ -534,7 +541,7 @@ class ResolverRegistryTest {
                 )
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 with(world.assumptions) {
                     source.snipToDemand(selections)
                 },
@@ -546,23 +553,23 @@ class ResolverRegistryTest {
                 "friend",
                 "peers",
             ),
-            result.fieldValues.keys,
+            result.getSelections().toSet(),
         )
         assertEquals(
             "target",
-            result.fieldValues["id"],
+            result.get("id"),
         )
         val snippedFriend =
-            assertIs<Value.Object>(result.fieldValues["friend"])
+            assertIs<EngineObjectData.Sync>(result.get("friend"))
         assertEquals(
             setOf("id"),
-            snippedFriend.fieldValues.keys,
+            snippedFriend.getSelections().toSet(),
         )
-        val peers = assertIs<List<*>>(result.fieldValues["peers"])
-        val snippedPeer = assertIs<Value.Object>(peers.first())
+        val peers = assertIs<List<*>>(result.get("peers"))
+        val snippedPeer = assertIs<EngineObjectData.Sync>(peers.first())
         assertEquals(
             setOf("name"),
-            snippedPeer.fieldValues.keys,
+            snippedPeer.getSelections().toSet(),
         )
         assertEquals(null, peers.last())
     }
@@ -576,7 +583,7 @@ class ResolverRegistryTest {
             }
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 with(fixture.assumptions) {
                     source.snipToDemand(
                         fixture.schema.fragmentFrom(
@@ -590,7 +597,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.fieldValues.keys)
+        assertEquals(emptySet(), result.getSelections().toSet())
     }
 
     @Test
@@ -602,7 +609,7 @@ class ResolverRegistryTest {
             }
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 with(fixture.assumptions) {
                     source.snipToDemand(
                         fixture.schema.fragmentFrom(
@@ -618,7 +625,7 @@ class ResolverRegistryTest {
                 },
             )
 
-        assertEquals(emptySet(), result.fieldValues.keys)
+        assertEquals(emptySet(), result.getSelections().toSet())
     }
 
     @Test
@@ -640,12 +647,12 @@ class ResolverRegistryTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "viewer") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { _, _ -> error("Not invoked") },
                             ),
                         schema.field("User", "greeting") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment =
                                     schema.fragmentFrom(
                                         """
@@ -676,13 +683,13 @@ class ResolverRegistryTest {
             ).subselections
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 context(world) {
                     source.snipToDemand(demand)
                 },
             )
 
-        assertEquals(emptySet(), result.fieldValues.keys)
+        assertEquals(emptySet(), result.getSelections().toSet())
     }
 
     @Test
@@ -695,7 +702,7 @@ class ResolverRegistryTest {
             }
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 with(fixture.assumptions) {
                     source.snipToDemand(
                         fixture.schema.fragmentFrom(
@@ -711,7 +718,7 @@ class ResolverRegistryTest {
 
         assertEquals(
             setOf("name"),
-            result.fieldValues.keys,
+            result.getSelections().toSet(),
         )
     }
 
@@ -746,7 +753,7 @@ class ResolverRegistryTest {
                 val userField = schema.field("Query", "user_V_A_node")
                 mapOf(
                     userField to
-                        model.testing.fieldResolverOf(
+                        fieldResolverOf(
                             objectFragment = fragment,
                             function = { _, _ -> schema.objectOf("User") },
                         ),
@@ -763,7 +770,7 @@ class ResolverRegistryTest {
                 nodeResolvers = { schema ->
                     if (withNodeResolver) {
                         val user = schema.type("User") as Schema.ObjectType
-                        mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
+                        mapOf(user to nodeResolverOf { error("Not invoked") })
                     } else {
                         emptyMap()
                     }
@@ -773,12 +780,12 @@ class ResolverRegistryTest {
                     val userFragment = schema.emptyFragmentOf("User")
                     mapOf(
                         schema.field("Query", "user_V_A_node") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
                         schema.field("User", "search_V_A_node") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = userFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
@@ -801,7 +808,7 @@ class ResolverRegistryTest {
             fieldName: String,
             possibleTypes: Set<Schema.ObjectType> =
                 (schema.type(typeName) as Schema.CompositeType).possibleTypes,
-        ): model.Selection {
+        ): Selection {
             return Selection.of(
                 key =
                     ObjectEngineResult.Key.of(

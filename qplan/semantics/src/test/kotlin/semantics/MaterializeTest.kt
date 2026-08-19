@@ -1,5 +1,9 @@
 package semantics
 
+import model.Arguments
+
+import semantics.contract.selectionValues
+
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -9,7 +13,6 @@ import model.MaterializeSelection
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
-import model.Value
 import model.fragmentFrom
 import model.materializeSelectionForestOf
 import model.testing.TestWorld
@@ -62,7 +65,7 @@ class MaterializeTest {
 
             assertEquals(
                 "ready",
-                materialized.await().fieldValues.getValue("value"),
+                materialized.await().get("value"),
             )
         }
 
@@ -189,9 +192,9 @@ class MaterializeTest {
                     result.materialize(selections, emptyList())
                 }
 
-            assertEquals(setOf("first", "second"), materialized.fieldValues.keys)
-            assertEquals("same", materialized.fieldValues.getValue("first"))
-            assertEquals("same", materialized.fieldValues.getValue("second"))
+            assertEquals(setOf("first", "second"), materialized.selectionValues().keys)
+            assertEquals("same", materialized.selectionValues().getValue("first"))
+            assertEquals("same", materialized.selectionValues().getValue("second"))
         }
 
     @Test
@@ -205,7 +208,7 @@ class MaterializeTest {
                         """.trimIndent(),
                     ).assumptions
             val field = world.schema.objectField("Query", "value")
-            val arguments = Value.Arguments.of(field, emptyMap())
+            val arguments = Arguments.Resolved.of(field, emptyMap())
             val first =
                 ObjectEngineResult.GroundKey.of(
                     occurrenceStampOf(listOf(ListEngineResult.Index.of(0))),
@@ -248,14 +251,14 @@ class MaterializeTest {
                     result.materialize(selections, emptyList())
                 }
 
-            assertEquals(setOf("first", "second"), materialized.fieldValues.keys)
+            assertEquals(setOf("first", "second"), materialized.selectionValues().keys)
             assertEquals(
                 "first-value",
-                materialized.fieldValues.getValue("first"),
+                materialized.selectionValues().getValue("first"),
             )
             assertEquals(
                 "second-value",
-                materialized.fieldValues.getValue("second"),
+                materialized.selectionValues().getValue("second"),
             )
         }
 }

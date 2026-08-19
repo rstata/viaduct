@@ -3,7 +3,6 @@ package semantics.contract
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.Value
 import model.fragmentFrom
 import model.merge
 import model.testing.TestWorld

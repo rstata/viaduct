@@ -8,6 +8,7 @@ import model.fragmentFrom
 import model.groundKey
 import model.merge
 import model.objectOf
+import model.schemaType
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import java.util.PriorityQueue
@@ -28,7 +29,8 @@ class DepthFirstReactorTest {
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
-        val selection = selections.merge(source.schemaType).byGroundKey().values.single()
+        val sourceType = source.schemaType
+        val selection = selections.merge(sourceType).byGroundKey().values.single()
         val coordinate = listOf<PathComponent>(selection.groundKey())
         val events = mutableListOf<ReactorEvent>()
         val runtimeSupport =
@@ -76,8 +78,9 @@ class DepthFirstReactorTest {
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
-        val selection = selections.merge(source.schemaType).byGroundKey().values.single()
-        val target = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
+        val sourceType = source.schemaType
+        val selection = selections.merge(sourceType).byGroundKey().values.single()
+        val target = ObjectEngineResult.of(sourceType, emptyMap(), mutable = true)
         val path = emptyList<PathComponent>()
         val firstResolver =
             DepthFirstReactor.SlotResolver(path, source, selection, target)

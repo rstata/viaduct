@@ -4,12 +4,11 @@ import model.ObjectEngineResult
 
 import model.Assumptions
 import model.EngineInputData
-import model.OpenArguments
+import model.Arguments
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Stamp
-import model.Value
 import model.concatenateSelectionForests
 import model.fetchBindings
 import model.flatMapToSelectionForest
@@ -48,7 +47,7 @@ fun SelectionForest.successorDemand(): SelectionForest =
                             ),
                     )
                 val arguments = key.arguments
-                if (arguments !is Value.Arguments || key.field !in world.resolverRegistry) {
+                if (arguments !is Arguments.Resolved || key.field !in world.resolverRegistry) {
                     selectionForestOf()
                 } else {
                     world.resolverRegistry
@@ -135,7 +134,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
                 )
             val arguments = key.arguments
             if (
-                arguments is Value.Arguments &&
+                arguments is Arguments.Resolved &&
                 key.field in world.resolverRegistry &&
                 expandedGroundedKeys.add(key)
             ) {
@@ -184,7 +183,7 @@ private data class SelectionIdentity(
 
 context(world: Assumptions)
 private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
-    if (arguments is Value.Arguments) return this
+    if (arguments is Arguments.Resolved) return this
     val groundedArguments = arguments.fetchBindings(field.arguments)
     val currentSelectionStamp = stamp as? Stamp.Occurrence
     val groundedKey =
@@ -245,7 +244,7 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                     ),
             )
         val arguments = key.arguments
-        if (arguments !is Value.Arguments || key.field !in world.resolverRegistry) {
+        if (arguments !is Arguments.Resolved || key.field !in world.resolverRegistry) {
             selectionForestOf()
         } else {
             world.resolverRegistry
@@ -280,7 +279,7 @@ private fun SelectionForest.boundarySkeleton(): SelectionForest =
     }
 
 private fun FieldResolver.objectFragmentWithFromArguments(
-    arguments: Value.Arguments,
+    arguments: Arguments.Resolved,
 ): SelectionForest {
     val bindings =
         variables.mapNotNull { (variable, definition) ->
@@ -295,7 +294,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
 }
 
 private fun SelectionForest.substitute(
-    bindings: Map<Value.Variable, EngineInputData?>,
+    bindings: Map<Arguments.Variable, EngineInputData?>,
 ): SelectionForest =
     flatMap { selection ->
         selectionForestOf(

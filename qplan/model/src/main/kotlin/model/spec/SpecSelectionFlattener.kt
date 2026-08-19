@@ -8,7 +8,6 @@ import model.MaterializeSelectionForest
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.Value
 import model.flatMapToMaterializeSelectionForest
 import model.materializeSelectionForestOf
 

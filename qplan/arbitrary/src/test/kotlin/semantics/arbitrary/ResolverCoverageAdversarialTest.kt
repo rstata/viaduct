@@ -1,9 +1,12 @@
 package semantics.arbitrary
 
+import model.Arguments
+
+import viaduct.engine.api.EngineObjectData
+
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
-import model.Value
 import model.objectOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,11 +45,11 @@ class ResolverCoverageAdversarialTest {
         val value =
             world.resolverRegistry.resolver(canonicalField)(
                 world.schema.objectOf("Query"),
-                Value.Arguments.of(canonicalField, emptyMap()),
+                Arguments.Resolved.of(canonicalField, emptyMap()),
             )
         val outer = assertIs<List<*>>(value)
         val inner = assertIs<List<*>>(outer.single())
-        assertIs<Value.Object>(inner.single())
+        assertIs<EngineObjectData.Sync>(inner.single())
     }
 
     @Test
@@ -104,23 +107,23 @@ class ResolverCoverageAdversarialTest {
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
                 world.resolverRegistry
-                    .resolver(bridgeField)(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
+                    .resolver(bridgeField)(emptyInput, Arguments.Resolved.of(bridgeField, emptyMap()))
             val payloadInput =
                 if (listOutput) {
-                    assertIs<Value.Object>(
+                    assertIs<EngineObjectData.Sync>(
                         assertIs<List<*>>(bridgeValue).first(),
                     )
                 } else {
-                    assertIs<Value.Object>(bridgeValue)
+                    assertIs<EngineObjectData.Sync>(bridgeValue)
                 }
 
             registry.clearResolutionWitness()
             world.resolverRegistry
-                .resolver(bridgeField)(emptyInput, Value.Arguments.of(bridgeField, emptyMap()))
+                .resolver(bridgeField)(emptyInput, Arguments.Resolved.of(bridgeField, emptyMap()))
             world.resolverRegistry
                 .resolver(payloadField)(
                     payloadInput,
-                    Value.Arguments.of(payloadField, emptyMap()),
+                    Arguments.Resolved.of(payloadField, emptyMap()),
                 )
 
             assertEquals(

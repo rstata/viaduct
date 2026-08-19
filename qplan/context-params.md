@@ -15,12 +15,14 @@ A function with an `Assumptions` context may directly call another function requ
 
 ```kotlin
 context(world: Assumptions)
-fun Value.Object.copyInWorld(): Value.Object =
-    Value.Object.of(type, fieldValues)
+fun EngineObjectData.Sync.isQueryRoot(): Boolean =
+    schemaType == world.schema.query
 
 context(world: Assumptions)
-fun Value.Object.copyTwiceInWorld(): Value.Object =
-    copyInWorld().copyInWorld()
+fun EngineObjectData.Sync.requireQueryRoot(): EngineObjectData.Sync {
+    require(isQueryRoot())
+    return this
+}
 ```
 
 The compiler supplies both calls from the existing context. No nested context block is needed.
@@ -35,9 +37,8 @@ For an assumption-heavy body that reads better with a receiver, use `run`:
 
 ```kotlin
 context(world: Assumptions)
-fun Value.Object.copyInWorld(): Value.Object = world.run {
-    val copiedFields = fieldValues.toMap()
-    Value.Object.of(type, copiedFields)
+fun EngineObjectData.Sync.isQueryRoot(): Boolean = world.run {
+    this@isQueryRoot.schemaType == schema.query
 }
 ```
 

@@ -6,7 +6,6 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Stamp
-import model.Value
 import model.applicableGroundSelections
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment

@@ -1,11 +1,13 @@
 package semantics
 
+import model.Arguments
+
+import model.Assumptions
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
-import model.Value
 import semantics.correctresolution.argumentsContainErrorValue
 
 /** The kind of work performed by one slot resolver. */
@@ -51,7 +53,7 @@ internal sealed interface ReactorEvent {
 
 internal typealias ReactorEventObserver = (ReactorEvent) -> Unit
 
-context(world: model.Assumptions)
+context(world: Assumptions)
 internal fun ObjectEngineResult.GroundKey.reactorSlotKind(): ReactorSlotKind =
     when {
         arguments.argumentsContainErrorValue() ->
@@ -179,8 +181,8 @@ internal fun List<PathComponent>.renderReactorPath(): String =
                 is ObjectEngineResult.GroundKey ->
                     "${component.field.containingType.typeName}.${component.field.fieldName}" +
                         when (val arguments = component.arguments) {
-                            model.OpenArguments.Ground.Error -> "(error)"
-                            is Value.Arguments ->
+                            Arguments.Error -> "(error)"
+                            is Arguments.Resolved ->
                                 arguments.fieldValues.entries.joinToString(
                                     prefix = "(",
                                     postfix = ")",

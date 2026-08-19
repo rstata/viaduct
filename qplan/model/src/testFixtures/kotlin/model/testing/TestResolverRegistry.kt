@@ -5,16 +5,17 @@ import model.ObjectEngineResult
 import model.Fragment
 import model.EngineErrorData
 import model.EngineOutputData
-import model.OpenArguments
+import model.Arguments
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.TypeExpr
-import model.Value
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.fieldExpressions
 import model.matchingVariableTypes
+import model.schemaType
 import model.registry.FieldResolver
 import model.registry.MissingResolverException
 import model.registry.ResolverRegistry
@@ -22,6 +23,7 @@ import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toSelectionForest
 import model.variableTemplates
+import viaduct.engine.api.EngineObjectData
 
 /**
  * A raw external node lookup accepted only by test-fixture composition.
@@ -35,21 +37,21 @@ typealias NodeResolverFunction = (String) -> EngineOutputData?
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
 
 typealias CanonicalFieldResolverApplicationObserver =
-    (Schema.OutputField, Value.Object, Value.Arguments, SelectionForest?) -> Unit
+    (Schema.OutputField, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
 
 internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
     fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
-    variableProviders: Map<Value.Variable, VariableDeclaration>,
+    variableProviders: Map<Arguments.Variable, VariableDeclaration>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
     val variablesByField =
         variableProviders.keys
-            .groupBy(Value.Variable::field)
+            .groupBy(Arguments.Variable::field)
             .mapValues { (_, variables) ->
-                variables.associateBy(Value.Variable::variableName)
+                variables.associateBy(Arguments.Variable::variableName)
             }
     val registryResolvers =
         lowering.fieldResolvers.mapValues { (field, resolver) ->
@@ -251,7 +253,7 @@ private class NodeResolverLowering(
             function = { input, _ ->
                 loadNode(
                     typedId =
-                        input.fieldValues.getValue(
+                        input.get(
                             idField.fieldName,
                         ),
                     nodeOutputType = nodeOutputType,
@@ -277,14 +279,15 @@ private class NodeResolverLowering(
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.typeName}")
         val result = resolver(id)
         if (result == null || result == EngineErrorData) return result
-        require(result is Value.Object) {
+        require(result is EngineObjectData.Sync) {
             "Node resolver for ${type.typeName} returned a non-object value"
         }
-        require(result.schemaType == type) {
-            "Node resolver for ${type.typeName} returned ${result.schemaType.typeName}"
+        val resultType = result.schemaType
+        require(resultType == type) {
+            "Node resolver for ${type.typeName} returned ${resultType.typeName}"
         }
         val returnedId =
-            result.fieldValues.getValue(
+            result.get(
                 validateNodeIdField(type).fieldName,
             )
         require(returnedId == id) {
@@ -356,14 +359,14 @@ private sealed interface DependencyVertex {
     ) : DependencyVertex
 
     data class Variable(
-        val variable: Value.Variable,
+        val variable: Arguments.Variable,
     ) : DependencyVertex
 }
 
 private class TestResolverRegistry(
     private val schema: Schema,
     fieldResolverDefinitions: Map<Schema.OutputField, FieldResolverDefinition>,
-    variableDeclarations: Map<Value.Variable, VariableDeclaration>,
+    variableDeclarations: Map<Arguments.Variable, VariableDeclaration>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
     private val fieldResolvers: Map<Schema.OutputField, FieldResolver>
@@ -501,10 +504,10 @@ private class TestResolverRegistry(
         return field in fieldResolvers
     }
 
-    override fun resolveRootQuery(): Value.Object {
+    override fun resolveRootQuery(): EngineObjectData.Sync {
         val query = schema.query
-        return Value.Object.of(
-            type = query,
+        return engineObjectDataOf(
+            schemaType = query,
             fields = mapOf("__typename" to query.typeName),
         )
     }
@@ -539,7 +542,7 @@ private class TestResolverRegistry(
     }
 
     private fun validateVariableUses(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         declaration: FromObjectField,
         fragment: Fragment,
     ) {
@@ -559,7 +562,7 @@ private class TestResolverRegistry(
             }
     }
 
-    private fun model.SelectionForest.containsProviderPath(providerPath: List<ObjectEngineResult.Key>): Boolean {
+    private fun SelectionForest.containsProviderPath(providerPath: List<ObjectEngineResult.Key>): Boolean {
         val provider = providerPath.first()
         val remaining = providerPath.drop(1)
         return toSelectionList().any { selection ->
@@ -571,7 +574,7 @@ private class TestResolverRegistry(
         }
     }
 
-    private fun model.SelectionForest.toSelectionList(): List<Selection> =
+    private fun SelectionForest.toSelectionList(): List<Selection> =
         buildList {
             this@toSelectionList.forEach(::add)
         }
@@ -581,12 +584,12 @@ private class TestResolverRegistry(
         val hasDefault: Boolean,
     )
 
-    private fun model.SelectionForest.variableUses(
-        variable: Value.Variable,
+    private fun SelectionForest.variableUses(
+        variable: Arguments.Variable,
     ): List<VariableUse> =
         buildList {
             this@variableUses.forEach { selection ->
-                if (selection.key.arguments != OpenArguments.Ground.Error) {
+                if (selection.key.arguments != Arguments.Error) {
                     selection.key.arguments.fieldExpressions().forEach { (name, value) ->
                         val argument = selection.key.field.arguments.fields.getValue(name)
                         addAll(
@@ -594,7 +597,7 @@ private class TestResolverRegistry(
                                 .matchingVariableTypes(
                                     variable = variable,
                                     typeExpr = argument.typeExpr,
-                                    hasDefault = argument.defaultValue is Value.Default.Present,
+                                    hasDefault = argument.defaultValue is Schema.DefaultValue.Present,
                                 ).map { (typeExpr, hasDefault) ->
                                     VariableUse(typeExpr, hasDefault)
                                 },

@@ -14,7 +14,7 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.OpenArguments
+import model.Arguments
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
@@ -23,7 +23,9 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Stamp
-import model.Value
+import model.TypeExpr
+import model.schemaType
+import viaduct.engine.api.EngineObjectData
 import model.VariableBinding
 import model.fetchBindings
 import model.groundKey
@@ -138,7 +140,7 @@ private class ResolverRuntime(
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
 private suspend fun orchestrateObject(
     path: List<PathComponent>,
-    source: Value.Object,
+    source: EngineObjectData.Sync,
     initialDemand: SelectionForest,
     target: ObjectEngineResult,
     runtime: ResolverRuntime,
@@ -272,12 +274,12 @@ private suspend fun orchestrateObject(
                 objectKey as? ObjectEngineResult.GroundKey
                     ?: error("Resolver26 found open arguments on passive key $objectKey")
             val arguments = groundKey.arguments
-            require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+            require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
                 "Resolver26 passive field ${groundKey.field.containingType.typeName}/" +
                     "${groundKey.field.fieldName} must be argumentless"
             }
             val sourceValue: EngineOutputData? =
-                source.fieldValues.getValue(groundKey.field.fieldName)
+                source.get(groundKey.field.fieldName)
             if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(
@@ -438,14 +440,14 @@ private fun SelectionForest.localizeTopLevelStamps(
                     .localizeTopLevelSelectionStamps(path)
                     .single()
             val sourceVariables:
-                Map<Pair<Schema.ObjectField, String>, Value.Variable> =
+                Map<Pair<Schema.ObjectField, String>, Arguments.Variable> =
                 selection.key
                     .selectionStampedVariables()
                     .associateBy { variable -> variable.field to variable.variableName }
             localizedSelection.key
                 .selectionStampedVariables()
                 .forEach { localizedVariable ->
-                    val sourceVariable: Value.Variable =
+                    val sourceVariable: Arguments.Variable =
                         sourceVariables.getValue(
                             localizedVariable.field to localizedVariable.variableName,
                         )
@@ -466,7 +468,7 @@ private fun SelectionForest.localizeTopLevelStamps(
 }
 
 // Returns every selection-stamped argument or provider-marker variable carried by this key.
-private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Value.Variable> =
+private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Arguments.Variable> =
     buildSet {
         addAll(
             arguments
@@ -514,12 +516,12 @@ private suspend fun resolveField(
         cell.setAccessResult(ErrorEngineResult)
         return
     }
-    val resolverArguments = groundKey.arguments as Value.Arguments
+    val resolverArguments = groundKey.arguments as Arguments.Resolved
 
     val coordinate = path + groundKey
     val constructionDemand: SelectionForest = selection.subselections
     val invocationDemand: SelectionForest = constructionDemand.successorDemand()
-    val input: Value.Object =
+    val input: EngineObjectData.Sync =
         target.materializeResolverInput(
             selections = expansion.inputMaterializeSelections,
             reader = coordinate,
@@ -568,10 +570,10 @@ private suspend fun resolveField(
     cell.setAccessResult(true)
 }
 
-private fun OpenArguments.Ground.bindingFor(argumentName: String): VariableBinding =
+private fun Arguments.Ground.bindingFor(argumentName: String): VariableBinding =
     when (this) {
-        OpenArguments.Ground.Error -> VariableBinding.Error
-        is Value.Arguments -> VariableBinding.of(fieldValues.getValue(argumentName))
+        Arguments.Error -> VariableBinding.Error
+        is Arguments.Resolved -> VariableBinding.of(fieldValues.getValue(argumentName))
     }
 
 // Returns whether this occurrence is a top-level object or list element in one resolver output.
@@ -588,7 +590,7 @@ private fun launchPassiveChildOrchestrations(
     path: List<PathComponent>,
     source: EngineOutputData?,
     target: EngineResult?,
-    expectedType: model.TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputType>,
     initialDemand: SelectionForest,
     runtime: ResolverRuntime,
 ) {
@@ -611,13 +613,13 @@ private fun launchPassiveChildOrchestrations(
         is Boolean,
         -> {
             val simpleType =
-                (expectedType as model.TypeExpr.Named).baseType as Schema.SimpleType
+                (expectedType as TypeExpr.Named).baseType as Schema.SimpleType
             check(target == source.toEngineResult(simpleType)) {
                 "Resolver26 passive simple source has different result at $path"
             }
         }
 
-        is Value.Object -> {
+        is EngineObjectData.Sync -> {
             check(target is ObjectEngineResult) {
                 "Resolver26 passive object source has non-object result at $path"
             }
@@ -633,7 +635,7 @@ private fun launchPassiveChildOrchestrations(
         }
 
         is List<*> -> {
-            val listType = expectedType as model.TypeExpr.List
+            val listType = expectedType as TypeExpr.List
             check(target is ListEngineResult && target.size == source.size) {
                 "Resolver26 passive list source has different result shape at $path"
             }
@@ -675,6 +677,6 @@ private data class LocalizeTopLevelStampsResult(
 )
 
 private data class BindingAlias(
-    val sourceVariable: Value.Variable,
-    val localizedVariable: Value.Variable,
+    val sourceVariable: Arguments.Variable,
+    val localizedVariable: Arguments.Variable,
 )

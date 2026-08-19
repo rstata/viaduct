@@ -1,5 +1,7 @@
 package model.registry
 
+import model.Arguments
+
 import model.ObjectEngineResult
 import model.ArgumentResolutionError
 
@@ -7,15 +9,16 @@ import model.Fragment
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.Value
 import model.emptyFragmentOf
 import model.fieldExpressions
 import model.fragmentFrom
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
+import model.testing.nodeResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -58,7 +61,7 @@ class ResolverDemandTest {
                 variableProviders = { schema ->
                     val owner = schema.objectField("Query", "x")
                     mapOf(
-                        Value.Variable.of(owner, "b") to
+                        Arguments.Variable.of(owner, "b") to
                             schema.fromObjectField(
                                 """
                                 fragment ignored on Query {
@@ -67,7 +70,7 @@ class ResolverDemandTest {
                                 """.trimIndent(),
                                 listOf("z"),
                             ),
-                        Value.Variable.of(owner, "c") to
+                        Arguments.Variable.of(owner, "c") to
                             schema.fromObjectField(
                                 """
                                 fragment ignored on Query {
@@ -137,12 +140,12 @@ class ResolverDemandTest {
                     val x = schema.objectField("Query", "x")
                     val y = schema.objectField("Query", "y")
                     mapOf(
-                        Value.Variable.of(x, "same") to
+                        Arguments.Variable.of(x, "same") to
                             schema.fromObjectField(
                                 "fragment ignored on Query { xSource }",
                                 listOf("xSource"),
                             ),
-                        Value.Variable.of(y, "same") to
+                        Arguments.Variable.of(y, "same") to
                             schema.fromObjectField(
                                 "fragment ignored on Query { ySource }",
                                 listOf("ySource"),
@@ -153,8 +156,8 @@ class ResolverDemandTest {
         val schema = world.schema
         val x = schema.objectField("Query", "x")
         val y = schema.objectField("Query", "y")
-        val xVariable = Value.Variable.of(x, "same")
-        val yVariable = Value.Variable.of(y, "same")
+        val xVariable = Arguments.Variable.of(x, "same")
+        val yVariable = Arguments.Variable.of(y, "same")
 
         assertEquals(
             setOf(xVariable),
@@ -208,14 +211,14 @@ class ResolverDemandTest {
                 variableProviders = { schema ->
                     val source = schema.objectField("Query", "source")
                     mapOf(
-                        Value.Variable.of(source, "seed") to
+                        Arguments.Variable.of(source, "seed") to
                             schema.fromArgument(source, "seed"),
                     )
                 },
             )
         val source = world.schema.objectField("Query", "source")
         val consume = world.schema.objectField("Query", "consume")
-        val variable = Value.Variable.of(source, "seed")
+        val variable = Arguments.Variable.of(source, "seed")
 
         val definition =
             assertIs<VariableDefinition.FromArgument>(
@@ -256,7 +259,7 @@ class ResolverDemandTest {
                         val source = schema.objectField("Query", "source")
                         val other = schema.objectField("Query", "other")
                         mapOf(
-                            Value.Variable.of(source, "seed") to
+                            Arguments.Variable.of(source, "seed") to
                                 schema.fromArgument(other, "seed"),
                         )
                     },
@@ -304,12 +307,12 @@ class ResolverDemandTest {
                     variableProviders = { schema ->
                         val owner = schema.objectField("Query", "x")
                         mapOf(
-                            Value.Variable.of(owner, "a") to
+                            Arguments.Variable.of(owner, "a") to
                                 schema.fromObjectField(
                                     "fragment ignored on Query { z(a: 0, b: ${'$'}b) }",
                                     listOf("z"),
                                 ),
-                            Value.Variable.of(owner, "b") to
+                            Arguments.Variable.of(owner, "b") to
                                 schema.fromObjectField(
                                     "fragment ignored on Query { z(a: ${'$'}a, b: 0) }",
                                     listOf("z"),
@@ -422,7 +425,7 @@ class ResolverDemandTest {
                     variableProviders = { schema ->
                         val owner = schema.field("Query", "result") as Schema.ObjectField
                         mapOf(
-                            Value.Variable.of(owner, "value") to
+                            Arguments.Variable.of(owner, "value") to
                                 schema.fromObjectField(
                                     """
                                     fragment ignored on Query {
@@ -452,8 +455,8 @@ class ResolverDemandTest {
                     val user = schema.type("User") as Schema.ObjectType
                     val admin = schema.type("Admin") as Schema.ObjectType
                     mapOf(
-                        user to model.testing.nodeResolverOf { error("Not invoked") },
-                        admin to model.testing.nodeResolverOf { error("Not invoked") },
+                        user to nodeResolverOf { error("Not invoked") },
+                        admin to nodeResolverOf { error("Not invoked") },
                     )
                 },
                 fieldResolvers = { schema ->
@@ -648,7 +651,7 @@ class ResolverDemandTest {
             """.trimIndent()
 
         fun resolver(fragment: Fragment): FieldResolverDefinition =
-            model.testing.fieldResolverOf(
+            fieldResolverOf(
                 objectFragment = fragment,
                 function = { _, _ -> error("Not invoked") },
             )
@@ -687,7 +690,7 @@ class ResolverDemandTest {
                 variableProviders = { schema ->
                     val owner = schema.field("Query", "result") as Schema.ObjectField
                     mapOf(
-                        Value.Variable.of(owner, "value") to
+                        Arguments.Variable.of(owner, "value") to
                             schema.fromObjectField(
                                 providerFragment,
                                 providerResponsePath,

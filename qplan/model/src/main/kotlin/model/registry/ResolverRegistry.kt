@@ -2,7 +2,7 @@ package model.registry
 
 import model.ObjectEngineResult
 import model.Schema
-import model.Value
+import viaduct.engine.api.EngineObjectData
 
 /**
  * The externally supplied field resolvers and field-relative variable definitions fixed for one
@@ -44,7 +44,7 @@ interface ResolverRegistry {
      *
      * Every other Query field is active and supplied by a registered field resolver.
      */
-    fun resolveRootQuery(): Value.Object
+    fun resolveRootQuery(): EngineObjectData.Sync
 
     operator fun contains(field: Schema.ObjectField): Boolean
 

@@ -2,6 +2,7 @@ package model.testing
 
 import model.Schema
 import model.SourceSchemaAdapter
+import model.gjDef
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -44,6 +45,22 @@ class NodeBridgeLoweringTest {
         assertEquals(bridge, producer.typeExpr.baseType)
         assertEquals(setOf("__typename", "id", "node"), bridge.fields.keys)
         assertEquals(setOf(bridge), bridge.possibleTypes)
+
+        val query = schema.query
+        val sourceQuery = schema.graphQLSchema.queryType
+        assertSame(query.gjDef, query.gjDef)
+        assertTrue(query.gjDef !== sourceQuery)
+        assertNotNull(query.gjDef.getFieldDefinition("user_V_A_node"))
+        assertNull(query.gjDef.getFieldDefinition("user"))
+
+        assertSame(bridge.gjDef, bridge.gjDef)
+        assertEquals(
+            setOf("id", "node"),
+            bridge.gjDef.fieldDefinitions.mapTo(linkedSetOf()) { it.name },
+        )
+
+        val user = schema.type("User") as Schema.ObjectType
+        assertSame(schema.graphQLSchema.getObjectType("User"), user.gjDef)
     }
 
     @Test

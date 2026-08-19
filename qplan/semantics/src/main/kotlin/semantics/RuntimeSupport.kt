@@ -5,7 +5,6 @@ import model.EngineResult
 import model.EngineResultCell
 import model.PathComponent
 import model.SelectionForest
-import model.Value
 import model.registry.successorDemand
 import java.util.concurrent.ConcurrentHashMap
 

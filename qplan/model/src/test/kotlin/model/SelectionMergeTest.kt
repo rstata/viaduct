@@ -219,21 +219,21 @@ class SelectionMergeTest {
             fixture.searchSelection(
                 mapOf(
                     "values" to
-                        listOf(Value.Variable.of(variableField, "x")),
+                        listOf(Arguments.Variable.of(variableField, "x")),
                 ),
             )
         val anotherX =
             fixture.searchSelection(
                 mapOf(
                     "values" to
-                        listOf(Value.Variable.of(variableField, "x")),
+                        listOf(Arguments.Variable.of(variableField, "x")),
                 ),
             )
         val y =
             fixture.searchSelection(
                 mapOf(
                     "values" to
-                        listOf(Value.Variable.of(variableField, "y")),
+                        listOf(Arguments.Variable.of(variableField, "y")),
                 ),
             )
         val literal =
@@ -261,7 +261,7 @@ class SelectionMergeTest {
             fixture.searchSelection(
                 mapOf(
                     "values" to
-                        listOf(Value.Variable.of(variableField, "x")),
+                        listOf(Arguments.Variable.of(variableField, "x")),
                 ),
             )
 
@@ -278,7 +278,7 @@ class SelectionMergeTest {
     fun `instantiation rejects an unbound stamped variable`() {
         val fixture = Fixture()
         val variableField = fixture.schema.objectField("Query", "search")
-        val variable = Value.Variable.of(variableField, "x").stamp(emptyList())
+        val variable = Arguments.Variable.of(variableField, "x").stamp(emptyList())
         val symbolic =
             fixture.searchSelection(
                 mapOf("values" to listOf(variable)),
@@ -298,7 +298,7 @@ class SelectionMergeTest {
         val fixture = Fixture()
         val variableField = fixture.schema.objectField("Query", "search")
         val variable =
-            Value.Variable.of(variableField, "x")
+            Arguments.Variable.of(variableField, "x")
                 .stamp(listOf(ListEngineResult.Index.of(0)))
         val symbolic =
             fixture.searchSelection(
@@ -326,9 +326,9 @@ class SelectionMergeTest {
     fun `repeated merge preserves a key containing substituted list bindings`() {
         val fixture = Fixture()
         val source = fixture.schema.objectField("Query", "source")
-        val variable = Value.Variable.of(source, "values").stamp(emptyList())
+        val variable = Arguments.Variable.of(source, "values").stamp(emptyList())
         val binding =
-            Value.Arguments
+            Arguments.Resolved
                 .of(source, mapOf("values" to listOf(1, 2)))
                 .fieldValues
                 .getValue("values")
@@ -360,9 +360,9 @@ class SelectionMergeTest {
         val fixture = Fixture()
         val definingField = fixture.schema.objectField("Query", "search")
         val firstVariable =
-            Value.Variable.of(definingField, "first").stamp(emptyList())
+            Arguments.Variable.of(definingField, "first").stamp(emptyList())
         val secondVariable =
-            Value.Variable.of(definingField, "second").stamp(emptyList())
+            Arguments.Variable.of(definingField, "second").stamp(emptyList())
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val firstMarker =
             Selection.of(
@@ -388,7 +388,7 @@ class SelectionMergeTest {
         val markerOnly:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable, VariableBinding>,
+                Map<Arguments.Variable, VariableBinding>,
             > =
             runBlocking {
                 context(fixture.world) {
@@ -402,7 +402,7 @@ class SelectionMergeTest {
         val combined:
             Pair<
                 ObjectSelectionForest,
-                Map<Value.Variable, VariableBinding>,
+                Map<Arguments.Variable, VariableBinding>,
             > =
             runBlocking {
                 context(fixture.world) {
@@ -425,7 +425,7 @@ class SelectionMergeTest {
     fun `variable markers report no binding for absent or incomplete result keys`() {
         val fixture = Fixture()
         val definingField = fixture.schema.objectField("Query", "search")
-        val variable = Value.Variable.of(definingField, "value").stamp(emptyList())
+        val variable = Arguments.Variable.of(definingField, "value").stamp(emptyList())
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val marker =
             Selection.of(
@@ -459,7 +459,7 @@ class SelectionMergeTest {
     fun `intermediate markers continue through objects and bind premature values`() {
         val fixture = Fixture()
         val definingField = fixture.schema.objectField("Query", "search")
-        val variable = Value.Variable.of(definingField, "value").stamp(emptyList())
+        val variable = Arguments.Variable.of(definingField, "value").stamp(emptyList())
         val leaf = fixture.selection("ConcreteItem", "a")
         val markedLeaf =
             Selection.of(
@@ -525,7 +525,7 @@ class SelectionMergeTest {
                     }
             }
             assertEquals(
-                mapOf<Value.Variable, VariableBinding>(
+                mapOf<Arguments.Variable, VariableBinding>(
                     variable to
                         if (prematureValue == ErrorEngineResult) {
                             VariableBinding.Error

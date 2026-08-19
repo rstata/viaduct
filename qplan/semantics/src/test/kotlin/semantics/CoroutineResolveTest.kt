@@ -11,7 +11,6 @@ import model.PathComponent
 import model.Schema
 import model.SelectionForest
 import model.UncompletedPromiseException
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -19,6 +18,8 @@ import model.registry.FieldResolver
 import model.registry.ResolverRegistry
 import model.sameCompletedResultAs
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import semantics.contract.selectionValues
 import semantics.resolver21.resolve
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,6 +27,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import viaduct.engine.api.EngineObjectData
 
 class CoroutineResolveTest {
     @Test
@@ -37,11 +39,11 @@ class CoroutineResolveTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "first") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> 1 },
                         schema.field("Query", "second") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> 2 },
                     )
@@ -96,15 +98,15 @@ class CoroutineResolveTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "child") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> schema.objectOf("Child") },
                         schema.field("Child", "first") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ -> 1 },
                         schema.field("Child", "second") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ -> 2 },
                     )
@@ -166,13 +168,13 @@ class CoroutineResolveTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "first") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { second }",
                                 ),
                             ) { _, _ -> 1 },
                         schema.field("Query", "second") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> 2 },
                     )
@@ -218,16 +220,16 @@ class CoroutineResolveTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "failed") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> throw failure },
                         schema.field("Query", "waiting") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { failed }",
                                 ),
                             ) { input, _ ->
-                                input.fieldValues.getValue("failed")
+                                input.selectionValues().getValue("failed")
                             },
                     )
                 },
@@ -260,7 +262,7 @@ class CoroutineResolveTest {
                     val items = schema.field("Query", "items")
                     mapOf(
                         items to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 listOf(
@@ -269,7 +271,7 @@ class CoroutineResolveTest {
                                 )
                             },
                         schema.field("Item", "value") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Item"),
                             ) { _, _ -> 7 },
                     )
@@ -316,7 +318,7 @@ private fun registryOverride(
     resolver: (Schema.ObjectField, ResolverRegistry) -> FieldResolver?,
 ): ResolverRegistry =
     object : ResolverRegistry {
-        override fun resolveRootQuery(): Value.Object = delegate.resolveRootQuery()
+        override fun resolveRootQuery(): EngineObjectData.Sync = delegate.resolveRootQuery()
 
         override fun contains(field: Schema.ObjectField): Boolean =
             resolver(field, delegate) != null

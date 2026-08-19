@@ -1,8 +1,9 @@
 package semantics.contract
 
+import model.Arguments
+
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.Schema
-import model.Value
 import model.testing.ResolverApplicationArguments
 import kotlin.test.assertEquals
 
@@ -19,7 +20,7 @@ internal fun ResolverApplicationArguments.assertApplications(
 ) {
     assertEquals(
         expected.mapValues { (field, applications) ->
-            applications.map { arguments -> Value.Arguments.of(field, arguments) }
+            applications.map { arguments -> Arguments.Resolved.of(field, arguments) }
         },
         all(),
     )
@@ -30,7 +31,7 @@ internal fun ResolverApplicationArguments.assertArguments(
     vararg expected: Map<String, Any?>,
 ) {
     arguments(field).shouldContainExactlyInAnyOrder(
-        expected.map { arguments -> Value.Arguments.of(field, arguments) },
+        expected.map { arguments -> Arguments.Resolved.of(field, arguments) },
     )
 }
 
@@ -43,7 +44,7 @@ internal fun ResolverApplicationArguments.assertDistinctArguments(
 ) {
     assertEquals(
         expected.mapTo(linkedSetOf()) { arguments ->
-            Value.Arguments.of(field, arguments)
+            Arguments.Resolved.of(field, arguments)
         },
         arguments(field).toSet(),
     )

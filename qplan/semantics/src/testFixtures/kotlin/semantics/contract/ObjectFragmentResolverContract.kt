@@ -1,5 +1,7 @@
 package semantics.contract
 
+import viaduct.engine.api.EngineObjectData
+
 import java.util.concurrent.ConcurrentHashMap
 import model.Assumptions
 import model.EngineResult
@@ -8,7 +10,6 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.TypeExpr
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -55,7 +56,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 "byTwo" to 2,
                                 "byThree" to 3,
                             ),
-                            input.fieldValues.toMap(),
+                            input.selectionValues().toMap(),
                         )
                     }
                 },
@@ -113,10 +114,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     if (field.containingType.typeName == "Holder" && field.fieldName == "chosen") {
-                        val item = assertIs<Value.Object>(input.fieldValues.getValue("item"))
-                        assertEquals(setOf("value"), item.fieldValues.keys)
-                        observed[item.schemaType.typeName] =
-                            assertIs<Int>(item.fieldValues.getValue("value"))
+                        val item = assertIs<EngineObjectData.Sync>(input.selectionValues().getValue("item"))
+                        assertEquals(setOf("value"), item.selectionValues().keys)
+                        observed[item.type.name] =
+                            assertIs<Int>(item.selectionValues().getValue("value"))
                     }
                 },
             )
@@ -178,12 +179,12 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             fieldResolverOf(resultFragment) { input, _ ->
                                 assertEquals(
                                     setOf("first", "second", "empty"),
-                                    input.fieldValues.keys,
+                                    input.selectionValues().keys,
                                 )
-                                assertEquals(7, input.fieldValues.getValue("first"))
-                                assertEquals(7, input.fieldValues.getValue("second"))
-                                assertTrue("empty" in input.fieldValues)
-                                assertEquals(null, input.fieldValues.getValue("empty"))
+                                assertEquals(7, input.selectionValues().getValue("first"))
+                                assertEquals(7, input.selectionValues().getValue("second"))
+                                assertTrue("empty" in input.selectionValues())
+                                assertEquals(null, input.selectionValues().getValue("empty"))
                                 1
                             },
                     )
@@ -238,17 +239,17 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             },
                         result to
                             fieldResolverOf(resultFragment) { input, _ ->
-                                assertEquals(setOf("payload"), input.fieldValues.keys)
+                                assertEquals(setOf("payload"), input.selectionValues().keys)
                                 val payload =
-                                    assertIs<Value.Object>(
-                                        input.fieldValues.getValue("payload"),
+                                    assertIs<EngineObjectData.Sync>(
+                                        input.selectionValues().getValue("payload"),
                                     )
                                 assertEquals(
                                     setOf("first", "second"),
-                                    payload.fieldValues.keys,
+                                    payload.selectionValues().keys,
                                 )
-                                assertEquals(2, payload.fieldValues.getValue("first"))
-                                assertEquals(3, payload.fieldValues.getValue("second"))
+                                assertEquals(2, payload.selectionValues().getValue("first"))
+                                assertEquals(3, payload.selectionValues().getValue("second"))
                                 5
                             },
                     )
@@ -285,7 +286,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
-                    val actualFields = input.fieldValues.keys
+                    val actualFields = input.selectionValues().keys
                     when (field.containingType.typeName to field.fieldName) {
                         "User" to "display" ->
                             require(actualFields == setOf("first", "last"))
@@ -338,15 +339,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     when (field.containingType.typeName to field.fieldName) {
                         "Profile" to "rendered" ->
                             require(
-                                input.fieldValues.keys == setOf("raw"),
+                                input.selectionValues().keys == setOf("raw"),
                             )
                         "User" to "message" -> {
                             require(
-                                input.fieldValues.keys == setOf("profile"),
+                                input.selectionValues().keys == setOf("profile"),
                             )
-                            val profile = input.fieldValues.values.single() as Value.Object
+                            val profile = input.selectionValues().values.single() as EngineObjectData.Sync
                             require(
-                                profile.fieldValues.keys == setOf("rendered"),
+                                profile.selectionValues().keys == setOf("rendered"),
                             )
                         }
                     }
@@ -612,19 +613,19 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     val seedKey = schema.contractKey("Group", "seed")
 
                     fun computedResolver(typeName: String) =
-                        model.testing.fieldResolverOf(
+                        fieldResolverOf(
                             schema.fragmentFrom(
                                 "fragment ignored on $typeName { base }",
                             ),
                         ) { input, _ ->
                             computedApplications += 1
-                            val base = input.fieldValues.getValue("base") as Int
+                            val base = input.selectionValues().getValue("base") as Int
                             base * if (typeName == "EvenProduct") 10 else 100
                         }
 
                     mapOf(
                         groups to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 listOf(
@@ -637,13 +638,13 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     )
                             },
                         schema.field("Group", "product") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Group { seed }",
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    input.fieldValues.getValue(seedKey.field.fieldName) as Int
+                                    input.selectionValues().getValue(seedKey.field.fieldName) as Int
                                 val factor =
                                     arguments.fieldValues.getValue("factor") as Int
                                 productApplications += seed to factor
@@ -750,7 +751,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     val rawKey = schema.contractKey("Entry", "raw")
                     mapOf(
                         groups to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 listOf(
@@ -763,13 +764,13 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     )
                             },
                         entries to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Group { seed }",
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    input.fieldValues.getValue(seedKey.field.fieldName) as Int
+                                    input.selectionValues().getValue(seedKey.field.fieldName) as Int
                                 val count =
                                     arguments.fieldValues.getValue("count") as Int
                                 applications += seed to count
@@ -780,14 +781,14 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     }
                             },
                         schema.field("Entry", "rendered") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment ignored on Entry { raw }",
                                 ),
                             ) { input, _ ->
                                 renderedApplications += 1
                                 val raw =
-                                    input.fieldValues.getValue(rawKey.field.fieldName) as Int
+                                    input.selectionValues().getValue(rawKey.field.fieldName) as Int
                                 "entry-$raw"
                             },
                     )

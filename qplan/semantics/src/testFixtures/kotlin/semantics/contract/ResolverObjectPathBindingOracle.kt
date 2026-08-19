@@ -13,7 +13,6 @@ import model.Schema
 import model.Selection
 import model.Stamp
 import model.TypeExpr
-import model.Value
 import model.VariableBinding
 import model.instantiateBindings
 import model.objectKey

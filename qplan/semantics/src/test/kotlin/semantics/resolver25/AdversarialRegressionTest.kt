@@ -1,12 +1,13 @@
 package semantics.resolver25
 
+import model.Arguments
+
 import java.time.Duration
 import model.EngineResult
 import model.EngineErrorData
 import model.EngineOutputData
 import model.ErrorEngineResult
 import model.ObjectEngineResult
-import model.Value
 import model.VariableBinding
 import model.fragmentFrom
 import model.objectOf
@@ -128,7 +129,7 @@ class AdversarialRegressionTest {
             assertEquals(
                 expectedBinding,
                 world.getBinding(
-                    Value.Variable
+                    Arguments.Variable
                         .of(resultKey.field, "value")
                         .stamp(listOf(resultKey)),
                 ),

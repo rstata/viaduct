@@ -1,12 +1,13 @@
 package semantics.resolver25
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
 import model.ObjectSelection
 import model.PathComponent
 import model.Schema
 import model.Selection
-import model.Value
 import model.VariableBinding
 
 internal sealed interface Resolver25BindingSource {
@@ -90,14 +91,14 @@ internal sealed interface Resolver25LifecycleEvent {
     data class BindingDeclared(
         override val sequence: Long,
         val ownerCoordinate: List<PathComponent>,
-        val variable: Value.Variable,
+        val variable: Arguments.Variable,
         val source: Resolver25BindingSource,
     ) : Resolver25LifecycleEvent
 
     data class BindingCompleted(
         override val sequence: Long,
         val ownerCoordinate: List<PathComponent>,
-        val variable: Value.Variable,
+        val variable: Arguments.Variable,
         val binding: VariableBinding,
     ) : Resolver25LifecycleEvent
 
@@ -255,7 +256,7 @@ internal class Resolver25LifecycleInstrumentation(
 
     fun bindingDeclared(
         ownerCoordinate: List<PathComponent>,
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         source: Resolver25BindingSource,
     ) {
         emit { sequence ->
@@ -270,7 +271,7 @@ internal class Resolver25LifecycleInstrumentation(
 
     fun bindingCompleted(
         ownerCoordinate: List<PathComponent>,
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         binding: VariableBinding,
     ) {
         emit { sequence ->

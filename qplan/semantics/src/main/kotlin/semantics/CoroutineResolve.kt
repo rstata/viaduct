@@ -10,12 +10,14 @@ import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
+import model.Arguments
 import model.PathComponent
 import model.Promise
 import model.SelectionForest
-import model.Value
 import model.groundKey
+import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Resolves [selections] through one structured coroutine tree rooted at this object occurrence.
@@ -24,7 +26,7 @@ import semantics.correctresolution.argumentsContainErrorValue
  * active child OER only after installing every demanded promise on that child.
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-internal suspend fun Value.Object.coroutineResolve(
+internal suspend fun EngineObjectData.Sync.coroutineResolve(
     selections: SelectionForest,
 ): ObjectEngineResult {
     val result =
@@ -48,7 +50,7 @@ internal suspend fun Value.Object.coroutineResolve(
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private fun CoroutineScope.orchestrateSlot(
     path: List<PathComponent>,
-    source: Value.Object,
+    source: EngineObjectData.Sync,
     selections: SelectionForest,
     target: ObjectEngineResult,
 ) {
@@ -84,7 +86,7 @@ private fun CoroutineScope.orchestrateSlot(
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun resolveSlot(
     path: List<PathComponent>,
-    source: Value.Object,
+    source: EngineObjectData.Sync,
     selection: ObjectSelection,
     target: ObjectEngineResult,
     cell: EngineResultCell,
@@ -92,11 +94,11 @@ private suspend fun resolveSlot(
     val key = selection.groundKey()
     val valuePromise = cell.getValue()
     when (val arguments = key.arguments) {
-        model.OpenArguments.Ground.Error -> {
+        Arguments.Error -> {
             valuePromise.complete(ErrorEngineResult)
             cell.setAccessResult(ErrorEngineResult)
         }
-        is Value.Arguments ->
+        is Arguments.Resolved ->
             coroutineScope {
                 val resolutionSelections = runtimeSupport.complete(selection.subselections)
                 val fieldValue =
@@ -122,7 +124,7 @@ private suspend fun resolveSlot(
                             )
                         }
                     } else {
-                        source.fieldValues.getValue(key.field.fieldName)
+                        source.get(key.field.fieldName)
                     }
                 val resolvedValue =
                     fieldValue.resolveValue(

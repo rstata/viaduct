@@ -1,11 +1,12 @@
 package semantics.contract
 
+import viaduct.engine.api.EngineObjectData
+
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
-import model.Value
 
 /** Subject-specific evidence retained alongside one resolution result. */
 interface ResolverResolutionObservation {
@@ -25,13 +26,13 @@ interface ResolverContract {
 
     fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult
 
     fun observeResolution(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ResolverResolutionObservation =
         ResultOnlyResolverResolutionObservation(
@@ -61,10 +62,12 @@ interface ResolverContract {
             }
 }
 
-internal fun Value.Object.hasExactlyFields(
+internal fun EngineObjectData.Sync.hasExactlyFields(
     vararg expectedFields: ObjectEngineResult.GroundKey,
 ): Boolean = hasExactlyFields(expectedFields.toSet())
 
-internal fun Value.Object.hasExactlyFields(
+internal fun EngineObjectData.Sync.hasExactlyFields(
     expectedFields: Set<ObjectEngineResult.GroundKey>,
-): Boolean = fieldValues.keys == expectedFields
+): Boolean =
+    getSelections().toSet() ==
+        expectedFields.mapTo(linkedSetOf()) { key -> key.field.fieldName }

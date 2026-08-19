@@ -7,7 +7,6 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.SelectionForest
-import model.Value
 import model.applicableGroundSelections
 import model.fragmentFrom
 import model.groundKey

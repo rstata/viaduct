@@ -5,6 +5,7 @@ import model.ObjectEngineResult
 import graphql.language.NamedNode
 import graphql.language.Node
 import graphql.parser.Parser
+import graphql.schema.GraphQLFieldDefinition
 import graphql.schema.GraphQLFieldsContainer
 import graphql.schema.GraphQLImplementingType
 import graphql.schema.GraphQLInterfaceType
@@ -18,7 +19,9 @@ import model.Schema
 import model.EngineErrorData
 import model.EngineOutputData
 import model.TypeExpr
-import model.Value
+import model.engineObjectDataOf
+import model.schemaType
+import viaduct.engine.api.EngineObjectData
 
 /**
  * A fixture pair of the GraphQL-visible source schema and the canonical decoded [Schema].
@@ -37,7 +40,7 @@ internal class GJSchema private constructor(
     internal val objectTypes: List<Schema.ObjectType>
         get() =
             graphQLSchema.allTypesAsList
-                .filterIsInstance<graphql.schema.GraphQLObjectType>()
+                .filterIsInstance<GraphQLObjectType>()
                 .filterNot { it.name.startsWith("__") }
                 .map { type(it.name) as Schema.ObjectType }
 
@@ -85,7 +88,7 @@ internal class GJSchema private constructor(
 
     private fun sourceField(
         field: Schema.OutputField,
-    ): graphql.schema.GraphQLFieldDefinition? {
+    ): GraphQLFieldDefinition? {
         val sourceContainer =
             graphQLSchema.getType(field.containingType.typeName) as? GraphQLFieldsContainer
                 ?: return null
@@ -96,7 +99,7 @@ internal class GJSchema private constructor(
             ?.takeIf { it.isNodeValued() }
     }
 
-    private fun graphql.schema.GraphQLFieldDefinition.isNodeValued(): Boolean {
+    private fun GraphQLFieldDefinition.isNodeValued(): Boolean {
         val node = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return false
         val output = GraphQLTypeUtil.unwrapAll(type) as? GraphQLImplementingType ?: return false
         return output.name == node.name ||
@@ -123,23 +126,24 @@ internal class GJSchema private constructor(
                 }
             }
             sourceTypeExpr is TypeExpr.Named && bridgeTypeExpr is TypeExpr.Named -> {
-                require(output is Value.Object) {
+                require(output is EngineObjectData.Sync) {
                     "Node field resolver did not return a node reference"
                 }
-                val idField = objectField(output.schemaType.typeName, "id")
-                val id = output.fieldValues.getValue(idField.fieldName)
+                val outputType = output.schemaType
+                val idField = objectField(outputType.typeName, "id")
+                val id = output.get(idField.fieldName)
                 require(id != EngineErrorData && id is String) {
-                    "Node reference ${output.schemaType.typeName}/id must contain a non-error ID"
+                    "Node reference ${outputType.typeName}/id must contain a non-error ID"
                 }
                 val bridgeType = bridgeTypeExpr.baseType as Schema.ObjectType
                 val bridgeId = objectField(bridgeType.typeName, NODE_BRIDGE_ID_FIELD)
-                Value.Object.of(
-                    type = bridgeType,
+                engineObjectDataOf(
+                    schemaType = bridgeType,
                     fields =
                         mapOf(
                             bridgeId.fieldName to
-                                "$TYPED_NODE_ID_PREFIX${output.schemaType.typeName.length}:" +
-                                    "${output.schemaType.typeName}$id",
+                                "$TYPED_NODE_ID_PREFIX${outputType.typeName.length}:" +
+                                    "${outputType.typeName}$id",
                         ),
                 )
             }
@@ -220,7 +224,7 @@ internal class GJSchema private constructor(
                 }
         }
 
-        private fun graphql.schema.GraphQLFieldDefinition.nodeOutputName(
+        private fun GraphQLFieldDefinition.nodeOutputName(
             schema: GraphQLSchema,
             node: GraphQLInterfaceType,
         ): String? {

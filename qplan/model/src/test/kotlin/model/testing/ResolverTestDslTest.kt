@@ -1,14 +1,12 @@
 package model.testing
 
-import model.ObjectEngineResult
-
-import model.OpenArguments
 import model.ArgumentResolutionError
 import model.EngineErrorData
 import model.EngineOutputData
+import model.ObjectEngineResult
+import model.Arguments
 import model.Schema
 import model.SourceSchemaAdapter
-import model.Value
 import model.fieldExpressions
 import model.objectOf
 import model.registry.VariableDefinition
@@ -17,6 +15,7 @@ import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import viaduct.engine.api.EngineObjectData
 
 class ResolverTestDslTest {
     @Test
@@ -46,7 +45,7 @@ class ResolverTestDslTest {
         val schema = world.schema
         val containerField = schema.objectField("Query", "container")
         val container =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 world.apply(containerField),
             )
         val total = schema.objectField("Container", "total")
@@ -55,14 +54,14 @@ class ResolverTestDslTest {
 
         assertEquals(10, result)
         assertEquals(
-            listOf(Value.Arguments.of(total, mapOf("extra" to 4))),
+            listOf(Arguments.Resolved.of(total, mapOf("extra" to 4))),
             world.applicationArguments.arguments(total),
         )
         assertEquals(
-            mapOf<Schema.OutputField, List<Value.Arguments>>(
+            mapOf<Schema.OutputField, List<Arguments.Resolved>>(
                 containerField to
-                    listOf(Value.Arguments.of(containerField, emptyMap())),
-                total to listOf(Value.Arguments.of(total, mapOf("extra" to 4))),
+                    listOf(Arguments.Resolved.of(containerField, emptyMap())),
+                total to listOf(Arguments.Resolved.of(total, mapOf("extra" to 4))),
             ),
             world.applicationArguments.all(),
         )
@@ -88,8 +87,8 @@ class ResolverTestDslTest {
             )
         val result = world.schema.objectField("Query", "result")
         val resolver = world.resolverRegistry.resolver(result)
-        val seed = Value.Variable.of(result, "seed")
-        val fromSource = Value.Variable.of(result, "fromSource")
+        val seed = Arguments.Variable.of(result, "seed")
+        val fromSource = Arguments.Variable.of(result, "fromSource")
 
         assertIs<VariableDefinition.FromArgument>(resolver.variables.getValue(seed))
         assertIs<VariableDefinition.FromObjectField>(resolver.variables.getValue(fromSource))
@@ -137,7 +136,7 @@ class ResolverTestDslTest {
                 .single()
 
         assertEquals(
-            OpenArguments.Ground.Error,
+            Arguments.Error,
             dependency.key.arguments,
         )
     }
@@ -203,14 +202,14 @@ class ResolverTestDslTest {
         val subject = world.schema.objectField("Query", "subject")
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 world.apply(subject),
             )
 
-        assertEquals("Person", result.schemaType.typeName)
+        assertEquals("Person", result.type.name)
         assertEquals(
             9,
-            result.fieldValues.getValue("value"),
+            result.get("value"),
         )
     }
 
@@ -239,22 +238,22 @@ class ResolverTestDslTest {
         val schema = world.schema
         val viewer = schema.objectField("Query", "viewer_V_A_node")
         val bridge =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 world.apply(viewer, arguments = mapOf("id" to "user-2")),
             )
         val node = schema.objectField("User_V_A_Bridge", "node")
         val user =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 world.apply(node, bridge),
             )
 
         assertEquals(
             "user-2",
-            user.fieldValues.getValue("id"),
+            user.get("id"),
         )
         assertEquals(
             8,
-            user.fieldValues.getValue("score"),
+            user.get("score"),
         )
         val sourceSchema = SourceSchemaAdapter(schema)
         assertEquals(viewer, sourceSchema.field("Query", "viewer"))
@@ -321,11 +320,14 @@ class ResolverTestDslTest {
 
 private fun TestWorld.apply(
     field: Schema.ObjectField,
-    input: Value.Object = resolverRegistry.resolveRootQuery(),
+    input: EngineObjectData.Sync = resolverRegistry.resolveRootQuery(),
     arguments: Map<String, Any?> = emptyMap(),
 ): EngineOutputData? =
-    when (val grounded = OpenArguments.of(field, arguments)) {
-        OpenArguments.Ground.Error -> EngineErrorData
-        is Value.Arguments -> resolverRegistry.resolver(field)(input, grounded)
+    when (val grounded = Arguments.of(field, arguments)) {
+        Arguments.Error -> EngineErrorData
+        is Arguments.Resolved ->
+            context(assumptions) {
+                resolverRegistry.resolver(field)(input, grounded)
+            }
         else -> error("Direct resolver application requires ground arguments")
     }

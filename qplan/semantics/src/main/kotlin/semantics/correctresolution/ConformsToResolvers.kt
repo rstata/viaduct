@@ -1,5 +1,7 @@
 package semantics.correctresolution
 
+import model.Arguments
+
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineErrorData
@@ -12,7 +14,8 @@ import model.PathComponent
 import model.Schema
 import model.Stamp
 import model.TypeExpr
-import model.Value
+import model.schemaType
+import viaduct.engine.api.EngineObjectData
 import model.applicableGroundSelections
 import model.toEngineOutputData
 import model.usedVariables
@@ -49,7 +52,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
         val arguments = groundKey.arguments
         val fieldResolverConforms =
             if (
-                arguments !is Value.Arguments ||
+                arguments !is Arguments.Resolved ||
                 groundKey.field !in registry
             ) {
                 true
@@ -69,7 +72,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                         )
                     }
                 val resolverArguments =
-                    Value.Arguments.of(
+                    Arguments.Resolved.of(
                         field = groundKey.field,
                         fields = arguments.fieldValues,
                     )
@@ -142,7 +145,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
         ErrorEngineResult -> resolverValue == EngineErrorData
 
         is ObjectEngineResult ->
-            resolverValue is Value.Object &&
+            resolverValue is EngineObjectData.Sync &&
                 objectFieldsConformToResolverValue(
                     resolverValue = resolverValue,
                     fieldBelongsToResolver = { field ->
@@ -165,7 +168,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 
 context(world: Assumptions)
 private fun ObjectEngineResult.objectFieldsConformToResolverValue(
-    resolverValue: Value.Object,
+    resolverValue: EngineObjectData.Sync,
     fieldBelongsToResolver: (Schema.ObjectField) -> Boolean,
 ): Boolean {
     if (type != resolverValue.schemaType) return false
@@ -176,14 +179,14 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
         if (!fieldBelongsToResolver(groundKey.field)) {
             true
         } else if (
-            arguments !is Value.Arguments ||
+            arguments !is Arguments.Resolved ||
                 arguments.fieldValues.isNotEmpty() ||
-                !resolverValue.fieldValues.containsKey(fieldName)
+                !resolverValue.isPresent(fieldName)
         ) {
             false
         } else {
             getCell(groundKey).getValue().get().engineResultConformsToResolverValue(
-                resolverValue.fieldValues.getValue(fieldName),
+                resolverValue.get(fieldName),
                 groundKey.field.typeExpr,
             )
         }

@@ -35,11 +35,11 @@ class AssumptionsTest {
 
         val node = fragment.subselections.single()
         assertEquals(
-            Value.Variable.of(variableField, "filter"),
+            Arguments.Variable.of(variableField, "filter"),
             node.key.arguments.fieldExpressions().getValue("filter"),
         )
         assertNotEquals(
-            Value.Variable.of(variableField, "other"),
+            Arguments.Variable.of(variableField, "other"),
             node.key.arguments.fieldExpressions().getValue("filter"),
         )
     }
@@ -65,9 +65,7 @@ class AssumptionsTest {
 
         val filter =
             assertIs<EngineInputObjectData>(
-                assertIs<OpenValue.Ground>(
-                    node.key.arguments.fieldExpressions().getValue("filter"),
-                ).data,
+                node.key.arguments.fieldExpressions().getValue("filter"),
             )
         val role = assertIs<String>(filter["role"])
         assertEquals("ADMIN", role)
@@ -128,11 +126,9 @@ class AssumptionsTest {
 
         assertEquals(
             filter,
-            assertIs<OpenValue.Ground>(
-                fragment.subselections.single().key.arguments
-                    .fieldExpressions()
-                    .getValue("filter"),
-            ).data,
+            fragment.subselections.single().key.arguments
+                .fieldExpressions()
+                .getValue("filter"),
         )
     }
 
@@ -147,7 +143,7 @@ class AssumptionsTest {
                 expectedType = filterType,
                 value =
                     mapOf(
-                        "limit" to Value.Variable.of(variableField, "nested"),
+                        "limit" to Arguments.Variable.of(variableField, "nested"),
                     ),
             )
         }
@@ -213,8 +209,8 @@ class AssumptionsTest {
         ).forEach { field ->
             assertEquals(Schema.NoArguments, field.arguments)
         }
-        val emptyArguments = Value.Arguments.of(actors, emptyMap())
-        val otherEmptyArguments = Value.Arguments.of(typeName, emptyMap())
+        val emptyArguments = Arguments.Resolved.of(actors, emptyMap())
+        val otherEmptyArguments = Arguments.Resolved.of(typeName, emptyMap())
         assertEquals(emptyArguments, otherEmptyArguments)
         assertEquals(
             TypeExpr.List.of(
@@ -232,10 +228,10 @@ class AssumptionsTest {
         assertEquals("filter", filterArgument.name)
         assertFalse(filterArgument.isRequired)
         val filterDefault =
-            assertIs<Value.Default.Present>(filterArgument.defaultValue)
+            assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
         val filterValue = assertIs<EngineInputObjectData>(filterDefault.value)
         val nodeArguments =
-            Value.Arguments.of(
+            Arguments.Resolved.of(
                 field = nodeField,
                 fields = mapOf("filter" to filterValue),
             )
@@ -260,9 +256,7 @@ class AssumptionsTest {
         assertEquals(nodeField, nodeKey.field)
         assertEquals(
             filterValue,
-            assertIs<OpenValue.Ground>(
-                nodeKey.arguments.fieldExpressions()["filter"],
-            ).data,
+            nodeKey.arguments.fieldExpressions()["filter"],
         )
         assertEquals(
             nodeKey,
@@ -308,7 +302,7 @@ class AssumptionsTest {
         runBlocking {
             val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
             val field = assumptions.schema.objectField("Query", "node_V_A_node")
-            val variable = Value.Variable.of(field, "value").stamp(emptyList())
+            val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
 
             assertFalse(assumptions.isBound(variable))
             assertFailsWith<IllegalStateException> {
@@ -331,7 +325,7 @@ class AssumptionsTest {
             assertEquals(VariableBinding.of(null), fetched.await())
             assertFalse(
                 assumptions.isBound(
-                    Value.Variable.of(field, "value")
+                    Arguments.Variable.of(field, "value")
                         .stamp(listOf(ListEngineResult.Index.of(0))),
                 ),
             )
@@ -341,13 +335,13 @@ class AssumptionsTest {
     fun `variable bindings are written once`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val field = assumptions.schema.objectField("Query", "node_V_A_node")
-        val variable = Value.Variable.of(field, "value").stamp(emptyList())
+        val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
         val first = 1
 
         assumptions.declareBinding(variable)
         assertFailsWith<IllegalStateException> {
             assumptions.declareBinding(
-                Value.Variable.of(field, "value").stamp(emptyList()),
+                Arguments.Variable.of(field, "value").stamp(emptyList()),
             )
         }
         assumptions.completeBinding(variable, first)
@@ -363,7 +357,7 @@ class AssumptionsTest {
         runBlocking {
             val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
             val field = assumptions.schema.objectField("Query", "node_V_A_node")
-            val variable = Value.Variable.of(field, "value").stamp(emptyList())
+            val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
             val value = 1
 
             assumptions.bindVariable(variable, value)
@@ -383,7 +377,7 @@ class AssumptionsTest {
     fun `immediate binding rejects a previously declared variable`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val field = assumptions.schema.objectField("Query", "node_V_A_node")
-        val variable = Value.Variable.of(field, "value").stamp(emptyList())
+        val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
 
         assumptions.declareBinding(variable)
 
@@ -396,7 +390,7 @@ class AssumptionsTest {
     fun `binding values are ground by type`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val field = assumptions.schema.objectField("Query", "node_V_A_node")
-        val binding = Value.Variable.of(field, "binding").stamp(emptyList())
+        val binding = Arguments.Variable.of(field, "binding").stamp(emptyList())
         val filter =
             toEngineInputObjectData(
                 expectedType = assumptions.schema.type("Filter") as Schema.InputObjectType,
@@ -413,14 +407,14 @@ class AssumptionsTest {
     fun `open arguments instantiate recursively from bindings`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val node = assumptions.schema.objectField("Query", "node_V_A_node")
-        val variable = Value.Variable.of(node, "filter").stamp(emptyList())
+        val variable = Arguments.Variable.of(node, "filter").stamp(emptyList())
         val filter =
             toEngineInputObjectData(
                 expectedType = assumptions.schema.type("Filter") as Schema.InputObjectType,
                 value = mapOf("limit" to 3),
             )
         val arguments =
-            OpenArguments.of(
+            Arguments.of(
                 field = node,
                 fields = mapOf("filter" to variable),
             )
@@ -432,7 +426,7 @@ class AssumptionsTest {
                 arguments.instantiateBindings(node.arguments)
             }
 
-        val grounded = assertIs<Value.Arguments>(instantiated)
+        val grounded = assertIs<Arguments.Resolved>(instantiated)
         assertEquals(
             filter,
             grounded.fieldValues.getValue("filter"),
@@ -443,14 +437,14 @@ class AssumptionsTest {
     fun `argument instantiation preserves the argument error`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val node = assumptions.schema.objectField("Query", "node_V_A_node")
-        val arguments = OpenArguments.of(node, mapOf("filter" to ArgumentResolutionError))
+        val arguments = Arguments.of(node, mapOf("filter" to ArgumentResolutionError))
 
         val instantiated =
             context(assumptions) {
                 arguments.instantiateBindings(node.arguments)
             }
 
-        assertSame(OpenArguments.Ground.Error, instantiated)
+        assertSame(Arguments.Error, instantiated)
     }
 
     @Test
@@ -463,14 +457,14 @@ class AssumptionsTest {
             ),
         ).forEach { filter ->
             val arguments =
-                OpenArguments.of(
+                Arguments.of(
                     node,
                     mapOf(
                         "filter" to filter,
                     ),
                 )
 
-            assertSame(OpenArguments.Ground.Error, arguments)
+            assertSame(Arguments.Error, arguments)
         }
     }
 
@@ -478,9 +472,9 @@ class AssumptionsTest {
     fun `nested erroneous variable bindings become an argument error`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val node = assumptions.schema.objectField("Query", "node_V_A_node")
-        val variable = Value.Variable.of(node, "tag").stamp(emptyList())
+        val variable = Arguments.Variable.of(node, "tag").stamp(emptyList())
         val arguments =
-            OpenArguments.of(
+            Arguments.of(
                 node,
                 mapOf(
                     "filter" to
@@ -496,7 +490,7 @@ class AssumptionsTest {
                 arguments.instantiateBindings(node.arguments)
             }
 
-        assertSame(OpenArguments.Ground.Error, instantiated)
+        assertSame(Arguments.Error, instantiated)
     }
 
     @Test
@@ -541,7 +535,7 @@ class AssumptionsTest {
 
         val nodeField = schema.field("Query", "node_V_A_node")
         val arguments =
-            Value.Arguments.of(
+            Arguments.Resolved.of(
                 field = nodeField,
                 fields =
                     mapOf(
@@ -564,7 +558,7 @@ class AssumptionsTest {
     fun `input-like factories apply declared defaults unless explicitly overridden`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val friendField = schema.field("User", "friend_V_A_node")
-        val defaultFriendArguments = Value.Arguments.of(friendField, emptyMap())
+        val defaultFriendArguments = Arguments.Resolved.of(friendField, emptyMap())
 
         assertEquals(
             3,
@@ -572,7 +566,7 @@ class AssumptionsTest {
         )
 
         val nodeField = schema.field("Query", "node_V_A_node")
-        val defaultArguments = Value.Arguments.of(nodeField, emptyMap())
+        val defaultArguments = Arguments.Resolved.of(nodeField, emptyMap())
         val defaultFilter =
             assertIs<EngineInputObjectData>(defaultArguments.fieldValues.getValue("filter"))
 
@@ -598,7 +592,7 @@ class AssumptionsTest {
         assertEquals(null, explicitFilter.getValue("role"))
 
         val explicitNullFriendArguments =
-            Value.Arguments.of(
+            Arguments.Resolved.of(
                 field = friendField,
                 fields = mapOf("limit" to null),
             )
@@ -630,7 +624,7 @@ class AssumptionsTest {
             )
         }
         assertFailsWith<ClassCastException> {
-            Value.Arguments.of(
+            Arguments.Resolved.of(
                 field = schema.field("Query", "node_V_A_node"),
                 fields = mapOf("filter" to 1),
             )

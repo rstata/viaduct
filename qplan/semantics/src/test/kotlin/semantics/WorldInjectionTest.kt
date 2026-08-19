@@ -1,20 +1,25 @@
 package semantics
 
-import model.ObjectEngineResult
+import model.Arguments
 
 import model.Assumptions
+import model.ObjectEngineResult
 import model.Schema
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.registry.ResolverRegistry
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.nodeResolverOf
+import semantics.contract.selectionValues
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import viaduct.engine.api.EngineObjectData
 
 class WorldInjectionTest {
     @Test
@@ -26,7 +31,7 @@ class WorldInjectionTest {
                     val user = schema.type("User") as Schema.ObjectType
                     mapOf(
                         user to
-                            model.testing.nodeResolverOf { id ->
+                            nodeResolverOf { id ->
                                 schema.objectOf("User") {
                                     "id" setTo id
                                 }
@@ -38,7 +43,7 @@ class WorldInjectionTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         userField to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ ->
                                     schema.objectOf("User") {
@@ -61,13 +66,12 @@ class WorldInjectionTest {
 
         val bridgeField = schema.objectField("Query", "user_V_A_node")
         val payloadField = schema.objectField("User_V_A_Bridge", "node")
-        val user = schema.type("User") as Schema.ObjectType
         val bridge =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 registry
                     .resolver(bridgeField)(
                         input = world.objectOf("Query"),
-                        arguments = Value.Arguments.of(bridgeField, emptyMap()),
+                        arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
                     ),
             )
 
@@ -82,22 +86,22 @@ class WorldInjectionTest {
                 """.trimIndent(),
             ).subselections
         val field =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 context(world) {
                     registry
                         .resolver(payloadField)(
                             input = bridge,
-                            arguments = Value.Arguments.of(payloadField, emptyMap()),
+                            arguments = Arguments.Resolved.of(payloadField, emptyMap()),
                             selections = selections.single().subselections.single().subselections,
                         )
                 },
             )
         assertEquals(
             "field",
-            field.fieldValues["id"],
+            field.selectionValues()["id"],
         )
 
-        kotlin.test.assertFailsWith<Schema.MissingSchemaElementException> {
+        assertFailsWith<Schema.MissingSchemaElementException> {
             schema.objectField("Query", "user")
         }
         assertEquals(bridgeField, selections.single().key.field)

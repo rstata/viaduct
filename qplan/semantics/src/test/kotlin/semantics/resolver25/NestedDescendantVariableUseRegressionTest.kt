@@ -1,10 +1,11 @@
 package semantics.resolver25
 
+import model.Arguments
+
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.instantiateBindings
@@ -15,9 +16,11 @@ import model.testing.fieldResolverOf
 import model.testing.fromObjectField
 import semantics.contract.Resolver25StructuralSignature
 import semantics.contract.resolver25StructuralSignatures
+import semantics.contract.selectionValues
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import viaduct.engine.api.EngineObjectData
 
 class NestedDescendantVariableUseRegressionTest {
     @Test
@@ -135,12 +138,12 @@ class NestedDescendantVariableUseRegressionTest {
                         schema.objectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val holder =
-                                    input.fieldValues.getValue(holderKey.field.fieldName)
-                                        as Value.Object
+                                    input.selectionValues().getValue(holderKey.field.fieldName)
+                                        as EngineObjectData.Sync
                                 val payload =
-                                    holder.fieldValues.getValue(consumeKey.field.fieldName)
-                                        as Value.Object
-                                payload.fieldValues.getValue(twoKey.field.fieldName)
+                                    holder.selectionValues().getValue(consumeKey.field.fieldName)
+                                        as EngineObjectData.Sync
+                                payload.selectionValues().getValue(twoKey.field.fieldName)
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Holder")) { _, _ ->
@@ -157,7 +160,7 @@ class NestedDescendantVariableUseRegressionTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Item", "result")
                     mapOf(
-                        Value.Variable.of(result, "value") to
+                        Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(resultFragment, listOf("source")),
                     )
                 },

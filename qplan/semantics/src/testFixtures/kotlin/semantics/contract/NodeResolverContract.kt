@@ -6,11 +6,12 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.TypeExpr
-import model.Value
 import model.emptyFragmentOf
 import model.objectOf
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.nodeResolverOf
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -89,7 +90,7 @@ interface NodeResolverContract : ResolverContract {
                 nodeResolvers = { schema ->
                     mapOf(
                         schema.contractObjectType("Profile") to
-                            model.testing.nodeResolverOf { id ->
+                            nodeResolverOf { id ->
                                 schema.objectOf("Profile") {
                                     "id" setTo id
                                     "name" setTo "Ada"
@@ -100,7 +101,7 @@ interface NodeResolverContract : ResolverContract {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "viewer") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, _ ->
                                 require(input.hasExactlyFields())
@@ -169,14 +170,14 @@ interface NodeResolverContract : ResolverContract {
                 nodeResolvers = { schema ->
                     mapOf(
                         schema.contractObjectType("User") to
-                            model.testing.nodeResolverOf { id ->
+                            nodeResolverOf { id ->
                                 schema.objectOf("User") {
                                     "id" setTo id
                                     "name" setTo "user-$id"
                                 }
                             },
                         schema.contractObjectType("Admin") to
-                            model.testing.nodeResolverOf { id ->
+                            nodeResolverOf { id ->
                                 schema.objectOf("Admin") {
                                     "id" setTo id
                                     "level" setTo 7
@@ -188,7 +189,7 @@ interface NodeResolverContract : ResolverContract {
                     val nodes = schema.field("Query", "nodes_V_A_node")
                     mapOf(
                         nodes to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { input, arguments ->
                                 require(input.hasExactlyFields())
@@ -263,7 +264,7 @@ interface NodeResolverContract : ResolverContract {
                 nodeResolvers = { schema ->
                     mapOf(
                         schema.contractObjectType("User") to
-                            model.testing.nodeResolverOf { id ->
+                            nodeResolverOf { id ->
                                 schema.objectOf("User") {
                                     "id" setTo id
                                     "name" setTo "user-$id"
@@ -292,7 +293,7 @@ interface NodeResolverContract : ResolverContract {
                         }
                     mapOf(
                         matrix to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { _, _ ->
                                     listOf(row("a", "b"), row("c"))

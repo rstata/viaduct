@@ -12,18 +12,24 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class ValueVariableTest {
+class ArgumentsTest {
     @Test
-    fun `ground open values wrap error-free inputs`() {
-        val typeExpr = TypeExpr.Named.of(Schema.IntType)
-        val input = 7
+    fun `resolved arguments retain natural input data`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  consume(value: Int!): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val consume = schema.objectField("Query", "consume")
 
-        val ground = assertIs<OpenValue.Ground>(OpenValue.of(typeExpr, input))
+        val arguments = Arguments.Resolved.of(consume, mapOf("value" to 7))
 
-        assertEquals(input, ground.data)
-        assertEquals(OpenValue.Ground.of(typeExpr, input), ground)
+        assertEquals(7, arguments.fieldValues.getValue("value"))
         assertFailsWith<ClassCastException> {
-            OpenValue.Ground.of(typeExpr, EngineErrorData)
+            Arguments.Resolved.of(consume, mapOf("value" to EngineErrorData))
         }
     }
 
@@ -38,8 +44,8 @@ class ValueVariableTest {
                 """.trimIndent(),
             ).schema
         val source = schema.objectField("Query", "source")
-        val template = Value.Variable.of(source, "value")
-        val arguments = OpenArguments.of(source, mapOf("value" to template))
+        val template = Arguments.Variable.of(source, "value")
+        val arguments = Arguments.of(source, mapOf("value" to template))
 
         val substituted =
             arguments.substituteTemplates(
@@ -47,7 +53,7 @@ class ValueVariableTest {
                 mapOf(template to null),
             )
 
-        assertIs<Value.Arguments>(substituted)
+        assertIs<Arguments.Resolved>(substituted)
         assertEquals(null, substituted.fieldValues.getValue("value"))
     }
 
@@ -64,11 +70,11 @@ class ValueVariableTest {
             ).schema
         val first = schema.objectField("Query", "first")
         val second = schema.objectField("Query", "second")
-        val template = Value.Variable.of(first, "value")
+        val template = Arguments.Variable.of(first, "value")
 
-        assertEquals(Value.Variable.of(first, "value"), template)
-        assertNotEquals(Value.Variable.of(first, "other"), template)
-        assertNotEquals(Value.Variable.of(second, "value"), template)
+        assertEquals(Arguments.Variable.of(first, "value"), template)
+        assertNotEquals(Arguments.Variable.of(first, "other"), template)
+        assertNotEquals(Arguments.Variable.of(second, "value"), template)
         assertTrue(template.isTemplate)
         assertFalse(template.isStamped)
         assertNull(template.stamp)
@@ -88,14 +94,14 @@ class ValueVariableTest {
             ).schema
         val first = schema.objectField("Query", "first")
         val second = schema.objectField("Query", "second")
-        val template = Value.Variable.of(first, "value")
+        val template = Arguments.Variable.of(first, "value")
         val path = listOf(ListEngineResult.Index.of(0))
         val stamp = template.stamp(path)
 
         assertEquals(template.stamp(path), stamp)
-        assertNotEquals(Value.Variable.of(first, "other").stamp(path), stamp)
-        assertNotEquals(Value.Variable.of(second, "value").stamp(path), stamp)
-        assertNotEquals<Value.Variable>(template, stamp)
+        assertNotEquals(Arguments.Variable.of(first, "other").stamp(path), stamp)
+        assertNotEquals(Arguments.Variable.of(second, "value").stamp(path), stamp)
+        assertNotEquals<Arguments.Variable>(template, stamp)
         assertNotEquals(template.stamp(emptyList()), stamp)
         assertFalse(stamp.isTemplate)
         assertTrue(stamp.isStamped)
@@ -120,7 +126,7 @@ class ValueVariableTest {
                 }
                 """.trimIndent(),
             ).assumptions
-        val template = Value.Variable.of(world.schema.objectField("Query", "source"), "value")
+        val template = Arguments.Variable.of(world.schema.objectField("Query", "source"), "value")
 
         assertFailsWith<IllegalArgumentException> {
             world.declareBinding(template)
@@ -146,9 +152,9 @@ class ValueVariableTest {
         val schema = world.schema
         val first = schema.objectField("Query", "first")
         val consume = schema.objectField("Query", "consume")
-        val template = Value.Variable.of(first, "value")
+        val template = Arguments.Variable.of(first, "value")
         val arguments =
-            OpenArguments.of(
+            Arguments.of(
                 consume,
                 mapOf(
                     "filter" to
@@ -169,7 +175,7 @@ class ValueVariableTest {
             context(world) {
                 stamped.instantiateBindings(consume.arguments)
             }
-        val groundedArguments = assertIs<Value.Arguments>(instantiated)
+        val groundedArguments = assertIs<Arguments.Resolved>(instantiated)
         val filter =
             assertIs<EngineInputObjectData>(
                 groundedArguments.fieldValues.getValue("filter"),
@@ -200,11 +206,11 @@ class ValueVariableTest {
             ).assumptions
         val source = world.schema.objectField("Query", "source")
         val consume = world.schema.objectField("Query", "consume")
-        val template = Value.Variable.of(source, "value")
+        val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(2))
         val variable = template.stamp(path)
         val arguments =
-            OpenArguments.of(
+            Arguments.of(
                 consume,
                 mapOf("values" to template),
             ).stampVars(consume.arguments, path)
@@ -241,11 +247,11 @@ class ValueVariableTest {
         val source = world.schema.objectField("Query", "source")
         val first = world.schema.objectField("Query", "first")
         val second = world.schema.objectField("Query", "second")
-        val template = Value.Variable.of(source, "value")
+        val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(1))
         val variable = template.stamp(path)
         val arguments =
-            OpenArguments
+            Arguments
                 .of(
                     first,
                     mapOf("filter" to mapOf("value" to template)),
@@ -258,7 +264,7 @@ class ValueVariableTest {
             context(world) {
                 arguments.instantiateBindings(second.arguments)
             }
-        val groundedArguments = assertIs<Value.Arguments>(grounded)
+        val groundedArguments = assertIs<Arguments.Resolved>(grounded)
         val filter =
             assertIs<EngineInputObjectData>(
                 groundedArguments.fieldValues.getValue("filter"),
@@ -284,11 +290,11 @@ class ValueVariableTest {
             ).assumptions
         val source = world.schema.objectField("Query", "source")
         val consume = world.schema.objectField("Query", "consume")
-        val template = Value.Variable.of(source, "value")
+        val template = Arguments.Variable.of(source, "value")
         val arguments =
-            OpenArguments.Template.of(
+            Arguments.Template.of(
                 consume.arguments,
-                OpenArguments.of(consume, mapOf("value" to template)),
+                Arguments.of(consume, mapOf("value" to template)),
             )
         val sourceSelection =
             Selection.of(
@@ -362,7 +368,7 @@ class ValueVariableTest {
         assertNotEquals<ObjectEngineResult.GroundKey>(first, unstamped)
         assertEquals(
             9,
-            assertIs<Value.Arguments>(first.arguments).fieldValues.getValue("value"),
+            assertIs<Arguments.Resolved>(first.arguments).fieldValues.getValue("value"),
         )
     }
 
@@ -379,11 +385,11 @@ class ValueVariableTest {
             ).schema
         val source = schema.objectField("Query", "source")
         val consume = schema.objectField("Query", "consume")
-        val stampedVariable = Value.Variable.of(source, "value").stamp(emptyList())
-        val arguments = OpenArguments.of(consume, mapOf("value" to stampedVariable))
+        val stampedVariable = Arguments.Variable.of(source, "value").stamp(emptyList())
+        val arguments = Arguments.of(consume, mapOf("value" to stampedVariable))
 
         assertFailsWith<IllegalArgumentException> {
-            OpenArguments.Template.of(consume.arguments, arguments)
+            Arguments.Template.of(consume.arguments, arguments)
         }
     }
 
@@ -400,10 +406,10 @@ class ValueVariableTest {
             ).schema
         val intConsumer = schema.objectField("Query", "intConsumer")
         val stringConsumer = schema.objectField("Query", "stringConsumer")
-        val arguments = OpenArguments.of(intConsumer, mapOf("value" to 1))
+        val arguments = Arguments.of(intConsumer, mapOf("value" to 1))
 
         assertFailsWith<IllegalArgumentException> {
-            OpenArguments.Template.of(stringConsumer.arguments, arguments)
+            Arguments.Template.of(stringConsumer.arguments, arguments)
         }
     }
 
@@ -426,9 +432,9 @@ class ValueVariableTest {
             val source = world.schema.objectField("Query", "source")
             val consume = world.schema.objectField("Query", "consume")
             val stamp = listOf(ListEngineResult.Index.of(1))
-            val variableTemplate = Value.Variable.of(source, "value")
+            val variableTemplate = Arguments.Variable.of(source, "value")
             val openArguments =
-                OpenArguments.of(
+                Arguments.of(
                     consume,
                     mapOf(
                         "filter" to
@@ -450,7 +456,7 @@ class ValueVariableTest {
                 )
             val variable = variableTemplate.stamp(selectionStamp)
             val arguments =
-                OpenArguments.Template
+                Arguments.Template
                     .of(consume.arguments, openArguments)
                     .stamp(consume.arguments, selectionStamp)
             world.declareBinding(variable)
@@ -465,7 +471,7 @@ class ValueVariableTest {
             assertFalse(fetched.isCompleted)
             world.completeBinding(variable, 9)
             val grounded = fetched.await()
-            val groundedArguments = assertIs<Value.Arguments>(grounded)
+            val groundedArguments = assertIs<Arguments.Resolved>(grounded)
             val filter =
                 assertIs<EngineInputObjectData>(
                     groundedArguments.fieldValues.getValue("filter"),

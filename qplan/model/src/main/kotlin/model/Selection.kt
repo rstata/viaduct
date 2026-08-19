@@ -1,5 +1,7 @@
 package model
 
+import viaduct.engine.api.EngineObjectData
+
 /**
  * A free commutative collection of opaque [Selection] members.
  *
@@ -164,18 +166,18 @@ fun SelectionForest.merge(type: Schema.ObjectType): ObjectSelectionForest {
 context(world: Assumptions)
 suspend fun SelectionForest.mergeWithVariables(
     result: ObjectEngineResult,
-): Pair<ObjectSelectionForest, Map<Value.Variable, VariableBinding>> {
+): Pair<ObjectSelectionForest, Map<Arguments.Variable, VariableBinding>> {
     val type: Schema.ObjectType = result.type
     val childrenByKey: MutableMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> =
         linkedMapOf()
-    val groundKeyByVariable: MutableMap<Value.Variable, ObjectEngineResult.GroundKey> =
+    val groundKeyByVariable: MutableMap<Arguments.Variable, ObjectEngineResult.GroundKey> =
         linkedMapOf()
-    val bindings: MutableMap<Value.Variable, VariableBinding> =
+    val bindings: MutableMap<Arguments.Variable, VariableBinding> =
         linkedMapOf()
     occurrences().forEach { selection ->
         if (type !in selection.possibleTypes) return@forEach
 
-        val variable: Value.Variable? =
+        val variable: Arguments.Variable? =
             (selection.key as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
         val specializedKey: ObjectEngineResult.ObjectKey = selection.objectKey(type)
         val groundKey: ObjectEngineResult.GroundKey =
@@ -304,7 +306,7 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
 }
 
 private fun ObjectEngineResult.ObjectKey.ground(
-    arguments: OpenArguments.Ground,
+    arguments: Arguments.Ground,
 ): ObjectEngineResult.GroundKey {
     val currentSelectionStamp = stamp as? Stamp.Occurrence
     return if (currentSelectionStamp != null) {
@@ -407,12 +409,12 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
 }
 
 // Returns this variable with its selection stamp extended through the concrete OER path.
-private fun Value.Variable.localizeSelectionStamp(
+private fun Arguments.Variable.localizeSelectionStamp(
     path: List<PathComponent>,
-): Value.Variable =
+): Arguments.Variable =
     stamp
         ?.let { currentStamp ->
-            Value.Variable
+            Arguments.Variable
                 .of(field = field, variableName = variableName)
                 .stamp(currentStamp.extendThrough(path))
         } ?: this
@@ -432,27 +434,27 @@ fun ObjectSelection.groundKey(): ObjectEngineResult.GroundKey =
         ?: error("Object selection key contains open arguments: $key")
 
 /** Returns the occurrence-specific variables used by this key's arguments. */
-internal fun ObjectEngineResult.Key.stampedVariables(): Set<Value.Variable> =
+internal fun ObjectEngineResult.Key.stampedVariables(): Set<Arguments.Variable> =
     arguments.stampedVariables()
 
 /** Returns the occurrence-specific variables used recursively by this selection. */
-private fun Selection.stampedVariables(): Set<Value.Variable> =
+private fun Selection.stampedVariables(): Set<Arguments.Variable> =
     key.stampedVariables() + subselections.stampedVariables()
 
 /** Returns the occurrence-specific variables used recursively by this forest. */
-fun SelectionForest.stampedVariables(): Set<Value.Variable> {
-    val variables = linkedSetOf<Value.Variable>()
+fun SelectionForest.stampedVariables(): Set<Arguments.Variable> {
+    val variables = linkedSetOf<Arguments.Variable>()
     forEach { selection -> variables += selection.stampedVariables() }
     return variables
 }
 
 /** Returns every variable expression used recursively by this selection. */
-private fun Selection.usedVariables(): Set<Value.Variable> =
+private fun Selection.usedVariables(): Set<Arguments.Variable> =
     key.arguments.usedVariables() + subselections.usedVariables()
 
 /** Returns every variable expression used recursively by this forest. */
-fun SelectionForest.usedVariables(): Set<Value.Variable> {
-    val variables = linkedSetOf<Value.Variable>()
+fun SelectionForest.usedVariables(): Set<Arguments.Variable> {
+    val variables = linkedSetOf<Arguments.Variable>()
     forEach { selection -> variables += selection.usedVariables() }
     return variables
 }
@@ -526,8 +528,8 @@ sealed interface Selection {
      *
      * [ObjectEngineResult.Key.field] is the canonical schema field intended by this selection, and
      * its containing type records the immediate field-lookup context. Non-variable argument values
-     * are in their coerced semantic form. An argument may contain a [Value.Variable]. Variables
-     * compare by name. Because a selection key is outside an OER or [Value.Object], its field may
+     * are in their coerced semantic form. An argument may contain a [Arguments.Variable]. Variables
+     * compare by name. Because a selection key is outside an OER or [EngineObjectData.Sync], its field may
      * belong to an abstract [Schema.InterfaceType] or [Schema.UnionType], and its arguments may
      * contain variables. Before a key is present in either value, its field must belong to the
      * applicable concrete [Schema.ObjectType] and its variables must be instantiated.

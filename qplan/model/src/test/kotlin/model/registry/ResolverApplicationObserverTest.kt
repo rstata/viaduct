@@ -1,7 +1,8 @@
 package model.registry
 
+import model.Arguments
+
 import model.SelectionForest
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -43,10 +44,10 @@ class ResolverApplicationObserverTest {
             world.fragmentFrom("fragment ignored on Query { value }").subselections
         val resolver = world.resolverRegistry.resolver(field)
         val input = world.schema.objectOf("Query")
-        val arguments = Value.Arguments.of(field, emptyMap())
+        val arguments = Arguments.Resolved.of(field, emptyMap())
 
-        resolver(input, arguments)
         context(world) {
+            resolver(input, arguments)
             resolver(input, arguments, suppliedDemand)
         }
 

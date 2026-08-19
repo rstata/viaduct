@@ -32,12 +32,10 @@ sealed interface EngineObjectDataEntry {
  */
 fun engineObjectDataOf(
     schemaType: Schema.ObjectType,
-    graphQLType: GraphQLObjectType,
     fields: Map<String, EngineOutputData?> = emptyMap(),
 ): EngineObjectData.Sync =
     engineObjectDataOf(
         schemaType = schemaType,
-        graphQLType = graphQLType,
         fields =
             fields.map { (name, value) ->
                 val field = schemaType.fields[name]
@@ -54,17 +52,13 @@ fun engineObjectDataOf(
 /**
  * Constructs a partial synchronous EOD from schema-associated selection values.
  *
- * [graphQLType] supplies the production EOD type while [schemaType] supplies qplan's canonical
- * validation definition. They must name the same concrete object type.
+ * [schemaType] supplies qplan's canonical validation definition and its canonical opaque
+ * GraphQL-Java definition for the production EOD type.
  */
 fun engineObjectDataOf(
     schemaType: Schema.ObjectType,
-    graphQLType: GraphQLObjectType,
     fields: Iterable<EngineObjectDataEntry>,
 ): EngineObjectData.Sync {
-    require(graphQLType.name == schemaType.typeName) {
-        "GraphQL object type ${graphQLType.name} does not represent ${schemaType.typeName}"
-    }
     val entries = fields.toList()
     entries.forEach { entry ->
         require(entry.field.containingType == schemaType) {
@@ -81,11 +75,21 @@ fun engineObjectDataOf(
         "Object ${schemaType.typeName} contains duplicate string selections"
     }
     return QPlanEngineObjectDataImpl(
-        type = graphQLType,
+        type = schemaType.gjDef,
         schemaType = schemaType,
         values = values,
     )
 }
+
+/**
+ * The canonical qplan schema type retained by this qplan-owned EOD.
+ *
+ * Qplan's model admits only objects constructed by [engineObjectDataOf]. The downcast keeps the
+ * concrete implementation private while making its canonical model type available without
+ * inspecting the opaque GraphQL-Java [EngineObjectData.type] witness.
+ */
+val EngineObjectData.Sync.schemaType: Schema.ObjectType
+    get() = (this as QPlanEngineObjectDataImpl).schemaType
 
 private data class EngineObjectDataEntryImpl(
     override val selection: String,
@@ -96,7 +100,7 @@ private data class EngineObjectDataEntryImpl(
 @OptIn(InternalApi::class)
 private class QPlanEngineObjectDataImpl(
     override val type: GraphQLObjectType,
-    private val schemaType: Schema.ObjectType,
+    val schemaType: Schema.ObjectType,
     values: Map<String, EngineOutputData?>,
 ) : EngineObjectData.Sync {
     private val values = values.toMap()

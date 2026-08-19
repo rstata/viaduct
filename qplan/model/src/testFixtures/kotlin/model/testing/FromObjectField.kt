@@ -1,5 +1,7 @@
 package model.testing
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
 import model.Fragment
@@ -7,7 +9,6 @@ import model.EngineInputData
 import model.Schema
 import model.SourceSchemaAdapter
 import model.TypeExpr
-import model.Value
 import model.spec.SpecSelection
 import model.spec.flatten
 import model.spec.flattenForMaterialization
@@ -27,7 +28,7 @@ class FromObjectField private constructor(
     private val nullableTraversal: Boolean,
 ) : VariableDeclaration {
     internal fun mapVariables(
-        transform: (Value.Variable) -> Value.Variable,
+        transform: (Arguments.Variable) -> Arguments.Variable,
     ): FromObjectField =
         FromObjectField(
             responsePath = responsePath,

@@ -10,29 +10,31 @@ import model.EngineOutputListData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectSelectionForest
-import model.OpenArguments
+import model.Arguments
 import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SelectionOccurrenceId
 import model.Stamp
-import model.Value
 import model.applicableGroundSelections
 import model.concatenateSelectionForests
+import model.engineObjectDataOf
 import model.materializeSelectionForestOf
+import model.schemaType
 import model.selectionForestOf
 import model.stampVars
 import model.toCanonicalMaterializeSelectionForest
 import model.variableTemplates
+import viaduct.engine.api.EngineObjectData
 
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
-    (Value.Object, Value.Arguments) -> EngineOutputData?
+    (EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?
 
 /** Observes one complete (null demand) or selective field-resolver application boundary. */
 typealias FieldResolverApplicationObserver =
-    (Value.Object, Value.Arguments, SelectionForest?) -> Unit
+    (EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
 
 /** Paired resolver-object-fragment views instantiated from one resolver occurrence. */
 sealed interface ResolverObjectFragment {
@@ -65,7 +67,7 @@ sealed interface ResolverObjectFragment {
 class FieldResolver private constructor(
     val field: Schema.ObjectField,
     private val objectFragmentTemplate: MaterializeSelectionForest,
-    val variables: Map<Value.Variable, VariableDefinition>,
+    val variables: Map<Arguments.Variable, VariableDefinition>,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
@@ -262,8 +264,8 @@ class FieldResolver private constructor(
      */
     context(world: Assumptions)
     operator fun invoke(
-        input: Value.Object,
-        arguments: Value.Arguments,
+        input: EngineObjectData.Sync,
+        arguments: Arguments.Resolved,
         selections: SelectionForest,
     ): EngineOutputData? {
         applicationObserver(input, arguments, selections)
@@ -276,8 +278,8 @@ class FieldResolver private constructor(
      * Applies this field resolver and returns its complete finite selection-independent output.
      */
     operator fun invoke(
-        input: Value.Object,
-        arguments: Value.Arguments,
+        input: EngineObjectData.Sync,
+        arguments: Arguments.Resolved,
     ): EngineOutputData? {
         applicationObserver(input, arguments, null)
         return function(input, arguments).synthesizeTypenames()
@@ -293,7 +295,7 @@ class FieldResolver private constructor(
         fun of(
             field: Schema.ObjectField,
             objectFragment: MaterializeSelectionForest,
-            variables: Map<Value.Variable, VariableDefinition>,
+            variables: Map<Arguments.Variable, VariableDefinition>,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
@@ -349,7 +351,7 @@ class FieldResolver private constructor(
         fun of(
             field: Schema.ObjectField,
             objectFragment: SelectionForest,
-            variables: Map<Value.Variable, VariableDefinition>,
+            variables: Map<Arguments.Variable, VariableDefinition>,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
@@ -389,20 +391,21 @@ private fun EngineOutputData?.synthesizeTypenames(): EngineOutputData? =
             values
         }
 
-        is Value.Object -> {
+        is EngineObjectData.Sync -> {
+            val schemaType = this.schemaType
             val typenameKey = "__typename"
             val typenameValue = schemaType.typeName
-            if (typenameKey in fieldValues) {
-                val supplied = fieldValues.getValue(typenameKey)
+            if (isPresent(typenameKey)) {
+                val supplied = get(typenameKey)
                 require(supplied == typenameValue) {
                     "Resolver supplied invalid ${schemaType.typeName}/__typename: $supplied"
                 }
             }
-            Value.Object.of(
-                type = schemaType,
+            engineObjectDataOf(
+                schemaType = schemaType,
                 fields =
-                    fieldValues.mapValues { (_, value) ->
-                        value.synthesizeTypenames()
+                    getSelections().associateWith { selection ->
+                        get(selection).synthesizeTypenames()
                     } + (typenameKey to typenameValue),
             )
         }
@@ -481,7 +484,7 @@ private fun MaterializeSelectionForest.stampVariableSelections(
                             occurrencePrefix + occurrenceIds.getValue(selection),
                     )
                 val arguments =
-                    OpenArguments.Template
+                    Arguments.Template
                         .of(selection.key.field.arguments, selection.key.arguments)
                         .stamp(selection.key.field.arguments, selectionStamp)
                 ObjectEngineResult.Key.of(
@@ -509,10 +512,10 @@ private fun MaterializeSelectionForest.selectionStampedVariableDefinitions(
     resolverPath: List<PathComponent>,
     occurrencePrefix: List<SelectionOccurrenceId>,
     occurrenceIds: Map<MaterializeSelection, SelectionOccurrenceId>,
-    definitions: Map<Value.Variable, VariableDefinition>,
+    definitions: Map<Arguments.Variable, VariableDefinition>,
 ): List<SelectionStampedVariableDefinition> {
     val stampedDefinitions =
-        linkedMapOf<Pair<SelectionOccurrenceId, Value.Variable>, SelectionStampedVariableDefinition>()
+        linkedMapOf<Pair<SelectionOccurrenceId, Arguments.Variable>, SelectionStampedVariableDefinition>()
     forEach { selection ->
         val occurrenceId = occurrenceIds.getValue(selection)
         val selectionStamp =
@@ -536,7 +539,7 @@ private fun MaterializeSelectionForest.selectionStampedVariableDefinitions(
                 definitions = definitions,
             ).forEach { definition ->
                 val id = definition.variable.stamp!!.occurrenceLineage.last()
-                stampedDefinitions[id to Value.Variable.of(
+                stampedDefinitions[id to Arguments.Variable.of(
                     definition.variable.field,
                     definition.variable.variableName,
                 )] = definition
@@ -547,7 +550,7 @@ private fun MaterializeSelectionForest.selectionStampedVariableDefinitions(
 
 private fun SelectionForest.markProviderPath(
     path: List<ObjectEngineResult.Key>,
-    variable: Value.Variable,
+    variable: Arguments.Variable,
 ): SelectionForest {
     val key = path.first()
     val remaining = path.drop(1)
@@ -578,7 +581,7 @@ private fun SelectionForest.markProviderPath(
 
 private fun SelectionForest.markProviderSourcePath(
     sourcePath: List<ObjectEngineResult.Key>,
-    variable: Value.Variable,
+    variable: Arguments.Variable,
 ): SelectionForest {
     val sourceKey = sourcePath.first()
     val remaining = sourcePath.drop(1)

@@ -4,6 +4,7 @@ import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
+import model.EngineObjectDataEntry
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -12,10 +13,11 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.TypeExpr
-import model.Value
+import model.engineObjectDataOf
 import model.toEngineOutputData
 import semantics.RuntimeSupport
 import semantics.materializedGroundKey
+import viaduct.engine.api.EngineObjectData
 
 // Returns a resolver-visible input object collected by GraphQL response key.
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
@@ -23,7 +25,7 @@ internal suspend fun ObjectEngineResult.materializeResolverInput(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
-): Value.Object =
+): EngineObjectData.Sync =
     materializeSelectedObject(
         selections = selections,
         reader = reader,
@@ -38,9 +40,9 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
     selectionPath: List<PathComponent>,
-): Value.Object {
+): EngineObjectData.Sync {
     val selectedValues =
-        linkedMapOf<String, Pair<model.Schema.ObjectField, EngineOutputData?>>()
+        linkedMapOf<String, Pair<Schema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedGroundKey = selection.materializedGroundKey(selectionPath)
         val cell = reserveCell(storedGroundKey)
@@ -57,11 +59,11 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                 )
         selectedValues[responseKey] = storedGroundKey.field to selectedValue
     }
-    return Value.Object.of(
-        type = type,
+    return engineObjectDataOf(
+        schemaType = type,
         fields =
             selectedValues.map { (key, fieldAndValue) ->
-                Value.Object.FieldValue.of(key, fieldAndValue.first, fieldAndValue.second)
+                EngineObjectDataEntry.of(key, fieldAndValue.first, fieldAndValue.second)
             },
     )
 }

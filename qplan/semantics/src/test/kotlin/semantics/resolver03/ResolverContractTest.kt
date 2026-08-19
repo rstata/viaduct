@@ -1,10 +1,13 @@
 package semantics.resolver03
 
+import semantics.resolver03.resolve
+
+import viaduct.engine.api.EngineObjectData
+
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.Value
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
@@ -23,10 +26,10 @@ class ResolverContractTest :
     CorrectResolutionPostTestPolicy {
     override fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
         context(world) {
-            semantics.resolver03.resolve(selections)
+            resolve(selections)
         }
 }

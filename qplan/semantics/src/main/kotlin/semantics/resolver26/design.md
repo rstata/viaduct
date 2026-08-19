@@ -10,19 +10,11 @@ The exercise assumes every field resolver completes normally, including with res
 
 Pre-grounded external selections and variable-free resolver-fragment selections use ordinary ground-key identity and coalesce when their keys are equal.
 
-Every variable-bearing selection introduced from a resolver object fragment carries a
-`Stamp.Occurrence`. The stamp combines the concrete resolver path with a nonempty lineage of
-registry-assigned `SelectionOccurrenceId` values. Selection equality is undefined; the occurrence
-IDs provide stable identity. Registry template keys have a null stamp, and ordinary concrete keys
-carry `Stamp.VariableFreeOccurrence`.
+Every variable-bearing selection introduced from a resolver object fragment carries a `Stamp.Occurrence`. The stamp combines the concrete resolver path with a nonempty lineage of registry-assigned `SelectionOccurrenceId` values. Selection equality is undefined; the occurrence IDs provide stable identity. Registry template keys have a null stamp, and ordinary concrete keys carry `Stamp.VariableFreeOccurrence`.
 
 When demand descends into an object or list occurrence, its top-level stamps localize through that exact result path. Distinct list positions and object occurrences therefore remain distinct. Stamped keys never coalesce with ordinary keys or with another occurrence lineage, even when they eventually have equal visible arguments.
 
-Resolver input materialization filters source occurrences to the concrete object type and collects
-them by response key. Each response group grounds and localizes its construction key, then reads
-the exact OER cell. Duplicate occurrences in one response-key group contribute one input entry
-with their combined subselections. Distinct aliases remain distinct input entries even when they
-read the same OER cell.
+Resolver input materialization filters source occurrences to the concrete object type and collects them by response key. Each response group grounds and localizes its construction key, then reads the exact OER cell. Duplicate occurrences in one response-key group contribute one input entry with their combined subselections. Distinct aliases remain distinct input entries even when they read the same OER cell.
 
 ## Request And Task Ownership
 
@@ -52,7 +44,7 @@ Readers never insert undeclared binding promises.
 
 ## Passive Values
 
-Passive ground keys are copied from the source `Value.Object` through the shared `resolveValue` path. Missing passive source keys are errors; open passive keys are outside the algorithm's domain.
+Passive ground keys are read by canonical field name from the source EOD through the shared `resolveValue` path. Missing passive source selections are errors; open passive keys are outside the algorithm's domain.
 
 When a passive value contains object or list occurrences, the runtime launches orchestration for those occurrences with the corresponding downstream selections. Existing cells are reused rather than replaced.
 

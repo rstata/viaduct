@@ -18,8 +18,7 @@ typealias EngineInputObjectData = Map<String, EngineInputData?>
 typealias EngineInputData = Any
 
 /**
- * Int, finite Double, Boolean, String, [Value.Object], [EngineObjectData.Sync], or
- * [EngineOutputListData].
+ * Int, finite Double, Boolean, String, [EngineObjectData.Sync], or [EngineOutputListData].
  *
  * String represents GraphQL String, ID, and enum values; the expected schema type disambiguates
  * them. [EngineErrorData] is additionally admitted to the broad output domain.
@@ -168,7 +167,7 @@ private fun toEngineInputFields(
     return buildMap {
         expectedType.fields.values.forEach { field ->
             val defaultValue = field.defaultValue
-            if (defaultValue is Value.Default.Present) {
+            if (defaultValue is Schema.DefaultValue.Present) {
                 put(field.name, defaultValue.value)
             }
         }
@@ -180,7 +179,7 @@ private fun toEngineInputFields(
 internal fun Schema.InputObjectLike.requiredFieldNames(): Set<String> =
     fields.values
         .filterTo(linkedSetOf()) { field ->
-            !field.typeExpr.isNullable && field.defaultValue == Value.Default.Absent
+            !field.typeExpr.isNullable && field.defaultValue == Schema.DefaultValue.Absent
         }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
 
 private fun Map<*, *>.toStringKeyedMap(): EngineInputObjectData =

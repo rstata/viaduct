@@ -1,5 +1,7 @@
 package model.testing
 
+import model.Arguments
+
 import com.google.inject.AbstractModule
 import com.google.inject.Guice
 import com.google.inject.Injector
@@ -10,7 +12,6 @@ import model.Assumptions
 import model.EngineErrorData
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.emptyFragmentOf
 import model.registry.ResolverRegistry
 import model.selectionsFrom
@@ -71,7 +72,7 @@ class TestWorld private constructor(
             fieldResolvers:
                 ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)? = null,
             variableProviders:
-                (Schema) -> Map<Value.Variable, VariableDeclaration> = { emptyMap() },
+                (Schema) -> Map<Arguments.Variable, VariableDeclaration> = { emptyMap() },
             selectiveResolvers: Boolean = true,
             applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld =
@@ -89,7 +90,7 @@ class TestWorld private constructor(
             schemaSDL: String,
             nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
             fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)?,
-            variableProviders: (Schema) -> Map<Value.Variable, VariableDeclaration>,
+            variableProviders: (Schema) -> Map<Arguments.Variable, VariableDeclaration>,
             selectiveResolvers: Boolean,
             applicationObserver: CanonicalFieldResolverApplicationObserver?,
             applicationArguments: ResolverApplicationArguments?,
@@ -147,7 +148,7 @@ private class TestWorldModule(
     private val schemaSDL: String,
     private val nodeResolvers: (Schema) -> Map<Schema.ObjectType, NodeResolverFunction>,
     private val fieldResolvers: ((Schema) -> Map<Schema.OutputField, FieldResolverDefinition>)?,
-    private val variableProviders: (Schema) -> Map<Value.Variable, VariableDeclaration>,
+    private val variableProviders: (Schema) -> Map<Arguments.Variable, VariableDeclaration>,
     private val selectiveResolvers: Boolean,
     private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ) : AbstractModule() {
@@ -175,7 +176,7 @@ private class TestWorldModule(
 
     @Provides
     @VariableProviders
-    fun variableProviders(schema: GJSchema): Map<Value.Variable, VariableDeclaration> =
+    fun variableProviders(schema: GJSchema): Map<Arguments.Variable, VariableDeclaration> =
         variableProviders.invoke(schema)
 
     @Provides
@@ -185,7 +186,7 @@ private class TestWorldModule(
         @NodeResolvers nodeResolvers: Map<Schema.ObjectType, NodeResolverFunction>,
         @FieldResolvers fieldResolvers: Map<Schema.OutputField, FieldResolverDefinition>,
         @VariableProviders
-        variableProviders: Map<Value.Variable, VariableDeclaration>,
+        variableProviders: Map<Arguments.Variable, VariableDeclaration>,
     ): ResolverRegistry =
         resolverRegistryOf(
             schema = schema,

@@ -8,7 +8,7 @@ A testing contract is a reusable suite for one resolver capability. The contract
 interface ResolverContract {
     fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult
 }
@@ -24,10 +24,7 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 
 - `EmptyObjectFragmentResolverContract` covers empty object fragments, arguments, `__typename`, list occurrences, interfaces, and concrete implementation defaults.
 - `NodeResolverContract` covers source-level node resolution through fixture-lowered `foo_V_A_node` producers and `T_V_A_Bridge.node` loaders.
-- `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including
-  response aliases on argumentless and argument-bearing fields, argument-distinct aliases,
-  non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output,
-  defaults, failures, and occurrence identity.
+- `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including response aliases on argumentless and argument-bearing fields, argument-distinct aliases, non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including a transitive chain.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
@@ -151,16 +148,9 @@ Replay one failed campaign coordinate through its recorded round and profile:
 
 ## Resolver26 Broad Campaign
 
-Resolver26's broad tests use five directed distributions: balanced worlds, localized descendants,
-nullable and error providers, stamp collisions, and multiple object-path owners. Their structural
-coverage is classified only from completed OER paths and stamped keys, resolver-application
-witnesses, and generated registry metadata. Separate request-local binding validation checks every
-activated object-path variable. No test observes scheduler events, coroutine ordering, demand
-phases, or Resolver25 lifecycle concepts.
+Resolver26's broad tests use five directed distributions: balanced worlds, localized descendants, nullable and error providers, stamp collisions, and multiple object-path owners. Their structural coverage is classified only from completed OER paths and stamped keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation checks every activated object-path variable. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
 
-Every generated case checks exact attempted/resolved/completed accounting, exact application
-identity counts, `correctResolution`, and independently reconstructed object-path bindings. A
-profile's aggregate run must also observe its required Resolver26 structural signatures.
+Every generated case checks exact attempted/resolved/completed accounting, exact application identity counts, `correctResolution`, and independently reconstructed object-path bindings. A profile's aggregate run must also observe its required Resolver26 structural signatures.
 
 The checked-in campaign uses fresh JVM rounds and persisted seeds distributed across schema breadth, registry diversity, query interactions, and large/deep worlds. Large/deep worlds bound generated list fanout so the budget explores depth instead of combinatorial list multiplication. Run persisted rounds with:
 
@@ -177,10 +167,7 @@ Replay one profile or exact coordinate from that round with:
   -PresolverPropertyCase=18:4:1
 ```
 
-Coordinate replay suppresses aggregate structural-coverage requirements while preserving the
-recorded profile, seed, and generator dimensions. A failing generated case should be reduced to a
-small deterministic regression test after determining whether the defect belongs to the generator,
-an independent oracle, or Resolver26.
+Coordinate replay suppresses aggregate structural-coverage requirements while preserving the recorded profile, seed, and generator dimensions. A failing generated case should be reduced to a small deterministic regression test after determining whether the defect belongs to the generator, an independent oracle, or Resolver26.
 
 ## Adding Tests
 

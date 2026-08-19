@@ -1,9 +1,10 @@
 package model.testing
 
+import model.Arguments
+
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.Value
 import model.registry.FieldResolver
 import model.registry.VariableDefinition
 import model.variables
@@ -30,7 +31,7 @@ internal class BranchOrderValidator(
         }
 
         data class VariableProduction(
-            val variable: Value.Variable,
+            val variable: Arguments.Variable,
             val providerPath: String,
             val productionPath: String,
             val usePath: String,
@@ -212,7 +213,7 @@ private fun Selection.branchOn(type: Schema.ObjectType): Schema.ObjectField? =
     }
 
 private fun SelectionForest.variableUsePaths(
-    variable: Value.Variable,
+    variable: Arguments.Variable,
     type: Schema.ObjectType,
 ): Map<Schema.ObjectField, Set<String>> {
     val result = linkedMapOf<Schema.ObjectField, MutableSet<String>>()
@@ -226,7 +227,7 @@ private fun SelectionForest.variableUsePaths(
 }
 
 private fun Selection.pathsContaining(
-    variable: Value.Variable,
+    variable: Arguments.Variable,
     prefix: List<String> = emptyList(),
 ): Set<String> {
     val path = prefix + key.field.fieldName

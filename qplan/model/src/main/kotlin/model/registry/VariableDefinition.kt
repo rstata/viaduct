@@ -4,7 +4,6 @@ import model.ObjectEngineResult
 
 import model.Schema
 import model.TypeExpr
-import model.Value
 
 /**
  * The source of one field-relative variable defined by a field resolver.

@@ -1,14 +1,17 @@
 package model.registry
 
+import model.Arguments
+
 import model.Fragment
 import model.Schema
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.FieldResolverDefinition
 import model.testing.FromObjectField
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import model.testing.fromObjectField
+import model.testing.nodeResolverOf
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -82,7 +85,7 @@ class BranchOrderInvariantTest {
                     variableProviders = { schema ->
                         val owner = schema.field("Parent", "result") as Schema.ObjectField
                         mapOf(
-                            Value.Variable.of(owner, "value") to
+                            Arguments.Variable.of(owner, "value") to
                                 schema.fromObjectField(
                                     "fragment ignored on Parent { shared { value } }",
                                     listOf("shared", "value"),
@@ -391,7 +394,7 @@ class BranchOrderInvariantTest {
                 """.trimIndent(),
             nodeResolvers = { schema ->
                 val user = schema.type("User") as Schema.ObjectType
-                mapOf(user to model.testing.nodeResolverOf { error("Not invoked") })
+                mapOf(user to nodeResolverOf { error("Not invoked") })
             },
             fieldResolvers = { schema ->
                 mapOf(
@@ -489,15 +492,15 @@ class BranchOrderInvariantTest {
             name: String,
             provider: String,
             responsePath: List<String>,
-        ): Map<Value.Variable, FromObjectField> {
+        ): Map<Arguments.Variable, FromObjectField> {
             val owner = schema.field("Query", "result") as Schema.ObjectField
             return mapOf(
-                Value.Variable.of(owner, name) to
+                Arguments.Variable.of(owner, name) to
                     schema.fromObjectField(provider, responsePath),
             )
         }
 
         fun resolver(fragment: Fragment): FieldResolverDefinition =
-            model.testing.fieldResolverOf(fragment) { _, _ -> error("Not invoked") }
+            fieldResolverOf(fragment) { _, _ -> error("Not invoked") }
     }
 }

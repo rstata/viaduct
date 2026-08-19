@@ -2,10 +2,7 @@
 
 ## Scope
 
-The resolver-test DSL describes small deterministic resolver worlds for regression tests and
-counterexamples of failed resolution. A world embeds its schema, resolver dependencies, variable
-definitions, and resolver outputs in one GraphQL document. It does not replace tests of fixture
-composition, generated worlds, scheduling, tracing, or other internal execution mechanics.
+The resolver-test DSL describes small deterministic resolver worlds for regression tests and counterexamples of failed resolution. A world embeds its schema, resolver dependencies, variable definitions, and resolver outputs in one GraphQL document. It does not replace tests of fixture composition, generated worlds, scheduling, tracing, or other internal execution mechanics.
 
 Construct a world with `TestWorld.fromDSL(schemaSDL)`.
 
@@ -17,9 +14,7 @@ Present resolver worlds top-down so a reader can follow them in the same order a
 2. Define the types named by those root fields.
 3. Continue with the types reached from those definitions.
 
-Apply the same ordering to test fixtures, documentation examples, and counterexamples shared during
-design discussions. GraphQL does not require this declaration order; it is a readability convention
-for this DSL.
+Apply the same ordering to test fixtures, documentation examples, and counterexamples shared during design discussions. GraphQL does not require this declaration order; it is a readability convention for this DSL.
 
 ## Built-In Schema
 
@@ -35,8 +30,7 @@ type Query {
 }
 ```
 
-Test schemas add root fields with `extend type Query`. Concrete Node implementations still declare
-`id: ID!` as required by GraphQL interface validation.
+Test schemas add root fields with `extend type Query`. Concrete Node implementations still declare `id: ID!` as required by GraphQL interface validation.
 
 The fixture parser also recognizes these metadata definitions:
 
@@ -60,20 +54,13 @@ input VariableDefinition {
 }
 ```
 
-`result` must be present even when its value is `null`. The compiler reads the directives from the
-source AST, builds the ordinary resolver registry, and strips the directives before constructing
-the retained GraphQL schema. The model schema therefore does not acquire a JSON leaf type or DSL
-metadata.
+`result` must be present even when its value is `null`. The compiler reads the directives from the source AST, builds the ordinary resolver registry, and strips the directives before constructing the retained GraphQL schema. The model schema therefore does not acquire a JSON leaf type or DSL metadata.
 
 ## Field Resolvers
 
-`of` is an optional selection-set string relative to the field's parent object type. An absent or
-empty `of` denotes an empty object fragment. Response-key aliases are preserved in the
-resolver-visible input. Co-applicable selections sharing one response key must identify a
-compatible field invocation.
-The string literal `"ERROR"` in an argument position produces `ArgumentResolutionError`, which
-collapses the enclosing tuple to `OpenArguments.Ground.Error`. It is fixture syntax, not a
-schema-defined string value or resolver variable.
+`of` is an optional selection-set string relative to the field's parent object type. An absent or empty `of` denotes an empty object fragment. Response-key aliases are preserved in the resolver-visible input. Co-applicable selections sharing one response key must identify a compatible field invocation.
+
+The string literal `"ERROR"` in an argument position produces `ArgumentResolutionError`, which collapses the enclosing tuple to `Arguments.Error`. It is fixture syntax, not a schema-defined string value or resolver variable.
 
 ```graphql
 extend type Query {
@@ -117,17 +104,13 @@ extend type Query {
 }
 ```
 
-Using `$seed` in a result expression reads the field argument directly and does not define a
-registry variable. Only a use inside `of` creates an inferred `FromArgument` definition.
+Using `$seed` in a result expression reads the field argument directly and does not define a registry variable. Only a use inside `of` creates an inferred `FromArgument` definition.
 
-`pathVars.path` follows the existing qplan `FromObjectField` restrictions. In particular, an
-intermediate path component cannot cross a list. This restriction is unrelated to field paths in
-result expressions.
+`pathVars.path` follows the existing qplan `FromObjectField` restrictions. In particular, an intermediate path component cannot cross a list. This restriction is unrelated to field paths in result expressions.
 
 ## Result Shapes
 
-Results are GraphQL literals accepted by Viaduct's JSON scalar: integers, strings, nulls, lists, and
-objects. They are interpreted against the resolver field's declared output type.
+Results are GraphQL literals accepted by Viaduct's JSON scalar: integers, strings, nulls, lists, and objects. They are interpreted against the resolver field's declared output type.
 
 - `null` is allowed at nullable positions.
 - `"ERROR"` produces `EngineErrorData` at any output position.
@@ -144,13 +127,9 @@ sum(v1, v2, ..., vn)
 sumplus1(v1, v2, ..., vn)
 ```
 
-Each value is either `$argumentName` or a dot-separated path from the resolver's materialized
-`of` input. `value(v)` requires exactly one reachable integer, null, or error and returns it
-unchanged. It therefore preserves nulls and errors instead of treating null as zero.
+Each value is either `$argumentName` or a dot-separated path from the resolver's materialized `of` input. `value(v)` requires exactly one reachable integer, null, or error and returns it unchanged. It therefore preserves nulls and errors instead of treating null as zero.
 
-For the sum expressions, a path may cross lists; all reachable integer leaves contribute to the
-sum. Null objects, lists, and elements contribute zero. An error reached by any term makes the
-complete expression an error.
+For the sum expressions, a path may cross lists; all reachable integer leaves contribute to the sum. Null objects, lists, and elements contribute zero. An error reached by any term makes the complete expression an error.
 
 ```graphql
 extend type Query {
@@ -178,9 +157,7 @@ type Entry {
 
 ## Node Results
 
-Node IDs are globally unique within one DSL world. A node resolver's result is the concrete object
-body for that ID; its top-level `id` and `__typename` are injected by the fixture. A complete
-top-down world places the root field before the Node type:
+Node IDs are globally unique within one DSL world. A node resolver's result is the concrete object body for that ID; its top-level `id` and `__typename` are injected by the fixture. A complete top-down world places the root field before the Node type:
 
 ```graphql
 extend type Query {
@@ -199,9 +176,7 @@ type User implements Node
 }
 ```
 
-Any Node-typed field result is a reference containing only `id`. The referenced `NodeResult`
-provides its concrete type and body. A reference ID may be a literal or `idFrom($argumentName)`,
-which reads a non-null ID argument from the resolver field:
+Any Node-typed field result is a reference containing only `id`. The referenced `NodeResult` provides its concrete type and body. A reference ID may be a literal or `idFrom($argumentName)`, which reads a non-null ID argument from the resolver field:
 
 ```graphql
 extend type Query {
@@ -223,5 +198,4 @@ type User implements Node
 
 Using an argument in `idFrom` reads it directly and does not define a resolver-registry variable.
 
-An unknown ID, an ID registered for an incompatible Node type, a duplicate global ID, or additional
-fields in a Node reference is rejected.
+An unknown ID, an ID registered for an incompatible Node type, a duplicate global ID, or additional fields in a Node reference is rejected.

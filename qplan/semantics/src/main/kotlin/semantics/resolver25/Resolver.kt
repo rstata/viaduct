@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import model.Arguments
+
 import java.util.Collections
 import java.util.IdentityHashMap
 import kotlinx.coroutines.CompletableDeferred
@@ -30,7 +32,8 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.TypeExpr
-import model.Value
+import model.schemaType
+import viaduct.engine.api.EngineObjectData
 import model.VariableBinding
 import model.containsErrorValue
 import model.fetchBindings
@@ -112,7 +115,7 @@ private class ResolverRuntime(
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
     fun createOrchestrator(
         path: List<PathComponent>,
-        source: Value.Object,
+        source: EngineObjectData.Sync,
         target: ObjectEngineResult,
         initialDemand: SelectionForest,
         potentialDemand: SelectionForest = initialDemand,
@@ -199,13 +202,13 @@ private fun Schema.ObjectType.newObjectResult(): ObjectEngineResult =
 private class ObjectResultOrchestrator(
     private val runtime: ResolverRuntime,
     private val path: List<PathComponent>,
-    private val source: Value.Object,
+    private val source: EngineObjectData.Sync,
     private val target: ObjectEngineResult,
 ) {
     val orchestrationReady: CompletableDeferred<Unit> = CompletableDeferred()
 
     private val fields: Map<Schema.ObjectField, FieldState> =
-        source.schemaType.fields.values.associateWith(::FieldState)
+        target.type.fields.values.associateWith(::FieldState)
 
     private val activationLock = Any()
     private var pendingActivations: Int = 0
@@ -215,9 +218,9 @@ private class ObjectResultOrchestrator(
     // Records every structurally possible output subselection before grounded-key activation.
     fun addPotentialDemand(demand: SelectionForest) {
         demand.forEach { selection ->
-            if (source.schemaType in selection.possibleTypes) {
+            if (target.type in selection.possibleTypes) {
                 val field =
-                    source.schemaType.fields.getValue(selection.key.field.fieldName)
+                    target.type.fields.getValue(selection.key.field.fieldName)
                 fields.getValue(field).addPotentialSelection(selection)
             }
         }
@@ -332,7 +335,7 @@ private class ObjectResultOrchestrator(
             fieldState.activate(
                 groundedKey = groundedKey,
                 groundedSelection = groundedSelection,
-                concreteType = source.schemaType,
+                concreteType = target.type,
             )
         if (!activation.created) {
             runtime.instrumentation.groundedDemandMerged(
@@ -340,7 +343,7 @@ private class ObjectResultOrchestrator(
                 coordinate = coordinate,
                 beforeLaunch = activation.mergedBeforeLaunch,
             )
-            if (groundedKey.field.fieldName in source.fieldValues.keys) {
+            if (source.isPresent(groundedKey.field.fieldName)) {
                 return launchMergedPassiveDemand(
                     keyState = activation.keyState,
                     demand = groundedSelection.subselections,
@@ -362,7 +365,7 @@ private class ObjectResultOrchestrator(
                 existing -> Resolver25KeyKind.PREEXISTING
                 groundedKey.arguments.argumentsContainErrorValue() ->
                     Resolver25KeyKind.ERROR
-                groundedKey.field.fieldName in source.fieldValues.keys ->
+                source.isPresent(groundedKey.field.fieldName) ->
                     Resolver25KeyKind.PASSIVE
                 else -> Resolver25KeyKind.FIELD_RESOLVER
             }
@@ -385,8 +388,8 @@ private class ObjectResultOrchestrator(
         when {
             existing -> {
                 val nestedFringe: List<Deferred<Unit>> =
-                    source.fieldValues
-                        .getValue(groundedKey.field.fieldName)
+                    source
+                        .get(groundedKey.field.fieldName)
                         .launchNestedFringe(
                             result = target.getCell(groundedKey).getValue().get(),
                             path = coordinate,
@@ -415,7 +418,7 @@ private class ObjectResultOrchestrator(
                 }
             }
 
-            groundedKey.field.fieldName in source.fieldValues.keys -> {
+            source.isPresent(groundedKey.field.fieldName) -> {
                 runtime.instrumentation.keyActivationReady(coordinate)
                 keyState.fringeInstalled.complete(Unit)
                 runtime.scope.launch {
@@ -445,8 +448,8 @@ private class ObjectResultOrchestrator(
         val groundedKey = keyState.groundedKey
         runtime.scope.launch {
             keyState.promiseInstalled.await()
-            source.fieldValues
-                .getValue(groundedKey.field.fieldName)
+            source
+                .get(groundedKey.field.fieldName)
                 .launchNestedFringe(
                     result = target.getCell(groundedKey).getValue().await(),
                     path = path + groundedKey,
@@ -638,7 +641,7 @@ private class ObjectResultOrchestrator(
                     )
                 }
             }
-            is Value.Object -> {
+            is EngineObjectData.Sync -> {
                 val resultObject =
                     result as? ObjectEngineResult
                         ?: error("Passive object output does not match its engine result at $path")
@@ -680,8 +683,7 @@ private class ObjectResultOrchestrator(
                                 "${groundedKey.field.containingType.typeName}/" +
                                 groundedKey.field.fieldName
                         }
-                        fieldValues
-                            .getValue(groundedKey.field.fieldName)
+                        get(groundedKey.field.fieldName)
                             .launchNestedFringe(
                                 result = resultObject.getCell(groundedKey).getValue().get(),
                                 path = path + groundedKey,
@@ -737,11 +739,11 @@ private class ObjectResultOrchestrator(
             else -> {
                 val resolutionSelections: SelectionForest =
                     selection.subselections.fetchSuccessorDemandDeferringTemplates()
-                val arguments = groundedKey.arguments as Value.Arguments
+                val arguments = groundedKey.arguments as Arguments.Resolved
                 val fieldValue: EngineOutputData? =
                     if (groundedKey.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(groundedKey.field)
-                        val input: Value.Object =
+                        val input: EngineObjectData.Sync =
                             target.materialize(
                                 selections =
                                     checkNotNull(inputMaterializeSelections) {
@@ -759,7 +761,7 @@ private class ObjectResultOrchestrator(
                             runtime.instrumentation.resolverFinished(coordinate)
                         }
                     } else {
-                        source.fieldValues.getValue(groundedKey.field.fieldName)
+                        source.get(groundedKey.field.fieldName)
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(
@@ -839,7 +841,7 @@ private class ObjectResultOrchestrator(
                         val potentialKey = potentialSelection.objectKey(concreteType)
                         val potentialArguments = potentialKey.arguments
                         if (
-                            potentialArguments !is Value.Arguments ||
+                            potentialArguments !is Arguments.Resolved ||
                             ObjectEngineResult.GroundKey.of(
                                 potentialKey.field,
                                 potentialArguments,
@@ -982,7 +984,7 @@ private suspend fun EngineOutputData?.resolveValue(
     return when (this) {
         null -> ResolvedValue(null, emptyList())
         EngineErrorData -> ResolvedValue(ErrorEngineResult, emptyList())
-        is Value.Object ->
+        is EngineObjectData.Sync ->
             resolveObjectValue(
                 path = path,
                 resolverDemand = resolverDemand,
@@ -1023,7 +1025,7 @@ private suspend fun EngineOutputData?.resolveValue(
 // Selects passive output fields and retains this object instance when any selected key crosses a
 // resolver boundary.
 context(world: Assumptions)
-private suspend fun Value.Object.resolveObjectValue(
+private suspend fun EngineObjectData.Sync.resolveObjectValue(
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
@@ -1048,7 +1050,7 @@ private suspend fun Value.Object.resolveObjectValue(
             }
     val demandedFieldNames: Set<String> =
         resolverDemandByGroundedKey.keys.mapTo(linkedSetOf()) { key -> key.field.fieldName }
-    val unselectedFieldNames: Set<String> = fieldValues.keys - demandedFieldNames
+    val unselectedFieldNames: Set<String> = getSelections().toSet() - demandedFieldNames
     require(unselectedFieldNames.isEmpty()) {
         "Selective resolver output ${schemaType.typeName} contains unselected fields: " +
             unselectedFieldNames.joinToString()
@@ -1062,13 +1064,12 @@ private suspend fun Value.Object.resolveObjectValue(
     val resolvedFields: List<ResolvedField> =
         selectedGroundedKeys.map { groundedKey ->
             val arguments = groundedKey.arguments
-            require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+            require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
                 "Passive object field ${schemaType.typeName}/${groundedKey.field.fieldName} " +
                     "must be argumentless"
             }
             val resolvedValue: ResolvedValue =
-                fieldValues
-                    .getValue(groundedKey.field.fieldName)
+                get(groundedKey.field.fieldName)
                     .resolveValue(
                         expectedType = groundedKey.field.typeExpr,
                         path = path + groundedKey,
@@ -1122,7 +1123,7 @@ private class ResolvedValue(
 
 private class ObjectResolution(
     val path: List<PathComponent>,
-    val source: Value.Object,
+    val source: EngineObjectData.Sync,
     val selections: SelectionForest,
     val potentialSelections: SelectionForest,
     val target: ObjectEngineResult,

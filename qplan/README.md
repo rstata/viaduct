@@ -2,13 +2,13 @@
 
 `qplan` is a compiling Kotlin model of Viaduct field resolution. It is used to state resolver algorithms precisely, compare execution structures, test their behavior over generated worlds, and support formal arguments about selected parts of query execution.
 
-The immediate integration direction is to align every maintained qplan resolver with Viaduct engine API carriers, especially `EngineObjectData`, so the model and a future engine implementation can remain close. Resolver26 is the primary algorithm and eventual implementation blueprint. The current work remains in qplan; [`handoff.md`](./handoff.md) records its active scope and priorities.
+Every maintained qplan resolver now uses the aligned engine carrier model, including qplan's validating `EngineObjectData.Sync` implementation. Resolver26 is the primary algorithm and eventual implementation blueprint. [`handoff.md`](./handoff.md) records the current state and scope boundaries.
 
-The longer-term `viaduct.engine.runtime.execution2` goal is query execution only. Its stated boundary excludes mutations, subscriptions, custom scalars, query fragments and `fromQueryField` variables, EOD aliases, and asynchronous EOD variants. That future goal supplies context for the qplan alignment work but is not an instruction to design or implement `execution2`.
+The longer-term `viaduct.engine.runtime.execution2` goal is query execution only. Its stated boundary excludes mutations, subscriptions, custom scalars, query fragments and `fromQueryField` variables, EOD aliases, and asynchronous EOD variants. That future goal supplies context for qplan but is not an instruction to design or implement `execution2`.
 
 ## Documentation Map
 
-- [`handoff.md`](./handoff.md) records the current objective, migration boundary, open decisions, and next work.
+- [`handoff.md`](./handoff.md) records the current implementation state, carrier boundaries, validation evidence, and longer-term context.
 - [`design-principles.md`](./design-principles.md) states durable modeling and resolver-design principles.
 - [`research-evidence.md`](./research-evidence.md) preserves findings, correctness obligations, hard cases, acceptance cases, prior art, and source provenance behind those principles.
 - [`resolver-versions.md`](./resolver-versions.md) explains why every maintained resolver exists and how earlier versions help simplify or debug Resolver26 work.

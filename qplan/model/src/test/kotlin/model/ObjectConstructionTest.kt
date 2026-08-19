@@ -1,5 +1,7 @@
 package model
 
+import viaduct.engine.api.EngineObjectData
+
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,35 +33,35 @@ class ObjectConstructionTest {
 
         assertEquals(
             "user",
-            user.fieldValues[key(schema, "id")],
+            user.get(key(schema, "id")),
         )
         assertEquals(
             "Ada",
-            user.fieldValues[key(schema, "name")],
+            user.get(key(schema, "name")),
         )
         assertEquals(
             36,
-            user.fieldValues[key(schema, "age")],
+            user.get(key(schema, "age")),
         )
         assertEquals(
             9.5,
-            user.fieldValues[key(schema, "score")],
+            user.get(key(schema, "score")),
         )
         assertEquals(
             true,
-            user.fieldValues[key(schema, "active")],
+            user.get(key(schema, "active")),
         )
         assertEquals(
             "ACTIVE",
-            user.fieldValues[key(schema, "status")],
+            user.get(key(schema, "status")),
         )
         val aliases =
-            assertIs<List<*>>(user.fieldValues[key(schema, "aliases")])
+            assertIs<List<*>>(user.get(key(schema, "aliases")))
         assertEquals(
             listOf("A", "Countess"),
             aliases,
         )
-        assertEquals(friend, user.fieldValues[key(schema, "friend")])
+        assertEquals(friend, user.get(key(schema, "friend")))
     }
 
     @Test
@@ -81,13 +83,13 @@ class ObjectConstructionTest {
         val typenameKey = "__typename"
         val typenameValue = "User"
 
-        val implicit = Value.Object.of(userType)
-        val explicit = Value.Object.of(userType, mapOf(typenameKey to typenameValue))
+        val implicit = engineObjectDataOf(userType)
+        val explicit = engineObjectDataOf(userType, mapOf(typenameKey to typenameValue))
 
-        assertEquals(emptyMap<String, EngineOutputData?>(), implicit.fieldValues)
+        assertEquals(emptyList(), implicit.getSelections().toList())
         assertEquals(
-            mapOf<String, EngineOutputData?>(typenameKey to typenameValue),
-            explicit.fieldValues,
+            typenameValue,
+            explicit.get(typenameKey),
         )
     }
 
@@ -104,10 +106,10 @@ class ObjectConstructionTest {
             }
 
         val friend =
-            assertIs<Value.Object>(user.fieldValues[key(schema, "friend")])
+            assertIs<EngineObjectData.Sync>(user.get(key(schema, "friend")))
         assertEquals(
             "Grace",
-            friend.fieldValues[key(schema, "name")],
+            friend.get(key(schema, "name")),
         )
     }
 
@@ -144,11 +146,11 @@ class ObjectConstructionTest {
         val viewerField = schema.objectField("Query", "viewer")
 
         assertFailsWith<IllegalArgumentException> {
-            Value.Object.of(
-                type = userType,
+            engineObjectDataOf(
+                schemaType = userType,
                 fields =
                     listOf(
-                        Value.Object.FieldValue.of("viewer", viewerField, user),
+                        EngineObjectDataEntry.of("viewer", viewerField, user),
                     ),
             )
         }
@@ -171,7 +173,7 @@ class ObjectConstructionTest {
         }
         assertEquals(
             setOf(key(schema, "name")),
-            user.fieldValues.keys,
+            user.getSelections().toSet(),
         )
     }
 

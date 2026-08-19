@@ -1,15 +1,19 @@
 package model.registry
 
+import model.Arguments
+
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
 import model.Schema
 import model.SelectionForest
-import model.Value
+import model.engineObjectDataOf
 import model.instantiateBindings
 import model.merge
 import model.objectKey
+import model.schemaType
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Supplies the selection input of a field resolver by projecting this selection-independent result
@@ -32,7 +36,7 @@ import model.objectKey
  *
  * Every applicable selection in [demand] must be declared on the concrete object type or one of
  * its nominal supertypes. A selection retained below a resolver boundary must contain no
- * [Value.Variable] in its key arguments; a resolver selection may retain symbolic arguments
+ * [Arguments.Variable] in its key arguments; a resolver selection may retain symbolic arguments
  * because projection stops before materializing its key.
  *
  * @throws IllegalArgumentException when a precondition is not met
@@ -44,7 +48,7 @@ internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutp
         EngineErrorData,
         -> this
 
-        is Value.Object -> snipObjectToDemand(demand)
+        is EngineObjectData.Sync -> snipObjectToDemand(demand)
         is List<*> -> {
             val values: EngineOutputListData =
                 map { value -> value.snipToDemand(demand) }
@@ -65,9 +69,10 @@ internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutp
     }
 
 context(world: Assumptions)
-private fun Value.Object.snipObjectToDemand(
+private fun EngineObjectData.Sync.snipObjectToDemand(
     demand: SelectionForest,
-): Value.Object {
+): EngineObjectData.Sync {
+    val schemaType = this.schemaType
     val selectedFields =
         demand
             .merge(schemaType)
@@ -79,22 +84,19 @@ private fun Value.Object.snipObjectToDemand(
             .map { (key, selection) ->
                 val concreteField = key.field
                 val arguments = key.arguments
-                require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+                require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
                     "Passive object field ${schemaType.typeName}/${concreteField.fieldName} " +
                         "must be argumentless"
                 }
-                val value = fieldValues.getValue(concreteField.fieldName)
+                val value = get(concreteField.fieldName)
                 val selectedValue =
                     if (concreteField.typeExpr.baseType is Schema.SimpleType) {
                         value
                     } else {
                         value.snipToDemand(selection.subselections)
                     }
-                Value.Object.FieldValue.of(
-                    key = concreteField.fieldName,
-                    field = concreteField,
-                    value = selectedValue,
-                )
+                concreteField.fieldName to selectedValue
             }
-    return Value.Object.of(schemaType, selectedFields)
+            .toMap()
+    return engineObjectDataOf(schemaType, selectedFields)
 }

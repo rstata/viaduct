@@ -11,7 +11,6 @@ import model.PathComponent
 import model.Schema
 import model.Selection
 import model.TypeExpr
-import model.Value
 import model.VariableBinding
 import model.fetchBindings
 import model.objectKey

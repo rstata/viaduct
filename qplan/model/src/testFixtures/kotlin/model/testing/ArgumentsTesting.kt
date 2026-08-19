@@ -1,11 +1,10 @@
 package model.testing
 
-import model.ObjectEngineResult
-
-import model.MaterializeSelection
-import model.OpenArguments
-import model.Selection
 import model.ArgumentResolutionError
+import model.Arguments
+import model.MaterializeSelection
+import model.ObjectEngineResult
+import model.Selection
 import model.fieldExpressions
 
 /** Replaces selected argument expressions with an error during fixture composition. */
@@ -15,7 +14,7 @@ fun Selection.withErrorArguments(argumentNames: Set<String>): Selection =
             ObjectEngineResult.Key.of(
                 field = key.field,
                 arguments =
-                    OpenArguments.of(
+                    Arguments.of(
                         key.field,
                         key.arguments
                             .fieldExpressions()
@@ -38,7 +37,7 @@ fun MaterializeSelection.withErrorArguments(
             ObjectEngineResult.Key.of(
                 field = key.field,
                 arguments =
-                    OpenArguments.of(
+                    Arguments.of(
                         key.field,
                         key.arguments
                             .fieldExpressions()

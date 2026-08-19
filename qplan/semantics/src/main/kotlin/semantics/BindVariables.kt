@@ -1,11 +1,12 @@
 package semantics
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
 import model.Assumptions
 import model.EngineInputData
 import model.PathComponent
-import model.Value
 import model.registry.VariableDefinition
 
 /**
@@ -20,18 +21,18 @@ context(world: Assumptions)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     path: List<PathComponent>,
     onDeclared: (
-        Value.Variable,
+        Arguments.Variable,
         VariableDefinition.FromArgument,
     ) -> Unit = { _, _ -> },
     onCompleted: (
-        Value.Variable,
+        Arguments.Variable,
         VariableDefinition.FromArgument,
         EngineInputData?,
     ) -> Unit = { _, _, _ -> },
 ) {
     forEach { key ->
         if (key.field !in world.resolverRegistry) return@forEach
-        val arguments = key.arguments as? Value.Arguments ?: return@forEach
+        val arguments = key.arguments as? Arguments.Resolved ?: return@forEach
 
         world.resolverRegistry
             .resolver(key.field)

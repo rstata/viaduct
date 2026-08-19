@@ -1,9 +1,12 @@
 package semantics
 
+import model.Arguments
+
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
+import model.EngineObjectDataEntry
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -15,24 +18,25 @@ import model.Schema
 import model.Selection
 import model.Stamp
 import model.TypeExpr
-import model.Value
+import model.engineObjectDataOf
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
 import model.selectionForestOf
 import model.toEngineOutputData
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Materializes the object value selected by [selections] from this result.
  *
  * [reader] is the exact root-relative coordinate of the resolver consuming the materialized value.
  *
- * This operation is defined when this result contains every value promise selected by [selections] and every selection applicable at an object visited by this operation contains no [Value.Variable] in its key arguments.
+ * This operation is defined when this result contains every value promise selected by [selections] and every selection applicable at an object visited by this operation contains no [Arguments.Variable] in its key arguments.
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 internal suspend fun ObjectEngineResult.materialize(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
-): Value.Object {
+): EngineObjectData.Sync {
     return materializeSelectedObjectValue(
         selections = selections,
         reader = reader,
@@ -48,9 +52,9 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
     selectionPath: List<PathComponent>,
-): Value.Object {
+): EngineObjectData.Sync {
     val selectedValues =
-        linkedMapOf<String, Pair<model.Schema.ObjectField, EngineOutputData?>>()
+        linkedMapOf<String, Pair<Schema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedKey = selection.materializedGroundKey(selectionPath)
         val cell = getCell(storedKey)
@@ -67,11 +71,12 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
                 )
         selectedValues[responseKey] = storedKey.field to selectedValue
     }
-    return Value.Object.of(
-        type,
-        selectedValues.map { (key, fieldAndValue) ->
-            Value.Object.FieldValue.of(key, fieldAndValue.first, fieldAndValue.second)
-        },
+    return engineObjectDataOf(
+        schemaType = type,
+        fields =
+            selectedValues.map { (key, fieldAndValue) ->
+                EngineObjectDataEntry.of(key, fieldAndValue.first, fieldAndValue.second)
+            },
     )
 }
 

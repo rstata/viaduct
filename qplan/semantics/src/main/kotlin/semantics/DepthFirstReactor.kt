@@ -5,10 +5,12 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
+import model.Schema
 import model.SelectionForest
-import model.Value
 import model.groundKey
+import model.schemaType
 import java.util.PriorityQueue
+import viaduct.engine.api.EngineObjectData
 
 /**
  * A single-threaded work queue that preserves the recursive resolver's depth-first traversal.
@@ -25,14 +27,14 @@ internal interface DepthFirstReactor {
 
     class SlotOrchestrator(
         override val path: List<PathComponent>,
-        val source: Value.Object,
+        val source: EngineObjectData.Sync,
         val selections: SelectionForest,
         val target: ObjectEngineResult,
     ) : Task
 
     class SlotResolver(
         override val path: List<PathComponent>,
-        val source: Value.Object,
+        val source: EngineObjectData.Sync,
         val selection: ObjectSelection,
         val target: ObjectEngineResult,
     ) : Task
@@ -40,13 +42,13 @@ internal interface DepthFirstReactor {
     companion object {
         context(world: Assumptions, runtimeSupport: RuntimeSupport)
         operator fun invoke(
-            source: Value.Object,
+            source: EngineObjectData.Sync,
             selections: SelectionForest,
             eventObserver: ReactorEventObserver = {},
         ): DepthFirstReactor {
             val reactor =
                 PriorityQueueDepthFirstReactor(
-                    source = source,
+                    schemaType = source.schemaType,
                     eventObserver = eventObserver,
                 )
             reactor.initialize(
@@ -59,10 +61,10 @@ internal interface DepthFirstReactor {
 }
 
 private class PriorityQueueDepthFirstReactor(
-    source: Value.Object,
+    schemaType: Schema.ObjectType,
     eventObserver: ReactorEventObserver,
 ) : DepthFirstReactor {
-    private val result = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
+    private val result = ObjectEngineResult.of(schemaType, emptyMap(), mutable = true)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
     private val instrumentation = ReactorInstrumentation(eventObserver)
     private var nextSequence = 0L
@@ -70,7 +72,7 @@ private class PriorityQueueDepthFirstReactor(
 
     context(world: Assumptions)
     fun initialize(
-        source: Value.Object,
+        source: EngineObjectData.Sync,
         selections: SelectionForest,
     ) {
         enqueue(

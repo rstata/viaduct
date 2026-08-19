@@ -1,10 +1,11 @@
 package semantics.contract
 
+import viaduct.engine.api.EngineObjectData
+
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Fragment
-import model.Value
 import model.fragmentFrom
 import model.objectOf
 import org.junit.jupiter.api.AfterEach
@@ -65,7 +66,7 @@ private object ContractPostTestState {
 
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
-    root: Value.Object,
+    root: EngineObjectData.Sync,
     fragment: Fragment,
 ): ObjectEngineResult {
     val result = resolve(world, root, fragment.subselections)

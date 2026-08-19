@@ -2,6 +2,7 @@ package semantics.contract
 
 import model.testing.TestWorld
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
@@ -57,7 +58,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                         field.containingType.typeName == "Item" &&
                         field.fieldName == "trigger"
                     ) {
-                        triggerInputKeys = input.fieldValues.keys
+                        triggerInputKeys = input.selectionValues().keys
                     }
                 },
             )
@@ -81,6 +82,6 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
             world.schema.objectField("Query", "driver_V_A_node"),
             1,
         )
-        kotlin.test.assertEquals(setOf("account"), triggerInputKeys)
+        assertEquals(setOf("account"), triggerInputKeys)
     }
 }

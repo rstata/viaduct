@@ -23,6 +23,11 @@ internal fun kotlin.collections.List<PathComponent>?.toSelectionPath():
 /**
  * A finite, well-founded field-resolution result.
  *
+ * Every object-field and list-element value slot contains [EngineResult] or null. Null represents
+ * GraphQL null; every non-null child is another result variant. [ErrorEngineResult] is admitted at
+ * every schema output position, so it may occur in any value slot without implementing that
+ * position's simple, object, or list result interface.
+ *
  * Equality depends on the result variant. [SimpleEngineResult] values use structural equality,
  * [EngineResult.Cell] and [ObjectEngineResult] values use reference equality, and
  * [ListEngineResult] values use structural equality over their type expression and positional cell
@@ -145,6 +150,9 @@ sealed interface EnumEngineResult : SimpleEngineResult {
 
 /**
  * The collapsed error result. Error metadata, paths, and multiplicity are intentionally omitted.
+ *
+ * Schema conformance admits this sibling result variant at every output type expression. It is not
+ * a Kotlin bottom subtype and exposes no simple, object, or list result properties.
  */
 data object ErrorEngineResult : EngineResult
 

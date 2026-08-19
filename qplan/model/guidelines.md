@@ -10,9 +10,11 @@ Exceptions, annotations, dependency-injection qualifiers, test utilities, parsin
 
 ## Carrier Boundary
 
-`EngineResult` values are finite and well-founded. `SimpleEngineResult` values use structural equality, cells and OERs use reference equality, and lists use structural equality over their type expression and positional cell identity. Use `sameCompletedResultAs` for explicit extensional comparison of completed result trees.
+The active carrier target treats `EngineInputData`, `EngineOutputData`, and `EngineResult` as distinct checked semantic unions represented by Kotlin `Any` typealiases. Their members are defined by domain-specific conformance relations rather than Kotlin subtyping. Nullable uses add GraphQL null. The aliases cannot distinguish overloads or prevent arbitrary `Any` values from crossing unchecked programming boundaries, so construction, publication, conversion, and observation operations enforce the appropriate domain relation.
 
-Mutable OERs may gain validated exact cells monotonically. Each cell has independent write-once value and `accessAccepted` promises, and a written parent cell may retain a mutable child OER while that child gains cells. Self-reference and cyclic result graphs are outside the result domain.
+`EngineResult` values are finite and well-founded. Pre-domain scalar values use structural equality, cells and OERs use reference equality, and lists use structural equality over their type expression and positional cell identity. Use `sameCompletedResultAs` for explicit extensional comparison of completed result trees.
+
+Mutable OERs may gain validated exact cells monotonically. Each cell has independent write-once value and access-result promises, and a written parent cell may retain a mutable child OER while that child gains cells. Self-reference and cyclic result graphs are outside the result domain.
 
 `Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
 
@@ -43,15 +45,23 @@ Keys belong exclusively to the engine-result domain. `Value.Object` and `Value.O
 
 `Value.Object.FieldValue` carries a string key, canonical object field, and value only through object construction so the factory can validate schema conformance before retaining the string map. A completed object does not retain hidden OER keys or schema-field metadata. Argument-bearing passive fields are outside the source and resolver-output domain and must be rejected.
 
-`OpenValue.Ground` wraps canonical `EngineInputData`; other open values contain variables. `OpenArguments.Ground` is either an error-free `Value.Arguments` or one tuple-level error. Variable bindings likewise distinguish error-free engine input data from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
+`OpenValue.Ground` wraps canonical `EngineInputData`; other open values contain variables. Engine input data has no error sentinel. `OpenArguments.Ground` is either an error-free `Value.Arguments` or one tuple-level argument-resolution error, and variable bindings likewise distinguish error-free engine input data from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
 
 ## Result Representation
 
-`EngineResult.Cell` represents one object-field or list-element occurrence with independent value and `accessAccepted` promises. A completed access result of true means access is accepted and false means it is rejected. Field and type checks are represented by that one result.
+The target `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `Schema.ID`, canonical `Schema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
 
-`Value.Output` represents resolver output without result cells or access decisions. Do not collapse resolver output and engine result into one carrier merely because they can contain corresponding values.
+Every object-field and list-element value slot contains `EngineResult?`. Null represents GraphQL null. Every non-null child is another member of the result domain. Schema conformance admits `ErrorEngineResult` at every output type expression, including non-null types, so an error may occupy any value location in a result tree. `ErrorEngineResult` is an inhabited sentinel rather than Kotlin's bottom type and exposes no scalar, object, or list properties.
 
-Simple resolver outputs and simple field results use independent carriers. Convert `Value.Simple` to an `EngineResult` only at result-publication boundaries with `toEngineResult`, and convert a `SimpleEngineResult` back to `Value.Simple` only at resolver-input or materialization boundaries with `toValue`. `Value.Error` corresponds to the separate `ErrorEngineResult` singleton.
+`EngineResultCell` represents one object-field or list-element occurrence with independent value and access-result promises. Its value promise contains `EngineResult?` and obeys the corresponding field or element schema type. Its non-null access-result promise contains `EngineResult` constrained to either `Boolean` or `ErrorEngineResult`; true means accepted, false means rejected, and the sentinel means access evaluation failed. This is an independent conformance relation rather than a GraphQL field-type relation. Factories, direct setters, and deferred promises validate their respective slot relation before making a completion observable.
+
+`ListEngineResult` remains a nominal typed result wrapper and implements `List<EngineResultCell>` by delegation to a private backing list. The wrapper carries the element `typeExpr`; its equality is structural over that type expression and positional cell identities. A builder may transfer a mutable list into the wrapper without copying only when ownership transfer is exclusive and the builder retains no post-publication mutation path. The read-only `List` interface and a private delegate do not by themselves make an aliased mutable list immutable.
+
+`EngineOutputData` represents resolver output without result cells or access decisions. Its target members are production-compatible scalar representations, recursive `List<EngineOutputData?>`, the temporarily retained `Value.Object`, and the singleton `EngineErrorData`. `EngineErrorData` belongs to the broad output domain but not to narrower simple, list, or object categories. Do not collapse resolver output and engine result into one carrier merely because they contain corresponding successful values.
+
+Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `Schema.ID` for ID, and the canonical `Schema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the target model.
+
+`Schema.EnumType` owns a name-keyed map of canonical `Schema.EnumValue` definitions. Each enum value exposes its name and containing enum type and uses the schema-canonical equality documented by `Schema`; same-named values of different enum types are distinct. `Schema.ID` is a structurally equal runtime value containing one string, not a canonical schema definition.
 
 Input-object and argument field values use ordinary maps. Use `getValue` when presence is a
 precondition and test membership before an optional lookup so an absent entry remains distinct from
@@ -77,9 +87,11 @@ Align storage and access with that API where it preserves the modeled meaning, b
 
 ## Working Vocabulary
 
-A semantic category is a modeled set of values represented by an interface hierarchy, such as `EngineResult`, `Value`, or `Schema.Type`.
+A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `Schema.Type`, or intensionally by a checked `Any` typealias, such as the target `EngineResult`.
 
-A concrete variant is one particular form of value in a category, such as `ObjectEngineResult` within `EngineResult` or `TypeExpr.List` within `TypeExpr`.
+A concrete variant is one particular form of value in a nominal category, such as `TypeExpr.List` within `TypeExpr`. A semantic union member is one admitted representation in an intentional `Any`-represented domain, such as `Schema.ID` within `EngineResult`.
+
+A pre-domain type is an unambiguous runtime representation that may be admitted by one or more semantic domains. A pre-domain type does not inherit from or otherwise nominally belong to those domains. Kotlin primitives, `String`, `Schema.ID`, and `Schema.EnumValue` are examples.
 
 A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `ObjectEngineResult`, `Promise`, `ObjectEngineResult.Key`, and `FieldResolver` are examples.
 
@@ -99,13 +111,13 @@ Keep functions requiring non-mathematical inputs or producing non-mathematical o
 
 ## Public Type Forms
 
-Public semantic categories are sealed interfaces unless the category itself is intentionally supplied by external composition code. For example, `EngineResult` and `Schema.Type` are sealed, while externally supplied roots such as `Schema` and `ResolverRegistry` are open interfaces.
+Public nominal semantic categories are sealed interfaces unless the category itself is intentionally supplied by external composition code. For example, `Schema.Type` is sealed, while externally supplied roots such as `Schema` and `ResolverRegistry` are open interfaces. A performance-sensitive untyped union may instead be a documented `Any` typealias with explicit conformance operations.
 
 Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `ObjectEngineResult` is sealed around its private implementation, while externally implemented `Schema.ObjectType` is an open leaf. Its enclosing category, `Schema.Type`, remains sealed.
 
-Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `Value.Error`, `Value.Default.Absent`, and built-in scalar type definitions are examples.
+Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `Value.Default.Absent`, and built-in scalar type definitions are examples.
 
-Public enums represent finite scalar sets of unique values, such as the five possible results of `Schema.TypeRelation`. They are not used as substitutes for algebraic categories with variants such as `EngineResult`.
+Public enums represent finite scalar sets of unique values, such as the five possible results of `Schema.TypeRelation`. They are not used as substitutes for algebraic categories or checked semantic unions.
 
 Do not expose public data classes or public sealed classes. For example, expose `Promise` as a sealed interface backed by private implementations rather than exposing their generated component operations.
 
@@ -117,9 +129,9 @@ Every public semantic category or variant has one of four equality modes: struct
 
 Structural equality means that two values are equal exactly when they have the same semantic constructor and their corresponding components are recursively equal. For example, two object keys are equal when their fields and argument values are equal, while a named type expression is never equal to a list type expression.
 
-Reference equality means that two values are equal exactly when they are the same runtime occurrence. `EngineResult.Cell` and `ObjectEngineResult` use reference equality because their promise state is monotonically mutable. Their identity hashes are stable while cells or promises are installed and completed, so either may be used safely as a map key. A cell is allocated by its containing OER or LER, and its reference identity is its occurrence ID. `ListEngineResult` remains structural over its type expression and positional cell identity. Use `sameCompletedResultAs` when an explicit extensional comparison of completed result trees is required.
+Reference equality means that two values are equal exactly when they are the same runtime occurrence. `EngineResultCell` and `ObjectEngineResult` use reference equality because their promise state is monotonically mutable. Their identity hashes are stable while cells or promises are installed and completed, so either may be used safely as a map key. A cell is allocated by its containing OER or LER, and its reference identity is its occurrence ID. `ListEngineResult` remains structural over its type expression and positional cell identity. Use `sameCompletedResultAs` when an explicit extensional comparison of completed result trees is required.
 
-Schema-canonical equality applies only to `Schema` and schema-definition graph elements: `Schema.Type`, `Schema.OutputField`, `Schema.InputLikeField`, and `Schema.FieldArguments`. Two schemas are equal exactly when they denote the same canonical schema. Two schema elements from that schema are equal exactly when they denote the same canonical element. Applying `==` to elements from different schemas is outside the modeled equality domain, regardless of the host-language result.
+Schema-canonical equality applies only to `Schema` and schema-definition graph elements: `Schema.Type`, `Schema.EnumValue`, `Schema.OutputField`, `Schema.InputLikeField`, and `Schema.FieldArguments`. Two schemas are equal exactly when they denote the same canonical schema. Two schema elements from that schema are equal exactly when they denote the same canonical element. Applying `==` to elements from different schemas is outside the modeled equality domain, regardless of the host-language result.
 
 Undefined equality means that Kotlin `==`, `equals`, hashing, membership in equality-based collections, map-key use, deduplication, and other equality-dependent operations have no semantic interpretation for that category. `Selection`, resolver values, resolver functions, and `Assumptions` are examples.
 
@@ -139,7 +151,7 @@ Prefer a private data-class implementation when its generated structural equalit
 
 Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned field-resolver wrappers are logic-constructible; `Schema` and `ResolverRegistry` are externally supplied. Field-resolver functions are supplied during pre-reasoning assembly and encapsulated by `FieldResolver` behind a model-owned factory and public demand-projection operation. External raw node lookups, when accepted by composition infrastructure, are lowered to field resolvers before the canonical registry is exposed.
 
-Every independently constructible non-singleton semantic type has a public factory, conventionally named `of`. For example, `ObjectEngineResult`, `IntEngineResult`, `Promise`, `Value.Int`, and `FieldResolver` have factories. `EngineResult.Cell` is deliberately not independently constructible: OER and LER factories allocate their cells so a cell cannot be shared by two containers. Abstract categories such as `EngineResult` and `Value` need no factory when their concrete variants provide the construction operations.
+Every independently constructible non-singleton semantic type has a public factory, conventionally named `of`. For example, `ObjectEngineResult`, `Schema.ID`, `Promise`, and `FieldResolver` have factories. `EngineResultCell` is deliberately not independently constructible: OER and LER factories allocate their cells so a cell cannot be shared by two containers. Pre-domain Kotlin values and abstract semantic domains need no domain-wide factory.
 
 Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `ObjectEngineResult.Key` and `GroundKeyImpl` implementing `ObjectEngineResult.GroundKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
@@ -157,7 +169,7 @@ An `of` factory normally accepts already semantic components. For example, `Prom
 
 GraphQL coercion may be a semantic function. For example, construction of an argument-bearing object key may apply argument coercion, but the coercion relation should be independently defined rather than embedded only inside `ObjectEngineResult.Key.of`. Each coercion function separately specifies whether coercion failure is a modeled result or an input outside its domain.
 
-Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `ObjectEngineResult.of` validates every initially present value coordinate, nullability, and nested result type, while `EngineResult.Cell.setValue` and validating deferred value promises enforce the same invariant before completion. Every observable completed value therefore satisfies its documented carrier invariants, and `correctResolution` does not need schema conformance as a separate conjunct.
+Factories establish all carrier invariants available at their construction boundary eagerly and document those postconditions on the factory. Reusable invariant relations live in `model.invariants`. For example, `ObjectEngineResult.of` validates every initially present value coordinate, nullability, and nested result type, while `EngineResultCell` setters and validating deferred promises enforce the value-slot and access-result relations before completion. Every observable completed value therefore satisfies its documented carrier invariants, and `correctResolution` does not need schema conformance as a separate conjunct.
 
 Use compositional validation for nested typed values. For example, a list factory validates its elements, and an enclosing OER factory checks that the list's declared element type is compatible with the field type rather than traversing and revalidating the entire list.
 

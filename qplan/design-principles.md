@@ -20,6 +20,14 @@ Resolver input demand, client demand, output projection demand, symbolic or pote
 
 Cross each boundary through an explicit checked operation. Do not make exact operations tolerate open values or reuse one demand representation merely because two values happen to coincide in one example.
 
+Semantic domains need not be nominal Kotlin hierarchies. Performance-sensitive domains may be represented by `Any` typealiases whose members are specified by documented conformance relations and checked at construction, publication, and conversion boundaries. Distinct aliases remain distinct mathematical domains even though Kotlin cannot use them as overload discriminators or prevent an arbitrary `Any` from crossing an unchecked programming boundary.
+
+A **pre-domain type** supplies an unambiguous runtime representation that one or more semantic domains may admit. Ordinary Kotlin `Int`, finite `Double`, `Boolean`, and `String` values are pre-domain representations. Qplan's result domain additionally uses `Schema.ID` and canonical `Schema.EnumValue` values so GraphQL strings, IDs, and enum members remain distinguishable without carrying a nominal result wrapper around every scalar.
+
+Production Viaduct currently overloads Kotlin `String` for GraphQL String, ID, and enum values in engine input and output data. Qplan's carrier target preserves that representation in `EngineInputData` and `EngineOutputData` for current compatibility, while `EngineResult` uses `String`, `Schema.ID`, and `Schema.EnumValue` respectively. Crossings between output data and engine results therefore require schema-directed conversion. This deliberate conversion boundary may disappear after production input and output carriers adopt the stronger pre-domain representations.
+
+Failure sentinels belong to domains rather than to every pre-domain type. Engine results, engine output data, and argument resolution use distinct error sentinels; `EngineInputData` has no error member. No sentinel impersonates scalar, list, or object interfaces merely to obtain an artificial Kotlin union.
+
 ## Result Occurrence Is Identity
 
 The semantic identity of work is an occurrence in the result tree. Equal node IDs, schema coordinates, arguments, or values do not merge separate object or list occurrences. List indices and concrete containing paths remain part of occurrence identity. Caching, batching, and request deduplication are separate execution layers.
@@ -45,7 +53,7 @@ Resolver object fragments determine input requirements. Resolver arguments ident
 
 ## Progress Is Monotonic And Strict
 
-Mutable semantic state is limited to documented monotonic stores. An OER or LER cell value, a cell's `accessAccepted` result, and a request-local variable binding move from absent to one immediate or deferred promise; a deferred promise completes once.
+Mutable semantic state is limited to documented monotonic stores. An OER or LER cell value, a cell's access result, and a request-local variable binding move from absent to one immediate or deferred promise; a deferred promise completes once.
 
 A parent may publish a stable child OER before the child is complete. Later work fills absent child cells without replacing the parent or rebuilding the subtree.
 
@@ -90,5 +98,7 @@ Generated presence is weaker than runtime activation. Directed profiles should r
 The qplan model currently owns carriers such as `EngineResult`, typed keys, schema validation, and occurrence-aware cells. Viaduct's `EngineObjectData.Sync` is the intended synchronous partial-object boundary for the current alignment work and distinguishes an absent field from a present null value.
 
 The migration should make qplan use Viaduct engine API carriers where they express the same semantic fact while preserving qplan-only structure needed for formal reasoning. Do not erase occurrence identity, ground-key validation, or model invariants merely to reduce source-level differences.
+
+Alignment does not require preserving every fragile production representation inside the result tree. In particular, qplan intentionally distinguishes result-domain ID and enum values even though current production engine input and output data represent both as strings. Keep that mismatch isolated in explicit adapters so a future production migration can remove conversions without changing result semantics.
 
 The purpose of alignment is to keep the future implementation distance small. It does not make production runtime concerns part of every qplan function, and it does not expand the immediate task into `execution2` design.

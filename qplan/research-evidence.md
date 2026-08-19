@@ -20,6 +20,7 @@ These findings come from production investigation, focused counterexamples, or f
 8. Alias-free internal demand is not automatically a valid tenant-visible GraphQL fragment.
 9. Broad random campaigns can miss a decisive counterexample or validate a flawed oracle.
 10. Variable identity belongs to its defining resolver occurrence; nested variables must be stamped and instantiated one activated demand layer at a time.
+11. Production engine input data, resolver output data, OER leaf values, and `EngineObjectData.Sync` overload Kotlin `String` for GraphQL String, ID, and enum values; tenant boundaries temporarily project IDs and enums to `GlobalID<T>` or generated Kotlin enum classes and lower them back to strings before returning to the engine.
 
 The central consequence is producer-specific: every producer-owned value later consumed from one resolver-bearing occurrence must be covered by the demand supplied to that occurrence's producing application. A correct final union, cache hit, widened result, or second materialization is weaker evidence.
 
@@ -66,6 +67,12 @@ Correct aggregation does not require global barriers across unrelated object or 
 | Checkers and execution epochs | Backlogged; mutations, subscriptions, and incremental epochs are outside the stated future scope | Raw and checked reads can differ, and work must not be coalesced across ordering or epoch boundaries. |
 
 Scope labels describe current qplan and stated integration priorities, not claims that the harder cases are permanently irrelevant. A carrier refactor should preserve their identities or explicit exclusions without pulling their implementation into the current task.
+
+## Production Scalar Carrier Evidence
+
+Production Viaduct has no engine-level nominal value type for GraphQL ID or enum members. GraphQL Java coercion produces strings, tenant argument conversion projects those strings to tenant-facing `GlobalID<T>` or generated enum values when required, tenant resolver return conversion lowers those values back to strings, `FieldResolutionResult.engineResult` stores the resulting leaf unchanged, and `EngineObjectData.Sync` exposes the same string. Consequently an ID, GraphQL String, and enum member with the same spelling are indistinguishable inside current production engine input and output data without schema context.
+
+Qplan's carrier target deliberately follows this production representation for `EngineInputData` and `EngineOutputData`, but not for `EngineResult`. The result domain uses structural `Schema.ID` values and canonical `Schema.EnumValue` definitions so IDs, strings, enum types, and same-named members of distinct enum types remain distinguishable. Schema-directed adapters wrap output strings when publishing results and unwrap result values when materializing resolver-visible data. This is a temporary compatibility conversion, not an assertion that production's overloaded representation is the desired endpoint.
 
 ## Multiple-Materialization Prior Art
 
@@ -133,6 +140,10 @@ These sources preserve the research trail. Proposals and implementation reviews 
 - [#1061282: Preserve type constraints](https://git.musta.ch/airbnb/treehouse/pull/1061282)
 - [#1064433: Normalized child plans](https://git.musta.ch/airbnb/treehouse/pull/1064433)
 - [#1079007: Retain skipped fragments](https://git.musta.ch/airbnb/treehouse/pull/1079007)
+- [`FieldResolutionResult.engineResult`](../core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/FieldResolutionResult.kt)
+- [Tenant resolver output lowering](../core/tenant/runtime/src/main/kotlin/viaduct/tenant/runtime/execution/FieldUnbatchedResolverExecutorImpl.kt)
+- [`EngineObjectData.Sync` materialization](../core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/SyncEngineObjectDataFactory.kt)
+- [`ViaductSchema.EnumValue`](../core/shared/viaductschema/src/main/kotlin/viaduct/graphql/schema/ViaductSchema.kt)
 
 ### Specifications
 

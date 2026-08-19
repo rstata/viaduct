@@ -20,4 +20,4 @@ rootProject.name = "qplanning"
 
 includeBuild("../core")
 
-include("arbitrary", "model", "semantics")
+include("arbitrary", "execution", "model", "semantics")

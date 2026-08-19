@@ -1,6 +1,9 @@
 package execution
 
+import graphql.ExceptionWhileDataFetching
 import graphql.TypeResolutionEnvironment
+import graphql.execution.DataFetcherResult
+import graphql.execution.ResultPath
 import graphql.schema.DataFetcher
 import graphql.schema.DataFetchingEnvironment
 import graphql.schema.GraphQLObjectType
@@ -69,9 +72,9 @@ private class ObjectEngineResultDataFetcher(
                 .getValue()
                 .get()
         return if (field.fieldName == sourceFieldName) {
-            value.toGraphQLJavaValue()
+            value.toGraphQLJavaValue(environment)
         } else {
-            value.toGraphQLJavaNodeValue()
+            value.toGraphQLJavaNodeValue(environment)
         }
     }
 }
@@ -88,20 +91,20 @@ private fun resolveType(environment: TypeResolutionEnvironment): GraphQLObjectTy
         )
 }
 
-private fun EngineResult?.toGraphQLJavaValue(): Any? =
+private fun EngineResult?.toGraphQLJavaValue(
+    environment: DataFetchingEnvironment,
+    path: ResultPath = environment.executionStepInfo.path,
+): Any? =
     when (this) {
         null -> null
-        ErrorEngineResult ->
-            throw IllegalStateException(
-                "QPlan cannot complete ErrorEngineResult without GraphQL error metadata",
-            )
+        ErrorEngineResult -> errorResult(environment, path)
         is ObjectEngineResult -> this
         is ListEngineResult ->
-            map { cell ->
+            mapIndexed { index, cell ->
                 cell
                     .getValue()
                     .get()
-                    .toGraphQLJavaValue()
+                    .toGraphQLJavaValue(environment, path.segment(index))
             }
         is Schema.ID -> value
         is Schema.EnumValue -> name
@@ -113,15 +116,19 @@ private fun EngineResult?.toGraphQLJavaValue(): Any? =
         else -> throw IllegalStateException("Unexpected qplan engine result: $this")
     }
 
-private fun EngineResult?.toGraphQLJavaNodeValue(): Any? =
+private fun EngineResult?.toGraphQLJavaNodeValue(
+    environment: DataFetchingEnvironment,
+    path: ResultPath = environment.executionStepInfo.path,
+): Any? =
     when (this) {
         null -> null
+        ErrorEngineResult -> errorResult(environment, path)
         is ListEngineResult ->
-            map { cell ->
+            mapIndexed { index, cell ->
                 cell
                     .getValue()
                     .get()
-                    .toGraphQLJavaNodeValue()
+                    .toGraphQLJavaNodeValue(environment, path.segment(index))
             }
         is ObjectEngineResult -> {
             val payloadField =
@@ -133,7 +140,24 @@ private fun EngineResult?.toGraphQLJavaNodeValue(): Any? =
             getCell(payloadKey)
                 .getValue()
                 .get()
-                .toGraphQLJavaValue()
+                .toGraphQLJavaValue(environment, path)
         }
-        else -> toGraphQLJavaValue()
+        else -> toGraphQLJavaValue(environment, path)
     }
+
+private fun errorResult(
+    environment: DataFetchingEnvironment,
+    path: ResultPath,
+): DataFetcherResult<Any> =
+    DataFetcherResult
+        .newResult<Any>()
+        .error(
+            ExceptionWhileDataFetching(
+                path,
+                QPlanFieldResolutionException(),
+                environment.field.sourceLocation,
+            ),
+        ).build()
+
+private class QPlanFieldResolutionException :
+    RuntimeException("QPlan field resolution failed")

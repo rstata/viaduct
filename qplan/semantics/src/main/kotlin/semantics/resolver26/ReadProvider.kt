@@ -38,7 +38,7 @@ internal suspend fun ObjectEngineResult.readProvider(
                 field = specializedKey.field,
                 arguments =
                     specializedKey.arguments.fetchBindings(
-                        specializedKey.field.arguments,
+                        specializedKey.field,
                     ),
             )
         val cell = current.reserveCell(groundKey)

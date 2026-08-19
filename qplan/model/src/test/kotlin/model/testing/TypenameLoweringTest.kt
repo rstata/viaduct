@@ -38,7 +38,7 @@ class TypenameLoweringTest {
         ).forEach { typeName ->
             val field = schema.requireField(typeName, "V_I_typename")
             assertEquals(typeName, field.containingDef.name)
-            assertEquals(Schema.NoArguments, field.arguments)
+            assertTrue(field.args.isEmpty())
             assertEquals(Schema.StringType, field.type.baseType)
             assertTrue(!field.type.isNullable)
         }
@@ -150,7 +150,7 @@ class TypenameLoweringTest {
             val field = schema.requireObjectField(type.name, "V_I_typename")
             val resolver = registry.resolver(field)
             assertTrue(field in registry)
-            assertEquals(Schema.NoArguments, field.arguments)
+            assertTrue(field.args.isEmpty())
             assertTrue(resolver.objectFragment.isEmpty())
             assertTrue(resolver.variables.isEmpty())
             assertTrue(registry.mayDemandFrom(field).isEmpty())

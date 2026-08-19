@@ -178,7 +178,7 @@ interface DeepResolverStressContract : ResolverContract {
                                 .requireField(
                                     application.key.field.typeName,
                                     application.key.field.fieldName,
-                                ).arguments.fields
+                                ).args
                                 .isNotEmpty()
                         ) {
                             argumentBearingNodeBridgeProducerApplications += 1

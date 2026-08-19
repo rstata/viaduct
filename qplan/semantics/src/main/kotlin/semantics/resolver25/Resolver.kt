@@ -580,7 +580,7 @@ private class ObjectResultOrchestrator(
                     field = specializedKey.field,
                     arguments =
                         specializedKey.arguments.fetchBindings(
-                            specializedKey.field.arguments,
+                            specializedKey.field,
                         ),
                 )
             if (index == 0) {
@@ -665,7 +665,7 @@ private class ObjectResultOrchestrator(
                         potentialDemand.merge(schemaType)
                     mergedDemand.byKey().values.flatMap { selection ->
                         val field = selection.key.field
-                        check(field.arguments.fields.isEmpty()) {
+                        check(field.args.isEmpty()) {
                             "Passive fringe traversal crossed argument-bearing field $field"
                         }
                         val groundedKey = ObjectEngineResult.GroundKey.of(field, emptyMap())

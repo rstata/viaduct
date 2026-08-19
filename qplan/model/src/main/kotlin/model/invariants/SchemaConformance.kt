@@ -56,14 +56,14 @@ internal fun EngineOutputData?.conformsToOutputSchema(
 /** Whether this argument tuple recursively conforms to [expectedType]. */
 context(world: Assumptions)
 internal fun Arguments.Resolved.conformsToSchema(
-    expectedType: Schema.FieldArguments,
-): Boolean = conformsToArgumentDefinition(expectedType)
+    expectedField: Schema.Field,
+): Boolean = conformsToArgumentDefinition(expectedField)
 
 /** Whether this key's arguments recursively conform to its output field. */
 context(world: Assumptions)
 internal fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
     val keyArguments = arguments
-    return keyArguments.conformsToArgumentDefinition(field.arguments)
+    return keyArguments.conformsToArgumentDefinition(field)
 }
 
 /**

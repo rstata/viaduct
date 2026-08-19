@@ -244,7 +244,7 @@ private suspend fun orchestrateObject(
                         is VariableDefinition.FromObjectField -> {
                             require(
                                 definition.path.all { providerKey ->
-                                    providerKey.field.arguments.fields.isEmpty()
+                                    providerKey.field.args.isEmpty()
                                 },
                             ) {
                                 "Resolver26 requires argument-free FromObjectField provider paths"

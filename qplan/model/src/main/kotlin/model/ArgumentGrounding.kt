@@ -1,38 +1,38 @@
 package model
 
 /**
- * Grounds this argument tuple under [world] and [expectedType].
+ * Grounds this argument tuple under [world] for [expectedField].
  *
  * @throws IllegalStateException when a stamped variable is unbound or a template is unstamped
  */
 context(world: Assumptions)
 internal fun Arguments.instantiateBindings(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
 ): Arguments.Ground {
     if (this == Arguments.Error) return Arguments.Error
-    return groundedArguments(expectedType) { value, typeExpr ->
+    return groundedArguments(expectedField) { value, typeExpr ->
         value.instantiateBindings(typeExpr)
     }
 }
 
-/** Grounds this argument tuple under [expectedType], suspending for incomplete stamped variables. */
+/** Grounds this argument tuple for [expectedField], suspending for incomplete stamped variables. */
 context(world: Assumptions)
 suspend fun Arguments.fetchBindings(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
 ): Arguments.Ground {
     if (this == Arguments.Error) return Arguments.Error
-    return groundedArguments(expectedType) { value, typeExpr ->
+    return groundedArguments(expectedField) { value, typeExpr ->
         value.fetchBindings(typeExpr)
     }
 }
 
 private inline fun Arguments.groundedArguments(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     ground: (ArgumentExpression?, TypeExpr<Schema.InputTypeDef>) -> VariableBinding,
 ): Arguments.Ground {
     val fields = linkedMapOf<String, EngineInputData?>()
     fieldExpressions().forEach { (name, value) ->
-        val typeExpr = expectedType.requireField(name).type
+        val typeExpr = expectedField.requireArg(name).type
         when (val binding = ground(value, typeExpr)) {
             VariableBinding.Error -> return Arguments.Error
             is VariableBinding.Input -> fields[name] = binding.value

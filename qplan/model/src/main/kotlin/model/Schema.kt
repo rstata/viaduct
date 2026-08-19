@@ -22,7 +22,7 @@ import graphql.schema.GraphQLObjectType
  * semantic category, and every engine object through qplan's validating EOD factory. The one-schema world
  * stipulates that every definition supplied to those factories is canonical in this schema; the
  * factories do not revalidate that ownership. Nested definitions navigate to their canonical owners through
- * [Field.containingDef] and [InputLikeField.containingDef]. Compare definitions with ordinary
+ * [Field.containingDef], [InputField.containingDef], and [FieldArg.containingDef]. Compare definitions with ordinary
  * `==`, `!=`, and collection equality operations. Only acyclic value objects such as [TypeExpr] and
  * [CoercedDefaultValue] add structural equality over their properties.
  *
@@ -96,7 +96,7 @@ interface Schema {
      * - `f.name == "V_I_typename"`;
      * - `f.containingDef == t`;
      * - `f.type == TypeExpr.Named.of(StringType, isNullable = false)`;
-     * - `f.arguments == NoArguments`; and
+     * - `f.args.isEmpty()`; and
      * - `t.field("V_I_typename") == f`.
      *
      * Unions own no fields. Synthetic node-bridge objects own only their `id` and `node` fields.
@@ -227,53 +227,15 @@ interface Schema {
     interface Union : CompositeTypeDef
 
     /**
-     * A schema definition shaped like a GraphQL input object.
-     *
-     * ### Invariant: schema-input-field-graph
-     *
-     * The instances are named [Input] definitions and schema-synthetic [FieldArguments]
-     * definitions. Each field's [InputLikeField.containingDef] is this definition.
-     */
-    sealed interface InputObjectLike {
-        val fields: Collection<InputLikeField>
-
-        fun field(name: String): InputLikeField? = fields.find { it.name == name }
-    }
-
-    /**
      * An input object definition.
      *
-     * Every [InputField] occurs exactly once in its containing definition's field collection.
+     * Every [InputField] occurs exactly once in its containing definition's field collection,
+     * points back to this definition, and is returned by [field] under its name.
      */
-    interface Input : InputTypeDef, InputObjectLike {
-        override val fields: Collection<InputField>
-        override fun field(name: String): InputField? = fields.find { it.name == name }
-    }
+    interface Input : InputTypeDef {
+        val fields: Collection<InputField>
 
-    /**
-     * The complete argument definition of an output field.
-     *
-     * ### Invariant: schema-field-argument-graph
-     *
-     * This is schema-synthetic rather than a named [TypeDef], and it cannot occur in a [TypeExpr].
-     * Each non-empty instance belongs to exactly one [Field]. The empty argument definition
-     * is always represented by the singleton [NoArguments] and is shared by every field that takes
-     * no arguments.
-     */
-    sealed interface FieldArguments : InputObjectLike {
-        interface NonEmpty : FieldArguments
-    }
-
-    /**
-     * The unique argument definition for every output field that takes no arguments.
-     *
-     * ### Invariant: schema-no-arguments
-     *
-     * For every [Field] `f`, `f.arguments == NoArguments` exactly when `f` takes no
-     * arguments.
-     */
-    data object NoArguments : FieldArguments {
-        override val fields: Collection<FieldArg> = emptyList()
+        fun field(name: String): InputField? = fields.find { it.name == name }
     }
 
     /**
@@ -282,13 +244,15 @@ interface Schema {
      * ### Invariant: schema-output-field-coordinate
      *
      * `containingDef.field(name) == this`, and [type]'s base type is canonical in the same
-     * schema. [arguments] is the input-object-like definition of the complete argument tuple.
+     * schema. [args] is the complete collection of canonical argument definitions: argument names
+     * are unique, every member points back to this field, and [arg] returns each member under its
+     * name.
      */
     interface Field {
         val name: String
         val containingDef: CompositeTypeDef
         val type: TypeExpr<OutputTypeDef>
-        val arguments: FieldArguments
+        val args: Collection<FieldArg>
     }
 
     /**
@@ -302,16 +266,15 @@ interface Schema {
     }
 
     /**
-     * A field of an input-object-like definition.
+     * An input field or output-field argument.
      *
      * ### Invariant: schema-input-like-field-coordinate
      *
-     * `containingDef.field(name) == this`, and [type]'s base type is canonical in the same
-     * schema. [defaultValue], when present, is valid for [type].
+     * [type]'s base type is canonical in the same schema. [defaultValue], when present, is valid
+     * for [type]. The precise subtype supplies its containing definition.
      */
     sealed interface InputLikeField {
         val name: String
-        val containingDef: InputObjectLike
         val type: TypeExpr<InputTypeDef>
         val defaultValue: CoercedDefaultValue
 
@@ -321,16 +284,16 @@ interface Schema {
 
     /** The canonical input-object field at [containingDef]/[name]. */
     interface InputField : InputLikeField {
-        override val containingDef: Input
+        val containingDef: Input
     }
 
     /**
-     * The canonical argument named [name] in [containingDef].
+     * The canonical argument named [name] on [containingDef].
      *
-     * `containingDef.field(name) == this`.
+     * `containingDef.arg(name) == this`.
      */
     interface FieldArg : InputLikeField {
-        override val containingDef: FieldArguments
+        val containingDef: Field
     }
 
     /**

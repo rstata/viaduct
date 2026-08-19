@@ -57,23 +57,23 @@ sealed interface Arguments {
     sealed interface Template : Arguments {
         /**
          * Returns this argument template stamped at [selectionStamp] and checked against
-         * [expectedType].
+         * [expectedField].
          */
         fun stamp(
-            expectedType: Schema.FieldArguments,
+            expectedField: Schema.Field,
             selectionStamp: Stamp.Occurrence,
         ): Arguments
 
         companion object {
             /**
-             * Wraps [arguments] as a registry argument template checked against [expectedType].
+             * Wraps [arguments] as a registry argument template checked against [expectedField].
              *
              * [arguments] may contain only variable templates, never stamped variables.
              */
             fun of(
-                expectedType: Schema.FieldArguments,
+                expectedField: Schema.Field,
                 arguments: Arguments,
-            ): Template = argumentTemplateOf(expectedType, arguments)
+            ): Template = argumentTemplateOf(expectedField, arguments)
         }
     }
 

@@ -7,6 +7,7 @@ import model.ObjectEngineResult
 import model.SelectionOccurrenceId
 import model.Schema
 import model.Stamp
+import model.requireArg
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -74,7 +75,7 @@ class StampedVariableDefinitionFactoryTest {
         val variable = template.stamp(occurrence)
         val definition =
             VariableDefinition.FromArgument.of(
-                result.arguments.requireField("seed") as Schema.FieldArg,
+                result.requireArg("seed"),
             )
 
         assertEquals(
@@ -82,7 +83,7 @@ class StampedVariableDefinitionFactoryTest {
             SelectionStampedVariableDefinition.of(
                 variable,
                 VariableDefinition.FromArgument.of(
-                    result.arguments.requireField("seed") as Schema.FieldArg,
+                    result.requireArg("seed"),
                 ),
             ),
         )
@@ -104,7 +105,7 @@ class StampedVariableDefinitionFactoryTest {
                 variable = template.stamp(path),
                 definition =
                     VariableDefinition.FromArgument.of(
-                        result.arguments.requireField("seed") as Schema.FieldArg,
+                        result.requireArg("seed"),
                     ),
             )
         }

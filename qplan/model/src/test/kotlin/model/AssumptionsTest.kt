@@ -187,8 +187,7 @@ class AssumptionsTest {
 
         val typeName = schema.requireField("Node", "V_I_typename")
         assertEquals(node, typeName.containingDef)
-        assertEquals(Schema.NoArguments, typeName.arguments)
-        assertEquals(emptyList(), Schema.NoArguments.fields)
+        assertEquals(emptyList(), typeName.args)
         assertEquals(
             TypeExpr.Named.of(Schema.StringType, isNullable = false),
             typeName.type,
@@ -201,7 +200,7 @@ class AssumptionsTest {
             schema.requireField("Admin", "level"),
             actors,
         ).forEach { field ->
-            assertEquals(Schema.NoArguments, field.arguments)
+            assertTrue(field.args.isEmpty())
         }
         val emptyArguments = Arguments.Resolved.of(actors, emptyMap())
         val otherEmptyArguments = Arguments.Resolved.of(typeName, emptyMap())
@@ -216,9 +215,9 @@ class AssumptionsTest {
 
         val nodeField = schema.requireField("Query", "node_V_A_node")
         assertEquals(query, nodeField.containingDef)
-        assertFalse(nodeField.arguments == Schema.NoArguments)
-        val filterArgument = nodeField.arguments.requireField("filter")
-        assertEquals(nodeField.arguments, filterArgument.containingDef)
+        assertTrue(nodeField.args.isNotEmpty())
+        val filterArgument = nodeField.requireArg("filter")
+        assertEquals(nodeField, filterArgument.containingDef)
         assertEquals("filter", filterArgument.name)
         assertFalse(filterArgument.isRequired)
         val filterDefault =
@@ -272,15 +271,15 @@ class AssumptionsTest {
         assertFalse(interfaceIdKey == objectIdKey)
 
         val friendField = schema.requireField("User", "friend_V_A_node")
-        assertFalse(friendField.arguments == Schema.NoArguments)
-        val limitArgument: Schema.InputLikeField =
-            friendField.arguments.requireField("limit")
-        assertEquals(friendField.arguments, limitArgument.containingDef)
+        assertTrue(friendField.args.isNotEmpty())
+        val limitArgument: Schema.FieldArg =
+            friendField.requireArg("limit")
+        assertEquals(friendField, limitArgument.containingDef)
         assertEquals("limit", limitArgument.name)
         assertFalse(limitArgument.isRequired)
 
         val filter = assertIs<Schema.Input>(schema.requireType("Filter"))
-        val limitInputField: Schema.InputLikeField = filter.requireField("limit")
+        val limitInputField: Schema.InputField = filter.requireField("limit")
         assertEquals(filter, limitInputField.containingDef)
         assertEquals("limit", limitInputField.name)
         assertFalse(limitInputField.isRequired)
@@ -417,7 +416,7 @@ class AssumptionsTest {
 
         val instantiated =
             context(assumptions) {
-                arguments.instantiateBindings(node.arguments)
+                arguments.instantiateBindings(node)
             }
 
         val grounded = assertIs<Arguments.Resolved>(instantiated)
@@ -435,7 +434,7 @@ class AssumptionsTest {
 
         val instantiated =
             context(assumptions) {
-                arguments.instantiateBindings(node.arguments)
+                arguments.instantiateBindings(node)
             }
 
         assertSame(Arguments.Error, instantiated)
@@ -481,7 +480,7 @@ class AssumptionsTest {
 
         val instantiated =
             context(assumptions) {
-                arguments.instantiateBindings(node.arguments)
+                arguments.instantiateBindings(node)
             }
 
         assertSame(Arguments.Error, instantiated)

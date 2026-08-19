@@ -49,7 +49,7 @@ class ArgumentsTest {
 
         val substituted =
             arguments.substituteTemplates(
-                source.arguments,
+                source,
                 mapOf(template to null),
             )
 
@@ -167,13 +167,13 @@ class ArgumentsTest {
             )
         val path = listOf(ListEngineResult.Index.of(2))
 
-        val stamped = arguments.stampVars(consume.arguments, path)
+        val stamped = arguments.stampVars(consume, path)
         val stampedVariable = template.stamp(path)
         world.declareBinding(stampedVariable)
         world.completeBinding(stampedVariable, 9)
         val instantiated =
             context(world) {
-                stamped.instantiateBindings(consume.arguments)
+                stamped.instantiateBindings(consume)
             }
         val groundedArguments = assertIs<Arguments.Resolved>(instantiated)
         val filter =
@@ -213,13 +213,13 @@ class ArgumentsTest {
             Arguments.of(
                 consume,
                 mapOf("values" to template),
-            ).stampVars(consume.arguments, path)
+            ).stampVars(consume, path)
         world.declareBinding(variable)
         world.completeBinding(variable, 9)
 
         assertFailsWith<ClassCastException> {
             context(world) {
-                arguments.instantiateBindings(consume.arguments)
+                arguments.instantiateBindings(consume)
             }
         }
     }
@@ -255,14 +255,14 @@ class ArgumentsTest {
                 .of(
                     first,
                     mapOf("filter" to mapOf("value" to template)),
-                ).stampVars(first.arguments, path)
+                ).stampVars(first, path)
 
         world.declareBinding(variable)
         world.completeBinding(variable, 9)
 
         val grounded =
             context(world) {
-                arguments.instantiateBindings(second.arguments)
+                arguments.instantiateBindings(second)
             }
         val groundedArguments = assertIs<Arguments.Resolved>(grounded)
         val filter =
@@ -293,7 +293,7 @@ class ArgumentsTest {
         val template = Arguments.Variable.of(source, "value")
         val arguments =
             Arguments.Template.of(
-                consume.arguments,
+                consume,
                 Arguments.of(consume, mapOf("value" to template)),
             )
         val sourceSelection =
@@ -318,7 +318,7 @@ class ArgumentsTest {
             ObjectEngineResult.Key.of(
                 stamp = selectionStamp,
                 field = consume,
-                arguments = arguments.stamp(consume.arguments, selectionStamp),
+                arguments = arguments.stamp(consume, selectionStamp),
             )
 
         fun ground(key: ObjectEngineResult.ObjectKey): ObjectEngineResult.GroundKey =
@@ -389,7 +389,7 @@ class ArgumentsTest {
         val arguments = Arguments.of(consume, mapOf("value" to stampedVariable))
 
         assertFailsWith<IllegalArgumentException> {
-            Arguments.Template.of(consume.arguments, arguments)
+            Arguments.Template.of(consume, arguments)
         }
     }
 
@@ -409,7 +409,7 @@ class ArgumentsTest {
         val arguments = Arguments.of(intConsumer, mapOf("value" to 1))
 
         assertFailsWith<IllegalArgumentException> {
-            Arguments.Template.of(stringConsumer.arguments, arguments)
+            Arguments.Template.of(stringConsumer, arguments)
         }
     }
 
@@ -457,14 +457,14 @@ class ArgumentsTest {
             val variable = variableTemplate.stamp(selectionStamp)
             val arguments =
                 Arguments.Template
-                    .of(consume.arguments, openArguments)
-                    .stamp(consume.arguments, selectionStamp)
+                    .of(consume, openArguments)
+                    .stamp(consume, selectionStamp)
             world.declareBinding(variable)
 
             val fetched =
                 async {
                     context(world) {
-                        arguments.fetchBindings(consume.arguments)
+                        arguments.fetchBindings(consume)
                     }
                 }
 

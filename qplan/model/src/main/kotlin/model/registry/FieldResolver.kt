@@ -16,6 +16,7 @@ import model.SelectionForest
 import model.SelectionOccurrenceId
 import model.Stamp
 import model.applicableGroundSelections
+import model.arg
 import model.concatenateSelectionForests
 import model.materializeSelectionForestOf
 import model.selectionForestOf
@@ -106,7 +107,7 @@ class FieldResolver private constructor(
                                         field = key.field,
                                         arguments =
                                             key.arguments.stampVars(
-                                                key.field.arguments,
+                                                key.field,
                                                 path,
                                             ),
                                     )
@@ -237,7 +238,7 @@ class FieldResolver private constructor(
                                 field = key.field,
                                 arguments =
                                     key.arguments.stampVars(
-                                        key.field.arguments,
+                                        key.field,
                                         sitePath,
                                     ),
                             )
@@ -316,8 +317,8 @@ class FieldResolver private constructor(
                     is VariableDefinition.FromArgument -> {
                         val argument = definition.argument
                         require(
-                            argument.containingDef == variable.field.arguments &&
-                                variable.field.arguments.field(argument.name) == argument,
+                            argument.containingDef == variable.field &&
+                                variable.field.arg(argument.name) == argument,
                         ) {
                             "Variable ${variable.variableName} argument ${argument.name} " +
                                 "does not belong to ${variable.field.containingDef.name}/" +
@@ -379,7 +380,7 @@ private fun MaterializeSelectionForest.stampVariables(
                         field = selection.key.field,
                         arguments =
                             selection.key.arguments.stampVars(
-                                selection.key.field.arguments,
+                                selection.key.field,
                                 path,
                             ),
                     ),
@@ -440,8 +441,8 @@ private fun MaterializeSelectionForest.stampVariableSelections(
                     )
                 val arguments =
                     Arguments.Template
-                        .of(selection.key.field.arguments, selection.key.arguments)
-                        .stamp(selection.key.field.arguments, selectionStamp)
+                        .of(selection.key.field, selection.key.arguments)
+                        .stamp(selection.key.field, selectionStamp)
                 ObjectEngineResult.Key.of(
                     stamp = selectionStamp,
                     field = selection.key.field,

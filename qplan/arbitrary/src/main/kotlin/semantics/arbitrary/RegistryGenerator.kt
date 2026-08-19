@@ -372,7 +372,7 @@ class ArbitraryRegistry internal constructor(
                                         field as Schema.ObjectField,
                                     ),
                             function = { input, arguments ->
-                                field.arguments.fields
+                                field.args
                                     .filter { argument ->
                                         argument.defaultValue is CoercedDefaultValue.Present
                                     }.forEach { argument ->
@@ -415,7 +415,7 @@ class ArbitraryRegistry internal constructor(
                                     stableGeneratedHash(
                                         effectiveInput.resolutionFingerprint().value,
                                         effectiveArguments
-                                            .resolutionFingerprint(field.arguments)
+                                            .resolutionFingerprint(field)
                                             .value,
                                     )
                                 when (program) {
@@ -433,7 +433,7 @@ class ArbitraryRegistry internal constructor(
                                                     },
                                                 input = effectiveInput,
                                                 arguments = effectiveArguments,
-                                                argumentType = field.arguments,
+                                                argumentField = field,
                                                 applicationOrdinal = ordinal,
                                             )
                                         } else {
@@ -1929,13 +1929,13 @@ private fun sensitiveScalar(
     scalar: ScalarKind,
     input: EngineObjectData.Sync,
     arguments: Arguments.Resolved,
-    argumentType: Schema.FieldArguments,
+    argumentField: Schema.Field,
     applicationOrdinal: Int? = null,
 ): EngineOutputData {
     val fingerprint =
         input.resolutionFingerprint().value +
             "|" +
-            arguments.resolutionFingerprint(argumentType).value +
+            arguments.resolutionFingerprint(argumentField).value +
             applicationOrdinal?.let { "|ordinal:$it" }.orEmpty()
     val hash = fingerprint.hashCode()
     return when (scalar) {

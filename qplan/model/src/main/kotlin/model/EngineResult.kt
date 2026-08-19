@@ -126,7 +126,7 @@ sealed interface ObjectEngineResult {
                 field: Schema.Field,
                 arguments: Arguments,
             ): Key {
-                require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                require(arguments.conformsToArgumentDefinition(field)) {
                     "Stamped key arguments do not belong to its output field"
                 }
                 return when (field) {
@@ -167,7 +167,7 @@ sealed interface ObjectEngineResult {
                 field: Schema.Field,
                 arguments: Arguments,
             ): Key {
-                require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                require(arguments.conformsToArgumentDefinition(field)) {
                     "Key arguments do not belong to its output field"
                 }
                 return when (field) {
@@ -245,7 +245,7 @@ sealed interface ObjectEngineResult {
                 field: Schema.ObjectField,
                 arguments: Arguments,
             ): ObjectKey {
-                require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                require(arguments.conformsToArgumentDefinition(field)) {
                     "Stamped object-key arguments do not belong to its output field"
                 }
                 return if (arguments is Arguments.Ground) {
@@ -264,7 +264,7 @@ sealed interface ObjectEngineResult {
                 field: Schema.ObjectField,
                 arguments: Arguments,
             ): ObjectKey {
-                require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                require(arguments.conformsToArgumentDefinition(field)) {
                     "Key arguments do not belong to its output field"
                 }
                 return if (arguments is Arguments.Ground) {
@@ -295,7 +295,7 @@ sealed interface ObjectEngineResult {
                 field: Schema.ObjectField,
                 arguments: Arguments.Ground,
             ): GroundKey {
-                require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                require(arguments.conformsToArgumentDefinition(field)) {
                     "Ground arguments do not belong to the stamped selection field"
                 }
                 return StampedGroundKeyImpl(
@@ -320,7 +320,7 @@ sealed interface ObjectEngineResult {
                 field: Schema.ObjectField,
                 arguments: Arguments.Ground,
             ): GroundKey {
-                require(arguments.conformsToArgumentDefinition(field.arguments)) {
+                require(arguments.conformsToArgumentDefinition(field)) {
                     "Key arguments do not belong to its output field"
                 }
                 return GroundKeyImpl(field, arguments, Stamp.VariableFreeOccurrence)

@@ -130,7 +130,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
             getSelections()
                 .map { fieldName ->
                     val field = schemaType.requireField(fieldName)
-                    require(field.arguments.fields.isEmpty()) {
+                    require(field.args.isEmpty()) {
                         "Passive object field ${schemaType.name}/$fieldName must be argumentless"
                     }
                     ObjectEngineResult.GroundKey.of(field, emptyMap())

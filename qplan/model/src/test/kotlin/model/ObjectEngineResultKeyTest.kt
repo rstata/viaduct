@@ -175,8 +175,8 @@ class ObjectEngineResultKeyTest {
             )
         val arguments =
             Arguments.Template
-                .of(abstractField.arguments, sourceKey.arguments)
-                .stamp(abstractField.arguments, selectionStamp)
+                .of(abstractField, sourceKey.arguments)
+                .stamp(abstractField, selectionStamp)
         val stampedKey =
             ObjectEngineResult.Key.of(
                 stamp = selectionStamp,

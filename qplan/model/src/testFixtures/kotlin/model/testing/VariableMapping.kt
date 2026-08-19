@@ -27,7 +27,7 @@ internal fun List<ObjectEngineResult.Key>.mapVariables(
     map { key ->
         ObjectEngineResult.Key.of(
             field = key.field,
-            arguments = key.arguments.mapVariableTemplates(key.field.arguments, transform),
+            arguments = key.arguments.mapVariableTemplates(key.field, transform),
         )
     }
 
@@ -42,7 +42,7 @@ private fun SelectionForest.mapVariables(
                         field = selection.key.field,
                         arguments =
                             selection.key.arguments.mapVariableTemplates(
-                                selection.key.field.arguments,
+                                selection.key.field,
                                 transform,
                             ),
                     ),
@@ -64,7 +64,7 @@ private fun MaterializeSelectionForest.mapVariables(
                         field = selection.key.field,
                         arguments =
                             selection.key.arguments.mapVariableTemplates(
-                                selection.key.field.arguments,
+                                selection.key.field,
                                 transform,
                             ),
                     ),

@@ -178,7 +178,7 @@ fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleTypeDef): EngineO
     }
 
 private fun toEngineInputFields(
-    expectedType: Schema.InputObjectLike,
+    expectedType: Schema.Input,
     fields: EngineInputObjectData,
 ): EngineInputObjectData {
     val supplied =
@@ -199,10 +199,16 @@ private fun toEngineInputFields(
     }
 }
 
-internal fun Schema.InputObjectLike.requiredFieldNames(): Set<String> =
+internal fun Schema.Input.requiredFieldNames(): Set<String> =
     fields
         .filterTo(linkedSetOf()) { field ->
             !field.type.isNullable && field.defaultValue == CoercedDefaultValue.Absent
+        }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
+
+internal fun Schema.Field.requiredArgNames(): Set<String> =
+    args
+        .filterTo(linkedSetOf()) { arg ->
+            !arg.type.isNullable && arg.defaultValue == CoercedDefaultValue.Absent
         }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
 
 private fun Map<*, *>.toStringKeyedMap(): EngineInputObjectData =

@@ -293,22 +293,6 @@ internal class GJSchemaDecoder(
                 val modelType = types.getValue(graphQLType.name) as Schema.CompositeTypeDef
                 graphQLType.fieldDefinitions.forEach { graphQLField ->
                     val sourceTypeExpr = decodeOutputType(graphQLField.type)
-                    val arguments =
-                        fieldArgumentsOf(
-                            definitions = graphQLField.arguments,
-                            name = { it.name },
-                        ) { graphQLArgument, containingType ->
-                            FieldArgumentImpl(
-                                name = graphQLArgument.name,
-                                containingDef = containingType,
-                                type = decodeInputType(graphQLArgument.type),
-                                defaultValue =
-                                    decodeDefault(
-                                        graphQLArgument.type,
-                                        graphQLArgument.argumentDefaultValue,
-                                    ),
-                            )
-                        }
                     val modelField =
                         outputFieldOf(
                             name =
@@ -324,8 +308,24 @@ internal class GJSchemaDecoder(
                                 } else {
                                     sourceTypeExpr
                                 },
-                            arguments = arguments,
-                        )
+                        ) { containingField ->
+                            fieldArgsOf(
+                                definitions = graphQLField.arguments,
+                                containingDef = containingField,
+                                name = { it.name },
+                            ) { graphQLArgument ->
+                                FieldArgumentImpl(
+                                    name = graphQLArgument.name,
+                                    containingDef = containingField,
+                                    type = decodeInputType(graphQLArgument.type),
+                                    defaultValue =
+                                        decodeDefault(
+                                            graphQLArgument.type,
+                                            graphQLArgument.argumentDefaultValue,
+                                        ),
+                                )
+                            }
+                        }
                     addCompositeField(modelType, modelField)
                 }
             }
@@ -337,7 +337,6 @@ internal class GJSchemaDecoder(
                 name = LOWERED_TYPENAME_FIELD,
                 containingDef = type,
                 type = TypeExpr.Named.of(Schema.StringType, isNullable = false),
-                arguments = Schema.NoArguments,
             )
         addCompositeField(type, field)
     }
@@ -352,7 +351,6 @@ internal class GJSchemaDecoder(
                     name = NODE_BRIDGE_ID_FIELD,
                     containingDef = bridgeType,
                     type = TypeExpr.Named.of(Schema.IDType),
-                    arguments = Schema.NoArguments,
                 ),
             )
             addCompositeField(
@@ -361,7 +359,6 @@ internal class GJSchemaDecoder(
                     name = NODE_BRIDGE_PAYLOAD_FIELD,
                     containingDef = bridgeType,
                     type = TypeExpr.Named.of(nodeType),
-                    arguments = Schema.NoArguments,
                 ),
             )
         }
@@ -396,7 +393,7 @@ internal class GJSchemaDecoder(
                             .name(field.name)
                             .type(field.type.toGraphQLType() as GraphQLOutputType)
                             .arguments(
-                                field.arguments.fields.map { argument ->
+                                field.args.map { argument ->
                                     GraphQLArgument
                                         .newArgument()
                                         .name(argument.name)
@@ -982,34 +979,34 @@ private class InputObjectTypeImpl(
     }
 }
 
-private class FieldArgumentsImpl(
-    override val fields: Collection<Schema.FieldArg>,
-) : Schema.FieldArguments.NonEmpty
-
 private class OutputFieldImpl(
     override val name: String,
     override val containingDef: Schema.CompositeTypeDef,
     override val type: TypeExpr<Schema.OutputTypeDef>,
-    override val arguments: Schema.FieldArguments,
-) : Schema.Field
+    argsFactory: (Schema.Field) -> Collection<Schema.FieldArg>,
+) : Schema.Field {
+    override val args: Collection<Schema.FieldArg> = argsFactory(this)
+}
 
 private class ObjectFieldImpl(
     override val name: String,
     override val containingDef: Schema.Object,
     override val type: TypeExpr<Schema.OutputTypeDef>,
-    override val arguments: Schema.FieldArguments,
-) : Schema.ObjectField
+    argsFactory: (Schema.Field) -> Collection<Schema.FieldArg>,
+) : Schema.ObjectField {
+    override val args: Collection<Schema.FieldArg> = argsFactory(this)
+}
 
 private fun outputFieldOf(
     name: String,
     containingDef: Schema.CompositeTypeDef,
     type: TypeExpr<Schema.OutputTypeDef>,
-    arguments: Schema.FieldArguments,
+    argsFactory: (Schema.Field) -> Collection<Schema.FieldArg> = { emptyList() },
 ): Schema.Field =
     if (containingDef is Schema.Object) {
-        ObjectFieldImpl(name, containingDef, type, arguments)
+        ObjectFieldImpl(name, containingDef, type, argsFactory)
     } else {
-        OutputFieldImpl(name, containingDef, type, arguments)
+        OutputFieldImpl(name, containingDef, type, argsFactory)
     }
 
 private class InputFieldImpl(
@@ -1021,35 +1018,33 @@ private class InputFieldImpl(
 
 private class FieldArgumentImpl(
     override val name: String,
-    override val containingDef: Schema.FieldArguments,
+    override val containingDef: Schema.Field,
     override val type: TypeExpr<Schema.InputTypeDef>,
     override val defaultValue: CoercedDefaultValue,
 ) : Schema.FieldArg
 
-private fun <T> fieldArgumentsOf(
+private fun <T> fieldArgsOf(
     definitions: Collection<T>,
+    containingDef: Schema.Field,
     name: (T) -> String,
-    createField: (T, Schema.FieldArguments) -> Schema.FieldArg,
-): Schema.FieldArguments {
-    if (definitions.isEmpty()) return Schema.NoArguments
-
+    createField: (T) -> Schema.FieldArg,
+): Collection<Schema.FieldArg> {
     val fields = mutableListOf<Schema.FieldArg>()
-    val result = FieldArgumentsImpl(fields)
     definitions.forEach { definition ->
         val argumentName = name(definition)
         require(fields.none { it.name == argumentName }) {
             "Duplicate field argument: $argumentName"
         }
-        val field = createField(definition, result)
+        val field = createField(definition)
         require(field.name == argumentName) {
             "Field argument name does not match its declared name"
         }
-        require(field.containingDef == result) {
-            "Field argument does not reference its containing argument definition"
+        require(field.containingDef == containingDef) {
+            "Field argument does not reference its containing field"
         }
         fields += field
     }
-    return result
+    return fields.toList()
 }
 
 private class DecodedSchema(

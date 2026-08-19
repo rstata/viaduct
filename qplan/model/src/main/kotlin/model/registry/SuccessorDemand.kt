@@ -43,7 +43,7 @@ fun SelectionForest.successorDemand(): SelectionForest =
                         field = specializedKey.field,
                         arguments =
                             specializedKey.arguments.instantiateBindings(
-                                specializedKey.field.arguments,
+                                specializedKey.field,
                             ),
                     )
                 val arguments = key.arguments
@@ -129,7 +129,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
                     field = specializedKey.field,
                     arguments =
                         specializedKey.arguments.fetchBindings(
-                            specializedKey.field.arguments,
+                            specializedKey.field,
                         ),
                 )
             val arguments = key.arguments
@@ -184,7 +184,7 @@ private data class SelectionIdentity(
 context(world: Assumptions)
 private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
     if (arguments is Arguments.Resolved) return this
-    val groundedArguments = arguments.fetchBindings(field.arguments)
+    val groundedArguments = arguments.fetchBindings(field)
     val currentSelectionStamp = stamp as? Stamp.Occurrence
     val groundedKey =
         if (currentSelectionStamp != null) {
@@ -240,7 +240,7 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                 field = specializedKey.field,
                 arguments =
                     specializedKey.arguments.instantiateBindings(
-                        specializedKey.field.arguments,
+                        specializedKey.field,
                     ),
             )
         val arguments = key.arguments
@@ -304,7 +304,7 @@ private fun SelectionForest.substitute(
                         field = selection.key.field,
                         arguments =
                             selection.key.arguments.substituteTemplates(
-                                selection.key.field.arguments,
+                                selection.key.field,
                                 bindings,
                             ),
                     ),

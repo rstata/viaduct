@@ -19,14 +19,14 @@ private data class ArgumentsTemplateImpl(
     val fieldValues: Map<String, ArgumentExpression?>,
 ) : Arguments.Template {
     override fun stamp(
-        expectedType: Schema.FieldArguments,
+        expectedField: Schema.Field,
         selectionStamp: Stamp.Occurrence,
     ): Arguments =
         argumentsOfExpressions(
             fieldValues.mapValues { (_, value) ->
                 value.stampVariables(selectionStamp)
             },
-        ).validatedAgainst(expectedType)
+        ).validatedAgainst(expectedField)
 }
 
 internal fun argumentsOf(
@@ -34,11 +34,11 @@ internal fun argumentsOf(
     fields: Map<String, Any?>,
 ): Arguments =
     argumentsOfExpressions(
-        coerceArgumentFields(field.arguments, fields),
+        coerceArgumentFields(field, fields),
     )
 
 internal fun argumentTemplateOf(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     arguments: Arguments,
 ): Arguments.Template {
     require(arguments != Arguments.Error) {
@@ -53,7 +53,7 @@ internal fun argumentTemplateOf(
         } else {
             ArgumentsTemplateImpl(arguments.fieldExpressions())
         }
-    return template.validatedAgainst(expectedType)
+    return template.validatedAgainst(expectedField)
 }
 
 internal fun coerceArgumentExpression(
@@ -88,7 +88,7 @@ internal fun coerceArgumentExpression(
 }
 
 private fun coerceArgumentFields(
-    type: Schema.InputObjectLike,
+    type: Schema.Input,
     fields: Map<String, Any?>,
 ): Map<String, ArgumentExpression?> {
     val suppliedFields =
@@ -108,6 +108,30 @@ private fun coerceArgumentFields(
                 }
             }.toMap() + suppliedFields
     if (!values.keys.containsAll(type.requiredFieldNames())) throw ClassCastException()
+    return values
+}
+
+private fun coerceArgumentFields(
+    field: Schema.Field,
+    fields: Map<String, Any?>,
+): Map<String, ArgumentExpression?> {
+    val suppliedFields =
+        fields.mapValues { (argName, value) ->
+            val arg = field.arg(argName) ?: throw ClassCastException()
+            coerceArgumentExpression(arg.type, value)
+        }
+
+    val values =
+        field.args
+            .mapNotNull { arg ->
+                val defaultValue = arg.defaultValue
+                if (defaultValue is CoercedDefaultValue.Present) {
+                    arg.name to defaultValue.value
+                } else {
+                    null
+                }
+            }.toMap() + suppliedFields
+    if (!values.keys.containsAll(field.requiredArgNames())) throw ClassCastException()
     return values
 }
 
@@ -132,25 +156,25 @@ internal fun Arguments.fieldExpressions(): Map<String, ArgumentExpression?> =
     }
 
 private fun <T : Arguments> T.validatedAgainst(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
 ): T {
-    require(conformsToArgumentDefinition(expectedType)) {
+    require(conformsToArgumentDefinition(expectedField)) {
         "Argument expressions do not conform to the expected field"
     }
     return this
 }
 
 internal fun Arguments.conformsToArgumentDefinition(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
 ): Boolean =
     when (this) {
         Arguments.Error -> true
         else ->
             fieldExpressions().let { fields ->
-                fields.keys.containsAll(expectedType.requiredFieldNames()) &&
+                fields.keys.containsAll(expectedField.requiredArgNames()) &&
                     fields.all { (name, value) ->
-                        val field = expectedType.field(name) ?: return@all false
-                        value.conformsToArgumentType(field.type)
+                        val arg = expectedField.arg(name) ?: return@all false
+                        value.conformsToArgumentType(arg.type)
                     }
             }
     }
@@ -183,7 +207,7 @@ private fun ArgumentExpression?.conformsToArgumentType(
  * contained selection-stamped variable.
  */
 internal fun Arguments.restampSelectionVariables(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     selectionStamp: Stamp.Occurrence,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -191,17 +215,17 @@ internal fun Arguments.restampSelectionVariables(
         fieldExpressions().mapValues { (_, value) ->
             value.restampVariables(selectionStamp)
         },
-    ).validatedAgainst(expectedType)
+    ).validatedAgainst(expectedField)
 }
 
 internal fun Arguments.stampVars(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     path: List<PathComponent>,
 ): Arguments {
     if (this == Arguments.Error) return this
     return argumentsOfExpressions(
         fieldExpressions().mapValues { (_, value) -> value.stampVars(path) },
-    ).validatedAgainst(expectedType)
+    ).validatedAgainst(expectedField)
 }
 
 private fun ArgumentExpression?.stampVars(
@@ -249,7 +273,7 @@ private fun ArgumentExpression?.restampVariables(
     }
 
 internal fun Arguments.substituteTemplates(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     bindings: Map<Arguments.Variable, EngineInputData?>,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -260,10 +284,10 @@ internal fun Arguments.substituteTemplates(
         fieldExpressions().mapValues { (name, value) ->
             value.substituteTemplates(
                 bindings,
-                expectedType.requireField(name).type,
+                expectedField.requireArg(name).type,
             )
         }
-    return argumentsOfExpressions(substituted).validatedAgainst(expectedType)
+    return argumentsOfExpressions(substituted).validatedAgainst(expectedField)
 }
 
 private fun ArgumentExpression?.substituteTemplates(
@@ -297,7 +321,7 @@ private fun ArgumentExpression?.substituteTemplates(
     }
 
 internal fun Arguments.mapVariableTemplates(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     transform: (Arguments.Variable) -> Arguments.Variable,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -305,7 +329,7 @@ internal fun Arguments.mapVariableTemplates(
         fieldExpressions().mapValues { (_, value) ->
             value.mapVariableTemplates(transform)
         }
-    return argumentsOfExpressions(mapped).validatedAgainst(expectedType)
+    return argumentsOfExpressions(mapped).validatedAgainst(expectedField)
 }
 
 private fun ArgumentExpression?.mapVariableTemplates(
@@ -386,7 +410,7 @@ internal fun Arguments.retarget(field: Schema.Field): Arguments {
     if (this == Arguments.Error) return this
     val retargeted = Arguments.of(field, fieldExpressions())
     return when (this) {
-        is Arguments.Template -> Arguments.Template.of(field.arguments, retargeted)
+        is Arguments.Template -> Arguments.Template.of(field, retargeted)
         else -> retargeted
     }
 }

@@ -1,6 +1,7 @@
 package model.testing
 
 import model.Schema
+import model.arg
 import model.requireObjectField
 
 /** One external `fromArgument` declaration accepted by test-fixture composition. */
@@ -22,7 +23,7 @@ fun Schema.fromArgument(
         "${field.containingDef.name}/${field.name} is not canonical in this schema"
     }
     val argument =
-        field.arguments.field(argumentName) as? Schema.FieldArg
+        field.arg(argumentName)
             ?: throw IllegalArgumentException(
                 "${field.containingDef.name}/${field.name} has no argument $argumentName",
             )

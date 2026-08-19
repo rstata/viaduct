@@ -42,7 +42,7 @@ fun engineObjectDataOf(
                 require(field is Schema.ObjectField) {
                     "${schemaType.name} has no canonical object field named $name"
                 }
-                require(field.arguments.fields.isEmpty()) {
+                require(field.args.isEmpty()) {
                     "Passive object field ${schemaType.name}/$name must be argumentless"
                 }
                 EngineObjectDataEntry.of(name, field, value)

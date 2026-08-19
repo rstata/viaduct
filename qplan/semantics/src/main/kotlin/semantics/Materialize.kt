@@ -84,7 +84,7 @@ context(world: Assumptions)
 internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
     selectionPath: List<PathComponent>,
 ): ObjectEngineResult.GroundKey {
-    val arguments = key.arguments.fetchBindings(key.field.arguments)
+    val arguments = key.arguments.fetchBindings(key.field)
     val stamp = key.stamp as? Stamp.Occurrence
     val groundedKey =
         if (stamp == null) {

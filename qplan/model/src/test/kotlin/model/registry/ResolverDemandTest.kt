@@ -14,6 +14,7 @@ import model.SelectionForest
 import model.emptyFragmentOf
 import model.fieldExpressions
 import model.fragmentFrom
+import model.requireArg
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
@@ -226,7 +227,7 @@ class ResolverDemandTest {
             assertIs<VariableDefinition.FromArgument>(
                 world.resolverRegistry.resolver(source).variables.getValue(variable),
             )
-        assertEquals(source.arguments.requireField("seed"), definition.argument)
+        assertEquals(source.requireArg("seed"), definition.argument)
         assertEquals(setOf(consume), world.resolverRegistry.mayDemandFrom(source))
 
         val resolver = world.resolverRegistry.resolver(source)

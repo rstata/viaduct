@@ -15,6 +15,7 @@ import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fieldExpressions
 import model.matchingVariableTypes
+import model.requireArg
 import model.requireField
 import model.requireObjectField
 import model.requireQueryTypeDef
@@ -351,7 +352,7 @@ private class NodeResolverLowering(
         require(schema.requireField(type.name, "id") == idField) {
             "${type.name}/id is not canonical in this registry's schema"
         }
-        require(idField.arguments == Schema.NoArguments) {
+        require(idField.args.isEmpty()) {
             "Node id field ${type.name}/id must take no arguments"
         }
         require(idField.type.baseType == Schema.IDType) {
@@ -437,7 +438,7 @@ private class TestResolverRegistry(
             }
             when (declaration) {
                 is FromArgument -> {
-                    require(declaration.argument.containingDef == variable.field.arguments) {
+                    require(declaration.argument.containingDef == variable.field) {
                         "Variable ${variable.variableName} argument " +
                             "${declaration.argument.name} does not belong to " +
                             "${variable.field.containingDef.name}/${variable.field.name}"
@@ -607,7 +608,7 @@ private class TestResolverRegistry(
             this@variableUses.forEach { selection ->
                 if (selection.key.arguments != Arguments.Error) {
                     selection.key.arguments.fieldExpressions().forEach { (name, value) ->
-                        val argument = selection.key.field.arguments.requireField(name)
+                        val argument = selection.key.field.requireArg(name)
                         addAll(
                             value
                                 .matchingVariableTypes(

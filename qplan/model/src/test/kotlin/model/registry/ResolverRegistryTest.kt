@@ -232,11 +232,11 @@ class ResolverRegistryTest {
         val payload = schema.requireObjectField("User_V_A_Bridge", "node")
         val bridgeId = schema.requireObjectField("User_V_A_Bridge", "id")
 
-        assertEquals(setOf("id"), bridge.arguments.fields.mapTo(linkedSetOf(), Schema.InputLikeField::name))
+        assertEquals(setOf("id"), bridge.args.mapTo(linkedSetOf(), Schema.InputLikeField::name))
         assertTrue(world.resolverRegistry.resolver(bridge).variables.isEmpty())
         val payloadResolver = world.resolverRegistry.resolver(payload)
         assertTrue(payloadResolver.variables.isEmpty())
-        assertEquals(Schema.NoArguments, payload.arguments)
+        assertTrue(payload.args.isEmpty())
         assertEquals(bridgeId, payloadResolver.objectFragment.single().key.field)
     }
 

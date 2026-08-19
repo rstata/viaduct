@@ -182,7 +182,7 @@ suspend fun SelectionForest.mergeWithVariables(
         val specializedKey: ObjectEngineResult.ObjectKey = selection.objectKey(type)
         val groundKey: ObjectEngineResult.GroundKey =
             specializedKey.ground(
-                specializedKey.arguments.fetchBindings(specializedKey.field.arguments),
+                specializedKey.arguments.fetchBindings(specializedKey.field),
             )
         childrenByKey
             .getOrPut(groundKey, ::mutableListOf)
@@ -277,7 +277,7 @@ fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
             byKey().values.forEach { selection ->
                 val key =
                     selection.key.ground(
-                        selection.key.arguments.instantiateBindings(selection.key.field.arguments),
+                        selection.key.arguments.instantiateBindings(selection.key.field),
                     )
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
             }
@@ -297,7 +297,7 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
             byKey().values.forEach { selection ->
                 val key =
                     selection.key.ground(
-                        selection.key.arguments.fetchBindings(selection.key.field.arguments),
+                        selection.key.arguments.fetchBindings(selection.key.field),
                     )
                 getOrPut(key, ::mutableListOf).add(selection.subselections)
             }
@@ -385,7 +385,7 @@ private fun ObjectEngineResult.Key.localizeSelectionStamps(
         if (localizedStamp == null) {
             arguments
         } else {
-            arguments.restampSelectionVariables(field.arguments, localizedStamp)
+            arguments.restampSelectionVariables(field, localizedStamp)
         }
     val baseKey =
         if (localizedStamp == null) {

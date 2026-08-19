@@ -15,6 +15,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.TypeExpr
+import model.requireArg
 import model.requireField
 import viaduct.engine.api.EngineObjectData
 import model.registry.ResolverRegistry
@@ -438,11 +439,11 @@ fun SelectionForest.allowedResolverClosure(
 }
 
 fun Arguments.Resolved.resolutionFingerprint(
-    expectedType: Schema.FieldArguments,
+    expectedField: Schema.Field,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): ResolutionFingerprint =
     ResolutionFingerprint(
-        FingerprintBudget(bounds).arguments(this, expectedType),
+        FingerprintBudget(bounds).arguments(this, expectedField),
     )
 
 fun EngineObjectData.Sync.resolutionFingerprint(
@@ -479,7 +480,7 @@ private class FingerprintBudget(
 
     fun arguments(
         arguments: Arguments,
-        expectedType: Schema.FieldArguments,
+        expectedField: Schema.Field,
     ): String =
         when (arguments) {
             Arguments.Error -> node("error-args")
@@ -491,7 +492,7 @@ private class FingerprintBudget(
                             .joinToString(",") { (name, value) ->
                                 atom(name) +
                                     "=" +
-                                    input(value, expectedType.requireField(name).type)
+                                    input(value, expectedField.requireArg(name).type)
                             } +
                         ")",
                 )
@@ -550,7 +551,7 @@ private class FingerprintBudget(
             "key(" +
                 atom(key.field.containingDef.name) +
                 "/" + atom(key.field.name) +
-                ";" + arguments(key.arguments, key.field.arguments) +
+                ";" + arguments(key.arguments, key.field) +
                 ")",
         )
 
@@ -646,7 +647,7 @@ private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
     ResolutionFingerprint(
         "${field.containingDef.name.length}:${field.containingDef.name}/" +
             "${field.name.length}:${field.name};" +
-            FingerprintBudget(bounds).arguments(arguments, field.arguments),
+            FingerprintBudget(bounds).arguments(arguments, field),
     )
 
 private fun Schema.Field.fieldCoordinate(): FieldCoordinate =

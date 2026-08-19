@@ -45,25 +45,25 @@ class ResolutionWitnessTest {
             )
 
         assertEquals(
-            baseArguments.resolutionFingerprint(search.arguments),
-            reorderedArguments.resolutionFingerprint(search.arguments),
+            baseArguments.resolutionFingerprint(search),
+            reorderedArguments.resolutionFingerprint(search),
         )
         assertNotEquals(
-            baseArguments.resolutionFingerprint(search.arguments),
+            baseArguments.resolutionFingerprint(search),
             arguments(search, limit = 4, rank = 7, tags = listOf(1, 2))
-                .resolutionFingerprint(search.arguments),
+                .resolutionFingerprint(search),
             "Distinct top-level arguments must remain distinguishable",
         )
         assertNotEquals(
-            baseArguments.resolutionFingerprint(search.arguments),
+            baseArguments.resolutionFingerprint(search),
             arguments(search, limit = 3, rank = 8, tags = listOf(1, 2))
-                .resolutionFingerprint(search.arguments),
+                .resolutionFingerprint(search),
             "Distinct nested input values must remain distinguishable",
         )
         assertNotEquals(
-            baseArguments.resolutionFingerprint(search.arguments),
+            baseArguments.resolutionFingerprint(search),
             arguments(search, limit = 3, rank = 7, tags = listOf(2, 1))
-                .resolutionFingerprint(search.arguments),
+                .resolutionFingerprint(search),
             "Input-list order must remain significant",
         )
 

@@ -29,6 +29,7 @@ import model.Fragment
 import model.Schema
 import model.SourceSchemaAdapter
 import model.TypeExpr
+import model.arg
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -365,7 +366,7 @@ private class Compiler(
             fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)
                 require(field is Schema.ObjectField)
-                val argumentNames = field.arguments.fields.mapTo(linkedSetOf(), Schema.InputLikeField::name)
+                val argumentNames = field.args.mapTo(linkedSetOf(), Schema.InputLikeField::name)
                 val pathVariables = definition.pathVariables.associateBy(DslPathVariable::name)
                 require(pathVariables.keys.intersect(argumentNames).isEmpty()) {
                     "${definition.typeName}.${definition.fieldName} $PATH_VARS_ARGUMENT may not " +
@@ -487,7 +488,7 @@ private class ResultEvaluator(
         evaluate(
             typeExpr = sourceSchema.typeExpr(field),
             source = result,
-            context = EvaluationContext(input, arguments, field.arguments),
+            context = EvaluationContext(input, arguments, field),
         )
 
     fun evaluateNodeResult(entry: CompiledNodeResult): EngineOutputData? =
@@ -812,7 +813,7 @@ private class ResultEvaluator(
                     val argumentName = match.groupValues[1]
                     val argumentType =
                         context.argumentDefinitions
-                            ?.field(argumentName)
+                            ?.arg(argumentName)
                             ?.type
                     when {
                         argumentType !is TypeExpr.Named ||
@@ -837,7 +838,7 @@ private class ResultEvaluator(
 private data class EvaluationContext(
     val input: EngineObjectData.Sync,
     val arguments: Arguments.Resolved?,
-    val argumentDefinitions: Schema.FieldArguments?,
+    val argumentDefinitions: Schema.Field?,
 )
 
 private data class PreparedObjectFragment(

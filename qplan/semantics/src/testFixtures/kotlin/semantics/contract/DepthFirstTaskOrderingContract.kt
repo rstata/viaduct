@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireField
 import viaduct.engine.api.EngineObjectData
-
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
@@ -58,7 +58,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "container") to
+                        schema.requireField("Query", "container") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
@@ -67,13 +67,13 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
                                     "right" setTo objectOf("Child")
                                 }
                             },
-                        schema.field("Child", "nested") to
+                        schema.requireField("Child", "nested") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ ->
                                 "nested"
                             },
-                        schema.field("Query", "after") to
+                        schema.requireField("Query", "after") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->

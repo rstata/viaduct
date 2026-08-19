@@ -1,11 +1,11 @@
 package semantics.contract
 
 import viaduct.engine.api.EngineObjectData
-
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
+import model.requireField
 import model.SelectionForest
 
 /** Subject-specific evidence retained alongside one resolution result. */
@@ -44,7 +44,7 @@ interface ResolverContract {
 
     fun expectedPassiveResultKeys(
         @Suppress("UNUSED_PARAMETER")
-        type: Schema.ObjectType,
+        type: Schema.Object,
         keys: Set<ObjectEngineResult.GroundKey>,
     ): Set<ObjectEngineResult.GroundKey> = keys
 }
@@ -57,4 +57,4 @@ internal fun EngineObjectData.Sync.hasExactlyFields(
     expectedFields: Set<ObjectEngineResult.GroundKey>,
 ): Boolean =
     getSelections().toSet() ==
-        expectedFields.mapTo(linkedSetOf()) { key -> key.field.fieldName }
+        expectedFields.mapTo(linkedSetOf()) { key -> key.field.name }

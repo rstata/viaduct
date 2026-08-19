@@ -1,7 +1,10 @@
 package model.registry
 
+import model.requireQueryTypeDef
+import model.requireObjectField
+import model.requireField
+import model.requireType
 import model.ObjectEngineResult
-
 import model.Fragment
 import model.Schema
 import model.Selection
@@ -24,22 +27,22 @@ class SiblingDemandTest {
 
         assertTrue(
             context(world) {
-                schema.key(schema.query, "consumer").demandsFromSibling(
-                    schema.key(schema.query, "sibling", mapOf("input" to 1)),
+                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
+                    schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 1)),
                 )
             },
         )
         assertFalse(
             context(world) {
-                schema.key(schema.query, "consumer").demandsFromSibling(
-                    schema.key(schema.query, "other"),
+                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
+                    schema.key(schema.requireQueryTypeDef(), "other"),
                 )
             },
         )
         assertFalse(
             context(world) {
-                schema.key(schema.query, "consumer").demandsFromSibling(
-                    schema.key(schema.query, "sibling", mapOf("input" to 2)),
+                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
+                    schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 2)),
                 )
             },
         )
@@ -52,8 +55,8 @@ class SiblingDemandTest {
 
         assertFalse(
             context(world) {
-                schema.key(schema.query, "consumer").demandsFromSibling(
-                    schema.key(schema.query, "other"),
+                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
+                    schema.key(schema.requireQueryTypeDef(), "other"),
                 )
             },
         )
@@ -66,9 +69,9 @@ class SiblingDemandTest {
 
         assertFailsWith<IllegalArgumentException> {
             context(world) {
-                schema.key(schema.query, "consumer").demandsFromSibling(
+                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(
-                        schema.type("Payload") as Schema.ObjectType,
+                        schema.requireType("Payload") as Schema.Object,
                         "nested",
                     ),
                 )
@@ -84,7 +87,7 @@ class SiblingDemandTest {
             fieldResolvers = { schema ->
                 val consumerFragment =
                     if (includeInapplicableSelection) {
-                        val query = schema.query
+                        val query = schema.requireQueryTypeDef()
                         Fragment.of(
                             nominalType = query,
                             subselections =
@@ -109,17 +112,17 @@ class SiblingDemandTest {
                     }
                 val emptyFragment = schema.emptyFragmentOf("Query")
                 mapOf(
-                    schema.field("Query", "consumer") to
+                    schema.requireField("Query", "consumer") to
                         fieldResolverOf(
                             objectFragment = consumerFragment,
                             function = { _, _ -> "consumer" },
                         ),
-                    schema.field("Query", "sibling") to
+                    schema.requireField("Query", "sibling") to
                         fieldResolverOf(
                             objectFragment = emptyFragment,
                             function = { _, _ -> schema.objectOf("Payload") },
                         ),
-                    schema.field("Query", "other") to
+                    schema.requireField("Query", "other") to
                         fieldResolverOf(
                             objectFragment = emptyFragment,
                             function = { _, _ -> "other" },
@@ -129,12 +132,12 @@ class SiblingDemandTest {
         )
 
     private fun Schema.key(
-        type: Schema.ObjectType,
+        type: Schema.Object,
         fieldName: String,
         arguments: Map<String, Any?> = emptyMap(),
     ): ObjectEngineResult.GroundKey =
         ObjectEngineResult.GroundKey.of(
-            field = objectField(type.typeName, fieldName),
+            field = requireObjectField(type.name, fieldName),
             arguments = arguments,
         )
 

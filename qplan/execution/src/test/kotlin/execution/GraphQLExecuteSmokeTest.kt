@@ -46,7 +46,7 @@ class GraphQLExecuteSmokeTest {
             TestWorld.fromDSL(
                 resolverSchema,
                 applicationObserver = { field, _, _, _ ->
-                    applications += "${field.containingType.typeName}.${field.fieldName}"
+                    applications += "${field.containingDef.name}.${field.name}"
                 },
             )
         val fixture =

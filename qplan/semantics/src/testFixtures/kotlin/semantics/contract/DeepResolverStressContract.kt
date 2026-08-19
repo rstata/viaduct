@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireField
 import io.kotest.property.PropertyTesting
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
@@ -174,7 +175,7 @@ interface DeepResolverStressContract : ResolverContract {
                         if (
                             application.key.field.fieldName.endsWith("_V_A_node") &&
                             world.schema
-                                .field(
+                                .requireField(
                                     application.key.field.typeName,
                                     application.key.field.fieldName,
                                 ).arguments.fields
@@ -283,7 +284,7 @@ interface DeepResolverStressContract : ResolverContract {
         roots: Set<FieldCoordinate>,
     ): Int {
         fun canonicalField(coordinate: FieldCoordinate): Schema.ObjectField? =
-            world.schema.field(coordinate.typeName, coordinate.fieldName) as? Schema.ObjectField
+            world.schema.requireField(coordinate.typeName, coordinate.fieldName) as? Schema.ObjectField
 
         fun depth(
             field: Schema.ObjectField,
@@ -295,8 +296,8 @@ interface DeepResolverStressContract : ResolverContract {
                     .filter { dependency ->
                         registry.sourceResolverCoordinate(
                             FieldCoordinate(
-                                dependency.containingType.typeName,
-                                dependency.fieldName,
+                                dependency.containingDef.name,
+                                dependency.name,
                             ),
                         ) in activatedSourceResolvers
                     }.filterNot { dependency -> dependency in visited }

@@ -14,12 +14,12 @@ class ObjectEngineResultKeyTest {
     @Test
     fun `object fields always construct object keys with structural equality`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = schema.type("User") as Schema.ObjectType
-        val field = user.fields.getValue("id")
+        val user = schema.requireType("User") as Schema.Object
+        val field = user.requireField("id")
 
         val general =
             ObjectEngineResult.Key.of(
-                field = field as Schema.OutputField,
+                field = field as Schema.Field,
                 arguments = emptyMap(),
             )
         val precise = ObjectEngineResult.GroundKey.of(field, emptyMap())
@@ -33,7 +33,7 @@ class ObjectEngineResultKeyTest {
     @Test
     fun `abstract fields construct plain keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val field = schema.field("Node", "id")
+        val field = schema.requireField("Node", "id")
 
         val key = ObjectEngineResult.Key.of(field, emptyMap())
 
@@ -43,12 +43,12 @@ class ObjectEngineResultKeyTest {
     @Test
     fun `concrete fields with open arguments construct object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val field = schema.objectField("Query", "find_V_A_node")
+        val field = schema.requireObjectField("Query", "find_V_A_node")
         val variable = Arguments.Variable.of(field, "id")
 
         val key =
             ObjectEngineResult.Key.of(
-                field = field as Schema.OutputField,
+                field = field as Schema.Field,
                 arguments = Arguments.of(field, mapOf("id" to variable)),
             )
 
@@ -69,8 +69,8 @@ class ObjectEngineResultKeyTest {
                 }
                 """.trimIndent(),
             ).schema
-        val source = schema.objectField("Query", "source")
-        val consume = schema.objectField("Query", "consume")
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
         val variable = Arguments.Variable.of(source, "value")
         val templateKey =
             ObjectEngineResult.Key.of(
@@ -125,8 +125,8 @@ class ObjectEngineResultKeyTest {
                 }
                 """.trimIndent(),
             ).schema
-        val source = schema.objectField("Query", "source")
-        val consume = schema.objectField("Query", "consume")
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
         val stampedVariable =
             Arguments.Variable
                 .of(source, "value")
@@ -159,9 +159,9 @@ class ObjectEngineResultKeyTest {
                 }
                 """.trimIndent(),
             ).schema
-        val source = schema.objectField("Query", "source")
-        val abstractField = schema.field("Item", "computed")
-        val concreteType = schema.type("ConcreteItem") as Schema.ObjectType
+        val source = schema.requireObjectField("Query", "source")
+        val abstractField = schema.requireField("Item", "computed")
+        val concreteType = schema.requireType("ConcreteItem") as Schema.Object
         val variable = Arguments.Variable.of(source, "factor")
         val sourceKey =
             ObjectEngineResult.Key.of(
@@ -212,8 +212,8 @@ class ObjectEngineResultKeyTest {
     @Test
     fun `selection paths contain only object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = ObjectEngineResult.GroundKey.of(schema.objectField("Query", "user_V_A_node"), emptyMap())
-        val id = ObjectEngineResult.GroundKey.of(schema.objectField("User", "id"), emptyMap())
+        val user = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Query", "user_V_A_node"), emptyMap())
+        val id = ObjectEngineResult.GroundKey.of(schema.requireObjectField("User", "id"), emptyMap())
 
         assertEquals(listOf(user, id), listOf<PathComponent>(user, id).toSelectionPath())
         assertNull(listOf<PathComponent>(user, ListEngineResult.Index.of(0), id).toSelectionPath())

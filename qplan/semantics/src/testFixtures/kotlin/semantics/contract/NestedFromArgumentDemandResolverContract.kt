@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.ObjectEngineResult
-
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,17 +48,17 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        world.schema.objectField("Query", "result"),
+                        world.schema.requireObjectField("Query", "result"),
                         mapOf("value" to 7),
                     ),
                 ).get(),
         )
         testWorld.applicationArguments.assertApplications(
             mapOf(
-                world.schema.objectField("Query", "holder") to listOf(emptyMap()),
-                world.schema.objectField("Query", "result") to
+                world.schema.requireObjectField("Query", "holder") to listOf(emptyMap()),
+                world.schema.requireObjectField("Query", "result") to
                     listOf(mapOf("value" to 7)),
-                world.schema.objectField("Item", "consume") to
+                world.schema.requireObjectField("Item", "consume") to
                     listOf(mapOf("value" to 7)),
             ),
         )

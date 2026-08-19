@@ -1,5 +1,7 @@
 package semantics.contract
 
+import model.requireQueryTypeDef
+import model.requireObjectField
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -52,16 +54,16 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "payload" &&
+                        field.containingDef.name == "Query" &&
+                        field.name == "payload" &&
                         demand != null
                     ) {
                         suppliedDemandFields +=
                             demand
-                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .merge(field.type.baseType as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { key ->
-                                    key.field.fieldName
+                                    key.field.name
                                 }
                     }
                 },
@@ -83,7 +85,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
 
         val payloadKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "payload"),
+                world.schema.requireObjectField("Query", "payload"),
                 mapOf("arg" to 1),
             )
         val oneKey = world.schema.contractKey("Payload", "one")
@@ -144,16 +146,16 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     """.trimIndent(),
                 applicationObserver = { field, _, _, demand ->
                     if (
-                        field.containingType.typeName == "Query" &&
-                        field.fieldName == "payload" &&
+                        field.containingDef.name == "Query" &&
+                        field.name == "payload" &&
                         demand != null
                     ) {
                         suppliedDemandFields +=
                             demand
-                                .merge(field.typeExpr.baseType as Schema.ObjectType)
+                                .merge(field.type.baseType as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { key ->
-                                    key.field.fieldName
+                                    key.field.name
                                 }
                     }
                 },
@@ -161,7 +163,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 mapOf(
                     "seed" to 1,
                     "other" to 1,
@@ -196,7 +198,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             context(world) {
                 resolved.correctResolution(
                     selections
-                        .merge(world.schema.query)
+                        .merge(world.schema.requireQueryTypeDef())
                         .instantiateBindings(),
                 )
             },

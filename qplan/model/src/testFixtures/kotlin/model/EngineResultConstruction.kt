@@ -13,8 +13,8 @@ fun Schema.engineResultOf(
     typeName: String,
     block: EngineResultScope.() -> Unit = {},
 ): ObjectEngineResult {
-    val type = type(typeName)
-    require(type is Schema.ObjectType) {
+    val type = requireType(typeName)
+    require(type is Schema.Object) {
         "$typeName is not an object type"
     }
     return EngineResultScope(this, type)
@@ -24,13 +24,13 @@ fun Schema.engineResultOf(
 
 /** Constructs a list engine result in this reasoning world. */
 fun Assumptions.listResultOf(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
     vararg values: Any?,
 ): ListEngineResult = schema.listResultOf(typeExpr, *values)
 
 /** Constructs a list engine result whose elements have [typeExpr]. */
 fun Schema.listResultOf(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
     vararg values: Any?,
 ): ListEngineResult =
     ListEngineResult.of(
@@ -45,7 +45,7 @@ annotation class EngineResultDsl
 @EngineResultDsl
 class EngineResultScope internal constructor(
     private val schema: Schema,
-    private val type: Schema.ObjectType,
+    private val type: Schema.Object,
 ) {
     private val values = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult?>()
     private val accessResults = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult>()
@@ -56,12 +56,12 @@ class EngineResultScope internal constructor(
         vararg arguments: Pair<String, Any?>,
     ): EngineResultFieldReference {
         require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
-            "Arguments for ${type.typeName}/$fieldName must have distinct names"
+            "Arguments for ${type.name}/$fieldName must have distinct names"
         }
         return EngineResultFieldReference(
             key =
                 ObjectEngineResult.GroundKey.of(
-                    field = schema.objectField(type.typeName, fieldName),
+                    field = schema.requireObjectField(type.name, fieldName),
                     arguments = arguments.toMap(),
                 ),
         )
@@ -91,9 +91,9 @@ class EngineResultScope internal constructor(
         accessResult: EngineResult,
     ) {
         require(key !in values) {
-            "Duplicate engine-result field ${type.typeName}/${key.field.fieldName}"
+            "Duplicate engine-result field ${type.name}/${key.field.name}"
         }
-        values[key] = coerceEngineResult(key.field.typeExpr, value)
+        values[key] = coerceEngineResult(key.field.type, value)
         accessResults[key] = accessResult
     }
 
@@ -117,7 +117,7 @@ class EngineResultFieldReference internal constructor(
 )
 
 private fun coerceEngineResult(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
     value: Any?,
 ): EngineResult? {
     if (value.conformsToResultSchemaType(typeExpr)) return value
@@ -138,11 +138,11 @@ private fun coerceEngineResult(
 
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
-                is Schema.SimpleType ->
+                is Schema.SimpleTypeDef ->
                     coerceSimpleValue(type, requireNotNull(value)).toEngineResult(type)
-                is Schema.CompositeType ->
+                is Schema.CompositeTypeDef ->
                     throw IllegalArgumentException(
-                        "Expected an object engine result for ${type.typeName}",
+                        "Expected an object engine result for ${type.name}",
                     )
             }
     }

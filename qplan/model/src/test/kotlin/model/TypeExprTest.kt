@@ -37,10 +37,10 @@ class TypeExprTest {
 
     @Test
     fun `output composites contain canonical narrower types`() {
-        val node = schema.type("Node") as Schema.InterfaceType
-        val actor = schema.type("Actor") as Schema.UnionType
-        val user = schema.type("User") as Schema.ObjectType
-        val admin = schema.type("Admin") as Schema.ObjectType
+        val node = schema.requireType("Node") as Schema.Interface
+        val actor = schema.requireType("Actor") as Schema.Union
+        val user = schema.requireType("User") as Schema.Object
+        val admin = schema.requireType("Admin") as Schema.Object
         val nodeExpr = TypeExpr.Named.of(node)
         val actorExpr = TypeExpr.Named.of(actor)
         val userExpr = TypeExpr.Named.of(user, isNullable = false)

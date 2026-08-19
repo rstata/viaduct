@@ -27,7 +27,7 @@ class OperationSelectionParsingTest {
 
         val arguments =
             selections
-                .merge(fixture.schema.query)
+                .merge(fixture.schema.requireQueryTypeDef())
                 .groundKeys()
                 .mapTo(linkedSetOf()) { key -> key.arguments.fieldExpressions() }
         val expected: Set<Map<String, Any?>> =
@@ -61,7 +61,7 @@ class OperationSelectionParsingTest {
                 """.trimIndent(),
             )
 
-        val key = selections.merge(fixture.schema.query).groundKeys().single()
+        val key = selections.merge(fixture.schema.requireQueryTypeDef()).groundKeys().single()
         assertEquals(
             mapOf(
                 "term" to "fallback",
@@ -91,24 +91,24 @@ class OperationSelectionParsingTest {
                 variables = mapOf("id" to 42),
             )
 
-        val root = selections.merge(fixture.schema.query).single()
-        assertEquals("node_V_A_node", root.key.field.fieldName)
+        val root = selections.merge(fixture.schema.requireQueryTypeDef()).single()
+        assertEquals("node_V_A_node", root.key.field.name)
         assertEquals(
             mapOf("id" to "42"),
             root.key.arguments.fieldExpressions(),
         )
 
-        val bridgeType = root.key.field.typeExpr.baseType as Schema.ObjectType
+        val bridgeType = root.key.field.type.baseType as Schema.Object
         val payload = root.subselections.merge(bridgeType).single()
-        assertEquals("node", payload.key.field.fieldName)
+        assertEquals("node", payload.key.field.name)
 
-        val userType = fixture.schema.type("User") as Schema.ObjectType
+        val userType = fixture.schema.requireType("User") as Schema.Object
         assertEquals(
             setOf("id", "handle"),
             payload.subselections
                 .merge(userType)
                 .groundKeys()
-                .mapTo(linkedSetOf()) { key -> key.field.fieldName },
+                .mapTo(linkedSetOf()) { key -> key.field.name },
         )
     }
 

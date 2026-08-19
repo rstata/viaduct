@@ -1,7 +1,7 @@
 package semantics.resolver26
 
+import model.requireObjectField
 import semantics.contract.selectionValues
-
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -39,12 +39,12 @@ class ResolverOccurrenceWitnessTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val items = schema.objectField("Query", "items")
+                    val items = schema.requireObjectField("Query", "items")
                     val payloadType =
-                        (items.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
+                        (items.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
                     val baseKey =
                         ObjectEngineResult.GroundKey.of(
-                            schema.objectField("Payload", "base"),
+                            schema.requireObjectField("Payload", "base"),
                             emptyMap(),
                         )
                     mapOf(
@@ -59,13 +59,13 @@ class ResolverOccurrenceWitnessTest {
                                             },
                                         )
                             },
-                        schema.objectField("Payload", "computed") to
+                        schema.requireObjectField("Payload", "computed") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment PayloadInput on Payload { base }",
                                 ),
                             ) { input, _ ->
-                                input.selectionValues().getValue(baseKey.field.fieldName)
+                                input.selectionValues().getValue(baseKey.field.name)
                             },
                     )
                 },
@@ -87,8 +87,8 @@ class ResolverOccurrenceWitnessTest {
                                 occurrencePath = application.occurrencePath,
                                 field =
                                     FieldCoordinate(
-                                        application.field.containingType.typeName,
-                                        application.field.fieldName,
+                                        application.field.containingDef.name,
+                                        application.field.name,
                                     ),
                                 arguments = application.arguments,
                                 input = application.input,

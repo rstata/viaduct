@@ -263,7 +263,7 @@ private suspend fun orchestrateObject(
     }
 
     require(source.schemaType == target.type) {
-        "Source type ${source.schemaType.typeName} does not match result type ${target.type.typeName}"
+        "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
     }
 
     val closed: CloseInputDemandResult = closeInputDemand()
@@ -275,15 +275,15 @@ private suspend fun orchestrateObject(
                     ?: error("Resolver26 found open arguments on passive key $objectKey")
             val arguments = groundKey.arguments
             require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-                "Resolver26 passive field ${groundKey.field.containingType.typeName}/" +
-                    "${groundKey.field.fieldName} must be argumentless"
+                "Resolver26 passive field ${groundKey.field.containingDef.name}/" +
+                    "${groundKey.field.name} must be argumentless"
             }
             val sourceValue: EngineOutputData? =
-                source.get(groundKey.field.fieldName)
+                source.get(groundKey.field.name)
             if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(
-                        expectedType = groundKey.field.typeExpr,
+                        expectedType = groundKey.field.type,
                         path = path + groundKey,
                         resolverDemand = selection.subselections,
                     )
@@ -296,7 +296,7 @@ private suspend fun orchestrateObject(
                 path = path + groundKey,
                 source = sourceValue,
                 target = target.getCell(groundKey).getValue().get(),
-                expectedType = groundKey.field.typeExpr,
+                expectedType = groundKey.field.type,
                 initialDemand = selection.subselections,
                 runtime = runtime,
             )
@@ -411,7 +411,7 @@ private fun CloseInputDemandResult.prepareBindings() {
                         world.bindVariable(
                             stampedDefinition.variable,
                             expansion.ownerKey.arguments.bindingFor(
-                                definition.argument.argumentName,
+                                definition.argument.name,
                             ),
                         )
                     } else {
@@ -490,7 +490,7 @@ private fun ResolverExpansion.completeFromArgumentBindings(groundKey: ObjectEngi
         val definition = stampedDefinition.definition as VariableDefinition.FromArgument
         world.completeBinding(
             stampedDefinition.variable,
-            groundKey.arguments.bindingFor(definition.argument.argumentName),
+            groundKey.arguments.bindingFor(definition.argument.name),
         )
     }
 }
@@ -548,7 +548,7 @@ private suspend fun resolveField(
         )
     val resolvedValue: ResolvedValue =
         fieldValue.resolveValue(
-            expectedType = groundKey.field.typeExpr,
+            expectedType = groundKey.field.type,
             path = coordinate,
             resolverDemand = invocationDemand,
         )
@@ -590,7 +590,7 @@ private fun launchPassiveChildOrchestrations(
     path: List<PathComponent>,
     source: EngineOutputData?,
     target: EngineResult?,
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
     initialDemand: SelectionForest,
     runtime: ResolverRuntime,
 ) {
@@ -613,7 +613,7 @@ private fun launchPassiveChildOrchestrations(
         is Boolean,
         -> {
             val simpleType =
-                (expectedType as TypeExpr.Named).baseType as Schema.SimpleType
+                (expectedType as TypeExpr.Named).baseType as Schema.SimpleTypeDef
             check(target == source.toEngineResult(simpleType)) {
                 "Resolver26 passive simple source has different result at $path"
             }

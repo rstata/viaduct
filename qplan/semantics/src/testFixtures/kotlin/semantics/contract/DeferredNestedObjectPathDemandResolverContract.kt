@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -57,7 +58,7 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
                 ).get(),
         )
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Item", "result"),
+            world.schema.requireObjectField("Item", "result"),
             mapOf("value" to 7),
         )
     }

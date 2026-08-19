@@ -10,8 +10,8 @@ class SpecSelectionTest {
     @Test
     fun `field factory enforces subselection shape from the canonical field`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val nameField = schema.field("User", "name")
-        val userField = schema.field("Query", "user")
+        val nameField = schema.requireField("User", "name")
+        val userField = schema.requireField("Query", "user")
         val nameSelection =
             SpecSelection.Field.of(
                 alias = null,
@@ -62,7 +62,7 @@ class SpecSelectionTest {
 
         assertFailsWith<IllegalArgumentException> {
             SpecSelection.InlineFragment.of(
-                typeCondition = schema.type("User") as Schema.ObjectType,
+                typeCondition = schema.requireType("User") as Schema.Object,
                 selections = emptyList(),
             )
         }

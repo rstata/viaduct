@@ -1,7 +1,10 @@
 package model.spec
 
+import model.requireQueryTypeDef
+import model.requireObjectField
+import model.requireField
+import model.requireType
 import model.Arguments
-
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
@@ -37,7 +40,7 @@ class MaterializeSelectionFlattenerTest {
         assertEquals(collected["release"].key, collected["version"].key)
         assertTrue(
             selections.constructionSelections().all { selection ->
-                selection.key.field == fixture.schema.field("Query", "version")
+                selection.key.field == fixture.schema.requireField("Query", "version")
             },
         )
     }
@@ -81,12 +84,12 @@ class MaterializeSelectionFlattenerTest {
         val fixture = SchemaFixture()
         val firstVariable =
             Arguments.Variable.of(
-                field = fixture.schema.objectField("Query", "version"),
+                field = fixture.schema.requireObjectField("Query", "version"),
                 variableName = "first",
             )
         val secondVariable =
             Arguments.Variable.of(
-                field = fixture.schema.objectField("Query", "version"),
+                field = fixture.schema.requireObjectField("Query", "version"),
                 variableName = "second",
             )
         val conflictingArguments =
@@ -129,7 +132,7 @@ class MaterializeSelectionFlattenerTest {
         val fixture = SchemaFixture()
         val variable =
             Arguments.Variable.of(
-                field = fixture.schema.objectField("Query", "version"),
+                field = fixture.schema.requireObjectField("Query", "version"),
                 variableName = "term",
             )
         val selections =
@@ -153,7 +156,7 @@ class MaterializeSelectionFlattenerTest {
     @Test
     fun `construction-only provider markers cannot enter a materialize forest`() {
         val fixture = SchemaFixture()
-        val field = fixture.schema.objectField("Query", "version")
+        val field = fixture.schema.requireObjectField("Query", "version")
         val stamp = Stamp.Occurrence.of(resolverPath = emptyList())
         val variable =
             Arguments.Variable
@@ -216,11 +219,11 @@ class MaterializeSelectionFlattenerTest {
             selections.collect(fixture.query)["pet"].subselections
         assertEquals(2, alternatives.size)
         assertEquals(
-            fixture.schema.objectField("Dog", "barkVolume"),
+            fixture.schema.requireObjectField("Dog", "barkVolume"),
             alternatives.collect(fixture.dog)["sound"].key.field,
         )
         assertEquals(
-            fixture.schema.objectField("Cat", "lives"),
+            fixture.schema.requireObjectField("Cat", "lives"),
             alternatives.collect(fixture.cat)["sound"].key.field,
         )
     }
@@ -257,9 +260,9 @@ class MaterializeSelectionFlattenerTest {
             )
 
         val bundles = selections.collect(fixture.query)["bundles"]
-        assertEquals(fixture.pack, bundles.key.field.typeExpr.baseType)
+        assertEquals(fixture.pack, bundles.key.field.type.baseType)
         val animals = bundles.subselections.collect(fixture.pack)["animals"]
-        assertEquals(fixture.pet, animals.key.field.typeExpr.baseType)
+        assertEquals(fixture.pet, animals.key.field.type.baseType)
         assertEquals(
             setOf("label"),
             animals.subselections.collect(fixture.dog).responseKeys(),
@@ -295,24 +298,24 @@ class MaterializeSelectionFlattenerTest {
                 flattenForMaterialization(parsed.nominalType, parsed.selections)
             }
 
-        val account = selections.collect(schema.query)["account"]
-        assertEquals("user_V_A_node", account.key.field.fieldName)
+        val account = selections.collect(schema.requireQueryTypeDef())["account"]
+        assertEquals("user_V_A_node", account.key.field.name)
         assertEquals(
             setOf("user_V_A_node"),
             selections
                 .constructionSelections()
-                .merge(schema.query)
+                .merge(schema.requireQueryTypeDef())
                 .keys()
-                .mapTo(linkedSetOf()) { key -> key.field.fieldName },
+                .mapTo(linkedSetOf()) { key -> key.field.name },
         )
 
-        val bridge = account.key.field.typeExpr.baseType as Schema.ObjectType
+        val bridge = account.key.field.type.baseType as Schema.Object
         val payload = account.subselections.collect(bridge)["node"]
-        assertEquals("node", payload.key.field.fieldName)
+        assertEquals("node", payload.key.field.name)
         assertEquals(
             setOf("id"),
             payload.subselections
-                .collect(schema.type("User") as Schema.ObjectType)
+                .collect(schema.requireType("User") as Schema.Object)
                 .responseKeys(),
         )
     }
@@ -322,12 +325,12 @@ class MaterializeSelectionFlattenerTest {
         val assumptions = world.assumptions
         val schema = world.schema
 
-        val query = schema.query
-        val item = schema.type("Item") as Schema.ObjectType
-        val pack = schema.type("Pack") as Schema.ObjectType
-        val dog = schema.type("Dog") as Schema.ObjectType
-        val cat = schema.type("Cat") as Schema.ObjectType
-        val pet = schema.type("Pet") as Schema.InterfaceType
+        val query = schema.requireQueryTypeDef()
+        val item = schema.requireType("Item") as Schema.Object
+        val pack = schema.requireType("Pack") as Schema.Object
+        val dog = schema.requireType("Dog") as Schema.Object
+        val cat = schema.requireType("Cat") as Schema.Object
+        val pet = schema.requireType("Pet") as Schema.Interface
 
         fun field(
             containingType: String,
@@ -336,7 +339,7 @@ class MaterializeSelectionFlattenerTest {
             arguments: Map<String, Any?> = emptyMap(),
             subselections: List<SpecSelection>? = null,
         ): SpecSelection.Field {
-            val field = schema.field(containingType, fieldName)
+            val field = schema.requireField(containingType, fieldName)
             return SpecSelection.Field.of(
                 alias = alias,
                 field = field,
@@ -346,13 +349,13 @@ class MaterializeSelectionFlattenerTest {
         }
 
         fun inlineFragment(
-            typeCondition: Schema.CompositeType?,
+            typeCondition: Schema.CompositeTypeDef?,
             selections: List<SpecSelection>,
         ): SpecSelection.InlineFragment =
             SpecSelection.InlineFragment.of(typeCondition, selections)
 
         fun flatten(
-            typeInScope: Schema.CompositeType,
+            typeInScope: Schema.CompositeTypeDef,
             selectionSet: List<SpecSelection>,
         ): MaterializeSelectionForest =
             context(assumptions) {

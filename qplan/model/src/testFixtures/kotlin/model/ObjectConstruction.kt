@@ -13,8 +13,8 @@ fun Schema.objectOf(
     typeName: String,
     block: ObjectValueScope.() -> Unit = {},
 ): EngineObjectData.Sync {
-    val type = type(typeName)
-    require(type is Schema.ObjectType) {
+    val type = requireType(typeName)
+    require(type is Schema.Object) {
         "$typeName is not an object type"
     }
     return ObjectValueScope(this, type)
@@ -29,7 +29,7 @@ annotation class ObjectValueDsl
 @ObjectValueDsl
 class ObjectValueScope internal constructor(
     private val schema: Schema,
-    private val type: Schema.ObjectType,
+    private val type: Schema.Object,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
     private val fields = linkedMapOf<String, EngineObjectDataEntry>()
@@ -41,11 +41,11 @@ class ObjectValueScope internal constructor(
         vararg arguments: Pair<String, Any?>,
     ): ObjectFieldReference {
         require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
-            "Arguments for ${type.typeName}/$fieldName must have distinct names"
+            "Arguments for ${type.name}/$fieldName must have distinct names"
         }
-        val field = sourceSchema.field(type.typeName, fieldName)
+        val field = sourceSchema.field(type.name, fieldName)
         require(field is Schema.ObjectField) {
-            "${type.typeName}/$fieldName does not lower to an object field"
+            "${type.name}/$fieldName does not lower to an object field"
         }
         return ObjectFieldReference(
             scope = this,
@@ -66,18 +66,18 @@ class ObjectValueScope internal constructor(
     /** Assigns [value] to this exact field coordinate. */
     infix fun ObjectFieldReference.setTo(value: Any?) {
         require(!isBuilt) {
-            "Cannot assign fields after constructing ${type.typeName}"
+            "Cannot assign fields after constructing ${type.name}"
         }
         require(scope === this@ObjectValueScope) {
             "A field reference cannot be assigned in another object scope"
         }
         val arguments = key.arguments
         require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-            "Passive object field ${type.typeName}/${key.field.fieldName} must be argumentless"
+            "Passive object field ${type.name}/${key.field.name} must be argumentless"
         }
-        val fieldName = key.field.fieldName
+        val fieldName = key.field.name
         require(fieldName !in fields) {
-            "Duplicate object field ${type.typeName}/${key.field.fieldName}"
+            "Duplicate object field ${type.name}/${key.field.name}"
         }
         fields[fieldName] =
             EngineObjectDataEntry.of(
@@ -110,11 +110,11 @@ class ObjectValueScope internal constructor(
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
     internal val key: ObjectEngineResult.GroundKey,
-    internal val sourceTypeExpr: TypeExpr<Schema.OutputType>,
+    internal val sourceTypeExpr: TypeExpr<Schema.OutputTypeDef>,
 )
 
 private fun coerceOutputValue(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
     value: Any?,
 ): EngineOutputData? {
     if (value == null || value == EngineErrorData) return value
@@ -129,15 +129,15 @@ private fun coerceOutputValue(
 
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
-                is Schema.SimpleType -> coerceSimpleValue(type, value)
-                is Schema.CompositeType -> {
+                is Schema.SimpleTypeDef -> coerceSimpleValue(type, value)
+                is Schema.CompositeTypeDef -> {
                     require(
                         value is EngineObjectData.Sync &&
-                            type.possibleTypes.any { possibleType ->
-                                possibleType.typeName == value.type.name
+                            type.possibleObjectTypes.any { possibleType ->
+                                possibleType.name == value.type.name
                             },
                     ) {
-                        "Expected an object value for ${type.typeName}"
+                        "Expected an object value for ${type.name}"
                     }
                     value
                 }

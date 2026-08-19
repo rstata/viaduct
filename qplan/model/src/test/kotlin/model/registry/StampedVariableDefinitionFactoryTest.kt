@@ -1,7 +1,8 @@
 package model.registry
 
+import model.requireObjectField
+import model.requireField
 import model.Arguments
-
 import model.ObjectEngineResult
 import model.SelectionOccurrenceId
 import model.Schema
@@ -23,8 +24,8 @@ class StampedVariableDefinitionFactoryTest {
                 }
                 """.trimIndent(),
         )
-    private val result = world.schema.objectField("Query", "result")
-    private val source = world.schema.objectField("Query", "source")
+    private val result = world.schema.requireObjectField("Query", "result")
+    private val source = world.schema.requireObjectField("Query", "source")
     private val template = Arguments.Variable.of(result, "seed")
     private val path =
         listOf(ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 1)))
@@ -73,7 +74,7 @@ class StampedVariableDefinitionFactoryTest {
         val variable = template.stamp(occurrence)
         val definition =
             VariableDefinition.FromArgument.of(
-                result.arguments.fields.getValue("seed") as Schema.FieldArgument,
+                result.arguments.requireField("seed") as Schema.FieldArg,
             )
 
         assertEquals(
@@ -81,7 +82,7 @@ class StampedVariableDefinitionFactoryTest {
             SelectionStampedVariableDefinition.of(
                 variable,
                 VariableDefinition.FromArgument.of(
-                    result.arguments.fields.getValue("seed") as Schema.FieldArgument,
+                    result.arguments.requireField("seed") as Schema.FieldArg,
                 ),
             ),
         )
@@ -103,7 +104,7 @@ class StampedVariableDefinitionFactoryTest {
                 variable = template.stamp(path),
                 definition =
                     VariableDefinition.FromArgument.of(
-                        result.arguments.fields.getValue("seed") as Schema.FieldArgument,
+                        result.arguments.requireField("seed") as Schema.FieldArg,
                     ),
             )
         }

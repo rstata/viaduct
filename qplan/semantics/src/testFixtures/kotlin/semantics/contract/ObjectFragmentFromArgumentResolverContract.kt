@@ -1,9 +1,9 @@
 package semantics.contract
 
+import model.requireField
+import model.requireObjectField
 import model.Arguments
-
 import model.ObjectEngineResult
-
 import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -40,7 +40,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                     """.trimIndent(),
             )
         val world = testWorld.assumptions
-        val resultField = world.schema.objectField("Query", "result")
+        val resultField = world.schema.requireObjectField("Query", "result")
         val variable = Arguments.Variable.of(resultField, "seed")
         val firstKey =
             ObjectEngineResult.GroundKey.of(
@@ -63,7 +63,7 @@ interface ObjectFragmentFromArgumentResolverContract :
         assertEquals(14, resolved.getCell(firstKey).get())
         assertEquals(16, resolved.getCell(secondKey).get())
         testWorld.applicationArguments.assertArguments(
-            world.schema.field("Query", "consume"),
+            world.schema.requireField("Query", "consume"),
             mapOf("value" to 7),
             mapOf("value" to 8),
         )
@@ -108,8 +108,8 @@ interface ObjectFragmentFromArgumentResolverContract :
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Query", "result")
-                    val consume = schema.objectField("Query", "consume")
+                    val result = schema.requireObjectField("Query", "result")
+                    val consume = schema.requireObjectField("Query", "consume")
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
@@ -122,7 +122,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "argumentValue") to
                             schema.fromArgument(result, "value"),
@@ -132,7 +132,7 @@ interface ObjectFragmentFromArgumentResolverContract :
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 mapOf("value" to 7),
             )
         val resolved =
@@ -161,7 +161,7 @@ interface ObjectFragmentFromArgumentResolverContract :
         val world = testWorld.assumptions
         val oneKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "one"),
+                world.schema.requireObjectField("Query", "one"),
                 mapOf("seed" to 7),
             )
         val resolved = resolveAndValidate(world, "query { one(seed: 7) }")

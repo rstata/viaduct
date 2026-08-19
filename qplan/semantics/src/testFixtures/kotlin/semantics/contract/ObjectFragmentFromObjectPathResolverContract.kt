@@ -1,5 +1,6 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.ObjectEngineResult
 import model.EngineErrorData
 import model.EngineOutputData
@@ -41,7 +42,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                     """.trimIndent(),
             )
         val world = testWorld.assumptions
-        val resultField = world.schema.objectField("Query", "result")
+        val resultField = world.schema.requireObjectField("Query", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
         val resolver = world.resolverRegistry.resolver(resultField)
         val resolved = resolveAndValidate(world, "query { result }")
@@ -86,8 +87,8 @@ interface ObjectFragmentFromObjectPathResolverContract :
                         """.trimIndent(),
                     applicationObserver = { field, input, _, _ ->
                         if (
-                            field.containingType.typeName == "Query" &&
-                            field.fieldName == "result"
+                            field.containingDef.name == "Query" &&
+                            field.name == "result"
                         ) {
                             val consumed =
                                 input.selectionValues().entries
@@ -99,7 +100,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                     },
                 )
             val world = testWorld.assumptions
-            val resultField = world.schema.objectField("Query", "result")
+            val resultField = world.schema.requireObjectField("Query", "result")
             val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
             val resolver = world.resolverRegistry.resolver(resultField)
             val resolved = resolveAndValidate(world, "query { result }")
@@ -156,7 +157,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
 
@@ -187,7 +188,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val world = testWorld.assumptions
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", "result"),
+                world.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
 
@@ -195,7 +196,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         assertEquals(10, resolved.getCell(resultKey).get())
         testWorld.applicationArguments.assertArguments(
-            world.schema.objectField("Query", "consume"),
+            world.schema.requireObjectField("Query", "consume"),
             mapOf("values" to listOf(2, 3, 5)),
         )
     }

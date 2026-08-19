@@ -18,7 +18,7 @@ class AssumptionsTest {
     @Test
     fun `constructs a resolver fragment variable with its defining field`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val variableField = assumptions.schema.objectField("Query", "node_V_A_node")
+        val variableField = assumptions.schema.requireObjectField("Query", "node_V_A_node")
 
         val fragment =
             assumptions.schema.fragmentFrom(
@@ -59,9 +59,9 @@ class AssumptionsTest {
                 """.trimIndent(),
             )
 
-        assertEquals(assumptions.schema.query, fragment.nominalType)
+        assertEquals(assumptions.schema.requireQueryTypeDef(), fragment.nominalType)
         val node = fragment.subselections.single()
-        assertEquals("node_V_A_node", node.key.field.fieldName)
+        assertEquals("node_V_A_node", node.key.field.name)
 
         val filter =
             assertIs<EngineInputObjectData>(
@@ -78,9 +78,9 @@ class AssumptionsTest {
         )
 
         val payload = node.subselections.single()
-        assertEquals("node", payload.key.field.fieldName)
+        assertEquals("node", payload.key.field.name)
         val id = payload.subselections.single()
-        assertEquals("id", id.key.field.fieldName)
+        assertEquals("id", id.key.field.name)
     }
 
     @Test
@@ -104,7 +104,7 @@ class AssumptionsTest {
     @Test
     fun `parses a fragment from a schema with explicit variable bindings`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val filterType = schema.requireType("Filter") as Schema.Input
         val filter =
             toEngineInputObjectData(
                 expectedType = filterType,
@@ -135,8 +135,8 @@ class AssumptionsTest {
     @Test
     fun `ground input object construction rejects unresolved variables`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.type("Filter") as Schema.InputObjectType
-        val variableField = schema.objectField("Query", "node_V_A_node")
+        val filterType = schema.requireType("Filter") as Schema.Input
+        val variableField = schema.requireObjectField("Query", "node_V_A_node")
 
         assertFailsWith<ClassCastException> {
             toEngineInputObjectData(
@@ -156,8 +156,8 @@ class AssumptionsTest {
         val worldFragment = assumptions.emptyFragmentOf("Query")
         val schemaFragment = assumptions.schema.emptyFragmentOf("Query")
 
-        assertEquals(assumptions.schema.query, worldFragment.nominalType)
-        assertEquals(assumptions.schema.query, schemaFragment.nominalType)
+        assertEquals(assumptions.schema.requireQueryTypeDef(), worldFragment.nominalType)
+        assertEquals(assumptions.schema.requireQueryTypeDef(), schemaFragment.nominalType)
         assertTrue(worldFragment.subselections.isEmpty())
         assertTrue(schemaFragment.subselections.isEmpty())
     }
@@ -170,33 +170,35 @@ class AssumptionsTest {
         assertEquals(world.schema, assumptions.schema)
 
         val schema = assumptions.schema
-        val query = schema.query
-        val node = assertIs<Schema.InterfaceType>(schema.type("Node"))
-        val user = assertIs<Schema.ObjectType>(schema.type("User"))
-        val admin = assertIs<Schema.ObjectType>(schema.type("Admin"))
-        val actor = assertIs<Schema.UnionType>(schema.type("Actor"))
-        assertEquals(query, schema.type("Query"))
-        assertEquals(Schema.IntType, schema.type("Int"))
-        assertEquals(Schema.FloatType, schema.type("Float"))
-        assertEquals(Schema.StringType, schema.type("String"))
-        assertEquals(Schema.BooleanType, schema.type("Boolean"))
-        assertEquals(Schema.IDType, schema.type("ID"))
-        assertEquals(setOf(user, admin), node.possibleTypes)
-        assertEquals(setOf(user, admin), actor.possibleTypes)
-        val typeName = schema.field("Node", "V_I_typename")
-        assertEquals(node, typeName.containingType)
+        val query = schema.requireQueryTypeDef()
+        val node = assertIs<Schema.Interface>(schema.requireType("Node"))
+        val user = assertIs<Schema.Object>(schema.requireType("User"))
+        val admin = assertIs<Schema.Object>(schema.requireType("Admin"))
+        val actor = assertIs<Schema.Union>(schema.requireType("Actor"))
+
+        assertEquals(query, schema.requireType("Query"))
+        assertEquals(Schema.IntType, schema.requireType("Int"))
+        assertEquals(Schema.FloatType, schema.requireType("Float"))
+        assertEquals(Schema.StringType, schema.requireType("String"))
+        assertEquals(Schema.BooleanType, schema.requireType("Boolean"))
+        assertEquals(Schema.IDType, schema.requireType("ID"))
+        assertEquals(setOf(user, admin), node.possibleObjectTypes)
+        assertEquals(setOf(user, admin), actor.possibleObjectTypes)
+
+        val typeName = schema.requireField("Node", "V_I_typename")
+        assertEquals(node, typeName.containingDef)
         assertEquals(Schema.NoArguments, typeName.arguments)
-        assertEquals(emptyMap(), Schema.NoArguments.fields)
+        assertEquals(emptyList(), Schema.NoArguments.fields)
         assertEquals(
             TypeExpr.Named.of(Schema.StringType, isNullable = false),
-            typeName.typeExpr,
+            typeName.type,
         )
 
-        val actors = schema.field("Query", "actors")
+        val actors = schema.requireField("Query", "actors")
         listOf(
-            schema.field("Node", "id"),
-            schema.field("User", "name"),
-            schema.field("Admin", "level"),
+            schema.requireField("Node", "id"),
+            schema.requireField("User", "name"),
+            schema.requireField("Admin", "level"),
             actors,
         ).forEach { field ->
             assertEquals(Schema.NoArguments, field.arguments)
@@ -209,14 +211,14 @@ class AssumptionsTest {
                 elementType = TypeExpr.Named.of(actor, isNullable = false),
                 isNullable = false,
             ),
-            actors.typeExpr,
+            actors.type,
         )
 
-        val nodeField = schema.field("Query", "node_V_A_node")
-        assertEquals(query, nodeField.containingType)
+        val nodeField = schema.requireField("Query", "node_V_A_node")
+        assertEquals(query, nodeField.containingDef)
         assertFalse(nodeField.arguments == Schema.NoArguments)
-        val filterArgument = nodeField.arguments.fields.getValue("filter")
-        assertEquals(nodeField.arguments, filterArgument.containingType)
+        val filterArgument = nodeField.arguments.requireField("filter")
+        assertEquals(nodeField.arguments, filterArgument.containingDef)
         assertEquals("filter", filterArgument.name)
         assertFalse(filterArgument.isRequired)
         val filterDefault =
@@ -259,32 +261,32 @@ class AssumptionsTest {
         )
         val interfaceIdKey =
             ObjectEngineResult.Key.of(
-                field = schema.field("Node", "id"),
+                field = schema.requireField("Node", "id"),
                 arguments = emptyMap(),
             )
         val objectIdKey =
             ObjectEngineResult.Key.of(
-                field = schema.field("User", "id"),
+                field = schema.requireField("User", "id"),
                 arguments = emptyMap(),
             )
         assertFalse(interfaceIdKey == objectIdKey)
 
-        val friendField = schema.field("User", "friend_V_A_node")
+        val friendField = schema.requireField("User", "friend_V_A_node")
         assertFalse(friendField.arguments == Schema.NoArguments)
         val limitArgument: Schema.InputLikeField =
-            friendField.arguments.fields.getValue("limit")
-        assertEquals(friendField.arguments, limitArgument.containingType)
+            friendField.arguments.requireField("limit")
+        assertEquals(friendField.arguments, limitArgument.containingDef)
         assertEquals("limit", limitArgument.name)
         assertFalse(limitArgument.isRequired)
 
-        val filter = assertIs<Schema.InputObjectType>(schema.type("Filter"))
-        val limitInputField: Schema.InputLikeField = filter.fields.getValue("limit")
-        assertEquals(filter, limitInputField.containingType)
+        val filter = assertIs<Schema.Input>(schema.requireType("Filter"))
+        val limitInputField: Schema.InputLikeField = filter.requireField("limit")
+        assertEquals(filter, limitInputField.containingDef)
         assertEquals("limit", limitInputField.name)
         assertFalse(limitInputField.isRequired)
         val tagsTypeExpr =
-            assertIs<TypeExpr.List<Schema.InputType>>(
-                filter.fields.getValue("tags").typeExpr,
+            assertIs<TypeExpr.List<Schema.InputTypeDef>>(
+                filter.requireField("tags").type,
             )
         assertFalse(tagsTypeExpr.elementType.isNullable)
     }
@@ -293,7 +295,7 @@ class AssumptionsTest {
     fun `variable bindings distinguish undeclared incomplete and bound to null`(): Unit =
         runBlocking {
             val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-            val field = assumptions.schema.objectField("Query", "node_V_A_node")
+            val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
             val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
 
             assertFalse(assumptions.isBound(variable))
@@ -326,7 +328,7 @@ class AssumptionsTest {
     @Test
     fun `variable bindings are written once`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.objectField("Query", "node_V_A_node")
+        val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
         val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
         val first = 1
 
@@ -348,7 +350,7 @@ class AssumptionsTest {
     fun `variables can be bound immediately exactly once`(): Unit =
         runBlocking {
             val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-            val field = assumptions.schema.objectField("Query", "node_V_A_node")
+            val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
             val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
             val value = 1
 
@@ -368,7 +370,7 @@ class AssumptionsTest {
     @Test
     fun `immediate binding rejects a previously declared variable`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.objectField("Query", "node_V_A_node")
+        val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
         val variable = Arguments.Variable.of(field, "value").stamp(emptyList())
 
         assumptions.declareBinding(variable)
@@ -381,11 +383,11 @@ class AssumptionsTest {
     @Test
     fun `binding values are ground by type`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.objectField("Query", "node_V_A_node")
+        val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
         val binding = Arguments.Variable.of(field, "binding").stamp(emptyList())
         val filter =
             toEngineInputObjectData(
-                expectedType = assumptions.schema.type("Filter") as Schema.InputObjectType,
+                expectedType = assumptions.schema.requireType("Filter") as Schema.Input,
                 value = mapOf("limit" to 1),
             )
 
@@ -398,11 +400,11 @@ class AssumptionsTest {
     @Test
     fun `open arguments instantiate recursively from bindings`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val node = assumptions.schema.objectField("Query", "node_V_A_node")
+        val node = assumptions.schema.requireObjectField("Query", "node_V_A_node")
         val variable = Arguments.Variable.of(node, "filter").stamp(emptyList())
         val filter =
             toEngineInputObjectData(
-                expectedType = assumptions.schema.type("Filter") as Schema.InputObjectType,
+                expectedType = assumptions.schema.requireType("Filter") as Schema.Input,
                 value = mapOf("limit" to 3),
             )
         val arguments =
@@ -428,7 +430,7 @@ class AssumptionsTest {
     @Test
     fun `argument instantiation preserves the argument error`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val node = assumptions.schema.objectField("Query", "node_V_A_node")
+        val node = assumptions.schema.requireObjectField("Query", "node_V_A_node")
         val arguments = Arguments.of(node, mapOf("filter" to ArgumentResolutionError))
 
         val instantiated =
@@ -442,7 +444,7 @@ class AssumptionsTest {
     @Test
     fun `nested input errors become an argument error`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val node = schema.objectField("Query", "node_V_A_node")
+        val node = schema.requireObjectField("Query", "node_V_A_node")
         listOf(
             mapOf(
                 "tags" to listOf(ArgumentResolutionError),
@@ -463,7 +465,7 @@ class AssumptionsTest {
     @Test
     fun `nested erroneous variable bindings become an argument error`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val node = assumptions.schema.objectField("Query", "node_V_A_node")
+        val node = assumptions.schema.requireObjectField("Query", "node_V_A_node")
         val variable = Arguments.Variable.of(node, "tag").stamp(emptyList())
         val arguments =
             Arguments.of(
@@ -500,7 +502,7 @@ class AssumptionsTest {
     @Test
     fun `input-like factories convert host values according to the schema`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val filterType = schema.requireType("Filter") as Schema.Input
         val filter =
             toEngineInputObjectData(
                 expectedType = filterType,
@@ -525,7 +527,7 @@ class AssumptionsTest {
             assertIs<String>(filter.getValue("role")),
         )
 
-        val nodeField = schema.field("Query", "node_V_A_node")
+        val nodeField = schema.requireField("Query", "node_V_A_node")
         val arguments =
             Arguments.Resolved.of(
                 field = nodeField,
@@ -549,7 +551,7 @@ class AssumptionsTest {
     @Test
     fun `input-like factories apply declared defaults unless explicitly overridden`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val friendField = schema.field("User", "friend_V_A_node")
+        val friendField = schema.requireField("User", "friend_V_A_node")
         val defaultFriendArguments = Arguments.Resolved.of(friendField, emptyMap())
 
         assertEquals(
@@ -557,7 +559,7 @@ class AssumptionsTest {
             defaultFriendArguments.fieldValues.getValue("limit"),
         )
 
-        val nodeField = schema.field("Query", "node_V_A_node")
+        val nodeField = schema.requireField("Query", "node_V_A_node")
         val defaultArguments = Arguments.Resolved.of(nodeField, emptyMap())
         val defaultFilter =
             assertIs<EngineInputObjectData>(defaultArguments.fieldValues.getValue("filter"))
@@ -573,7 +575,7 @@ class AssumptionsTest {
 
         val explicitFilter =
             toEngineInputObjectData(
-                expectedType = schema.type("Filter") as Schema.InputObjectType,
+                expectedType = schema.requireType("Filter") as Schema.Input,
                 value = mapOf("limit" to 20, "role" to null),
             )
         assertEquals(
@@ -595,7 +597,7 @@ class AssumptionsTest {
     @Test
     fun `input-like factories reject values that do not match the schema`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.type("Filter") as Schema.InputObjectType
+        val filterType = schema.requireType("Filter") as Schema.Input
 
         assertFailsWith<ClassCastException> {
             toEngineInputObjectData(
@@ -617,7 +619,7 @@ class AssumptionsTest {
         }
         assertFailsWith<ClassCastException> {
             Arguments.Resolved.of(
-                field = schema.field("Query", "node_V_A_node"),
+                field = schema.requireField("Query", "node_V_A_node"),
                 fields = mapOf("filter" to 1),
             )
         }

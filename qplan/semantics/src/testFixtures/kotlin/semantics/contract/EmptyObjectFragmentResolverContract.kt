@@ -5,6 +5,8 @@ import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
+import model.requireObjectField
+import model.requireType
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -93,8 +95,8 @@ interface EmptyObjectFragmentResolverContract :
                     """.trimIndent(),
                 applicationObserver = { field, input, _, _ ->
                     require(input.hasExactlyFields())
-                    if (field.fieldName == "computed") {
-                        applications += field.containingType.typeName
+                    if (field.name == "computed") {
+                        applications += field.containingDef.name
                     }
                 },
             )
@@ -163,11 +165,12 @@ interface EmptyObjectFragmentResolverContract :
     }
 }
 
-internal fun Schema.contractObjectType(typeName: String): Schema.ObjectType =
-    type(typeName) as Schema.ObjectType
+internal fun Schema.contractObjectType(typeName: String): Schema.Object =
+    requireType(typeName) as Schema.Object
 
 internal fun Schema.contractKey(
     typeName: String,
     fieldName: String,
     arguments: Map<String, Any?> = emptyMap(),
-): ObjectEngineResult.GroundKey = ObjectEngineResult.GroundKey.of(objectField(typeName, fieldName), arguments)
+): ObjectEngineResult.GroundKey =
+    ObjectEngineResult.GroundKey.of(requireObjectField(typeName, fieldName), arguments)

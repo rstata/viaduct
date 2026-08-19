@@ -1,9 +1,9 @@
 package semantics
 
+import model.requireField
+import model.requireObjectField
 import model.Arguments
-
 import model.ObjectEngineResult
-
 import kotlinx.coroutines.runBlocking
 import model.VariableBinding
 import model.emptyFragmentOf
@@ -22,7 +22,7 @@ class FromArgumentBindingTest {
                 schemaSDL = "type Query { echo(value: Int): Int }",
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.field("Query", "echo") to
+                        schema.requireField("Query", "echo") to
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
@@ -31,7 +31,7 @@ class FromArgumentBindingTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val field = schema.objectField("Query", "echo")
+                    val field = schema.requireObjectField("Query", "echo")
                     mapOf(
                         Arguments.Variable.of(field, "value") to
                             schema.fromArgument(field, "value"),
@@ -39,7 +39,7 @@ class FromArgumentBindingTest {
                 },
             )
         val world = testWorld.assumptions
-        val field = world.schema.objectField("Query", "echo")
+        val field = world.schema.requireObjectField("Query", "echo")
         val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
 
         context(world) {

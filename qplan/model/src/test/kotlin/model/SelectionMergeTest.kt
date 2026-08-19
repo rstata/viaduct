@@ -36,12 +36,12 @@ class SelectionMergeTest {
         val merged = forest.merge(fixture.query)
         val oneKey =
             ObjectEngineResult.GroundKey.of(
-                fixture.schema.objectField("Query", "scalar"),
+                fixture.schema.requireObjectField("Query", "scalar"),
                 mapOf("arg" to 1),
             )
         val missingKey =
             ObjectEngineResult.GroundKey.of(
-                fixture.schema.objectField("Query", "scalar"),
+                fixture.schema.requireObjectField("Query", "scalar"),
                 mapOf("arg" to 3),
             )
 
@@ -56,7 +56,7 @@ class SelectionMergeTest {
         assertEquals(setOf(oneKey), filtered.keys())
         merged.forEach { selection ->
             assertIs<ObjectSelection>(selection)
-            assertEquals(fixture.query, selection.key.field.containingType)
+            assertEquals(fixture.query, selection.key.field.containingDef)
             assertEquals(setOf(fixture.query), selection.possibleTypes)
             assertTrue(selection.subselections.isEmpty())
         }
@@ -155,7 +155,7 @@ class SelectionMergeTest {
         assertEquals(1, merged.size)
         assertEquals(
             ObjectEngineResult.Key.of(
-                fixture.schema.field("ConcreteItem", "computed"),
+                fixture.schema.requireField("ConcreteItem", "computed"),
                 mapOf("factor" to 7),
             ),
             merged.single().key,
@@ -214,7 +214,7 @@ class SelectionMergeTest {
     @Test
     fun `merge coalesces equal open object keys`() {
         val fixture = Fixture()
-        val variableField = fixture.schema.objectField("Query", "search")
+        val variableField = fixture.schema.requireObjectField("Query", "search")
         val sameX =
             fixture.searchSelection(
                 mapOf(
@@ -256,7 +256,7 @@ class SelectionMergeTest {
     @Test
     fun `instantiation rejects an unstamped variable template`() {
         val fixture = Fixture()
-        val variableField = fixture.schema.objectField("Query", "search")
+        val variableField = fixture.schema.requireObjectField("Query", "search")
         val symbolic =
             fixture.searchSelection(
                 mapOf(
@@ -277,7 +277,7 @@ class SelectionMergeTest {
     @Test
     fun `instantiation rejects an unbound stamped variable`() {
         val fixture = Fixture()
-        val variableField = fixture.schema.objectField("Query", "search")
+        val variableField = fixture.schema.requireObjectField("Query", "search")
         val variable = Arguments.Variable.of(variableField, "x").stamp(emptyList())
         val symbolic =
             fixture.searchSelection(
@@ -296,7 +296,7 @@ class SelectionMergeTest {
     @Test
     fun `bound nested variables merge with equal concrete arguments`() {
         val fixture = Fixture()
-        val variableField = fixture.schema.objectField("Query", "search")
+        val variableField = fixture.schema.requireObjectField("Query", "search")
         val variable =
             Arguments.Variable.of(variableField, "x")
                 .stamp(listOf(ListEngineResult.Index.of(0)))
@@ -325,7 +325,7 @@ class SelectionMergeTest {
     @Test
     fun `repeated merge preserves a key containing substituted list bindings`() {
         val fixture = Fixture()
-        val source = fixture.schema.objectField("Query", "source")
+        val source = fixture.schema.requireObjectField("Query", "source")
         val variable = Arguments.Variable.of(source, "values").stamp(emptyList())
         val binding =
             Arguments.Resolved
@@ -358,7 +358,7 @@ class SelectionMergeTest {
     @Test
     fun `variable markers manufacture and identify ordinary ground selections`() {
         val fixture = Fixture()
-        val definingField = fixture.schema.objectField("Query", "search")
+        val definingField = fixture.schema.requireObjectField("Query", "search")
         val firstVariable =
             Arguments.Variable.of(definingField, "first").stamp(emptyList())
         val secondVariable =
@@ -424,7 +424,7 @@ class SelectionMergeTest {
     @Test
     fun `variable markers report no binding for absent or incomplete result keys`() {
         val fixture = Fixture()
-        val definingField = fixture.schema.objectField("Query", "search")
+        val definingField = fixture.schema.requireObjectField("Query", "search")
         val variable = Arguments.Variable.of(definingField, "value").stamp(emptyList())
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val marker =
@@ -458,7 +458,7 @@ class SelectionMergeTest {
     @Test
     fun `intermediate markers continue through objects and bind premature values`() {
         val fixture = Fixture()
-        val definingField = fixture.schema.objectField("Query", "search")
+        val definingField = fixture.schema.requireObjectField("Query", "search")
         val variable = Arguments.Variable.of(definingField, "value").stamp(emptyList())
         val leaf = fixture.selection("ConcreteItem", "a")
         val markedLeaf =
@@ -542,20 +542,20 @@ class SelectionMergeTest {
         val testWorld = TestWorld.fromSDL(SCHEMA)
         val world = testWorld.assumptions
         val schema = world.schema
-        val query = schema.query
-        val item = schema.type("ConcreteItem") as Schema.ObjectType
-        val filter = schema.type("Filter") as Schema.InputObjectType
+        val query = schema.requireQueryTypeDef()
+        val item = schema.requireType("ConcreteItem") as Schema.Object
+        val filter = schema.requireType("Filter") as Schema.Input
 
         fun selection(
             typeName: String,
             fieldName: String,
             arguments: Map<String, Any?> = emptyMap(),
-            possibleTypes: Set<Schema.ObjectType> =
-                (schema.type(typeName) as Schema.CompositeType).possibleTypes,
+            possibleTypes: Set<Schema.Object> =
+                (schema.requireType(typeName) as Schema.CompositeTypeDef).possibleObjectTypes,
             subselections: SelectionForest = selectionForestOf(),
         ): Selection =
             Selection.of(
-                key = ObjectEngineResult.Key.of(schema.field(typeName, fieldName), arguments),
+                key = ObjectEngineResult.Key.of(schema.requireField(typeName, fieldName), arguments),
                 possibleTypes = possibleTypes,
                 subselections = subselections,
             )

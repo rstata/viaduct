@@ -52,7 +52,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                 .reserveValue()
                 .await()
                 .materializeSelectedValue(
-                    expectedType = storedGroundKey.field.typeExpr,
+                    expectedType = storedGroundKey.field.type,
                     selections = selection.subselections,
                     reader = reader,
                     resultPath = resultPath + storedGroundKey,
@@ -71,7 +71,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
 // Recursively materializes one selected engine result while preserving null, error, and list shape.
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
 private suspend fun EngineResult?.materializeSelectedValue(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -100,6 +100,6 @@ private suspend fun EngineResult?.materializeSelectedValue(
                 }
             values
         }
-        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleType)
+        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleTypeDef)
     }
 }

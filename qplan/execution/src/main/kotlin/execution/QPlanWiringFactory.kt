@@ -57,10 +57,10 @@ private class ObjectEngineResultDataFetcher(
                         environment.fieldDefinition.name,
                 )
         val sourceFieldName = environment.fieldDefinition.name
-        val field = sourceSchema.field(source.type.typeName, sourceFieldName)
+        val field = sourceSchema.field(source.type.name, sourceFieldName)
         require(field is Schema.ObjectField) {
             "QPlan completion requires a concrete field for " +
-                "${source.type.typeName}/$sourceFieldName"
+                "${source.type.name}/$sourceFieldName"
         }
         val key =
             ObjectEngineResult.GroundKey.of(
@@ -72,7 +72,7 @@ private class ObjectEngineResultDataFetcher(
                 .getCell(key)
                 .getValue()
                 .get()
-        return if (field.fieldName == sourceFieldName) {
+        return if (field.name == sourceFieldName) {
             value.toGraphQLJavaValue(environment)
         } else {
             value.toGraphQLJavaNodeValue(environment)
@@ -86,9 +86,9 @@ private fun resolveType(environment: TypeResolutionEnvironment): GraphQLObjectTy
             ?: throw IllegalStateException(
                 "QPlan abstract type completion requires an ObjectEngineResult source",
             )
-    return environment.schema.getObjectType(source.type.typeName)
+    return environment.schema.getObjectType(source.type.name)
         ?: throw IllegalStateException(
-            "GraphQL schema has no object type named ${source.type.typeName}",
+            "GraphQL schema has no object type named ${source.type.name}",
         )
 }
 
@@ -133,9 +133,9 @@ private fun EngineResult?.toGraphQLJavaNodeValue(
             }
         is ObjectEngineResult -> {
             val payloadField =
-                type.fields["node"]
+                type.field("node")
                     ?: throw IllegalStateException(
-                        "QPlan node bridge ${type.typeName} has no payload field",
+                        "QPlan node bridge ${type.name} has no payload field",
                     )
             val payloadKey = ObjectEngineResult.GroundKey.of(payloadField, emptyMap())
             getCell(payloadKey)

@@ -1,5 +1,6 @@
 package model.testing
 
+import model.requireType
 import model.Schema
 import viaduct.graphql.utils.GraphQLTypeRelation
 import kotlin.test.Test
@@ -37,19 +38,19 @@ class GraphQLTypeRelationsParityTest {
 
     @Test
     fun `populates model possible types from shared GraphQL relations`() {
-        val both = schema.type("Both") as Schema.ObjectType
-        val leftOnly = schema.type("LeftOnly") as Schema.ObjectType
-        val other = schema.type("Other") as Schema.ObjectType
-        val deep = schema.type("Deep") as Schema.ObjectType
+        val both = schema.requireType("Both") as Schema.Object
+        val leftOnly = schema.requireType("LeftOnly") as Schema.Object
+        val other = schema.requireType("Other") as Schema.Object
+        val deep = schema.requireType("Deep") as Schema.Object
 
-        assertEquals(setOf(both, leftOnly), compositeType("Left").possibleTypes)
-        assertEquals(setOf(both), compositeType("Right").possibleTypes)
-        assertEquals(setOf(both, other), compositeType("Mixed").possibleTypes)
-        assertEquals(emptySet(), compositeType("EmptyParent").possibleTypes)
-        assertEquals(emptySet(), compositeType("EmptyChild").possibleTypes)
-        assertEquals(setOf(deep), compositeType("Grand").possibleTypes)
-        assertEquals(setOf(deep), compositeType("Parent").possibleTypes)
-        assertEquals(setOf(deep), compositeType("Child").possibleTypes)
+        assertEquals(setOf(both, leftOnly), compositeType("Left").possibleObjectTypes)
+        assertEquals(setOf(both), compositeType("Right").possibleObjectTypes)
+        assertEquals(setOf(both, other), compositeType("Mixed").possibleObjectTypes)
+        assertEquals(emptySet(), compositeType("EmptyParent").possibleObjectTypes)
+        assertEquals(emptySet(), compositeType("EmptyChild").possibleObjectTypes)
+        assertEquals(setOf(deep), compositeType("Grand").possibleObjectTypes)
+        assertEquals(setOf(deep), compositeType("Parent").possibleObjectTypes)
+        assertEquals(setOf(deep), compositeType("Child").possibleObjectTypes)
     }
 
     private fun relationBetween(
@@ -64,8 +65,8 @@ class GraphQLTypeRelationsParityTest {
     private fun sourceType(typeName: String) =
         schema.sourceCompositeType(compositeType(typeName))
 
-    private fun compositeType(typeName: String): Schema.CompositeType =
-        schema.type(typeName) as Schema.CompositeType
+    private fun compositeType(typeName: String): Schema.CompositeTypeDef =
+        schema.requireType(typeName) as Schema.CompositeTypeDef
 
     private companion object {
         val SCHEMA_SDL =

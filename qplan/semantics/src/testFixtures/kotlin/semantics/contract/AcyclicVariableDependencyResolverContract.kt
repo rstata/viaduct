@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireObjectField
 import model.Arguments
-
 import io.kotest.matchers.collections.shouldContainExactly
 import model.EngineResult
 import model.ObjectEngineResult
@@ -51,11 +51,11 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
 
         assertEquals(1, resolved.getCell(cKey).get())
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Query", "a"),
+            world.schema.requireObjectField("Query", "a"),
             mapOf("seed" to 1),
         )
         testWorld.applicationArguments.assertDistinctArguments(
-            world.schema.objectField("Query", "d"),
+            world.schema.requireObjectField("Query", "d"),
             mapOf("seed" to 1),
         )
     }
@@ -123,8 +123,8 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, _, arguments, _ ->
-                    if (field.fieldName == "first" || field.fieldName == "consume") {
-                        argumentApplications += field.fieldName to arguments
+                    if (field.name == "first" || field.name == "consume") {
+                        argumentApplications += field.name to arguments
                     }
                 },
             )
@@ -137,12 +137,12 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
         argumentApplications.toList().shouldContainExactly(
             "first" to
                 Arguments.Resolved.of(
-                    world.schema.objectField("Query", "first"),
+                    world.schema.requireObjectField("Query", "first"),
                     mapOf("value" to 1),
                 ),
             "consume" to
                 Arguments.Resolved.of(
-                    world.schema.objectField("Query", "consume"),
+                    world.schema.requireObjectField("Query", "consume"),
                     mapOf("value" to 2),
                 ),
         )

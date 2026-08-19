@@ -55,7 +55,7 @@ private fun CoroutineScope.orchestrateSlot(
     target: ObjectEngineResult,
 ) {
     require(source.schemaType == target.type) {
-        "Source type ${source.schemaType.typeName} does not match result type ${target.type.typeName}"
+        "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
     }
 
     val closedDemand = source.schemaType.closeResolverDemand(path, selections)
@@ -124,11 +124,11 @@ private suspend fun resolveSlot(
                             )
                         }
                     } else {
-                        source.get(key.field.fieldName)
+                        source.get(key.field.name)
                     }
                 val resolvedValue =
                     fieldValue.resolveValue(
-                        expectedType = key.field.typeExpr,
+                        expectedType = key.field.type,
                         path = path + key,
                         resolverDemand = resolutionSelections,
                     )

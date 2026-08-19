@@ -1,5 +1,7 @@
 package semantics
 
+import model.requireQueryTypeDef
+import model.requireObjectField
 import model.EngineResult
 import model.EngineResultCell
 import model.ObjectEngineResult
@@ -208,13 +210,13 @@ class RuntimeSupportTest {
                     }
                     """.trimIndent(),
                 ).assumptions
-        val target = ObjectEngineResult.of(world.schema.query, mutable = true)
+        val target = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), mutable = true)
         val support =
             RuntimeSupport.cycleChecking { selections -> selections }
 
         fun key(name: String): ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(
-                world.schema.objectField("Query", name),
+                world.schema.requireObjectField("Query", name),
                 emptyMap(),
             )
 

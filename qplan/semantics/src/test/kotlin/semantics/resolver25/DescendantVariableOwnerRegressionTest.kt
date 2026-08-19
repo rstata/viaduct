@@ -1,5 +1,6 @@
 package semantics.resolver25
 
+import model.requireObjectField
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -71,7 +72,7 @@ class DescendantVariableOwnerRegressionTest {
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
-                        world.schema.objectField("Query", "items"),
+                        world.schema.requireObjectField("Query", "items"),
                         emptyMap(),
                     ),
                 ).getValue().get() as ListEngineResult
@@ -82,7 +83,7 @@ class DescendantVariableOwnerRegressionTest {
                 item
                     .getCell(
                         ObjectEngineResult.GroundKey.of(
-                            world.schema.objectField("Item", "result"),
+                            world.schema.requireObjectField("Item", "result"),
                             emptyMap(),
                         ),
                     ).getValue().get()

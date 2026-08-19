@@ -1,5 +1,6 @@
 package semantics.resolver25
 
+import model.requireObjectField
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -26,13 +27,13 @@ class GroundedSuccessorProjectionRegressionTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     mapOf(
-                        schema.objectField("Query", "item") to
+                        schema.requireObjectField("Query", "item") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Item") {
                                     "passive" setTo 1
                                 }
                             },
-                        schema.objectField("Item", "successor") to
+                        schema.requireObjectField("Item", "successor") to
                             fieldResolverOf(
                                 schema.fragmentFrom(
                                     "fragment Successor on Item { passive }",
@@ -56,7 +57,7 @@ class GroundedSuccessorProjectionRegressionTest {
             setOf("passive", "successor"),
             buildSet {
                 projected.forEach { selection ->
-                    add(selection.key.field.fieldName)
+                    add(selection.key.field.name)
                 }
             },
         )

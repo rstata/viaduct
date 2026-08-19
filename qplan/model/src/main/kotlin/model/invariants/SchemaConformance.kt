@@ -37,7 +37,7 @@ internal fun EngineObjectData.Sync.conformsToSchema(): Boolean = this.conformsTo
  */
 context(world: Assumptions)
 internal fun EngineInputData?.conformsToSchema(
-    typeExpr: TypeExpr<Schema.InputType>,
+    typeExpr: TypeExpr<Schema.InputTypeDef>,
 ): Boolean = conformsToInputSchemaType(typeExpr)
 
 /**
@@ -48,7 +48,7 @@ internal fun EngineInputData?.conformsToSchema(
  */
 context(world: Assumptions)
 internal fun EngineOutputData?.conformsToOutputSchema(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
 ): Boolean =
     conformsToOutputSchemaType(typeExpr) &&
         (this !is EngineObjectData.Sync || conformsToOutputData())
@@ -80,9 +80,9 @@ internal fun EngineResult.conformsToSchema(): Boolean =
             keys.all { key ->
                 val cell = getCell(key)
                 val value = getCell(key).getValue().get()
-                key.field.containingType == type &&
+                key.field.containingDef == type &&
                     key.conformsToSchema() &&
-                    value.conformsToResultSchemaType(key.field.typeExpr) &&
+                    value.conformsToResultSchemaType(key.field.type) &&
                     (value?.conformsToSchema() ?: true) &&
                     cell.getAccessResult().get().conformsToAccessResult()
             }
@@ -94,7 +94,7 @@ internal fun EngineResult.conformsToSchema(): Boolean =
                     cell.getAccessResult().get().conformsToAccessResult()
             }
         is Schema.EnumValue ->
-            containingType.values[name] == this
+            containingDef.value(name) == this
         is Double -> isFinite()
         is Int,
         is Boolean,
@@ -105,12 +105,12 @@ internal fun EngineResult.conformsToSchema(): Boolean =
     }
 
 private fun EngineInputData.conformsToInputObjectType(
-    expectedType: Schema.InputObjectType,
+    expectedType: Schema.Input,
 ): Boolean {
     val fieldValues = asEngineInputObjectDataOrNull() ?: return false
     if (
-        expectedType.fields.values.any { field ->
-            !field.typeExpr.isNullable &&
+        expectedType.fields.any { field ->
+            !field.type.isNullable &&
                 field.defaultValue == CoercedDefaultValue.Absent &&
                 field.name !in fieldValues
         }
@@ -118,13 +118,13 @@ private fun EngineInputData.conformsToInputObjectType(
         return false
     }
     return fieldValues.all { (fieldName, value) ->
-        val field = expectedType.fields[fieldName] ?: return@all false
-        value.conformsToInputSchemaType(field.typeExpr)
+        val field = expectedType.field(fieldName) ?: return@all false
+        value.conformsToInputSchemaType(field.type)
     }
 }
 
 internal fun EngineInputData?.conformsToInputSchemaType(
-    typeExpr: TypeExpr<Schema.InputType>,
+    typeExpr: TypeExpr<Schema.InputTypeDef>,
 ): Boolean =
     when {
         this == null -> typeExpr.isNullable
@@ -139,10 +139,10 @@ internal fun EngineInputData?.conformsToInputSchemaType(
                 Schema.StringType -> this is String
                 Schema.BooleanType -> this is Boolean
                 Schema.IDType -> this is String
-                is Schema.EnumType ->
+                is Schema.Enum ->
                     this is String &&
-                        this in expectedType.values
-                is Schema.InputObjectType ->
+                        expectedType.value(this) != null
+                is Schema.Input ->
                     conformsToInputObjectType(expectedType)
             }
         else -> false
@@ -162,7 +162,7 @@ private fun EngineInputData.asEngineInputObjectDataOrNull(): EngineInputObjectDa
 }
 
 fun EngineOutputData?.conformsToOutputSchemaType(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
@@ -172,9 +172,9 @@ fun EngineOutputData?.conformsToOutputSchemaType(
                 all { value -> value.conformsToOutputSchemaType(typeExpr.elementType) }
         is EngineObjectData.Sync ->
             typeExpr is TypeExpr.Named &&
-                (typeExpr.baseType as? Schema.CompositeType)
-                    ?.possibleTypes
-                    ?.any { possibleType -> possibleType.typeName == type.name } == true
+                (typeExpr.baseType as? Schema.CompositeTypeDef)
+                    ?.possibleObjectTypes
+                    ?.any { possibleType -> possibleType.name == type.name } == true
         is Int -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IntType
         is Double ->
             isFinite() &&
@@ -186,7 +186,7 @@ fun EngineOutputData?.conformsToOutputSchemaType(
                     Schema.StringType,
                     Schema.IDType,
                     -> true
-                    is Schema.EnumType -> this in expected.values
+                    is Schema.Enum -> expected.value(this) != null
                     else -> false
                 }
         is Boolean -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.BooleanType
@@ -209,7 +209,7 @@ private fun EngineOutputData?.conformsToOutputData(): Boolean =
     }
 
 internal fun EngineResult?.conformsToResultSchemaType(
-    typeExpr: TypeExpr<Schema.OutputType>,
+    typeExpr: TypeExpr<Schema.OutputTypeDef>,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
@@ -217,7 +217,7 @@ internal fun EngineResult?.conformsToResultSchemaType(
         is ObjectEngineResult ->
             if (typeExpr is TypeExpr.Named) {
                 val declaredType = typeExpr.baseType
-                declaredType is Schema.CompositeType && type in declaredType.possibleTypes
+                declaredType is Schema.CompositeTypeDef && type in declaredType.possibleObjectTypes
             } else {
                 false
             }
@@ -234,8 +234,8 @@ internal fun EngineResult?.conformsToResultSchemaType(
         is EngineIDResult -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IDType
         is Schema.EnumValue ->
             typeExpr is TypeExpr.Named &&
-                typeExpr.baseType == containingType &&
-                containingType.values[name] == this
+                typeExpr.baseType == containingDef &&
+                containingDef.value(name) == this
         else -> false
     }
 

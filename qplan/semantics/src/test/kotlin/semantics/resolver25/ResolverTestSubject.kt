@@ -61,7 +61,7 @@ internal fun observeResolver25Resolution(
 private fun Resolver25LifecycleEvent.debugSummary(): String =
     when (this) {
         is Resolver25LifecycleEvent.DemandSubmitted ->
-            "$sequence submit ${path.debugSummary()} ${selection.key.field.fieldName} " +
+            "$sequence submit ${path.debugSummary()} ${selection.key.field.name} " +
                 "sub=${selection.subselections.debugFields()}"
         is Resolver25LifecycleEvent.DemandGrounded ->
             "$sequence ground ${coordinate.debugSummary()}"
@@ -91,11 +91,11 @@ private fun List<PathComponent>.debugSummary(): String =
     }
 
 private fun Schema.ObjectField.debugSummary(): String =
-    "${containingType.typeName}/$fieldName"
+    "${containingDef.name}/$name"
 
 private fun SelectionForest.debugFields(): Set<String> =
     linkedSetOf<String>().also { fields ->
         forEach { selection ->
-            fields += selection.key.field.fieldName
+            fields += selection.key.field.name
         }
     }

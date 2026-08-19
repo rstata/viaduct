@@ -23,6 +23,9 @@ import model.MaterializeSelectionForest
 import model.Schema
 import model.SourceSchemaAdapter
 import model.SelectionForest
+import model.requireObjectField
+import model.requireQueryTypeDef
+import model.requireType
 import model.spec.SpecSelection
 import model.spec.flatten
 import model.spec.flattenForMaterialization
@@ -42,7 +45,7 @@ internal class GJSelectionParser(
     private val sourceSchema = SourceSchemaAdapter(schema)
     private var effectiveVariableField = variableField
 
-    fun selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> {
+    fun selectionsFrom(fragment: String): Pair<Schema.CompositeTypeDef, SelectionForest> {
         val parsed = specSelectionsFrom(fragment)
         val selections = flatten(schema, parsed.nominalType, parsed.selections)
         return parsed.nominalType to selections
@@ -74,12 +77,12 @@ internal class GJSelectionParser(
                 mode = TranslationMode.EXTERNAL_OPERATION,
                 fragmentsByName = fragmentsByName,
             )
-        return flatten(schema, schema.query, selections)
+        return flatten(schema, schema.requireQueryTypeDef(), selections)
     }
 
     fun materializeSelectionsFrom(
         fragment: String,
-    ): Pair<Schema.CompositeType, MaterializeSelectionForest> {
+    ): Pair<Schema.CompositeTypeDef, MaterializeSelectionForest> {
         val parsed = specSelectionsFrom(fragment)
         val selections =
             flattenForMaterialization(schema, parsed.nominalType, parsed.selections)
@@ -97,13 +100,12 @@ internal class GJSelectionParser(
         validateFragment(document)
 
         val typeConditionName = definition.typeCondition.name!!
-        val typeCondition = schema.type(typeConditionName) as Schema.CompositeType
+        val typeCondition = schema.requireType(typeConditionName) as Schema.CompositeTypeDef
         if (effectiveVariableField == null) {
             effectiveVariableField =
-                typeCondition.possibleTypes
+                typeCondition.possibleObjectTypes
                     .first()
                     .fields
-                    .values
                     .first()
         }
         val graphQLTypeCondition =
@@ -220,9 +222,9 @@ internal class GJSelectionParser(
         val loweredNodeField = schema.isLoweredNodeField(canonicalField)
         val canonicalSubselections =
             if (loweredNodeField) {
-                val bridgeType = canonicalField.typeExpr.baseType as Schema.ObjectType
+                val bridgeType = canonicalField.type.baseType as Schema.Object
                 val payloadField =
-                    schema.objectField(bridgeType.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
+                    schema.requireObjectField(bridgeType.name, NODE_BRIDGE_PAYLOAD_FIELD)
                 listOf(
                     SpecSelection.Field.of(
                         alias = null,
@@ -258,7 +260,7 @@ internal class GJSelectionParser(
                 schema.graphQLSchema.getType(it) as GraphQLCompositeType
             }
         val modelTypeCondition =
-            typeConditionName?.let { schema.type(it) as Schema.CompositeType }
+            typeConditionName?.let { schema.requireType(it) as Schema.CompositeTypeDef }
         val selections =
             decodeSelectionSet(
                 fragment.selectionSet,
@@ -295,7 +297,7 @@ internal class GJSelectionParser(
             )
         if (selections.isEmpty()) return null
         return SpecSelection.InlineFragment.of(
-            typeCondition = schema.type(typeConditionName) as Schema.CompositeType,
+            typeCondition = schema.requireType(typeConditionName) as Schema.CompositeTypeDef,
             selections = selections,
         )
     }
@@ -390,6 +392,6 @@ internal class GJSelectionParser(
 }
 
 internal data class ParsedSpecFragment(
-    val nominalType: Schema.CompositeType,
+    val nominalType: Schema.CompositeTypeDef,
     val selections: List<SpecSelection>,
 )

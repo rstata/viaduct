@@ -8,5 +8,5 @@ import graphql.schema.GraphQLObjectType
  * This mirrors ViaductSchema's GraphQL-Java-backed `gjDef` accessors so a future schema migration
  * can replace the backing model without changing Engine API call sites.
  */
-val Schema.ObjectType.gjDef: GraphQLObjectType
+val Schema.Object.gjDef: GraphQLObjectType
     get() = graphQLJavaDefinition

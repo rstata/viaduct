@@ -1,15 +1,14 @@
 package model.testing
 
 import model.Arguments
-
 import model.ObjectEngineResult
-
 import model.Fragment
 import model.EngineInputData
 import model.Schema
 import model.SourceSchemaAdapter
 import model.TypeExpr
 import model.spec.SpecSelection
+import model.requireField
 import model.spec.flatten
 import model.spec.flattenForMaterialization
 import viaduct.graphql.utils.GraphQLTypeRelation
@@ -25,7 +24,7 @@ class FromObjectField private constructor(
     val responsePath: List<String>,
     internal val objectFragment: Fragment,
     internal val keyPath: List<ObjectEngineResult.Key>,
-    internal val terminalType: TypeExpr<Schema.OutputType>,
+    internal val terminalType: TypeExpr<Schema.OutputTypeDef>,
     private val nullableTraversal: Boolean,
 ) : VariableDeclaration {
     internal fun mapVariables(
@@ -40,7 +39,7 @@ class FromObjectField private constructor(
         )
 
     internal fun isCompatibleWith(
-        locationType: TypeExpr<Schema.InputType>,
+        locationType: TypeExpr<Schema.InputTypeDef>,
         locationHasDefault: Boolean,
     ): Boolean =
         compatibleTypes(
@@ -114,19 +113,19 @@ fun Schema.fromObjectField(
 
 private data class CompiledPath(
     val keys: List<ObjectEngineResult.Key>,
-    val terminalType: TypeExpr<Schema.OutputType>,
+    val terminalType: TypeExpr<Schema.OutputTypeDef>,
     val nullableTraversal: Boolean,
 )
 
 private data class MatchingField(
     val keys: List<ObjectEngineResult.Key>,
-    val typeExpr: TypeExpr<Schema.OutputType>,
+    val typeExpr: TypeExpr<Schema.OutputTypeDef>,
     val subselections: List<SpecSelection>,
-    val lossyCondition: Pair<Schema.CompositeType, Schema.CompositeType>?,
+    val lossyCondition: Pair<Schema.CompositeTypeDef, Schema.CompositeTypeDef>?,
 )
 
 private fun GJSchema.compilePath(
-    typeInScope: Schema.CompositeType,
+    typeInScope: Schema.CompositeTypeDef,
     selections: List<SpecSelection>,
     responsePath: List<String>,
     index: Int = 0,
@@ -148,7 +147,7 @@ private fun GJSchema.compilePath(
     matches.firstNotNullOfOrNull(MatchingField::lossyCondition)?.let { (from, to) ->
         throw IllegalArgumentException(
             "fromObjectField path ${responsePath.joinToString(".")} traverses lossy type " +
-                "condition ${from.typeName} to ${to.typeName}",
+                "condition ${from.name} to ${to.name}",
         )
     }
 
@@ -167,7 +166,7 @@ private fun GJSchema.compilePath(
     val isTerminal = index == responsePath.lastIndex
 
     if (isTerminal) {
-        require(typeExpr.baseType is Schema.SimpleType) {
+        require(typeExpr.baseType is Schema.SimpleTypeDef) {
             "fromObjectField path ${responsePath.joinToString(".")} must terminate at a scalar " +
                 "or enum"
         }
@@ -178,12 +177,12 @@ private fun GJSchema.compilePath(
         )
     }
 
-    require(typeExpr is TypeExpr.Named && typeExpr.baseType is Schema.CompositeType) {
+    require(typeExpr is TypeExpr.Named && typeExpr.baseType is Schema.CompositeTypeDef) {
         "fromObjectField path ${responsePath.joinToString(".")} cannot traverse list or simple " +
-            "field ${key.field.containingType.typeName}/${key.field.fieldName}"
+            "field ${key.field.containingDef.name}/${key.field.name}"
     }
     return compilePath(
-        typeInScope = typeExpr.baseType as Schema.CompositeType,
+        typeInScope = typeExpr.baseType as Schema.CompositeTypeDef,
         selections = matches.flatMap(MatchingField::subselections),
         responsePath = responsePath,
         index = index + 1,
@@ -194,9 +193,9 @@ private fun GJSchema.compilePath(
 
 private fun GJSchema.matchingFields(
     selections: List<SpecSelection>,
-    typeInScope: Schema.CompositeType,
+    typeInScope: Schema.CompositeTypeDef,
     responseKey: String,
-    lossyCondition: Pair<Schema.CompositeType, Schema.CompositeType>? = null,
+    lossyCondition: Pair<Schema.CompositeTypeDef, Schema.CompositeTypeDef>? = null,
 ): List<MatchingField> =
     selections.flatMap { selection ->
         when (selection) {
@@ -204,7 +203,7 @@ private fun GJSchema.matchingFields(
                 if ((selection.alias ?: selection.fieldName) != responseKey) {
                     emptyList()
                 } else {
-                    val field = field(typeInScope.typeName, selection.fieldName)
+                    val field = requireField(typeInScope.name, selection.fieldName)
                     val loweredNodeField = isLoweredNodeField(field)
                     val payloadSelection =
                         if (loweredNodeField) {
@@ -216,11 +215,11 @@ private fun GJSchema.matchingFields(
                         }
                     val payloadKey =
                         payloadSelection?.let { payload ->
-                            val bridgeType = field.typeExpr.baseType as Schema.ObjectType
+                            val bridgeType = field.type.baseType as Schema.Object
                             ObjectEngineResult.Key.of(
                                 field =
-                                    this@matchingFields.field(
-                                        bridgeType.typeName,
+                                    this@matchingFields.requireField(
+                                        bridgeType.name,
                                         payload.fieldName,
                                     ),
                                 arguments = payload.arguments,
@@ -272,14 +271,14 @@ private fun GJSchema.matchingFields(
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun TypeExpr<Schema.OutputType>.asInputType(): TypeExpr<Schema.InputType> {
-    require(baseType is Schema.InputType)
-    return this as TypeExpr<Schema.InputType>
+private fun TypeExpr<Schema.OutputTypeDef>.asInputType(): TypeExpr<Schema.InputTypeDef> {
+    require(baseType is Schema.InputTypeDef)
+    return this as TypeExpr<Schema.InputTypeDef>
 }
 
 private tailrec fun compatibleTypes(
-    locationType: TypeExpr<Schema.InputType>,
-    sourceType: TypeExpr<Schema.InputType>,
+    locationType: TypeExpr<Schema.InputTypeDef>,
+    sourceType: TypeExpr<Schema.InputTypeDef>,
     nullableTraversal: Boolean,
     locationHasDefault: Boolean,
 ): Boolean {
@@ -336,7 +335,7 @@ private tailrec fun compatibleTypes(
     }
 }
 
-private fun <T : Schema.Type> TypeExpr<T>.withNullable(nullable: Boolean): TypeExpr<T> =
+private fun <T : Schema.TypeDef> TypeExpr<T>.withNullable(nullable: Boolean): TypeExpr<T> =
     when (this) {
         is TypeExpr.Named -> TypeExpr.Named.of(baseType, nullable)
         is TypeExpr.List -> TypeExpr.List.of(elementType, nullable)

@@ -2,7 +2,6 @@ package semantics.arbitrary
 
 import model.Arguments
 import model.CoercedDefaultValue
-
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.arbitrary
@@ -25,6 +24,7 @@ import viaduct.engine.api.EngineObjectData
 import model.fragmentFrom
 import model.materializeSelectionForestOf
 import model.objectOf
+import model.requireType
 import model.selectionForestOf
 import model.toMaterializeSelectionForest
 import model.testing.CanonicalFieldResolverApplicationObserver
@@ -315,8 +315,8 @@ class ArbitraryRegistry internal constructor(
                 { field, input, arguments, suppliedDemand ->
                     val coordinate =
                         FieldCoordinate(
-                            field.containingType.typeName,
-                            field.fieldName,
+                            field.containingDef.name,
+                            field.name,
                         )
                     recordApplication(coordinate, arguments, input, suppliedDemand)
                     if (
@@ -334,7 +334,7 @@ class ArbitraryRegistry internal constructor(
             schemaSDL = schemaSDL,
             nodeResolvers = { canonicalSchema ->
                 nodeValues.map { (typeName, plan) ->
-                    val type = canonicalSchema.type(typeName) as Schema.ObjectType
+                    val type = canonicalSchema.requireType(typeName) as Schema.Object
                     type to
                         nodeResolverOf { id ->
                             plan.materializeObject(
@@ -355,7 +355,7 @@ class ArbitraryRegistry internal constructor(
                             coordinate.typeName,
                             coordinate.fieldName,
                         )
-                    val owner = field.containingType as Schema.ObjectType
+                    val owner = field.containingDef as Schema.Object
                     val constant =
                         plan.materialize(
                             canonicalSchema,
@@ -372,7 +372,7 @@ class ArbitraryRegistry internal constructor(
                                         field as Schema.ObjectField,
                                     ),
                             function = { input, arguments ->
-                                field.arguments.fields.values
+                                field.arguments.fields
                                     .filter { argument ->
                                         argument.defaultValue is CoercedDefaultValue.Present
                                     }.forEach { argument ->
@@ -422,14 +422,14 @@ class ArbitraryRegistry internal constructor(
                                     ResolverProgramKind.CONSTANT -> constant
                                     else ->
                                         if (
-                                            field.typeExpr !is TypeExpr.List &&
-                                            field.typeExpr.baseType is Schema.SimpleType
+                                            field.type !is TypeExpr.List &&
+                                            field.type.baseType is Schema.SimpleTypeDef
                                         ) {
                                             sensitiveScalar(
                                                 scalar =
                                                     ScalarKind.entries.single {
                                                         it.graphQLName ==
-                                                            field.typeExpr.baseType.typeName
+                                                            field.type.baseType.name
                                                     },
                                                 input = effectiveInput,
                                                 arguments = effectiveArguments,
@@ -1565,7 +1565,7 @@ internal data class FragmentPlan(
     ): Fragment =
         if (selections.isEmpty()) {
             Fragment.of(
-                nominalType = schema.type(ownerName) as Schema.ObjectType,
+                nominalType = schema.requireType(ownerName) as Schema.Object,
                 subselections = selectionForestOf(),
             )
         } else {
@@ -1635,10 +1635,10 @@ internal data class FragmentSelectionPlan(
 
     fun materialize(
         schema: Schema,
-        owner: Schema.ObjectType,
+        owner: Schema.Object,
         variableField: Schema.ObjectField,
     ): Selection =
-        FragmentPlan(owner.typeName, listOf(this))
+        FragmentPlan(owner.name, listOf(this))
             .materialize(schema, variableField)
             .subselections
             .single()
@@ -1672,7 +1672,7 @@ private fun List<FragmentSelectionPlan>.materialize(
                     .filterValues { argument -> argument is ErrorInputPlan }
                     .keys,
             ).let { materializedSelection ->
-                if (materializedSelection.key.field.fieldName.endsWith("_V_A_node")) {
+                if (materializedSelection.key.field.name.endsWith("_V_A_node")) {
                     val payload = materializedSelection.subselections.single()
                     return@let MaterializeSelection.of(
                         responseKey = materializedSelection.responseKey,
@@ -2123,7 +2123,7 @@ internal sealed interface ValuePlan {
      */
     fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String? = null,
         generatedHashSeed: Int = 0,
     ): EngineOutputData?
@@ -2136,7 +2136,7 @@ internal sealed interface ValuePlan {
 internal data object NullPlan : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData? = null
@@ -2147,7 +2147,7 @@ internal data object NullPlan : ValuePlan {
 internal data object ErrorPlan : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData = EngineErrorData
@@ -2158,7 +2158,7 @@ internal data object ErrorPlan : ValuePlan {
 internal data object InputIdPlan : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData = requireNotNull(inputId)
@@ -2172,7 +2172,7 @@ internal data class ScalarPlan(
 ) : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData =
@@ -2192,7 +2192,7 @@ internal data class ListPlan(
 ) : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputListData {
@@ -2217,7 +2217,7 @@ internal data class ObjectPlan(
 ) : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineObjectData.Sync =
@@ -2267,11 +2267,11 @@ internal data class GeneratedHashPlan(
 ) : ValuePlan {
     override fun materialize(
         schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputType>,
+        typeExpr: TypeExpr<Schema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineObjectData.Sync {
-        require(typeExpr.baseType.typeName == GENERATED_HASH_TYPE)
+        require(typeExpr.baseType.name == GENERATED_HASH_TYPE)
         val rootHash = mixGeneratedHash(generatedHashSeed, salt)
         return generatedHashObject(
             schema = schema,

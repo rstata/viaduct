@@ -1,7 +1,7 @@
 package semantics.contract
 
+import model.requireField
 import model.ObjectEngineResult
-
 import model.Schema
 import model.SelectionForest
 import model.emptyFragmentOf
@@ -9,6 +9,7 @@ import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
 import model.objectOf
+import model.requireType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import semantics.correctresolution.correctResolution
@@ -35,8 +36,8 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val item = schema.field("Query", "item")
-                    val computed = schema.field("Item", "computed")
+                    val item = schema.requireField("Query", "item")
+                    val computed = schema.requireField("Item", "computed")
                     mapOf(
                         item to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -65,7 +66,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom("fragment ignored on Query { item { computed } }")
-        val itemType = world.schema.type("Item") as Schema.ObjectType
+        val itemType = world.schema.requireType("Item") as Schema.Object
 
         val result =
             resolve(
@@ -81,7 +82,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                     .merge(itemType)
                     .instantiateBindings()
                     .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.fieldName }
+                    .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
         assertTrue(context(world) { result.correctResolution(fragment) })

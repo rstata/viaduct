@@ -64,7 +64,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
             promise
                 .await()
                 .materializeEngineResultValue(
-                    expectedType = storedKey.field.typeExpr,
+                    expectedType = storedKey.field.type,
                     selections = selection.subselections,
                     reader = reader,
                     resultPath = resultPath + storedKey,
@@ -97,7 +97,7 @@ internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
         selectionForestOf(
             Selection.of(
                 key = groundedKey,
-                possibleTypes = setOf(groundedKey.field.containingType),
+                possibleTypes = setOf(groundedKey.field.containingDef),
                 subselections = selectionForestOf(),
             ),
         ).localizeTopLevelSelectionStamps(selectionPath)
@@ -110,7 +110,7 @@ internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
 // Recursively materializes one selected result while retaining its exact stored path.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun EngineResult?.materializeEngineResultValue(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -133,7 +133,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
                 resultPath = resultPath,
             )
         }
-        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleType)
+        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleTypeDef)
     }
 
 // Materializes each list element at a path containing its concrete list index.

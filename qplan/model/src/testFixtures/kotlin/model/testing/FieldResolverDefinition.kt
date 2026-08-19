@@ -76,14 +76,14 @@ class FieldResolverDefinition private constructor(
         variables: Map<Arguments.Variable, VariableDefinition>,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {
-        val objectType = field.containingType
+        val objectType = field.containingDef
 
         fun normalize(
             fragment: Fragment,
             role: String,
         ): MaterializeSelectionForest {
             require(fragment.nominalType == objectType) {
-                "$role type ${fragment.nominalType.typeName} does not match ${objectType.typeName}"
+                "$role type ${fragment.nominalType.name} does not match ${objectType.name}"
             }
             return fragment.materializeSelections.flatMap { selection ->
                 if (objectType !in selection.possibleTypes) {

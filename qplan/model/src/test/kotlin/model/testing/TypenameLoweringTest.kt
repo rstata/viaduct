@@ -7,6 +7,10 @@ import model.merge
 import model.objectKey
 import model.objectOf
 import model.operationSelectionsFrom
+import model.requireField
+import model.requireObjectField
+import model.requireQueryTypeDef
+import model.requireType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,13 +22,13 @@ class TypenameLoweringTest {
     fun `lowered schema owns ordinary typename fields and a universal top interface`() {
         val world = TestWorld.fromSDL(SCHEMA)
         val schema = world.schema
-        val top = assertIs<Schema.InterfaceType>(schema.type("V_I_Top"))
+        val top = assertIs<Schema.Interface>(schema.requireType("V_I_Top"))
         val objectTypes =
             listOf("Query", "A", "B")
-                .map { name -> schema.type(name) as Schema.ObjectType }
+                .map { name -> schema.requireType(name) as Schema.Object }
 
-        assertEquals(objectTypes.toSet(), top.possibleTypes)
-        assertEquals(setOf("V_I_typename"), top.fields.keys)
+        assertEquals(objectTypes.toSet(), top.possibleObjectTypes)
+        assertEquals(setOf("V_I_typename"), top.fields.mapTo(linkedSetOf(), Schema.Field::name))
         listOf(
             "Query",
             "Item",
@@ -32,18 +36,18 @@ class TypenameLoweringTest {
             "A",
             "B",
         ).forEach { typeName ->
-            val field = schema.field(typeName, "V_I_typename")
-            assertEquals(typeName, field.containingType.typeName)
+            val field = schema.requireField(typeName, "V_I_typename")
+            assertEquals(typeName, field.containingDef.name)
             assertEquals(Schema.NoArguments, field.arguments)
-            assertEquals(Schema.StringType, field.typeExpr.baseType)
-            assertTrue(!field.typeExpr.isNullable)
+            assertEquals(Schema.StringType, field.type.baseType)
+            assertTrue(!field.type.isNullable)
         }
         listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
             assertFailsWith<Schema.MissingSchemaElementException> {
-                schema.field(typeName, "V_I_typename")
+                schema.requireField(typeName, "V_I_typename")
             }
         }
-        assertTrue((schema.type("Choice") as Schema.UnionType).fields.isEmpty())
+        assertTrue((schema.requireType("Choice") as Schema.Union).fields.isEmpty())
         listOf(
             "Query",
             "Item",
@@ -55,7 +59,7 @@ class TypenameLoweringTest {
             "Node_V_A_Bridge",
         ).forEach { typeName ->
             assertFailsWith<Schema.MissingSchemaElementException> {
-                schema.field(typeName, "__typename")
+                schema.requireField(typeName, "__typename")
             }
         }
     }
@@ -66,8 +70,8 @@ class TypenameLoweringTest {
 
         val objectFragment = schema.fragmentFrom("fragment F on A { __typename }")
         val objectSelection = objectFragment.subselections.single()
-        assertEquals("A", objectSelection.key.field.containingType.typeName)
-        assertEquals("V_I_typename", objectSelection.key.field.fieldName)
+        assertEquals("A", objectSelection.key.field.containingDef.name)
+        assertEquals("V_I_typename", objectSelection.key.field.name)
         assertEquals(
             "V_I_typename",
             objectFragment.materializeSelections.single().responseKey,
@@ -75,16 +79,16 @@ class TypenameLoweringTest {
 
         val interfaceSelection =
             schema.fragmentFrom("fragment F on Item { __typename }").subselections.single()
-        assertEquals("Item", interfaceSelection.key.field.containingType.typeName)
+        assertEquals("Item", interfaceSelection.key.field.containingDef.name)
         assertEquals(
             "A",
-            interfaceSelection.key.objectKey(schema.type("A") as Schema.ObjectType)
-                .field.containingType.typeName,
+            interfaceSelection.key.objectKey(schema.requireType("A") as Schema.Object)
+                .field.containingDef.name,
         )
 
         val unionFragment = schema.fragmentFrom("fragment F on Choice { kind: __typename }")
         val unionSelection = unionFragment.subselections.single()
-        assertEquals("V_I_Top", unionSelection.key.field.containingType.typeName)
+        assertEquals("V_I_Top", unionSelection.key.field.containingDef.name)
         assertEquals(
             "kind",
             unionFragment.materializeSelections.single().responseKey,
@@ -94,12 +98,12 @@ class TypenameLoweringTest {
             schema.fragmentFrom("fragment F on Query { node { __typename } }")
                 .subselections
                 .single()
-        val bridgeType = nodeSelection.key.field.typeExpr.baseType as Schema.ObjectType
+        val bridgeType = nodeSelection.key.field.type.baseType as Schema.Object
         val payload = nodeSelection.subselections.merge(bridgeType).single()
-        assertEquals("node", payload.key.field.fieldName)
+        assertEquals("node", payload.key.field.name)
         assertEquals(
             "V_I_typename",
-            payload.subselections.single().key.field.fieldName,
+            payload.subselections.single().key.field.name,
         )
     }
 
@@ -127,11 +131,11 @@ class TypenameLoweringTest {
                 }
                 """.trimIndent(),
             )
-        val a = nested.merge(world.schema.query).single()
-        assertEquals("a_V_A_node", a.key.field.fieldName)
-        val bridgeType = a.key.field.typeExpr.baseType as Schema.ObjectType
+        val a = nested.merge(world.schema.requireQueryTypeDef()).single()
+        assertEquals("a_V_A_node", a.key.field.name)
+        val bridgeType = a.key.field.type.baseType as Schema.Object
         val payload = a.subselections.merge(bridgeType).single()
-        assertEquals("node", payload.key.field.fieldName)
+        assertEquals("node", payload.key.field.name)
         assertTrue(payload.subselections.isEmpty())
     }
 
@@ -140,10 +144,10 @@ class TypenameLoweringTest {
         val world = TestWorld.fromSDL(SCHEMA)
         val schema = world.schema
         val registry = world.resolverRegistry
-        val top = schema.type("V_I_Top") as Schema.InterfaceType
+        val top = schema.requireType("V_I_Top") as Schema.Interface
 
-        top.possibleTypes.forEach { type ->
-            val field = schema.objectField(type.typeName, "V_I_typename")
+        top.possibleObjectTypes.forEach { type ->
+            val field = schema.requireObjectField(type.name, "V_I_typename")
             val resolver = registry.resolver(field)
             assertTrue(field in registry)
             assertEquals(Schema.NoArguments, field.arguments)
@@ -151,9 +155,9 @@ class TypenameLoweringTest {
             assertTrue(resolver.variables.isEmpty())
             assertTrue(registry.mayDemandFrom(field).isEmpty())
             assertEquals(
-                type.typeName,
+                type.name,
                 resolver(
-                    input = schema.objectOf(type.typeName),
+                    input = schema.objectOf(type.name),
                     arguments = Arguments.Resolved.of(field, emptyMap()),
                 ),
             )

@@ -111,7 +111,7 @@ sealed interface ObjectEngineResult {
      * occurrence carry [Stamp.Occurrence].
      */
     sealed interface Key {
-        val field: Schema.OutputField
+        val field: Schema.Field
         val arguments: Arguments
         val stamp: Stamp?
 
@@ -123,7 +123,7 @@ sealed interface ObjectEngineResult {
              */
             fun of(
                 stamp: Stamp.Occurrence,
-                field: Schema.OutputField,
+                field: Schema.Field,
                 arguments: Arguments,
             ): Key {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
@@ -148,7 +148,7 @@ sealed interface ObjectEngineResult {
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.
              */
             fun of(
-                field: Schema.OutputField,
+                field: Schema.Field,
                 arguments: Map<String, Any?>,
             ): Key = of(field, Arguments.of(field, arguments))
 
@@ -164,7 +164,7 @@ sealed interface ObjectEngineResult {
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.
              */
             fun of(
-                field: Schema.OutputField,
+                field: Schema.Field,
                 arguments: Arguments,
             ): Key {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
@@ -328,7 +328,7 @@ sealed interface ObjectEngineResult {
         }
     }
 
-    val type: Schema.ObjectType
+    val type: Schema.Object
 
     val keys: Set<GroundKey>
 
@@ -360,7 +360,7 @@ sealed interface ObjectEngineResult {
          * installed once and each slot of that cell may be installed once.
          */
         fun of(
-            type: Schema.ObjectType,
+            type: Schema.Object,
             values: Map<GroundKey, EngineResult?> = emptyMap(),
             accessResults: Map<GroundKey, EngineResult> =
                 values.keys.associateWith { true },
@@ -414,7 +414,7 @@ sealed interface ListEngineResult : List<EngineResultCell> {
         }
     }
 
-    val typeExpr: TypeExpr<Schema.OutputType>
+    val typeExpr: TypeExpr<Schema.OutputTypeDef>
 
     companion object {
         /**
@@ -424,7 +424,7 @@ sealed interface ListEngineResult : List<EngineResultCell> {
          * world.
          */
         fun of(
-            typeExpr: TypeExpr<Schema.OutputType>,
+            typeExpr: TypeExpr<Schema.OutputTypeDef>,
             values: List<EngineResult?>,
             accessResults: List<EngineResult?> =
                 values.map { true },
@@ -735,7 +735,7 @@ private class CellValueStore(
 }
 
 private class ObjectResultImpl(
-    override val type: Schema.ObjectType,
+    override val type: Schema.Object,
     cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
     mutable: Boolean,
 ) : ObjectEngineResult {
@@ -775,7 +775,7 @@ private class ObjectResultImpl(
 }
 
 private class ObjectCellStore(
-    private val type: Schema.ObjectType,
+    private val type: Schema.Object,
     cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
     private val mutable: Boolean,
 ) {
@@ -809,8 +809,8 @@ private class ObjectCellStore(
     fun freeze() {
         val presentCells =
             synchronized(lock) {
-                check(mutable) { "${type.typeName} result is immutable" }
-                check(!frozen) { "${type.typeName} result is already frozen" }
+                check(mutable) { "${type.name} result is immutable" }
+                check(!frozen) { "${type.name} result is already frozen" }
                 frozen = true
                 cells.toMap()
             }
@@ -836,15 +836,15 @@ private class ObjectCellStore(
 }
 
 private fun missingResultCell(
-    type: Schema.ObjectType,
+    type: Schema.Object,
     field: ObjectEngineResult.GroundKey,
 ): NoSuchElementException =
     NoSuchElementException(
-        "Missing engine-result cell: ${type.typeName}.${field.field.fieldName}",
+        "Missing engine-result cell: ${type.name}.${field.field.name}",
     )
 
 private class ListResultImpl(
-    override val typeExpr: TypeExpr<Schema.OutputType>,
+    override val typeExpr: TypeExpr<Schema.OutputTypeDef>,
     private val cells: List<EngineResultCell>,
 ) : ListEngineResult,
     List<EngineResultCell> by cells {
@@ -861,26 +861,26 @@ private data class ListIndexImpl(
 ) : ListEngineResult.Index
 
 private data class KeyImpl(
-    override val field: Schema.OutputField,
+    override val field: Schema.Field,
     override val arguments: Arguments,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.Key
 
 private data class StampedKeyImpl(
-    override val field: Schema.OutputField,
+    override val field: Schema.Field,
     override val arguments: Arguments,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.Key
 
 private data class VariableKeyImpl(
-    override val field: Schema.OutputField,
+    override val field: Schema.Field,
     override val arguments: Arguments,
     override val variableDefinedByThisKey: Arguments.Variable,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.VariableKey
 
 private data class StampedVariableKeyImpl(
-    override val field: Schema.OutputField,
+    override val field: Schema.Field,
     override val arguments: Arguments,
     override val variableDefinedByThisKey: Arguments.Variable,
     override val stamp: Stamp.Occurrence,
@@ -1017,11 +1017,11 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
         .also { write(key, it) }
 
 private fun validateObjectField(
-    type: Schema.ObjectType,
+    type: Schema.Object,
     field: ObjectEngineResult.GroundKey,
 ): Unit =
-    require(field.field.containingType == type) {
-        "${type.typeName} result contains a field owned by another type"
+    require(field.field.containingDef == type) {
+        "${type.name} result contains a field owned by another type"
     }
 
 private fun validateObjectValue(
@@ -1033,9 +1033,9 @@ private fun validateObjectValue(
             "A key with erroneous arguments must contain an error value"
         }
     }
-    require(value.conformsToResultSchemaType(field.field.typeExpr)) {
-        "${field.field.containingType.typeName}/${field.field.fieldName} result does not conform to " +
-            field.field.typeExpr
+    require(value.conformsToResultSchemaType(field.field.type)) {
+        "${field.field.containingDef.name}/${field.field.name} result does not conform to " +
+            field.field.type
     }
 }
 

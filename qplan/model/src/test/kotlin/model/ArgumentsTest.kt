@@ -23,7 +23,7 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).schema
-        val consume = schema.objectField("Query", "consume")
+        val consume = schema.requireObjectField("Query", "consume")
 
         val arguments = Arguments.Resolved.of(consume, mapOf("value" to 7))
 
@@ -43,7 +43,7 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).schema
-        val source = schema.objectField("Query", "source")
+        val source = schema.requireObjectField("Query", "source")
         val template = Arguments.Variable.of(source, "value")
         val arguments = Arguments.of(source, mapOf("value" to template))
 
@@ -68,8 +68,8 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).schema
-        val first = schema.objectField("Query", "first")
-        val second = schema.objectField("Query", "second")
+        val first = schema.requireObjectField("Query", "first")
+        val second = schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(first, "value")
 
         assertEquals(Arguments.Variable.of(first, "value"), template)
@@ -92,8 +92,8 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).schema
-        val first = schema.objectField("Query", "first")
-        val second = schema.objectField("Query", "second")
+        val first = schema.requireObjectField("Query", "first")
+        val second = schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(first, "value")
         val path = listOf(ListEngineResult.Index.of(0))
         val stamp = template.stamp(path)
@@ -126,7 +126,7 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).assumptions
-        val template = Arguments.Variable.of(world.schema.objectField("Query", "source"), "value")
+        val template = Arguments.Variable.of(world.schema.requireObjectField("Query", "source"), "value")
 
         assertFailsWith<IllegalArgumentException> {
             world.declareBinding(template)
@@ -150,8 +150,8 @@ class ArgumentsTest {
                 """.trimIndent(),
             ).assumptions
         val schema = world.schema
-        val first = schema.objectField("Query", "first")
-        val consume = schema.objectField("Query", "consume")
+        val first = schema.requireObjectField("Query", "first")
+        val consume = schema.requireObjectField("Query", "consume")
         val template = Arguments.Variable.of(first, "value")
         val arguments =
             Arguments.of(
@@ -204,8 +204,8 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).assumptions
-        val source = world.schema.objectField("Query", "source")
-        val consume = world.schema.objectField("Query", "consume")
+        val source = world.schema.requireObjectField("Query", "source")
+        val consume = world.schema.requireObjectField("Query", "consume")
         val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(2))
         val variable = template.stamp(path)
@@ -244,9 +244,9 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).assumptions
-        val source = world.schema.objectField("Query", "source")
-        val first = world.schema.objectField("Query", "first")
-        val second = world.schema.objectField("Query", "second")
+        val source = world.schema.requireObjectField("Query", "source")
+        val first = world.schema.requireObjectField("Query", "first")
+        val second = world.schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(1))
         val variable = template.stamp(path)
@@ -288,8 +288,8 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).assumptions
-        val source = world.schema.objectField("Query", "source")
-        val consume = world.schema.objectField("Query", "consume")
+        val source = world.schema.requireObjectField("Query", "source")
+        val consume = world.schema.requireObjectField("Query", "consume")
         val template = Arguments.Variable.of(source, "value")
         val arguments =
             Arguments.Template.of(
@@ -299,7 +299,7 @@ class ArgumentsTest {
         val sourceSelection =
             Selection.of(
                 key = ObjectEngineResult.Key.of(consume, arguments),
-                possibleTypes = setOf(world.schema.query),
+                possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                 subselections = selectionForestOf(),
             )
         val firstPath = listOf(ListEngineResult.Index.of(1))
@@ -326,10 +326,10 @@ class ArgumentsTest {
                 selectionForestOf(
                     Selection.of(
                         key = key,
-                        possibleTypes = setOf(world.schema.query),
+                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = selectionForestOf(),
                     ),
-                ).merge(world.schema.query)
+                ).merge(world.schema.requireQueryTypeDef())
                     .instantiateBindings()
                     .groundKeys()
                     .single()
@@ -347,10 +347,10 @@ class ArgumentsTest {
                 selectionForestOf(
                     Selection.of(
                         key = first,
-                        possibleTypes = setOf(world.schema.query),
+                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = selectionForestOf(),
                     ),
-                ).applicableGroundSelections(world.schema.query)
+                ).applicableGroundSelections(world.schema.requireQueryTypeDef())
                     .groundKeys()
                     .single()
             }
@@ -383,8 +383,8 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).schema
-        val source = schema.objectField("Query", "source")
-        val consume = schema.objectField("Query", "consume")
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
         val stampedVariable = Arguments.Variable.of(source, "value").stamp(emptyList())
         val arguments = Arguments.of(consume, mapOf("value" to stampedVariable))
 
@@ -404,8 +404,8 @@ class ArgumentsTest {
                 }
                 """.trimIndent(),
             ).schema
-        val intConsumer = schema.objectField("Query", "intConsumer")
-        val stringConsumer = schema.objectField("Query", "stringConsumer")
+        val intConsumer = schema.requireObjectField("Query", "intConsumer")
+        val stringConsumer = schema.requireObjectField("Query", "stringConsumer")
         val arguments = Arguments.of(intConsumer, mapOf("value" to 1))
 
         assertFailsWith<IllegalArgumentException> {
@@ -429,8 +429,8 @@ class ArgumentsTest {
                     }
                     """.trimIndent(),
                 ).assumptions
-            val source = world.schema.objectField("Query", "source")
-            val consume = world.schema.objectField("Query", "consume")
+            val source = world.schema.requireObjectField("Query", "source")
+            val consume = world.schema.requireObjectField("Query", "consume")
             val stamp = listOf(ListEngineResult.Index.of(1))
             val variableTemplate = Arguments.Variable.of(source, "value")
             val openArguments =
@@ -446,7 +446,7 @@ class ArgumentsTest {
             val sourceSelection =
                 Selection.of(
                     key = ObjectEngineResult.Key.of(consume, openArguments),
-                    possibleTypes = setOf(world.schema.query),
+                    possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                     subselections = selectionForestOf(),
                 )
             val selectionStamp =

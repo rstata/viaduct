@@ -1,10 +1,10 @@
 package model.registry
 
+import model.requireQueryTypeDef
+import model.requireObjectField
 import model.Arguments
-
 import model.ListEngineResult
 import model.ObjectEngineResult
-
 import model.Stamp
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -42,27 +42,27 @@ class StampedObjectPathDefinitionTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
                                 1
                             },
-                        schema.objectField("Query", "consume") to
+                        schema.requireObjectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 1
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
                     )
                 },
             )
-        val result = testWorld.schema.objectField("Query", "result")
+        val result = testWorld.schema.requireObjectField("Query", "result")
         val resolver = testWorld.resolverRegistry.resolver(result)
         val firstPath =
             listOf(
@@ -96,21 +96,21 @@ class StampedObjectPathDefinitionTest {
             }
         }
         assertEquals(
-            fullyStampedFragment.merge(testWorld.schema.query).keys(),
-            equalFullyStampedFragment.merge(testWorld.schema.query).keys(),
+            fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            equalFullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
         )
         assertNotEquals(
-            fullyStampedFragment.merge(testWorld.schema.query).keys(),
-            otherFullyStampedFragment.merge(testWorld.schema.query).keys(),
+            fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            otherFullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
         )
         assertEquals(
             fullyStampedFragment
                 .filter { selection -> selection.key.stampedVariables().isEmpty() }
-                .merge(testWorld.schema.query)
+                .merge(testWorld.schema.requireQueryTypeDef())
                 .keys(),
             otherFullyStampedFragment
                 .filter { selection -> selection.key.stampedVariables().isEmpty() }
-                .merge(testWorld.schema.query)
+                .merge(testWorld.schema.requireQueryTypeDef())
                 .keys(),
         )
     }
@@ -135,24 +135,24 @@ class StampedObjectPathDefinitionTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(source)) { _, _ ->
                                 1
                             },
-                        schema.objectField("Query", "source") to
+                        schema.requireObjectField("Query", "source") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 1
                             },
-                        schema.objectField("Query", "consume") to
+                        schema.requireObjectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 1
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
@@ -163,11 +163,11 @@ class StampedObjectPathDefinitionTest {
             )
         val resolver =
             testWorld.resolverRegistry.resolver(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
             )
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
                 mapOf("seed" to 3),
             )
         val sitePath = listOf(resultKey)
@@ -178,7 +178,7 @@ class StampedObjectPathDefinitionTest {
         assertEquals(
             setOf("source", "consume"),
             objectFragment.materializeSelections
-                .collect(testWorld.schema.query)
+                .collect(testWorld.schema.requireQueryTypeDef())
                 .responseKeys(),
         )
         assertTrue(
@@ -195,7 +195,7 @@ class StampedObjectPathDefinitionTest {
         val definition = resolver.stampedPathVarDefinitions(sitePath).single()
         val seed =
             Arguments.Variable.of(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
                 "seed",
             ).stamp(sitePath)
 
@@ -295,24 +295,24 @@ class StampedObjectPathDefinitionTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
                                 1
                             },
-                        schema.objectField("Query", "box") to
+                        schema.requireObjectField("Query", "box") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 null
                             },
-                        schema.objectField("Query", "consume") to
+                        schema.requireObjectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 1
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(fragment, listOf("box", "value")),
@@ -321,11 +321,11 @@ class StampedObjectPathDefinitionTest {
             )
         val resolver =
             testWorld.resolverRegistry.resolver(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
             )
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
         val definition = resolver.stampedPathVarDefinitions(listOf(resultKey)).single()
@@ -334,7 +334,7 @@ class StampedObjectPathDefinitionTest {
                 .stampVars(listOf(resultKey))
                 .filter { selection ->
                     selection.key is ObjectEngineResult.VariableKey &&
-                        selection.key.field.fieldName == "box"
+                        selection.key.field.name == "box"
                 }
                 .single()
         val markedValue = markedBox.subselections.single()
@@ -383,24 +383,24 @@ class StampedObjectPathDefinitionTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
                                 1
                             },
-                        schema.objectField("Query", "container") to
+                        schema.requireObjectField("Query", "container") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 null
                             },
-                        schema.objectField("Query", "consume") to
+                        schema.requireObjectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 1
                             },
                     )
                 },
                 variableProviders = { schema ->
-                    val result = schema.objectField("Query", "result")
+                    val result = schema.requireObjectField("Query", "result")
                     mapOf(
                         Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(
@@ -412,11 +412,11 @@ class StampedObjectPathDefinitionTest {
             )
         val resolver =
             testWorld.resolverRegistry.resolver(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
             )
         val resultKey =
             ObjectEngineResult.GroundKey.of(
-                testWorld.schema.objectField("Query", "result"),
+                testWorld.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
         val markedContainer =
@@ -424,15 +424,15 @@ class StampedObjectPathDefinitionTest {
                 .stampVars(listOf(resultKey))
                 .filter { selection ->
                     selection.key is ObjectEngineResult.VariableKey &&
-                        selection.key.field.fieldName == "container"
+                        selection.key.field.name == "container"
                 }.single()
         val markedBoxes =
             markedContainer.subselections.filter { selection ->
                 selection.key is ObjectEngineResult.VariableKey &&
-                    selection.key.field.fieldName == "box"
+                    selection.key.field.name == "box"
             }
 
         val markedBox = markedBoxes.single()
-        assertEquals("value", markedBox.subselections.single().key.field.fieldName)
+        assertEquals("value", markedBox.subselections.single().key.field.name)
     }
 }

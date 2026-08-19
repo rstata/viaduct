@@ -1,7 +1,7 @@
 package model
 
 internal fun coerceSimpleValue(
-    type: Schema.SimpleType,
+    type: Schema.SimpleTypeDef,
     value: Any,
 ): EngineOutputData =
     when (type) {
@@ -13,18 +13,18 @@ internal fun coerceSimpleValue(
         Schema.StringType -> requireType<String>(value, type)
         Schema.BooleanType -> requireType<Boolean>(value, type)
         Schema.IDType -> requireType<String>(value, type)
-        is Schema.EnumType ->
+        is Schema.Enum ->
             requireType<String>(value, type).also {
-                require(it in type.values) { "$it is not a value of ${type.typeName}" }
+                require(type.value(it) != null) { "$it is not a value of ${type.name}" }
             }
     }
 
 private inline fun <reified T : Any> requireType(
     value: Any,
-    type: Schema.Type,
+    type: Schema.TypeDef,
 ): T {
     require(value is T) {
-        "Expected ${T::class.simpleName} for ${type.typeName}"
+        "Expected ${T::class.simpleName} for ${type.name}"
     }
     return value
 }

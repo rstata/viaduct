@@ -79,7 +79,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                 val resolverValue = resolver(input, resolverArguments)
                 value.engineResultConformsToResolverValue(
                     resolverValue = resolverValue,
-                    expectedType = groundKey.field.typeExpr,
+                    expectedType = groundKey.field.type,
                 )
             }
 
@@ -110,7 +110,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
         } &&
             result.conformsToSelectionsAt(
                 selections =
-                    constructionSelections.applicableGroundSelections(field.containingType),
+                    constructionSelections.applicableGroundSelections(field.containingDef),
                 path = path.dropLast(1),
             )
     }
@@ -138,7 +138,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolverValue(
     resolverValue: EngineOutputData?,
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
 ): Boolean =
     when (this) {
         null -> resolverValue == null
@@ -163,7 +163,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                     )
                 }
         else ->
-            toEngineOutputData(expectedType.baseType as Schema.SimpleType) == resolverValue
+            toEngineOutputData(expectedType.baseType as Schema.SimpleTypeDef) == resolverValue
     }
 
 context(world: Assumptions)
@@ -174,7 +174,7 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
     if (type != resolverValue.schemaType) return false
 
     return keys.all { groundKey ->
-        val fieldName = groundKey.field.fieldName
+        val fieldName = groundKey.field.name
         val arguments = groundKey.arguments
         if (!fieldBelongsToResolver(groundKey.field)) {
             true
@@ -187,7 +187,7 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
         } else {
             getCell(groundKey).getValue().get().engineResultConformsToResolverValue(
                 resolverValue.get(fieldName),
-                groundKey.field.typeExpr,
+                groundKey.field.type,
             )
         }
     }

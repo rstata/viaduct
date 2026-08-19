@@ -4,6 +4,8 @@ import model.Schema
 import model.engineResultOf
 import model.engineObjectDataOf
 import model.objectOf
+import model.requireField
+import model.requireType
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -22,7 +24,7 @@ class SchemaConformanceTest {
         assertTrue(
             context(world) {
                 value.conformsToSchema() &&
-                    value.conformsToOutputSchema(schema.field("Query", "user").typeExpr)
+                    value.conformsToOutputSchema(schema.requireField("Query", "user").type)
             },
         )
     }
@@ -45,7 +47,7 @@ class SchemaConformanceTest {
     @Test
     fun `object value factory rejects a field value with the wrong type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = schema.type("User") as Schema.ObjectType
+        val user = schema.requireType("User") as Schema.Object
 
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(

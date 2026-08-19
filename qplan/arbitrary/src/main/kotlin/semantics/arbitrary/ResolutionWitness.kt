@@ -15,6 +15,7 @@ import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.TypeExpr
+import model.requireField
 import viaduct.engine.api.EngineObjectData
 import model.registry.ResolverRegistry
 import java.security.MessageDigest
@@ -393,7 +394,7 @@ fun SelectionForest.allowedResolverClosure(
                 )
             }
             selection.possibleTypes.forEach { possibleType ->
-                val field = possibleType.fields[selection.key.field.fieldName]
+                val field = possibleType.field(selection.key.field.name)
                 if (field is Schema.ObjectField && field in registry) {
                     directlySelected += field
                 }
@@ -432,7 +433,7 @@ fun SelectionForest.allowedResolverClosure(
 
     return AllowedResolverClosure(
         directlySelectedFields = directlySelected,
-        canonicalFields = closure.mapTo(linkedSetOf(), Schema.OutputField::fieldCoordinate),
+        canonicalFields = closure.mapTo(linkedSetOf(), Schema.Field::fieldCoordinate),
     )
 }
 
@@ -490,7 +491,7 @@ private class FingerprintBudget(
                             .joinToString(",") { (name, value) ->
                                 atom(name) +
                                     "=" +
-                                    input(value, expectedType.fields.getValue(name).typeExpr)
+                                    input(value, expectedType.requireField(name).type)
                             } +
                         ")",
                 )
@@ -534,10 +535,10 @@ private class FingerprintBudget(
         node(
             "selection(" +
                 canonicalKey(selection.key) +
-                ";nominal=" + atom(selection.key.field.containingType.typeName) +
+                ";nominal=" + atom(selection.key.field.containingDef.name) +
                 ";possible=" +
                 selection.possibleTypes
-                    .map { type -> atom(type.typeName) }
+                    .map { type -> atom(type.name) }
                     .sorted()
                     .joinToString(",", "[", "]") +
                 ";children=" + forest(selection.subselections) +
@@ -547,15 +548,15 @@ private class FingerprintBudget(
     private fun canonicalKey(key: ObjectEngineResult.Key): String =
         node(
             "key(" +
-                atom(key.field.containingType.typeName) +
-                "/" + atom(key.field.fieldName) +
+                atom(key.field.containingDef.name) +
+                "/" + atom(key.field.name) +
                 ";" + arguments(key.arguments, key.field.arguments) +
                 ")",
         )
 
     private fun input(
         value: EngineInputData?,
-        expectedType: TypeExpr<Schema.InputType>,
+        expectedType: TypeExpr<Schema.InputTypeDef>,
     ): String {
         if (value == null) return node("null")
 
@@ -580,15 +581,15 @@ private class FingerprintBudget(
                     Schema.BooleanType ->
                         node("boolean:${value as Boolean}")
                     Schema.IDType -> node("id:${atom(value as String)}")
-                    is Schema.EnumType ->
+                    is Schema.Enum ->
                         node(
-                            "enum:${atom(expectedNamedType.typeName)}:" +
+                            "enum:${atom(expectedNamedType.name)}:" +
                                 atom(value as String),
                         )
-                    is Schema.InputObjectType -> {
+                    is Schema.Input -> {
                         val fields = requireType<EngineInputObjectData>(value)
                         node(
-                            "input-object:${atom(expectedNamedType.typeName)}{" +
+                            "input-object:${atom(expectedNamedType.name)}{" +
                                 fields.entries
                                     .sortedBy(Map.Entry<String, EngineInputData?>::key)
                                     .joinToString(",") { (name, fieldValue) ->
@@ -596,7 +597,7 @@ private class FingerprintBudget(
                                             "=" +
                                             input(
                                                 fieldValue,
-                                                expectedNamedType.fields.getValue(name).typeExpr,
+                                                expectedNamedType.requireField(name).type,
                                             )
                                     } +
                                 "}",
@@ -611,10 +612,10 @@ private class FingerprintBudget(
         return value
     }
 
-    private fun typeExpr(typeExpr: TypeExpr<Schema.Type>): String =
+    private fun typeExpr(typeExpr: TypeExpr<Schema.TypeDef>): String =
         when (typeExpr) {
             is TypeExpr.Named ->
-                "named(${atom(typeExpr.baseType.typeName)},nullable=${typeExpr.isNullable})"
+                "named(${atom(typeExpr.baseType.name)},nullable=${typeExpr.isNullable})"
             is TypeExpr.List ->
                 "list(${typeExpr(typeExpr.elementType)},nullable=${typeExpr.isNullable})"
         }
@@ -643,10 +644,10 @@ private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
     bounds: ResolutionWitnessBounds,
 ): ResolutionFingerprint =
     ResolutionFingerprint(
-        "${field.containingType.typeName.length}:${field.containingType.typeName}/" +
-            "${field.fieldName.length}:${field.fieldName};" +
+        "${field.containingDef.name.length}:${field.containingDef.name}/" +
+            "${field.name.length}:${field.name};" +
             FingerprintBudget(bounds).arguments(arguments, field.arguments),
     )
 
-private fun Schema.OutputField.fieldCoordinate(): FieldCoordinate =
-    FieldCoordinate(containingType.typeName, fieldName)
+private fun Schema.Field.fieldCoordinate(): FieldCoordinate =
+    FieldCoordinate(containingDef.name, name)

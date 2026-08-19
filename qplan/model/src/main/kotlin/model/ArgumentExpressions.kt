@@ -30,7 +30,7 @@ private data class ArgumentsTemplateImpl(
 }
 
 internal fun argumentsOf(
-    field: Schema.OutputField,
+    field: Schema.Field,
     fields: Map<String, Any?>,
 ): Arguments =
     argumentsOfExpressions(
@@ -57,7 +57,7 @@ internal fun argumentTemplateOf(
 }
 
 internal fun coerceArgumentExpression(
-    typeExpr: TypeExpr<Schema.InputType>,
+    typeExpr: TypeExpr<Schema.InputTypeDef>,
     value: Any?,
 ): ArgumentExpression? {
     if (value == null) {
@@ -75,11 +75,11 @@ internal fun coerceArgumentExpression(
         }
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
-                is Schema.SimpleType ->
+                is Schema.SimpleTypeDef ->
                     requireNotNull(toEngineInputData(typeExpr, value)) {
                         "A non-null argument expression cannot coerce to null"
                     }
-                is Schema.InputObjectType -> {
+                is Schema.Input -> {
                     val fields = value.toStringKeyedArgumentMap()
                     coerceArgumentFields(type, fields)
                 }
@@ -93,12 +93,12 @@ private fun coerceArgumentFields(
 ): Map<String, ArgumentExpression?> {
     val suppliedFields =
         fields.mapValues { (fieldName, value) ->
-            val field = type.fields[fieldName] ?: throw ClassCastException()
-            coerceArgumentExpression(field.typeExpr, value)
+            val field = type.field(fieldName) ?: throw ClassCastException()
+            coerceArgumentExpression(field.type, value)
         }
 
     val values =
-        type.fields.values
+        type.fields
             .mapNotNull { field ->
                 val defaultValue = field.defaultValue
                 if (defaultValue is CoercedDefaultValue.Present) {
@@ -149,14 +149,14 @@ internal fun Arguments.conformsToArgumentDefinition(
             fieldExpressions().let { fields ->
                 fields.keys.containsAll(expectedType.requiredFieldNames()) &&
                     fields.all { (name, value) ->
-                        val field = expectedType.fields[name] ?: return@all false
-                        value.conformsToArgumentType(field.typeExpr)
+                        val field = expectedType.field(name) ?: return@all false
+                        value.conformsToArgumentType(field.type)
                     }
             }
     }
 
 private fun ArgumentExpression?.conformsToArgumentType(
-    typeExpr: TypeExpr<Schema.InputType>,
+    typeExpr: TypeExpr<Schema.InputTypeDef>,
 ): Boolean =
     when {
         this == null -> typeExpr.isNullable
@@ -164,15 +164,15 @@ private fun ArgumentExpression?.conformsToArgumentType(
         typeExpr is TypeExpr.List ->
             this is List<*> &&
                 all { element -> element.conformsToArgumentType(typeExpr.elementType) }
-        typeExpr is TypeExpr.Named && typeExpr.baseType is Schema.InputObjectType -> {
+        typeExpr is TypeExpr.Named && typeExpr.baseType is Schema.Input -> {
             val fields = this as? Map<*, *> ?: return false
-            val expectedType = typeExpr.baseType as Schema.InputObjectType
+            val expectedType = typeExpr.baseType as Schema.Input
             val names = fields.keys
             names.all { it is String } &&
                 names.containsAll(expectedType.requiredFieldNames()) &&
                 fields.all { (name, value) ->
-                    val field = expectedType.fields[name] ?: return@all false
-                    value.conformsToArgumentType(field.typeExpr)
+                    val field = expectedType.field(name as String) ?: return@all false
+                    value.conformsToArgumentType(field.type)
                 }
         }
         else -> conformsToInputSchemaType(typeExpr)
@@ -260,7 +260,7 @@ internal fun Arguments.substituteTemplates(
         fieldExpressions().mapValues { (name, value) ->
             value.substituteTemplates(
                 bindings,
-                expectedType.fields.getValue(name).typeExpr,
+                expectedType.requireField(name).type,
             )
         }
     return argumentsOfExpressions(substituted).validatedAgainst(expectedType)
@@ -268,7 +268,7 @@ internal fun Arguments.substituteTemplates(
 
 private fun ArgumentExpression?.substituteTemplates(
     bindings: Map<Arguments.Variable, EngineInputData?>,
-    expectedType: TypeExpr<Schema.InputType>,
+    expectedType: TypeExpr<Schema.InputTypeDef>,
 ): ArgumentExpression? =
     when (this) {
         is Arguments.Variable ->
@@ -285,11 +285,11 @@ private fun ArgumentExpression?.substituteTemplates(
         }
         is Map<*, *> -> {
             val expectedObjectType = (expectedType as TypeExpr.Named).baseType
-            check(expectedObjectType is Schema.InputObjectType)
+            check(expectedObjectType is Schema.Input)
             toStringKeyedArgumentMap().mapValues { (name, value) ->
                 value.substituteTemplates(
                     bindings,
-                    expectedObjectType.fields.getValue(name).typeExpr,
+                    expectedObjectType.requireField(name).type,
                 )
             }
         }
@@ -382,7 +382,7 @@ private fun ArgumentExpression?.containsVariable(): Boolean =
 internal fun Arguments.variableTemplates(): Set<Arguments.Variable> =
     variables().filterTo(linkedSetOf(), Arguments.Variable::isTemplate)
 
-internal fun Arguments.retarget(field: Schema.OutputField): Arguments {
+internal fun Arguments.retarget(field: Schema.Field): Arguments {
     if (this == Arguments.Error) return this
     val retargeted = Arguments.of(field, fieldExpressions())
     return when (this) {
@@ -393,9 +393,9 @@ internal fun Arguments.retarget(field: Schema.OutputField): Arguments {
 
 internal fun ArgumentExpression?.matchingVariableTypes(
     variable: Arguments.Variable,
-    typeExpr: TypeExpr<Schema.InputType>,
+    typeExpr: TypeExpr<Schema.InputTypeDef>,
     hasDefault: Boolean,
-): List<Pair<TypeExpr<Schema.InputType>, Boolean>> {
+): List<Pair<TypeExpr<Schema.InputTypeDef>, Boolean>> {
     require(variable.isTemplate) { "Variable type matching requires a template" }
     return when {
         this == variable -> listOf(typeExpr to hasDefault)
@@ -405,13 +405,13 @@ internal fun ArgumentExpression?.matchingVariableTypes(
             }
         this is Map<*, *> &&
             typeExpr is TypeExpr.Named &&
-            typeExpr.baseType is Schema.InputObjectType -> {
-            val expectedType = typeExpr.baseType as Schema.InputObjectType
+            typeExpr.baseType is Schema.Input -> {
+            val expectedType = typeExpr.baseType as Schema.Input
             toStringKeyedArgumentMap().flatMap { (name, value) ->
-                val field = expectedType.fields.getValue(name)
+                val field = expectedType.requireField(name)
                 value.matchingVariableTypes(
                     variable,
-                    field.typeExpr,
+                    field.type,
                     field.defaultValue is CoercedDefaultValue.Present,
                 )
             }

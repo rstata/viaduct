@@ -31,19 +31,19 @@ sealed interface EngineObjectDataEntry {
  * Every supplied value conforms to its field's output type.
  */
 fun engineObjectDataOf(
-    schemaType: Schema.ObjectType,
+    schemaType: Schema.Object,
     fields: Map<String, EngineOutputData?> = emptyMap(),
 ): EngineObjectData.Sync =
     engineObjectDataOf(
         schemaType = schemaType,
         fields =
             fields.map { (name, value) ->
-                val field = schemaType.fields[name]
+                val field = schemaType.field(name)
                 require(field is Schema.ObjectField) {
-                    "${schemaType.typeName} has no canonical object field named $name"
+                    "${schemaType.name} has no canonical object field named $name"
                 }
                 require(field.arguments.fields.isEmpty()) {
-                    "Passive object field ${schemaType.typeName}/$name must be argumentless"
+                    "Passive object field ${schemaType.name}/$name must be argumentless"
                 }
                 EngineObjectDataEntry.of(name, field, value)
             },
@@ -56,23 +56,23 @@ fun engineObjectDataOf(
  * GraphQL-Java definition for the production EOD type.
  */
 fun engineObjectDataOf(
-    schemaType: Schema.ObjectType,
+    schemaType: Schema.Object,
     fields: Iterable<EngineObjectDataEntry>,
 ): EngineObjectData.Sync {
     val entries = fields.toList()
     entries.forEach { entry ->
-        require(entry.field.containingType == schemaType) {
-            "${schemaType.typeName} cannot contain output field " +
-                "${entry.field.containingType.typeName}/${entry.field.fieldName}"
+        require(entry.field.containingDef == schemaType) {
+            "${schemaType.name} cannot contain output field " +
+                "${entry.field.containingDef.name}/${entry.field.name}"
         }
-        require(entry.value.conformsToOutputSchemaType(entry.field.typeExpr)) {
-            "${schemaType.typeName}/${entry.field.fieldName} value does not conform to " +
-                entry.field.typeExpr
+        require(entry.value.conformsToOutputSchemaType(entry.field.type)) {
+            "${schemaType.name}/${entry.field.name} value does not conform to " +
+                entry.field.type
         }
     }
     val values = entries.associate { entry -> entry.selection to entry.value }
     require(values.size == entries.size) {
-        "Object ${schemaType.typeName} contains duplicate string selections"
+        "Object ${schemaType.name} contains duplicate string selections"
     }
     return QPlanEngineObjectDataImpl(
         type = schemaType.gjDef,
@@ -88,7 +88,7 @@ fun engineObjectDataOf(
  * concrete implementation private while making its canonical model type available without
  * inspecting the opaque GraphQL-Java [EngineObjectData.type] witness.
  */
-val EngineObjectData.Sync.schemaType: Schema.ObjectType
+val EngineObjectData.Sync.schemaType: Schema.Object
     get() = (this as QPlanEngineObjectDataImpl).schemaType
 
 private data class EngineObjectDataEntryImpl(
@@ -100,7 +100,7 @@ private data class EngineObjectDataEntryImpl(
 @OptIn(InternalApi::class)
 private class QPlanEngineObjectDataImpl(
     override val type: GraphQLObjectType,
-    val schemaType: Schema.ObjectType,
+    val schemaType: Schema.Object,
     values: Map<String, EngineOutputData?>,
 ) : EngineObjectData.Sync {
     private val values = values.toMap()

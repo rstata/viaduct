@@ -22,8 +22,8 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
                     }
                     """.trimIndent(),
                 applicationObserver = { field, _, _, _ ->
-                    if (field.containingType.typeName == "Item" &&
-                        field.fieldName == "children"
+                    if (field.containingDef.name == "Item" &&
+                        field.name == "children"
                     ) {
                         childrenApplications += 1
                         check(childrenApplications <= 12) {

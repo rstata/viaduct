@@ -1,7 +1,6 @@
 package semantics
 
 import model.Arguments
-
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
@@ -17,6 +16,7 @@ import viaduct.engine.api.EngineObjectData
 import model.applicableGroundSelections
 import model.invariants.conformsToOutputSchemaType
 import model.schemaType
+import model.requireField
 import model.selectionForestOf
 import model.toEngineResult
 
@@ -49,7 +49,7 @@ internal class ObjectResolution(
  */
 context(world: Assumptions)
 internal fun EngineOutputData?.resolveValue(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
 ): ResolvedValue {
@@ -97,7 +97,7 @@ internal fun EngineOutputData?.resolveValue(
         }
         else ->
             ResolvedValue(
-                toEngineResult((expectedType as TypeExpr.Named).baseType as Schema.SimpleType),
+                toEngineResult((expectedType as TypeExpr.Named).baseType as Schema.SimpleTypeDef),
                 emptyList(),
                 emptyList(),
             )
@@ -113,10 +113,10 @@ private fun EngineObjectData.Sync.resolveObjectValue(
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     if (world.selectiveResolvers) {
         val selectedFieldNames =
-            resolverDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.fieldName }
+            resolverDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
         val unselectedKeys = getSelections().toSet() - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
-            "Selective resolver output ${schemaType.typeName} contains unselected fields: " +
+            "Selective resolver output ${schemaType.name} contains unselected fields: " +
                 unselectedKeys.joinToString()
         }
     }
@@ -129,9 +129,9 @@ private fun EngineObjectData.Sync.resolveObjectValue(
         } else {
             getSelections()
                 .map { fieldName ->
-                    val field = schemaType.fields.getValue(fieldName)
+                    val field = schemaType.requireField(fieldName)
                     require(field.arguments.fields.isEmpty()) {
-                        "Passive object field ${schemaType.typeName}/$fieldName must be argumentless"
+                        "Passive object field ${schemaType.name}/$fieldName must be argumentless"
                     }
                     ObjectEngineResult.GroundKey.of(field, emptyMap())
                 }.filter { key -> key.field !in world.resolverRegistry }
@@ -147,12 +147,12 @@ private fun EngineObjectData.Sync.resolveObjectValue(
         ) { result, key ->
             val arguments = key.arguments
             require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-                "Passive object field ${schemaType.typeName}/${key.field.fieldName} must be argumentless"
+                "Passive object field ${schemaType.name}/${key.field.name} must be argumentless"
             }
             val fieldValue =
-                get(key.field.fieldName)
+                get(key.field.name)
                     .resolveValue(
-                        expectedType = key.field.typeExpr,
+                        expectedType = key.field.type,
                         path = path + key,
                         resolverDemand =
                             resolverDemandByKey[key]

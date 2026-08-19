@@ -45,7 +45,7 @@ internal suspend fun ObjectEngineResult.readProvider(
         diagnosticInstrumentation.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == definition.path.lastIndex) {
-            return value.toProviderBinding(groundKey.field.typeExpr)
+            return value.toProviderBinding(groundKey.field.type)
         }
         when (value) {
             null -> return VariableBinding.of(null)
@@ -59,7 +59,7 @@ internal suspend fun ObjectEngineResult.readProvider(
 
 // Converts a provider result to an input value and rejects object-valued terminals.
 private fun EngineResult?.toProviderBinding(
-    expectedType: TypeExpr<Schema.OutputType>,
+    expectedType: TypeExpr<Schema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
@@ -69,13 +69,13 @@ private fun EngineResult?.toProviderBinding(
             error("A path-variable provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseType as Schema.SimpleType),
+                toEngineSimpleData(expectedType.baseType as Schema.SimpleTypeDef),
             )
     }
 
 // Converts a provider list to an input list after checking its element type.
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputType) {
+    require(typeExpr.baseType is Schema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()

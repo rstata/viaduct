@@ -1,7 +1,8 @@
 package model.registry
 
+import model.requireObjectField
+import model.requireField
 import model.Arguments
-
 import model.SelectionForest
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -29,7 +30,7 @@ class ResolverApplicationObserverTest {
                 fieldResolvers = { schema ->
                     val fragment = schema.emptyFragmentOf("Query")
                     mapOf(
-                        schema.field("Query", "value") to
+                        schema.requireField("Query", "value") to
                             fieldResolverOf(fragment) { _, _ -> 7 }
                                 .observeApplications { _, _, selections ->
                                     observed += selections
@@ -39,7 +40,7 @@ class ResolverApplicationObserverTest {
                 },
             )
         val world = testWorld.assumptions
-        val field = world.schema.objectField("Query", "value")
+        val field = world.schema.requireObjectField("Query", "value")
         val suppliedDemand =
             world.fragmentFrom("fragment ignored on Query { value }").subselections
         val resolver = world.resolverRegistry.resolver(field)

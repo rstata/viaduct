@@ -1,7 +1,9 @@
 package semantics
 
+import model.requireType
+import model.requireField
+import model.requireObjectField
 import model.Arguments
-
 import model.Assumptions
 import model.ObjectEngineResult
 import model.Schema
@@ -28,7 +30,7 @@ class WorldInjectionTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
-                    val user = schema.type("User") as Schema.ObjectType
+                    val user = schema.requireType("User") as Schema.Object
                     mapOf(
                         user to
                             nodeResolverOf { id ->
@@ -39,9 +41,9 @@ class WorldInjectionTest {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val userField = schema.field("Query", "user_V_A_node")
+                    val userField = schema.requireField("Query", "user_V_A_node")
                     val queryFragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.OutputField, FieldResolverDefinition>(
+                    mapOf<Schema.Field, FieldResolverDefinition>(
                         userField to
                             fieldResolverOf(
                                 objectFragment = queryFragment,
@@ -64,8 +66,8 @@ class WorldInjectionTest {
         assertEquals(registry, testWorld.instance(ResolverRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
 
-        val bridgeField = schema.objectField("Query", "user_V_A_node")
-        val payloadField = schema.objectField("User_V_A_Bridge", "node")
+        val bridgeField = schema.requireObjectField("Query", "user_V_A_node")
+        val payloadField = schema.requireObjectField("User_V_A_Bridge", "node")
         val bridge =
             assertIs<EngineObjectData.Sync>(
                 registry
@@ -102,7 +104,7 @@ class WorldInjectionTest {
         )
 
         assertFailsWith<Schema.MissingSchemaElementException> {
-            schema.objectField("Query", "user")
+            schema.requireObjectField("Query", "user")
         }
         assertEquals(bridgeField, selections.single().key.field)
         assertEquals(
@@ -110,7 +112,7 @@ class WorldInjectionTest {
             selections.single().subselections.single().key.field,
         )
         assertEquals(
-            schema.field("User", "id"),
+            schema.requireField("User", "id"),
             selections.single().subselections.single().subselections.single().key.field,
         )
     }
@@ -119,9 +121,9 @@ class WorldInjectionTest {
     fun `guice supplies required query resolvers when resolver inputs are omitted`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
 
-        assertFalse(world.schema.objectField("User", "id") in world.resolverRegistry)
+        assertFalse(world.schema.requireObjectField("User", "id") in world.resolverRegistry)
         world.resolverRegistry.resolver(
-            world.schema.objectField("Query", "user_V_A_node"),
+            world.schema.requireObjectField("Query", "user_V_A_node"),
         )
     }
 
@@ -144,10 +146,10 @@ class WorldInjectionTest {
 }
 
 private fun Schema.key(
-    type: Schema.ObjectType,
+    type: Schema.Object,
     fieldName: String,
 ): ObjectEngineResult.GroundKey =
     ObjectEngineResult.GroundKey.of(
-        field = objectField(type.typeName, fieldName),
+        field = requireObjectField(type.name, fieldName),
         arguments = emptyMap(),
     )

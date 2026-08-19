@@ -11,6 +11,7 @@ import graphql.language.StringValue
 import graphql.language.Value as GraphQLValue
 import graphql.language.VariableReference
 import graphql.schema.GraphQLArgument
+import graphql.schema.GraphQLCompositeType
 import graphql.schema.GraphQLEnumType
 import graphql.schema.GraphQLFieldDefinition
 import graphql.schema.GraphQLFieldsContainer
@@ -40,12 +41,15 @@ import model.EngineSimpleData
 import model.Schema
 import model.TypeExpr
 import model.coerceArgumentExpression
+import viaduct.graphql.utils.GraphQLTypeRelation
+import viaduct.graphql.utils.GraphQLTypeRelations
 
 /** Names reserved for fixture-generated canonical types and fields. */
 internal const val NODE_SYNTHETIC_NAME_TOKEN = "V_A"
 internal const val TYPENAME_SYNTHETIC_NAME_TOKEN = "V_I"
 internal const val TYPENAME_TOP_TYPE = "V_I_Top"
 internal const val LOWERED_TYPENAME_FIELD = "V_I_typename"
+internal const val VIADUCT_IGNORE_SYMBOL = "VIADUCT_IGNORE"
 internal const val NODE_BRIDGE_TYPE_SUFFIX = "_V_A_Bridge"
 internal const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
 internal const val NODE_BRIDGE_ID_FIELD = "id"
@@ -72,6 +76,7 @@ internal fun nodeBridgeFieldName(sourceFieldName: String): String =
  */
 internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
+    private val typeRelations: GraphQLTypeRelations,
 ) {
     private val types = linkedMapOf<String, Schema.Type>()
     private val abstractCompositeFields =
@@ -107,7 +112,6 @@ internal class GJSchemaDecoder(
             DecodedSchema(
                 query = query,
                 types = types.toMap(),
-                graphQLSchema = graphQLSchema,
             )
         populatePossibleTypes()
         populateTypenameTopPossibleTypes()
@@ -219,8 +223,8 @@ internal class GJSchemaDecoder(
             .map { GraphQLTypeUtil.unwrapAll(it.type) }
             .filterIsInstance<GraphQLImplementingType>()
             .filter { outputType ->
-                outputType.name == node.name ||
-                    implementsInterface(node.name, outputType)
+                typeRelations.relationUnwrapped(node, outputType) in
+                    setOf(GraphQLTypeRelation.Same, GraphQLTypeRelation.WiderThan)
             }.mapTo(linkedSetOf()) { it.name }
     }
 
@@ -235,26 +239,17 @@ internal class GJSchemaDecoder(
     }
 
     private fun populatePossibleTypes() {
-        graphQLSchema.allTypesAsList.forEach { graphQLType ->
-            when (graphQLType) {
-                is GraphQLInterfaceType -> {
-                    val modelType = types.getValue(graphQLType.name) as Schema.InterfaceType
-                    graphQLSchema.allTypesAsList
-                        .filterIsInstance<GraphQLObjectType>()
-                        .filter { implementsInterface(graphQLType.name, it) }
-                        .mapTo(possibleTypeSets.getValue(modelType)) {
-                            types.getValue(it.name) as Schema.ObjectType
-                        }
-                }
-
-                is GraphQLUnionType -> {
-                    val modelType = types.getValue(graphQLType.name) as Schema.UnionType
-                    graphQLType.types.mapTo(possibleTypeSets.getValue(modelType)) {
+        graphQLSchema.allTypesAsList
+            .filterIsInstance<GraphQLCompositeType>()
+            .filterNot { it.name.startsWith("__") }
+            .forEach { graphQLType ->
+                val modelType = types.getValue(graphQLType.name) as Schema.CompositeType
+                typeRelations
+                    .possibleObjectTypes(graphQLType)
+                    .mapTo(possibleTypeSets.getValue(modelType)) {
                         types.getValue(it.name) as Schema.ObjectType
                     }
-                }
             }
-        }
     }
 
     private fun populateTypenameTopPossibleTypes() {
@@ -431,13 +426,11 @@ internal class GJSchemaDecoder(
     }
 
     private fun isNodeType(type: Schema.OutputType): Boolean {
-        val nodeType = types["Node"] as? Schema.InterfaceType ?: return false
+        val nodeType = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return false
         if (type !is Schema.CompositeType) return false
-        return schema.relation(nodeType, type) in
-            setOf(
-                Schema.TypeRelation.SAME,
-                Schema.TypeRelation.WIDER_THAN,
-            )
+        val sourceType = graphQLSchema.getType(type.typeName) as GraphQLCompositeType
+        return typeRelations.relationUnwrapped(nodeType, sourceType) in
+            setOf(GraphQLTypeRelation.Same, GraphQLTypeRelation.WiderThan)
     }
 
     private fun addCompositeField(
@@ -538,12 +531,6 @@ internal class GJSchemaDecoder(
             check(decoded != ArgumentResolutionError && decoded !is Arguments.Variable)
             CoercedDefaultValue.of(decoded)
         }
-
-    private fun implementsInterface(
-        interfaceName: String,
-        implementingType: GraphQLImplementingType,
-        visited: Set<String> = emptySet(),
-    ): Boolean = implementsInterface(graphQLSchema, interfaceName, implementingType, visited)
 
 }
 
@@ -1031,7 +1018,6 @@ private fun <T> fieldArgumentsOf(
 private class DecodedSchema(
     override val query: Schema.ObjectType,
     private val types: Map<String, Schema.Type>,
-    private val graphQLSchema: GraphQLSchema,
 ) : Schema {
     override fun type(typeName: String): Schema.Type =
         types[typeName] ?: throw Schema.MissingSchemaElementException(typeName)
@@ -1043,72 +1029,5 @@ private class DecodedSchema(
         val containingType = type(typeName) as? Schema.CompositeType
         return containingType?.fields?.get(fieldName)
             ?: throw Schema.MissingSchemaElementException(typeName, fieldName)
-    }
-
-    override fun spreadableTypes(
-        parentType: Schema.CompositeType,
-    ): Set<Schema.CompositeType> =
-        types.values
-            .filterIsInstance<Schema.CompositeType>()
-            .filter { candidate ->
-                candidate == parentType ||
-                    candidate.possibleTypes.any(parentType.possibleTypes::contains)
-            }.toCollection(linkedSetOf())
-
-    override fun isSpreadable(
-        parentType: Schema.CompositeType,
-        fragmentType: Schema.CompositeType,
-    ): Boolean =
-        fragmentType == parentType ||
-            fragmentType.possibleTypes.any(parentType.possibleTypes::contains)
-
-    override fun relation(
-        a: Schema.CompositeType,
-        b: Schema.CompositeType,
-    ): Schema.TypeRelation =
-        when {
-            a == b -> Schema.TypeRelation.SAME
-            isNominallyWider(a, b) -> Schema.TypeRelation.WIDER_THAN
-            isNominallyWider(b, a) -> Schema.TypeRelation.NARROWER_THAN
-            a.possibleTypes.any(b.possibleTypes::contains) -> Schema.TypeRelation.COPARENT
-            else -> Schema.TypeRelation.NONE
-        }
-
-    private fun isNominallyWider(
-        wider: Schema.CompositeType,
-        narrower: Schema.CompositeType,
-    ): Boolean =
-        when (val widerType = graphQLSchema.getType(wider.typeName)) {
-            is GraphQLInterfaceType ->
-                (graphQLSchema.getType(narrower.typeName) as? GraphQLImplementingType)
-                    ?.let { implementsInterface(widerType.name, it) } == true
-
-            is GraphQLUnionType ->
-                graphQLSchema.getType(narrower.typeName) is GraphQLObjectType &&
-                    widerType.types.any { it.name == narrower.typeName }
-
-            else -> false
-        }
-
-    private fun implementsInterface(
-        interfaceName: String,
-        implementingType: GraphQLImplementingType,
-        visited: Set<String> = emptySet(),
-    ): Boolean = implementsInterface(graphQLSchema, interfaceName, implementingType, visited)
-}
-
-internal fun implementsInterface(
-    schema: GraphQLSchema,
-    interfaceName: String,
-    implementingType: GraphQLImplementingType,
-    visited: Set<String> = emptySet(),
-): Boolean {
-    if (implementingType.name in visited) return false
-    val nextVisited = visited + implementingType.name
-    return implementingType.interfaces.any { implementedInterface ->
-        implementedInterface.name == interfaceName ||
-            (schema.getType(implementedInterface.name) as GraphQLImplementingType).let {
-                implementsInterface(schema, interfaceName, it, nextVisited)
-            }
     }
 }

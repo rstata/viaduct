@@ -12,6 +12,7 @@ import model.TypeExpr
 import model.spec.SpecSelection
 import model.spec.flatten
 import model.spec.flattenForMaterialization
+import viaduct.graphql.utils.GraphQLTypeRelation
 
 /**
  * One external `fromObjectField` declaration compiled for canonical registry construction.
@@ -244,15 +245,20 @@ private fun GJSchema.matchingFields(
             is SpecSelection.InlineFragment -> {
                 val condition = selection.typeCondition
                 val relation =
-                    condition?.let { relation(typeInScope, it) }
+                    condition?.let {
+                        typeRelations.relationUnwrapped(
+                            sourceCompositeType(typeInScope),
+                            sourceCompositeType(it),
+                        )
+                    }
                 val nextLossyCondition =
                     lossyCondition
                         ?: condition
                             ?.takeIf {
                                 relation in
                                     setOf(
-                                        Schema.TypeRelation.WIDER_THAN,
-                                        Schema.TypeRelation.COPARENT,
+                                        GraphQLTypeRelation.WiderThan,
+                                        GraphQLTypeRelation.Coparent,
                                     )
                             }?.let { typeInScope to it }
                 matchingFields(

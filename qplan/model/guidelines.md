@@ -18,7 +18,7 @@ Mutable OERs may gain validated exact cells monotonically. Each cell has indepen
 
 `Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
 
-Use canonical schema relations for GraphQL semantics rather than Kotlin inheritance. In particular, use schema-canonical definitions, `Schema.TypeRelation`, and `CompositeType.possibleTypes` as appropriate for field ownership, type overlap, applicability, and subtype reasoning.
+Use canonical schema definitions and `CompositeType.possibleTypes` for field ownership and concrete applicability rather than Kotlin inheritance. Source-facing fixture and lowering infrastructure delegates nominal relation, overlap, and fragment-spread reasoning to the shared `GraphQLTypeRelations` built from the retained source `GraphQLSchema`; it does not reproduce those relations in the qplan schema model.
 
 Each `Schema.ObjectType` also retains one canonical GraphQL-Java definition for Engine API integration. This attached object is canonical in the operational sense that repeated access within one schema returns the same instance, so it introduces no competing identity. It is otherwise not part of the mathematical model: reasoning must treat it as opaque and must not inspect it for equality, hashing, conformance, field ownership, applicability, or subtype decisions. Infrastructure accesses it through `Schema.ObjectType.gjDef`, mirroring ViaductSchema's GraphQL-Java-backed extension vocabulary.
 
@@ -111,8 +111,6 @@ Public nominal semantic categories are sealed interfaces unless the category its
 Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `ObjectEngineResult` is sealed around its private implementation, while externally implemented `Schema.ObjectType` is an open leaf. Its enclosing category, `Schema.Type`, remains sealed.
 
 Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `CoercedDefaultValue.Absent`, and built-in scalar type definitions are examples.
-
-Public enums represent finite scalar sets of unique values, such as the five possible results of `Schema.TypeRelation`. They are not used as substitutes for algebraic categories or checked semantic unions.
 
 Do not expose public data classes or public sealed classes. For example, expose `Promise` as a sealed interface backed by private implementations rather than exposing their generated component operations.
 

@@ -92,65 +92,6 @@ interface Schema {
     }
 
     /**
-     * Returns exactly the composite types that may be used as type conditions in the selection
-     * set of [parentType], according to GraphQL fragment-spread validity.
-     *
-     * For composite types `a` and `b`, `b` is in `spreadableTypes(a)` exactly when `a == b` or their
-     * [CompositeType.possibleTypes] sets have a common member. Thus the parent type itself is always
-     * in the returned set, even when it has no possible object types, while distinct nominally
-     * related interfaces with no common possible object are not spreadable. Spreadability is
-     * symmetric.
-     */
-    fun spreadableTypes(parentType: CompositeType): Set<CompositeType>
-
-    /**
-     * Whether [fragmentType] may be used as a type condition in the selection set of [parentType],
-     * according to GraphQL fragment-spread validity.
-     *
-     * This is true exactly when [fragmentType] is in `spreadableTypes(parentType)`.
-     */
-    fun isSpreadable(
-        parentType: CompositeType,
-        fragmentType: CompositeType,
-    ): Boolean
-
-    /**
-     * The selection-set relation of the composite types [a] and [b].
-     *
-     * Nominal narrowing and fragment spreadability remain distinct. In particular, one interface
-     * may be nominally narrower than another even when neither has a possible concrete object;
-     * that fact alone does not make a fragment spread possible. A nominally narrower type's
-     * possible-object set is a subset of the wider type's set, but set inclusion does not imply a
-     * nominal relation. The result is a stipulated schema relation, not an algorithm derived solely
-     * by comparing [CompositeType.possibleTypes].
-     */
-    fun relation(
-        a: CompositeType,
-        b: CompositeType,
-    ): TypeRelation
-
-    /**
-     * The relation of the first composite type to the second.
-     *
-     * [SAME] holds exactly when both values denote the same canonical type. [WIDER_THAN] holds
-     * exactly when the first type is an interface transitively implemented by the second object or
-     * interface, or when the first is a union having the second object as a direct member.
-     * [NARROWER_THAN] is exactly the converse. [COPARENT] holds exactly when neither type nominally
-     * contains the other but some concrete object type is possible for both. [NONE] holds exactly
-     * when none of the other relations does.
-     *
-     * Reversing the two types exchanges [WIDER_THAN] and [NARROWER_THAN] and preserves [SAME],
-     * [COPARENT], and [NONE].
-     */
-    enum class TypeRelation {
-        SAME,
-        WIDER_THAN,
-        NARROWER_THAN,
-        COPARENT,
-        NONE,
-    }
-
-    /**
      * A named type definition.
      *
      * ### Invariant: schema-type-name-uniqueness

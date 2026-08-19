@@ -11,6 +11,8 @@ dependencies {
     testFixturesImplementation("com.graphql-java:graphql-java:26.0")
     testFixturesImplementation("com.google.inject:guice:7.0.0")
     testFixturesImplementation("jakarta.inject:jakarta.inject-api:2.0.1")
+    testFixturesApi(viaductLibs.viaduct.shared.graphql)
+    testFixturesApi(viaductLibs.viaduct.shared.utils)
 
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

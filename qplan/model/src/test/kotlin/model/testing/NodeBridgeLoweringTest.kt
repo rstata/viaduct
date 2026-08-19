@@ -127,6 +127,27 @@ class NodeBridgeLoweringTest {
     }
 
     @Test
+    fun `rejects the shared GraphQL relation ignore symbol`() {
+        val exception =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    """
+                    type VIADUCT_IGNORE {
+                      value: String
+                    }
+
+                    type Query {
+                      ignored: VIADUCT_IGNORE
+                    }
+                    """.trimIndent(),
+                )
+            }
+
+        assertContains(exception.message.orEmpty(), VIADUCT_IGNORE_SYMBOL)
+        assertContains(exception.message.orEmpty(), "reserved symbol")
+    }
+
+    @Test
     fun `rejects node return covariance that would require a bridge hierarchy`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {

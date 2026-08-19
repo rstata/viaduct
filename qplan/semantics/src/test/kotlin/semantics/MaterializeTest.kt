@@ -7,7 +7,6 @@ import model.EngineResult
 import model.ListEngineResult
 import model.MaterializeSelection
 import model.ObjectEngineResult
-import model.MissingFieldException
 import model.PathComponent
 import model.Schema
 import model.Value
@@ -82,7 +81,7 @@ class MaterializeTest {
                 .materializeSelections
         val result = ObjectEngineResult.of(world.schema.query)
 
-        assertFailsWith<MissingFieldException> {
+        assertFailsWith<NoSuchElementException> {
             runBlocking {
                 context(world, runtimeSupport) {
                     result.materialize(

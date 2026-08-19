@@ -29,7 +29,7 @@ internal suspend fun Value.Object.coroutineResolve(
 ): ObjectEngineResult {
     val result =
         ObjectEngineResult.of(
-            type = type,
+            type = schemaType,
             mutable = true,
         )
 
@@ -52,11 +52,11 @@ private fun CoroutineScope.orchestrateSlot(
     selections: SelectionForest,
     target: ObjectEngineResult,
 ) {
-    require(source.type == target.type) {
-        "Source type ${source.type.typeName} does not match result type ${target.type.typeName}"
+    require(source.schemaType == target.type) {
+        "Source type ${source.schemaType.typeName} does not match result type ${target.type.typeName}"
     }
 
-    val closedDemand = source.type.closeResolverDemand(path, selections)
+    val closedDemand = source.schemaType.closeResolverDemand(path, selections)
     val unresolvedKeys = closedDemand.groundKeys() - target.keys
 
     unresolvedKeys.forEach { key ->

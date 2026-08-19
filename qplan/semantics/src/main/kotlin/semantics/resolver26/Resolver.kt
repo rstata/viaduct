@@ -74,7 +74,7 @@ internal fun resolve(
     context(RuntimeSupport.cycleChecking()) {
         val result: ObjectEngineResult =
             ObjectEngineResult.of(
-                type = source.type,
+                type = source.schemaType,
                 mutable = true,
             )
         return runBlocking(coroutineContext) {
@@ -152,7 +152,7 @@ private suspend fun orchestrateObject(
         val pathVariableDefinitions: MutableList<StampedObjectPathDefinition> = mutableListOf()
 
         while (true) {
-            val mergedDemand: ObjectSelectionForest = accumulatedDemand.merge(source.type)
+            val mergedDemand: ObjectSelectionForest = accumulatedDemand.merge(source.schemaType)
             val newResolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
                 mergedDemand
                     .byKey()
@@ -260,8 +260,8 @@ private suspend fun orchestrateObject(
         }
     }
 
-    require(source.type == target.type) {
-        "Source type ${source.type.typeName} does not match result type ${target.type.typeName}"
+    require(source.schemaType == target.type) {
+        "Source type ${source.schemaType.typeName} does not match result type ${target.type.typeName}"
     }
 
     val closed: CloseInputDemandResult = closeInputDemand()

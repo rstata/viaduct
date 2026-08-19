@@ -280,8 +280,8 @@ private class NodeResolverLowering(
         require(result is Value.Object) {
             "Node resolver for ${type.typeName} returned a non-object value"
         }
-        require(result.type == type) {
-            "Node resolver for ${type.typeName} returned ${result.type.typeName}"
+        require(result.schemaType == type) {
+            "Node resolver for ${type.typeName} returned ${result.schemaType.typeName}"
         }
         val returnedId =
             result.fieldValues.getValue(

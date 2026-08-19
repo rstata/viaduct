@@ -28,7 +28,7 @@ class DepthFirstReactorTest {
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
-        val selection = selections.merge(source.type).byGroundKey().values.single()
+        val selection = selections.merge(source.schemaType).byGroundKey().values.single()
         val coordinate = listOf<PathComponent>(selection.groundKey())
         val events = mutableListOf<ReactorEvent>()
         val runtimeSupport =
@@ -76,8 +76,8 @@ class DepthFirstReactorTest {
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
-        val selection = selections.merge(source.type).byGroundKey().values.single()
-        val target = ObjectEngineResult.of(source.type, emptyMap(), mutable = true)
+        val selection = selections.merge(source.schemaType).byGroundKey().values.single()
+        val target = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
         val path = emptyList<PathComponent>()
         val firstResolver =
             DepthFirstReactor.SlotResolver(path, source, selection, target)

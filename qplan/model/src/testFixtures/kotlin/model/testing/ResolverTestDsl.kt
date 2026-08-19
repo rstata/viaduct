@@ -745,7 +745,7 @@ private class ResultEvaluator(
                     val responseKey = path[index]
                     require(responseKey in value.fieldValues) {
                         "Path ${path.joinToString(".")} does not identify one value at " +
-                            "${value.type.typeName}.$responseKey"
+                            "${value.schemaType.typeName}.$responseKey"
                     }
                     val selected = value.fieldValues.getValue(responseKey)
                     if (schema is GJSchema && selected.containsNodeBridge()) {
@@ -766,7 +766,7 @@ private class ResultEvaluator(
     private fun EngineOutputData?.containsNodeBridge(): Boolean =
         when (this) {
             EngineErrorData -> false
-            is Value.Object -> type.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
+            is Value.Object -> schemaType.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
             is List<*> -> any { value -> value.containsNodeBridge() }
             else -> false
         }
@@ -777,7 +777,8 @@ private class ResultEvaluator(
             EngineErrorData -> listOf(EngineErrorData)
             is List<*> -> value.flatMap(::unwrapNodeBridge)
             is Value.Object -> {
-                val payload = schema.objectField(value.type.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
+                val payload =
+                    schema.objectField(value.schemaType.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
                 listOf(value.fieldValues.getValue(payload.fieldName))
             }
             else -> throw IllegalArgumentException("Malformed lowered Node bridge")

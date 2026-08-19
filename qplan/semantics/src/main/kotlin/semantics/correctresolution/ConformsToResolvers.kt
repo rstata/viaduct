@@ -168,7 +168,7 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
     resolverValue: Value.Object,
     fieldBelongsToResolver: (Schema.ObjectField) -> Boolean,
 ): Boolean {
-    if (type != resolverValue.type) return false
+    if (type != resolverValue.schemaType) return false
 
     return keys.all { groundKey ->
         val fieldName = groundKey.field.fieldName

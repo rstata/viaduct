@@ -513,7 +513,7 @@ private class FingerprintBudget(
                 )
             value is Value.Object ->
                 node(
-                    "object:${atom(value.type.typeName)}{" +
+                    "object:${atom(value.schemaType.typeName)}{" +
                         value.fieldValues.entries
                             .map { (key, fieldValue) ->
                                 atom(key) + "=" + output(fieldValue)

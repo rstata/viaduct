@@ -25,11 +25,11 @@ internal fun Value.Object.orchestrateKeys(
     selections: SelectionForest,
     resolved: ObjectEngineResult,
 ): ObjectEngineResult {
-    require(resolved.type == type) {
-        "Initial result type ${resolved.type.typeName} does not match $type"
+    require(resolved.type == schemaType) {
+        "Initial result type ${resolved.type.typeName} does not match $schemaType"
     }
 
-    val closedDemand = type.closeResolverDemand(path, selections)
+    val closedDemand = schemaType.closeResolverDemand(path, selections)
     val unresolvedKeys = closedDemand.groundKeys() - resolved.keys
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     orderedKeys.forEach { key ->
@@ -62,7 +62,7 @@ internal fun Value.Object.dependencyOrder(
             dependenciesOf(path, key, keys).isEmpty()
         }.toSet()
     require(ready.isNotEmpty()) {
-        "Resolver dependencies on ${type.typeName} contain a cycle"
+        "Resolver dependencies on ${schemaType.typeName} contain a cycle"
     }
     return dependencyOrder(
         path = path,

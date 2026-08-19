@@ -101,7 +101,7 @@ class EngineResultTest {
         val key = schema.key("Query", "first")
         val result = ObjectEngineResult.of(schema.query, mutable = true)
 
-        assertFailsWith<MissingFieldException> { result.getCell(key) }
+        assertFailsWith<NoSuchElementException> { result.getCell(key) }
         assertFalse(result.isCellSet(key))
     }
 
@@ -144,8 +144,8 @@ class EngineResultTest {
 
             result.freeze()
 
-            assertFailsWith<MissingFieldException> { awaitingMissing.await() }
-            assertFailsWith<MissingFieldException> { result.reserveCell(secondKey) }
+            assertFailsWith<NoSuchElementException> { awaitingMissing.await() }
+            assertFailsWith<NoSuchElementException> { result.reserveCell(secondKey) }
             assertFailsWith<IllegalStateException> {
                 firstCell.createValuePromise()
             }
@@ -338,7 +338,7 @@ class EngineResultTest {
             )
         val union = left.union(right)
 
-        assertFailsWith<MissingFieldException> {
+        assertFailsWith<NoSuchElementException> {
             union.reserveCell(requiredKey)
         }
     }

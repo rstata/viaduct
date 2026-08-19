@@ -129,7 +129,7 @@ private fun coerceOutputValue(
             when (val type = typeExpr.baseType) {
                 is Schema.SimpleType -> coerceSimpleValue(type, value)
                 is Schema.CompositeType -> {
-                    require(value is Value.Object && value.type in type.possibleTypes) {
+                    require(value is Value.Object && value.schemaType in type.possibleTypes) {
                         "Expected an object value for ${type.typeName}"
                     }
                     value

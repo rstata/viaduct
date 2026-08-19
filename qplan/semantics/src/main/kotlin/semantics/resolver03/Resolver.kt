@@ -26,7 +26,7 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
         source.orchestrateKeys(
             path = emptyList(),
             selections = selections,
-            resolved = ObjectEngineResult.of(source.type, emptyMap(), mutable = true),
+            resolved = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true),
         )
     }
 }

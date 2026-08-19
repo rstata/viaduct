@@ -443,8 +443,3 @@ interface Schema {
 private data class IDImpl(
     override val value: String,
 ) : Schema.ID
-
-class MissingFieldException(
-    val typeName: String,
-    val fieldName: String,
-) : NoSuchElementException("Missing field: $typeName.$fieldName")

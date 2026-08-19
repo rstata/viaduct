@@ -19,7 +19,7 @@ class ContextParametersTest {
 
         assertIs<Value.Object>(result)
         assertEquals(source, result)
-        assertEquals(world.schema.query, result.type)
+        assertEquals(world.schema.query, result.schemaType)
     }
 
     @Test
@@ -47,7 +47,7 @@ class ContextParametersTest {
                 },
             )
 
-        assertEquals(world.schema.query, result.type)
+        assertEquals(world.schema.query, result.schemaType)
         assertEquals(
             emptyMap<String, EngineOutputData?>(),
             result.fieldValues,
@@ -57,7 +57,7 @@ class ContextParametersTest {
     context(world: Assumptions)
     private fun Value.Object.copyInWorld(): Value.Object = world.run {
         val copiedFields = fieldValues.toMap()
-        Value.Object.of(type, copiedFields)
+        Value.Object.of(schemaType, copiedFields)
     }
 
     context(world: Assumptions)

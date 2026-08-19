@@ -7,8 +7,10 @@ Follow the current explicit prompt first, then this handoff. The immediate work 
 ## Immediate Objective
 
 The response-key materialization checkpoint and all three carrier phases are complete. Do not
-change OER identity or resolver scheduling, and do not begin the `EngineObjectData.Sync` migration
-until the current prompt explicitly requests that later work.
+change OER identity or resolver scheduling. The `EngineObjectData.Sync` migration is now active:
+qplan owns a validating synchronous implementation, while `Value.Object` remains the object carrier
+used by resolver and semantics APIs until the GraphQL-type bridge and call-site migration are
+designed.
 
 `Value.ObjectFields` is `Map<String, EngineOutputData?>`. Passive source and resolver-produced
 objects use canonical argumentless field names. Resolver inputs materialized from object fragments
@@ -28,11 +30,19 @@ Those exclusions guide compatibility choices during qplan alignment. They do not
 
 ## Current Carrier Boundary
 
-The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `ObjectEngineResult` values keyed by `ObjectEngineResult.GroundKey`; their `EngineResultCell`s carry independent write-once value and access-result promises and use reference identity for result occurrences.
+The qplan `model` project depends on `viaduct.engine.api` and now contains a qplan-owned
+`EngineObjectData.Sync` implementation. Qplan still represents resolved objects as typed
+`ObjectEngineResult` values keyed by `ObjectEngineResult.GroundKey`; their `EngineResultCell`s carry
+independent write-once value and access-result promises and use reference identity for result
+occurrences.
 
 Resolver outputs use the `Any`-represented checked `EngineOutputData` union, while completed fields
 use the distinct `Any`-represented checked `EngineResult` union. Resolver input objects remain
-`Value.Object` during this checkpoint. `EngineInputData` is likewise an `Any`-represented checked
+`Value.Object` during this checkpoint. Qplan now supplies its own `EngineObjectData.Sync`
+implementation with validating factories for canonical passive fields and alias-preserving
+materialized selections. The implementation snapshots its selection map, preserves absent,
+present-null, and present-error states, and uses production `UnsetFieldException` for strict reads.
+`EngineInputData` is likewise an `Any`-represented checked
 semantic union aligned with production Viaduct: GraphQL String, ID, and enum values are all Kotlin
 strings and schema context disambiguates them. `EngineOutputData` uses the same overloaded strings,
 ordinary recursive lists, retained `Value.Object`, and `EngineErrorData`. `EngineResult` instead
@@ -47,9 +57,12 @@ Resolver-visible materialization collects applicable object-fragment occurrences
 
 Schema alignment is deliberately independent of this carrier migration. GraphQL-Java remains the source-facing schema representation, while qplan's lowered `Schema` is used exclusively for field-resolution reasoning. Do not transform the GraphQL-Java schema or make tenant-visible APIs expose bridge coordinates.
 
-`EngineObjectData.Sync` is name-keyed, untyped at the value boundary, and partial. `get` distinguishes an unset selection by throwing, `getOrNull` tolerates it, and `isPresent` distinguishes absent from present-null without reading the value.
+`EngineObjectData.Sync` is name-keyed, untyped at the value boundary, and partial. `get` distinguishes an unset selection by throwing, `getOrNull` tolerates it, and `isPresent` distinguishes absent from present-null without reading the value. Qplan's implementation validates values against qplan's canonical schema during construction and separately retains the corresponding production `GraphQLObjectType`. The fixture's synthetic lowered bridge types have no source GraphQL type, so migrating `Value.Object` call sites still requires an explicit GraphQL-type provider for those definitions.
 
-Preserve exact-key validation, occurrence identity, selection-occurrence identity, and the difference between result values and access decisions throughout the carrier migration. The later `EngineObjectData.Sync` change will separately decide which qplan object responsibilities move to the engine API carrier.
+Preserve exact-key validation, occurrence identity, selection-occurrence identity, and the
+difference between result values and access decisions throughout the carrier migration. The
+call-site migration to the new implementation will separately decide which qplan object
+responsibilities move to the engine API carrier.
 
 Response aliases are materialization facts, not OER identity. They never become exact result-path or OER key components.
 
@@ -69,7 +82,9 @@ Each `EngineResultCell` has independent write-once value and access-result slots
 
 `ListEngineResult` remains a nominal wrapper because it retains an element type witness and result cells. It implements `List<EngineResultCell>` through delegation to a private list, preserving Kotlin collection operations while preventing callers from downcasting the wrapper to a mutable list. A builder may avoid snapshotting only by transferring exclusive ownership of its mutable backing list and retaining no path that can mutate it after publication. List-result equality remains structural over the element type expression and positional cell identities and therefore requires explicit `equals` and `hashCode` behavior beyond interface delegation.
 
-`ObjectEngineResult`, its exact-key hierarchy, and OER occurrence identity remain nominal model structures during these phases. Replacing the internal object-data carrier with `EngineObjectData.Sync` is explicitly later work.
+`ObjectEngineResult`, its exact-key hierarchy, and OER occurrence identity remain nominal model
+structures. Replacing `Value.Object` call sites with the available `EngineObjectData.Sync`
+implementation remains a separate migration stage.
 
 ## Resolver State
 
@@ -93,7 +108,11 @@ Runtime `FromObjectField` execution is present in Resolver25 and Resolver26. Doc
    output strings with result-domain `Schema.ID` and `Schema.EnumValue`.
 5. Complete, documentation reconciliation: implementation-specific vocabulary and resolver-local
    documents describe the landed APIs rather than the superseded hierarchy.
-6. Later checkpoint, not part of these phases: migrate the retained object-output carrier toward `EngineObjectData.Sync`, preserving OER keys, cells, occurrence identity, response-key materialization, and access-result semantics.
+6. In progress, EOD implementation checkpoint: qplan owns a validating `EngineObjectData.Sync`
+   implementation with canonical passive-field and alias-preserving construction paths. The
+   retained `Value.Object` call sites have not yet migrated because synthetic lowered object types
+   require an explicit GraphQL-type bridge. Preserve OER keys, cells, occurrence identity,
+   response-key materialization, and access-result semantics during that migration.
 
 ## Backlogged TLA+ Refinement
 

@@ -85,6 +85,18 @@ Viaduct's `EngineObjectData.Sync` is the target synchronous partial-object bound
 
 Align storage and access with that API where it preserves the modeled meaning, but retain explicit qplan structure for schema-canonical keys, occurrence identity, write-once ownership, and access decisions when EOD does not represent those facts directly. Record current migration choices in [`../handoff.md`](../handoff.md); update this guide only when a choice becomes a stable model rule.
 
+The qplan EOD implementation must preserve EOD's three-way read state. An absent selection makes
+`isPresent` false, makes `getOrNull` return null, and makes strict `get` throw production
+`UnsetFieldException`. A present selection whose value is null makes `isPresent` true and both
+getters return null. A present `EngineErrorData` selection likewise remains present: presence and
+selection-enumeration operations must not read or materialize it, and it must not be mistaken for
+an unset selection. The `Sync` subtype's suspending `fetch` methods delegate to the corresponding
+synchronous operations without changing these outcomes.
+
+Missing OER cells are not unset EOD selections. They are internal result-tree lookup failures and
+use ordinary `NoSuchElementException`; they must not surface as tenant-facing
+`UnsetFieldException`.
+
 ## Working Vocabulary
 
 A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `Schema.Type`, or intensionally by a checked `Any` typealias, such as the target `EngineResult`.
@@ -175,4 +187,4 @@ Use compositional validation for nested typed values. For example, a list factor
 
 ## Type Expressions
 
-Every property whose value is a `TypeExpr` is named `typeExpr`, such as `Schema.OutputField.typeExpr` and `ListEngineResult.typeExpr`. Properties containing named schema definitions remain `type`, such as `Value.Object.type` and `ObjectEngineResult.type`. Private parameters may use the shorter name `type` when the local type is unambiguous.
+Every property whose value is a `TypeExpr` is named `typeExpr`, such as `Schema.OutputField.typeExpr` and `ListEngineResult.typeExpr`. Properties containing named schema definitions normally remain `type`, such as `ObjectEngineResult.type`. `Value.Object.schemaType` is explicitly qualified to avoid colliding with the `GraphQLObjectType` property required by the target `EngineObjectData` interface. Private parameters may use the shorter name `type` when the local type is unambiguous.

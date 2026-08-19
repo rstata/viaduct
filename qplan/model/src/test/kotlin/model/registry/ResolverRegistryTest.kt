@@ -92,7 +92,7 @@ class ResolverRegistryTest {
                     arguments = Value.Arguments.of(bridgeField, emptyMap()),
                 )
         val bridgeObject = assertIs<Value.Object>(bridgeValue)
-        assertEquals(bridgeType, bridgeObject.type)
+        assertEquals(bridgeType, bridgeObject.schemaType)
         assertIs<String>(
             bridgeObject.fieldValues.getValue(
                 bridgeIdField.fieldName,
@@ -128,7 +128,7 @@ class ResolverRegistryTest {
         val root = fixture.assumptions.resolverRegistry.resolveRootQuery()
         val typenameKey = "__typename"
 
-        assertEquals(fixture.schema.query, root.type)
+        assertEquals(fixture.schema.query, root.schemaType)
         assertEquals(setOf(typenameKey), root.fieldValues.keys)
         assertEquals("Query", root.fieldValues.getValue(typenameKey))
     }

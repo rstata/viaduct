@@ -25,6 +25,7 @@ import model.selectionForestOf
 import model.toSelectionForest
 import model.variableTemplates
 import viaduct.engine.api.EngineObjectData
+import viaduct.graphql.utils.GraphQLTypeRelation
 
 /**
  * A raw external node lookup accepted only by test-fixture composition.
@@ -178,7 +179,12 @@ private class NodeResolverLowering(
     private fun loweredNodeFields(): Set<Schema.ObjectField> {
         nodeResolvers.forEach { (type, _) ->
             validateCanonicalType(type)
-            require(schema.relation(nodeType!!, type) == Schema.TypeRelation.WIDER_THAN) {
+            require(
+                schema.typeRelations.relationUnwrapped(
+                    schema.sourceCompositeType(nodeType!!),
+                    schema.sourceCompositeType(type),
+                ) == GraphQLTypeRelation.WiderThan,
+            ) {
                 "Node-resolver type ${type.typeName} does not implement Node"
             }
             validateNodeIdField(type)
@@ -195,10 +201,13 @@ private class NodeResolverLowering(
                 }
                 val isDeclaredNode =
                     nodeType != null &&
-                        schema.relation(nodeType, outputType) in
+                        schema.typeRelations.relationUnwrapped(
+                            schema.sourceCompositeType(nodeType),
+                            schema.sourceCompositeType(outputType),
+                        ) in
                         setOf(
-                            Schema.TypeRelation.SAME,
-                            Schema.TypeRelation.WIDER_THAN,
+                            GraphQLTypeRelation.Same,
+                            GraphQLTypeRelation.WiderThan,
                         )
                 require(isDeclaredNode) {
                     "Synthetic bridge ${field.containingType.typeName}/${field.fieldName} " +

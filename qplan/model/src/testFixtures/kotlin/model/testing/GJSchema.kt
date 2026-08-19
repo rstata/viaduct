@@ -5,6 +5,7 @@ import model.ObjectEngineResult
 import graphql.language.NamedNode
 import graphql.language.Node
 import graphql.parser.Parser
+import graphql.schema.GraphQLCompositeType
 import graphql.schema.GraphQLFieldDefinition
 import graphql.schema.GraphQLFieldsContainer
 import graphql.schema.GraphQLImplementingType
@@ -23,6 +24,8 @@ import model.TypeExpr
 import model.engineObjectDataOf
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
+import viaduct.graphql.utils.GraphQLTypeRelation
+import viaduct.graphql.utils.GraphQLTypeRelations
 
 /**
  * A fixture pair of the GraphQL-visible source schema and the canonical decoded [Schema].
@@ -35,8 +38,17 @@ import viaduct.engine.api.EngineObjectData
  */
 internal class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,
+    internal val typeRelations: GraphQLTypeRelations,
     private val decodedSchema: Schema,
 ) : Schema by decodedSchema {
+    internal fun sourceCompositeType(type: Schema.CompositeType): GraphQLCompositeType {
+        require(type(type.typeName) == type) {
+            "${type.typeName} is not canonical in this schema"
+        }
+        return graphQLSchema.getType(type.typeName) as? GraphQLCompositeType
+            ?: throw IllegalArgumentException("${type.typeName} is not a source composite type")
+    }
+
     /** The canonical concrete object types available to fixture registry lowering. */
     internal val objectTypes: List<Schema.ObjectType>
         get() =
@@ -109,8 +121,8 @@ internal class GJSchema private constructor(
     private fun GraphQLFieldDefinition.isNodeValued(): Boolean {
         val node = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return false
         val output = GraphQLTypeUtil.unwrapAll(type) as? GraphQLImplementingType ?: return false
-        return output.name == node.name ||
-            implementsInterface(graphQLSchema, node.name, output)
+        return typeRelations.relationUnwrapped(node, output) in
+            setOf(GraphQLTypeRelation.Same, GraphQLTypeRelation.WiderThan)
     }
 
     private fun lowerNodeReferences(
@@ -165,9 +177,12 @@ internal class GJSchema private constructor(
         @JvmStatic
         fun fromSDL(schemaSDL: String): GJSchema {
             val graphQLSchema = parseSchema(schemaSDL)
+            val typeRelations = GraphQLTypeRelations(graphQLSchema)
+            validateNodeFieldCovariance(graphQLSchema, typeRelations)
             return GJSchema(
                 graphQLSchema = graphQLSchema,
-                decodedSchema = GJSchemaDecoder(graphQLSchema).decode(),
+                typeRelations = typeRelations,
+                decodedSchema = GJSchemaDecoder(graphQLSchema, typeRelations).decode(),
             )
         }
 
@@ -193,10 +208,12 @@ internal class GJSchema private constructor(
 
             return UnExecutableSchemaGenerator
                 .makeUnExecutableSchema(registry)
-                .also(::validateNodeFieldCovariance)
         }
 
-        private fun validateNodeFieldCovariance(schema: GraphQLSchema) {
+        private fun validateNodeFieldCovariance(
+            schema: GraphQLSchema,
+            typeRelations: GraphQLTypeRelations,
+        ) {
             val node = schema.getType("Node") as? GraphQLInterfaceType ?: return
             val interfaces =
                 schema.allTypesAsList
@@ -209,15 +226,17 @@ internal class GJSchema private constructor(
                 .forEach { objectType ->
                     interfaces
                         .filter { interfaceType ->
-                            implementsInterface(schema, interfaceType.name, objectType)
+                            typeRelations.relationUnwrapped(interfaceType, objectType) ==
+                                GraphQLTypeRelation.WiderThan
                         }.forEach { interfaceType ->
                             interfaceType.fieldDefinitions.forEach { interfaceField ->
                                 val interfaceOutput =
-                                    interfaceField.nodeOutputName(schema, node) ?: return@forEach
+                                    interfaceField.nodeOutputName(typeRelations, node)
+                                        ?: return@forEach
                                 val objectOutput =
                                     objectType
                                         .getFieldDefinition(interfaceField.name)
-                                        ?.nodeOutputName(schema, node)
+                                        ?.nodeOutputName(typeRelations, node)
                                         ?: return@forEach
                                 require(objectOutput == interfaceOutput) {
                                     "Node-valued interface field covariance is outside model " +
@@ -232,12 +251,13 @@ internal class GJSchema private constructor(
         }
 
         private fun GraphQLFieldDefinition.nodeOutputName(
-            schema: GraphQLSchema,
+            typeRelations: GraphQLTypeRelations,
             node: GraphQLInterfaceType,
         ): String? {
             val output = GraphQLTypeUtil.unwrapAll(type) as? GraphQLImplementingType ?: return null
             return output.name.takeIf {
-                output.name == node.name || implementsInterface(schema, node.name, output)
+                typeRelations.relationUnwrapped(node, output) in
+                    setOf(GraphQLTypeRelation.Same, GraphQLTypeRelation.WiderThan)
             }
         }
 
@@ -247,6 +267,7 @@ internal class GJSchema private constructor(
                     NODE_SYNTHETIC_NAME_TOKEN to linkedSetOf<String>(),
                     TYPENAME_SYNTHETIC_NAME_TOKEN to linkedSetOf(),
                 )
+            val ignoredNames = linkedSetOf<String>()
 
             fun visit(node: Node<*>) {
                 val name = (node as? NamedNode<*>)?.name
@@ -256,6 +277,9 @@ internal class GJSchema private constructor(
                             invalidNames.add(name)
                         }
                     }
+                }
+                if (name == VIADUCT_IGNORE_SYMBOL) {
+                    ignoredNames.add(name)
                 }
                 node.children.forEach(::visit)
             }
@@ -270,6 +294,9 @@ internal class GJSchema private constructor(
                     "Source schema names cannot contain reserved token $token: " +
                         invalidNames.sorted().joinToString()
                 }
+            }
+            require(ignoredNames.isEmpty()) {
+                "Source schema names cannot use reserved symbol $VIADUCT_IGNORE_SYMBOL"
             }
         }
     }

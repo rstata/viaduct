@@ -1,39 +1,20 @@
 package execution
 
 import execution.testing.ExecutionTestFixture
+import execution.testing.assertResult
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * GraphQL-boundary copies of deterministic Resolver26 contract scenarios.
+ * GraphQL-boundary smoke coverage for deterministic Resolver26 scenarios.
  *
  * These tests intentionally assert only behavior observable through GraphQL.execute.
  */
-class ResolverContractExecutionTest {
+class GraphQLExecuteSmokeTest {
     @Test
     fun `specializes shared list continuation and concrete argument defaults`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    interface Item {
-                      computed: Int!
-                    }
-
-                    type Query {
-                      items: [Item!]!
-                    }
-
-                    type A implements Item {
-                      computed(factor: Int = 2): Int!
-                    }
-
-                    type B implements Item {
-                      computed: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -63,8 +44,7 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { items { computed } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf(
                 "items" to
                     listOf(
@@ -72,7 +52,6 @@ class ResolverContractExecutionTest {
                         mapOf("computed" to 3),
                     ),
             ),
-            result.getData(),
         )
     }
 
@@ -80,22 +59,6 @@ class ResolverContractExecutionTest {
     fun `resolves an empty query through field and node resolvers`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    interface Node {
-                      id: ID!
-                    }
-
-                    type Query {
-                      viewer(id: ID!): User!
-                    }
-
-                    type User implements Node {
-                      id: ID!
-                      name: Int!
-                      greeting(prefix: Int!): Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -126,8 +89,7 @@ class ResolverContractExecutionTest {
                 """.trimIndent(),
             )
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf(
                 "viewer" to
                     mapOf(
@@ -136,7 +98,6 @@ class ResolverContractExecutionTest {
                         "greeting" to 6,
                     ),
             ),
-            result.getData(),
         )
     }
 
@@ -144,18 +105,6 @@ class ResolverContractExecutionTest {
     fun `materializes argumentless and argument-bearing aliases by response key`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      viewer: User!
-                    }
-
-                    type User {
-                      plain: Int!
-                      scaled(factor: Int!): Int!
-                      total: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -177,10 +126,8 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { viewer { total } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf("viewer" to mapOf("total" to 10)),
-            result.getData(),
         )
     }
 
@@ -188,27 +135,6 @@ class ResolverContractExecutionTest {
     fun `collects one alias across non-overlapping concrete types`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      holders: [Holder!]!
-                    }
-
-                    type Holder {
-                      item: Choice!
-                      chosen: Int!
-                    }
-
-                    union Choice = Alpha | Beta
-
-                    type Alpha {
-                      alpha: Int!
-                    }
-
-                    type Beta {
-                      beta: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -244,8 +170,7 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { holders { chosen } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf(
                 "holders" to
                     listOf(
@@ -253,7 +178,6 @@ class ResolverContractExecutionTest {
                         mapOf("chosen" to 7),
                     ),
             ),
-            result.getData(),
         )
     }
 
@@ -261,19 +185,6 @@ class ResolverContractExecutionTest {
     fun `closes and orders transitive sibling resolver demand`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      viewer: User!
-                    }
-
-                    type User {
-                      first: Int!
-                      last: Int!
-                      display: Int!
-                      greeting: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -293,10 +204,8 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { viewer { greeting } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf("viewer" to mapOf("greeting" to 6)),
-            result.getData(),
         )
     }
 
@@ -304,22 +213,6 @@ class ResolverContractExecutionTest {
     fun `resolves descendant demand before its consuming sibling`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      viewer: User!
-                    }
-
-                    type User {
-                      profile: Profile!
-                      message: Int!
-                    }
-
-                    type Profile {
-                      raw: Int!
-                      rendered: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -345,10 +238,8 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { viewer { message } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf("viewer" to mapOf("message" to 3)),
-            result.getData(),
         )
     }
 
@@ -356,18 +247,6 @@ class ResolverContractExecutionTest {
     fun `resolves recursive demand introduced by an object fragment`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      chain: Chain!
-                    }
-
-                    type Chain {
-                      label: Int!
-                      next: Chain
-                      computed: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -394,10 +273,8 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { chain { computed } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf("chain" to mapOf("computed" to 2)),
-            result.getData(),
         )
     }
 
@@ -405,13 +282,6 @@ class ResolverContractExecutionTest {
     fun `resolves input selected with a fromArgument variable`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result(seed: Int!): Int!
-                      consume(value: Int!): Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -437,13 +307,11 @@ class ResolverContractExecutionTest {
                 variables = mapOf("first" to 7, "second" to 8),
             )
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf(
                 "first" to 14,
                 "second" to 16,
             ),
-            result.getData(),
         )
     }
 
@@ -451,18 +319,6 @@ class ResolverContractExecutionTest {
     fun `retains passive demand below an ungrounded nested resolver key`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      holder: Item!
-                      result(value: Int!): Int!
-                    }
-
-                    type Item {
-                      consume(value: Int!): Int!
-                      passive: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -492,13 +348,11 @@ class ResolverContractExecutionTest {
                 """.trimIndent(),
             )
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf(
                 "holder" to mapOf("__typename" to "Item"),
                 "result" to 7,
             ),
-            result.getData(),
         )
     }
 
@@ -506,14 +360,6 @@ class ResolverContractExecutionTest {
     fun `binds a variable from a direct active scalar provider`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result: Int!
-                      source: Int!
-                      consume(value: Int!): Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -532,26 +378,13 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { result }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(mapOf("result" to 14), result.getData())
+        result.assertResult(mapOf("result" to 14))
     }
 
     @Test
     fun `reads a nested provider after its active ancestor publishes passive content`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result: Int!
-                      box: Box!
-                      consume(value: Int!): Int!
-                    }
-
-                    type Box {
-                      value: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -574,22 +407,13 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { result }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(mapOf("result" to 9), result.getData())
+        result.assertResult(mapOf("result" to 9))
     }
 
     @Test
     fun `converts a terminal scalar list to a ground input list`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result: Int!
-                      source: [Int!]!
-                      consume(values: [Int!]!): Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -607,27 +431,13 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { result }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(mapOf("result" to 10), result.getData())
+        result.assertResult(mapOf("result" to 10))
     }
 
     @Test
     fun `waits for a provider value before expanding a nested variable use`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result: Int!
-                      source: Int!
-                      holder: Holder!
-                      delay: Int!
-                    }
-
-                    type Holder {
-                      consume(value: Int!): Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -651,30 +461,13 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { result }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(mapOf("result" to 7), result.getData())
+        result.assertResult(mapOf("result" to 7))
     }
 
     @Test
     fun `installs a resolver promise below a passive provider field`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      item: Item!
-                    }
-
-                    type Item {
-                      result: Int!
-                      provider: Provider!
-                      consume(value: Int!): Int!
-                    }
-
-                    type Provider {
-                      value: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -701,10 +494,8 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { item { result } }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(
+        result.assertResult(
             mapOf("item" to mapOf("result" to 11)),
-            result.getData(),
         )
     }
 
@@ -712,16 +503,6 @@ class ResolverContractExecutionTest {
     fun `accepts an acyclic mixed-variable dependency chain`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      outer: Int!
-                      q1(value: Int!): Int!
-                      q2(value: Int!): Int!
-                      q5: Int!
-                      q7(value: Int!): Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -749,26 +530,13 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { outer }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(mapOf("outer" to 1), result.getData())
+        result.assertResult(mapOf("outer" to 1))
     }
 
     @Test
     fun `applies the configured identity policy after variable selections ground equally`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result(seed: Int!, other: Int!): Int!
-                      payload(arg: Int!): Payload!
-                    }
-
-                    type Payload {
-                      one: Int!
-                      two: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -790,25 +558,13 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { result(seed: 1, other: 1) }")
 
-        assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
-        assertEquals(mapOf("result" to 8), result.getData())
+        result.assertResult(mapOf("result" to 8))
     }
 
     @Test
     fun `list null and error elements preserve position and skip descendants`() {
         val fixture =
             ExecutionTestFixture.fromResolverDSL(
-                schemaSDL =
-                    """
-                    type Query {
-                      items: [Item]
-                    }
-
-                    type Item {
-                      seed: Int!
-                      computed: Int!
-                    }
-                    """.trimIndent(),
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -826,7 +582,7 @@ class ResolverContractExecutionTest {
 
         val result = fixture.runQuery("query { items { computed } }")
 
-        assertEquals(
+        result.assertResult(
             mapOf(
                 "items" to
                     listOf(
@@ -835,12 +591,7 @@ class ResolverContractExecutionTest {
                         mapOf("computed" to 6),
                     ),
             ),
-            result.getData(),
-        )
-        assertEquals(1, result.errors.size)
-        assertEquals(
             listOf("items", 1),
-            assertNotNull(result.errors.single().path),
         )
         assertTrue(result.errors.single().message.contains("QPlan field resolution failed"))
     }

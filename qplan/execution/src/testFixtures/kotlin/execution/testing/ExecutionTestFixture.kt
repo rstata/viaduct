@@ -5,6 +5,13 @@ import execution.QPlanWiringFactory
 import graphql.ExecutionInput
 import graphql.ExecutionResult
 import graphql.GraphQL
+import graphql.language.AstPrinter
+import graphql.language.Definition
+import graphql.language.Directive
+import graphql.language.FieldDefinition
+import graphql.language.ObjectTypeDefinition
+import graphql.language.ObjectTypeExtensionDefinition
+import graphql.parser.Parser
 import graphql.schema.idl.RuntimeWiring
 import graphql.schema.idl.SchemaGenerator
 import graphql.schema.idl.SchemaParser
@@ -46,6 +53,18 @@ class ExecutionTestFixture private constructor(
             fromWorld(
                 schemaSDL = schemaSDL,
                 world = TestWorld.fromDSL(resolverSchemaSDL),
+            )
+
+        /**
+         * Builds a fixture directly from resolver-test DSL.
+         *
+         * The executable GraphQL schema is derived by removing fixture-only directives from the
+         * DSL document. The qplan world independently compiles the same document into resolvers.
+         */
+        fun fromResolverDSL(resolverSchemaSDL: String): ExecutionTestFixture =
+            fromResolverDSL(
+                schemaSDL = executableSchemaSDL(resolverSchemaSDL),
+                resolverSchemaSDL = resolverSchemaSDL,
             )
 
         private fun fromWorld(
@@ -95,3 +114,47 @@ class ExecutionTestFixture private constructor(
         }
     }
 }
+
+private fun executableSchemaSDL(resolverSchemaSDL: String): String {
+    val document = Parser.parse(resolverSchemaSDL)
+    val stripped =
+        document.transform { builder ->
+            builder.definitions(document.definitions.map(::stripResolverDirectives))
+        }
+    return BUILT_IN_SCHEMA + "\n" + AstPrinter.printAst(stripped)
+}
+
+private fun stripResolverDirectives(definition: Definition<*>): Definition<*> =
+    when (definition) {
+        is ObjectTypeExtensionDefinition ->
+            definition.transformExtension { builder ->
+                builder
+                    .directives(definition.directives.withoutResolverDirectives())
+                    .fieldDefinitions(
+                        definition.fieldDefinitions.map { it.withoutResolverDirectives() },
+                    )
+            }
+        is ObjectTypeDefinition ->
+            definition.transform { builder ->
+                builder
+                    .directives(definition.directives.withoutResolverDirectives())
+                    .fieldDefinitions(
+                        definition.fieldDefinitions.map { it.withoutResolverDirectives() },
+                    )
+            }
+        else -> definition
+    }
+
+private fun FieldDefinition.withoutResolverDirectives(): FieldDefinition =
+    transform { builder -> builder.directives(directives.withoutResolverDirectives()) }
+
+private fun List<Directive>.withoutResolverDirectives(): List<Directive> =
+    filterNot { directive -> directive.name in RESOLVER_DIRECTIVES }
+
+private val RESOLVER_DIRECTIVES = setOf("resolver", "nodeResolver")
+
+private val BUILT_IN_SCHEMA =
+    """
+    interface Node { id: ID! }
+    type Query { node(id: ID!): Node }
+    """.trimIndent()

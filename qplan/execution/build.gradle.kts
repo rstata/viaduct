@@ -12,6 +12,7 @@ dependencies {
     testFixturesImplementation(project(":model"))
     testFixturesImplementation(testFixtures(project(":model")))
     testFixturesImplementation("com.graphql-java:graphql-java:26.0")
+    testFixturesImplementation(kotlin("test"))
 
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

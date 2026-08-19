@@ -6,7 +6,7 @@ Follow the current explicit prompt first, then this handoff. The immediate work 
 
 ## Immediate Objective
 
-The response-key materialization checkpoint is complete, including removal of the retired deterministic materialized-field string address and its compatibility scaffolding. Do not change OER identity or resolver scheduling, and do not begin the `EngineObjectData.Sync` migration unless the current prompt explicitly requests it.
+The response-key materialization checkpoint is complete, including removal of the retired deterministic materialized-field string address and its compatibility scaffolding. The active work is the staged engine-value and engine-result carrier migration described below. Do not change OER identity or resolver scheduling, and do not begin the `EngineObjectData.Sync` migration until the three carrier phases are complete and the current prompt explicitly requests that later work.
 
 `Value.ObjectFields` is `Map<String, Value.Output?>`. Passive source and resolver-produced objects use canonical argumentless field names. Resolver inputs materialized from object fragments use GraphQL response keys, including aliases. Those strings never identify OER cells.
 
@@ -26,7 +26,7 @@ Those exclusions guide compatibility choices during qplan alignment. They do not
 
 The qplan `model` project already depends on `viaduct.engine.api`, but qplan source does not yet use `EngineObjectData`. Qplan currently represents resolved objects as typed `ObjectEngineResult` values keyed by `ObjectEngineResult.GroundKey`; their cells carry independent write-once value and `accessAccepted` promises and use reference identity for result occurrences.
 
-The resolver-value and engine-result domains are now distinct at every GraphQL output shape. Resolver inputs and outputs use `Value`, while completed fields use `IntEngineResult`, `FloatEngineResult`, `StringEngineResult`, `BooleanEngineResult`, `IDEngineResult`, `EnumEngineResult`, `ObjectEngineResult`, `ListEngineResult`, or `ErrorEngineResult`. `toEngineResult` and `toValue` mark crossings for simple values. This temporary parallel hierarchy keeps result semantics independent while the resolver-value side moves toward the engine API's future `EngineValueData` boundary.
+Resolver inputs and outputs currently use `Value`, while completed fields use the nominal `EngineResult` hierarchy. `EngineInputData` is already an `Any`-represented checked semantic union, but it temporarily uses qplan-owned `EngineIDData` and `EngineEnumValueData` wrappers that do not match production Viaduct. The active migration removes those wrappers, converts the result hierarchy to the same checked-union representation strategy, and then replaces every resolver-output `Value` variant except `Value.Object`.
 
 The complete key hierarchy belongs to `ObjectEngineResult`: `Key`, `VariableKey`, `ObjectKey`, and `GroundKey`. `Value.Object` stores only strings. Its construction-time `FieldValue` entries retain a schema field long enough to validate a value and then forget that metadata. Object equality and schema conformance therefore reason over already-validated string-keyed content rather than reconstructing OER identity.
 
@@ -36,9 +36,27 @@ Schema alignment is deliberately independent of this carrier migration. GraphQL-
 
 `EngineObjectData.Sync` is name-keyed, untyped at the value boundary, and partial. `get` distinguishes an unset selection by throwing, `getOrNull` tolerates it, and `isPresent` distinguishes absent from present-null without reading the value.
 
-The refactor must decide which qplan responsibilities move directly to engine API carriers and which remain model structure around them. Preserve exact-key validation, occurrence identity, selection-occurrence identity, and the difference between result values and access decisions even when the underlying object storage changes.
+Preserve exact-key validation, occurrence identity, selection-occurrence identity, and the difference between result values and access decisions throughout the carrier migration. The later `EngineObjectData.Sync` change will separately decide which qplan object responsibilities move to the engine API carrier.
 
 Response aliases are materialization facts, not OER identity. They never become exact result-path or OER key components.
+
+## Target Carrier Boundary
+
+`EngineInputData`, `EngineOutputData`, and `EngineResult` are distinct semantic domains represented by Kotlin `Any` typealiases plus explicit conformance relations. Nullable uses of those aliases add GraphQL null; null is not an error representation. Because the aliases erase to the same Kotlin type, domain-specific operations need distinct names and every unchecked `Any` boundary must be followed by validation or schema-directed conversion.
+
+Pre-domain scalar representations are values whose Kotlin types do not themselves belong exclusively to one semantic domain. `Int`, finite `Double`, `Boolean`, and `String` are shared pre-domain representations. Qplan adds structural `Schema.ID` and canonical `Schema.EnumValue` values, but initially admits them only to `EngineResult`.
+
+For current production compatibility, `EngineInputData` and `EngineOutputData` use Kotlin `String` for GraphQL String, ID, and enum values. `EngineResult` instead uses `String` for GraphQL String, `Schema.ID` for ID, and the canonical `Schema.EnumValue` owned by the expected `Schema.EnumType` for enum values. Publishing output data into a result recursively wraps ID and enum strings using the expected schema type; materializing a result into resolver-visible output recursively unwraps those values to strings. `EngineIDData` and `EngineEnumValueData` do not survive the migration.
+
+`Schema.EnumType` owns a name-keyed map of canonical `Schema.EnumValue` definitions rather than a set of string names. An enum value carries its name and containing enum definition and uses schema-canonical identity. `Schema.ID` wraps one string and uses structural equality; it is a runtime scalar representation nested under `Schema` for shared vocabulary rather than a schema definition.
+
+`EngineResult` semantically contains the pre-domain scalar representations admitted for results, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. `ErrorEngineResult` conforms at every GraphQL output type but remains a distinct sentinel rather than impersonating every result shape. `EngineOutputData` separately contains production-compatible scalar representations, ordinary recursive output lists, the temporarily retained `Value.Object`, and a distinct singleton `EngineErrorData`. No narrower output-data category includes `EngineErrorData`. `EngineInputData` has no error sentinel; argument evaluation uses a separate argument-resolution error outcome outside the input-data domain.
+
+Each `EngineResultCell` has independent write-once value and access-result slots. The value slot contains `EngineResult?` and is constrained by the field or list-element schema type. The non-null access-result slot contains `EngineResult` and is constrained to either a Boolean result or `ErrorEngineResult`. Direct writes, deferred promise completion, factories, and recursive conformance checks enforce the same slot-specific rules. The API should call the second slot an access result rather than imply that every completion is an acceptance Boolean.
+
+`ListEngineResult` remains a nominal wrapper because it retains an element type witness and result cells. It implements `List<EngineResultCell>` through delegation to a private list, preserving Kotlin collection operations while preventing callers from downcasting the wrapper to a mutable list. A builder may avoid snapshotting only by transferring exclusive ownership of its mutable backing list and retaining no path that can mutate it after publication. List-result equality remains structural over the element type expression and positional cell identities and therefore requires explicit `equals` and `hashCode` behavior beyond interface delegation.
+
+`ObjectEngineResult`, its exact-key hierarchy, and OER occurrence identity remain nominal model structures during these phases. Replacing the internal object-data carrier with `EngineObjectData.Sync` is explicitly later work.
 
 ## Resolver State
 
@@ -52,13 +70,12 @@ Runtime `FromObjectField` execution is present in Resolver25 and Resolver26. Doc
 
 ## Migration Sequence
 
-1. Complete: add source-occurrence `MaterializeSelection`, concrete-type response-key collection, and focused executable examples.
-2. Complete: make `FieldResolver` retain the unstamped materialize template and instantiate paired materialization and construction views.
-3. Complete: have Resolver26 reproduce construction's exact OER keys directly while preserving its ground-then-localize order.
-4. Complete: give Resolver25 and the shared resolvers paired response-preserving views derived from their historical `stampVars(path)` construction semantics.
-5. Complete: switch every maintained resolver to response-key materialization without an occurrence-key index.
-6. Complete: remove retired checkpoint scaffolding and update remaining evidence and durable documentation.
-7. Complete: run the complete qplan gate before beginning any `EngineObjectData.Sync` carrier work.
+1. Documentation checkpoint: record the target carrier domains, production compatibility boundary, invariants, and phased sequence; review and commit that documentation before implementation.
+2. Phase A, engine input data: make engine input data use production-compatible strings for GraphQL String, ID, and enum values; delete `EngineIDData` and `EngineEnumValueData`; and update input coercion, schema decoding, witnesses, and tests. Run `./gradlew check`.
+3. Phase B, engine results: add structural `Schema.ID` and canonical `Schema.EnumValue`, change `Schema.EnumType` to expose canonical values, replace the nominal scalar `EngineResult` hierarchy with an `Any` typealias and natural pre-domain values, retain `ObjectEngineResult`, delegated `ListEngineResult`, and `ErrorEngineResult`; rename the nested cell abstraction as needed because a typealias cannot own declarations; make both cell slots result-typed; enforce Boolean-or-error access-result conformance at every completion boundary; add explicit conversions between production-compatible strings and the stronger result representations; and update equality, union, materialization, resolver algorithms, schema decoding, fixtures, and tests. Run `./gradlew check`.
+4. Phase C, resolver output data: introduce `EngineOutputData`, recursive output-list data, and the distinct `EngineErrorData` sentinel; replace every resolver-output `Value` variant except `Value.Object`; replace the argument roles of `Value.Error` with a dedicated argument-resolution error outcome outside `EngineInputData`; make retained object fields contain `EngineOutputData?`; add schema-directed conversions between production-compatible output strings and result-domain `Schema.ID` or `Schema.EnumValue`; and update every maintained resolver, registry operation, fixture, generator, witness, and correctness judgment. Run `./gradlew check`.
+5. Documentation reconciliation: update implementation-specific vocabulary and resolver-local documents after each phase so they describe the landed APIs rather than the superseded hierarchy. Run the complete documentation and qplan gate.
+6. Later checkpoint, not part of these phases: migrate the retained object-output carrier toward `EngineObjectData.Sync`, preserving OER keys, cells, occurrence identity, response-key materialization, and access-result semantics.
 
 ## Backlogged TLA+ Refinement
 

@@ -78,7 +78,7 @@ private fun resolveWithLifecycleInstrumentation(
         withTimeout(90_000) {
             context(RuntimeSupport.cycleChecking()) {
                 val result: ObjectEngineResult =
-                    source.type.newObjectResult()
+                    source.schemaType.newObjectResult()
                 coroutineScope {
                     val runtime =
                         ResolverRuntime(
@@ -131,9 +131,9 @@ private class ResolverRuntime(
             check(orchestratorsByTarget.put(target, orchestrator) == null) {
                 "Resolver25 concurrently created two orchestrators at $path"
             }
-            instrumentation.orchestratorCreated(path, source.type)
+            instrumentation.orchestratorCreated(path, source.schemaType)
             orchestrator.addPotentialDemand(
-                source.type.closeStructuralDemand(potentialDemand),
+                source.schemaType.closeStructuralDemand(potentialDemand),
             )
             orchestrator.addDemand(initialDemand)
             orchestrator.start()
@@ -205,7 +205,7 @@ private class ObjectResultOrchestrator(
     val orchestrationReady: CompletableDeferred<Unit> = CompletableDeferred()
 
     private val fields: Map<Schema.ObjectField, FieldState> =
-        source.type.fields.values.associateWith(::FieldState)
+        source.schemaType.fields.values.associateWith(::FieldState)
 
     private val activationLock = Any()
     private var pendingActivations: Int = 0
@@ -215,9 +215,9 @@ private class ObjectResultOrchestrator(
     // Records every structurally possible output subselection before grounded-key activation.
     fun addPotentialDemand(demand: SelectionForest) {
         demand.forEach { selection ->
-            if (source.type in selection.possibleTypes) {
+            if (source.schemaType in selection.possibleTypes) {
                 val field =
-                    source.type.fields.getValue(selection.key.field.fieldName)
+                    source.schemaType.fields.getValue(selection.key.field.fieldName)
                 fields.getValue(field).addPotentialSelection(selection)
             }
         }
@@ -250,7 +250,7 @@ private class ObjectResultOrchestrator(
     ): List<Deferred<Unit>> {
         val activations = mutableListOf<Deferred<Unit>>()
         demand.forEach { selection ->
-            if (source.type in selection.possibleTypes) {
+            if (source.schemaType in selection.possibleTypes) {
                 activations += submitActivation(selection, consumerCoordinate)
             }
         }
@@ -332,7 +332,7 @@ private class ObjectResultOrchestrator(
             fieldState.activate(
                 groundedKey = groundedKey,
                 groundedSelection = groundedSelection,
-                concreteType = source.type,
+                concreteType = source.schemaType,
             )
         if (!activation.created) {
             runtime.instrumentation.groundedDemandMerged(
@@ -642,7 +642,7 @@ private class ObjectResultOrchestrator(
                 val resultObject =
                     result as? ObjectEngineResult
                         ?: error("Passive object output does not match its engine result at $path")
-                val mergedDemand: ObjectSelectionForest = demand.merge(type)
+                val mergedDemand: ObjectSelectionForest = demand.merge(schemaType)
                 if (
                     mergedDemand.byKey().values.any { selection ->
                         selection.key.field in world.resolverRegistry
@@ -659,7 +659,7 @@ private class ObjectResultOrchestrator(
                     )
                 } else {
                     val mergedPotentialDemand: ObjectSelectionForest =
-                        potentialDemand.merge(type)
+                        potentialDemand.merge(schemaType)
                     mergedDemand.byKey().values.flatMap { selection ->
                         val field = selection.key.field
                         check(field.arguments.fields.isEmpty()) {
@@ -1029,13 +1029,13 @@ private suspend fun Value.Object.resolveObjectValue(
     potentialDemand: SelectionForest,
 ): ResolvedValue {
     val engineResult: ObjectEngineResult =
-        type.newObjectResult()
+        schemaType.newObjectResult()
     val mergedDemand: ObjectSelectionForest =
         resolverDemand.mergeWithVariables(engineResult).first
     val resolverDemandByGroundedKey: Map<ObjectEngineResult.GroundKey, ObjectSelection> =
         mergedDemand.byGroundKey()
     val closedPotentialDemand: ObjectSelectionForest =
-        type.closeStructuralDemand(potentialDemand)
+        schemaType.closeStructuralDemand(potentialDemand)
     val potentialSubselectionsByField: Map<Schema.ObjectField, SelectionForest> =
         closedPotentialDemand
             .byKey()
@@ -1050,7 +1050,7 @@ private suspend fun Value.Object.resolveObjectValue(
         resolverDemandByGroundedKey.keys.mapTo(linkedSetOf()) { key -> key.field.fieldName }
     val unselectedFieldNames: Set<String> = fieldValues.keys - demandedFieldNames
     require(unselectedFieldNames.isEmpty()) {
-        "Selective resolver output ${type.typeName} contains unselected fields: " +
+        "Selective resolver output ${schemaType.typeName} contains unselected fields: " +
             unselectedFieldNames.joinToString()
     }
 
@@ -1063,7 +1063,7 @@ private suspend fun Value.Object.resolveObjectValue(
         selectedGroundedKeys.map { groundedKey ->
             val arguments = groundedKey.arguments
             require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
-                "Passive object field ${type.typeName}/${groundedKey.field.fieldName} " +
+                "Passive object field ${schemaType.typeName}/${groundedKey.field.fieldName} " +
                     "must be argumentless"
             }
             val resolvedValue: ResolvedValue =

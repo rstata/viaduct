@@ -207,7 +207,7 @@ class ResolverTestDslTest {
                 world.apply(subject),
             )
 
-        assertEquals("Person", result.type.typeName)
+        assertEquals("Person", result.schemaType.typeName)
         assertEquals(
             9,
             result.fieldValues.getValue("value"),

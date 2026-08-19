@@ -62,7 +62,7 @@ private class PriorityQueueDepthFirstReactor(
     source: Value.Object,
     eventObserver: ReactorEventObserver,
 ) : DepthFirstReactor {
-    private val result = ObjectEngineResult.of(source.type, emptyMap(), mutable = true)
+    private val result = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
     private val instrumentation = ReactorInstrumentation(eventObserver)
     private var nextSequence = 0L
@@ -108,11 +108,11 @@ private class PriorityQueueDepthFirstReactor(
 
     context(world: Assumptions, runtimeSupport: RuntimeSupport)
     private fun DepthFirstReactor.SlotOrchestrator.execute() {
-        require(target.type == source.type) {
-            "Initial result type ${target.type.typeName} does not match ${source.type}"
+        require(target.type == source.schemaType) {
+            "Initial result type ${target.type.typeName} does not match ${source.schemaType}"
         }
 
-        val closedDemand = source.type.closeResolverDemand(path, selections)
+        val closedDemand = source.schemaType.closeResolverDemand(path, selections)
         val unresolvedKeys = closedDemand.groundKeys() - target.keys
         source.dependencyOrder(path, unresolvedKeys).forEach { key ->
             enqueue(
@@ -150,7 +150,7 @@ private class PriorityQueueDepthFirstReactor(
             is DepthFirstReactor.SlotOrchestrator ->
                 instrumentation.orchestratorLaunched(
                     path = task.path,
-                    objectType = task.source.type.typeName,
+                    objectType = task.source.schemaType.typeName,
                 )
 
             is DepthFirstReactor.SlotResolver ->

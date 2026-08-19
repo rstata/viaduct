@@ -391,15 +391,15 @@ private fun EngineOutputData?.synthesizeTypenames(): EngineOutputData? =
 
         is Value.Object -> {
             val typenameKey = "__typename"
-            val typenameValue = type.typeName
+            val typenameValue = schemaType.typeName
             if (typenameKey in fieldValues) {
                 val supplied = fieldValues.getValue(typenameKey)
                 require(supplied == typenameValue) {
-                    "Resolver supplied invalid ${type.typeName}/__typename: $supplied"
+                    "Resolver supplied invalid ${schemaType.typeName}/__typename: $supplied"
                 }
             }
             Value.Object.of(
-                type = type,
+                type = schemaType,
                 fields =
                     fieldValues.mapValues { (_, value) ->
                         value.synthesizeTypenames()

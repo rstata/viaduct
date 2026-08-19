@@ -70,9 +70,9 @@ private fun Value.Object.snipObjectToDemand(
 ): Value.Object {
     val selectedFields =
         demand
-            .merge(type)
+            .merge(schemaType)
             .filter { selection ->
-                selection.objectKey(type).field !in world.resolverRegistry
+                selection.objectKey(schemaType).field !in world.resolverRegistry
             }
             .instantiateBindings()
             .byGroundKey()
@@ -80,7 +80,7 @@ private fun Value.Object.snipObjectToDemand(
                 val concreteField = key.field
                 val arguments = key.arguments
                 require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
-                    "Passive object field ${type.typeName}/${concreteField.fieldName} " +
+                    "Passive object field ${schemaType.typeName}/${concreteField.fieldName} " +
                         "must be argumentless"
                 }
                 val value = fieldValues.getValue(concreteField.fieldName)
@@ -96,5 +96,5 @@ private fun Value.Object.snipObjectToDemand(
                     value = selectedValue,
                 )
             }
-    return Value.Object.of(type, selectedFields)
+    return Value.Object.of(schemaType, selectedFields)
 }

@@ -1,5 +1,7 @@
 package model
 
+import viaduct.engine.api.EngineObjectData
+
 /**
  * Int, finite Double, Boolean, or String. String represents GraphQL String, ID, and enum values;
  * the expected schema type disambiguates them.
@@ -16,7 +18,8 @@ typealias EngineInputObjectData = Map<String, EngineInputData?>
 typealias EngineInputData = Any
 
 /**
- * Int, finite Double, Boolean, String, [Value.Object], or [EngineOutputListData].
+ * Int, finite Double, Boolean, String, [Value.Object], [EngineObjectData.Sync], or
+ * [EngineOutputListData].
  *
  * String represents GraphQL String, ID, and enum values; the expected schema type disambiguates
  * them. [EngineErrorData] is additionally admitted to the broad output domain.

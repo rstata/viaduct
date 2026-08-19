@@ -321,14 +321,14 @@ sealed interface ObjectEngineResult {
 
     fun isCellSet(field: GroundKey): Boolean = field in keys
 
-    /** @throws MissingFieldException when [field] has no cell */
+    /** @throws NoSuchElementException when [field] has no cell */
     fun getCell(field: GroundKey): EngineResultCell
 
     /**
      * Returns the field cell, explicitly creating an unclaimed reader placeholder when this
      * mutable object is not frozen.
      *
-     * @throws MissingFieldException when this object is immutable or frozen and has no cell
+     * @throws NoSuchElementException when this object is immutable or frozen and has no cell
      */
     fun reserveCell(field: GroundKey): EngineResultCell
 
@@ -741,7 +741,7 @@ private class ObjectResultImpl(
     override fun getCell(field: ObjectEngineResult.GroundKey): EngineResultCell {
         validateObjectField(type, field)
         return cellStore.readOrNull(field)
-            ?: throw MissingFieldException(type.typeName, field.field.fieldName)
+            ?: throw missingResultCell(type, field)
     }
 
     override fun reserveCell(field: ObjectEngineResult.GroundKey): EngineResultCell {
@@ -785,7 +785,7 @@ private class ObjectCellStore(
         synchronized(lock) {
             cells[field]
                 ?: if (frozen) {
-                    throw MissingFieldException(type.typeName, field.field.fieldName)
+                    throw missingResultCell(type, field)
                 } else {
                     mutableCell(field).also { cell ->
                         cells[field] = cell
@@ -803,7 +803,7 @@ private class ObjectCellStore(
             }
         presentCells.forEach { (field, cell) ->
             cell.implementation.freezeValue(
-                MissingFieldException(type.typeName, field.field.fieldName),
+                missingResultCell(type, field),
             )
         }
     }
@@ -820,8 +820,15 @@ private class ObjectCellStore(
             mutable = true,
             validateValue = { value -> validateObjectValue(field, value) },
         )
-
 }
+
+private fun missingResultCell(
+    type: Schema.ObjectType,
+    field: ObjectEngineResult.GroundKey,
+): NoSuchElementException =
+    NoSuchElementException(
+        "Missing engine-result cell: ${type.typeName}.${field.field.fieldName}",
+    )
 
 private class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,

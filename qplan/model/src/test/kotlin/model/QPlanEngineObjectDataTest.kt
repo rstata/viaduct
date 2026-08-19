@@ -1,0 +1,249 @@
+package model
+
+import kotlinx.coroutines.runBlocking
+import model.testing.GJSchema
+import viaduct.engine.api.EngineObjectData
+import viaduct.errors.UnsetFieldException
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+
+class QPlanEngineObjectDataTest {
+    private val fixture = GJSchema.fromSDL(SCHEMA_SDL)
+    private val schema: Schema = fixture
+    private val userType = schema.type("User") as Schema.ObjectType
+    private val graphQLUserType = requireNotNull(fixture.graphQLSchema.getObjectType("User"))
+
+    @Test
+    fun `distinguishes absent null value and error selections`() {
+        val data =
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = graphQLUserType,
+                fields =
+                    linkedMapOf(
+                        "name" to "Ada",
+                        "nickname" to null,
+                        "age" to EngineErrorData,
+                    ),
+            )
+
+        assertSame(graphQLUserType, data.type)
+        assertEquals("Ada", data.get("name"))
+        assertTrue(data.isPresent("nickname"))
+        assertNull(data.get("nickname"))
+        assertNull(data.getOrNull("nickname"))
+        assertTrue(data.isPresent("age"))
+        assertSame(EngineErrorData, data.get("age"))
+
+        assertFalse(data.isPresent("missing"))
+        assertNull(data.getOrNull("missing"))
+        val exception = assertFailsWith<UnsetFieldException> { data.get("missing") }
+        assertEquals("User", exception.typeName)
+    }
+
+    @Test
+    fun `suspending operations preserve synchronous read behavior`() =
+        runBlocking {
+            val data =
+                engineObjectDataOf(
+                    schemaType = userType,
+                    graphQLType = graphQLUserType,
+                    fields =
+                        linkedMapOf(
+                            "name" to "Ada",
+                            "nickname" to null,
+                            "age" to EngineErrorData,
+                        ),
+                )
+
+            assertEquals("Ada", data.fetch("name"))
+            assertNull(data.fetch("nickname"))
+            assertSame(EngineErrorData, data.fetch("age"))
+            assertNull(data.fetchOrNull("missing"))
+            assertEquals(
+                listOf("name", "nickname", "age"),
+                data.fetchSelections().toList(),
+            )
+            assertFailsWith<UnsetFieldException> { data.fetch("missing") }
+        }
+
+    @Test
+    fun `supports response aliases without exposing schema field metadata`() {
+        val data =
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = graphQLUserType,
+                fields =
+                    listOf(
+                        entry("displayName", "name", "Ada"),
+                        entry("friendAtLimit", "friend", null),
+                    ),
+            )
+
+        assertEquals(
+            listOf("displayName", "friendAtLimit"),
+            data.getSelections().toList(),
+        )
+        assertEquals("Ada", data.get("displayName"))
+        assertTrue(data.isPresent("friendAtLimit"))
+        assertFalse(data.isPresent("name"))
+        assertFalse(data.isPresent("friend"))
+    }
+
+    @Test
+    fun `snapshots passive field maps`() {
+        val fields =
+            linkedMapOf<String, EngineOutputData?>(
+                "name" to "Ada",
+            )
+        val data = engineObjectDataOf(userType, graphQLUserType, fields)
+
+        fields["name"] = "Grace"
+        fields["nickname"] = "Countess"
+
+        assertEquals("Ada", data.get("name"))
+        assertFalse(data.isPresent("nickname"))
+        assertEquals(listOf("name"), data.getSelections().toList())
+    }
+
+    @Test
+    fun `rejects values that do not conform to their schema field`() {
+        assertFailsWith<IllegalArgumentException> {
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = graphQLUserType,
+                fields = mapOf("name" to 1),
+            )
+        }
+    }
+
+    @Test
+    fun `rejects entries owned by another object type`() {
+        val queryField = schema.objectField("Query", "viewer")
+
+        assertFailsWith<IllegalArgumentException> {
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = graphQLUserType,
+                fields =
+                    listOf(
+                        EngineObjectDataEntry.of("viewer", queryField, null),
+                    ),
+            )
+        }
+    }
+
+    @Test
+    fun `rejects duplicate response selections`() {
+        assertFailsWith<IllegalArgumentException> {
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = graphQLUserType,
+                fields =
+                    listOf(
+                        entry("value", "name", "Ada"),
+                        entry("value", "age", 36),
+                    ),
+            )
+        }
+    }
+
+    @Test
+    fun `passive construction rejects argument-bearing fields`() {
+        assertFailsWith<IllegalArgumentException> {
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = graphQLUserType,
+                fields = mapOf("friend" to null),
+            )
+        }
+    }
+
+    @Test
+    fun `rejects a GraphQL object type with a different name`() {
+        assertFailsWith<IllegalArgumentException> {
+            engineObjectDataOf(
+                schemaType = userType,
+                graphQLType = fixture.graphQLSchema.queryType,
+            )
+        }
+    }
+
+    @Test
+    fun `qplan objects retain structural equality`() {
+        val first =
+            engineObjectDataOf(
+                userType,
+                graphQLUserType,
+                linkedMapOf("name" to "Ada", "nickname" to null),
+            )
+        val equal =
+            engineObjectDataOf(
+                userType,
+                graphQLUserType,
+                linkedMapOf("name" to "Ada", "nickname" to null),
+            )
+        val different =
+            engineObjectDataOf(
+                userType,
+                graphQLUserType,
+                linkedMapOf("name" to "Grace", "nickname" to null),
+            )
+
+        assertEquals(first, equal)
+        assertEquals(first.hashCode(), equal.hashCode())
+        assertNotEquals(first, different)
+        assertNotEquals(first, OtherEngineObjectData(graphQLUserType))
+    }
+
+    private fun entry(
+        selection: String,
+        fieldName: String,
+        value: EngineOutputData?,
+    ): EngineObjectDataEntry =
+        EngineObjectDataEntry.of(
+            selection = selection,
+            field = schema.objectField("User", fieldName),
+            value = value,
+        )
+
+    private class OtherEngineObjectData(
+        override val type: graphql.schema.GraphQLObjectType,
+    ) : EngineObjectData.Sync {
+        override suspend fun fetch(selection: String): Any? = null
+
+        override suspend fun fetchOrNull(selection: String): Any? = null
+
+        override suspend fun fetchSelections(): Iterable<String> = emptyList()
+
+        override fun get(selection: String): Any? = null
+
+        override fun getOrNull(selection: String): Any? = null
+
+        override fun isPresent(selection: String): Boolean = false
+
+        override fun getSelections(): Iterable<String> = emptyList()
+    }
+
+    private companion object {
+        val SCHEMA_SDL =
+            """
+            type User {
+              name: String!
+              nickname: String
+              age: Int
+              friend(limit: Int): User
+            }
+
+            type Query {
+              viewer: User
+            }
+            """.trimIndent()
+    }
+}

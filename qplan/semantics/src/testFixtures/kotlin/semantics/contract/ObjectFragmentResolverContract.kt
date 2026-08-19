@@ -115,7 +115,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     if (field.containingType.typeName == "Holder" && field.fieldName == "chosen") {
                         val item = assertIs<Value.Object>(input.fieldValues.getValue("item"))
                         assertEquals(setOf("value"), item.fieldValues.keys)
-                        observed[item.type.typeName] =
+                        observed[item.schemaType.typeName] =
                             assertIs<Int>(item.fieldValues.getValue("value"))
                     }
                 },

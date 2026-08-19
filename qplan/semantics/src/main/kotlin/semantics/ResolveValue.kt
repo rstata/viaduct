@@ -107,14 +107,14 @@ private fun Value.Object.resolveObjectValue(
     resolverDemand: SelectionForest,
     path: List<PathComponent>,
 ): ResolvedValue {
-    val mergedResolverDemand = resolverDemand.applicableGroundSelections(type)
+    val mergedResolverDemand = resolverDemand.applicableGroundSelections(schemaType)
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     if (world.selectiveResolvers) {
         val selectedFieldNames =
             resolverDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.fieldName }
         val unselectedKeys = fieldValues.keys - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
-            "Selective resolver output ${type.typeName} contains unselected fields: " +
+            "Selective resolver output ${schemaType.typeName} contains unselected fields: " +
                 unselectedKeys.joinToString()
         }
     }
@@ -127,9 +127,9 @@ private fun Value.Object.resolveObjectValue(
         } else {
             fieldValues.keys
                 .map { fieldName ->
-                    val field = type.fields.getValue(fieldName)
+                    val field = schemaType.fields.getValue(fieldName)
                     require(field.arguments.fields.isEmpty()) {
-                        "Passive object field ${type.typeName}/$fieldName must be argumentless"
+                        "Passive object field ${schemaType.typeName}/$fieldName must be argumentless"
                     }
                     ObjectEngineResult.GroundKey.of(field, emptyMap())
                 }.filter { key -> key.field !in world.resolverRegistry }
@@ -145,7 +145,7 @@ private fun Value.Object.resolveObjectValue(
         ) { result, key ->
             val arguments = key.arguments
             require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
-                "Passive object field ${type.typeName}/${key.field.fieldName} must be argumentless"
+                "Passive object field ${schemaType.typeName}/${key.field.fieldName} must be argumentless"
             }
             val fieldValue =
                 fieldValues
@@ -168,7 +168,7 @@ private fun Value.Object.resolveObjectValue(
                         fieldValue.objectOccurrences,
             )
         }
-    val engineResult = ObjectEngineResult.of(type, resolved.values, mutable = true)
+    val engineResult = ObjectEngineResult.of(schemaType, resolved.values, mutable = true)
     val localOccurrence =
         ObjectResolution(
             path = path,

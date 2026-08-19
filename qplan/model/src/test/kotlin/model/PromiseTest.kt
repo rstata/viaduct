@@ -49,12 +49,12 @@ class PromiseTest {
     fun `failed promise throws its cause from get and await`() =
         runBlocking {
             val promise = Promise.ofDeferred<String>()
-            val failure = MissingFieldException("Query", "missing")
+            val failure = NoSuchElementException("missing")
 
             promise.fail(failure)
 
-            assertFailsWith<MissingFieldException> { promise.get() }
-            assertFailsWith<MissingFieldException> { promise.await() }
+            assertFailsWith<NoSuchElementException> { promise.get() }
+            assertFailsWith<NoSuchElementException> { promise.await() }
             assertFailsWith<IllegalStateException> { promise.complete("late") }
             assertFailsWith<IllegalStateException> { promise.fail(failure) }
         }

@@ -15,6 +15,7 @@ import model.TypeExpr
 import model.Value
 import model.canContainPure
 import model.conformsToArgumentDefinition
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Whether this value recursively conforms to the schema definitions it carries.
@@ -24,8 +25,7 @@ import model.conformsToArgumentDefinition
  */
 context(world: Assumptions)
 internal fun Value.Object.conformsToSchema(): Boolean =
-    fieldValues.containingType == type &&
-        fieldValues.values.all { value -> value.conformsToOutputData() }
+    fieldValues.values.all { value -> value.conformsToOutputData() }
 
 /**
  * Whether this input value recursively conforms to [typeExpr].
@@ -171,9 +171,14 @@ fun EngineOutputData?.conformsToOutputSchemaType(
             typeExpr is TypeExpr.Named &&
                 when (val expected = typeExpr.baseType) {
                     is Schema.CompositeType ->
-                        type in expected.possibleTypes
-                    else -> expected == type
+                        schemaType in expected.possibleTypes
+                    else -> expected == schemaType
                 }
+        is EngineObjectData.Sync ->
+            typeExpr is TypeExpr.Named &&
+                (typeExpr.baseType as? Schema.CompositeType)
+                    ?.possibleTypes
+                    ?.any { possibleType -> possibleType.typeName == type.name } == true
         is Int -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IntType
         is Double ->
             isFinite() &&
@@ -203,8 +208,9 @@ private fun EngineOutputData?.conformsToOutputData(): Boolean =
         is Double -> isFinite()
         is List<*> -> all { value -> value.conformsToOutputData() }
         is Value.Object ->
-            fieldValues.containingType == type &&
-                fieldValues.values.all { value -> value.conformsToOutputData() }
+            fieldValues.values.all { value -> value.conformsToOutputData() }
+        is EngineObjectData.Sync ->
+            getSelections().all { selection -> get(selection).conformsToOutputData() }
         else -> false
     }
 

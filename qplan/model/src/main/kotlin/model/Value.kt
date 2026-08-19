@@ -18,7 +18,7 @@ import model.invariants.conformsToOutputSchemaType
  */
 sealed interface Value {
     sealed interface Typed : Value {
-        val type: Schema.Type
+        val schemaType: Schema.Type
     }
 
     /**
@@ -56,11 +56,11 @@ sealed interface Value {
      *
      * ### Invariant: object-value-owner
      *
-     * `fieldValues.containingType == type`. Object values are partial; resolver behavior is
+     * Object values are partial; resolver behavior is
      * responsible for supplying passive fields, including canonical `__typename`.
      */
     sealed interface Object : Value, Typed {
-        override val type: Schema.ObjectType
+        override val schemaType: Schema.ObjectType
         val fieldValues: ObjectFields
 
         companion object {
@@ -143,17 +143,12 @@ sealed interface Value {
      * Passive and resolver-produced objects use canonical argumentless field names. Resolver
      * inputs materialized from object fragments use GraphQL response keys.
      *
-     * ### Invariant: object-field-values-owner
-     *
-     * [containingType] is the concrete object type whose fields these values inhabit.
      */
     sealed interface ObjectFields : Map<kotlin.String, EngineOutputData?> {
-        val containingType: Schema.ObjectType
-
-        /** @throws MissingFieldException when [key] is not present */
+        /** @throws NoSuchElementException when [key] is not present */
         override operator fun get(key: kotlin.String): EngineOutputData?
 
-        /** @throws MissingFieldException when [key] is not present */
+        /** @throws NoSuchElementException when [key] is not present */
         fun getValue(key: kotlin.String): EngineOutputData?
     }
 
@@ -247,7 +242,7 @@ sealed interface Value {
 }
 
 private data class ObjectValueImpl(
-    override val type: Schema.ObjectType,
+    override val schemaType: Schema.ObjectType,
     override val fieldValues: Value.ObjectFields,
 ) : Value.Object
 
@@ -317,25 +312,18 @@ private data class PresentDefaultValueImpl(
 ) : Value.Default.Present
 
 private class ObjectFieldValuesImpl(
-    override val containingType: Schema.ObjectType,
     private val backingMap: Map<String, EngineOutputData?>,
 ) : Value.ObjectFields,
     Map<String, EngineOutputData?> by backingMap {
     override operator fun get(key: String): EngineOutputData? = getValue(key)
 
-    override fun getValue(key: String): EngineOutputData? {
-        if (!backingMap.containsKey(key)) {
-            throw MissingFieldException(containingType.typeName, key)
-        }
-        return backingMap[key]
-    }
+    override fun getValue(key: String): EngineOutputData? = backingMap.getValue(key)
 
     override fun equals(other: Any?): Boolean =
         other is Value.ObjectFields &&
-            containingType == other.containingType &&
             entries == other.entries
 
-    override fun hashCode(): Int = 31 * containingType.hashCode() + backingMap.hashCode()
+    override fun hashCode(): Int = backingMap.hashCode()
 
     override fun toString(): String = backingMap.toString()
 }
@@ -345,8 +333,8 @@ private fun objectValueOfValidatedFields(
     fields: Map<String, EngineOutputData?>,
 ): Value.Object =
     ObjectValueImpl(
-        type = type,
-        fieldValues = ObjectFieldValuesImpl(type, fields.toMap()),
+        schemaType = type,
+        fieldValues = ObjectFieldValuesImpl(fields.toMap()),
     )
 
 internal fun argumentsOfGround(

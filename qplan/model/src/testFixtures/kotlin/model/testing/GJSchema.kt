@@ -126,10 +126,10 @@ internal class GJSchema private constructor(
                 require(output is Value.Object) {
                     "Node field resolver did not return a node reference"
                 }
-                val idField = objectField(output.type.typeName, "id")
+                val idField = objectField(output.schemaType.typeName, "id")
                 val id = output.fieldValues.getValue(idField.fieldName)
                 require(id != EngineErrorData && id is String) {
-                    "Node reference ${output.type.typeName}/id must contain a non-error ID"
+                    "Node reference ${output.schemaType.typeName}/id must contain a non-error ID"
                 }
                 val bridgeType = bridgeTypeExpr.baseType as Schema.ObjectType
                 val bridgeId = objectField(bridgeType.typeName, NODE_BRIDGE_ID_FIELD)
@@ -138,8 +138,8 @@ internal class GJSchema private constructor(
                     fields =
                         mapOf(
                             bridgeId.fieldName to
-                                "$TYPED_NODE_ID_PREFIX${output.type.typeName.length}:" +
-                                    "${output.type.typeName}$id",
+                                "$TYPED_NODE_ID_PREFIX${output.schemaType.typeName.length}:" +
+                                    "${output.schemaType.typeName}$id",
                         ),
                 )
             }

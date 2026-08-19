@@ -352,7 +352,7 @@ class EngineResultTest {
         val lookupWithError =
             ObjectEngineResult.GroundKey.of(
                 schema.objectField("User", "lookup"),
-                mapOf("limit" to Value.Error),
+                mapOf("limit" to ArgumentResolutionError),
             )
         val user =
             ObjectEngineResult.of(
@@ -613,30 +613,29 @@ class EngineResultTest {
         val status = schema.type("Status") as Schema.EnumType
         val cases =
             listOf(
-                Triple<Value.Simple, EngineResult, Schema.SimpleType>(
-                    Value.Int.of(1),
+                Triple<EngineOutputData, EngineResult, Schema.SimpleType>(
+                    1,
                     1,
                     Schema.IntType,
                 ),
-                Triple(Value.Float.of(2.5), 2.5, Schema.FloatType),
-                Triple(Value.String.of("three"), "three", Schema.StringType),
-                Triple(Value.Boolean.of(true), true, Schema.BooleanType),
-                Triple(Value.ID.of("four"), Schema.ID.of("four"), Schema.IDType),
+                Triple(2.5, 2.5, Schema.FloatType),
+                Triple("three", "three", Schema.StringType),
+                Triple(true, true, Schema.BooleanType),
+                Triple("four", Schema.ID.of("four"), Schema.IDType),
                 Triple(
-                    Value.Enum.of(status, "READY"),
+                    "READY",
                     status.values.getValue("READY"),
                     status,
                 ),
             )
 
         cases.forEach { (value, expectedResult, type) ->
-            val result = value.toEngineResult()
+            val result = value.toEngineResult(type)
             assertEquals(expectedResult, result)
-            assertEquals(value, result.toValue(type))
+            assertEquals(value, result.toEngineOutputData(type))
         }
         assertEquals(Schema.ID.of("four"), Schema.ID.of("four"))
         assertSame(status.values.getValue("READY"), cases.last().second)
-        assertSame(ErrorEngineResult, Value.Error.toEngineResult())
     }
 
     @Test

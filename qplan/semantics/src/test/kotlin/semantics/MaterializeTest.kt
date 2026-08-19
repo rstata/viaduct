@@ -62,7 +62,7 @@ class MaterializeTest {
             promise.complete("ready")
 
             assertEquals(
-                Value.String.of("ready"),
+                "ready",
                 materialized.await().fieldValues.getValue("value"),
             )
         }
@@ -191,8 +191,8 @@ class MaterializeTest {
                 }
 
             assertEquals(setOf("first", "second"), materialized.fieldValues.keys)
-            assertEquals(Value.String.of("same"), materialized.fieldValues.getValue("first"))
-            assertEquals(Value.String.of("same"), materialized.fieldValues.getValue("second"))
+            assertEquals("same", materialized.fieldValues.getValue("first"))
+            assertEquals("same", materialized.fieldValues.getValue("second"))
         }
 
     @Test
@@ -251,11 +251,11 @@ class MaterializeTest {
 
             assertEquals(setOf("first", "second"), materialized.fieldValues.keys)
             assertEquals(
-                Value.String.of("first-value"),
+                "first-value",
                 materialized.fieldValues.getValue("first"),
             )
             assertEquals(
-                Value.String.of("second-value"),
+                "second-value",
                 materialized.fieldValues.getValue("second"),
             )
         }

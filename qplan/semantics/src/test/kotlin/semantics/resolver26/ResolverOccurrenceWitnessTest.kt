@@ -49,18 +49,14 @@ class ResolverOccurrenceWitnessTest {
                     mapOf(
                         items to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.OutputList.of(
-                                    typeExpr = payloadType,
-                                    values =
-                                        listOf(
+                                listOf(
                                             schema.objectOf("Payload") {
                                                 "base" setTo 10
                                             },
                                             schema.objectOf("Payload") {
                                                 "base" setTo 10
                                             },
-                                        ),
-                                )
+                                        )
                             },
                         schema.objectField("Payload", "computed") to
                             fieldResolverOf(

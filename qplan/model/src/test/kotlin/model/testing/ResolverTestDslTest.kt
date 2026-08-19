@@ -3,6 +3,9 @@ package model.testing
 import model.ObjectEngineResult
 
 import model.OpenArguments
+import model.ArgumentResolutionError
+import model.EngineErrorData
+import model.EngineOutputData
 import model.Schema
 import model.SourceSchemaAdapter
 import model.Value
@@ -50,7 +53,7 @@ class ResolverTestDslTest {
 
         val result = world.apply(total, container, mapOf("extra" to 4))
 
-        assertEquals(Value.Int.of(10), result)
+        assertEquals(10, result)
         assertEquals(
             listOf(Value.Arguments.of(total, mapOf("extra" to 4))),
             world.applicationArguments.arguments(total),
@@ -108,7 +111,7 @@ class ResolverTestDslTest {
         val failed = world.schema.objectField("Query", "failed")
 
         assertNull(world.apply(nullable, root))
-        assertEquals(Value.Error, world.apply(failed, root))
+        assertEquals(EngineErrorData, world.apply(failed, root))
     }
 
     @Test
@@ -157,9 +160,9 @@ class ResolverTestDslTest {
         val echo = world.schema.objectField("Query", "echo")
 
         listOf(
-            4 to Value.Int.of(4),
+            4 to 4,
             null to null,
-            Value.Error to Value.Error,
+            ArgumentResolutionError to EngineErrorData,
         ).forEach { (value, expected) ->
             assertEquals(
                 expected,
@@ -206,7 +209,7 @@ class ResolverTestDslTest {
 
         assertEquals("Person", result.type.typeName)
         assertEquals(
-            Value.Int.of(9),
+            9,
             result.fieldValues.getValue("value"),
         )
     }
@@ -246,11 +249,11 @@ class ResolverTestDslTest {
             )
 
         assertEquals(
-            Value.ID.of("user-2"),
+            "user-2",
             user.fieldValues.getValue("id"),
         )
         assertEquals(
-            Value.Int.of(8),
+            8,
             user.fieldValues.getValue("score"),
         )
         val sourceSchema = SourceSchemaAdapter(schema)
@@ -320,9 +323,9 @@ private fun TestWorld.apply(
     field: Schema.ObjectField,
     input: Value.Object = resolverRegistry.resolveRootQuery(),
     arguments: Map<String, Any?> = emptyMap(),
-): Value.Output? =
+): EngineOutputData? =
     when (val grounded = OpenArguments.of(field, arguments)) {
-        OpenArguments.Ground.Error -> Value.Error
+        OpenArguments.Ground.Error -> EngineErrorData
         is Value.Arguments -> resolverRegistry.resolver(field)(input, grounded)
         else -> error("Direct resolver application requires ground arguments")
     }

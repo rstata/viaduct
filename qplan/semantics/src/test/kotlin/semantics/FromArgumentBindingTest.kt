@@ -24,7 +24,7 @@ class FromArgumentBindingTest {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                Value.Int.of(0)
+                                0
                             },
                     )
                 },

@@ -443,7 +443,7 @@ class AssumptionsTest {
     fun `argument instantiation preserves the argument error`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val node = assumptions.schema.objectField("Query", "node_V_A_node")
-        val arguments = OpenArguments.of(node, mapOf("filter" to Value.Error))
+        val arguments = OpenArguments.of(node, mapOf("filter" to ArgumentResolutionError))
 
         val instantiated =
             context(assumptions) {
@@ -459,7 +459,7 @@ class AssumptionsTest {
         val node = schema.objectField("Query", "node_V_A_node")
         listOf(
             mapOf(
-                "tags" to listOf(Value.Error),
+                "tags" to listOf(ArgumentResolutionError),
             ),
         ).forEach { filter ->
             val arguments =

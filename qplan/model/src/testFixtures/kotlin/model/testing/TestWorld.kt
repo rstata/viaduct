@@ -7,6 +7,7 @@ import com.google.inject.Provides
 import com.google.inject.ProvisionException
 import jakarta.inject.Singleton
 import model.Assumptions
+import model.EngineErrorData
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -217,7 +218,7 @@ private class TestWorldModule(
             .associateWith {
                 fieldResolverOf(
                     objectFragment = queryFragment,
-                    function = { _, _ -> Value.Error },
+                    function = { _, _ -> EngineErrorData },
                 )
             }
     }

@@ -58,11 +58,11 @@ class IsClosedUnderResolverDemandTest {
                                     }
                                     """.trimIndent(),
                                 ),
-                            ) { _, _ -> Value.Int.of(14) },
+                            ) { _, _ -> 14 },
                         consume to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
-                            ) { _, _ -> Value.Int.of(14) },
+                            ) { _, _ -> 14 },
                         parent to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),

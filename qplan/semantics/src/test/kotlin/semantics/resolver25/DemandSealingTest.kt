@@ -117,7 +117,7 @@ class DemandSealingTest {
                             },
                         schema.objectField("Query", "b") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(4)
+                                4
                             },
                         schema.objectField("Query", "c") to
                             fieldResolverOf(
@@ -222,11 +222,10 @@ class DemandSealingTest {
                                 val symbolic =
                                     input.fieldValues.getValue("symbolic") as Value.Object
                                 val one =
-                                    exact.fieldValues.getValue(oneKey.field.fieldName) as Value.Int
+                                    exact.fieldValues.getValue(oneKey.field.fieldName) as Int
                                 val two =
-                                    symbolic.fieldValues.getValue(twoKey.field.fieldName)
-                                        as Value.Int
-                                Value.Int.of(one.intValue + two.intValue)
+                                    symbolic.fieldValues.getValue(twoKey.field.fieldName) as Int
+                                one + two
                             },
                         schema.objectField("Query", "a") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -240,7 +239,7 @@ class DemandSealingTest {
                             },
                         schema.objectField("Query", "b") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.String.of("same")
+                                "same"
                             },
                     )
                 },

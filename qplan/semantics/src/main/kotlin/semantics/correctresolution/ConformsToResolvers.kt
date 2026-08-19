@@ -2,6 +2,8 @@ package semantics.correctresolution
 
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -12,7 +14,7 @@ import model.Stamp
 import model.TypeExpr
 import model.Value
 import model.applicableGroundSelections
-import model.toValue
+import model.toEngineOutputData
 import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
@@ -132,16 +134,15 @@ private fun EngineResult?.engineResultConformsToResolvers(
 
 context(world: Assumptions)
 private fun EngineResult?.engineResultConformsToResolverValue(
-    resolverValue: Value.Output?,
+    resolverValue: EngineOutputData?,
     expectedType: TypeExpr<Schema.OutputType>,
 ): Boolean =
     when (this) {
         null -> resolverValue == null
-        ErrorEngineResult -> resolverValue == Value.Error
+        ErrorEngineResult -> resolverValue == EngineErrorData
 
         is ObjectEngineResult ->
-            resolverValue != Value.Error &&
-                resolverValue is Value.Object &&
+            resolverValue is Value.Object &&
                 objectFieldsConformToResolverValue(
                     resolverValue = resolverValue,
                     fieldBelongsToResolver = { field ->
@@ -150,16 +151,16 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                 )
 
         is ListEngineResult ->
-            resolverValue != Value.Error &&
-            resolverValue is Value.OutputList &&
-                size == resolverValue.values.size &&
+            resolverValue is List<*> &&
+                size == resolverValue.size &&
                 indices.all { index ->
                     get(index).getValue().get().engineResultConformsToResolverValue(
-                        resolverValue.values[index],
+                        resolverValue[index],
                         typeExpr,
                     )
                 }
-        else -> toValue(expectedType.baseType as Schema.SimpleType) == resolverValue
+        else ->
+            toEngineOutputData(expectedType.baseType as Schema.SimpleType) == resolverValue
     }
 
 context(world: Assumptions)

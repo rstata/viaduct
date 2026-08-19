@@ -126,6 +126,7 @@ private suspend fun resolveSlot(
                     }
                 val resolvedValue =
                     fieldValue.resolveValue(
+                        expectedType = key.field.typeExpr,
                         path = path + key,
                         resolverDemand = resolutionSelections,
                     )

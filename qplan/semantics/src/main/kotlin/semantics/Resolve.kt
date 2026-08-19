@@ -142,6 +142,7 @@ internal fun Value.Object.resolveKey(
                 }
             val resolvedValue =
                 fieldValue.resolveValue(
+                    expectedType = key.field.typeExpr,
                     path = path + key,
                     resolverDemand = resolutionSelections,
                 )

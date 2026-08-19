@@ -1,6 +1,6 @@
 package model
 
-import model.invariants.conformsToSchemaType
+import model.invariants.conformsToOutputSchemaType
 
 /**
  * A ground GraphQL semantic value.
@@ -17,158 +17,8 @@ import model.invariants.conformsToSchemaType
  * [Assumptions.schema] under which that value is interpreted.
  */
 sealed interface Value {
-    sealed interface Output : Value
-
     sealed interface Typed : Value {
         val type: Schema.Type
-    }
-
-    sealed interface Simple : Output {
-        val type: Schema.SimpleType
-    }
-
-    /**
-     * A value in the model's closed universe of built-in scalar leaf types: [Int], [Float],
-     * [String], [Boolean], or [ID].
-     */
-    sealed interface Scalar : Simple {
-        override val type: Schema.ScalarType
-    }
-
-    sealed interface Int : Scalar {
-        override val type: Schema.IntType
-            get() = Schema.IntType
-
-        val intValue: kotlin.Int
-
-        companion object {
-            /**
-             * ### Invariant: int-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(value: kotlin.Int): Int = IntValueImpl(value)
-        }
-    }
-
-    sealed interface Float : Scalar {
-        override val type: Schema.FloatType
-            get() = Schema.FloatType
-
-        /**
-         * ### Invariant: schema-finite-float
-         *
-         * This value is finite; NaN and positive or negative infinity are excluded.
-         */
-        val floatValue: Double
-
-        companion object {
-            /**
-             * ### Invariant: float-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(value: Double): Float {
-                require(value.isFinite()) { "GraphQL Float values must be finite" }
-                return FloatValueImpl(value)
-            }
-        }
-    }
-
-    sealed interface String : Scalar {
-        override val type: Schema.StringType
-            get() = Schema.StringType
-
-        val stringValue: kotlin.String
-
-        companion object {
-            /**
-             * ### Invariant: string-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(value: kotlin.String): String = StringValueImpl(value)
-        }
-    }
-
-    sealed interface Boolean : Scalar {
-        override val type: Schema.BooleanType
-            get() = Schema.BooleanType
-
-        val booleanValue: kotlin.Boolean
-
-        companion object {
-            /**
-             * ### Invariant: boolean-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(value: kotlin.Boolean): Boolean = BooleanValueImpl(value)
-        }
-    }
-
-    sealed interface ID : Scalar {
-        override val type: Schema.IDType
-            get() = Schema.IDType
-
-        val idValue: kotlin.String
-
-        companion object {
-            /**
-             * ### Invariant: id-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(value: kotlin.String): ID = IDValueImpl(value)
-        }
-    }
-
-    sealed interface Enum : Simple {
-        /**
-         * ### Invariant: schema-enum-membership
-         *
-         * [type] is the canonical enum definition through which this value was constructed, and
-         * [enumValue] is a member of [type.values].
-         */
-        override val type: Schema.EnumType
-        val enumValue: kotlin.String
-
-        companion object {
-            /**
-             * ### Invariant: enum-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(
-                type: Schema.EnumType,
-                value: kotlin.String,
-            ): Enum {
-                require(value in type.values) { "$value is not a value of ${type.typeName}" }
-                return EnumValueImpl(type, value)
-            }
-        }
-    }
-
-    sealed interface OutputList : Output {
-        val typeExpr: TypeExpr<Schema.OutputType>
-        val values: kotlin.collections.List<Output?>
-
-        companion object {
-            /**
-             * ### Invariant: output-list-value-factory-schema-conformance
-             *
-             * Every result satisfies `result.conformsToSchema()` in its reasoning world.
-             */
-            fun of(
-                typeExpr: TypeExpr<Schema.OutputType>,
-                values: kotlin.collections.List<Output?>,
-            ): OutputList {
-                require(values.all { it.conformsToSchemaType(typeExpr) }) {
-                    "Output list element does not conform to $typeExpr"
-                }
-                return OutputListValueImpl(typeExpr, values)
-            }
-        }
     }
 
     /**
@@ -209,7 +59,7 @@ sealed interface Value {
      * `fieldValues.containingType == type`. Object values are partial; resolver behavior is
      * responsible for supplying passive fields, including canonical `__typename`.
      */
-    sealed interface Object : Output, Typed {
+    sealed interface Object : Value, Typed {
         override val type: Schema.ObjectType
         val fieldValues: ObjectFields
 
@@ -227,7 +77,7 @@ sealed interface Value {
              */
             fun of(
                 type: Schema.ObjectType,
-                fields: Map<kotlin.String, Output?> = emptyMap(),
+                fields: Map<kotlin.String, EngineOutputData?> = emptyMap(),
             ): Object =
                 of(
                     type = type,
@@ -258,7 +108,7 @@ sealed interface Value {
                         "${type.typeName} cannot contain output field " +
                             "${entry.field.containingType.typeName}/${entry.field.fieldName}"
                     }
-                    require(entry.value.conformsToSchemaType(entry.field.typeExpr)) {
+                    require(entry.value.conformsToOutputSchemaType(entry.field.typeExpr)) {
                         "${type.typeName}/${entry.field.fieldName} value does not conform to " +
                             entry.field.typeExpr
                     }
@@ -275,13 +125,13 @@ sealed interface Value {
         sealed interface FieldValue {
             val key: kotlin.String
             val field: Schema.ObjectField
-            val value: Output?
+            val value: EngineOutputData?
 
             companion object {
                 fun of(
                     key: kotlin.String,
                     field: Schema.ObjectField,
-                    value: Output?,
+                    value: EngineOutputData?,
                 ): FieldValue = ObjectFieldValueImpl(key, field, value)
             }
         }
@@ -297,14 +147,14 @@ sealed interface Value {
      *
      * [containingType] is the concrete object type whose fields these values inhabit.
      */
-    sealed interface ObjectFields : Map<kotlin.String, Output?> {
+    sealed interface ObjectFields : Map<kotlin.String, EngineOutputData?> {
         val containingType: Schema.ObjectType
 
         /** @throws MissingFieldException when [key] is not present */
-        override operator fun get(key: kotlin.String): Output?
+        override operator fun get(key: kotlin.String): EngineOutputData?
 
         /** @throws MissingFieldException when [key] is not present */
-        fun getValue(key: kotlin.String): Output?
+        fun getValue(key: kotlin.String): EngineOutputData?
     }
 
     /**
@@ -373,55 +223,13 @@ sealed interface Value {
     }
 
     /**
-     * The bottom value of the GraphQL value hierarchy.
-     *
-     * Error metadata, paths, and multiplicity are intentionally collapsed into this singleton.
-     */
-    data object Error :
-        Int,
-        Float,
-        String,
-        Boolean,
-        ID,
-        Enum,
-        Object,
-        OpenValue {
-        override val type: Nothing
-            get() = unsupported()
-
-        override val intValue: kotlin.Int
-            get() = unsupported()
-
-        override val floatValue: Double
-            get() = unsupported()
-
-        override val stringValue: kotlin.String
-            get() = unsupported()
-
-        override val booleanValue: kotlin.Boolean
-            get() = unsupported()
-
-        override val idValue: kotlin.String
-            get() = unsupported()
-
-        override val enumValue: kotlin.String
-            get() = unsupported()
-
-        override val fieldValues: Nothing
-            get() = unsupported()
-
-        private fun unsupported(): Nothing =
-            throw UnsupportedOperationException("Value.Error has no observable properties")
-    }
-
-    /**
      * An optional, fully coerced semantic default.
      *
      * ### Invariant: schema-default-value-conformance
      *
      * [Absent] means that no default is declared. [Present.value] may be null, denoting an explicit
      * GraphQL null; absence and explicit null are distinct. When attached to a field or argument,
-     * [Present] is valid for its declaring [TypeExpr]. It contains neither [Variable] nor [Error].
+     * [Present] is valid for its declaring [TypeExpr]. It contains no [Variable].
      *
      * Default values use structural equality.
      */
@@ -438,36 +246,6 @@ sealed interface Value {
     }
 }
 
-private data class IntValueImpl(
-    override val intValue: Int,
-) : Value.Int
-
-private data class FloatValueImpl(
-    override val floatValue: Double,
-) : Value.Float
-
-private data class StringValueImpl(
-    override val stringValue: String,
-) : Value.String
-
-private data class BooleanValueImpl(
-    override val booleanValue: Boolean,
-) : Value.Boolean
-
-private data class IDValueImpl(
-    override val idValue: String,
-) : Value.ID
-
-private data class EnumValueImpl(
-    override val type: Schema.EnumType,
-    override val enumValue: String,
-) : Value.Enum
-
-private data class OutputListValueImpl(
-    override val typeExpr: TypeExpr<Schema.OutputType>,
-    override val values: kotlin.collections.List<Value.Output?>,
-) : Value.OutputList
-
 private data class ObjectValueImpl(
     override val type: Schema.ObjectType,
     override val fieldValues: Value.ObjectFields,
@@ -476,7 +254,7 @@ private data class ObjectValueImpl(
 private data class ObjectFieldValueImpl(
     override val key: String,
     override val field: Schema.ObjectField,
-    override val value: Value.Output?,
+    override val value: EngineOutputData?,
 ) : Value.Object.FieldValue
 
 private data class ArgumentsValueImpl(
@@ -540,12 +318,12 @@ private data class PresentDefaultValueImpl(
 
 private class ObjectFieldValuesImpl(
     override val containingType: Schema.ObjectType,
-    private val backingMap: Map<String, Value.Output?>,
+    private val backingMap: Map<String, EngineOutputData?>,
 ) : Value.ObjectFields,
-    Map<String, Value.Output?> by backingMap {
-    override operator fun get(key: String): Value.Output? = getValue(key)
+    Map<String, EngineOutputData?> by backingMap {
+    override operator fun get(key: String): EngineOutputData? = getValue(key)
 
-    override fun getValue(key: String): Value.Output? {
+    override fun getValue(key: String): EngineOutputData? {
         if (!backingMap.containsKey(key)) {
             throw MissingFieldException(containingType.typeName, key)
         }
@@ -564,7 +342,7 @@ private class ObjectFieldValuesImpl(
 
 private fun objectValueOfValidatedFields(
     type: Schema.ObjectType,
-    fields: Map<String, Value.Output?>,
+    fields: Map<String, EngineOutputData?>,
 ): Value.Object =
     ObjectValueImpl(
         type = type,

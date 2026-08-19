@@ -31,33 +31,33 @@ class ObjectConstructionTest {
 
         assertEquals(
             "user",
-            assertIs<Value.ID>(user.fieldValues[key(schema, "id")]).idValue,
+            user.fieldValues[key(schema, "id")],
         )
         assertEquals(
             "Ada",
-            assertIs<Value.String>(user.fieldValues[key(schema, "name")]).stringValue,
+            user.fieldValues[key(schema, "name")],
         )
         assertEquals(
             36,
-            assertIs<Value.Int>(user.fieldValues[key(schema, "age")]).intValue,
+            user.fieldValues[key(schema, "age")],
         )
         assertEquals(
             9.5,
-            assertIs<Value.Float>(user.fieldValues[key(schema, "score")]).floatValue,
+            user.fieldValues[key(schema, "score")],
         )
         assertEquals(
             true,
-            assertIs<Value.Boolean>(user.fieldValues[key(schema, "active")]).booleanValue,
+            user.fieldValues[key(schema, "active")],
         )
         assertEquals(
             "ACTIVE",
-            assertIs<Value.Enum>(user.fieldValues[key(schema, "status")]).enumValue,
+            user.fieldValues[key(schema, "status")],
         )
         val aliases =
-            assertIs<Value.OutputList>(user.fieldValues[key(schema, "aliases")])
+            assertIs<List<*>>(user.fieldValues[key(schema, "aliases")])
         assertEquals(
             listOf("A", "Countess"),
-            aliases.values.map { assertIs<Value.String>(it).stringValue },
+            aliases,
         )
         assertEquals(friend, user.fieldValues[key(schema, "friend")])
     }
@@ -79,14 +79,14 @@ class ObjectConstructionTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
         val typenameKey = "__typename"
-        val typenameValue = Value.String.of("User")
+        val typenameValue = "User"
 
         val implicit = Value.Object.of(userType)
         val explicit = Value.Object.of(userType, mapOf(typenameKey to typenameValue))
 
-        assertEquals(emptyMap<String, Value.Output?>(), implicit.fieldValues)
+        assertEquals(emptyMap<String, EngineOutputData?>(), implicit.fieldValues)
         assertEquals(
-            mapOf<String, Value.Output?>(typenameKey to typenameValue),
+            mapOf<String, EngineOutputData?>(typenameKey to typenameValue),
             explicit.fieldValues,
         )
     }
@@ -107,7 +107,7 @@ class ObjectConstructionTest {
             assertIs<Value.Object>(user.fieldValues[key(schema, "friend")])
         assertEquals(
             "Grace",
-            assertIs<Value.String>(friend.fieldValues[key(schema, "name")]).stringValue,
+            friend.fieldValues[key(schema, "name")],
         )
     }
 

@@ -112,7 +112,7 @@ class SiblingDemandTest {
                     schema.field("Query", "consumer") to
                         model.testing.fieldResolverOf(
                             objectFragment = consumerFragment,
-                            function = { _, _ -> Value.String.of("consumer") },
+                            function = { _, _ -> "consumer" },
                         ),
                     schema.field("Query", "sibling") to
                         model.testing.fieldResolverOf(
@@ -122,7 +122,7 @@ class SiblingDemandTest {
                     schema.field("Query", "other") to
                         model.testing.fieldResolverOf(
                             objectFragment = emptyFragment,
-                            function = { _, _ -> Value.String.of("other") },
+                            function = { _, _ -> "other" },
                         ),
                 )
             },

@@ -1,6 +1,7 @@
 package semantics.contract
 
 import model.EngineResult
+import model.EngineOutputListData
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -171,7 +172,7 @@ interface NodeResolverContract : ResolverContract {
                             model.testing.nodeResolverOf { id ->
                                 schema.objectOf("User") {
                                     "id" setTo id
-                                    "name" setTo "user-${id.idValue}"
+                                    "name" setTo "user-$id"
                                 }
                             },
                         schema.contractObjectType("Admin") to
@@ -185,14 +186,6 @@ interface NodeResolverContract : ResolverContract {
                 },
                 fieldResolvers = { schema ->
                     val nodes = schema.field("Query", "nodes_V_A_node")
-                    val elementType =
-                        TypeExpr.List.of(
-                            TypeExpr.Named.of(
-                                schema.type("Node") as Schema.OutputType,
-                                isNullable = false,
-                            ),
-                            isNullable = false,
-                        ).elementType
                     mapOf(
                         nodes to
                             model.testing.fieldResolverOf(
@@ -201,17 +194,14 @@ interface NodeResolverContract : ResolverContract {
                                 require(input.hasExactlyFields())
                                 val group =
                                     arguments.fieldValues.getValue("group") as String
-                                Value.OutputList.of(
-                                    elementType,
-                                    listOf(
+                                listOf(
                                         schema.objectOf("User") {
                                             "id" setTo "$group-user"
                                         },
                                         schema.objectOf("Admin") {
                                             "id" setTo "$group-admin"
                                         },
-                                    ),
-                                )
+                                    )
                             },
                     )
                 },
@@ -276,7 +266,7 @@ interface NodeResolverContract : ResolverContract {
                             model.testing.nodeResolverOf { id ->
                                 schema.objectOf("User") {
                                     "id" setTo id
-                                    "name" setTo "user-${id.idValue}"
+                                    "name" setTo "user-$id"
                                 }
                             },
                     )
@@ -294,26 +284,18 @@ interface NodeResolverContract : ResolverContract {
                             ),
                             isNullable = false,
                         )
-                    val inner = outer.elementType as TypeExpr.List<Schema.OutputType>
-                    fun row(vararg ids: String): Value.OutputList =
-                        Value.OutputList.of(
-                            typeExpr = inner.elementType,
-                            values =
-                                ids.map { id ->
-                                    schema.objectOf("User") {
-                                        "id" setTo id
-                                    }
-                                },
-                        )
+                    fun row(vararg ids: String): EngineOutputListData =
+                        ids.map { id ->
+                            schema.objectOf("User") {
+                                "id" setTo id
+                            }
+                        }
                     mapOf(
                         matrix to
                             model.testing.fieldResolverOf(
                                 objectFragment = schema.emptyFragmentOf("Query"),
                                 function = { _, _ ->
-                                    Value.OutputList.of(
-                                        typeExpr = outer.elementType,
-                                        values = listOf(row("a", "b"), row("c")),
-                                    )
+                                    listOf(row("a", "b"), row("c"))
                                 },
                             ),
                     )

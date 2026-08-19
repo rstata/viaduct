@@ -34,8 +34,8 @@ class SourceSchemaAdapter(
     /** Lowers a source-shaped output for storage at a canonical fixture field. */
     fun lowerOutput(
         field: Schema.OutputField,
-        output: Value.Output?,
-    ): Value.Output? =
+        output: EngineOutputData?,
+    ): EngineOutputData? =
         if (schema is GJSchema) {
             schema.lowerSourceOutput(field, output)
         } else {

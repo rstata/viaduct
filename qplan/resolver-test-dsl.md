@@ -71,8 +71,9 @@ metadata.
 empty `of` denotes an empty object fragment. Response-key aliases are preserved in the
 resolver-visible input. Co-applicable selections sharing one response key must identify a
 compatible field invocation.
-The string literal `"ERROR"` in an argument position produces `Value.Error`; it is fixture syntax,
-not a schema-defined string value or resolver variable.
+The string literal `"ERROR"` in an argument position produces `ArgumentResolutionError`, which
+collapses the enclosing tuple to `OpenArguments.Ground.Error`. It is fixture syntax, not a
+schema-defined string value or resolver variable.
 
 ```graphql
 extend type Query {
@@ -129,7 +130,7 @@ Results are GraphQL literals accepted by Viaduct's JSON scalar: integers, string
 objects. They are interpreted against the resolver field's declared output type.
 
 - `null` is allowed at nullable positions.
-- `"ERROR"` produces `Value.Error` at any position.
+- `"ERROR"` produces `EngineErrorData` at any output position.
 - Integer leaves may be integer literals or expression strings.
 - Result objects may not supply fields that have their own `@resolver`.
 - Concrete object results may not supply `__typename`.

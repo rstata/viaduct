@@ -45,11 +45,11 @@ class StampedObjectPathDefinitionTest {
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                         schema.objectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                     )
                 },
@@ -138,15 +138,15 @@ class StampedObjectPathDefinitionTest {
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(source)) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                         schema.objectField("Query", "source") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                         schema.objectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                     )
                 },
@@ -298,7 +298,7 @@ class StampedObjectPathDefinitionTest {
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                         schema.objectField("Query", "box") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -306,7 +306,7 @@ class StampedObjectPathDefinitionTest {
                             },
                         schema.objectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                     )
                 },
@@ -386,7 +386,7 @@ class StampedObjectPathDefinitionTest {
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                         schema.objectField("Query", "container") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -394,7 +394,7 @@ class StampedObjectPathDefinitionTest {
                             },
                         schema.objectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                     )
                 },

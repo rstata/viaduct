@@ -44,9 +44,9 @@ class ResolverCoverageAdversarialTest {
                 world.schema.objectOf("Query"),
                 Value.Arguments.of(canonicalField, emptyMap()),
             )
-        val outer = assertIs<Value.OutputList>(value)
-        val inner = assertIs<Value.OutputList>(outer.values.single())
-        assertIs<Value.Object>(inner.values.single())
+        val outer = assertIs<List<*>>(value)
+        val inner = assertIs<List<*>>(outer.single())
+        assertIs<Value.Object>(inner.single())
     }
 
     @Test
@@ -108,7 +108,7 @@ class ResolverCoverageAdversarialTest {
             val payloadInput =
                 if (listOutput) {
                     assertIs<Value.Object>(
-                        assertIs<Value.OutputList>(bridgeValue).values.first(),
+                        assertIs<List<*>>(bridgeValue).first(),
                     )
                 } else {
                     assertIs<Value.Object>(bridgeValue)

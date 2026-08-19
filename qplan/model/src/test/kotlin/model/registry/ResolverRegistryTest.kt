@@ -3,6 +3,7 @@ package model.registry
 import model.ObjectEngineResult
 
 import model.Fragment
+import model.EngineErrorData
 import model.Schema
 import model.Selection
 import model.TypeExpr
@@ -35,7 +36,7 @@ class ResolverRegistryTest {
                     mapOf(
                         user to
                             model.testing.nodeResolverOf { id ->
-                                assertEquals("42", id.idValue)
+                                assertEquals("42", id)
                                 schema.objectOf("User") {
                                     "id" setTo id
                                 }
@@ -92,7 +93,7 @@ class ResolverRegistryTest {
                 )
         val bridgeObject = assertIs<Value.Object>(bridgeValue)
         assertEquals(bridgeType, bridgeObject.type)
-        assertIs<Value.ID>(
+        assertIs<String>(
             bridgeObject.fieldValues.getValue(
                 bridgeIdField.fieldName,
             ),
@@ -129,7 +130,7 @@ class ResolverRegistryTest {
 
         assertEquals(fixture.schema.query, root.type)
         assertEquals(setOf(typenameKey), root.fieldValues.keys)
-        assertEquals(Value.String.of("Query"), root.fieldValues.getValue(typenameKey))
+        assertEquals("Query", root.fieldValues.getValue(typenameKey))
     }
 
     @Test
@@ -244,22 +245,15 @@ class ResolverRegistryTest {
                     val fragment = schema.emptyFragmentOf("Query")
                     mapOf<Schema.OutputField, FieldResolverDefinition>(
                         schema.field("Query", "scalar") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> Value.String.of("value") },
+                            model.testing.fieldResolverOf(fragment) { _, _ -> "value" },
                         schema.field("Query", "list") to
                             model.testing.fieldResolverOf(fragment) { _, _ ->
-                                Value.OutputList.of(
-                                    typeExpr =
-                                        (
-                                            schema.field("Query", "list").typeExpr as
-                                                TypeExpr.List<Schema.OutputType>
-                                        ).elementType,
-                                    values = listOf(Value.String.of("value"), null),
-                                )
+                                listOf("value", null)
                             },
                         schema.field("Query", "nullable") to
                             model.testing.fieldResolverOf(fragment) { _, _ -> null },
                         schema.field("Query", "failed") to
-                            model.testing.fieldResolverOf(fragment) { _, _ -> Value.Error },
+                            model.testing.fieldResolverOf(fragment) { _, _ -> EngineErrorData },
                     )
                 },
             )
@@ -278,20 +272,13 @@ class ResolverRegistryTest {
                 }
             }
 
-        assertEquals(Value.String.of("value"), outputs.getValue("scalar"))
+        assertEquals("value", outputs.getValue("scalar"))
         assertEquals(
-            Value.OutputList.of(
-                typeExpr =
-                    (
-                        schema.field("Query", "list").typeExpr as
-                            TypeExpr.List<Schema.OutputType>
-                    ).elementType,
-                values = listOf(Value.String.of("value"), null),
-            ),
+            listOf("value", null),
             outputs.getValue("list"),
         )
         assertEquals(null, outputs.getValue("nullable"))
-        assertEquals(Value.Error, outputs.getValue("failed"))
+        assertEquals(EngineErrorData, outputs.getValue("failed"))
 
         outputs.forEach { (_, output) ->
             val projection =
@@ -563,7 +550,7 @@ class ResolverRegistryTest {
         )
         assertEquals(
             "target",
-            assertIs<Value.ID>(result.fieldValues["id"]).idValue,
+            result.fieldValues["id"],
         )
         val snippedFriend =
             assertIs<Value.Object>(result.fieldValues["friend"])
@@ -571,13 +558,13 @@ class ResolverRegistryTest {
             setOf("id"),
             snippedFriend.fieldValues.keys,
         )
-        val peers = assertIs<Value.OutputList>(result.fieldValues["peers"])
-        val snippedPeer = assertIs<Value.Object>(peers.values.first())
+        val peers = assertIs<List<*>>(result.fieldValues["peers"])
+        val snippedPeer = assertIs<Value.Object>(peers.first())
         assertEquals(
             setOf("name"),
             snippedPeer.fieldValues.keys,
         )
-        assertEquals(null, peers.values.last())
+        assertEquals(null, peers.last())
     }
 
     @Test

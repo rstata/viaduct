@@ -94,9 +94,7 @@ class WorldInjectionTest {
             )
         assertEquals(
             "field",
-            assertIs<Value.ID>(
-                field.fieldValues["id"],
-            ).idValue,
+            field.fieldValues["id"],
         )
 
         kotlin.test.assertFailsWith<Schema.MissingSchemaElementException> {

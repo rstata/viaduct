@@ -12,10 +12,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
+import model.EngineErrorData
 import model.EngineResult
 import model.EngineResultCell
 import model.EngineInputData
 import model.EngineInputListData
+import model.EngineOutputData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
@@ -41,6 +43,7 @@ import model.objectKey
 import model.selectionForestOf
 import model.toEngineResult
 import model.toEngineSimpleData
+import model.invariants.conformsToOutputSchemaType
 import model.registry.StampedObjectPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
 import semantics.RuntimeSupport
@@ -604,7 +607,7 @@ private class ObjectResultOrchestrator(
     // Traverses already-built passive output until reaching the next object occurrence whose
     // current demand crosses a resolver boundary. Lists preserve one occurrence per position.
     context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
-    private fun Value.Output?.launchNestedFringe(
+    private fun EngineOutputData?.launchNestedFringe(
         result: EngineResult?,
         path: List<PathComponent>,
         demand: SelectionForest,
@@ -612,19 +615,22 @@ private class ObjectResultOrchestrator(
     ): List<Deferred<Unit>> =
         when (this) {
             null,
-            Value.Error,
-            is Value.Simple,
+            EngineErrorData,
+            is Int,
+            is Double,
+            is String,
+            is Boolean,
             -> emptyList()
 
-            is Value.OutputList -> {
+            is List<*> -> {
                 val resultList =
                     result as? ListEngineResult
                         ?: error("Passive list output does not match its engine result at $path")
-                require(values.size == resultList.size) {
+                require(size == resultList.size) {
                     "Passive list output changed length at $path"
                 }
-                values.indices.flatMap { index ->
-                    values[index].launchNestedFringe(
+                indices.flatMap { index ->
+                    get(index).launchNestedFringe(
                         result = resultList[index].getValue().get(),
                         path = path + ListEngineResult.Index.of(index),
                         demand = demand,
@@ -632,7 +638,6 @@ private class ObjectResultOrchestrator(
                     )
                 }
             }
-
             is Value.Object -> {
                 val resultObject =
                     result as? ObjectEngineResult
@@ -694,6 +699,7 @@ private class ObjectResultOrchestrator(
                     }
                 }
             }
+            else -> error("Unsupported resolver output at $path: $this")
         }
 
     private fun List<Deferred<Unit>>.asLatch(): Deferred<Unit> {
@@ -722,7 +728,7 @@ private class ObjectResultOrchestrator(
             groundedKey.arguments.argumentsContainErrorValue() -> {
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
-                    AvailableKeyOutput(Value.Error, ErrorEngineResult),
+                    AvailableKeyOutput(EngineErrorData, ErrorEngineResult),
                 )
                 runtime.instrumentation.valuePublished(coordinate)
                 cell.getValue().complete(ErrorEngineResult)
@@ -732,7 +738,7 @@ private class ObjectResultOrchestrator(
                 val resolutionSelections: SelectionForest =
                     selection.subselections.fetchSuccessorDemandDeferringTemplates()
                 val arguments = groundedKey.arguments as Value.Arguments
-                val fieldValue: Value.Output? =
+                val fieldValue: EngineOutputData? =
                     if (groundedKey.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(groundedKey.field)
                         val input: Value.Object =
@@ -757,6 +763,7 @@ private class ObjectResultOrchestrator(
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(
+                        expectedType = groundedKey.field.typeExpr,
                         path = path + groundedKey,
                         resolverDemand = resolutionSelections,
                         potentialDemand =
@@ -948,7 +955,7 @@ private class ObjectResultOrchestrator(
     )
 
     private class AvailableKeyOutput(
-        val source: Value.Output?,
+        val source: EngineOutputData?,
         val result: EngineResult?,
     )
 
@@ -963,25 +970,30 @@ private class ObjectResultOrchestrator(
  * that still contain active resolver demand.
  */
 context(world: Assumptions)
-private suspend fun Value.Output?.resolveValue(
+private suspend fun EngineOutputData?.resolveValue(
+    expectedType: TypeExpr<Schema.OutputType>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
-): ResolvedValue =
-    when (this) {
+): ResolvedValue {
+    require(conformsToOutputSchemaType(expectedType)) {
+        "Resolver output does not conform to $expectedType"
+    }
+    return when (this) {
         null -> ResolvedValue(null, emptyList())
-        Value.Error -> ResolvedValue(ErrorEngineResult, emptyList())
-        is Value.Simple -> ResolvedValue(toEngineResult(), emptyList())
+        EngineErrorData -> ResolvedValue(ErrorEngineResult, emptyList())
         is Value.Object ->
             resolveObjectValue(
                 path = path,
                 resolverDemand = resolverDemand,
                 potentialDemand = potentialDemand,
             )
-        is Value.OutputList -> {
+        is List<*> -> {
+            val listType = expectedType as TypeExpr.List
             val resolvedElements: List<ResolvedValue> =
-                values.mapIndexed { index, value ->
+                mapIndexed { index, value ->
                     value.resolveValue(
+                        expectedType = listType.elementType,
                         path = path + ListEngineResult.Index.of(index),
                         resolverDemand = resolverDemand,
                         potentialDemand = potentialDemand,
@@ -990,14 +1002,23 @@ private suspend fun Value.Output?.resolveValue(
             ResolvedValue(
                 engineResult =
                     ListEngineResult.of(
-                        typeExpr = typeExpr,
+                        typeExpr = listType.elementType,
                         values = resolvedElements.map(ResolvedValue::engineResult),
                     ),
                 objectsNeedingResolution =
                     resolvedElements.flatMap(ResolvedValue::objectsNeedingResolution),
             )
         }
+        else ->
+            ResolvedValue(
+                engineResult =
+                    toEngineResult(
+                        (expectedType as TypeExpr.Named).baseType as Schema.SimpleType,
+                    ),
+                objectsNeedingResolution = emptyList(),
+            )
     }
+}
 
 // Selects passive output fields and retains this object instance when any selected key crosses a
 // resolver boundary.
@@ -1049,6 +1070,7 @@ private suspend fun Value.Object.resolveObjectValue(
                 fieldValues
                     .getValue(groundedKey.field.fieldName)
                     .resolveValue(
+                        expectedType = groundedKey.field.typeExpr,
                         path = path + groundedKey,
                         resolverDemand =
                             resolverDemandByGroundedKey

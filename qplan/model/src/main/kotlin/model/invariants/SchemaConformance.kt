@@ -1,6 +1,8 @@
 package model.invariants
 
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
 import model.EngineResult
 import model.EngineInputData
 import model.EngineInputListData
@@ -21,19 +23,9 @@ import model.conformsToArgumentDefinition
  * context fixes the canonical schema under which those carried definitions are interpreted.
  */
 context(world: Assumptions)
-internal fun Value.Output.conformsToSchema(): Boolean =
-    when (this) {
-        Value.Error -> true
-        is Value.Enum -> enumValue in type.values
-        is Value.Simple -> true
-        is Value.OutputList ->
-            values.all { value -> value.conformsToSchema(typeExpr) }
-        is Value.Object ->
-            fieldValues.containingType == type &&
-                fieldValues.values.all { value ->
-                    value == null || value.conformsToSchema()
-                }
-    }
+internal fun Value.Object.conformsToSchema(): Boolean =
+    fieldValues.containingType == type &&
+        fieldValues.values.all { value -> value.conformsToOutputData() }
 
 /**
  * Whether this input value recursively conforms to [typeExpr].
@@ -48,15 +40,15 @@ internal fun EngineInputData?.conformsToSchema(
 /**
  * Whether this output value recursively conforms to [typeExpr].
  *
- * Null conforms exactly at a nullable outer layer and [Value.Error] conforms to every output type
- * expression.
+ * Null conforms exactly at a nullable outer layer and [EngineErrorData] conforms to every output
+ * type expression.
  */
 context(world: Assumptions)
-internal fun Value.Output?.conformsToSchema(
+internal fun EngineOutputData?.conformsToOutputSchema(
     typeExpr: TypeExpr<Schema.OutputType>,
 ): Boolean =
-    conformsToSchemaType(typeExpr) &&
-        (this == null || conformsToSchema())
+    conformsToOutputSchemaType(typeExpr) &&
+        (this !is Value.Object || conformsToSchema())
 
 /** Whether this argument tuple recursively conforms to [expectedType]. */
 context(world: Assumptions)
@@ -166,24 +158,54 @@ private fun EngineInputData.asEngineInputObjectDataOrNull(): EngineInputObjectDa
     return fields as EngineInputObjectData
 }
 
-internal fun Value.Output?.conformsToSchemaType(
+fun EngineOutputData?.conformsToOutputSchemaType(
     typeExpr: TypeExpr<Schema.OutputType>,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
-        Value.Error -> true
-        is Value.OutputList ->
+        EngineErrorData -> true
+        is List<*> ->
             typeExpr is TypeExpr.List &&
-                typeExpr.elementType.canContainPure(this.typeExpr)
-        is Value.Typed ->
+                all { value -> value.conformsToOutputSchemaType(typeExpr.elementType) }
+        is Value.Object ->
             typeExpr is TypeExpr.Named &&
                 when (val expected = typeExpr.baseType) {
                     is Schema.CompositeType ->
-                        type is Schema.ObjectType && type in expected.possibleTypes
+                        type in expected.possibleTypes
                     else -> expected == type
                 }
-        is Value.Simple ->
-            typeExpr is TypeExpr.Named && typeExpr.baseType == type
+        is Int -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IntType
+        is Double ->
+            isFinite() &&
+                typeExpr is TypeExpr.Named &&
+                typeExpr.baseType == Schema.FloatType
+        is String ->
+            typeExpr is TypeExpr.Named &&
+                when (val expected = typeExpr.baseType) {
+                    Schema.StringType,
+                    Schema.IDType,
+                    -> true
+                    is Schema.EnumType -> this in expected.values
+                    else -> false
+                }
+        is Boolean -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.BooleanType
+        else -> false
+    }
+
+private fun EngineOutputData?.conformsToOutputData(): Boolean =
+    when (this) {
+        null,
+        EngineErrorData,
+        is Int,
+        is Boolean,
+        is String,
+        -> true
+        is Double -> isFinite()
+        is List<*> -> all { value -> value.conformsToOutputData() }
+        is Value.Object ->
+            fieldValues.containingType == type &&
+                fieldValues.values.all { value -> value.conformsToOutputData() }
+        else -> false
     }
 
 internal fun EngineResult?.conformsToResultSchemaType(

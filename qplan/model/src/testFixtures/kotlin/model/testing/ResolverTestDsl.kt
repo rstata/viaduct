@@ -23,6 +23,8 @@ import graphql.parser.Parser
 import java.lang.Math.addExact
 import java.math.BigInteger
 import model.EngineInputData
+import model.EngineErrorData
+import model.EngineOutputData
 import model.Fragment
 import model.Schema
 import model.SourceSchemaAdapter
@@ -310,7 +312,7 @@ private class Compiler(
             .mapValues { (type, entries) ->
                 val byId = entries.associateBy(CompiledNodeResult::id)
                 nodeResolverOf { id ->
-                    byId[id.idValue]?.let { entry ->
+                    byId[id]?.let { entry ->
                         evaluator.evaluateNodeResult(entry)
                     }
                 }
@@ -478,14 +480,14 @@ private class ResultEvaluator(
         result: GraphQLValue<*>,
         input: Value.Object,
         arguments: Value.Arguments,
-    ): Value.Output? =
+    ): EngineOutputData? =
         evaluate(
             typeExpr = sourceSchema.typeExpr(field),
             source = result,
             context = EvaluationContext(input, arguments, field.arguments),
         )
 
-    fun evaluateNodeResult(entry: CompiledNodeResult): Value.Output? =
+    fun evaluateNodeResult(entry: CompiledNodeResult): EngineOutputData? =
         evaluate(
             typeExpr = TypeExpr.Named.of(entry.type, isNullable = true),
             source = entry.result,
@@ -498,8 +500,8 @@ private class ResultEvaluator(
         source: GraphQLValue<*>,
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult? = null,
-    ): Value.Output? {
-        if (source is StringValue && source.value == ERROR_SENTINEL) return Value.Error
+    ): EngineOutputData? {
+        if (source is StringValue && source.value == ERROR_SENTINEL) return EngineErrorData
         if (source is NullValue) {
             require(typeExpr.isNullable) { "null does not conform to $typeExpr" }
             return null
@@ -507,13 +509,9 @@ private class ResultEvaluator(
         return when (typeExpr) {
             is TypeExpr.List -> {
                 require(source is ArrayValue) { "Expected a list result for $typeExpr" }
-                Value.OutputList.of(
-                    typeExpr = typeExpr.elementType,
-                    values =
-                        source.values.map { value ->
-                            evaluate(typeExpr.elementType, value, context)
-                        },
-                )
+                source.values.map { value ->
+                    evaluate(typeExpr.elementType, value, context)
+                }
             }
             is TypeExpr.Named ->
                 when (val type = typeExpr.baseType) {
@@ -523,10 +521,7 @@ private class ResultEvaluator(
                                 "null does not conform to $typeExpr"
                             }
                         }
-                    Schema.IDType ->
-                        Value.ID.of(
-                            parseResultId(source, context),
-                        )
+                    Schema.IDType -> parseResultId(source, context)
                     is Schema.SimpleType ->
                         throw IllegalArgumentException(
                             "Resolver-test DSL leaves must be Int, not ${type.typeName}",
@@ -542,7 +537,7 @@ private class ResultEvaluator(
         source: GraphQLValue<*>,
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult?,
-    ): Value.Output? {
+    ): EngineOutputData? {
         require(source is ObjectValue) {
             "Expected an object result for ${declaredType.typeName}"
         }
@@ -646,9 +641,9 @@ private class ResultEvaluator(
     private fun evaluateInt(
         source: GraphQLValue<*>,
         context: EvaluationContext,
-    ): Value.Output? =
+    ): EngineOutputData? =
         when (source) {
-            is IntValue -> Value.Int.of(source.value.toIntExact("GraphQL Int result"))
+            is IntValue -> source.value.toIntExact("GraphQL Int result")
             is StringValue -> evaluateExpression(source.requiredValue(), context)
             else -> throw IllegalArgumentException("Int results require an integer or expression")
         }
@@ -656,7 +651,7 @@ private class ResultEvaluator(
     private fun evaluateExpression(
         source: String,
         context: EvaluationContext,
-    ): Value.Output? {
+    ): EngineOutputData? {
         val match = EXPRESSION.matchEntire(source)
             ?: throw IllegalArgumentException("Invalid resolver-test expression: $source")
         val operation = match.groupValues[1]
@@ -674,7 +669,7 @@ private class ResultEvaluator(
                 "value(...) requires exactly one reachable value, found ${values.size}"
             }
             return values.single().also { value ->
-                require(value == null || value == Value.Error || value is Value.Int) {
+                require(value == null || value == EngineErrorData || value is Int) {
                     "value(...) result is not an Int"
                 }
             }
@@ -686,8 +681,8 @@ private class ResultEvaluator(
             values.forEach { value ->
                 when (value) {
                     null -> Unit
-                    Value.Error -> return Value.Error
-                    is Value.Int -> sum = addExact(sum, value.intValue)
+                    EngineErrorData -> return EngineErrorData
+                    is Int -> sum = addExact(sum, value)
                     else ->
                         throw IllegalArgumentException(
                             "Resolver-test expression value is not an Int: $term",
@@ -695,19 +690,19 @@ private class ResultEvaluator(
                 }
             }
         }
-        return Value.Int.of(sum)
+        return sum
     }
 
     private fun expressionValues(
         term: String,
         context: EvaluationContext,
         preserveNulls: Boolean,
-    ): List<Value.Output?> =
+    ): List<EngineOutputData?> =
         if (term.startsWith("$")) {
             val value = argumentValue(term.removePrefix("$"), context)
             when (value) {
                 null -> listOf(null)
-                is Int -> listOf(Value.Int.of(value))
+                is Int -> listOf(value)
                 else ->
                     throw IllegalArgumentException(
                         "Resolver-test expression value is not an output value: $term",
@@ -736,15 +731,15 @@ private class ResultEvaluator(
         input: Value.Object,
         path: List<String>,
         preserveNulls: Boolean = false,
-    ): List<Value.Output?> {
+    ): List<EngineOutputData?> {
         fun visit(
-            value: Value.Output?,
+            value: EngineOutputData?,
             index: Int,
-        ): List<Value.Output?> =
+        ): List<EngineOutputData?> =
             when {
                 value == null -> if (preserveNulls) listOf(null) else emptyList()
-                value == Value.Error -> listOf(Value.Error)
-                value is Value.OutputList -> value.values.flatMap { visit(it, index) }
+                value == EngineErrorData -> listOf(EngineErrorData)
+                value is List<*> -> value.flatMap { visit(it, index) }
                 index == path.size -> listOf(value)
                 value is Value.Object -> {
                     val responseKey = path[index]
@@ -768,19 +763,19 @@ private class ResultEvaluator(
         return visit(input, 0)
     }
 
-    private fun Value.Output?.containsNodeBridge(): Boolean =
+    private fun EngineOutputData?.containsNodeBridge(): Boolean =
         when (this) {
-            Value.Error -> false
+            EngineErrorData -> false
             is Value.Object -> type.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
-            is Value.OutputList -> values.any { value -> value.containsNodeBridge() }
+            is List<*> -> any { value -> value.containsNodeBridge() }
             else -> false
         }
 
-    private fun unwrapNodeBridge(value: Value.Output?): List<Value.Output?> =
+    private fun unwrapNodeBridge(value: EngineOutputData?): List<EngineOutputData?> =
         when (value) {
             null -> emptyList()
-            Value.Error -> listOf(Value.Error)
-            is Value.OutputList -> value.values.flatMap(::unwrapNodeBridge)
+            EngineErrorData -> listOf(EngineErrorData)
+            is List<*> -> value.flatMap(::unwrapNodeBridge)
             is Value.Object -> {
                 val payload = schema.objectField(value.type.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
                 listOf(value.fieldValues.getValue(payload.fieldName))

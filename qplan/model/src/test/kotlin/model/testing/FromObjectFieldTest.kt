@@ -3,6 +3,7 @@ package model.testing
 import model.ObjectEngineResult
 
 import model.Schema
+import model.EngineErrorData
 import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -360,12 +361,14 @@ class FromObjectFieldTest {
                 schema.query.fields.values
                     .filter { field -> field.fieldName != "__typename" }
                     .associateWith {
-                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> Value.Error }
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                            EngineErrorData
+                        }
                     } +
                     mapOf(
                         schema.field("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(objectFragment)) { _, _ ->
-                                Value.Int.of(1)
+                                1
                             },
                     )
             },

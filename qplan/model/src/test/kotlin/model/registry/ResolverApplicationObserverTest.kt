@@ -29,7 +29,7 @@ class ResolverApplicationObserverTest {
                     val fragment = schema.emptyFragmentOf("Query")
                     mapOf(
                         schema.field("Query", "value") to
-                            fieldResolverOf(fragment) { _, _ -> Value.Int.of(7) }
+                            fieldResolverOf(fragment) { _, _ -> 7 }
                                 .observeApplications { _, _, selections ->
                                     observed += selections
                                 }.mapOutput { output -> output }

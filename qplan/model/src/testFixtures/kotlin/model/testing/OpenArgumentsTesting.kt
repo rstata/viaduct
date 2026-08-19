@@ -5,10 +5,10 @@ import model.ObjectEngineResult
 import model.MaterializeSelection
 import model.OpenArguments
 import model.Selection
-import model.Value
+import model.ArgumentResolutionError
 import model.fieldExpressions
 
-/** Replaces selected argument expressions with [Value.Error] during fixture composition. */
+/** Replaces selected argument expressions with an error during fixture composition. */
 fun Selection.withErrorArguments(argumentNames: Set<String>): Selection =
     Selection.of(
         key =
@@ -20,7 +20,7 @@ fun Selection.withErrorArguments(argumentNames: Set<String>): Selection =
                         key.arguments
                             .fieldExpressions()
                             .mapValues { (name, value) ->
-                                if (name in argumentNames) Value.Error else value
+                                if (name in argumentNames) ArgumentResolutionError else value
                             },
                     ),
             ),
@@ -28,7 +28,7 @@ fun Selection.withErrorArguments(argumentNames: Set<String>): Selection =
         subselections = subselections,
     )
 
-/** Replaces selected argument expressions with [Value.Error] during fixture composition. */
+/** Replaces selected argument expressions with an error during fixture composition. */
 fun MaterializeSelection.withErrorArguments(
     argumentNames: Set<String>,
 ): MaterializeSelection =
@@ -43,7 +43,7 @@ fun MaterializeSelection.withErrorArguments(
                         key.arguments
                             .fieldExpressions()
                             .mapValues { (name, value) ->
-                                if (name in argumentNames) Value.Error else value
+                                if (name in argumentNames) ArgumentResolutionError else value
                             },
                     ),
             ),

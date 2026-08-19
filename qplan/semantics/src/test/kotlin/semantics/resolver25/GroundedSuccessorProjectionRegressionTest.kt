@@ -38,7 +38,7 @@ class GroundedSuccessorProjectionRegressionTest {
                                     "fragment Successor on Item { passive }",
                                 ),
                             ) { _, _ ->
-                                model.Value.Int.of(2)
+                                2
                             },
                     )
                 },

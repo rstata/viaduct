@@ -1,6 +1,7 @@
 package model.registry
 
 import model.ObjectEngineResult
+import model.ArgumentResolutionError
 
 import model.Fragment
 import model.Schema
@@ -578,7 +579,7 @@ class ResolverDemandTest {
                                 key =
                                     ObjectEngineResult.Key.of(
                                         parsedSecond.key.field,
-                                        mapOf("arg" to Value.Error),
+                                        mapOf("arg" to ArgumentResolutionError),
                                     ),
                                 possibleTypes = parsedSecond.possibleTypes,
                                 subselections = parsedSecond.subselections,

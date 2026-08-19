@@ -4,6 +4,7 @@ import model.ObjectEngineResult
 
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.EngineErrorData
 import model.OpenArguments
 import model.Schema
 import model.Selection
@@ -51,7 +52,7 @@ class SuccessorDemandTest {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                Value.Error
+                                EngineErrorData
                             },
                         schema.field("Root", "consumer") to
                             model.testing.fieldResolverOf(
@@ -69,13 +70,13 @@ class SuccessorDemandTest {
                                         """.trimIndent(),
                                     ),
                             ) { _, _ ->
-                                Value.String.of("consumer")
+                                "consumer"
                             },
                         schema.field("Box", "computed") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Box"),
                             ) { _, _ ->
-                                Value.String.of("computed")
+                                "computed"
                             },
                     )
                 },
@@ -162,7 +163,7 @@ class SuccessorDemandTest {
                     mapOf(
                         schema.objectField("Query", "item") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Error
+                                EngineErrorData
                             },
                         schema.objectField("Item", "consume") to
                             fieldResolverOf(
@@ -170,11 +171,11 @@ class SuccessorDemandTest {
                                     "fragment Consume on Item { fixed }",
                                 ),
                             ) { _, _ ->
-                                Value.Error
+                                EngineErrorData
                             },
                         schema.objectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
-                                Value.Error
+                                EngineErrorData
                             },
                     )
                 },
@@ -230,7 +231,7 @@ class SuccessorDemandTest {
                     mapOf(
                         schema.objectField("Query", "successor") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(0)
+                                0
                             },
                     )
                 },
@@ -344,7 +345,7 @@ class SuccessorDemandTest {
                         put(
                             schema.objectField("Query", "item"),
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Error
+                                EngineErrorData
                             },
                         )
                         layerFields.forEach { field ->
@@ -365,7 +366,7 @@ class SuccessorDemandTest {
                             put(
                                 schema.objectField("Item", field),
                                 fieldResolverOf(objectFragment) { _, _ ->
-                                    Value.Int.of(0)
+                                    0
                                 },
                             )
                         }
@@ -381,7 +382,7 @@ class SuccessorDemandTest {
                                     """.trimIndent(),
                                 ),
                             ) { _, _ ->
-                                Value.Int.of(0)
+                                0
                             },
                         )
                     }

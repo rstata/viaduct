@@ -1,6 +1,9 @@
 package model.registry
 
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
+import model.EngineOutputListData
 import model.Schema
 import model.SelectionForest
 import model.Value
@@ -35,25 +38,30 @@ import model.objectKey
  * @throws IllegalArgumentException when a precondition is not met
  */
 context(world: Assumptions)
-internal fun Value.Output?.snipToDemand(demand: SelectionForest): Value.Output? =
+internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutputData? =
     when (this) {
         null,
-        Value.Error,
+        EngineErrorData,
         -> this
 
         is Value.Object -> snipObjectToDemand(demand)
-        is Value.OutputList ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values = values.map { it.snipToDemand(demand) },
-            )
+        is List<*> -> {
+            val values: EngineOutputListData =
+                map { value -> value.snipToDemand(demand) }
+            values
+        }
 
-        is Value.Simple -> {
+        is Int,
+        is Double,
+        is String,
+        is Boolean,
+        -> {
             require(demand.isEmpty()) {
                 "Cannot apply subselections to a simple value $this"
             }
             this
         }
+        else -> throw ClassCastException("Unsupported engine output data: $this")
     }
 
 context(world: Assumptions)

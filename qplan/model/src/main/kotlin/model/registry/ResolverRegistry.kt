@@ -14,7 +14,7 @@ import model.Value
  * variable-template values. Acyclicity is intentionally checked over a conservative
  * coordinate-level possibility relation derived from fixed open fragment shapes. The relation
  * may therefore contain an edge whose exact occurrence is inactive because of a runtime type guard
- * or [Value.Error] argument, and the registry may reject a world whose exact active occurrences
+ * or erroneous argument tuple, and the registry may reject a world whose exact active occurrences
  * would be acyclic.
  *
  * Every variable is defined from one argument of its resolver field or from one nonempty canonical

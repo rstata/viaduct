@@ -3,6 +3,8 @@ package model.testing
 import model.ObjectEngineResult
 
 import model.Fragment
+import model.EngineErrorData
+import model.EngineOutputData
 import model.OpenArguments
 import model.Schema
 import model.Selection
@@ -27,7 +29,7 @@ import model.variableTemplates
  * This alias is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
  * functions and exposes a field-only [ResolverRegistry].
  */
-typealias NodeResolverFunction = (Value.ID) -> Value.Output?
+typealias NodeResolverFunction = (String) -> EngineOutputData?
 
 /** Marks a raw external node lookup for fixture composition. */
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
@@ -259,11 +261,11 @@ private class NodeResolverLowering(
     }
 
     private fun loadNode(
-        typedId: Value.Output?,
+        typedId: EngineOutputData?,
         nodeOutputType: Schema.CompositeType,
-    ): Value.Output? {
-        if (typedId == null || typedId == Value.Error) return typedId
-        require(typedId is Value.ID) {
+    ): EngineOutputData? {
+        if (typedId == null || typedId == EngineErrorData) return typedId
+        require(typedId is String) {
             "Node bridge ${nodeBridgeTypeName(nodeOutputType)} did not contain an ID"
         }
         val (type, id) = decodeTypedId(typedId)
@@ -274,7 +276,7 @@ private class NodeResolverLowering(
             nodeResolvers[type]
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.typeName}")
         val result = resolver(id)
-        if (result == null || result == Value.Error) return result
+        if (result == null || result == EngineErrorData) return result
         require(result is Value.Object) {
             "Node resolver for ${type.typeName} returned a non-object value"
         }
@@ -297,11 +299,11 @@ private class NodeResolverLowering(
             NODE_BRIDGE_PAYLOAD_FIELD,
         )
 
-    private fun decodeTypedId(id: Value.ID): Pair<Schema.ObjectType, Value.ID> {
-        require(id.idValue.startsWith(TYPED_NODE_ID_PREFIX)) {
+    private fun decodeTypedId(id: String): Pair<Schema.ObjectType, String> {
+        require(id.startsWith(TYPED_NODE_ID_PREFIX)) {
             "Synthetic node-ID bridge contains an untyped ID"
         }
-        val encoded = id.idValue.removePrefix(TYPED_NODE_ID_PREFIX)
+        val encoded = id.removePrefix(TYPED_NODE_ID_PREFIX)
         val separator = encoded.indexOf(':')
         require(separator > 0) { "Malformed typed node ID" }
         val typeNameLength = encoded.substring(0, separator).toInt()
@@ -309,7 +311,7 @@ private class NodeResolverLowering(
         val typeNameEnd = typeNameStart + typeNameLength
         require(typeNameEnd <= encoded.length) { "Malformed typed node ID" }
         val type = schema.type(encoded.substring(typeNameStart, typeNameEnd)) as Schema.ObjectType
-        return type to Value.ID.of(encoded.substring(typeNameEnd))
+        return type to encoded.substring(typeNameEnd)
     }
 
     private fun validateNodeIdField(type: Schema.ObjectType): Schema.ObjectField {
@@ -503,7 +505,7 @@ private class TestResolverRegistry(
         val query = schema.query
         return Value.Object.of(
             type = query,
-            fields = mapOf("__typename" to Value.String.of(query.typeName)),
+            fields = mapOf("__typename" to query.typeName),
         )
     }
 

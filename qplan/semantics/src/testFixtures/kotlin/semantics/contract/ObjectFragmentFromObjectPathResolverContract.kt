@@ -1,6 +1,8 @@
 package semantics.contract
 
 import model.ObjectEngineResult
+import model.EngineErrorData
+import model.EngineOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.Value
@@ -66,7 +68,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val dslValue = if (isError) "\"ERROR\"" else "null"
             var observedResultInput = false
             var consumedKey: String? = null
-            var consumedValue: Value.Output? = null
+            var consumedValue: EngineOutputData? = null
             val testWorld =
                 TestWorld.fromDSL(
                     selectiveResolvers = selectiveResolvers,
@@ -124,7 +126,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             )
             assertEquals("consume", consumedKey)
             assertEquals(true, observedResultInput)
-            assertEquals(if (isError) Value.Error else null, consumedValue)
+            assertEquals(if (isError) EngineErrorData else null, consumedValue)
         }
     }
 

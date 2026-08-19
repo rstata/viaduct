@@ -39,11 +39,11 @@ class CoroutineResolveTest {
                         schema.field("Query", "first") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
-                            ) { _, _ -> Value.Int.of(1) },
+                            ) { _, _ -> 1 },
                         schema.field("Query", "second") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
-                            ) { _, _ -> Value.Int.of(2) },
+                            ) { _, _ -> 2 },
                     )
                 },
             )
@@ -102,11 +102,11 @@ class CoroutineResolveTest {
                         schema.field("Child", "first") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
-                            ) { _, _ -> Value.Int.of(1) },
+                            ) { _, _ -> 1 },
                         schema.field("Child", "second") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
-                            ) { _, _ -> Value.Int.of(2) },
+                            ) { _, _ -> 2 },
                     )
                 },
             )
@@ -170,11 +170,11 @@ class CoroutineResolveTest {
                                 schema.fragmentFrom(
                                     "fragment ignored on Query { second }",
                                 ),
-                            ) { _, _ -> Value.Int.of(1) },
+                            ) { _, _ -> 1 },
                         schema.field("Query", "second") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
-                            ) { _, _ -> Value.Int.of(2) },
+                            ) { _, _ -> 2 },
                     )
                 },
             )
@@ -263,21 +263,15 @@ class CoroutineResolveTest {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                Value.OutputList.of(
-                                    typeExpr =
-                                        (items.typeExpr as model.TypeExpr.List<Schema.OutputType>)
-                                            .elementType,
-                                    values =
-                                        listOf(
-                                            schema.objectOf("Item"),
-                                            schema.objectOf("Item"),
-                                        ),
+                                listOf(
+                                    schema.objectOf("Item"),
+                                    schema.objectOf("Item"),
                                 )
                             },
                         schema.field("Item", "value") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Item"),
-                            ) { _, _ -> Value.Int.of(7) },
+                            ) { _, _ -> 7 },
                     )
                 },
             )

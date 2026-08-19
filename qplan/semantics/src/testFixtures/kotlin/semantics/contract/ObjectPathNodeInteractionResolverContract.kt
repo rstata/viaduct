@@ -67,7 +67,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
         resolveAndValidate(
             world,
             """
-                    fragment ignored on Query {
+                    query {
                       item {
                         profile {
                           details { __typename }

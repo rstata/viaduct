@@ -44,7 +44,7 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   item {
                     children { common }
                   }

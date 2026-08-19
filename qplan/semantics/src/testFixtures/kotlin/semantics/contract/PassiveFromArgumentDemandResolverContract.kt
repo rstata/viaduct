@@ -50,7 +50,7 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   container {
                     bridge {
                       load { name }

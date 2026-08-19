@@ -13,6 +13,7 @@ import model.TypeExpr
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.operationSelectionsFrom
 import model.sameCompletedResultAs
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -63,7 +64,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { viewer { total } }")
+            resolveAndValidate(world, "query { viewer { total } }")
         val viewer =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
@@ -123,7 +124,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { holders { chosen } }")
+            resolveAndValidate(world, "query { holders { chosen } }")
         val holders =
             assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "holders")).get(),
@@ -192,7 +193,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
 
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+        val resolved = resolveAndValidate(world, "query { result }")
 
         assertEquals(
             1,
@@ -257,7 +258,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
 
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+        val resolved = resolveAndValidate(world, "query { result }")
 
         assertEquals(
             5,
@@ -297,7 +298,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { viewer { greeting } }")
+            resolveAndValidate(world, "query { viewer { greeting } }")
         val viewer =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
@@ -355,7 +356,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { viewer { message } }")
+            resolveAndValidate(world, "query { viewer { message } }")
         val viewer =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
@@ -401,7 +402,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { chain { computed } }")
+            resolveAndValidate(world, "query { chain { computed } }")
         val chain =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "chain")).get(),
@@ -447,7 +448,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { holder { result } }")
+            resolveAndValidate(world, "query { holder { result } }")
         val holder =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "holder")).get(),
@@ -491,7 +492,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { items { computed } }")
+            resolveAndValidate(world, "query { items { computed } }")
         val items =
             assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
@@ -536,7 +537,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     """.trimIndent(),
             )
         val world = testWorld.assumptions
-        val fragment = world.fragmentFrom("fragment ignored on Query { result }")
+        val selections = world.operationSelectionsFrom("query { result }")
 
         val completeWorld =
             Assumptions.of(
@@ -546,9 +547,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         val expected =
             context(completeWorld) {
-                resolveWithResolver01(fragment.subselections)
+                resolveWithResolver01(selections)
             }
-        val result = resolveAndValidate(world, fragment)
+        val result = resolveAndValidate(world, selections)
 
         assertEquals(
             expected.keys.mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
@@ -668,7 +669,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   groups {
                     byTwo: product(factor: 2) {
                       label
@@ -799,7 +800,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   groups {
                     one: entries(count: 1) { rendered }
                     three: entries(count: 3) { rendered }

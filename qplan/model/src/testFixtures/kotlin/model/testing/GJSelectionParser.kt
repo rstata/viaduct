@@ -1,14 +1,19 @@
 package model.testing
 
+import graphql.GraphQLContext
+import graphql.execution.CoercedVariables
+import graphql.execution.ValuesResolver
 import graphql.language.Document
 import graphql.language.Field
 import graphql.language.FragmentDefinition
 import graphql.language.FragmentSpread
 import graphql.language.InlineFragment
+import graphql.language.OperationDefinition
 import graphql.language.SelectionSet
 import graphql.introspection.Introspection
 import graphql.parser.Parser
 import graphql.schema.GraphQLCompositeType
+import graphql.schema.GraphQLFieldDefinition
 import graphql.schema.GraphQLTypeUtil
 import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
@@ -43,6 +48,32 @@ internal class GJSelectionParser(
         return parsed.nominalType to selections
     }
 
+    fun selectionsFrom(
+        operation: OperationDefinition,
+        variables: CoercedVariables,
+        graphQLContext: GraphQLContext,
+        locale: Locale,
+    ): SelectionForest {
+        require(operation.operation == OperationDefinition.Operation.QUERY) {
+            "Qplan operation decoding supports query operations only"
+        }
+        require(operation.directives.isEmpty()) {
+            "Applied directives are deferred from the current spec-selection model"
+        }
+        val selections =
+            decodeSelectionSet(
+                selectionSet = operation.selectionSet,
+                typeInScope = schema.graphQLSchema.queryType,
+                argumentDecoder =
+                    CoercedArgumentDecoder(
+                        variables = variables,
+                        graphQLContext = graphQLContext,
+                        locale = locale,
+                    ),
+            )
+        return flatten(schema, schema.query, selections)
+    }
+
     fun materializeSelectionsFrom(
         fragment: String,
     ): Pair<Schema.CompositeType, MaterializeSelectionForest> {
@@ -75,7 +106,11 @@ internal class GJSelectionParser(
         val graphQLTypeCondition =
             schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
         val specSelections =
-            decodeSelectionSet(definition.selectionSet, graphQLTypeCondition)
+            decodeSelectionSet(
+                selectionSet = definition.selectionSet,
+                typeInScope = graphQLTypeCondition,
+                argumentDecoder = LiteralArgumentDecoder(),
+            )
         return ParsedSpecFragment(typeCondition, specSelections)
     }
 
@@ -95,11 +130,17 @@ internal class GJSelectionParser(
     private fun decodeSelectionSet(
         selectionSet: SelectionSet,
         typeInScope: GraphQLCompositeType,
+        argumentDecoder: ArgumentDecoder,
     ): List<SpecSelection> =
         selectionSet.selections.map { selection ->
             when (selection) {
-                is Field -> decodeField(selection, typeInScope)
-                is InlineFragment -> decodeInlineFragment(selection, typeInScope)
+                is Field -> decodeField(selection, typeInScope, argumentDecoder)
+                is InlineFragment ->
+                    decodeInlineFragment(
+                        fragment = selection,
+                        typeInScope = typeInScope,
+                        argumentDecoder = argumentDecoder,
+                    )
                 is FragmentSpread ->
                     throw IllegalArgumentException(
                         "Named fragment spreads must be inlined before constructing spec selections",
@@ -111,6 +152,7 @@ internal class GJSelectionParser(
     private fun decodeField(
         field: Field,
         typeInScope: GraphQLCompositeType,
+        argumentDecoder: ArgumentDecoder,
     ): SpecSelection.Field {
         require(field.directives.isEmpty()) {
             "Applied directives are deferred from the current spec-selection model"
@@ -121,38 +163,12 @@ internal class GJSelectionParser(
                 typeInScope,
                 field.name,
             )!!
-        val suppliedArguments = field.arguments.associateBy { it.name }
-        val arguments =
-            fieldDefinition.arguments
-                .mapNotNull { argumentDefinition ->
-                    val suppliedArgument = suppliedArguments[argumentDefinition.name]
-                    when {
-                        suppliedArgument != null ->
-                            argumentDefinition.name to
-                                decodeLiteral(
-                                    type = argumentDefinition.type,
-                                    value = suppliedArgument.value,
-                                    variableValues = variableValues,
-                                    schema = schema,
-                                    variableField = effectiveVariableField,
-                                )
-                        argumentDefinition.hasSetDefaultValue() ->
-                            argumentDefinition.name to
-                                decodeInputValue(
-                                    argumentDefinition.type,
-                                    argumentDefinition.argumentDefaultValue,
-                                    variableValues,
-                                    schema,
-                                    effectiveVariableField,
-                                )
-                        else -> null
-                    }
-                }.toMap()
+        val arguments = argumentDecoder.decode(field, fieldDefinition)
         val subselections =
             field.selectionSet?.let { selectionSet ->
                 val resultType =
                     GraphQLTypeUtil.unwrapAll(fieldDefinition.type) as GraphQLCompositeType
-                decodeSelectionSet(selectionSet, resultType)
+                decodeSelectionSet(selectionSet, resultType, argumentDecoder)
             }
         val canonicalField = sourceSchema.field(typeInScope.name, field.name)
         val loweredNodeField = schema.isLoweredNodeField(canonicalField)
@@ -183,6 +199,7 @@ internal class GJSelectionParser(
     private fun decodeInlineFragment(
         fragment: InlineFragment,
         typeInScope: GraphQLCompositeType,
+        argumentDecoder: ArgumentDecoder,
     ): SpecSelection.InlineFragment {
         require(fragment.directives.isEmpty()) {
             "Applied directives are deferred from the current spec-selection model"
@@ -200,8 +217,84 @@ internal class GJSelectionParser(
                 decodeSelectionSet(
                     fragment.selectionSet,
                     graphQLTypeCondition ?: typeInScope,
+                    argumentDecoder,
                 ),
         )
+    }
+
+    private sealed interface ArgumentDecoder {
+        fun decode(
+            field: Field,
+            fieldDefinition: GraphQLFieldDefinition,
+        ): Map<String, Any?>
+    }
+
+    private inner class LiteralArgumentDecoder : ArgumentDecoder {
+        override fun decode(
+            field: Field,
+            fieldDefinition: GraphQLFieldDefinition,
+        ): Map<String, Any?> {
+            val suppliedArguments = field.arguments.associateBy { it.name }
+            return fieldDefinition.arguments
+                .mapNotNull { argumentDefinition ->
+                    val suppliedArgument = suppliedArguments[argumentDefinition.name]
+                    when {
+                        suppliedArgument != null ->
+                            argumentDefinition.name to
+                                decodeLiteral(
+                                    type = argumentDefinition.type,
+                                    value = suppliedArgument.value,
+                                    variableValues = variableValues,
+                                    schema = schema,
+                                    variableField = effectiveVariableField,
+                                )
+                        argumentDefinition.hasSetDefaultValue() ->
+                            argumentDefinition.name to
+                                decodeInputValue(
+                                    argumentDefinition.type,
+                                    argumentDefinition.argumentDefaultValue,
+                                    variableValues,
+                                    schema,
+                                    effectiveVariableField,
+                                )
+                        else -> null
+                    }
+                }.toMap()
+        }
+    }
+
+    private inner class CoercedArgumentDecoder(
+        private val variables: CoercedVariables,
+        private val graphQLContext: GraphQLContext,
+        private val locale: Locale,
+    ) : ArgumentDecoder {
+        override fun decode(
+            field: Field,
+            fieldDefinition: GraphQLFieldDefinition,
+        ): Map<String, Any?> {
+            val values =
+                ValuesResolver.getArgumentValues(
+                    schema.graphQLSchema.codeRegistry,
+                    fieldDefinition.arguments,
+                    field.arguments,
+                    variables,
+                    graphQLContext,
+                    locale,
+                )
+            return fieldDefinition.arguments
+                .mapNotNull { argumentDefinition ->
+                    if (argumentDefinition.name !in values) {
+                        null
+                    } else {
+                        argumentDefinition.name to
+                            decodeExternalInputValue(
+                                type = argumentDefinition.type,
+                                value = values[argumentDefinition.name],
+                                schema = schema,
+                            )
+                    }
+                }.toMap()
+        }
     }
 
     private companion object {

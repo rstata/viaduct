@@ -36,7 +36,7 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   holder { __typename }
                   result(value: 7)
                 }

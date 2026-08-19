@@ -2,8 +2,8 @@ package semantics.contract
 
 import model.EngineResult
 import model.ObjectEngineResult
-import model.fragmentFrom
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -90,9 +90,9 @@ private fun ResolverContract.assertRejectsWorldMode(selectiveResolvers: Boolean)
         TestWorld.fromSDL(
             schemaSDL = "type Query { value: Int }",
             selectiveResolvers = selectiveResolvers,
-        )
+    )
     val world = testWorld.assumptions
-    val selections = world.fragmentFrom("fragment ignored on Query { __typename }").subselections
+    val selections = world.operationSelectionsFrom("query { __typename }")
 
     assertFailsWith<IllegalArgumentException> {
         resolve(world, world.objectOf("Query"), selections)
@@ -117,7 +117,7 @@ private fun ResolverContract.resolvePassiveOutputFixture(): PassiveOutputFixture
         )
     val world = testWorld.assumptions
     val result =
-        resolveAndValidate(world, "fragment ignored on Query { user { requested } }")
+        resolveAndValidate(world, "query { user { requested } }")
     val user =
         assertIs<ObjectEngineResult>(
             result.getCell(world.schema.contractKey("Query", "user")).get(),
@@ -170,7 +170,7 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
         )
     val world = testWorld.assumptions
     val result =
-        resolveAndValidate(world, "fragment ignored on Query { chain { computed } }")
+        resolveAndValidate(world, "query { chain { computed } }")
     val chain =
         assertIs<ObjectEngineResult>(
             result.getCell(world.schema.contractKey("Query", "chain")).get(),

@@ -4,9 +4,10 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.Stamp
-import model.fragmentFrom
+import model.instantiateBindings
 import model.merge
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -67,13 +68,13 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val resultKey = world.schema.contractKey("Query", "result")
-        val resultQuery = world.fragmentFrom("fragment Query on Query { result }")
+        val resultSelections = world.operationSelectionsFrom("query { result }")
 
         val resolvedResult =
             resolveAndValidate(
                 world,
                 world.objectOf("Query"),
-                resultQuery,
+                resultSelections,
             )
 
         assertEquals(8, resolvedResult.getCell(resultKey).get())
@@ -87,10 +88,10 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             )
         val oneKey = world.schema.contractKey("Payload", "one")
         val twoKey = world.schema.contractKey("Payload", "two")
-        val externalQuery =
-            world.fragmentFrom(
+        val externalSelections =
+            world.operationSelectionsFrom(
                 """
-                fragment Query on Query {
+                query {
                   payload(arg: 1) { one }
                   payload(arg: 1) { two }
                 }
@@ -101,7 +102,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 world.objectOf("Query"),
-                externalQuery,
+                externalSelections,
             )
         val payload =
             assertIs<ObjectEngineResult>(
@@ -166,13 +167,13 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     "other" to 1,
                 ),
             )
-        val fragment =
-            world.fragmentFrom(
-                """fragment Query on Query { result(seed: 1, other: 1) }""",
+        val selections =
+            world.operationSelectionsFrom(
+                """query { result(seed: 1, other: 1) }""",
             )
 
         val resolved =
-            resolveAndValidate(world, fragment)
+            resolveAndValidate(world, selections)
 
         assertEquals(8, resolved.getCell(resultKey).get())
         when (variableSelectionIdentityPolicy) {
@@ -191,6 +192,14 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 )
             }
         }
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(
+            context(world) {
+                resolved.correctResolution(
+                    selections
+                        .merge(world.schema.query)
+                        .instantiateBindings(),
+                )
+            },
+        )
     }
 }

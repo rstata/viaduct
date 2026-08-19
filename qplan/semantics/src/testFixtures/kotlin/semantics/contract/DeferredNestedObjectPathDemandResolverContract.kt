@@ -40,7 +40,7 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   item {
                     step { __typename }
                   }

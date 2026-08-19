@@ -11,6 +11,7 @@ import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
@@ -66,9 +67,9 @@ class NestedDescendantVariableUseRegressionTest {
         val resolved =
             context(world) {
                 resolve(
-                    world.fragmentFrom(
-                        "fragment ignored on Query { item { result } }",
-                    ).subselections,
+                    world.operationSelectionsFrom(
+                        "query { item { result } }",
+                    ),
                 )
             }
         val item = resolved.getCell(itemKey).getValue().get() as ObjectEngineResult
@@ -182,9 +183,9 @@ class NestedDescendantVariableUseRegressionTest {
                 world = world,
                 root = world.objectOf("Query"),
                 selections =
-                    world.fragmentFrom(
+                    world.operationSelectionsFrom(
                         """
-                            fragment ignored on Query {
+                            query {
                               item {
                                 holder {
                                   consume(value: 7) {
@@ -195,7 +196,7 @@ class NestedDescendantVariableUseRegressionTest {
                               }
                             }
                         """.trimIndent(),
-                    ).subselections,
+                    ),
             )
         val resolved = observation.result
         val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()

@@ -119,8 +119,7 @@ class CoroutineResolveTest {
                 world.schema.groundKey("Child", "first"),
                 world.schema.groundKey("Child", "second"),
             )
-        val expectedChildResultKeys =
-            expectedChildKeys + world.schema.groundKey("Child", "__typename")
+        val expectedChildResultKeys = expectedChildKeys
         var rootCell: EngineResultCell? = null
         val childRegistrations = linkedSetOf<ObjectEngineResult.GroundKey>()
         val runtimeSupport =

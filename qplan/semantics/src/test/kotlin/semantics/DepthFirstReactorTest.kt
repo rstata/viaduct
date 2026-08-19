@@ -50,16 +50,16 @@ class DepthFirstReactorTest {
                 ReactorEvent.OrchestratorStarted(emptyList(), "Query"),
                 ReactorEvent.ResolverLaunched(
                     coordinate,
-                    ReactorSlotKind.PASSIVE,
+                    ReactorSlotKind.FIELD_RESOLVER,
                 ),
                 ReactorEvent.OrchestratorFinished(emptyList(), "Query"),
                 ReactorEvent.ResolverStarted(
                     coordinate,
-                    ReactorSlotKind.PASSIVE,
+                    ReactorSlotKind.FIELD_RESOLVER,
                 ),
                 ReactorEvent.ResolverFinished(
                     coordinate,
-                    ReactorSlotKind.PASSIVE,
+                    ReactorSlotKind.FIELD_RESOLVER,
                 ),
             ),
             events,

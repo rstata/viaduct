@@ -20,7 +20,6 @@ import semantics.arbitrary.allowedResolverClosure
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
-import semantics.correctresolution.conformsToTypename
 import semantics.correctresolution.correctResolution
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
@@ -106,7 +105,6 @@ interface ResolverWitnessContract : ResolverContract {
                             "selections=${result.conformsToSelections(fragment.subselections)}, " +
                             "closed=${result.isClosedUnderResolverDemand()}, " +
                             "resolvers=${result.conformsToResolvers()}, " +
-                            "typename=${result.conformsToTypename()}, " +
                             "unclosed=${result.unclosedRegisteredResolverOccurrences().map { cell ->
                                 cell.applicationKey to cell.occurrencePath
                             }}"

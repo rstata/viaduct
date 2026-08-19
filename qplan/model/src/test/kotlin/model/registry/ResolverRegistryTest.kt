@@ -130,14 +130,12 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `root resolver supplies only canonical query typename`() {
+    fun `root resolver supplies an empty query object`() {
         val fixture = Fixture()
         val root = fixture.assumptions.resolverRegistry.resolveRootQuery()
-        val typenameKey = "__typename"
 
         assertEquals(fixture.schema.query, root.schemaType)
-        assertEquals(setOf(typenameKey), root.getSelections().toSet())
-        assertEquals("Query", root.get(typenameKey))
+        assertEquals(emptySet(), root.getSelections().toSet())
     }
 
     @Test
@@ -170,7 +168,7 @@ class ResolverRegistryTest {
         }
 
         val userBridge = schema.type("User_V_A_Bridge") as Schema.ObjectType
-        assertEquals(setOf("__typename", "id", "node"), userBridge.fields.keys)
+        assertEquals(setOf("V_I_typename", "id", "node"), userBridge.fields.keys)
         val matrixBridge = schema.field("Query", "matrix_V_A_node")
         val outer = assertIs<TypeExpr.List<Schema.OutputType>>(matrixBridge.typeExpr)
         val inner = assertIs<TypeExpr.List<Schema.OutputType>>(outer.elementType)
@@ -451,7 +449,7 @@ class ResolverRegistryTest {
 
     @Test
     fun `rejects field resolvers for node id and generated typename fields`() {
-        listOf("id", "__typename").forEach { fieldName ->
+        listOf("id", "V_I_typename").forEach { fieldName ->
             assertFailsWith<IllegalArgumentException> {
                 TestWorld.fromSDL(
                     schemaSDL = SCHEMA_SDL,

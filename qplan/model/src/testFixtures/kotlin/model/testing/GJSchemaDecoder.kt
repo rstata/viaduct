@@ -40,8 +40,11 @@ import model.Schema
 import model.TypeExpr
 import model.coerceArgumentExpression
 
-/** Names reserved for fixture-generated canonical node bridge types and fields. */
-internal const val SYNTHETIC_NAME_TOKEN = "V_A"
+/** Names reserved for fixture-generated canonical types and fields. */
+internal const val NODE_SYNTHETIC_NAME_TOKEN = "V_A"
+internal const val TYPENAME_SYNTHETIC_NAME_TOKEN = "V_I"
+internal const val TYPENAME_TOP_TYPE = "V_I_Top"
+internal const val LOWERED_TYPENAME_FIELD = "V_I_typename"
 internal const val NODE_BRIDGE_TYPE_SUFFIX = "_V_A_Bridge"
 internal const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
 internal const val NODE_BRIDGE_ID_FIELD = "id"
@@ -94,6 +97,7 @@ internal class GJSchemaDecoder(
 
         registerBuiltInScalars()
         createTypeShells()
+        createTypenameTopTypeShell()
         createNodeBridgeTypeShells()
 
         val query = types["Query"] as Schema.ObjectType
@@ -104,6 +108,7 @@ internal class GJSchemaDecoder(
                 graphQLSchema = graphQLSchema,
             )
         populatePossibleTypes()
+        populateTypenameTopPossibleTypes()
         populateInputFields()
         populateCompositeFields()
         populateNodeBridgeTypes()
@@ -189,6 +194,19 @@ internal class GJSchemaDecoder(
         }
     }
 
+    private fun createTypenameTopTypeShell() {
+        require(TYPENAME_TOP_TYPE !in types) {
+            "Synthetic typename interface collides with $TYPENAME_TOP_TYPE"
+        }
+        val fields = linkedMapOf<String, Schema.OutputField>()
+        val possibleTypes = linkedSetOf<Schema.ObjectType>()
+        registerComposite(
+            InterfaceTypeImpl(TYPENAME_TOP_TYPE, fields, possibleTypes),
+            fields,
+            possibleTypes,
+        )
+    }
+
     private fun usedNodeOutputTypeNames(): Set<String> {
         val node = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return emptySet()
         return graphQLSchema.allTypesAsList
@@ -236,6 +254,13 @@ internal class GJSchemaDecoder(
         }
     }
 
+    private fun populateTypenameTopPossibleTypes() {
+        val top = types.getValue(TYPENAME_TOP_TYPE) as Schema.InterfaceType
+        types.values
+            .filterIsInstance<Schema.ObjectType>()
+            .toCollection(possibleTypeSets.getValue(top))
+    }
+
     private fun populateInputFields() {
         graphQLSchema.allTypesAsList
             .filterIsInstance<GraphQLInputObjectType>()
@@ -260,8 +285,9 @@ internal class GJSchemaDecoder(
 
     private fun populateCompositeFields() {
         types.values
-            .filterIsInstance<Schema.CompositeType>()
-            .forEach(::addTypeNameField)
+            .filter { it is Schema.ObjectType || it is Schema.InterfaceType }
+            .map { it as Schema.CompositeType }
+            .forEach(::addLoweredTypenameField)
 
         graphQLSchema.allTypesAsList
             .filterIsInstance<GraphQLFieldsContainer>()
@@ -309,10 +335,10 @@ internal class GJSchemaDecoder(
             }
     }
 
-    private fun addTypeNameField(type: Schema.CompositeType) {
+    private fun addLoweredTypenameField(type: Schema.CompositeType) {
         val field =
             outputFieldOf(
-                fieldName = "__typename",
+                fieldName = LOWERED_TYPENAME_FIELD,
                 containingType = type,
                 typeExpr = TypeExpr.Named.of(Schema.StringType, isNullable = false),
                 arguments = Schema.NoArguments,
@@ -348,7 +374,7 @@ internal class GJSchemaDecoder(
     private fun populateGraphQLJavaObjectDefinitions() {
         objectFields.keys.forEach { objectType ->
             val sourceDefinition = graphQLSchema.getObjectType(objectType.typeName)
-            val modeledFieldNames = objectType.fields.keys - "__typename"
+            val modeledFieldNames = objectType.fields.keys
             val definition =
                 sourceDefinition
                     ?.takeIf { source ->
@@ -368,7 +394,6 @@ internal class GJSchemaDecoder(
             .name(objectType.typeName)
             .fields(
                 objectType.fields.values
-                    .filterNot { field -> field.fieldName == "__typename" }
                     .map { field ->
                         GraphQLFieldDefinition
                             .newFieldDefinition()

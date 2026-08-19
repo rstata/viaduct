@@ -34,6 +34,7 @@ class QPlanExecutionStrategy(
                 variables = executionContext.coercedVariables,
                 graphQLContext = executionContext.graphQLContext,
                 locale = executionContext.locale,
+                fragmentsByName = executionContext.fragmentsByName,
             )
 
         // Field Resolution: Use resolver26 to compute an OER tree

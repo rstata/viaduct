@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * Contract for resolvers whose user-declared object fragments are empty.
@@ -18,7 +19,7 @@ interface EmptyObjectFragmentResolverContract :
     ResolverContract,
     CrossKeyRecursiveDemandResolverContract {
     @Test
-    fun `resolves typename as the concrete object type`() {
+    fun `resolves an externally typename-only query to an empty root`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL = "type Query { value: Int }",
@@ -26,10 +27,7 @@ interface EmptyObjectFragmentResolverContract :
             ).assumptions
         val result = resolveAndValidate(world, "query { __typename }")
 
-        assertEquals(
-            "Query",
-            result.getCell(world.schema.contractKey("Query", "__typename")).get(),
-        )
+        assertTrue(result.keys.isEmpty())
     }
 
     @Test

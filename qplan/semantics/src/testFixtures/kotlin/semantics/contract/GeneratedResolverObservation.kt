@@ -17,7 +17,6 @@ import semantics.arbitrary.ResolverTestCase
 import semantics.correctresolution.correctResolution
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
-import semantics.correctresolution.conformsToTypename
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.assertEquals
@@ -86,9 +85,6 @@ object GeneratedCaseAssertions {
                             },
                             diagnostic("conformsToResolvers") {
                                 execution.result.conformsToResolvers()
-                            },
-                            diagnostic("conformsToTypename") {
-                                execution.result.conformsToTypename()
                             },
                         ).joinToString(separator = "\n")
                             .let { diagnostics ->

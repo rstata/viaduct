@@ -5,6 +5,7 @@ import graphql.execution.CoercedVariables
 import graphql.execution.RawVariables
 import graphql.execution.ValuesResolver
 import graphql.language.OperationDefinition
+import graphql.language.FragmentDefinition
 import graphql.parser.Parser
 import graphql.validation.Validator
 import java.util.Locale
@@ -18,17 +19,19 @@ fun Assumptions.selectionsFrom(fragment: String): Pair<Schema.CompositeType, Sel
 /**
  * Decodes one post-validation query operation with already-coerced operation variables.
  *
- * Applied directives and named fragment spreads are outside the current selection model.
+ * Applied directives are outside the current selection model. Named fragment spreads are inlined
+ * while decoding.
  */
 fun Assumptions.selectionsFrom(
     operation: OperationDefinition,
     variables: CoercedVariables,
     graphQLContext: GraphQLContext = GraphQLContext.getDefault(),
     locale: Locale = Locale.getDefault(),
+    fragmentsByName: Map<String, FragmentDefinition> = emptyMap(),
 ): SelectionForest =
     schema
         .selectionParser()
-        .selectionsFrom(operation, variables, graphQLContext, locale)
+        .selectionsFrom(operation, variables, graphQLContext, locale, fragmentsByName)
 
 /** Parses and decodes one validated query operation with raw request variables. */
 fun Assumptions.operationSelectionsFrom(
@@ -48,6 +51,10 @@ fun Assumptions.operationSelectionsFrom(
         ) { it.message }
     }
     val operations = document.getDefinitionsOfType(OperationDefinition::class.java)
+    val fragmentsByName =
+        document
+            .getDefinitionsOfType(FragmentDefinition::class.java)
+            .associateBy { fragment -> fragment.name }
     val operation =
         if (operationName == null) {
             require(operations.size == 1) {
@@ -68,7 +75,13 @@ fun Assumptions.operationSelectionsFrom(
             graphQLContext,
             locale,
         )
-    return selectionsFrom(operation, coercedVariables, graphQLContext, locale)
+    return selectionsFrom(
+        operation,
+        coercedVariables,
+        graphQLContext,
+        locale,
+        fragmentsByName,
+    )
 }
 
 /** Parses one post-validation GraphQL fragment into the model fragment used by tests. */

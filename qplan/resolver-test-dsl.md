@@ -157,7 +157,7 @@ type Entry {
 
 ## Node Results
 
-Node IDs are globally unique within one DSL world. A node resolver's result is the concrete object body for that ID; its top-level `id` and `__typename` are injected by the fixture. A complete top-down world places the root field before the Node type:
+Node IDs are globally unique within one DSL world. A node resolver's result is the concrete object body for that ID; its top-level `id` is injected by the fixture, while internal typename demand is resolved through the generated `V_I_typename` field resolver. A complete top-down world places the root field before the Node type:
 
 ```graphql
 extend type Query {

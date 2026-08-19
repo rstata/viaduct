@@ -80,7 +80,7 @@ class ObjectConstructionTest {
     fun `object values retain only explicitly supplied fields`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val userType = schema.type("User") as Schema.ObjectType
-        val typenameKey = "__typename"
+        val typenameKey = "V_I_typename"
         val typenameValue = "User"
 
         val implicit = engineObjectDataOf(userType)

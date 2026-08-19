@@ -40,26 +40,13 @@ interface ResolverContract {
         )
 
     fun expectedPassiveResultFieldNames(vararg fieldNames: String): Set<String> =
-        fieldNames.filterNotTo(linkedSetOf()) { it == "__typename" } +
-            if (selectiveResolvers) emptySet() else setOf("__typename")
+        fieldNames.toSet()
 
     fun expectedPassiveResultKeys(
+        @Suppress("UNUSED_PARAMETER")
         type: Schema.ObjectType,
         keys: Set<ObjectEngineResult.GroundKey>,
-    ): Set<ObjectEngineResult.GroundKey> =
-        keys.filterNotTo(linkedSetOf()) { key ->
-            key.field.fieldName == "__typename"
-        } +
-            if (selectiveResolvers) {
-                emptySet()
-            } else {
-                setOf(
-                    ObjectEngineResult.GroundKey.of(
-                        field = type.fields.getValue("__typename"),
-                        arguments = emptyMap(),
-                    ),
-                )
-            }
+    ): Set<ObjectEngineResult.GroundKey> = keys
 }
 
 internal fun EngineObjectData.Sync.hasExactlyFields(

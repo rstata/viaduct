@@ -67,7 +67,7 @@ class ExecutionTestFixture private constructor(
                 resolverSchemaSDL = resolverSchemaSDL,
             )
 
-        private fun fromWorld(
+        internal fun fromWorld(
             schemaSDL: String,
             world: TestWorld,
         ): ExecutionTestFixture {

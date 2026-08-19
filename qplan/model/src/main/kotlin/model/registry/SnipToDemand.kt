@@ -24,11 +24,11 @@ import viaduct.engine.api.EngineObjectData
  * coordinate selected by both.
  *
  * Simple, null, and error results are unchanged. List results are projected element-wise. Object
- * projection retains demanded passive fields, including `__typename`, and stops before every field
- * with a registered resolver. A type-conditioned selection that does not apply to a concrete object
- * is omitted before its key is reconstructed against that object's concrete field. There is no
- * implicit node-reference retention or node-specific root projection; fixture-generated bridge
- * fields appear only when included in [demand].
+ * projection retains demanded passive fields and stops before every field with a registered
+ * resolver. A type-conditioned selection that does not apply to a concrete object is omitted before
+ * its key is reconstructed against that object's concrete field. There is no implicit
+ * node-reference retention or node-specific root projection; fixture-generated bridge fields appear
+ * only when included in [demand].
  *
  * This operation's reasoning scope assumes that every argument-bearing output field has an explicit
  * field resolver. Such a field is therefore a resolver boundary, and every retained field is

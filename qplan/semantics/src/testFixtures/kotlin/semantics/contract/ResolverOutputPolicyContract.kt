@@ -23,7 +23,7 @@ interface CompleteResolverOutputPolicyContract : ResolverContract {
         val resolved = resolvePassiveOutputFixture()
 
         assertEquals(
-            setOf("requested", "extra", "__typename"),
+            setOf("requested", "extra"),
             resolved.fieldNames,
         )
     }
@@ -62,7 +62,7 @@ interface CompleteObjectFragmentOutputPolicyContract : ResolverContract {
     fun `retains complete passive recursive output`() {
         val resolved = resolveRecursiveOutputFixture()
 
-        assertEquals(setOf("label", "next", "__typename"), resolved.fieldNames)
+        assertEquals(setOf("label", "next"), resolved.fieldNames)
         assertTrue(resolved.hasNext)
         assertEquals(null, resolved.nextValue)
     }

@@ -214,7 +214,7 @@ private class TestWorldModule(
         val queryFragment = schema.emptyFragmentOf("Query")
         return schema.query.fields.values
             .filter {
-                it.fieldName != "__typename"
+                it.fieldName != LOWERED_TYPENAME_FIELD
             }
             .associateWith {
                 fieldResolverOf(

@@ -188,7 +188,11 @@ class ArbitraryRegistry internal constructor(
         applicationCounts.toMap()
 
     fun resolverProgram(sourceField: FieldCoordinate): ResolverProgramKind =
-        resolverPrograms.getValue(sourceField)
+        if (sourceField.fieldName == "V_I_typename") {
+            ResolverProgramKind.CONSTANT
+        } else {
+            resolverPrograms.getValue(sourceField)
+        }
 
     fun applicationProgram(
         schema: ArbitrarySchema,
@@ -204,8 +208,11 @@ class ArbitraryRegistry internal constructor(
         schema: ArbitrarySchema,
         canonicalField: FieldCoordinate,
     ): Boolean =
-        canonicalField.isNodeLoader(schema) ||
-            objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
+        when {
+            canonicalField.fieldName == "V_I_typename" -> false
+            canonicalField.isNodeLoader(schema) -> true
+            else -> objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
+        }
 
     /** Recursive selection counts for every generated field-resolver object fragment. */
     fun objectFragmentSelectionCounts(): List<Int> =

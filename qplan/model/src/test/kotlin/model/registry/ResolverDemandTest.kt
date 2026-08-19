@@ -287,7 +287,7 @@ class ResolverDemandTest {
                         val resolvers =
                             mutableMapOf<Schema.OutputField, FieldResolverDefinition>()
                         schema.query.fields.values
-                            .filter { it.fieldName != "__typename" }
+                            .filter { it.fieldName != "V_I_typename" }
                             .forEach { field ->
                                 resolvers[field] = resolver(schema.emptyFragmentOf("Query"))
                             }

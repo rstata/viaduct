@@ -34,8 +34,12 @@ sealed interface SpecSelection {
         /** The response alias, or null when the response key is [fieldName]. */
         val alias: String?
 
+        /** The canonical schema field selected at this source occurrence. */
+        val schemaField: Schema.OutputField
+
         /** The schema field name. */
         val fieldName: String
+            get() = schemaField.fieldName
 
         /**
          * The schema-checked field argument tuple.
@@ -53,7 +57,8 @@ sealed interface SpecSelection {
          * ### Invariant: spec-field-shape
          *
          * This is null exactly when the field's base type is a [Schema.SimpleType]. When the base
-         * type is a [Schema.CompositeType], this is non-null and non-empty as required by GraphQL.
+         * type is a [Schema.CompositeType], this is non-null. It may be empty after an external
+         * operation's `__typename` selections have been erased.
          */
         val subselections: List<SpecSelection>?
 
@@ -62,7 +67,7 @@ sealed interface SpecSelection {
              * Constructs a field selection whose subselection shape matches [field]'s base type.
              *
              * @throws IllegalArgumentException when a simple field has subselections or a composite
-             * field lacks a non-empty selection set
+             * field lacks a selection set
              */
             @JvmStatic
             fun of(
@@ -79,14 +84,14 @@ sealed interface SpecSelection {
                         }
 
                     is Schema.CompositeType ->
-                        require(!subselections.isNullOrEmpty()) {
+                        require(subselections != null) {
                             "Composite field ${field.containingType.typeName}.${field.fieldName} " +
-                                "requires a non-empty selection set"
+                                "requires a selection set"
                         }
                 }
                 return FieldImpl(
                     alias,
-                    field.fieldName,
+                    field,
                     Arguments.of(field, arguments),
                     subselections,
                 )
@@ -145,7 +150,7 @@ sealed interface SpecSelection {
 
 private class FieldImpl(
     override val alias: String?,
-    override val fieldName: String,
+    override val schemaField: Schema.OutputField,
     override val arguments: Arguments,
     override val subselections: List<SpecSelection>?,
 ) : SpecSelection.Field

@@ -13,7 +13,6 @@ import model.operationSelectionsFrom
 import org.junit.jupiter.api.AfterEach
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
-import semantics.correctresolution.conformsToTypename
 import semantics.correctresolution.correctResolution
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
@@ -62,8 +61,7 @@ private object ContractPostTestState {
                         "selections=" +
                         validation.result.conformsToSelections(validation.selections) +
                         ", closed=${validation.result.isClosedUnderResolverDemand()}, " +
-                        "resolvers=${validation.result.conformsToResolvers()}, " +
-                        "typename=${validation.result.conformsToTypename()}"
+                        "resolvers=${validation.result.conformsToResolvers()}"
                 },
             )
         }

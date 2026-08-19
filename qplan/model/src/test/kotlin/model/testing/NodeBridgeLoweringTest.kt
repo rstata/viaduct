@@ -43,7 +43,7 @@ class NodeBridgeLoweringTest {
         val producer = schema.field("Query", "user_V_A_node")
         val bridge = schema.type("User_V_A_Bridge") as Schema.ObjectType
         assertEquals(bridge, producer.typeExpr.baseType)
-        assertEquals(setOf("__typename", "id", "node"), bridge.fields.keys)
+        assertEquals(setOf("V_I_typename", "id", "node"), bridge.fields.keys)
         assertEquals(setOf(bridge), bridge.possibleTypes)
 
         val query = schema.query
@@ -55,12 +55,13 @@ class NodeBridgeLoweringTest {
 
         assertSame(bridge.gjDef, bridge.gjDef)
         assertEquals(
-            setOf("id", "node"),
+            setOf("V_I_typename", "id", "node"),
             bridge.gjDef.fieldDefinitions.mapTo(linkedSetOf()) { it.name },
         )
 
         val user = schema.type("User") as Schema.ObjectType
-        assertSame(schema.graphQLSchema.getObjectType("User"), user.gjDef)
+        assertTrue(schema.graphQLSchema.getObjectType("User") !== user.gjDef)
+        assertNotNull(user.gjDef.getFieldDefinition("V_I_typename"))
     }
 
     @Test

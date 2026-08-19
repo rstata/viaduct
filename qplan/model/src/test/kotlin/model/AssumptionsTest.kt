@@ -175,6 +175,7 @@ class AssumptionsTest {
         val user = assertIs<Schema.ObjectType>(schema.type("User"))
         val admin = assertIs<Schema.ObjectType>(schema.type("Admin"))
         val actor = assertIs<Schema.UnionType>(schema.type("Actor"))
+        val typenameTop = assertIs<Schema.InterfaceType>(schema.type("V_I_Top"))
 
         assertEquals(query, schema.type("Query"))
         assertEquals(Schema.IntType, schema.type("Int"))
@@ -188,10 +189,10 @@ class AssumptionsTest {
         assertEquals(Schema.TypeRelation.NARROWER_THAN, schema.relation(user, node))
         assertEquals(Schema.TypeRelation.WIDER_THAN, schema.relation(actor, admin))
         assertEquals(Schema.TypeRelation.COPARENT, schema.relation(node, actor))
-        assertEquals(setOf(node, user, admin, actor), schema.spreadableTypes(node))
+        assertEquals(setOf(node, user, admin, actor, typenameTop), schema.spreadableTypes(node))
         assertEquals(true, schema.isSpreadable(node, actor))
 
-        val typeName = schema.field("Node", "__typename")
+        val typeName = schema.field("Node", "V_I_typename")
         assertEquals(node, typeName.containingType)
         assertEquals(Schema.NoArguments, typeName.arguments)
         assertEquals(emptyMap(), Schema.NoArguments.fields)

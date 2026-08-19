@@ -46,14 +46,14 @@ class SpecSelectionTest {
                 subselections = null,
             )
         }
-        assertFailsWith<IllegalArgumentException> {
+        val emptyUserSelection =
             SpecSelection.Field.of(
                 alias = null,
                 field = userField,
                 arguments = emptyMap(),
                 subselections = emptyList(),
             )
-        }
+        assertEquals(emptyList(), emptyUserSelection.subselections)
     }
 
     @Test

@@ -100,11 +100,7 @@ private fun SpecSelection.Field.flattenField(
     schema: Schema,
     context: SelectionContext,
 ): MaterializeSelection {
-    val field =
-        schema.field(
-            context.nominalType.typeName,
-            fieldName,
-        )
+    val field = schemaField
     val flattenedSubselections =
         when (val resultType = field.typeExpr.baseType) {
             is Schema.SimpleType -> materializeSelectionForestOf()

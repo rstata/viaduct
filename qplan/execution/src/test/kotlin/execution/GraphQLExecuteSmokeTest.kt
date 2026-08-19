@@ -2,6 +2,8 @@ package execution
 
 import execution.testing.ExecutionTestFixture
 import execution.testing.assertResult
+import java.util.concurrent.ConcurrentLinkedQueue
+import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -11,6 +13,125 @@ import kotlin.test.assertTrue
  * These tests intentionally assert only behavior observable through GraphQL.execute.
  */
 class GraphQLExecuteSmokeTest {
+    @Test
+    fun `completes external typename without qplan typename resolver applications`() {
+        val applications = ConcurrentLinkedQueue<String>()
+        val resolverSchema =
+            """
+            extend type Query {
+              viewer: User! @resolver(result: {})
+              item: Item! @resolver(result: {__typename: "A"})
+              choice: Choice! @resolver(result: {__typename: "B"})
+            }
+
+            type User {
+              value: Int
+            }
+
+            interface Item {
+              value: Int
+            }
+
+            union Choice = A | B
+
+            type A implements Item {
+              value: Int
+            }
+
+            type B implements Item {
+              value: Int
+            }
+            """.trimIndent()
+        val world =
+            TestWorld.fromDSL(
+                resolverSchema,
+                applicationObserver = { field, _, _, _ ->
+                    applications += "${field.containingType.typeName}.${field.fieldName}"
+                },
+            )
+        val fixture =
+            ExecutionTestFixture.fromWorld(
+                schemaSDL =
+                    """
+                    type Query {
+                      viewer: User!
+                      item: Item!
+                      choice: Choice!
+                    }
+
+                    type User {
+                      value: Int
+                    }
+
+                    interface Item {
+                      value: Int
+                    }
+
+                    union Choice = A | B
+
+                    type A implements Item {
+                      value: Int
+                    }
+
+                    type B implements Item {
+                      value: Int
+                    }
+                    """.trimIndent(),
+                world = world,
+            )
+
+        fixture.runQuery("query { __typename }").assertResult(
+            mapOf("__typename" to "Query"),
+        )
+        assertTrue(applications.isEmpty())
+
+        val result =
+            fixture.runQuery(
+                """
+                query {
+                  rootKind: __typename
+                  viewer {
+                    __typename
+                    kind: __typename
+                    ...ViewerKind
+                  }
+                  item {
+                    __typename
+                    ... on A {
+                      concreteKind: __typename
+                    }
+                  }
+                  choice {
+                    __typename
+                  }
+                }
+
+                fragment ViewerKind on User {
+                  namedKind: __typename
+                }
+                """.trimIndent(),
+            )
+
+        result.assertResult(
+            mapOf(
+                "rootKind" to "Query",
+                "viewer" to
+                    mapOf(
+                        "__typename" to "User",
+                        "kind" to "User",
+                        "namedKind" to "User",
+                    ),
+                "item" to
+                    mapOf(
+                        "__typename" to "A",
+                        "concreteKind" to "A",
+                    ),
+                "choice" to mapOf("__typename" to "B"),
+            ),
+        )
+        assertTrue(applications.none { it.endsWith(".V_I_typename") })
+    }
+
     @Test
     fun `specializes shared list continuation and concrete argument defaults`() {
         val fixture =

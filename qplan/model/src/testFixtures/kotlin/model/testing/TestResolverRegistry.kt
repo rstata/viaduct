@@ -146,8 +146,20 @@ private class NodeResolverLowering(
                 val payload = payloadField(type)
                 payload to payloadResolver(type)
             }
+        val typenameResolvers =
+            (schema.type(TYPENAME_TOP_TYPE) as Schema.InterfaceType)
+                .possibleTypes
+                .associate { type ->
+                    val field = schema.objectField(type.typeName, LOWERED_TYPENAME_FIELD)
+                    field to
+                        FieldResolverDefinition.of(
+                            objectFragment = schema.emptyFragmentOf(type.typeName),
+                            function = { _, _ -> type.typeName },
+                        )
+                }
 
-        fieldResolvers = ordinaryResolvers + bridgeResolvers + payloadResolvers
+        fieldResolvers =
+            ordinaryResolvers + bridgeResolvers + payloadResolvers + typenameResolvers
     }
 
     private fun canonicalNodeType(): Schema.InterfaceType? {
@@ -219,8 +231,8 @@ private class NodeResolverLowering(
             require(field !in nodeIdFields) {
                 "Node id field $typeName/${field.fieldName} cannot have a field resolver"
             }
-            require(field.fieldName != "__typename") {
-                "Generated field $typeName/__typename cannot have a field resolver"
+            require(field.fieldName != LOWERED_TYPENAME_FIELD) {
+                "Generated field $typeName/$LOWERED_TYPENAME_FIELD cannot be supplied directly"
             }
             val fragmentType = resolver.objectFragment.nominalType
             require(schema.type(fragmentType.typeName) == fragmentType) {
@@ -388,9 +400,6 @@ private class TestResolverRegistry(
             require(field.containingType is Schema.ObjectType) {
                 "Field resolver $typeName/${field.fieldName} must belong to a concrete object type"
             }
-            require(field.fieldName != "__typename") {
-                "Generated field $typeName/__typename cannot have a field resolver"
-            }
             val fragmentType = resolver.objectFragment.nominalType
             require(schema.type(fragmentType.typeName) == fragmentType) {
                 "${fragmentType.typeName} is not canonical in this registry's schema"
@@ -402,10 +411,7 @@ private class TestResolverRegistry(
         }
         val missingQueryFields =
             schema.query.fields.values
-                .filter {
-                    it.fieldName != "__typename" &&
-                        it !in fieldResolverDefinitions
-                }
+                .filter { it !in fieldResolverDefinitions }
         require(missingQueryFields.isEmpty()) {
             "Query fields without field resolvers: " +
                 missingQueryFields.map { it.fieldName }.sorted().joinToString()
@@ -506,10 +512,7 @@ private class TestResolverRegistry(
 
     override fun resolveRootQuery(): EngineObjectData.Sync {
         val query = schema.query
-        return engineObjectDataOf(
-            schemaType = query,
-            fields = mapOf("__typename" to query.typeName),
-        )
+        return engineObjectDataOf(schemaType = query)
     }
 
     override fun resolver(field: Schema.ObjectField): FieldResolver {

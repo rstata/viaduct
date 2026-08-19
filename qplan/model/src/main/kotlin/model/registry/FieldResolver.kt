@@ -4,9 +4,7 @@ import model.ObjectEngineResult
 
 import java.util.IdentityHashMap
 import model.Assumptions
-import model.EngineErrorData
 import model.EngineOutputData
-import model.EngineOutputListData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectSelectionForest
@@ -19,9 +17,7 @@ import model.SelectionOccurrenceId
 import model.Stamp
 import model.applicableGroundSelections
 import model.concatenateSelectionForests
-import model.engineObjectDataOf
 import model.materializeSelectionForestOf
-import model.schemaType
 import model.selectionForestOf
 import model.stampVars
 import model.toCanonicalMaterializeSelectionForest
@@ -270,7 +266,6 @@ class FieldResolver private constructor(
     ): EngineOutputData? {
         applicationObserver(input, arguments, selections)
         return function(input, arguments)
-            .synthesizeTypenames()
             .snipToDemand(projectionDemand(selections))
     }
 
@@ -282,7 +277,7 @@ class FieldResolver private constructor(
         arguments: Arguments.Resolved,
     ): EngineOutputData? {
         applicationObserver(input, arguments, null)
-        return function(input, arguments).synthesizeTypenames()
+        return function(input, arguments)
     }
 
     companion object {
@@ -371,46 +366,6 @@ private class ResolverObjectFragmentImpl(
     override val materializeSelections: MaterializeSelectionForest,
     override val constructionSelections: SelectionForest,
 ) : ResolverObjectFragment
-
-/**
- * Recursively supplies the canonical passive `__typename` field of every resolver-produced object.
- */
-private fun EngineOutputData?.synthesizeTypenames(): EngineOutputData? =
-    when (this) {
-        null,
-        EngineErrorData,
-        is Int,
-        is Double,
-        is String,
-        is Boolean,
-        -> this
-
-        is List<*> -> {
-            val values: EngineOutputListData =
-                map { value -> value.synthesizeTypenames() }
-            values
-        }
-
-        is EngineObjectData.Sync -> {
-            val schemaType = this.schemaType
-            val typenameKey = "__typename"
-            val typenameValue = schemaType.typeName
-            if (isPresent(typenameKey)) {
-                val supplied = get(typenameKey)
-                require(supplied == typenameValue) {
-                    "Resolver supplied invalid ${schemaType.typeName}/__typename: $supplied"
-                }
-            }
-            engineObjectDataOf(
-                schemaType = schemaType,
-                fields =
-                    getSelections().associateWith { selection ->
-                        get(selection).synthesizeTypenames()
-                    } + (typenameKey to typenameValue),
-            )
-        }
-        else -> throw ClassCastException("Unsupported engine output data: $this")
-    }
 
 private fun MaterializeSelectionForest.stampVariables(
     path: List<PathComponent>,

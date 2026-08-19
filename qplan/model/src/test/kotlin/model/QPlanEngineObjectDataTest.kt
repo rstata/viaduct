@@ -33,7 +33,8 @@ class QPlanEngineObjectDataTest {
                     ),
             )
 
-        assertSame(graphQLUserType, data.type)
+        assertSame(userType.gjDef, data.type)
+        assertNotEquals(graphQLUserType, data.type)
         assertEquals("Ada", data.get("name"))
         assertTrue(data.isPresent("nickname"))
         assertNull(data.get("nickname"))
@@ -165,7 +166,8 @@ class QPlanEngineObjectDataTest {
 
         assertSame(userType, data.schemaType)
         assertSame(userType.gjDef, data.type)
-        assertSame(graphQLUserType, data.type)
+        assertNotEquals(graphQLUserType, data.type)
+        assertTrue(data.type.getFieldDefinition("V_I_typename") != null)
     }
 
     @Test

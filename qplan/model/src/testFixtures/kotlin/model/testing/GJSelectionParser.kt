@@ -53,6 +53,7 @@ internal class GJSelectionParser(
         variables: CoercedVariables,
         graphQLContext: GraphQLContext,
         locale: Locale,
+        fragmentsByName: Map<String, FragmentDefinition> = emptyMap(),
     ): SelectionForest {
         require(operation.operation == OperationDefinition.Operation.QUERY) {
             "Qplan operation decoding supports query operations only"
@@ -70,6 +71,8 @@ internal class GJSelectionParser(
                         graphQLContext = graphQLContext,
                         locale = locale,
                     ),
+                mode = TranslationMode.EXTERNAL_OPERATION,
+                fragmentsByName = fragmentsByName,
             )
         return flatten(schema, schema.query, selections)
     }
@@ -110,6 +113,7 @@ internal class GJSelectionParser(
                 selectionSet = definition.selectionSet,
                 typeInScope = graphQLTypeCondition,
                 argumentDecoder = LiteralArgumentDecoder(),
+                mode = TranslationMode.INTERNAL_FRAGMENT,
             )
         return ParsedSpecFragment(typeCondition, specSelections)
     }
@@ -131,20 +135,51 @@ internal class GJSelectionParser(
         selectionSet: SelectionSet,
         typeInScope: GraphQLCompositeType,
         argumentDecoder: ArgumentDecoder,
+        mode: TranslationMode,
+        fragmentsByName: Map<String, FragmentDefinition> = emptyMap(),
     ): List<SpecSelection> =
-        selectionSet.selections.map { selection ->
+        selectionSet.selections.flatMap { selection ->
             when (selection) {
-                is Field -> decodeField(selection, typeInScope, argumentDecoder)
+                is Field ->
+                    listOfNotNull(
+                        decodeField(
+                            selection,
+                            typeInScope,
+                            argumentDecoder,
+                            mode,
+                            fragmentsByName,
+                        ),
+                    )
                 is InlineFragment ->
-                    decodeInlineFragment(
-                        fragment = selection,
-                        typeInScope = typeInScope,
-                        argumentDecoder = argumentDecoder,
+                    listOfNotNull(
+                        decodeInlineFragment(
+                            fragment = selection,
+                            typeInScope = typeInScope,
+                            argumentDecoder = argumentDecoder,
+                            mode = mode,
+                            fragmentsByName = fragmentsByName,
+                        ),
                     )
-                is FragmentSpread ->
-                    throw IllegalArgumentException(
-                        "Named fragment spreads must be inlined before constructing spec selections",
+                is FragmentSpread -> {
+                    require(mode == TranslationMode.EXTERNAL_OPERATION) {
+                        "Named fragment spreads must be inlined before constructing spec selections"
+                    }
+                    require(selection.directives.isEmpty()) {
+                        "Applied directives are deferred from the current spec-selection model"
+                    }
+                    val fragment =
+                        fragmentsByName[selection.name]
+                            ?: throw IllegalArgumentException(
+                                "Missing named fragment definition: ${selection.name}",
+                            )
+                    listOfNotNull(
+                        decodeNamedFragment(
+                            fragment = fragment,
+                            argumentDecoder = argumentDecoder,
+                            fragmentsByName = fragmentsByName,
+                        ),
                     )
+                }
                 else -> throw IllegalArgumentException("Unexpected GraphQL selection: $selection")
             }
         }
@@ -153,9 +188,14 @@ internal class GJSelectionParser(
         field: Field,
         typeInScope: GraphQLCompositeType,
         argumentDecoder: ArgumentDecoder,
-    ): SpecSelection.Field {
+        mode: TranslationMode,
+        fragmentsByName: Map<String, FragmentDefinition>,
+    ): SpecSelection.Field? {
         require(field.directives.isEmpty()) {
             "Applied directives are deferred from the current spec-selection model"
+        }
+        if (mode == TranslationMode.EXTERNAL_OPERATION && field.name == "__typename") {
+            return null
         }
         val fieldDefinition =
             Introspection.getFieldDef(
@@ -168,7 +208,13 @@ internal class GJSelectionParser(
             field.selectionSet?.let { selectionSet ->
                 val resultType =
                     GraphQLTypeUtil.unwrapAll(fieldDefinition.type) as GraphQLCompositeType
-                decodeSelectionSet(selectionSet, resultType, argumentDecoder)
+                decodeSelectionSet(
+                    selectionSet,
+                    resultType,
+                    argumentDecoder,
+                    mode,
+                    fragmentsByName,
+                )
             }
         val canonicalField = sourceSchema.field(typeInScope.name, field.name)
         val loweredNodeField = schema.isLoweredNodeField(canonicalField)
@@ -200,7 +246,9 @@ internal class GJSelectionParser(
         fragment: InlineFragment,
         typeInScope: GraphQLCompositeType,
         argumentDecoder: ArgumentDecoder,
-    ): SpecSelection.InlineFragment {
+        mode: TranslationMode,
+        fragmentsByName: Map<String, FragmentDefinition>,
+    ): SpecSelection.InlineFragment? {
         require(fragment.directives.isEmpty()) {
             "Applied directives are deferred from the current spec-selection model"
         }
@@ -211,14 +259,44 @@ internal class GJSelectionParser(
             }
         val modelTypeCondition =
             typeConditionName?.let { schema.type(it) as Schema.CompositeType }
+        val selections =
+            decodeSelectionSet(
+                fragment.selectionSet,
+                graphQLTypeCondition ?: typeInScope,
+                argumentDecoder,
+                mode,
+                fragmentsByName,
+            )
+        if (selections.isEmpty()) return null
         return SpecSelection.InlineFragment.of(
             typeCondition = modelTypeCondition,
-            selections =
-                decodeSelectionSet(
-                    fragment.selectionSet,
-                    graphQLTypeCondition ?: typeInScope,
-                    argumentDecoder,
-                ),
+            selections = selections,
+        )
+    }
+
+    private fun decodeNamedFragment(
+        fragment: FragmentDefinition,
+        argumentDecoder: ArgumentDecoder,
+        fragmentsByName: Map<String, FragmentDefinition>,
+    ): SpecSelection.InlineFragment? {
+        require(fragment.directives.isEmpty()) {
+            "Applied directives are deferred from the current spec-selection model"
+        }
+        val typeConditionName = fragment.typeCondition.name!!
+        val graphQLTypeCondition =
+            schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
+        val selections =
+            decodeSelectionSet(
+                fragment.selectionSet,
+                graphQLTypeCondition,
+                argumentDecoder,
+                TranslationMode.EXTERNAL_OPERATION,
+                fragmentsByName,
+            )
+        if (selections.isEmpty()) return null
+        return SpecSelection.InlineFragment.of(
+            typeCondition = schema.type(typeConditionName) as Schema.CompositeType,
+            selections = selections,
         )
     }
 
@@ -227,6 +305,11 @@ internal class GJSelectionParser(
             field: Field,
             fieldDefinition: GraphQLFieldDefinition,
         ): Map<String, Any?>
+    }
+
+    private enum class TranslationMode {
+        EXTERNAL_OPERATION,
+        INTERNAL_FRAGMENT,
     }
 
     private inner class LiteralArgumentDecoder : ArgumentDecoder {

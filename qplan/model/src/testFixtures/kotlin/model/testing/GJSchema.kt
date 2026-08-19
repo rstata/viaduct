@@ -13,6 +13,7 @@ import graphql.schema.GraphQLObjectType
 import graphql.schema.GraphQLOutputType
 import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLTypeUtil
+import graphql.schema.GraphQLUnionType
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
 import model.Schema
@@ -48,14 +49,20 @@ internal class GJSchema private constructor(
         typeName: String,
         fieldName: String,
     ): Schema.OutputField {
+        if (fieldName == "__typename") {
+            val sourceType = graphQLSchema.getType(typeName)
+            val canonicalOwner =
+                if (sourceType is GraphQLUnionType) {
+                    TYPENAME_TOP_TYPE
+                } else {
+                    typeName
+                }
+            return field(canonicalOwner, LOWERED_TYPENAME_FIELD)
+        }
         val sourceField =
             (graphQLSchema.getType(typeName) as? GraphQLFieldsContainer)
                 ?.getFieldDefinition(fieldName)
-                ?: return field(typeName, fieldName).also {
-                    require(fieldName == "__typename") {
-                        "$typeName/$fieldName is not a source GraphQL field"
-                    }
-                }
+                ?: throw IllegalArgumentException("$typeName/$fieldName is not a source GraphQL field")
         val canonicalName =
             if (sourceField.isNodeValued()) {
                 nodeBridgeFieldName(fieldName)
@@ -235,20 +242,34 @@ internal class GJSchema private constructor(
         }
 
         private fun validateReservedNames(schemaSDL: String) {
-            val invalidNames = linkedSetOf<String>()
+            val invalidNamesByToken =
+                linkedMapOf(
+                    NODE_SYNTHETIC_NAME_TOKEN to linkedSetOf<String>(),
+                    TYPENAME_SYNTHETIC_NAME_TOKEN to linkedSetOf(),
+                )
 
             fun visit(node: Node<*>) {
                 val name = (node as? NamedNode<*>)?.name
-                if (name != null && name.contains(SYNTHETIC_NAME_TOKEN)) {
-                    invalidNames.add(name)
+                if (name != null) {
+                    invalidNamesByToken.forEach { (token, invalidNames) ->
+                        if (name.contains(token)) {
+                            invalidNames.add(name)
+                        }
+                    }
                 }
                 node.children.forEach(::visit)
             }
 
             Parser.parse(schemaSDL).children.forEach(::visit)
-            require(invalidNames.isEmpty()) {
-                "Source schema names cannot contain reserved token $SYNTHETIC_NAME_TOKEN: " +
-                    invalidNames.sorted().joinToString()
+            val collisions =
+                invalidNamesByToken.filterValues { invalidNames -> invalidNames.isNotEmpty() }
+            require(collisions.isEmpty()) {
+                collisions.entries.joinToString(
+                    separator = "; ",
+                ) { (token, invalidNames) ->
+                    "Source schema names cannot contain reserved token $token: " +
+                        invalidNames.sorted().joinToString()
+                }
             }
         }
     }

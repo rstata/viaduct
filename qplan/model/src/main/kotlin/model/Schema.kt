@@ -34,8 +34,8 @@ import graphql.schema.GraphQLObjectType
  *
  * Type-extension declarations, their boundaries, and their provenance are not represented; their
  * merged effects are already present in the effective field maps. Directives, descriptions, source
- * locations, introspection other than `__typename`, custom scalars, mutations, and subscriptions
- * are outside the current model.
+ * locations, source-schema introspection fields, custom scalars, mutations, and subscriptions are
+ * outside the current model.
  * Collections exposed by the schema are finite mathematical maps and sets; their iteration order,
  * concrete implementation, and mutability are not modeled.
  */
@@ -205,15 +205,18 @@ interface Schema {
      *
      * ### Invariant: schema-composite-field-graph
      *
-     * [fields] contains all fields selectable at this type, rather than only fields declared in
-     * SDL. Every composite type `t` has exactly one owner-specific, schema-synthetic GraphQL
-     * meta-field `f` for which:
+     * [fields] contains all canonical lowered fields selectable at this type, rather than only
+     * fields declared in source SDL. Every object and interface type `t` has exactly one
+     * owner-specific synthetic field `f` for which:
      *
-     * - `f.fieldName == "__typename"`;
+     * - `f.fieldName == "V_I_typename"`;
      * - `f.containingType == t`;
      * - `f.typeExpr == TypeExpr.Named.of(StringType, isNullable = false)`;
      * - `f.arguments == NoArguments`; and
-     * - `field(t.typeName, "__typename") == f`.
+     * - `field(t.typeName, "V_I_typename") == f`.
+     *
+     * Unions own no fields. The synthetic interface `V_I_Top` owns the field selected for
+     * union-scoped source `__typename` and has every lowered object in [possibleTypes].
      *
      * Each map key equals its field's [OutputField.fieldName], and each field's
      * [OutputField.containingType] is this definition. Conversely, every [OutputField] in the
@@ -304,7 +307,7 @@ interface Schema {
     /**
      * An object type.
      *
-     * [fields] contains `__typename` and the object's effective fields after flattening type
+     * [fields] contains `V_I_typename` and the object's effective fields after flattening type
      * extensions and inherited interface fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
      *
@@ -327,7 +330,7 @@ interface Schema {
     /**
      * An interface type.
      *
-     * [fields] contains `__typename` and the interface's effective fields after flattening type
+     * [fields] contains `V_I_typename` and the interface's effective fields after flattening type
      * extensions and inherited interface fields. Parent-interface and implementation
      * relationships are represented by the schema's relation operations rather than stored here.
      */
@@ -338,8 +341,7 @@ interface Schema {
      *
      * ### Invariant: schema-union-fields
      *
-     * Union membership is represented by [CompositeType.possibleTypes]. [fields] contains exactly
-     * the `__typename` field.
+     * Union membership is represented by [CompositeType.possibleTypes]. [fields] is empty.
      */
     interface UnionType : CompositeType
 

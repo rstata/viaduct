@@ -44,9 +44,8 @@ internal class ObjectResolution(
  * field resolution for [resolverDemand].
  *
  * Selective worlds include only fields in [resolverDemand]. Non-selective worlds include every
- * passive field actually present in the output, including resolver-supplied `__typename`, and
- * recursively stop at registered resolver boundaries. Null, error, and simple values terminate
- * traversal.
+ * passive field actually present in the output and recursively stop at registered resolver
+ * boundaries. Null, error, and simple values terminate traversal.
  */
 context(world: Assumptions)
 internal fun EngineOutputData?.resolveValue(

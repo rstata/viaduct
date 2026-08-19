@@ -1,6 +1,7 @@
 package model.testing
 
 import model.ObjectEngineResult
+import model.CoercedDefaultValue
 
 import model.Fragment
 import model.EngineErrorData
@@ -600,7 +601,7 @@ private class TestResolverRegistry(
                                 .matchingVariableTypes(
                                     variable = variable,
                                     typeExpr = argument.typeExpr,
-                                    hasDefault = argument.defaultValue is Schema.DefaultValue.Present,
+                                    hasDefault = argument.defaultValue is CoercedDefaultValue.Present,
                                 ).map { (typeExpr, hasDefault) ->
                                     VariableUse(typeExpr, hasDefault)
                                 },

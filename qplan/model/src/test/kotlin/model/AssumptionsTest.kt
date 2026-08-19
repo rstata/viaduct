@@ -229,7 +229,7 @@ class AssumptionsTest {
         assertEquals("filter", filterArgument.name)
         assertFalse(filterArgument.isRequired)
         val filterDefault =
-            assertIs<Schema.DefaultValue.Present>(filterArgument.defaultValue)
+            assertIs<CoercedDefaultValue.Present>(filterArgument.defaultValue)
         val filterValue = assertIs<EngineInputObjectData>(filterDefault.value)
         val nodeArguments =
             Arguments.Resolved.of(

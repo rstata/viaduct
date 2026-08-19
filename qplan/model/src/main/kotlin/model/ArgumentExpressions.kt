@@ -101,7 +101,7 @@ private fun coerceArgumentFields(
         type.fields.values
             .mapNotNull { field ->
                 val defaultValue = field.defaultValue
-                if (defaultValue is Schema.DefaultValue.Present) {
+                if (defaultValue is CoercedDefaultValue.Present) {
                     field.name to defaultValue.value
                 } else {
                     null
@@ -412,7 +412,7 @@ internal fun ArgumentExpression?.matchingVariableTypes(
                 value.matchingVariableTypes(
                     variable,
                     field.typeExpr,
-                    field.defaultValue is Schema.DefaultValue.Present,
+                    field.defaultValue is CoercedDefaultValue.Present,
                 )
             }
         }

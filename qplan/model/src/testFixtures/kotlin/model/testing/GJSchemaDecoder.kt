@@ -32,6 +32,7 @@ import graphql.schema.GraphQLUnionType
 import graphql.schema.InputValueWithState
 import model.ArgumentResolutionError
 import model.Arguments
+import model.CoercedDefaultValue
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
@@ -523,9 +524,9 @@ internal class GJSchemaDecoder(
     private fun decodeDefault(
         type: GraphQLInputType,
         value: InputValueWithState,
-    ): Schema.DefaultValue =
+    ): CoercedDefaultValue =
         if (value.isNotSet) {
-            Schema.DefaultValue.Absent
+            CoercedDefaultValue.Absent
         } else {
             val decoded =
                 decodeInputValue(
@@ -535,7 +536,7 @@ internal class GJSchemaDecoder(
                     schema,
                 )
             check(decoded != ArgumentResolutionError && decoded !is Arguments.Variable)
-            Schema.DefaultValue.of(decoded)
+            CoercedDefaultValue.of(decoded)
         }
 
     private fun implementsInterface(
@@ -993,14 +994,14 @@ private class InputFieldImpl(
     override val fieldName: String,
     override val containingType: Schema.InputObjectType,
     override val typeExpr: TypeExpr<Schema.InputType>,
-    override val defaultValue: Schema.DefaultValue,
+    override val defaultValue: CoercedDefaultValue,
 ) : Schema.InputField
 
 private class FieldArgumentImpl(
     override val argumentName: String,
     override val containingType: Schema.FieldArguments,
     override val typeExpr: TypeExpr<Schema.InputType>,
-    override val defaultValue: Schema.DefaultValue,
+    override val defaultValue: CoercedDefaultValue,
 ) : Schema.FieldArgument
 
 private fun <T> fieldArgumentsOf(

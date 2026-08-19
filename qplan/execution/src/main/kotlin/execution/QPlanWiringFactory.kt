@@ -13,6 +13,7 @@ import graphql.schema.idl.InterfaceWiringEnvironment
 import graphql.schema.idl.UnionWiringEnvironment
 import graphql.schema.idl.WiringFactory
 import model.EngineResult
+import model.EngineIDResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -106,7 +107,7 @@ private fun EngineResult?.toGraphQLJavaValue(
                     .get()
                     .toGraphQLJavaValue(environment, path.segment(index))
             }
-        is Schema.ID -> value
+        is EngineIDResult -> value
         is Schema.EnumValue -> name
         is Int,
         is Double,

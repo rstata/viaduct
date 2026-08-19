@@ -24,7 +24,7 @@ import graphql.schema.GraphQLObjectType
  * factories do not revalidate that ownership. Nested definitions navigate to their canonical owners through
  * [OutputField.containingType] and [InputLikeField.containingType]. Compare definitions with ordinary
  * `==`, `!=`, and collection equality operations. Only acyclic value objects such as [TypeExpr] and
- * [Schema.DefaultValue] add structural equality over their properties.
+ * [CoercedDefaultValue] add structural equality over their properties.
  *
  * ### Invariant: schema-supported-domain
  *
@@ -40,25 +40,6 @@ import graphql.schema.GraphQLObjectType
  * concrete implementation, and mutability are not modeled.
  */
 interface Schema {
-    /**
-     * An optional, fully coerced semantic schema default.
-     *
-     * [Absent] means that no default is declared. [Present.value] may be null, denoting an explicit
-     * GraphQL null; absence and explicit null are distinct. When attached to a field or argument,
-     * [Present] is valid for its declaring [TypeExpr]. Default values use structural equality.
-     */
-    sealed interface DefaultValue {
-        data object Absent : DefaultValue
-
-        sealed interface Present : DefaultValue {
-            val value: EngineInputData?
-        }
-
-        companion object {
-            fun of(value: EngineInputData?): Present = PresentDefaultValueImpl(value)
-        }
-    }
-
     /**
      * The canonical query root.
      *
@@ -296,15 +277,6 @@ interface Schema {
         val containingType: EnumType
     }
 
-    /** A structurally equal GraphQL ID result value. */
-    sealed interface ID {
-        val value: String
-
-        companion object {
-            fun of(value: String): ID = IDImpl(value)
-        }
-    }
-
     /**
      * An object type.
      *
@@ -432,10 +404,10 @@ interface Schema {
         val name: String
         val containingType: InputObjectLike
         val typeExpr: TypeExpr<InputType>
-        val defaultValue: Schema.DefaultValue
+        val defaultValue: CoercedDefaultValue
 
         val isRequired: Boolean
-            get() = !typeExpr.isNullable && defaultValue == Schema.DefaultValue.Absent
+            get() = !typeExpr.isNullable && defaultValue == CoercedDefaultValue.Absent
     }
 
     /** The canonical input-object field at [containingType]/[fieldName]. */
@@ -476,11 +448,3 @@ interface Schema {
             },
         )
 }
-
-private data class IDImpl(
-    override val value: String,
-) : Schema.ID
-
-private data class PresentDefaultValueImpl(
-    override val value: EngineInputData?,
-) : Schema.DefaultValue.Present

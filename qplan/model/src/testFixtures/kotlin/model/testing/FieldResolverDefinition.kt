@@ -1,6 +1,7 @@
 package model.testing
 
 import model.Fragment
+import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.Schema
@@ -28,7 +29,9 @@ class FieldResolverDefinition private constructor(
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
-    fun mapOutput(transform: (Value.Output?) -> Value.Output?): FieldResolverDefinition =
+    fun mapOutput(
+        transform: (EngineOutputData?) -> EngineOutputData?,
+    ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
             function = { input, arguments -> transform(function(input, arguments)) },

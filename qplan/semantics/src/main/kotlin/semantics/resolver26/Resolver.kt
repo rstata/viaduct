@@ -6,6 +6,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
@@ -274,11 +276,12 @@ private suspend fun orchestrateObject(
                 "Resolver26 passive field ${groundKey.field.containingType.typeName}/" +
                     "${groundKey.field.fieldName} must be argumentless"
             }
-            val sourceValue: Value.Output? =
+            val sourceValue: EngineOutputData? =
                 source.fieldValues.getValue(groundKey.field.fieldName)
             if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(
+                        expectedType = groundKey.field.typeExpr,
                         path = path + groundKey,
                         resolverDemand = selection.subselections,
                     )
@@ -291,6 +294,7 @@ private suspend fun orchestrateObject(
                 path = path + groundKey,
                 source = sourceValue,
                 target = target.getCell(groundKey).getValue().get(),
+                expectedType = groundKey.field.typeExpr,
                 initialDemand = selection.subselections,
                 runtime = runtime,
             )
@@ -534,7 +538,7 @@ private suspend fun resolveField(
             variableSourceSelectionStamps = variableSourceSelectionStamps,
         ),
     )
-    val fieldValue: Value.Output? =
+    val fieldValue: EngineOutputData? =
         expansion.resolver(
             input = input,
             arguments = resolverArguments,
@@ -542,6 +546,7 @@ private suspend fun resolveField(
         )
     val resolvedValue: ResolvedValue =
         fieldValue.resolveValue(
+            expectedType = groundKey.field.typeExpr,
             path = coordinate,
             resolverDemand = invocationDemand,
         )
@@ -581,8 +586,9 @@ private fun ObjectResolution.isRootOfOutputAt(
 context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
 private fun launchPassiveChildOrchestrations(
     path: List<PathComponent>,
-    source: Value.Output?,
+    source: EngineOutputData?,
     target: EngineResult?,
+    expectedType: model.TypeExpr<Schema.OutputType>,
     initialDemand: SelectionForest,
     runtime: ResolverRuntime,
 ) {
@@ -593,14 +599,20 @@ private fun launchPassiveChildOrchestrations(
             }
         }
 
-        Value.Error -> {
+        EngineErrorData -> {
             check(target == ErrorEngineResult) {
                 "Resolver26 passive error source has different result at $path"
             }
         }
 
-        is Value.Simple -> {
-            check(target == source.toEngineResult()) {
+        is Int,
+        is Double,
+        is String,
+        is Boolean,
+        -> {
+            val simpleType =
+                (expectedType as model.TypeExpr.Named).baseType as Schema.SimpleType
+            check(target == source.toEngineResult(simpleType)) {
                 "Resolver26 passive simple source has different result at $path"
             }
         }
@@ -620,20 +632,23 @@ private fun launchPassiveChildOrchestrations(
             }
         }
 
-        is Value.OutputList -> {
-            check(target is ListEngineResult && target.size == source.values.size) {
+        is List<*> -> {
+            val listType = expectedType as model.TypeExpr.List
+            check(target is ListEngineResult && target.size == source.size) {
                 "Resolver26 passive list source has different result shape at $path"
             }
-            source.values.forEachIndexed { index, value ->
+            source.forEachIndexed { index, value ->
                 launchPassiveChildOrchestrations(
                     path = path + ListEngineResult.Index.of(index),
                     source = value,
                     target = target[index].getValue().get(),
+                    expectedType = listType.elementType,
                     initialDemand = initialDemand,
                     runtime = runtime,
                 )
             }
         }
+        else -> error("Unsupported resolver output at $path: $source")
     }
 }
 

@@ -29,6 +29,7 @@ import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
 import model.EngineSimpleData
+import model.ArgumentResolutionError
 import model.OpenValue
 import model.Schema
 import model.TypeExpr
@@ -488,7 +489,7 @@ internal fun decodeLiteral(
         return if (variableValues.containsKey(value.name)) {
             val bound = variableValues.getValue(value.name)
             if (bound === ErroneousVariableValue) {
-                Value.Error
+                ArgumentResolutionError
             } else {
                 OpenValue.of(
                     decodeModelInputType(type, schema),

@@ -139,7 +139,7 @@ private fun coerceEngineResult(
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
                 is Schema.SimpleType ->
-                    coerceSimpleValue(type, requireNotNull(value)).toEngineResult()
+                    coerceSimpleValue(type, requireNotNull(value)).toEngineResult(type)
                 is Schema.CompositeType ->
                     throw IllegalArgumentException(
                         "Expected an object engine result for ${type.typeName}",

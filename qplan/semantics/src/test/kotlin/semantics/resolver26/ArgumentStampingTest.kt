@@ -54,7 +54,7 @@ class ArgumentStampingTest {
                     mapOf(
                         schema.objectField("Query", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
-                                Value.Int.of(0)
+                                0
                             },
                         schema.objectField("Query", "box") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -62,9 +62,7 @@ class ArgumentStampingTest {
                             },
                         schema.objectField("Box", "child") to
                             fieldResolverOf(schema.emptyFragmentOf("Box")) { _, arguments ->
-                                Value.Int.of(
-                                    arguments.fieldValues.getValue("value") as Int,
-                                )
+                                arguments.fieldValues.getValue("value") as Int
                             },
                     )
                 },
@@ -173,35 +171,26 @@ class ArgumentStampingTest {
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
                                 val itemValues =
-                                    input.fieldValues.getValue(itemsKey.field.fieldName)
-                                        as Value.OutputList
-                                Value.Int.of(
-                                    itemValues.values.sumOf { value ->
+                                    input.fieldValues.getValue(itemsKey.field.fieldName) as List<*>
+                                itemValues.sumOf { value ->
                                         val item = value as Value.Object
                                         val childValue =
                                             item.fieldValues.getValue(
                                                 visibleChildKey.field.fieldName,
-                                            ) as Value.Int
-                                        childValue.intValue
-                                    },
-                                )
+                                            ) as Int
+                                        childValue
+                                    }
                             },
                         items to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.OutputList.of(
-                                    typeExpr = itemType,
-                                    values =
-                                        listOf(
+                                listOf(
                                             schema.objectOf("Item"),
                                             schema.objectOf("Item"),
-                                        ),
-                                )
+                                        )
                             },
                         child to
                             fieldResolverOf(schema.emptyFragmentOf("Item")) { _, arguments ->
-                                Value.Int.of(
-                                    arguments.fieldValues.getValue("value") as Int,
-                                )
+                                arguments.fieldValues.getValue("value") as Int
                             },
                     )
                 },
@@ -304,11 +293,10 @@ class ArgumentStampingTest {
                                 val seedValue =
                                     input.fieldValues.getValue("seedValue") as Value.Object
                                 val one =
-                                    ground.fieldValues.getValue(oneKey.field.fieldName) as Value.Int
+                                    ground.fieldValues.getValue(oneKey.field.fieldName) as Int
                                 val two =
-                                    seedValue.fieldValues.getValue(twoKey.field.fieldName)
-                                        as Value.Int
-                                Value.Int.of(one.intValue + two.intValue)
+                                    seedValue.fieldValues.getValue(twoKey.field.fieldName) as Int
+                                one + two
                             },
                         frank to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->

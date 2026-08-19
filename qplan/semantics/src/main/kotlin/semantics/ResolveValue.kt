@@ -1,14 +1,19 @@
 package semantics
 
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.Schema
 import model.SelectionForest
+import model.TypeExpr
 import model.Value
 import model.applicableGroundSelections
+import model.invariants.conformsToOutputSchemaType
 import model.selectionForestOf
 import model.toEngineResult
 
@@ -41,17 +46,21 @@ internal class ObjectResolution(
  * traversal.
  */
 context(world: Assumptions)
-internal fun Value.Output?.resolveValue(
+internal fun EngineOutputData?.resolveValue(
+    expectedType: TypeExpr<Schema.OutputType>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
-): ResolvedValue =
-    when (this) {
+): ResolvedValue {
+    require(conformsToOutputSchemaType(expectedType)) {
+        "Resolver output does not conform to $expectedType"
+    }
+    return when (this) {
         null -> ResolvedValue(null, emptyList(), emptyList())
-        Value.Error -> ResolvedValue(ErrorEngineResult, emptyList(), emptyList())
-        is Value.Simple -> ResolvedValue(toEngineResult(), emptyList(), emptyList())
+        EngineErrorData -> ResolvedValue(ErrorEngineResult, emptyList(), emptyList())
         is Value.Object -> resolveObjectValue(resolverDemand, path)
-        is Value.OutputList ->
-            values
+        is List<*> -> {
+            val listType = expectedType as TypeExpr.List
+            this
                 .withIndex()
                 .fold(
                     ResolvedList(
@@ -62,6 +71,7 @@ internal fun Value.Output?.resolveValue(
                 ) { resolved, (index, value) ->
                     val element =
                         value.resolveValue(
+                            expectedType = listType.elementType,
                             path = path + ListEngineResult.Index.of(index),
                             resolverDemand = resolverDemand,
                         )
@@ -76,12 +86,21 @@ internal fun Value.Output?.resolveValue(
                     )
                 }.let { resolved ->
                     ResolvedValue(
-                        engineResult = ListEngineResult.of(typeExpr, resolved.values),
+                        engineResult =
+                            ListEngineResult.of(listType.elementType, resolved.values),
                         objectsNeedingResolution = resolved.objectsNeedingResolution,
                         objectOccurrences = resolved.objectOccurrences,
                     )
                 }
+        }
+        else ->
+            ResolvedValue(
+                toEngineResult((expectedType as TypeExpr.Named).baseType as Schema.SimpleType),
+                emptyList(),
+                emptyList(),
+            )
     }
+}
 
 context(world: Assumptions)
 private fun Value.Object.resolveObjectValue(
@@ -132,6 +151,7 @@ private fun Value.Object.resolveObjectValue(
                 fieldValues
                     .getValue(key.field.fieldName)
                     .resolveValue(
+                        expectedType = key.field.typeExpr,
                         path = path + key,
                         resolverDemand =
                             resolverDemandByKey[key]

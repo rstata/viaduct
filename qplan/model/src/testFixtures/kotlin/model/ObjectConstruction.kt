@@ -114,27 +114,26 @@ class ObjectFieldReference internal constructor(
 private fun coerceOutputValue(
     typeExpr: TypeExpr<Schema.OutputType>,
     value: Any?,
-): Value.Output? {
-    if (value == null || value is Value.Output) return value
+): EngineOutputData? {
+    if (value == null || value == EngineErrorData) return value
 
     return when (typeExpr) {
         is TypeExpr.List -> {
             require(value is List<*>) {
                 "Expected a list value for $typeExpr"
             }
-            Value.OutputList.of(
-                typeExpr = typeExpr.elementType,
-                values = value.map { coerceOutputValue(typeExpr.elementType, it) },
-            )
+            value.map { coerceOutputValue(typeExpr.elementType, it) }
         }
 
         is TypeExpr.Named ->
             when (val type = typeExpr.baseType) {
                 is Schema.SimpleType -> coerceSimpleValue(type, value)
-                is Schema.CompositeType ->
-                    throw IllegalArgumentException(
-                        "Expected an object value for ${type.typeName}",
-                    )
+                is Schema.CompositeType -> {
+                    require(value is Value.Object && value.type in type.possibleTypes) {
+                        "Expected an object value for ${type.typeName}"
+                    }
+                    value
+                }
             }
     }
 }

@@ -67,36 +67,6 @@ sealed interface EngineResultCell {
  */
 data object ErrorEngineResult
 
-/** Converts a simple resolver value into the corresponding engine-result representation. */
-fun Value.Simple.toEngineResult(): EngineResult =
-    when (this) {
-        Value.Error -> ErrorEngineResult
-        is Value.Int -> intValue
-        is Value.Float -> floatValue
-        is Value.String -> stringValue
-        is Value.Boolean -> booleanValue
-        is Value.ID -> Schema.ID.of(idValue)
-        is Value.Enum -> type.values.getValue(enumValue)
-    }
-
-/** Converts an engine result conforming to [expectedType] into a simple resolver value. */
-fun EngineResult.toValue(expectedType: Schema.SimpleType): Value.Simple =
-    when (expectedType) {
-        Schema.IntType -> Value.Int.of(castEngineResult())
-        Schema.FloatType -> Value.Float.of(castEngineResult())
-        Schema.StringType -> Value.String.of(castEngineResult())
-        Schema.BooleanType -> Value.Boolean.of(castEngineResult())
-        Schema.IDType -> Value.ID.of(castEngineResult<Schema.ID>().value)
-        is Schema.EnumType -> {
-            val value = castEngineResult<Schema.EnumValue>()
-            if (value.containingType != expectedType) throw ClassCastException()
-            Value.Enum.of(expectedType, value.name)
-        }
-    }
-
-private inline fun <reified T> EngineResult.castEngineResult(): T =
-    this as? T ?: throw ClassCastException()
-
 /**
  * A finite object result whose exact cells are installed once.
  *

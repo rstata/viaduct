@@ -51,9 +51,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     if (field.containingType.typeName == "User" && field.fieldName == "total") {
                         assertEquals(
                             mapOf(
-                                "plainValue" to Value.Int.of(5),
-                                "byTwo" to Value.Int.of(2),
-                                "byThree" to Value.Int.of(3),
+                                "plainValue" to 5,
+                                "byTwo" to 2,
+                                "byThree" to 3,
                             ),
                             input.fieldValues.toMap(),
                         )
@@ -116,7 +116,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                         val item = assertIs<Value.Object>(input.fieldValues.getValue("item"))
                         assertEquals(setOf("value"), item.fieldValues.keys)
                         observed[item.type.typeName] =
-                            assertIs<Value.Int>(item.fieldValues.getValue("value")).intValue
+                            assertIs<Int>(item.fieldValues.getValue("value"))
                     }
                 },
             )
@@ -168,7 +168,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     mapOf(
                         source to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                Value.Int.of(7)
+                                7
                             },
                         nullable to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
@@ -180,11 +180,11 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     setOf("first", "second", "empty"),
                                     input.fieldValues.keys,
                                 )
-                                assertEquals(Value.Int.of(7), input.fieldValues.getValue("first"))
-                                assertEquals(Value.Int.of(7), input.fieldValues.getValue("second"))
+                                assertEquals(7, input.fieldValues.getValue("first"))
+                                assertEquals(7, input.fieldValues.getValue("second"))
                                 assertTrue("empty" in input.fieldValues)
                                 assertEquals(null, input.fieldValues.getValue("empty"))
-                                Value.Int.of(1)
+                                1
                             },
                     )
                 },
@@ -247,9 +247,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                     setOf("first", "second"),
                                     payload.fieldValues.keys,
                                 )
-                                assertEquals(Value.Int.of(2), payload.fieldValues.getValue("first"))
-                                assertEquals(Value.Int.of(3), payload.fieldValues.getValue("second"))
-                                Value.Int.of(5)
+                                assertEquals(2, payload.fieldValues.getValue("first"))
+                                assertEquals(3, payload.fieldValues.getValue("second"))
+                                5
                             },
                     )
                 },
@@ -618,14 +618,8 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             ),
                         ) { input, _ ->
                             computedApplications += 1
-                            val base =
-                                input.fieldValues.getValue(
-                                    "base",
-                                ) as Value.Int
-                            Value.Int.of(
-                                base.intValue *
-                                    if (typeName == "EvenProduct") 10 else 100,
-                            )
+                            val base = input.fieldValues.getValue("base") as Int
+                            base * if (typeName == "EvenProduct") 10 else 100
                         }
 
                     mapOf(
@@ -633,17 +627,14 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                Value.OutputList.of(
-                                    groupElement,
-                                    listOf(
+                                listOf(
                                         schema.objectOf("Group") {
                                             "seed" setTo 1
                                         },
                                         schema.objectOf("Group") {
                                             "seed" setTo 2
                                         },
-                                    ),
-                                )
+                                    )
                             },
                         schema.field("Group", "product") to
                             model.testing.fieldResolverOf(
@@ -652,8 +643,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    (input.fieldValues.getValue(seedKey.field.fieldName) as Value.Int)
-                                        .intValue
+                                    input.fieldValues.getValue(seedKey.field.fieldName) as Int
                                 val factor =
                                     arguments.fieldValues.getValue("factor") as Int
                                 productApplications += seed to factor
@@ -763,17 +753,14 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                Value.OutputList.of(
-                                    groupElement,
-                                    listOf(
+                                listOf(
                                         schema.objectOf("Group") {
                                             "seed" setTo 10
                                         },
                                         schema.objectOf("Group") {
                                             "seed" setTo 20
                                         },
-                                    ),
-                                )
+                                    )
                             },
                         entries to
                             model.testing.fieldResolverOf(
@@ -782,19 +769,15 @@ interface ObjectFragmentResolverContract : ResolverContract {
                                 ),
                             ) { input, arguments ->
                                 val seed =
-                                    (input.fieldValues.getValue(seedKey.field.fieldName) as Value.Int)
-                                        .intValue
+                                    input.fieldValues.getValue(seedKey.field.fieldName) as Int
                                 val count =
                                     arguments.fieldValues.getValue("count") as Int
                                 applications += seed to count
-                                Value.OutputList.of(
-                                    entryElement,
-                                    (0 until count).map { offset ->
+                                (0 until count).map { offset ->
                                         schema.objectOf("Entry") {
                                             "raw" setTo seed + offset
                                         }
-                                    },
-                                )
+                                    }
                             },
                         schema.field("Entry", "rendered") to
                             model.testing.fieldResolverOf(
@@ -804,8 +787,8 @@ interface ObjectFragmentResolverContract : ResolverContract {
                             ) { input, _ ->
                                 renderedApplications += 1
                                 val raw =
-                                    input.fieldValues.getValue(rawKey.field.fieldName) as Value.Int
-                                Value.String.of("entry-${raw.intValue}")
+                                    input.fieldValues.getValue(rawKey.field.fieldName) as Int
+                                "entry-$raw"
                             },
                     )
                 },

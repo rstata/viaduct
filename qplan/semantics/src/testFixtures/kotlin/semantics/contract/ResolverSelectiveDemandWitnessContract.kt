@@ -58,8 +58,8 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                                 val base =
                                     input.fieldValues.getValue(
                                         "base",
-                                    ) as Value.String
-                                Value.String.of("computed:${base.stringValue}")
+                                    ) as String
+                                "computed:$base"
                             },
                     )
                 },

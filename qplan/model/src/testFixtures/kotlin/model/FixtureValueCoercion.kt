@@ -3,20 +3,20 @@ package model
 internal fun coerceSimpleValue(
     type: Schema.SimpleType,
     value: Any,
-): Value.Simple =
+): EngineOutputData =
     when (type) {
-        Schema.IntType ->
-            requireType<Int>(value, type).let(Value.Int::of)
+        Schema.IntType -> requireType<Int>(value, type)
         Schema.FloatType ->
-            requireType<Double>(value, type).let(Value.Float::of)
-        Schema.StringType ->
-            requireType<String>(value, type).let(Value.String::of)
-        Schema.BooleanType ->
-            requireType<Boolean>(value, type).let(Value.Boolean::of)
-        Schema.IDType ->
-            requireType<String>(value, type).let(Value.ID::of)
+            requireType<Double>(value, type).also {
+                require(it.isFinite()) { "GraphQL Float values must be finite" }
+            }
+        Schema.StringType -> requireType<String>(value, type)
+        Schema.BooleanType -> requireType<Boolean>(value, type)
+        Schema.IDType -> requireType<String>(value, type)
         is Schema.EnumType ->
-            Value.Enum.of(type, requireType<String>(value, type))
+            requireType<String>(value, type).also {
+                require(it in type.values) { "$it is not a value of ${type.typeName}" }
+            }
     }
 
 private inline fun <reified T : Any> requireType(

@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.EngineErrorData
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
@@ -559,17 +560,23 @@ class ResolutionWitnessTest {
                     )
                 mapOf(
                     schema.field("Query", "item") to
-                        fieldResolverOf(queryNeedsHelper) { _, _ -> Value.Error },
+                        fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData },
                     schema.field("Query", "items") to
-                        fieldResolverOf(queryNeedsHelper) { _, _ -> Value.Error },
+                        fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData },
                     schema.field("Query", "helper") to
-                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> Value.Error },
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                            EngineErrorData
+                        },
                     schema.field("Query", "dead") to
-                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> Value.Error },
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                            EngineErrorData
+                        },
                     schema.field("Payload", "computed") to
-                        fieldResolverOf(payloadNeedsBase) { _, _ -> Value.Error },
+                        fieldResolverOf(payloadNeedsBase) { _, _ -> EngineErrorData },
                     schema.field("Payload", "base") to
-                        fieldResolverOf(schema.emptyFragmentOf("Payload")) { _, _ -> Value.Error },
+                        fieldResolverOf(schema.emptyFragmentOf("Payload")) { _, _ ->
+                            EngineErrorData
+                        },
                 )
             },
         )

@@ -1,6 +1,9 @@
 package semantics
 
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
+import model.EngineOutputListData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -16,7 +19,7 @@ import model.Value
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
 import model.selectionForestOf
-import model.toValue
+import model.toEngineOutputData
 
 /**
  * Materializes the object value selected by [selections] from this result.
@@ -47,7 +50,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selectionPath: List<PathComponent>,
 ): Value.Object {
     val selectedValues =
-        linkedMapOf<String, Pair<model.Schema.ObjectField, Value.Output?>>()
+        linkedMapOf<String, Pair<model.Schema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedKey = selection.materializedGroundKey(selectionPath)
         val cell = getCell(storedKey)
@@ -106,10 +109,10 @@ private suspend fun EngineResult?.materializeEngineResultValue(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
-): Value.Output? =
+): EngineOutputData? =
     when (this) {
         null -> null
-        ErrorEngineResult -> Value.Error
+        ErrorEngineResult -> EngineErrorData
         is ObjectEngineResult ->
             materializeSelectedObjectValue(
                 selections = selections,
@@ -117,17 +120,15 @@ private suspend fun EngineResult?.materializeEngineResultValue(
                 resultPath = resultPath,
                 selectionPath = resultPath,
             )
-        is ListEngineResult ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values =
-                    materializeValues(
-                        selections = selections,
-                        reader = reader,
-                        resultPath = resultPath,
-                    ),
+        is ListEngineResult -> {
+            require(expectedType is TypeExpr.List)
+            materializeValues(
+                selections = selections,
+                reader = reader,
+                resultPath = resultPath,
             )
-        else -> toValue(expectedType.baseType as Schema.SimpleType)
+        }
+        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleType)
     }
 
 // Materializes each list element at a path containing its concrete list index.
@@ -136,8 +137,8 @@ private suspend fun ListEngineResult.materializeValues(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
-): kotlin.collections.List<Value.Output?> {
-    val materialized = mutableListOf<Value.Output?>()
+): EngineOutputListData {
+    val materialized = mutableListOf<EngineOutputData?>()
     indices.forEach { index ->
         materialized +=
             get(index).getValue().await().materializeEngineResultValue(

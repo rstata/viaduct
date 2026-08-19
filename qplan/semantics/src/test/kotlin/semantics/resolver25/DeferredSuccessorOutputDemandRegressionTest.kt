@@ -52,7 +52,7 @@ class DeferredSuccessorOutputDemandRegressionTest {
                                     """.trimIndent(),
                                 ),
                             ) { _, _ ->
-                                model.Value.Int.of(1)
+                                1
                             },
                         schema.objectField("Branch", "target") to
                             fieldResolverOf(schema.emptyFragmentOf("Branch")) { _, _ ->

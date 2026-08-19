@@ -49,7 +49,7 @@ class ContextParametersTest {
 
         assertEquals(world.schema.query, result.type)
         assertEquals(
-            emptyMap<String, Value.Output?>(),
+            emptyMap<String, EngineOutputData?>(),
             result.fieldValues,
         )
     }

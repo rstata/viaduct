@@ -15,6 +15,25 @@ typealias EngineInputObjectData = Map<String, EngineInputData?>
 /** [EngineSimpleData], [EngineInputListData], or [EngineInputObjectData]. */
 typealias EngineInputData = Any
 
+/**
+ * Int, finite Double, Boolean, String, [Value.Object], or [EngineOutputListData].
+ *
+ * String represents GraphQL String, ID, and enum values; the expected schema type disambiguates
+ * them. [EngineErrorData] is additionally admitted to the broad output domain.
+ */
+typealias EngineOutputData = Any
+
+/** A recursively validated list of nullable engine output values. */
+typealias EngineOutputListData = List<EngineOutputData?>
+
+/**
+ * The collapsed resolver-output error sentinel.
+ *
+ * This belongs only to the broad [EngineOutputData] domain. It is distinct from
+ * [ErrorEngineResult] and argument-resolution failure.
+ */
+data object EngineErrorData
+
 /** Converts a simple engine result to production-compatible engine input data. */
 fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleType): EngineSimpleData =
     when (expectedType) {
@@ -39,7 +58,6 @@ internal fun toEngineInputData(
         if (!expectedType.isNullable) throw ClassCastException()
         return null
     }
-    if (value == Value.Error) throw ClassCastException()
 
     return when (expectedType) {
         is TypeExpr.Named -> toEngineNamedInputData(expectedType.baseType, value)
@@ -107,6 +125,32 @@ private fun toEngineSimpleData(
     }
 
 private inline fun <reified T> Any.cast(): T = this as? T ?: throw ClassCastException()
+
+/** Converts simple resolver output to the result representation selected by [expectedType]. */
+fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleType): EngineResult =
+    when (expectedType) {
+        Schema.IntType -> cast<Int>()
+        Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
+        Schema.StringType -> cast<String>()
+        Schema.BooleanType -> cast<Boolean>()
+        Schema.IDType -> Schema.ID.of(cast())
+        is Schema.EnumType -> expectedType.values.getValue(cast())
+    }
+
+/** Converts a simple engine result to production-compatible resolver output. */
+fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleType): EngineOutputData =
+    when (expectedType) {
+        Schema.IntType -> cast<Int>()
+        Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
+        Schema.StringType -> cast<String>()
+        Schema.BooleanType -> cast<Boolean>()
+        Schema.IDType -> cast<Schema.ID>().value
+        is Schema.EnumType -> {
+            val value = cast<Schema.EnumValue>()
+            if (value.containingType != expectedType) throw ClassCastException()
+            value.name
+        }
+    }
 
 private fun toEngineInputFields(
     expectedType: Schema.InputObjectLike,

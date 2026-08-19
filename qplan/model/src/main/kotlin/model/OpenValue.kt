@@ -52,6 +52,14 @@ sealed interface OpenValue {
 }
 
 /**
+ * One erroneous argument expression.
+ *
+ * Recursive argument construction collapses any occurrence of this sentinel to
+ * [OpenArguments.Ground.Error]. It does not belong to [EngineInputData].
+ */
+data object ArgumentResolutionError : OpenValue
+
+/**
  * An opaque argument tuple that may contain variables.
  *
  * Ground [Value.Arguments] values are also open arguments and retain their ordinary inspectable
@@ -118,7 +126,7 @@ sealed interface OpenArguments {
          *
          * Declared defaults are included. A variable-free result is either ordinary
          * [Value.Arguments] or [Ground.Error] when any supplied expression recursively contains
-         * [Value.Error].
+         * [ArgumentResolutionError].
          */
         fun of(
             field: Schema.OutputField,
@@ -210,7 +218,7 @@ private fun coerceOpenInputValue(
         if (!typeExpr.isNullable) throw ClassCastException()
         return null
     }
-    if (value == Value.Error) return Value.Error
+    if (value == ArgumentResolutionError) return ArgumentResolutionError
     if (value is Value.Variable) return value
     if (value is OpenValue.Ground) {
         return OpenValue.Ground.of(typeExpr, value.data)
@@ -284,7 +292,7 @@ private fun OpenValue.conformsToOpenSchemaType(
     typeExpr: TypeExpr<Schema.InputType>,
 ): Boolean =
     when (this) {
-        Value.Error, is Value.Variable -> true
+        ArgumentResolutionError, is Value.Variable -> true
         is OpenValue.Ground -> data.conformsToInputSchemaType(typeExpr)
         is OpenListValueImpl ->
             typeExpr is TypeExpr.List &&
@@ -558,7 +566,7 @@ fun OpenArguments.containsErrorValue(): Boolean = this == OpenArguments.Ground.E
 
 private fun OpenValue?.containsErrorValue(): Boolean =
     when (this) {
-        Value.Error -> true
+        ArgumentResolutionError -> true
         is OpenListValueImpl -> values.any { value -> value.containsErrorValue() }
         is OpenInputObjectValueImpl ->
             fieldValues.values.any { value -> value.containsErrorValue() }
@@ -648,7 +656,7 @@ private fun OpenValue?.instantiateBindings(
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
-        Value.Error -> VariableBinding.Error
+        ArgumentResolutionError -> VariableBinding.Error
         is OpenValue.Ground -> VariableBinding.of(data)
         is Value.Variable ->
             if (isStamped) {
@@ -694,7 +702,7 @@ private suspend fun OpenValue?.fetchBindings(
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
-        Value.Error -> VariableBinding.Error
+        ArgumentResolutionError -> VariableBinding.Error
         is OpenValue.Ground -> VariableBinding.of(data)
         is Value.Variable ->
             if (isStamped) {

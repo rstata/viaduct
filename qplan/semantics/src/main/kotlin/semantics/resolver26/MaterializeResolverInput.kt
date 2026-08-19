@@ -1,6 +1,9 @@
 package semantics.resolver26
 
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
+import model.EngineOutputListData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -10,7 +13,7 @@ import model.PathComponent
 import model.Schema
 import model.TypeExpr
 import model.Value
-import model.toValue
+import model.toEngineOutputData
 import semantics.RuntimeSupport
 import semantics.materializedGroundKey
 
@@ -37,12 +40,12 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
     selectionPath: List<PathComponent>,
 ): Value.Object {
     val selectedValues =
-        linkedMapOf<String, Pair<model.Schema.ObjectField, Value.Output?>>()
+        linkedMapOf<String, Pair<model.Schema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedGroundKey = selection.materializedGroundKey(selectionPath)
         val cell = reserveCell(storedGroundKey)
         diagnosticInstrumentation.cycleCheck(reader, cell)
-        val selectedValue: Value.Output? =
+        val selectedValue: EngineOutputData? =
             cell
                 .reserveValue()
                 .await()
@@ -70,10 +73,10 @@ private suspend fun EngineResult?.materializeSelectedValue(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
-): Value.Output? {
+): EngineOutputData? {
     return when (this) {
         null -> null
-        ErrorEngineResult -> Value.Error
+        ErrorEngineResult -> EngineErrorData
         is ObjectEngineResult -> {
             materializeSelectedObject(
                 selections = selections,
@@ -82,19 +85,19 @@ private suspend fun EngineResult?.materializeSelectedValue(
                 selectionPath = resultPath,
             )
         }
-        is ListEngineResult ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values =
-                    indices.map { index ->
-                        get(index).getValue().await().materializeSelectedValue(
-                            expectedType = typeExpr,
-                            selections = selections,
-                            reader = reader,
-                            resultPath = resultPath + ListEngineResult.Index.of(index),
-                        )
-                    },
-            )
-        else -> toValue(expectedType.baseType as Schema.SimpleType)
+        is ListEngineResult -> {
+            require(expectedType is TypeExpr.List)
+            val values: EngineOutputListData =
+                indices.map { index ->
+                    get(index).getValue().await().materializeSelectedValue(
+                        expectedType = typeExpr,
+                        selections = selections,
+                        reader = reader,
+                        resultPath = resultPath + ListEngineResult.Index.of(index),
+                    )
+                }
+            values
+        }
+        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleType)
     }
 }

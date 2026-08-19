@@ -2,6 +2,8 @@ package semantics.resolver25
 
 import java.time.Duration
 import model.EngineResult
+import model.EngineErrorData
+import model.EngineOutputData
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.Value
@@ -24,7 +26,7 @@ class AdversarialRegressionTest {
 
     @Test
     fun `nested provider propagates error through an intermediate`() {
-        assertNestedProviderShortCircuit(provided = Value.Error, passiveIntermediate = false)
+        assertNestedProviderShortCircuit(provided = EngineErrorData, passiveIntermediate = false)
     }
 
     @Test
@@ -34,20 +36,20 @@ class AdversarialRegressionTest {
 
     @Test
     fun `nested provider propagates error through a passive intermediate`() {
-        assertNestedProviderShortCircuit(provided = Value.Error, passiveIntermediate = true)
+        assertNestedProviderShortCircuit(provided = EngineErrorData, passiveIntermediate = true)
     }
 
     private fun assertNestedProviderShortCircuit(
-        provided: Value.Output?,
+        provided: EngineOutputData?,
         passiveIntermediate: Boolean,
     ) {
         val expectedBinding =
-            if (provided == Value.Error) {
+            if (provided == EngineErrorData) {
                 VariableBinding.Error
             } else {
                 VariableBinding.of(null)
             }
-        val expectedResult = if (provided == Value.Error) ErrorEngineResult else null
+        val expectedResult = if (provided == EngineErrorData) ErrorEngineResult else null
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {
             val providerSelection =
                 if (passiveIntermediate) {
@@ -55,7 +57,7 @@ class AdversarialRegressionTest {
                 } else {
                     "box { value }"
                 }
-            val providedResult = if (provided == Value.Error) "\"ERROR\"" else "null"
+            val providedResult = if (provided == EngineErrorData) "\"ERROR\"" else "null"
             val boxResult =
                 if (passiveIntermediate) {
                     "{nested: $providedResult}"

@@ -1,6 +1,8 @@
 package semantics.arbitrary
 
 import model.EngineResult
+import model.EngineErrorData
+import model.EngineOutputData
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
@@ -495,21 +497,18 @@ private class FingerprintBudget(
             else -> node("open-args:${arguments.hashCode()}")
         }
 
-    fun output(value: Value.Output?): String =
+    fun output(value: EngineOutputData?): String =
         when {
             value == null -> node("null")
-            value == Value.Error -> node("error")
-            value is Value.Int -> node("int:${value.intValue}")
-            value is Value.Float -> node("float:${value.floatValue.toBits()}")
-            value is Value.String -> node("string:${atom(value.stringValue)}")
-            value is Value.Boolean -> node("boolean:${value.booleanValue}")
-            value is Value.ID -> node("id:${atom(value.idValue)}")
-            value is Value.Enum ->
-                node("enum:${atom(value.type.typeName)}:${atom(value.enumValue)}")
-            value is Value.OutputList ->
+            value == EngineErrorData -> node("error")
+            value is Int -> node("int:$value")
+            value is Double -> node("float:${value.toBits()}")
+            value is String -> node("string:${atom(value)}")
+            value is Boolean -> node("boolean:$value")
+            value is List<*> ->
                 node(
-                    "list:${typeExpr(value.typeExpr)}[" +
-                        value.values.joinToString(separator = ",", transform = ::output) +
+                    "list[" +
+                        value.joinToString(separator = ",", transform = ::output) +
                         "]",
                 )
             value is Value.Object ->

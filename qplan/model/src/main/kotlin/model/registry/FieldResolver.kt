@@ -4,6 +4,9 @@ import model.ObjectEngineResult
 
 import java.util.IdentityHashMap
 import model.Assumptions
+import model.EngineErrorData
+import model.EngineOutputData
+import model.EngineOutputListData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectSelectionForest
@@ -25,7 +28,7 @@ import model.variableTemplates
 
 /** A deterministic partial map from a resolved object fragment and arguments to an output value. */
 typealias FieldResolverFunction =
-    (Value.Object, Value.Arguments) -> Value.Output?
+    (Value.Object, Value.Arguments) -> EngineOutputData?
 
 /** Observes one complete (null demand) or selective field-resolver application boundary. */
 typealias FieldResolverApplicationObserver =
@@ -262,7 +265,7 @@ class FieldResolver private constructor(
         input: Value.Object,
         arguments: Value.Arguments,
         selections: SelectionForest,
-    ): Value.Output? {
+    ): EngineOutputData? {
         applicationObserver(input, arguments, selections)
         return function(input, arguments)
             .synthesizeTypenames()
@@ -275,7 +278,7 @@ class FieldResolver private constructor(
     operator fun invoke(
         input: Value.Object,
         arguments: Value.Arguments,
-    ): Value.Output? {
+    ): EngineOutputData? {
         applicationObserver(input, arguments, null)
         return function(input, arguments).synthesizeTypenames()
     }
@@ -370,22 +373,25 @@ private class ResolverObjectFragmentImpl(
 /**
  * Recursively supplies the canonical passive `__typename` field of every resolver-produced object.
  */
-private fun Value.Output?.synthesizeTypenames(): Value.Output? =
+private fun EngineOutputData?.synthesizeTypenames(): EngineOutputData? =
     when (this) {
         null,
-        Value.Error,
-        is Value.Simple,
+        EngineErrorData,
+        is Int,
+        is Double,
+        is String,
+        is Boolean,
         -> this
 
-        is Value.OutputList ->
-            Value.OutputList.of(
-                typeExpr = typeExpr,
-                values = values.map { value -> value.synthesizeTypenames() },
-            )
+        is List<*> -> {
+            val values: EngineOutputListData =
+                map { value -> value.synthesizeTypenames() }
+            values
+        }
 
         is Value.Object -> {
             val typenameKey = "__typename"
-            val typenameValue = Value.String.of(type.typeName)
+            val typenameValue = type.typeName
             if (typenameKey in fieldValues) {
                 val supplied = fieldValues.getValue(typenameKey)
                 require(supplied == typenameValue) {
@@ -400,6 +406,7 @@ private fun Value.Output?.synthesizeTypenames(): Value.Output? =
                     } + (typenameKey to typenameValue),
             )
         }
+        else -> throw ClassCastException("Unsupported engine output data: $this")
     }
 
 private fun MaterializeSelectionForest.stampVariables(

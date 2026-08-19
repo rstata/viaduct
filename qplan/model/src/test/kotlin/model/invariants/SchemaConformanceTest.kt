@@ -24,7 +24,7 @@ class SchemaConformanceTest {
         assertTrue(
             context(world) {
                 value.conformsToSchema() &&
-                    value.conformsToSchema(schema.field("Query", "user").typeExpr)
+                    value.conformsToOutputSchema(schema.field("Query", "user").typeExpr)
             },
         )
     }
@@ -54,7 +54,7 @@ class SchemaConformanceTest {
                 type = user,
                 fields =
                     mapOf(
-                        "name" to Value.Int.of(1),
+                        "name" to 1,
                     ),
             )
         }

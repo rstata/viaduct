@@ -69,13 +69,13 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ ->
-                                Value.String.of("nested")
+                                "nested"
                             },
                         schema.field("Query", "after") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                Value.String.of("after")
+                                "after"
                             },
                     )
                 },

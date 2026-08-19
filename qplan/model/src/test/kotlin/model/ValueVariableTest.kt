@@ -23,7 +23,7 @@ class ValueVariableTest {
         assertEquals(input, ground.data)
         assertEquals(OpenValue.Ground.of(typeExpr, input), ground)
         assertFailsWith<ClassCastException> {
-            OpenValue.Ground.of(typeExpr, Value.Error)
+            OpenValue.Ground.of(typeExpr, EngineErrorData)
         }
     }
 

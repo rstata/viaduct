@@ -15,6 +15,8 @@ import graphql.schema.GraphQLTypeUtil
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
 import model.Schema
+import model.EngineErrorData
+import model.EngineOutputData
 import model.TypeExpr
 import model.Value
 
@@ -23,7 +25,7 @@ import model.Value
  *
  * Construct the reasoning world's one schema before its values and assumptions so every non-error
  * value is created through this exact canonical graph. The canonical graph may contain synthetic
- * node bridge types and fields absent from the retained GraphQL Java schema. [Value.Error] is
+ * node bridge types and fields absent from the retained GraphQL Java schema. [EngineErrorData] is
  * schema-independent. The retained source schema parses and validates GraphQL selections, ensuring
  * those inputs cannot name synthetic definitions.
  */
@@ -71,8 +73,8 @@ internal class GJSchema private constructor(
 
     internal fun lowerSourceOutput(
         field: Schema.OutputField,
-        output: Value.Output?,
-    ): Value.Output? {
+        output: EngineOutputData?,
+    ): EngineOutputData? {
         if (!isLoweredNodeField(field)) return output
         return lowerNodeReferences(
             output = output,
@@ -102,27 +104,23 @@ internal class GJSchema private constructor(
     }
 
     private fun lowerNodeReferences(
-        output: Value.Output?,
+        output: EngineOutputData?,
         sourceTypeExpr: TypeExpr<Schema.OutputType>,
         bridgeTypeExpr: TypeExpr<Schema.OutputType>,
-    ): Value.Output? =
+    ): EngineOutputData? =
         when {
-            output == null || output == Value.Error -> output
+            output == null || output == EngineErrorData -> output
             sourceTypeExpr is TypeExpr.List && bridgeTypeExpr is TypeExpr.List -> {
-                require(output is Value.OutputList) {
+                require(output is List<*>) {
                     "Node-list field resolver did not return a list"
                 }
-                Value.OutputList.of(
-                    typeExpr = bridgeTypeExpr.elementType,
-                    values =
-                        output.values.map { value ->
-                            lowerNodeReferences(
-                                output = value,
-                                sourceTypeExpr = sourceTypeExpr.elementType,
-                                bridgeTypeExpr = bridgeTypeExpr.elementType,
-                            )
-                        },
-                )
+                output.map { value ->
+                    lowerNodeReferences(
+                        output = value,
+                        sourceTypeExpr = sourceTypeExpr.elementType,
+                        bridgeTypeExpr = bridgeTypeExpr.elementType,
+                    )
+                }
             }
             sourceTypeExpr is TypeExpr.Named && bridgeTypeExpr is TypeExpr.Named -> {
                 require(output is Value.Object) {
@@ -130,7 +128,7 @@ internal class GJSchema private constructor(
                 }
                 val idField = objectField(output.type.typeName, "id")
                 val id = output.fieldValues.getValue(idField.fieldName)
-                require(id != Value.Error && id is Value.ID) {
+                require(id != EngineErrorData && id is String) {
                     "Node reference ${output.type.typeName}/id must contain a non-error ID"
                 }
                 val bridgeType = bridgeTypeExpr.baseType as Schema.ObjectType
@@ -140,10 +138,8 @@ internal class GJSchema private constructor(
                     fields =
                         mapOf(
                             bridgeId.fieldName to
-                                Value.ID.of(
-                                    "$TYPED_NODE_ID_PREFIX${output.type.typeName.length}:" +
-                                        "${output.type.typeName}${id.idValue}",
-                                ),
+                                "$TYPED_NODE_ID_PREFIX${output.type.typeName.length}:" +
+                                    "${output.type.typeName}$id",
                         ),
                 )
             }

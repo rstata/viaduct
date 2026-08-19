@@ -49,11 +49,11 @@ class ResolveValueTest {
                         schema.field("User", "computed") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
-                            ) { _, _ -> Value.String.of("computed") },
+                            ) { _, _ -> "computed" },
                         schema.field("Profile", "rendered") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Profile"),
-                            ) { _, _ -> Value.String.of("rendered") },
+                            ) { _, _ -> "rendered" },
                     )
                 },
             )
@@ -92,6 +92,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
+                    expectedType = world.schema.objectField("Query", "user").typeExpr,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -150,11 +151,11 @@ class ResolveValueTest {
                         schema.field("User", "computed") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
-                            ) { _, _ -> Value.String.of("computed") },
+                            ) { _, _ -> "computed" },
                         schema.field("Profile", "rendered") to
                             model.testing.fieldResolverOf(
                                 schema.emptyFragmentOf("Profile"),
-                            ) { _, _ -> Value.String.of("rendered") },
+                            ) { _, _ -> "rendered" },
                     )
                 },
             )
@@ -184,6 +185,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
+                    expectedType = world.schema.objectField("Query", "user").typeExpr,
                     path = emptyList(),
                     resolverDemand = resolverDemand,
                 )
@@ -230,6 +232,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
+                    expectedType = world.schema.objectField("Query", "user").typeExpr,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -273,6 +276,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
+                    expectedType = world.schema.objectField("Query", "user").typeExpr,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -307,7 +311,7 @@ class ResolveValueTest {
                         Value.Object.FieldValue.of(
                             key = field.fieldName,
                             field = field,
-                            value = Value.String.of("one"),
+                            value = "one",
                         ),
                     ),
             )
@@ -319,6 +323,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
+                    expectedType = world.schema.objectField("Query", "item").typeExpr,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -368,21 +373,15 @@ class ResolveValueTest {
         val world = testWorld.assumptions
         val schema = world.schema
         val itemsField = schema.objectField("Query", "items")
-        val elementType =
-            (itemsField.typeExpr as TypeExpr.List<Schema.OutputType>).elementType
         val output =
-            Value.OutputList.of(
-                typeExpr = elementType,
-                values =
-                    listOf(
+            listOf(
                         schema.objectOf("Item") {
                             "nested" setTo schema.objectOf("Nested")
                         },
                         schema.objectOf("Item") {
                             "nested" setTo schema.objectOf("Nested")
                         },
-                    ),
-            )
+                    )
         val selections =
             world.fragmentFrom(
                 """
@@ -410,6 +409,7 @@ class ResolveValueTest {
         val resolvedValue =
             context(world) {
                 output.resolveValue(
+                    expectedType = itemsField.typeExpr,
                     path = rootPath,
                     resolverDemand = selections,
                 )

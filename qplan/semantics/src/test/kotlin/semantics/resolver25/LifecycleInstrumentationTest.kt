@@ -195,7 +195,7 @@ class LifecycleInstrumentationTest {
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
                                 val value =
                                     arguments.fieldValues.getValue("value") as Int
-                                Value.Int.of(value * 2)
+                                value * 2
                             },
                     )
                 },

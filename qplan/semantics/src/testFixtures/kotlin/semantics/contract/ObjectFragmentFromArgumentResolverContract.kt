@@ -115,9 +115,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                Value.Int.of(
-                                    arguments.fieldValues.getValue("value") as Int,
-                                )
+                                arguments.fieldValues.getValue("value") as Int
                             },
                     )
                 },

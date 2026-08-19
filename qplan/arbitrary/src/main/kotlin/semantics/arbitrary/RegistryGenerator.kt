@@ -7,6 +7,9 @@ import io.kotest.property.arbitrary.double
 import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
+import model.EngineErrorData
+import model.EngineOutputData
+import model.EngineOutputListData
 import model.Fragment
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
@@ -326,7 +329,7 @@ class ArbitraryRegistry internal constructor(
                                 schema = canonicalSchema,
                                 inputId = id,
                                 generatedHashSeed =
-                                    stableGeneratedHash(typeName, id.idValue),
+                                    stableGeneratedHash(typeName, id),
                             )
                         }
                 }.toMap()
@@ -1916,7 +1919,7 @@ private fun sensitiveScalar(
     arguments: Value.Arguments,
     argumentType: Schema.FieldArguments,
     applicationOrdinal: Int? = null,
-): Value.Simple {
+): EngineOutputData {
     val fingerprint =
         input.resolutionFingerprint().value +
             "|" +
@@ -1924,11 +1927,11 @@ private fun sensitiveScalar(
             applicationOrdinal?.let { "|ordinal:$it" }.orEmpty()
     val hash = fingerprint.hashCode()
     return when (scalar) {
-        ScalarKind.BOOLEAN -> Value.Boolean.of(hash and 1 == 0)
-        ScalarKind.FLOAT -> Value.Float.of(hash.toDouble())
-        ScalarKind.ID -> Value.ID.of("generated-$hash")
-        ScalarKind.INT -> Value.Int.of(hash)
-        ScalarKind.STRING -> Value.String.of("generated-$hash")
+        ScalarKind.BOOLEAN -> hash and 1 == 0
+        ScalarKind.FLOAT -> hash.toDouble()
+        ScalarKind.ID -> "generated-$hash"
+        ScalarKind.INT -> hash
+        ScalarKind.STRING -> "generated-$hash"
     }
 }
 
@@ -2109,9 +2112,9 @@ internal sealed interface ValuePlan {
     fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID? = null,
+        inputId: String? = null,
         generatedHashSeed: Int = 0,
-    ): Value.Output?
+    ): EngineOutputData?
 
     fun selectedPaths(prefix: String = ""): Set<String>
 
@@ -2122,9 +2125,9 @@ internal data object NullPlan : ValuePlan {
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
-    ): Value.Output? = null
+    ): EngineOutputData? = null
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
 }
@@ -2133,9 +2136,9 @@ internal data object ErrorPlan : ValuePlan {
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
-    ): Value.Output = Value.Error
+    ): EngineOutputData = EngineErrorData
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
 }
@@ -2144,9 +2147,9 @@ internal data object InputIdPlan : ValuePlan {
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
-    ): Value.Output = requireNotNull(inputId)
+    ): EngineOutputData = requireNotNull(inputId)
 
     override fun selectedPaths(prefix: String): Set<String> = setOf(prefix)
 }
@@ -2158,15 +2161,15 @@ internal data class ScalarPlan(
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
-    ): Value.Simple =
+    ): EngineOutputData =
         when (scalar) {
-            ScalarKind.BOOLEAN -> Value.Boolean.of(value as Boolean)
-            ScalarKind.FLOAT -> Value.Float.of(value as Double)
-            ScalarKind.ID -> Value.ID.of(value as String)
-            ScalarKind.INT -> Value.Int.of(value as Int)
-            ScalarKind.STRING -> Value.String.of(value as String)
+            ScalarKind.BOOLEAN -> value as Boolean
+            ScalarKind.FLOAT -> value as Double
+            ScalarKind.ID -> value as String
+            ScalarKind.INT -> value as Int
+            ScalarKind.STRING -> value as String
         }
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
@@ -2178,17 +2181,13 @@ internal data class ListPlan(
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
-    ): Value.OutputList {
+    ): EngineOutputListData {
         require(typeExpr is TypeExpr.List)
-        return Value.OutputList.of(
-            typeExpr = typeExpr.elementType,
-            values =
-                elements.map {
-                    it.materialize(schema, typeExpr.elementType, inputId, generatedHashSeed)
-                },
-        )
+        return elements.map {
+            it.materialize(schema, typeExpr.elementType, inputId, generatedHashSeed)
+        }
     }
 
     override fun selectedPaths(prefix: String): Set<String> =
@@ -2207,14 +2206,14 @@ internal data class ObjectPlan(
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
     ): Value.Object =
         materializeObject(schema, inputId, generatedHashSeed)
 
     fun materializeObject(
         schema: Schema,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int = 0,
     ): Value.Object {
         val sourceSchema = SourceSchemaAdapter(schema)
@@ -2257,7 +2256,7 @@ internal data class GeneratedHashPlan(
     override fun materialize(
         schema: Schema,
         typeExpr: TypeExpr<Schema.OutputType>,
-        inputId: Value.ID?,
+        inputId: String?,
         generatedHashSeed: Int,
     ): Value.Object {
         require(typeExpr.baseType.typeName == GENERATED_HASH_TYPE)

@@ -206,8 +206,8 @@ interface Schema {
      * ### Invariant: schema-composite-field-graph
      *
      * [fields] contains all canonical lowered fields selectable at this type, rather than only
-     * fields declared in source SDL. Every object and interface type `t` has exactly one
-     * owner-specific synthetic field `f` for which:
+     * fields declared in source SDL. Every source object and interface type `t`, together with the
+     * synthetic `V_I_Top` interface, has exactly one owner-specific synthetic field `f` for which:
      *
      * - `f.fieldName == "V_I_typename"`;
      * - `f.containingType == t`;
@@ -215,8 +215,9 @@ interface Schema {
      * - `f.arguments == NoArguments`; and
      * - `field(t.typeName, "V_I_typename") == f`.
      *
-     * Unions own no fields. The synthetic interface `V_I_Top` owns the field selected for
-     * union-scoped source `__typename` and has every lowered object in [possibleTypes].
+     * Unions own no fields. Synthetic node-bridge objects own only their `id` and `node` fields.
+     * The synthetic interface `V_I_Top` owns the field selected for union-scoped source
+     * `__typename` and has every lowered source object, but no node bridge, in [possibleTypes].
      *
      * Each map key equals its field's [OutputField.fieldName], and each field's
      * [OutputField.containingType] is this definition. Conversely, every [OutputField] in the
@@ -307,8 +308,9 @@ interface Schema {
     /**
      * An object type.
      *
-     * [fields] contains `V_I_typename` and the object's effective fields after flattening type
-     * extensions and inherited interface fields. Interface implementation relationships are
+     * For source objects, [fields] contains `V_I_typename` and the object's effective fields after
+     * flattening type extensions and inherited interface fields. Synthetic node-bridge objects
+     * contain only their `id` and `node` fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
      *
      * [graphQLJavaDefinition] is a canonical opaque attachment for integration with Viaduct engine

@@ -77,6 +77,7 @@ internal class GJSchemaDecoder(
         linkedMapOf<Schema.CompositeType, MutableMap<String, Schema.OutputField>>()
     private val objectFields =
         linkedMapOf<Schema.ObjectType, MutableMap<String, Schema.ObjectField>>()
+    private val nodeBridgeTypes = linkedSetOf<Schema.ObjectType>()
     private val inputFields =
         linkedMapOf<Schema.InputObjectType, MutableMap<String, Schema.InputField>>()
     private val possibleTypeSets =
@@ -188,6 +189,7 @@ internal class GJSchemaDecoder(
             val possibleTypes = linkedSetOf<Schema.ObjectType>()
             val bridgeType = ObjectTypeImpl(bridgeTypeName, fields, possibleTypes)
             possibleTypes += bridgeType
+            nodeBridgeTypes += bridgeType
             types[bridgeTypeName] = bridgeType
             objectFields[bridgeType] = fields
             possibleTypeSets[bridgeType] = possibleTypes
@@ -258,6 +260,7 @@ internal class GJSchemaDecoder(
         val top = types.getValue(TYPENAME_TOP_TYPE) as Schema.InterfaceType
         types.values
             .filterIsInstance<Schema.ObjectType>()
+            .filterNot(nodeBridgeTypes::contains)
             .toCollection(possibleTypeSets.getValue(top))
     }
 
@@ -287,6 +290,7 @@ internal class GJSchemaDecoder(
         types.values
             .filter { it is Schema.ObjectType || it is Schema.InterfaceType }
             .map { it as Schema.CompositeType }
+            .filterNot(nodeBridgeTypes::contains)
             .forEach(::addLoweredTypenameField)
 
         graphQLSchema.allTypesAsList

@@ -9,41 +9,45 @@ import kotlin.test.assertNotSame
 
 class EngineValueDataTest {
     @Test
-    fun `simple casts preserve GraphQL string ID and enum distinctions`() {
+    fun `simple casts use production-compatible strings for String ID and enum`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val role = schema.type("Role") as Schema.EnumType
+        val otherRole = schema.type("OtherRole") as Schema.EnumType
 
         assertEquals(
             "same",
             toEngineSimpleData(TypeExpr.Named.of(Schema.StringType), "same"),
         )
         assertEquals(
-            EngineIDData("same"),
+            "same",
             toEngineSimpleData(TypeExpr.Named.of(Schema.IDType), "same"),
         )
         assertEquals(
-            EngineEnumValueData("ADMIN", role),
+            "ADMIN",
             toEngineSimpleData(TypeExpr.Named.of(role), "ADMIN"),
+        )
+        assertEquals(
+            "ADMIN",
+            toEngineSimpleData(TypeExpr.Named.of(otherRole), "ADMIN"),
         )
     }
 
     @Test
-    fun `casts reject non-finite floats and enums from another type`() {
+    fun `casts reject non-finite floats and unknown enum names`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val role = schema.type("Role") as Schema.EnumType
-        val otherRole = schema.type("OtherRole") as Schema.EnumType
 
         assertFailsWith<ClassCastException> {
             toEngineSimpleData(TypeExpr.Named.of(Schema.FloatType), Double.NaN)
         }
         assertFailsWith<ClassCastException> {
+            toEngineSimpleData(TypeExpr.Named.of(Schema.IDType), 1)
+        }
+        assertFailsWith<ClassCastException> {
             toEngineSimpleData(
                 TypeExpr.Named.of(role),
-                EngineEnumValueData("ADMIN", otherRole),
+                "MISSING",
             )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            EngineEnumValueData("MISSING", role)
         }
     }
 
@@ -51,7 +55,6 @@ class EngineValueDataTest {
     fun `input casts recursively copy and schema-check lists and objects`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filter = schema.type("Filter") as Schema.InputObjectType
-        val role = schema.type("Role") as Schema.EnumType
         val ids = mutableListOf<Any?>("first")
         val source = mutableMapOf<String, Any?>("ids" to ids, "role" to "ADMIN")
 
@@ -61,8 +64,8 @@ class EngineValueDataTest {
 
         val convertedIds = assertIs<EngineInputListData>(converted.getValue("ids"))
         assertNotSame(ids, convertedIds)
-        assertEquals(listOf(EngineIDData("first")), convertedIds)
-        assertEquals(EngineEnumValueData("ADMIN", role), converted.getValue("role"))
+        assertEquals(listOf("first"), convertedIds)
+        assertEquals("ADMIN", converted.getValue("role"))
     }
 
     @Test

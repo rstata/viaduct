@@ -1,7 +1,6 @@
 package semantics.resolver25
 
 import model.EngineResult
-import model.IntEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
@@ -50,7 +49,7 @@ class DemandSealingTest {
 
         val resolved = resolveResult(testWorld)
 
-        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).getValue().get())
+        assertEquals(14, resolved.getCell(resultKey).getValue().get())
         assertEquals(
             VariableBinding.of(7),
             testWorld.assumptions.getBinding(
@@ -166,7 +165,7 @@ class DemandSealingTest {
             },
         )
         assertEquals(
-            IntEngineResult.of(9),
+            9,
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(
@@ -280,7 +279,7 @@ class DemandSealingTest {
                         testWorld.schema.objectField("Query", "result"),
                         emptyMap(),
                     ),
-                ).getValue().get() == IntEngineResult.of(8),
+                ).getValue().get() == 8,
         )
     }
 
@@ -322,7 +321,7 @@ class DemandSealingTest {
                 emptyMap(),
             )
 
-        assertEquals(IntEngineResult.of(11), resolved.getCell(resultKey).getValue().get())
+        assertEquals(11, resolved.getCell(resultKey).getValue().get())
         assertContains(
             observation.lifecycleEvents.resolver25StructuralSignatures(),
             Resolver25StructuralSignature.NESTED_PROVIDER_PATH,
@@ -513,7 +512,7 @@ class DemandSealingTest {
             },
         )
         assertEquals(
-            IntEngineResult.of(9),
+            9,
             resolved
                 .getCell(
                     ObjectEngineResult.GroundKey.of(

@@ -1,11 +1,9 @@
 package semantics.contract
 
 import model.EngineResult
-import model.IDEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.StringEngineResult
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
@@ -142,22 +140,16 @@ interface NodeResolverContract : ResolverContract {
 
         assertEquals(expectedPassiveResultKeys(card.type, setOf(bridgeKey)), card.keys)
         assertEquals(
-            "\$node:7:Profileprofile-1",
-            assertIs<IDEngineResult>(
-                bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "id")).get(),
-            ).idValue,
+            Schema.ID.of("\$node:7:Profileprofile-1"),
+            bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "id")).get(),
         )
         assertEquals(
-            "profile-1",
-            assertIs<IDEngineResult>(
-                profile.getCell(schema.contractKey("Profile", "id")).get(),
-            ).idValue,
+            Schema.ID.of("profile-1"),
+            profile.getCell(schema.contractKey("Profile", "id")).get(),
         )
         assertEquals(
             "Ada",
-            assertIs<StringEngineResult>(
-                profile.getCell(schema.contractKey("Profile", "name")).get(),
-            ).stringValue,
+            profile.getCell(schema.contractKey("Profile", "name")).get(),
         )
     }
 

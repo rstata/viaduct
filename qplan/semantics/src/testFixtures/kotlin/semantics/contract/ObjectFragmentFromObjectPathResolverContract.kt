@@ -3,7 +3,6 @@ package semantics.contract
 import model.ObjectEngineResult
 import model.EngineResult
 import model.ErrorEngineResult
-import model.IntEngineResult
 import model.Value
 import model.VariableBinding
 import model.testing.TestWorld
@@ -53,7 +52,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                     .variable
             }
 
-        assertEquals(IntEngineResult.of(14), resolved.getCell(resultKey).get())
+        assertEquals(14, resolved.getCell(resultKey).get())
         assertEquals(
             VariableBinding.of(7),
             world.getBinding(boundVariable),
@@ -162,7 +161,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(IntEngineResult.of(9), resolved.getCell(resultKey).get())
+        assertEquals(9, resolved.getCell(resultKey).get())
     }
 
     @Test
@@ -193,7 +192,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
-        assertEquals(IntEngineResult.of(10), resolved.getCell(resultKey).get())
+        assertEquals(10, resolved.getCell(resultKey).get())
         testWorld.applicationArguments.assertArguments(
             world.schema.objectField("Query", "consume"),
             mapOf("values" to listOf(2, 3, 5)),

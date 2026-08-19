@@ -4,11 +4,9 @@ import java.util.concurrent.ConcurrentHashMap
 import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
-import model.IntEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.StringEngineResult
 import model.TypeExpr
 import model.Value
 import model.emptyFragmentOf
@@ -71,7 +69,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(
-            IntEngineResult.of(10),
+            10,
             viewer.getCell(world.schema.contractKey("User", "total")).get(),
         )
     }
@@ -134,9 +132,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             listOf(4, 7),
             holders.indices.map { index ->
                 val holder = assertIs<ObjectEngineResult>(holders[index].get())
-                assertIs<IntEngineResult>(
-                    holder.getCell(world.schema.contractKey("Holder", "chosen")).get(),
-                ).intValue
+                holder.getCell(world.schema.contractKey("Holder", "chosen")).get()
             },
         )
         assertEquals(mapOf("Alpha" to 4, "Beta" to 7), observed)
@@ -198,7 +194,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
         assertEquals(
-            IntEngineResult.of(1),
+            1,
             resolved.getCell(world.schema.contractKey("Query", "result")).get(),
         )
     }
@@ -263,7 +259,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
 
         assertEquals(
-            IntEngineResult.of(5),
+            5,
             resolved.getCell(world.schema.contractKey("Query", "result")).get(),
         )
     }
@@ -416,7 +412,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
         assertTrue("label" in next.keys.map { it.field.fieldName })
         assertEquals(
-            IntEngineResult.of(2),
+            2,
             chain.getCell(world.schema.contractKey("Chain", "computed")).get(),
         )
     }
@@ -457,7 +453,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
 
         assertEquals(
-            IntEngineResult.of(7),
+            7,
             holder.getCell(world.schema.contractKey("Holder", "result")).get(),
         )
     }
@@ -505,7 +501,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
         assertEquals(ErrorEngineResult, items[1].get())
         val item = assertIs<ObjectEngineResult>(items[2].get())
         assertEquals(
-            IntEngineResult.of(6),
+            6,
             item.getCell(world.schema.contractKey("Item", "computed")).get(),
         )
         assertEquals(1, itemsApplications)
@@ -571,7 +567,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             )
         }
         assertEquals(
-            IntEngineResult.of(1),
+            1,
             result.getCell(world.schema.contractKey("Query", "result")).get(),
         )
         testWorld.applicationArguments.assertApplicationCount(
@@ -719,11 +715,11 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     if (base % 2 == 0) "EvenProduct" else "OddProduct"
                 assertEquals(typeName, product.type.typeName)
                 assertEquals(
-                    StringEngineResult.of("${seed}x$factor"),
+                    "${seed}x$factor",
                     product.getCell(world.schema.contractKey(typeName, "label")).get(),
                 )
                 assertEquals(
-                    IntEngineResult.of(base * if (typeName == "EvenProduct") 10 else 100),
+                    base * if (typeName == "EvenProduct") 10 else 100,
                     product.getCell(world.schema.contractKey(typeName, "computed")).get(),
                 )
             }
@@ -848,7 +844,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 entries.forEachIndexed { offset, cell ->
                     val entry = assertIs<ObjectEngineResult>(cell.get())
                     assertEquals(
-                        StringEngineResult.of("entry-${seed + offset}"),
+                        "entry-${seed + offset}",
                         entry.getCell(world.schema.contractKey("Entry", "rendered")).get(),
                     )
                 }

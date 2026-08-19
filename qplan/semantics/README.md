@@ -13,7 +13,7 @@ fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boo
 
 ## Vocabulary
 
-An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. **SER** is occasional shorthand for a `SimpleEngineResult`. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and simple values remain explicit parts of the physical result.
+An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and pre-domain scalar values remain explicit parts of the physical result.
 
 When discussing relationships among OER occurrences, a list is treated as a one-to-many path edge. The object containing a list field is therefore the parent of each object element for resolver-ancestry purposes, while each `ListEngineResult.Index` remains part of the element's exact identity.
 

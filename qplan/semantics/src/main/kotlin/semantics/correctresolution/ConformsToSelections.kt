@@ -8,7 +8,6 @@ import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
-import model.SimpleEngineResult
 import model.Value
 import model.applicableGroundSelections
 import model.groundKey
@@ -69,7 +68,6 @@ private fun EngineResult?.engineResultConformsToSelections(
     when (this) {
         null,
         ErrorEngineResult,
-        is SimpleEngineResult,
         -> true
 
         is ObjectEngineResult ->
@@ -84,4 +82,5 @@ private fun EngineResult?.engineResultConformsToSelections(
                     path = path + ListEngineResult.Index.of(index),
                 )
             }
+        else -> true
     }

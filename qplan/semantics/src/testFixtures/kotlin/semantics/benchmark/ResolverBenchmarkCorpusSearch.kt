@@ -6,7 +6,6 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.SimpleEngineResult
 import model.Fragment
 import model.Value
 import model.fragmentFrom
@@ -174,7 +173,7 @@ object ResolverBenchmarkCorpusSearch {
         beneathList: Boolean = false,
     ): ResultShape =
         when (this) {
-            null, ErrorEngineResult, is SimpleEngineResult -> ResultShape()
+            null, ErrorEngineResult -> ResultShape()
             is ListEngineResult ->
                 indices
                     .map { index ->
@@ -199,6 +198,7 @@ object ResolverBenchmarkCorpusSearch {
                     }
                 childShapes.fold(ResultShape(), ResultShape::plus)
             }
+            else -> ResultShape()
         }
 
     private fun parseCounts(value: String): TestCaseCount {

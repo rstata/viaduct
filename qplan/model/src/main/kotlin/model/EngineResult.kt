@@ -1,6 +1,16 @@
 package model
 
-import model.invariants.conformsToSchemaType
+import model.invariants.conformsToResultSchemaType
+
+/**
+ * A finite, well-founded field-resolution result.
+ *
+ * The semantic union contains Int, finite Double, Boolean, String, [Schema.ID],
+ * [Schema.EnumValue], [ObjectEngineResult], [ListEngineResult], or [ErrorEngineResult]. Nullable
+ * uses additionally represent GraphQL null. Membership and schema compatibility are enforced by
+ * result constructors and cell completion boundaries.
+ */
+typealias EngineResult = Any
 
 /**
  * One step in an exact path through an engine-result tree.
@@ -21,131 +31,32 @@ internal fun kotlin.collections.List<PathComponent>?.toSelectionPath():
     this?.map { component -> component as? ObjectEngineResult.GroundKey ?: return null }
 
 /**
- * A finite, well-founded field-resolution result.
+ * One result occurrence with independent write-once value and access-result slots.
  *
- * Every object-field and list-element value slot contains [EngineResult] or null. Null represents
- * GraphQL null; every non-null child is another result variant. [ErrorEngineResult] is admitted at
- * every schema output position, so it may occur in any value slot without implementing that
- * position's simple, object, or list result interface.
- *
- * Equality depends on the result variant. [SimpleEngineResult] values use structural equality,
- * [EngineResult.Cell] and [ObjectEngineResult] values use reference equality, and
- * [ListEngineResult] values use structural equality over their type expression and positional cell
- * equality. Schema definitions within those properties use the canonical equality documented by
- * [Schema].
+ * The value slot contains [EngineResult] or GraphQL null. The access-result slot contains a Boolean
+ * result or [ErrorEngineResult]. Cells use reference equality and stable identity hashing because
+ * either slot may be completed after publication.
  */
-sealed interface EngineResult {
+sealed interface EngineResultCell {
+    /** @throws IllegalStateException when this cell has no value promise */
+    fun getValue(): Promise<EngineResult?>
+
     /**
-     * One result occurrence with independent write-once value and access-acceptance slots.
-     *
-     * A cell is used both for object fields and list elements. A completed `accessAccepted` value
-     * of `true` means access is accepted and `false` means access is rejected. Cells use reference
-     * equality and stable identity hashing because either slot may be completed after publication.
+     * Returns the value promise, explicitly creating an unclaimed reader placeholder when this
+     * mutable cell has no promise.
      */
-    sealed interface Cell {
-        /** @throws IllegalStateException when this cell has no value promise */
-        fun getValue(): Promise<EngineResult?>
+    fun reserveValue(): Promise<EngineResult?>
 
-        /**
-         * Returns the value promise, explicitly creating an unclaimed reader placeholder when this
-         * mutable cell has no promise.
-         */
-        fun reserveValue(): Promise<EngineResult?>
+    fun setValue(value: EngineResult?)
 
-        fun setValue(value: EngineResult?)
+    fun createValuePromise(): Promise<EngineResult?>
 
-        fun createValuePromise(): Promise<EngineResult?>
+    /** @throws IllegalStateException when this cell has no access-result promise */
+    fun getAccessResult(): Promise<EngineResult>
 
-        /** @throws IllegalStateException when this cell has no access-acceptance promise */
-        fun getAccessAccepted(): Promise<Value.Boolean>
+    fun setAccessResult(result: EngineResult)
 
-        fun setAccessAccepted(accept: Value.Boolean)
-
-        fun createAccessAcceptedPromise(): Promise<Value.Boolean>
-    }
-}
-
-/** A scalar or enum field-resolution result. */
-sealed interface SimpleEngineResult : EngineResult {
-    val type: Schema.SimpleType
-}
-
-/** A built-in scalar field-resolution result. */
-sealed interface ScalarEngineResult : SimpleEngineResult {
-    override val type: Schema.ScalarType
-}
-
-sealed interface IntEngineResult : ScalarEngineResult {
-    override val type: Schema.IntType
-        get() = Schema.IntType
-
-    val intValue: Int
-
-    companion object {
-        fun of(value: Int): IntEngineResult = IntEngineResultImpl(value)
-    }
-}
-
-sealed interface FloatEngineResult : ScalarEngineResult {
-    override val type: Schema.FloatType
-        get() = Schema.FloatType
-
-    val floatValue: Double
-
-    companion object {
-        fun of(value: Double): FloatEngineResult {
-            require(value.isFinite()) { "GraphQL Float results must be finite" }
-            return FloatEngineResultImpl(value)
-        }
-    }
-}
-
-sealed interface StringEngineResult : ScalarEngineResult {
-    override val type: Schema.StringType
-        get() = Schema.StringType
-
-    val stringValue: String
-
-    companion object {
-        fun of(value: String): StringEngineResult = StringEngineResultImpl(value)
-    }
-}
-
-sealed interface BooleanEngineResult : ScalarEngineResult {
-    override val type: Schema.BooleanType
-        get() = Schema.BooleanType
-
-    val booleanValue: Boolean
-
-    companion object {
-        fun of(value: Boolean): BooleanEngineResult = BooleanEngineResultImpl(value)
-    }
-}
-
-sealed interface IDEngineResult : ScalarEngineResult {
-    override val type: Schema.IDType
-        get() = Schema.IDType
-
-    val idValue: String
-
-    companion object {
-        fun of(value: String): IDEngineResult = IDEngineResultImpl(value)
-    }
-}
-
-sealed interface EnumEngineResult : SimpleEngineResult {
-    override val type: Schema.EnumType
-    val enumValue: String
-
-    companion object {
-        fun of(
-            type: Schema.EnumType,
-            value: String,
-        ): EnumEngineResult {
-            require(value in type.values) { "$value is not a value of ${type.typeName}" }
-            return EnumEngineResultImpl(type, value)
-        }
-    }
+    fun createAccessResultPromise(): Promise<EngineResult>
 }
 
 /**
@@ -154,30 +65,37 @@ sealed interface EnumEngineResult : SimpleEngineResult {
  * Schema conformance admits this sibling result variant at every output type expression. It is not
  * a Kotlin bottom subtype and exposes no simple, object, or list result properties.
  */
-data object ErrorEngineResult : EngineResult
+data object ErrorEngineResult
 
-/** Converts a simple resolver value into the corresponding independent engine result. */
+/** Converts a simple resolver value into the corresponding engine-result representation. */
 fun Value.Simple.toEngineResult(): EngineResult =
     when (this) {
         Value.Error -> ErrorEngineResult
-        is Value.Int -> IntEngineResult.of(intValue)
-        is Value.Float -> FloatEngineResult.of(floatValue)
-        is Value.String -> StringEngineResult.of(stringValue)
-        is Value.Boolean -> BooleanEngineResult.of(booleanValue)
-        is Value.ID -> IDEngineResult.of(idValue)
-        is Value.Enum -> EnumEngineResult.of(type, enumValue)
+        is Value.Int -> intValue
+        is Value.Float -> floatValue
+        is Value.String -> stringValue
+        is Value.Boolean -> booleanValue
+        is Value.ID -> Schema.ID.of(idValue)
+        is Value.Enum -> type.values.getValue(enumValue)
     }
 
-/** Converts a simple engine result into the corresponding resolver value. */
-fun SimpleEngineResult.toValue(): Value.Simple =
-    when (this) {
-        is IntEngineResult -> Value.Int.of(intValue)
-        is FloatEngineResult -> Value.Float.of(floatValue)
-        is StringEngineResult -> Value.String.of(stringValue)
-        is BooleanEngineResult -> Value.Boolean.of(booleanValue)
-        is IDEngineResult -> Value.ID.of(idValue)
-        is EnumEngineResult -> Value.Enum.of(type, enumValue)
+/** Converts an engine result conforming to [expectedType] into a simple resolver value. */
+fun EngineResult.toValue(expectedType: Schema.SimpleType): Value.Simple =
+    when (expectedType) {
+        Schema.IntType -> Value.Int.of(castEngineResult())
+        Schema.FloatType -> Value.Float.of(castEngineResult())
+        Schema.StringType -> Value.String.of(castEngineResult())
+        Schema.BooleanType -> Value.Boolean.of(castEngineResult())
+        Schema.IDType -> Value.ID.of(castEngineResult<Schema.ID>().value)
+        is Schema.EnumType -> {
+            val value = castEngineResult<Schema.EnumValue>()
+            if (value.containingType != expectedType) throw ClassCastException()
+            Value.Enum.of(expectedType, value.name)
+        }
     }
+
+private inline fun <reified T> EngineResult.castEngineResult(): T =
+    this as? T ?: throw ClassCastException()
 
 /**
  * A finite object result whose exact cells are installed once.
@@ -185,14 +103,14 @@ fun SimpleEngineResult.toValue(): Value.Simple =
  * Every present key belongs to [type], contains no variables, and its cell value completes only
  * with a result conforming to the field's type expression. [getCell] is a strict read.
  * [reserveCell] explicitly installs an unclaimed reader placeholder on a mutable object. A writer
- * claims the value placeholder through [EngineResult.Cell.createValuePromise] or
- * [EngineResult.Cell.setValue]. [freeze] seals the key set and freezes every present cell's value
+ * claims the value placeholder through [EngineResultCell.createValuePromise] or
+ * [EngineResultCell.setValue]. [freeze] seals the key set and freezes every present cell's value
  * slot. A claimed value promise may complete after freezing.
  *
  * Objects use reference equality and stable identity hashing, so they may be used as map keys while
  * cells are installed or their slots are completed.
  */
-sealed interface ObjectEngineResult : EngineResult {
+sealed interface ObjectEngineResult {
     /**
      * One alias-free output-field coordinate consisting of a canonical field and its arguments.
      *
@@ -434,7 +352,7 @@ sealed interface ObjectEngineResult : EngineResult {
     fun isCellSet(field: GroundKey): Boolean = field in keys
 
     /** @throws MissingFieldException when [field] has no cell */
-    fun getCell(field: GroundKey): EngineResult.Cell
+    fun getCell(field: GroundKey): EngineResultCell
 
     /**
      * Returns the field cell, explicitly creating an unclaimed reader placeholder when this
@@ -442,7 +360,7 @@ sealed interface ObjectEngineResult : EngineResult {
      *
      * @throws MissingFieldException when this object is immutable or frozen and has no cell
      */
-    fun reserveCell(field: GroundKey): EngineResult.Cell
+    fun reserveCell(field: GroundKey): EngineResultCell
 
     /**
      * Seals this object's cell-key set and freezes every present cell's value slot. Claimed
@@ -461,15 +379,16 @@ sealed interface ObjectEngineResult : EngineResult {
         fun of(
             type: Schema.ObjectType,
             values: Map<GroundKey, EngineResult?> = emptyMap(),
-            accessAccepted: Map<GroundKey, Value.Boolean> =
-                values.keys.associateWith { Value.Boolean.of(true) },
+            accessResults: Map<GroundKey, EngineResult> =
+                values.keys.associateWith { true },
             mutable: Boolean = false,
         ): ObjectEngineResult {
-            val fields = values.keys + accessAccepted.keys
+            val fields = values.keys + accessResults.keys
             fields.forEach { field ->
                 validateObjectField(type, field)
             }
             values.forEach { (field, value) -> validateObjectValue(field, value) }
+            accessResults.values.forEach(::validateAccessResult)
             return ObjectResultImpl(
                 type = type,
                 cells =
@@ -477,7 +396,7 @@ sealed interface ObjectEngineResult : EngineResult {
                         CellImpl(
                             initialValue = values[field],
                             initiallyValueSet = field in values,
-                            accessAccepted = accessAccepted[field],
+                            accessResult = accessResults[field],
                             mutable = mutable,
                             validateValue = { value -> validateObjectValue(field, value) },
                         )
@@ -499,7 +418,7 @@ sealed interface ObjectEngineResult : EngineResult {
  * value against it, so it acts as a retained type witness: assigning a list to a compatible list
  * position requires comparing type expressions, not recursively revalidating its contents.
  */
-sealed interface ListEngineResult : EngineResult {
+sealed interface ListEngineResult : List<EngineResultCell> {
     /** A non-negative position selecting one element of an engine-result list. */
     sealed interface Index : PathComponent {
         val index: Int
@@ -513,51 +432,37 @@ sealed interface ListEngineResult : EngineResult {
     }
 
     val typeExpr: TypeExpr<Schema.OutputType>
-    val size: Int
-    val indices: IntRange
-        get() = 0 until size
-
-    operator fun get(index: Int): EngineResult.Cell
-
-    fun <R> map(transform: (EngineResult.Cell) -> R): kotlin.collections.List<R> =
-        indices.map { index -> transform(get(index)) }
-
-    fun all(predicate: (EngineResult.Cell) -> Boolean): Boolean =
-        indices.all { index -> predicate(get(index)) }
-
-    fun forEachIndexed(action: (index: Int, EngineResult.Cell) -> Unit) {
-        indices.forEach { index -> action(index, get(index)) }
-    }
 
     companion object {
         /**
          * ### Invariant: list-engine-result-factory-schema-conformance
          *
-         * Every cell value satisfies `value.conformsToSchemaType(typeExpr)` in its reasoning
+         * Every cell value satisfies `value.conformsToResultSchemaType(typeExpr)` in its reasoning
          * world.
          */
         fun of(
             typeExpr: TypeExpr<Schema.OutputType>,
             values: kotlin.collections.List<EngineResult?>,
-            accessAccepted: kotlin.collections.List<Value.Boolean?> =
-                values.map { Value.Boolean.of(true) },
+            accessResults: kotlin.collections.List<EngineResult?> =
+                values.map { true },
             mutableCells: Boolean = false,
         ): ListEngineResult {
-            require(values.all { value -> value.conformsToSchemaType(typeExpr) }) {
+            require(values.all { value -> value.conformsToResultSchemaType(typeExpr) }) {
                 "List engine result contains an element incompatible with $typeExpr"
             }
-            require(accessAccepted.size == values.size) {
+            require(accessResults.size == values.size) {
                 "List engine result access results must match its value count"
             }
+            accessResults.filterNotNull().forEach(::validateAccessResult)
             val cells =
                 values.mapIndexed { index, value ->
                     CellImpl(
                         initialValue = value,
                         initiallyValueSet = true,
-                        accessAccepted = accessAccepted[index],
+                        accessResult = accessResults[index],
                         mutable = mutableCells,
                         validateValue = { updated ->
-                            require(updated.conformsToSchemaType(typeExpr)) {
+                            require(updated.conformsToResultSchemaType(typeExpr)) {
                                 "List engine result contains an element incompatible with " +
                                     typeExpr
                             }
@@ -573,7 +478,7 @@ sealed interface ListEngineResult : EngineResult {
  * Returns whether two completed result trees contain the same values and access results.
  *
  * This explicit extensional comparison is distinct from ordinary equality because
- * [EngineResult.Cell] and [ObjectEngineResult] use reference equality. Both trees must be finite
+ * [EngineResultCell] and [ObjectEngineResult] use reference equality. Both trees must be finite
  * and every present promise they contain must be completed. Its result is meaningful only after
  * both trees are quiescent; the comparison does not take an atomic snapshot while promises or
  * cells are being mutated concurrently.
@@ -594,7 +499,6 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
 
     return when (this) {
         ErrorEngineResult -> other == ErrorEngineResult
-        is SimpleEngineResult -> other is SimpleEngineResult && this == other
         is ListEngineResult ->
             other is ListEngineResult &&
                 typeExpr == other.typeExpr &&
@@ -602,14 +506,15 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
                 indices.all { index -> this[index].hasSameCompletedCellAs(other[index]) }
         is ObjectEngineResult ->
             other is ObjectEngineResult && sameCompletedObjectResultAs(other)
+        else -> isScalarResultMember() && other?.isScalarResultMember() == true && this == other
     }
 }
 
-private fun EngineResult.Cell.hasSameCompletedCellAs(other: EngineResult.Cell): Boolean {
+private fun EngineResultCell.hasSameCompletedCellAs(other: EngineResultCell): Boolean {
     val leftValue = completedValue
     val rightValue = other.completedValue
     return leftValue.hasSameCompletedResultAs(rightValue) &&
-        completedAccessAccepted == other.completedAccessAccepted
+        completedAccessResult == other.completedAccessResult
 }
 
 /**
@@ -635,26 +540,24 @@ internal fun EngineResult?.union(other: EngineResult?): EngineResult? {
             ErrorEngineResult
         }
 
-        is SimpleEngineResult -> {
-            require(other is SimpleEngineResult) {
-                "Cannot union different engine-result variants"
-            }
-            require(this == other) { "Cannot union unequal simple engine results" }
-            this
-        }
-
         is ListEngineResult -> {
             require(other is ListEngineResult) {
                 "Cannot union different engine-result variants"
             }
             union(other)
         }
-
         is ObjectEngineResult -> {
             require(other is ObjectEngineResult) {
                 "Cannot union different engine-result variants"
             }
             union(other)
+        }
+        else -> {
+            require(isScalarResultMember() && other.isScalarResultMember()) {
+                "Cannot union different engine-result variants"
+            }
+            require(this == other) { "Cannot union unequal scalar engine results" }
+            this
         }
     }
 }
@@ -667,8 +570,7 @@ internal fun EngineResult?.union(other: EngineResult?): EngineResult? {
 private fun CompletedCell.union(other: CompletedCell): CompletedCell =
     CompletedCell(
         value = value.union(other.value),
-        accessAccepted =
-            unionAccessAccepted(accessAccepted, other.accessAccepted),
+        accessResult = unionAccessResult(accessResult, other.accessResult),
     )
 
 /**
@@ -687,9 +589,9 @@ internal fun ObjectEngineResult.union(other: ObjectEngineResult): ObjectEngineRe
     return ObjectEngineResult.of(
         type = type,
         values = cells.mapValues { (_, cell) -> cell.value },
-        accessAccepted =
+        accessResults =
             cells.mapNotNull { (key, cell) ->
-                cell.accessAccepted?.let { key to it }
+                cell.accessResult?.let { key to it }
             }.toMap(),
     )
 }
@@ -713,17 +615,21 @@ internal fun ListEngineResult.union(other: ListEngineResult): ListEngineResult {
     return ListEngineResult.of(
         typeExpr = typeExpr,
         values = cells.map(CompletedCell::value),
-        accessAccepted = cells.map(CompletedCell::accessAccepted),
+        accessResults = cells.map(CompletedCell::accessResult),
     )
 }
 
 private class CellImpl(
     initialValue: EngineResult? = null,
     initiallyValueSet: Boolean = false,
-    accessAccepted: Value.Boolean? = null,
+    accessResult: EngineResult? = null,
     private val mutable: Boolean,
     private val validateValue: (EngineResult?) -> Unit = {},
-) : EngineResult.Cell {
+) : EngineResultCell {
+    init {
+        accessResult?.let(::validateAccessResult)
+    }
+
     private val valueStore =
         CellValueStore(
             initialValue = initialValue,
@@ -731,8 +637,8 @@ private class CellImpl(
             mutable = mutable,
             validateValue = validateValue,
         )
-    private val accessAcceptedStore =
-        promiseStore(accessAccepted?.let { mapOf(Unit to it) }.orEmpty())
+    private val accessResultStore =
+        promiseStore(accessResult?.let { mapOf(Unit to it) }.orEmpty())
 
     override fun getValue(): Promise<EngineResult?> =
         checkNotNull(valueStore.readOrNull()) {
@@ -748,19 +654,20 @@ private class CellImpl(
 
     override fun createValuePromise(): Promise<EngineResult?> = valueStore.claim()
 
-    override fun getAccessAccepted(): Promise<Value.Boolean> =
-        checkNotNull(accessAcceptedStore.readOrNull(Unit)) {
-            "Cell has no access-acceptance result"
+    override fun getAccessResult(): Promise<EngineResult> =
+        checkNotNull(accessResultStore.readOrNull(Unit)) {
+            "Cell has no access result"
         }
 
-    override fun setAccessAccepted(accept: Value.Boolean) {
+    override fun setAccessResult(result: EngineResult) {
         checkMutable()
-        accessAcceptedStore.set(Unit, accept)
+        validateAccessResult(result)
+        accessResultStore.set(Unit, result)
     }
 
-    override fun createAccessAcceptedPromise(): Promise<Value.Boolean> {
+    override fun createAccessResultPromise(): Promise<EngineResult> {
         checkMutable()
-        return accessAcceptedStore.create(Unit)
+        return accessResultStore.create(Unit, ::validateAccessResult)
     }
 
     fun freezeValue(cause: Throwable) {
@@ -769,14 +676,14 @@ private class CellImpl(
 
     fun requireCompleted() {
         valueStore.readOrNull()?.get().requireCompleted()
-        accessAcceptedStore.snapshot().values.forEach { promise -> promise.get() }
+        accessResultStore.snapshot().values.forEach { promise -> promise.get() }
     }
 
     val completedValue: EngineResult?
         get() = checkNotNull(valueStore.readOrNull()) { "Cell has no value" }.get()
 
-    val completedAccessAccepted: Value.Boolean?
-        get() = accessAcceptedStore.readOrNull(Unit)?.get()
+    val completedAccessResult: EngineResult?
+        get() = accessResultStore.readOrNull(Unit)?.get()
 
     private fun checkMutable() = check(mutable) { "Cell is immutable" }
 }
@@ -846,7 +753,7 @@ private class CellValueStore(
 
 private class ObjectResultImpl(
     override val type: Schema.ObjectType,
-    cells: Map<ObjectEngineResult.GroundKey, EngineResult.Cell>,
+    cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
     mutable: Boolean,
 ) : ObjectEngineResult {
     private val cellStore =
@@ -861,13 +768,13 @@ private class ObjectResultImpl(
 
     override fun isCellSet(field: ObjectEngineResult.GroundKey): Boolean = cellStore.isSet(field)
 
-    override fun getCell(field: ObjectEngineResult.GroundKey): EngineResult.Cell {
+    override fun getCell(field: ObjectEngineResult.GroundKey): EngineResultCell {
         validateObjectField(type, field)
         return cellStore.readOrNull(field)
             ?: throw MissingFieldException(type.typeName, field.field.fieldName)
     }
 
-    override fun reserveCell(field: ObjectEngineResult.GroundKey): EngineResult.Cell {
+    override fun reserveCell(field: ObjectEngineResult.GroundKey): EngineResultCell {
         validateObjectField(type, field)
         return cellStore.reserve(field)
     }
@@ -876,7 +783,7 @@ private class ObjectResultImpl(
         cellStore.freeze()
     }
 
-    val completedCells: Map<ObjectEngineResult.GroundKey, EngineResult.Cell>
+    val completedCells: Map<ObjectEngineResult.GroundKey, EngineResultCell>
         get() = cellStore.completedCells()
 
     fun requireCompleted() {
@@ -886,7 +793,7 @@ private class ObjectResultImpl(
 
 private class ObjectCellStore(
     private val type: Schema.ObjectType,
-    cells: Map<ObjectEngineResult.GroundKey, EngineResult.Cell>,
+    cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
     private val mutable: Boolean,
 ) {
     private val lock = Any()
@@ -896,15 +803,15 @@ private class ObjectCellStore(
     val keys: Set<ObjectEngineResult.GroundKey>
         get() = synchronized(lock) { cells.keys.toSet() }
 
-    val cellValues: kotlin.collections.List<EngineResult.Cell>
+    val cellValues: kotlin.collections.List<EngineResultCell>
         get() = synchronized(lock) { cells.values.toList() }
 
     fun isSet(field: ObjectEngineResult.GroundKey): Boolean = synchronized(lock) { field in cells }
 
-    fun readOrNull(field: ObjectEngineResult.GroundKey): EngineResult.Cell? =
+    fun readOrNull(field: ObjectEngineResult.GroundKey): EngineResultCell? =
         synchronized(lock) { cells[field] }
 
-    fun reserve(field: ObjectEngineResult.GroundKey): EngineResult.Cell =
+    fun reserve(field: ObjectEngineResult.GroundKey): EngineResultCell =
         synchronized(lock) {
             cells[field]
                 ?: if (frozen) {
@@ -931,14 +838,14 @@ private class ObjectCellStore(
         }
     }
 
-    fun completedCells(): Map<ObjectEngineResult.GroundKey, EngineResult.Cell> =
+    fun completedCells(): Map<ObjectEngineResult.GroundKey, EngineResultCell> =
         synchronized(lock) {
             cells.mapValues { (_, cell) ->
                 cell.also { it.implementation.requireCompleted() }
             }
         }
 
-    private fun mutableCell(field: ObjectEngineResult.GroundKey): EngineResult.Cell =
+    private fun mutableCell(field: ObjectEngineResult.GroundKey): EngineResultCell =
         CellImpl(
             mutable = true,
             validateValue = { value -> validateObjectValue(field, value) },
@@ -946,44 +853,22 @@ private class ObjectCellStore(
 
 }
 
-private data class ListResultImpl(
+private class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
-    private val cells: kotlin.collections.List<EngineResult.Cell>,
-) : ListEngineResult {
-    override val size: Int
-        get() = cells.size
+    private val cells: kotlin.collections.List<EngineResultCell>,
+) : ListEngineResult,
+    kotlin.collections.List<EngineResultCell> by cells {
+    override fun equals(other: Any?): Boolean =
+        other is ListEngineResult &&
+            typeExpr == other.typeExpr &&
+            cells == other
 
-    override fun get(index: Int): EngineResult.Cell = cells[index]
+    override fun hashCode(): Int = 31 * typeExpr.hashCode() + cells.hashCode()
 }
 
 private data class ListIndexImpl(
     override val index: Int,
 ) : ListEngineResult.Index
-
-private data class IntEngineResultImpl(
-    override val intValue: Int,
-) : IntEngineResult
-
-private data class FloatEngineResultImpl(
-    override val floatValue: Double,
-) : FloatEngineResult
-
-private data class StringEngineResultImpl(
-    override val stringValue: String,
-) : StringEngineResult
-
-private data class BooleanEngineResultImpl(
-    override val booleanValue: Boolean,
-) : BooleanEngineResult
-
-private data class IDEngineResultImpl(
-    override val idValue: String,
-) : IDEngineResult
-
-private data class EnumEngineResultImpl(
-    override val type: Schema.EnumType,
-    override val enumValue: String,
-) : EnumEngineResult
 
 private data class KeyImpl(
     override val field: Schema.OutputField,
@@ -1046,23 +931,23 @@ private fun OpenArguments.inferredKeyStamp(): Stamp? {
 
 private data class CompletedCell(
     val value: EngineResult?,
-    val accessAccepted: Value.Boolean?,
+    val accessResult: EngineResult?,
 )
 
-private fun EngineResult.Cell.completed(): CompletedCell =
+private fun EngineResultCell.completed(): CompletedCell =
     CompletedCell(
         value = completedValue,
-        accessAccepted = completedAccessAccepted,
+        accessResult = completedAccessResult,
     )
 
-private val EngineResult.Cell.implementation: CellImpl
+private val EngineResultCell.implementation: CellImpl
     get() = this as CellImpl
 
-private val EngineResult.Cell.completedValue: EngineResult?
+private val EngineResultCell.completedValue: EngineResult?
     get() = implementation.completedValue
 
-private val EngineResult.Cell.completedAccessAccepted: Value.Boolean?
-    get() = implementation.completedAccessAccepted
+private val EngineResultCell.completedAccessResult: EngineResult?
+    get() = implementation.completedAccessResult
 
 private val ObjectEngineResult.implementation: ObjectResultImpl
     get() = this as ObjectResultImpl
@@ -1086,11 +971,11 @@ private fun EngineResult?.requireCompleted() {
     when (this) {
         null,
         ErrorEngineResult,
-        is SimpleEngineResult,
         -> Unit
         is ListEngineResult ->
             indices.forEach { index -> get(index).implementation.requireCompleted() }
         is ObjectEngineResult -> implementation.requireCompleted()
+        else -> check(isScalarResultMember()) { "Value is not an engine result: $this" }
     }
 }
 
@@ -1107,17 +992,17 @@ private fun <K, V> unionMaps(
         }
     }
 
-private fun unionAccessAccepted(
-    first: Value.Boolean?,
-    second: Value.Boolean?,
-): Value.Boolean? =
+private fun unionAccessResult(
+    first: EngineResult?,
+    second: EngineResult?,
+): EngineResult? =
     when {
         first == null -> second
         second == null -> first
         else ->
             first.also {
                 require(first == second) {
-                    "Cannot union cells with unequal access-acceptance results"
+                    "Cannot union cells with unequal access results"
                 }
             }
     }
@@ -1158,8 +1043,22 @@ private fun validateObjectValue(
             "A key with erroneous arguments must contain an error value"
         }
     }
-    require(value.conformsToSchemaType(field.field.typeExpr)) {
+    require(value.conformsToResultSchemaType(field.field.typeExpr)) {
         "${field.field.containingType.typeName}/${field.field.fieldName} result does not conform to " +
             field.field.typeExpr
+    }
+}
+
+private fun EngineResult.isScalarResultMember(): Boolean =
+    this is Int ||
+        this is Double && isFinite() ||
+        this is Boolean ||
+        this is String ||
+        this is Schema.ID ||
+        this is Schema.EnumValue
+
+private fun validateAccessResult(result: EngineResult) {
+    require(result is Boolean || result == ErrorEngineResult) {
+        "Cell access result must be Boolean or ErrorEngineResult"
     }
 }

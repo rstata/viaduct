@@ -9,7 +9,6 @@ import model.ObjectEngineResult
 import model.Fragment
 import model.SelectionForest
 import model.Stamp
-import model.SimpleEngineResult
 import model.Value
 import model.fragmentFrom
 import model.instantiateBindings
@@ -308,7 +307,7 @@ internal class CurrentProfileBenchmarkSupport(
     context(world: Assumptions)
     private fun EngineResult?.shape(depth: Int = 0): ResultShape =
         when (this) {
-            null, ErrorEngineResult, is SimpleEngineResult ->
+            null, ErrorEngineResult ->
                 ResultShape(
                     fields = 0,
                     activeFields = 0,
@@ -351,6 +350,13 @@ internal class CurrentProfileBenchmarkSupport(
                     ) { result, child ->
                         result.combine(child)
                     }
+            else ->
+                ResultShape(
+                    fields = 0,
+                    activeFields = 0,
+                    passiveFields = 0,
+                    depth = depth,
+                )
         }
 
     private fun ResultShape.combine(other: ResultShape): ResultShape =

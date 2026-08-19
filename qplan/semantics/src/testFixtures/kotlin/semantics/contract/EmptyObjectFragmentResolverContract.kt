@@ -2,11 +2,9 @@ package semantics.contract
 
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.EngineResult
-import model.IntEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.StringEngineResult
 import model.Value
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
@@ -31,9 +29,7 @@ interface EmptyObjectFragmentResolverContract :
 
         assertEquals(
             "Query",
-            assertIs<StringEngineResult>(
-                result.getCell(world.schema.contractKey("Query", "__typename")).get(),
-            ).stringValue,
+            result.getCell(world.schema.contractKey("Query", "__typename")).get(),
         )
     }
 
@@ -115,13 +111,13 @@ interface EmptyObjectFragmentResolverContract :
         val b = assertIs<ObjectEngineResult>(items[1].get())
 
         assertEquals(
-            IntEngineResult.of(2),
+            2,
             a.getCell(
                 world.schema.contractKey("A", "computed", mapOf("factor" to 2)),
             ).get(),
         )
         assertEquals(
-            IntEngineResult.of(3),
+            3,
             b.getCell(world.schema.contractKey("B", "computed")).get(),
         )
         applications.toList().shouldContainExactlyInAnyOrder("A", "B")
@@ -162,7 +158,7 @@ interface EmptyObjectFragmentResolverContract :
         val concreteDefaultKey =
             world.schema.contractKey("ConcreteItem", "computed", mapOf("factor" to 7))
 
-        assertEquals(IntEngineResult.of(7), item.getCell(concreteDefaultKey).get())
+        assertEquals(7, item.getCell(concreteDefaultKey).get())
         assertEquals(
             expectedPassiveResultKeys(item.type, setOf(concreteDefaultKey)),
             item.keys,

@@ -107,7 +107,7 @@ internal fun Value.Object.resolveKey(
     return when (val arguments = key.arguments) {
         model.OpenArguments.Ground.Error -> {
             cell.setValue(ErrorEngineResult)
-            cell.setAccessAccepted(Value.Error)
+            cell.setAccessResult(ErrorEngineResult)
             null
         }
 
@@ -146,7 +146,7 @@ internal fun Value.Object.resolveKey(
                     resolverDemand = resolutionSelections,
                 )
             cell.setValue(resolvedValue.engineResult)
-            cell.setAccessAccepted(Value.Boolean.of(true))
+            cell.setAccessResult(true)
             resolvedValue
         }
     }

@@ -8,9 +8,10 @@ import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectMaterializeSelection
 import model.PathComponent
+import model.Schema
 import model.Selection
-import model.SimpleEngineResult
 import model.Stamp
+import model.TypeExpr
 import model.Value
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
@@ -56,6 +57,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
             promise
                 .await()
                 .materializeEngineResultValue(
+                    expectedType = storedKey.field.typeExpr,
                     selections = selection.subselections,
                     reader = reader,
                     resultPath = resultPath + storedKey,
@@ -100,6 +102,7 @@ internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
 // Recursively materializes one selected result while retaining its exact stored path.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun EngineResult?.materializeEngineResultValue(
+    expectedType: TypeExpr<Schema.OutputType>,
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -107,7 +110,6 @@ private suspend fun EngineResult?.materializeEngineResultValue(
     when (this) {
         null -> null
         ErrorEngineResult -> Value.Error
-        is SimpleEngineResult -> toValue()
         is ObjectEngineResult ->
             materializeSelectedObjectValue(
                 selections = selections,
@@ -125,6 +127,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
                         resultPath = resultPath,
                     ),
             )
+        else -> toValue(expectedType.baseType as Schema.SimpleType)
     }
 
 // Materializes each list element at a path containing its concrete list index.
@@ -138,6 +141,7 @@ private suspend fun ListEngineResult.materializeValues(
     indices.forEach { index ->
         materialized +=
             get(index).getValue().await().materializeEngineResultValue(
+                expectedType = typeExpr,
                 selections = selections,
                 reader = reader,
                 resultPath = resultPath + ListEngineResult.Index.of(index),

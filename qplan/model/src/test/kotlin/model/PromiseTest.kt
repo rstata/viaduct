@@ -86,7 +86,7 @@ class PromiseTest {
             promise.get()
         }
 
-        promise.complete(StringEngineResult.of("ready"))
-        assertEquals(StringEngineResult.of("ready"), promise.get())
+        promise.complete("ready")
+        assertEquals("ready", promise.get())
     }
 }

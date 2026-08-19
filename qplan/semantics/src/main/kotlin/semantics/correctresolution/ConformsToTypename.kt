@@ -5,8 +5,6 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.SimpleEngineResult
-import model.StringEngineResult
 
 /**
  * Whether every retained `__typename` value names its containing object's concrete type.
@@ -26,8 +24,8 @@ private fun ObjectEngineResult.objectConformsToTypename(): Boolean =
         val value = getCell(key).getValue().get()
         if (key.field.fieldName == "__typename") {
             value != ErrorEngineResult &&
-                value is StringEngineResult &&
-                value.stringValue == type.typeName
+                value is String &&
+                value == type.typeName
         } else {
             value.engineResultConformsToTypename()
         }
@@ -38,10 +36,10 @@ private fun EngineResult?.engineResultConformsToTypename(): Boolean =
     when (this) {
         null,
         ErrorEngineResult,
-        is SimpleEngineResult,
         -> true
 
         is ObjectEngineResult -> objectConformsToTypename()
         is ListEngineResult ->
             all { cell -> cell.getValue().get().engineResultConformsToTypename() }
+        else -> true
     }

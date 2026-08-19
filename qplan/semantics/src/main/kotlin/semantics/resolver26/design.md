@@ -77,7 +77,7 @@ The field-resolution task:
 
 Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same localized child keys; strict occurrence stamps, binding aliases, and reservation rules make disagreement fail rather than silently create another identity.
 
-Argument errors complete the cell with `Value.Error` without invoking the resolver. Successful values complete the cell once and set `accessAccepted` to true.
+Argument errors complete both cell slots with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once and set the access result to the Boolean result `true`.
 
 ## Successor Demand
 

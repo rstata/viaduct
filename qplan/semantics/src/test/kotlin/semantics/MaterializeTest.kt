@@ -10,7 +10,6 @@ import model.ObjectEngineResult
 import model.MissingFieldException
 import model.PathComponent
 import model.Schema
-import model.StringEngineResult
 import model.Value
 import model.fragmentFrom
 import model.materializeSelectionForestOf
@@ -60,7 +59,7 @@ class MaterializeTest {
                 }
 
             assertFalse(materialized.isCompleted)
-            promise.complete(StringEngineResult.of("ready"))
+            promise.complete("ready")
 
             assertEquals(
                 Value.String.of("ready"),
@@ -183,7 +182,7 @@ class MaterializeTest {
             val result =
                 ObjectEngineResult.of(
                     type = world.schema.query,
-                    values = mapOf(storedKey to StringEngineResult.of("same")),
+                    values = mapOf(storedKey to "same"),
                 )
 
             val materialized =
@@ -240,8 +239,8 @@ class MaterializeTest {
                     type = world.schema.query,
                     values =
                         mapOf(
-                            first to StringEngineResult.of("first-value"),
-                            second to StringEngineResult.of("second-value"),
+                            first to "first-value",
+                            second to "second-value",
                         ),
                 )
 

@@ -2,17 +2,13 @@ package model.invariants
 
 import model.Assumptions
 import model.EngineResult
-import model.EngineEnumValueData
-import model.EngineIDData
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
-import model.EnumEngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.canContainPure
@@ -47,7 +43,7 @@ internal fun Value.Output.conformsToSchema(): Boolean =
 context(world: Assumptions)
 internal fun EngineInputData?.conformsToSchema(
     typeExpr: TypeExpr<Schema.InputType>,
-): Boolean = conformsToSchemaType(typeExpr)
+): Boolean = conformsToInputSchemaType(typeExpr)
 
 /**
  * Whether this output value recursively conforms to [typeExpr].
@@ -85,22 +81,32 @@ context(world: Assumptions)
 internal fun EngineResult.conformsToSchema(): Boolean =
     when (this) {
         ErrorEngineResult -> true
-        is EnumEngineResult -> enumValue in type.values
-        is SimpleEngineResult -> true
         is ObjectEngineResult ->
             keys.all { key ->
+                val cell = getCell(key)
                 val value = getCell(key).getValue().get()
                 key.field.containingType == type &&
                     key.conformsToSchema() &&
-                    value.conformsToSchemaType(key.field.typeExpr) &&
-                    (value?.conformsToSchema() ?: true)
+                    value.conformsToResultSchemaType(key.field.typeExpr) &&
+                    (value?.conformsToSchema() ?: true) &&
+                    cell.getAccessResult().get().conformsToAccessResult()
             }
         is ListEngineResult ->
             all { cell ->
                 val value = cell.getValue().get()
-                value.conformsToSchemaType(typeExpr) &&
-                    (value?.conformsToSchema() ?: true)
+                value.conformsToResultSchemaType(typeExpr) &&
+                    (value?.conformsToSchema() ?: true) &&
+                    cell.getAccessResult().get().conformsToAccessResult()
             }
+        is Schema.EnumValue ->
+            containingType.values[name] == this
+        is Double -> isFinite()
+        is Int,
+        is Boolean,
+        is String,
+        is Schema.ID,
+        -> true
+        else -> false
     }
 
 private fun EngineInputData.conformsToInputObjectType(
@@ -118,18 +124,18 @@ private fun EngineInputData.conformsToInputObjectType(
     }
     return fieldValues.all { (fieldName, value) ->
         val field = expectedType.fields[fieldName] ?: return@all false
-        value.conformsToSchemaType(field.typeExpr)
+        value.conformsToInputSchemaType(field.typeExpr)
     }
 }
 
-internal fun EngineInputData?.conformsToSchemaType(
+internal fun EngineInputData?.conformsToInputSchemaType(
     typeExpr: TypeExpr<Schema.InputType>,
 ): Boolean =
     when {
         this == null -> typeExpr.isNullable
         typeExpr is TypeExpr.List ->
             asEngineInputListDataOrNull()
-                ?.all { value -> value.conformsToSchemaType(typeExpr.elementType) }
+                ?.all { value -> value.conformsToInputSchemaType(typeExpr.elementType) }
                 ?: false
         typeExpr is TypeExpr.Named ->
             when (val expectedType = typeExpr.baseType) {
@@ -137,10 +143,10 @@ internal fun EngineInputData?.conformsToSchemaType(
                 Schema.FloatType -> this is Double && isFinite()
                 Schema.StringType -> this is String
                 Schema.BooleanType -> this is Boolean
-                Schema.IDType -> this is EngineIDData
+                Schema.IDType -> this is String
                 is Schema.EnumType ->
-                    this is EngineEnumValueData &&
-                        type == expectedType
+                    this is String &&
+                        this in expectedType.values
                 is Schema.InputObjectType ->
                     conformsToInputObjectType(expectedType)
             }
@@ -180,14 +186,12 @@ internal fun Value.Output?.conformsToSchemaType(
             typeExpr is TypeExpr.Named && typeExpr.baseType == type
     }
 
-internal fun EngineResult?.conformsToSchemaType(
+internal fun EngineResult?.conformsToResultSchemaType(
     typeExpr: TypeExpr<Schema.OutputType>,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
         ErrorEngineResult -> true
-        is SimpleEngineResult ->
-            typeExpr is TypeExpr.Named && typeExpr.baseType == type
         is ObjectEngineResult ->
             if (typeExpr is TypeExpr.Named) {
                 val declaredType = typeExpr.baseType
@@ -198,4 +202,20 @@ internal fun EngineResult?.conformsToSchemaType(
         is ListEngineResult ->
             typeExpr is TypeExpr.List &&
                 typeExpr.elementType.canContainPure(this.typeExpr)
+        is Int -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IntType
+        is Double ->
+            isFinite() &&
+                typeExpr is TypeExpr.Named &&
+                typeExpr.baseType == Schema.FloatType
+        is String -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.StringType
+        is Boolean -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.BooleanType
+        is Schema.ID -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IDType
+        is Schema.EnumValue ->
+            typeExpr is TypeExpr.Named &&
+                typeExpr.baseType == containingType &&
+                containingType.values[name] == this
+        else -> false
     }
+
+internal fun EngineResult.conformsToAccessResult(): Boolean =
+    this is Boolean || this == ErrorEngineResult

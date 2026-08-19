@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Assumptions
 import model.EngineResult
+import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
@@ -283,7 +284,7 @@ private suspend fun orchestrateObject(
                     )
                 target.reserveCell(groundKey).also { cell ->
                     cell.setValue(resolvedValue.engineResult)
-                    cell.setAccessAccepted(Value.Boolean.of(true))
+                    cell.setAccessResult(true)
                 }
             }
             launchPassiveChildOrchestrations(
@@ -495,7 +496,7 @@ private suspend fun resolveField(
     selection: ObjectSelection,
     expansion: ResolverExpansion,
     target: ObjectEngineResult,
-    cell: EngineResult.Cell,
+    cell: EngineResultCell,
     variableArgumentCount: Int,
     variableSourceSelectionStamps: Set<Stamp.Occurrence>,
     runtime: ResolverRuntime,
@@ -506,7 +507,7 @@ private suspend fun resolveField(
     }
     if (groundKey.arguments.argumentsContainErrorValue()) {
         cell.getValue().complete(ErrorEngineResult)
-        cell.setAccessAccepted(Value.Error)
+        cell.setAccessResult(ErrorEngineResult)
         return
     }
     val resolverArguments = groundKey.arguments as Value.Arguments
@@ -559,7 +560,7 @@ private suspend fun resolveField(
             }
         }
     cell.getValue().complete(resolvedValue.engineResult)
-    cell.setAccessAccepted(Value.Boolean.of(true))
+    cell.setAccessResult(true)
 }
 
 private fun OpenArguments.Ground.bindingFor(argumentName: String): VariableBinding =

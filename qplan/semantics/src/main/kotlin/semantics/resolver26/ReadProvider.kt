@@ -10,7 +10,6 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.Selection
-import model.SimpleEngineResult
 import model.TypeExpr
 import model.Value
 import model.VariableBinding
@@ -47,7 +46,7 @@ internal suspend fun ObjectEngineResult.readProvider(
         diagnosticInstrumentation.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == definition.path.lastIndex) {
-            return value.toProviderBinding()
+            return value.toProviderBinding(groundKey.field.typeExpr)
         }
         when (value) {
             null -> return VariableBinding.of(null)
@@ -60,15 +59,19 @@ internal suspend fun ObjectEngineResult.readProvider(
 }
 
 // Converts a provider result to an input value and rejects object-valued terminals.
-private fun EngineResult?.toProviderBinding(): VariableBinding =
+private fun EngineResult?.toProviderBinding(
+    expectedType: TypeExpr<Schema.OutputType>,
+): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
         ErrorEngineResult -> VariableBinding.Error
-        is SimpleEngineResult ->
-            VariableBinding.of(toEngineSimpleData())
         is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")
+        else ->
+            VariableBinding.of(
+                toEngineSimpleData(expectedType.baseType as Schema.SimpleType),
+            )
     }
 
 // Converts a provider list to an input list after checking its element type.
@@ -78,7 +81,7 @@ private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
     }
     val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
-        when (val binding = get(index).getValue().get().toProviderBinding()) {
+        when (val binding = get(index).getValue().get().toProviderBinding(typeExpr)) {
             VariableBinding.Error -> return VariableBinding.Error
             is VariableBinding.Input -> values += binding.value
         }

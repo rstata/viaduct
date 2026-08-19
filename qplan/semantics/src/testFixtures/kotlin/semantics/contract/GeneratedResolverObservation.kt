@@ -5,7 +5,6 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.SimpleEngineResult
 import model.Fragment
 import model.SelectionForest
 import model.Value
@@ -210,7 +209,6 @@ private fun EngineResult?.sameSelectedResultAs(
     if (this == null || other == null) return this == other
     return when (this) {
         ErrorEngineResult -> other == ErrorEngineResult
-        is SimpleEngineResult -> other is SimpleEngineResult && this == other
         is ListEngineResult ->
             other is ListEngineResult &&
                 typeExpr == other.typeExpr &&
@@ -238,5 +236,10 @@ private fun EngineResult?.sameSelectedResultAs(
                                     selections = selection.subselections,
                                 )
                     }
+        else ->
+            other != ErrorEngineResult &&
+                other !is ListEngineResult &&
+                other !is ObjectEngineResult &&
+                this == other
     }
 }

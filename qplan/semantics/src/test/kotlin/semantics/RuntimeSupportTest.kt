@@ -1,9 +1,9 @@
 package semantics
 
 import model.EngineResult
+import model.EngineResultCell
 import model.ObjectEngineResult
 import model.PathComponent
-import model.StringEngineResult
 import model.Value
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -106,7 +106,7 @@ class RuntimeSupportTest {
         fixture.target
             .reserveCell(key)
             .createValuePromise()
-            .complete(StringEngineResult.of("complete"))
+            .complete("complete")
         fixture.register("first")
 
         assertFailsWith<ResolverReadCycleException> {
@@ -221,7 +221,7 @@ class RuntimeSupportTest {
 
         fun path(name: String): List<PathComponent> = listOf(key(name))
 
-        fun cell(name: String): EngineResult.Cell = target.reserveCell(key(name))
+        fun cell(name: String): EngineResultCell = target.reserveCell(key(name))
 
         fun register(name: String) {
             support.registerWriter(

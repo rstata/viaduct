@@ -69,9 +69,8 @@ class AssumptionsTest {
                     node.key.arguments.fieldExpressions().getValue("filter"),
                 ).data,
             )
-        val role = assertIs<EngineEnumValueData>(filter["role"])
-        assertEquals(assumptions.schema.type("Role"), role.type)
-        assertEquals("ADMIN", role.value)
+        val role = assertIs<String>(filter["role"])
+        assertEquals("ADMIN", role)
         val limit = assertIs<Int>(filter["limit"])
         assertEquals(10, limit)
         val tags = assertIs<EngineInputListData>(filter["tags"])
@@ -241,10 +240,8 @@ class AssumptionsTest {
                 fields = mapOf("filter" to filterValue),
             )
         assertEquals(filterValue, nodeArguments.fieldValues.getValue("filter"))
-        val defaultRole =
-            assertIs<EngineEnumValueData>(filterValue["role"])
-        assertEquals(schema.type("Role"), defaultRole.type)
-        assertEquals("MEMBER", defaultRole.value)
+        val defaultRole = assertIs<String>(filterValue["role"])
+        assertEquals("MEMBER", defaultRole)
         val defaultLimit = assertIs<Int>(filterValue["limit"])
         assertEquals(10, defaultLimit)
         val tags =
@@ -539,7 +536,7 @@ class AssumptionsTest {
         )
         assertEquals(
             "ADMIN",
-            assertIs<EngineEnumValueData>(filter.getValue("role")).value,
+            assertIs<String>(filter.getValue("role")),
         )
 
         val nodeField = schema.field("Query", "node_V_A_node")
@@ -585,7 +582,7 @@ class AssumptionsTest {
         )
         assertEquals(
             "MEMBER",
-            assertIs<EngineEnumValueData>(defaultFilter["role"]).value,
+            assertIs<String>(defaultFilter["role"]),
         )
 
         val explicitFilter =
@@ -613,11 +610,6 @@ class AssumptionsTest {
     fun `input-like factories reject values that do not match the schema`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.type("Filter") as Schema.InputObjectType
-        val otherRole =
-            EngineEnumValueData(
-                "MEMBER",
-                schema.type("OtherRole") as Schema.EnumType,
-            )
 
         assertFailsWith<ClassCastException> {
             toEngineInputObjectData(
@@ -646,7 +638,7 @@ class AssumptionsTest {
         assertFailsWith<ClassCastException> {
             toEngineInputObjectData(
                 expectedType = filterType,
-                value = mapOf("role" to otherRole),
+                value = mapOf("role" to "MISSING"),
             )
         }
     }

@@ -8,8 +8,8 @@ package model
  *
  * ### Invariant: schema-canonical-definition-graph
  *
- * Definitions are canonical within this schema: each type name, field coordinate, input-field
- * coordinate, and argument coordinate identifies exactly one definition object. Definition
+ * Definitions are canonical within this schema: each type name, enum-value coordinate, field
+ * coordinate, input-field coordinate, and argument coordinate identifies exactly one definition object. Definition
  * classes do not override `Any.equals` or `Any.hashCode`, so `==` is reference equality and two
  * definitions are equal exactly when they represent the same schema element. For every definition
  * `d` reachable from this schema, `type(d.typeName) == d` when `d` is a [Type]; the corresponding
@@ -249,14 +249,35 @@ interface Schema {
     }
 
     /**
-     * An enum whose [values] are exactly its finite set of legal GraphQL enum value names.
+     * An enum whose [values] are exactly its finite map of legal GraphQL enum values by name.
      *
      * ### Invariant: schema-enum-values
      *
-     * The set has no modeled order, and each value is represented only by its name.
+     * The map has no modeled order. Every value is canonical in the containing schema, its
+     * [EnumValue.containingType] is this type, and each map key equals its value's [EnumValue.name].
      */
     interface EnumType : SimpleType {
-        val values: Set<String>
+        val values: Map<String, EnumValue>
+    }
+
+    /**
+     * One canonical member of [containingType].
+     *
+     * Enum values use schema-canonical equality. Same-named values from different enum types are
+     * distinct definitions.
+     */
+    interface EnumValue {
+        val name: String
+        val containingType: EnumType
+    }
+
+    /** A structurally equal GraphQL ID result value. */
+    sealed interface ID {
+        val value: String
+
+        companion object {
+            fun of(value: String): ID = IDImpl(value)
+        }
     }
 
     /**
@@ -418,6 +439,10 @@ interface Schema {
             },
         )
 }
+
+private data class IDImpl(
+    override val value: String,
+) : Schema.ID
 
 class MissingFieldException(
     val typeName: String,

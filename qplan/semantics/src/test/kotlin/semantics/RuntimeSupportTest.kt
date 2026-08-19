@@ -4,7 +4,6 @@ import model.EngineResult
 import model.EngineResultCell
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Value
 import model.selectionForestOf
 import model.testing.TestWorld
 import java.util.concurrent.ConcurrentLinkedQueue

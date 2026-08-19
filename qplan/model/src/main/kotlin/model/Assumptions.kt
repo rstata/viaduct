@@ -24,14 +24,14 @@ sealed interface Assumptions {
     val selectiveResolvers: Boolean
 
     /** Whether [variable] has a completed binding, including a binding whose value is null. */
-    fun isBound(variable: Value.Variable): Boolean
+    fun isBound(variable: Arguments.Variable): Boolean
 
     /**
      * Declares the uncompleted binding promise for [variable].
      *
      * @throws IllegalStateException when [variable] has already been declared
      */
-    fun declareBinding(variable: Value.Variable)
+    fun declareBinding(variable: Arguments.Variable)
 
     /**
      * Binds [variable] immediately to [binding].
@@ -39,12 +39,12 @@ sealed interface Assumptions {
      * @throws IllegalStateException when [variable] has already been declared or bound
      */
     fun bindVariable(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         binding: VariableBinding,
     )
 
     fun bindVariable(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         value: EngineInputData?,
     ) = bindVariable(variable, VariableBinding.of(value))
 
@@ -54,12 +54,12 @@ sealed interface Assumptions {
      * @throws IllegalStateException when [variable] is undeclared or already completed
      */
     fun completeBinding(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         binding: VariableBinding,
     )
 
     fun completeBinding(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         value: EngineInputData?,
     ) = completeBinding(variable, VariableBinding.of(value))
 
@@ -69,14 +69,14 @@ sealed interface Assumptions {
      * @throws IllegalStateException when [variable] is undeclared
      * @throws UncompletedPromiseException when its binding is incomplete
      */
-    fun getBinding(variable: Value.Variable): VariableBinding
+    fun getBinding(variable: Arguments.Variable): VariableBinding
 
     /**
      * Returns the value bound to [variable], suspending until its declared promise completes.
      *
      * @throws IllegalStateException when [variable] is undeclared
      */
-    suspend fun fetchBinding(variable: Value.Variable): VariableBinding
+    suspend fun fetchBinding(variable: Arguments.Variable): VariableBinding
 
     companion object {
         fun of(
@@ -98,20 +98,20 @@ private class AssumptionsImpl(
     override val selectiveResolvers: Boolean,
 ) : Assumptions {
     private val bindings =
-        OnceStore<Value.Variable, Promise<VariableBinding>>()
+        OnceStore<Arguments.Variable, Promise<VariableBinding>>()
 
-    override fun isBound(variable: Value.Variable): Boolean {
+    override fun isBound(variable: Arguments.Variable): Boolean {
         require(variable.isStamped) { "Variable templates cannot have bindings" }
         return bindings.isSet(variable) && bindings.read(variable).isCompleted
     }
 
-    override fun declareBinding(variable: Value.Variable) {
+    override fun declareBinding(variable: Arguments.Variable) {
         require(variable.isStamped) { "Variable templates cannot have bindings" }
         bindings.write(variable, Promise.ofDeferred())
     }
 
     override fun bindVariable(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         binding: VariableBinding,
     ) {
         require(variable.isStamped) { "Variable templates cannot have bindings" }
@@ -119,24 +119,24 @@ private class AssumptionsImpl(
     }
 
     override fun completeBinding(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
         binding: VariableBinding,
     ) {
         require(variable.isStamped) { "Variable templates cannot have bindings" }
         bindingPromise(variable).complete(binding)
     }
 
-    override fun getBinding(variable: Value.Variable): VariableBinding {
+    override fun getBinding(variable: Arguments.Variable): VariableBinding {
         require(variable.isStamped) { "Variable templates cannot have bindings" }
         return bindingPromise(variable).get()
     }
 
-    override suspend fun fetchBinding(variable: Value.Variable): VariableBinding {
+    override suspend fun fetchBinding(variable: Arguments.Variable): VariableBinding {
         require(variable.isStamped) { "Variable templates cannot have bindings" }
         return bindingPromise(variable).await()
     }
 
     private fun bindingPromise(
-        variable: Value.Variable,
+        variable: Arguments.Variable,
     ): Promise<VariableBinding> = bindings.read(variable)
 }

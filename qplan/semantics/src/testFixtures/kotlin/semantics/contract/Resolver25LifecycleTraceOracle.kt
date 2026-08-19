@@ -1,7 +1,8 @@
 package semantics.contract
 
+import model.Arguments
+
 import model.PathComponent
-import model.Value
 import model.usedVariables
 import semantics.resolver25.DemandContributionId
 import semantics.resolver25.Resolver25KeyKind
@@ -42,8 +43,8 @@ internal object Resolver25LifecycleTraceValidators {
             val promises = mutableSetOf<List<PathComponent>>()
             val sealed = mutableSetOf<List<PathComponent>>()
             val declaredBindings =
-                mutableSetOf<Pair<List<PathComponent>, Value.Variable>>()
-            val completedBindingVariables = mutableSetOf<Value.Variable>()
+                mutableSetOf<Pair<List<PathComponent>, Arguments.Variable>>()
+            val completedBindingVariables = mutableSetOf<Arguments.Variable>()
             val contributionsByConsumer =
                 mutableMapOf<List<PathComponent>, MutableSet<DemandContributionId>>()
             val installedContributionIds = mutableSetOf<DemandContributionId>()
@@ -114,7 +115,7 @@ internal object Resolver25LifecycleTraceValidators {
                             val unboundVariables =
                                 submission.selection.key.arguments
                                     .usedVariables()
-                                    .filter(Value.Variable::isStamped)
+                                    .filter(Arguments.Variable::isStamped)
                                     .filterNot(completedBindingVariables::contains)
                             if (unboundVariables.isNotEmpty()) {
                                 violations +=

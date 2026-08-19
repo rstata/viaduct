@@ -1,11 +1,12 @@
 package semantics.arbitrary
 
+import model.Arguments
+
 import model.EngineResult
 import model.EngineErrorData
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.Value
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
@@ -250,22 +251,22 @@ class ResolutionWitnessTest {
         val itemKey =
             ResolverApplicationKey(
                 FieldCoordinate("Query", "item"),
-                Value.Arguments.of(schema.field("Query", "item"), emptyMap()),
+                Arguments.Resolved.of(schema.field("Query", "item"), emptyMap()),
             )
         val itemsKey =
             ResolverApplicationKey(
                 FieldCoordinate("Query", "items"),
-                Value.Arguments.of(schema.field("Query", "items"), emptyMap()),
+                Arguments.Resolved.of(schema.field("Query", "items"), emptyMap()),
             )
         val helperKey =
             ResolverApplicationKey(
                 FieldCoordinate("Query", "helper"),
-                Value.Arguments.of(schema.field("Query", "helper"), emptyMap()),
+                Arguments.Resolved.of(schema.field("Query", "helper"), emptyMap()),
             )
         val computedOneKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
-                Value.Arguments.of(
+                Arguments.Resolved.of(
                     schema.field("Payload", "computed"),
                     mapOf("scale" to 1),
                 ),
@@ -273,7 +274,7 @@ class ResolutionWitnessTest {
         val computedTwoKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
-                Value.Arguments.of(
+                Arguments.Resolved.of(
                     schema.field("Payload", "computed"),
                     mapOf("scale" to 2),
                 ),
@@ -281,7 +282,7 @@ class ResolutionWitnessTest {
         val baseKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "base"),
-                Value.Arguments.of(schema.field("Payload", "base"), emptyMap()),
+                Arguments.Resolved.of(schema.field("Payload", "base"), emptyMap()),
             )
 
         assertEquals(
@@ -340,7 +341,7 @@ class ResolutionWitnessTest {
         log.record(FieldCoordinate("Query", "item"), itemKey.arguments, queryInput)
         log.record(
             FieldCoordinate("Query", "dead"),
-            Value.Arguments.of(schema.field("Query", "dead"), emptyMap()),
+            Arguments.Resolved.of(schema.field("Query", "dead"), emptyMap()),
             queryInput,
         )
         assertEquals(
@@ -359,7 +360,7 @@ class ResolutionWitnessTest {
         val computedKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
-                Value.Arguments.of(computedField, mapOf("scale" to 1)),
+                Arguments.Resolved.of(computedField, mapOf("scale" to 1)),
             )
 
         fun payload(value: Int): ObjectEngineResult =
@@ -427,7 +428,7 @@ class ResolutionWitnessTest {
         val computedKey =
             ResolverApplicationKey(
                 FieldCoordinate("Payload", "computed"),
-                Value.Arguments.of(computedField, mapOf("scale" to 1)),
+                Arguments.Resolved.of(computedField, mapOf("scale" to 1)),
             )
         val input =
             schema.objectOf("Payload") {
@@ -497,7 +498,7 @@ class ResolutionWitnessTest {
         rank: Int,
         tags: List<Int>,
         reverseFieldOrder: Boolean = false,
-    ): Value.Arguments {
+    ): Arguments.Resolved {
         val nested =
             if (reverseFieldOrder) {
                 linkedMapOf<String, Any?>("rank" to rank)
@@ -530,7 +531,7 @@ class ResolutionWitnessTest {
                     "limit" to limit,
                 )
             }
-        return Value.Arguments.of(field, fields)
+        return Arguments.Resolved.of(field, fields)
     }
 
     private fun traversalWorld(): TestWorld =

@@ -1,5 +1,7 @@
 package model.testing
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
 import graphql.language.ArrayValue
@@ -29,10 +31,11 @@ import model.Fragment
 import model.Schema
 import model.SourceSchemaAdapter
 import model.TypeExpr
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.schemaType
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Compiles schema-embedded resolver fixtures into the existing test-world composition API.
@@ -48,7 +51,7 @@ internal class ResolverTestDsl private constructor(
     fun fieldResolvers(schema: Schema): Map<Schema.OutputField, FieldResolverDefinition> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).fieldResolvers()
 
-    fun variableProviders(schema: Schema): Map<Value.Variable, VariableDeclaration> =
+    fun variableProviders(schema: Schema): Map<Arguments.Variable, VariableDeclaration> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).variableProviders()
 
     companion object {
@@ -357,7 +360,7 @@ private class Compiler(
         return compiled
     }
 
-    fun variableProviders(): Map<Value.Variable, VariableDeclaration> =
+    fun variableProviders(): Map<Arguments.Variable, VariableDeclaration> =
         buildMap {
             fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)
@@ -375,7 +378,7 @@ private class Compiler(
                         "${definition.fieldName}: ${unusedPathVariables.sorted().joinToString()}"
                 }
                 usedVariables.forEach { name ->
-                    val variable = Value.Variable.of(field, name)
+                    val variable = Arguments.Variable.of(field, name)
                     put(
                         variable,
                         when {
@@ -478,8 +481,8 @@ private class ResultEvaluator(
     fun evaluateFieldResult(
         field: Schema.ObjectField,
         result: GraphQLValue<*>,
-        input: Value.Object,
-        arguments: Value.Arguments,
+        input: EngineObjectData.Sync,
+        arguments: Arguments.Resolved,
     ): EngineOutputData? =
         evaluate(
             typeExpr = sourceSchema.typeExpr(field),
@@ -586,7 +589,7 @@ private class ResultEvaluator(
         source: ObjectValue,
         context: EvaluationContext,
         injectedNodeId: String? = null,
-    ): Value.Object {
+    ): EngineObjectData.Sync {
         val fields = source.uniqueFields("result for ${type.typeName}")
         if (injectedNodeId != null) {
             require(ID_FIELD !in fields) {
@@ -621,7 +624,7 @@ private class ResultEvaluator(
         declaredType: Schema.CompositeType,
         source: ObjectValue,
         context: EvaluationContext,
-    ): Value.Object {
+    ): EngineObjectData.Sync {
         val fields = source.uniqueFields("Node reference")
         require(fields.keys == setOf(ID_FIELD)) {
             "Node-typed results may contain only id"
@@ -728,7 +731,7 @@ private class ResultEvaluator(
     }
 
     private fun fieldPathValues(
-        input: Value.Object,
+        input: EngineObjectData.Sync,
         path: List<String>,
         preserveNulls: Boolean = false,
     ): List<EngineOutputData?> {
@@ -741,13 +744,13 @@ private class ResultEvaluator(
                 value == EngineErrorData -> listOf(EngineErrorData)
                 value is List<*> -> value.flatMap { visit(it, index) }
                 index == path.size -> listOf(value)
-                value is Value.Object -> {
+                value is EngineObjectData.Sync -> {
                     val responseKey = path[index]
-                    require(responseKey in value.fieldValues) {
+                    require(value.isPresent(responseKey)) {
                         "Path ${path.joinToString(".")} does not identify one value at " +
-                            "${value.schemaType.typeName}.$responseKey"
+                            "${value.type.name}.$responseKey"
                     }
-                    val selected = value.fieldValues.getValue(responseKey)
+                    val selected = value.get(responseKey)
                     if (schema is GJSchema && selected.containsNodeBridge()) {
                         unwrapNodeBridge(selected).flatMap { visit(it, index + 1) }
                     } else {
@@ -766,7 +769,7 @@ private class ResultEvaluator(
     private fun EngineOutputData?.containsNodeBridge(): Boolean =
         when (this) {
             EngineErrorData -> false
-            is Value.Object -> schemaType.typeName.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
+            is EngineObjectData.Sync -> type.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
             is List<*> -> any { value -> value.containsNodeBridge() }
             else -> false
         }
@@ -776,10 +779,11 @@ private class ResultEvaluator(
             null -> emptyList()
             EngineErrorData -> listOf(EngineErrorData)
             is List<*> -> value.flatMap(::unwrapNodeBridge)
-            is Value.Object -> {
+            is EngineObjectData.Sync -> {
+                val schemaType = value.schemaType
                 val payload =
-                    schema.objectField(value.schemaType.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
-                listOf(value.fieldValues.getValue(payload.fieldName))
+                    schema.objectField(schemaType.typeName, NODE_BRIDGE_PAYLOAD_FIELD)
+                listOf(value.get(payload.fieldName))
             }
             else -> throw IllegalArgumentException("Malformed lowered Node bridge")
         }
@@ -832,8 +836,8 @@ private class ResultEvaluator(
 }
 
 private data class EvaluationContext(
-    val input: Value.Object,
-    val arguments: Value.Arguments?,
+    val input: EngineObjectData.Sync,
+    val arguments: Arguments.Resolved?,
     val argumentDefinitions: Schema.FieldArguments?,
 )
 

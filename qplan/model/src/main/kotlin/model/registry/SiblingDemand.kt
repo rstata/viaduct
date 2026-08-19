@@ -5,7 +5,6 @@ import model.ObjectEngineResult
 import model.Assumptions
 import model.PathComponent
 import model.Schema
-import model.Value
 
 /**
  * Whether this registered field resolver key directly demands [siblingKey] at the top level of its

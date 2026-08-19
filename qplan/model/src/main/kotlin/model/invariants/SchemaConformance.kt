@@ -1,5 +1,7 @@
 package model.invariants
 
+import model.Arguments
+
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
@@ -12,20 +14,19 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.TypeExpr
-import model.Value
 import model.canContainPure
 import model.conformsToArgumentDefinition
 import viaduct.engine.api.EngineObjectData
 
 /**
- * Whether this value recursively conforms to the schema definitions it carries.
+ * Whether this EOD recursively contains only engine output data.
  *
- * This relation is universally true of values constructed by their model factories. The [world]
- * context fixes the canonical schema under which those carried definitions are interpreted.
+ * Qplan's factory validates each selection against its canonical schema field before forgetting
+ * that field metadata. This relation checks the retained values without reconstructing field
+ * identity from response-key strings.
  */
 context(world: Assumptions)
-internal fun Value.Object.conformsToSchema(): Boolean =
-    fieldValues.values.all { value -> value.conformsToOutputData() }
+internal fun EngineObjectData.Sync.conformsToSchema(): Boolean = this.conformsToOutputData()
 
 /**
  * Whether this input value recursively conforms to [typeExpr].
@@ -48,11 +49,11 @@ internal fun EngineOutputData?.conformsToOutputSchema(
     typeExpr: TypeExpr<Schema.OutputType>,
 ): Boolean =
     conformsToOutputSchemaType(typeExpr) &&
-        (this !is Value.Object || conformsToSchema())
+        (this !is EngineObjectData.Sync || conformsToOutputData())
 
 /** Whether this argument tuple recursively conforms to [expectedType]. */
 context(world: Assumptions)
-internal fun Value.Arguments.conformsToSchema(
+internal fun Arguments.Resolved.conformsToSchema(
     expectedType: Schema.FieldArguments,
 ): Boolean = conformsToArgumentDefinition(expectedType)
 
@@ -108,7 +109,7 @@ private fun EngineInputData.conformsToInputObjectType(
     if (
         expectedType.fields.values.any { field ->
             !field.typeExpr.isNullable &&
-                field.defaultValue == Value.Default.Absent &&
+                field.defaultValue == Schema.DefaultValue.Absent &&
                 field.name !in fieldValues
         }
     ) {
@@ -167,13 +168,6 @@ fun EngineOutputData?.conformsToOutputSchemaType(
         is List<*> ->
             typeExpr is TypeExpr.List &&
                 all { value -> value.conformsToOutputSchemaType(typeExpr.elementType) }
-        is Value.Object ->
-            typeExpr is TypeExpr.Named &&
-                when (val expected = typeExpr.baseType) {
-                    is Schema.CompositeType ->
-                        schemaType in expected.possibleTypes
-                    else -> expected == schemaType
-                }
         is EngineObjectData.Sync ->
             typeExpr is TypeExpr.Named &&
                 (typeExpr.baseType as? Schema.CompositeType)
@@ -207,8 +201,6 @@ private fun EngineOutputData?.conformsToOutputData(): Boolean =
         -> true
         is Double -> isFinite()
         is List<*> -> all { value -> value.conformsToOutputData() }
-        is Value.Object ->
-            fieldValues.values.all { value -> value.conformsToOutputData() }
         is EngineObjectData.Sync ->
             getSelections().all { selection -> get(selection).conformsToOutputData() }
         else -> false

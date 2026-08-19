@@ -6,6 +6,7 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.RuntimeSupport
 import semantics.orchestrateKeys
+import model.schemaType
 
 /**
  * Resolves [selections] when resolver object fragments are empty, except for generated

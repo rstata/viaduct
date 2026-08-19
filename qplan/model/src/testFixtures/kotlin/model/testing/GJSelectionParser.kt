@@ -6,6 +6,7 @@ import graphql.language.FragmentDefinition
 import graphql.language.FragmentSpread
 import graphql.language.InlineFragment
 import graphql.language.SelectionSet
+import graphql.introspection.Introspection
 import graphql.parser.Parser
 import graphql.schema.GraphQLCompositeType
 import graphql.schema.GraphQLTypeUtil
@@ -17,7 +18,6 @@ import model.MaterializeSelectionForest
 import model.Schema
 import model.SourceSchemaAdapter
 import model.SelectionForest
-import model.Value
 import model.spec.SpecSelection
 import model.spec.flatten
 import model.spec.flattenForMaterialization
@@ -116,7 +116,7 @@ internal class GJSelectionParser(
             "Applied directives are deferred from the current spec-selection model"
         }
         val fieldDefinition =
-            graphql.introspection.Introspection.getFieldDef(
+            Introspection.getFieldDef(
                 schema.graphQLSchema,
                 typeInScope,
                 field.name,

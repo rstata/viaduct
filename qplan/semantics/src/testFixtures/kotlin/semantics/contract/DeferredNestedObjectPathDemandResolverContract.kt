@@ -1,6 +1,5 @@
 package semantics.contract
 
-import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,5 +1,7 @@
 package semantics.benchmark
 
+import viaduct.engine.api.EngineObjectData
+
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
@@ -7,9 +9,9 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
+import model.PathComponent
 import model.SelectionForest
 import model.Stamp
-import model.Value
 import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
@@ -26,6 +28,7 @@ import semantics.contract.validateObjectPathBindings
 import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Collections
 import java.util.Locale
 import kotlin.math.ceil
 
@@ -42,7 +45,7 @@ private const val REPORT_FILE_PROPERTY = "resolverBenchmarkReportFile"
 internal fun interface ResolverBenchmarkSubject {
     fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult
 }
@@ -50,17 +53,17 @@ internal fun interface ResolverBenchmarkSubject {
 internal fun interface ObservedResolverBenchmarkSubject {
     fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
         applicationObserver: (ResolverBenchmarkApplicationObservation) -> Unit,
     ): ObjectEngineResult
 }
 
 internal data class ResolverBenchmarkApplicationObservation(
-    val occurrencePath: List<model.PathComponent>,
+    val occurrencePath: List<PathComponent>,
     val occurrenceStamp: Stamp.Occurrence?,
     val variableArgumentCount: Int,
-    val variableSourceOccurrencePaths: Set<List<model.PathComponent>>,
+    val variableSourceOccurrencePaths: Set<List<PathComponent>>,
     val variableSourceSelectionStamps: Set<Stamp.Occurrence>,
 )
 
@@ -133,7 +136,7 @@ internal class CurrentProfileBenchmarkSupport(
                 val selections = world.fragmentFrom(source).subselections
                 corpus.registry.clearResolutionWitness()
                 val applicationObservations =
-                    java.util.Collections.synchronizedList(
+                    Collections.synchronizedList(
                         mutableListOf<ResolverBenchmarkApplicationObservation>(),
                     )
                 val result =
@@ -283,7 +286,7 @@ internal class CurrentProfileBenchmarkSupport(
 
     private data class PreparedResolution(
         val world: Assumptions,
-        val root: Value.Object,
+        val root: EngineObjectData.Sync,
         val selections: SelectionForest,
     )
 
@@ -468,7 +471,7 @@ internal class CurrentProfileBenchmarkSupport(
 
     private sealed interface ResolverOccurrenceIdentity {
         data class Ordinary(
-            val path: List<model.PathComponent>,
+            val path: List<PathComponent>,
         ) : ResolverOccurrenceIdentity
 
         data class Stamped(

@@ -1,12 +1,12 @@
 package model.spec
 
+import model.Arguments
+
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.OpenValue
 import model.Schema
 import model.Stamp
-import model.Value
 import model.materializeSelectionForestOf
 import model.merge
 import model.testing.GJSchema
@@ -80,12 +80,12 @@ class MaterializeSelectionFlattenerTest {
     fun `co-applicable response-key conflicts fail before open arguments are bound`() {
         val fixture = SchemaFixture()
         val firstVariable =
-            Value.Variable.of(
+            Arguments.Variable.of(
                 field = fixture.schema.objectField("Query", "version"),
                 variableName = "first",
             )
         val secondVariable =
-            Value.Variable.of(
+            Arguments.Variable.of(
                 field = fixture.schema.objectField("Query", "version"),
                 variableName = "second",
             )
@@ -128,7 +128,7 @@ class MaterializeSelectionFlattenerTest {
     fun `open argument groups remain open through collection`() {
         val fixture = SchemaFixture()
         val variable =
-            Value.Variable.of(
+            Arguments.Variable.of(
                 field = fixture.schema.objectField("Query", "version"),
                 variableName = "term",
             )
@@ -156,7 +156,7 @@ class MaterializeSelectionFlattenerTest {
         val field = fixture.schema.objectField("Query", "version")
         val stamp = Stamp.Occurrence.of(resolverPath = emptyList())
         val variable =
-            Value.Variable
+            Arguments.Variable
                 .of(field = field, variableName = "provider")
                 .stamp(stamp)
         val marker =
@@ -340,13 +340,7 @@ class MaterializeSelectionFlattenerTest {
             return SpecSelection.Field.of(
                 alias = alias,
                 field = field,
-                arguments =
-                    arguments.mapValues { (name, value) ->
-                        OpenValue.of(
-                            field.arguments.fields.getValue(name).typeExpr,
-                            value,
-                        )
-                    },
+                arguments = arguments,
                 subselections = subselections,
             )
         }

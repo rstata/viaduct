@@ -7,7 +7,6 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.applicableGroundSelections
 import model.flatMapToSelectionForest
 import semantics.correctresolution.argumentsContainErrorValue

@@ -1,10 +1,11 @@
 package model.registry
 
+import model.Arguments
+
 import model.ListEngineResult
 import model.ObjectEngineResult
 
 import model.Stamp
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.localizeTopLevelSelectionStamps
@@ -56,7 +57,7 @@ class StampedObjectPathDefinitionTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Query", "result")
                     mapOf(
-                        Value.Variable.of(result, "seed") to
+                        Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
                     )
                 },
@@ -82,7 +83,7 @@ class StampedObjectPathDefinitionTest {
         }
         fullyStampedFragment.forEach { selection ->
             if (selection.key.stampedVariables().isEmpty()) {
-                assertIs<Value.Arguments>(selection.key.arguments)
+                assertIs<Arguments.Resolved>(selection.key.arguments)
                 assertEquals(Stamp.VariableFreeOccurrence, selection.key.stamp)
             } else {
                 val stampedKey = selection.key
@@ -153,9 +154,9 @@ class StampedObjectPathDefinitionTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Query", "result")
                     mapOf(
-                        Value.Variable.of(result, "seed") to
+                        Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
-                        Value.Variable.of(result, "value") to
+                        Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(source, listOf("source")),
                     )
                 },
@@ -193,7 +194,7 @@ class StampedObjectPathDefinitionTest {
         )
         val definition = resolver.stampedPathVarDefinitions(sitePath).single()
         val seed =
-            Value.Variable.of(
+            Arguments.Variable.of(
                 testWorld.schema.objectField("Query", "result"),
                 "seed",
             ).stamp(sitePath)
@@ -313,7 +314,7 @@ class StampedObjectPathDefinitionTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Query", "result")
                     mapOf(
-                        Value.Variable.of(result, "value") to
+                        Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(fragment, listOf("box", "value")),
                     )
                 },
@@ -401,7 +402,7 @@ class StampedObjectPathDefinitionTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Query", "result")
                     mapOf(
-                        Value.Variable.of(result, "value") to
+                        Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(
                                 fragment,
                                 listOf("provider", "complete", "value"),

@@ -1,16 +1,20 @@
 package semantics
 
+import viaduct.engine.api.EngineObjectData
+
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.TypeExpr
-import model.Value
+import model.EngineObjectDataEntry
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -43,15 +47,15 @@ class ResolveValueTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "user") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> schema.objectOf("User") },
                         schema.field("User", "computed") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
                             ) { _, _ -> "computed" },
                         schema.field("Profile", "rendered") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Profile"),
                             ) { _, _ -> "rendered" },
                     )
@@ -145,15 +149,15 @@ class ResolveValueTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "user") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> schema.objectOf("User") },
                         schema.field("User", "computed") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("User"),
                             ) { _, _ -> "computed" },
                         schema.field("Profile", "rendered") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Profile"),
                             ) { _, _ -> "rendered" },
                     )
@@ -304,12 +308,12 @@ class ResolveValueTest {
         val itemType = world.schema.type("Item") as Schema.ObjectType
         val field = world.schema.objectField("Item", "value")
         val value =
-            Value.Object.of(
-                type = itemType,
+            engineObjectDataOf(
+                schemaType = itemType,
                 fields =
                     listOf(
-                        Value.Object.FieldValue.of(
-                            key = field.fieldName,
+                        EngineObjectDataEntry.of(
+                            selection = field.fieldName,
                             field = field,
                             value = "one",
                         ),
@@ -356,15 +360,15 @@ class ResolveValueTest {
                     val emptyNested = schema.emptyFragmentOf("Nested")
                     mapOf(
                         schema.field("Query", "items") to
-                            model.testing.fieldResolverOf(emptyQuery) { _, _ ->
+                            fieldResolverOf(emptyQuery) { _, _ ->
                                 error("Not invoked")
                             },
                         schema.field("Item", "computed") to
-                            model.testing.fieldResolverOf(emptyItem) { _, _ ->
+                            fieldResolverOf(emptyItem) { _, _ ->
                                 error("Not invoked")
                             },
                         schema.field("Nested", "rendered") to
-                            model.testing.fieldResolverOf(emptyNested) { _, _ ->
+                            fieldResolverOf(emptyNested) { _, _ ->
                                 error("Not invoked")
                             },
                     )

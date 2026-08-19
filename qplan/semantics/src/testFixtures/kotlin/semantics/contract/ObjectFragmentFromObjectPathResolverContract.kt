@@ -5,7 +5,6 @@ import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineResult
 import model.ErrorEngineResult
-import model.Value
 import model.VariableBinding
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -91,7 +90,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                             field.fieldName == "result"
                         ) {
                             val consumed =
-                                input.fieldValues.entries
+                                input.selectionValues().entries
                                     .single { (key, _) -> key == "consume" }
                             consumedKey = consumed.key
                             consumedValue = consumed.value

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records durable principles for the qplan model and its resolver algorithms. The evidence, known hard cases, and source provenance behind them live in [`research-evidence.md`](./research-evidence.md). Current implementation priorities belong in [`handoff.md`](./handoff.md), practical workflows belong in [`maintainer-guide.md`](./maintainer-guide.md), and completed chronology belongs in Git history.
+This document records durable principles for the qplan model and its resolver algorithms. The evidence, known hard cases, and source provenance behind them live in [`research-evidence.md`](./research-evidence.md). Current implementation state and scope boundaries belong in [`handoff.md`](./handoff.md), practical workflows belong in [`maintainer-guide.md`](./maintainer-guide.md), and completed chronology belongs in Git history.
 
 ## A Compiling Mathematical Model
 
@@ -10,11 +10,13 @@ Compiling Kotlin is qplan's primary specification language. Model declarations d
 
 Each reasoning exercise fixes one canonical `Assumptions`, `Schema`, and resolver registry. Schema decoding, GraphQL parsing, registry assembly, node lowering, and provider-path compilation are pre-reasoning composition. Semantic code trusts the carrier invariants established at that boundary.
 
+A schema definition may retain a canonical opaque foreign attachment needed at an integration boundary. Such an attachment is not a model value: semantic logic does not inspect it or use it in equality, hashing, conformance, or schema relations. Qplan object types currently retain their canonical GraphQL-Java definitions solely to supply Viaduct Engine API type witnesses.
+
 Compilation, examples, generated tests, stress campaigns, and cross-resolver agreement are finite consistency evidence. They are not mathematical proof. The TLA+ baseline proves only its explicitly stated finite calculus and assumptions.
 
 ## Keep Semantic Domains Distinct
 
-Selections may contain open `ObjectEngineResult.Key` values. An `ObjectEngineResult.ObjectKey` has a concrete object field but may still contain variables. Only a fully instantiated `ObjectEngineResult.GroundKey` belongs in exact OER cells, `Value.Object`, result paths, materialization, dependency ordering, and resolver application.
+Selections may contain open `ObjectEngineResult.Key` values. An `ObjectEngineResult.ObjectKey` has a concrete object field but may still contain variables. Only a fully instantiated `ObjectEngineResult.GroundKey` belongs in exact OER cells, result paths, materialization lookup, dependency ordering, and resolver application. EOD selections are strings and never contain OER keys.
 
 Resolver input demand, client demand, output projection demand, symbolic or potential demand, and supplied demand serve different purposes. Resolver-owned output, internal selection forests, tenant-visible GraphQL fragments, and completed result coverage are likewise related but not interchangeable representations.
 
@@ -24,7 +26,7 @@ Semantic domains need not be nominal Kotlin hierarchies. Performance-sensitive d
 
 A **pre-domain type** supplies an unambiguous runtime representation that one or more semantic domains may admit. Ordinary Kotlin `Int`, finite `Double`, `Boolean`, and `String` values are pre-domain representations. Qplan's result domain additionally uses `Schema.ID` and canonical `Schema.EnumValue` values so GraphQL strings, IDs, and enum members remain distinguishable without carrying a nominal result wrapper around every scalar.
 
-Production Viaduct currently overloads Kotlin `String` for GraphQL String, ID, and enum values in engine input and output data. Qplan's carrier target preserves that representation in `EngineInputData` and `EngineOutputData` for current compatibility, while `EngineResult` uses `String`, `Schema.ID`, and `Schema.EnumValue` respectively. Crossings between output data and engine results therefore require schema-directed conversion. This deliberate conversion boundary may disappear after production input and output carriers adopt the stronger pre-domain representations.
+Production Viaduct currently overloads Kotlin `String` for GraphQL String, ID, and enum values in engine input and output data. Qplan's carrier model preserves that representation in `EngineInputData` and `EngineOutputData` for current compatibility, while `EngineResult` uses `String`, `Schema.ID`, and `Schema.EnumValue` respectively. Crossings between output data and engine results therefore require schema-directed conversion. This deliberate conversion boundary may disappear after production input and output carriers adopt the stronger pre-domain representations.
 
 Failure sentinels belong to domains rather than to every pre-domain type. Engine results, engine output data, and argument resolution use distinct error sentinels; `EngineInputData` has no error member. No sentinel impersonates scalar, list, or object interfaces merely to obtain an artificial Kotlin union.
 
@@ -34,8 +36,7 @@ The semantic identity of work is an occurrence in the result tree. Equal node ID
 
 Cells are allocated by their containing OER or LER. Cell reference identity is the cell occurrence identity; a parallel numeric cell identifier would duplicate and risk disagreeing with the carrier.
 
-Resolver26 additionally preserves the identity of variable-bearing source selections through
-`SelectionOccurrenceId` lineage.
+Resolver26 additionally preserves the identity of variable-bearing source selections through `SelectionOccurrenceId` lineage.
 
 ## One-Shot Correctness Is Producer-Specific
 
@@ -93,12 +94,12 @@ Keep separate evidence for completed-result correctness, exact and occurrence-aw
 
 Generated presence is weaker than runtime activation. Directed profiles should require the target interaction to execute, and broad campaigns should record enough information to replay one exact `S:R:Q` coordinate. Large green campaigns remain finite evidence and do not override a focused counterexample.
 
-## Engine API Alignment
+## Engine API Boundary
 
-The qplan model currently owns carriers such as `EngineResult`, typed keys, schema validation, and occurrence-aware cells. Viaduct's `EngineObjectData.Sync` is the intended synchronous partial-object boundary for the current alignment work and distinguishes an absent field from a present null value.
+The qplan model owns carriers such as `EngineResult`, typed keys, schema validation, and occurrence-aware cells. Viaduct's `EngineObjectData.Sync` is the synchronous partial-object boundary and distinguishes an absent field from a present null value. Qplan supplies its own validating implementation so it can preserve schema preconditions and instrumentation points.
 
-The migration should make qplan use Viaduct engine API carriers where they express the same semantic fact while preserving qplan-only structure needed for formal reasoning. Do not erase occurrence identity, ground-key validation, or model invariants merely to reduce source-level differences.
+Qplan uses Viaduct engine API carriers where they express the same semantic fact while preserving qplan-only structure needed for formal reasoning. Do not erase occurrence identity, ground-key validation, or model invariants merely to reduce source-level differences.
 
 Alignment does not require preserving every fragile production representation inside the result tree. In particular, qplan intentionally distinguishes result-domain ID and enum values even though current production engine input and output data represent both as strings. Keep that mismatch isolated in explicit adapters so a future production migration can remove conversions without changing result semantics.
 
-The purpose of alignment is to keep the future implementation distance small. It does not make production runtime concerns part of every qplan function, and it does not expand the immediate task into `execution2` design.
+The aligned boundary keeps the future implementation distance small. It does not make production runtime concerns part of every qplan function or imply that `execution2` design is part of qplan work.

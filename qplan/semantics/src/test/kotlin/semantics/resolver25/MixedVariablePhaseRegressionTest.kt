@@ -1,14 +1,13 @@
 package semantics.resolver25
 
 import model.ObjectEngineResult
-
-import model.Value
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
 import semantics.contract.Resolver25StructuralSignature
 import semantics.contract.assertDistinctArguments
 import semantics.contract.resolver25StructuralSignatures
+import semantics.contract.selectionValues
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -51,7 +50,7 @@ class MixedVariablePhaseRegressionTest {
                         field.fieldName == "bridge"
                     ) {
                         val seed =
-                            input.fieldValues.entries
+                            input.selectionValues().entries
                                 .single { (key, _) ->
                                     key == "seed" || key.startsWith("seed(")
                                 }.value
@@ -138,7 +137,7 @@ class MixedVariablePhaseRegressionTest {
                         field.fieldName == "source"
                     ) {
                         val producer =
-                            input.fieldValues.entries
+                            input.selectionValues().entries
                                 .single { (key, _) ->
                                     key == "producer" || key.startsWith("producer(")
                                 }.value

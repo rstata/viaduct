@@ -6,11 +6,13 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
+import model.Arguments
 import model.PathComponent
 import model.SelectionForest
-import model.Value
+import viaduct.engine.api.EngineObjectData
 import model.groundKey
 import model.registry.demandsFromSibling
+import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 
 /**
@@ -20,7 +22,7 @@ import semantics.correctresolution.argumentsContainErrorValue
  * [runtimeSupport] supplies their differing output-boundary semantics.
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-internal fun Value.Object.orchestrateKeys(
+internal fun EngineObjectData.Sync.orchestrateKeys(
     path: List<PathComponent>,
     selections: SelectionForest,
     resolved: ObjectEngineResult,
@@ -50,7 +52,7 @@ internal fun Value.Object.orchestrateKeys(
  * Returns a topological ordering of [keys] using Kahn's algorithm, with demand before consumption.
  */
 context(world: Assumptions)
-internal fun Value.Object.dependencyOrder(
+internal fun EngineObjectData.Sync.dependencyOrder(
     path: List<PathComponent>,
     keys: Set<ObjectEngineResult.GroundKey>,
     ordered: List<ObjectEngineResult.GroundKey> = emptyList(),
@@ -73,7 +75,7 @@ internal fun Value.Object.dependencyOrder(
 
 /** Returns the unresolved sibling keys demanded by the field resolver for [consumer]. */
 context(world: Assumptions)
-private fun Value.Object.dependenciesOf(
+private fun EngineObjectData.Sync.dependenciesOf(
     path: List<PathComponent>,
     consumer: ObjectEngineResult.GroundKey,
     unresolved: Set<ObjectEngineResult.GroundKey>,
@@ -97,7 +99,7 @@ private fun Value.Object.dependenciesOf(
  * result-tree fringe.
  */
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
-internal fun Value.Object.resolveKey(
+internal fun EngineObjectData.Sync.resolveKey(
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
     resolved: ObjectEngineResult,
@@ -105,13 +107,13 @@ internal fun Value.Object.resolveKey(
     val key = fieldSelection.groundKey()
     val cell = resolved.reserveCell(key)
     return when (val arguments = key.arguments) {
-        model.OpenArguments.Ground.Error -> {
+        Arguments.Error -> {
             cell.setValue(ErrorEngineResult)
             cell.setAccessResult(ErrorEngineResult)
             null
         }
 
-        is Value.Arguments -> {
+        is Arguments.Resolved -> {
             val resolutionSelections = runtimeSupport.complete(fieldSelection.subselections)
             val fieldValue =
                 if (key.field in world.resolverRegistry) {
@@ -138,7 +140,7 @@ internal fun Value.Object.resolveKey(
                         )
                     }
                 } else {
-                    fieldValues.getValue(key.field.fieldName)
+                    get(key.field.fieldName)
                 }
             val resolvedValue =
                 fieldValue.resolveValue(

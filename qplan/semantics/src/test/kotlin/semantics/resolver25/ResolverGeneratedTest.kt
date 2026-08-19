@@ -1,11 +1,12 @@
 package semantics.resolver25
 
+import viaduct.engine.api.EngineObjectData
+
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.Value
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
 import semantics.arbitrary.ErrorValueWeight
@@ -41,6 +42,7 @@ import semantics.arbitrary.checkResolverTestCases
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
 import semantics.contract.GeneratedCaseAssertions
+import semantics.contract.GeneratedResolutionObservation
 import semantics.contract.ListPassiveDeepeningGeneratedResolverContract
 import semantics.contract.MixedVariableGeneratedResolverContract
 import semantics.contract.NodeGeneratedResolverContract
@@ -232,19 +234,19 @@ class ResolverGeneratedTest :
 
     override fun resolve(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
         resolveWithLifecycleValidation(world, root, selections)
 
     override fun observeResolution(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ResolverResolutionObservation =
         observeWithLifecycleValidation(world, root, selections)
 
-    private val semantics.contract.GeneratedResolutionObservation.lifecycleEvents:
+    private val GeneratedResolutionObservation.lifecycleEvents:
         List<Resolver25LifecycleEvent>
         get() =
             (subject as Resolver25ResolutionObservation).lifecycleEvents

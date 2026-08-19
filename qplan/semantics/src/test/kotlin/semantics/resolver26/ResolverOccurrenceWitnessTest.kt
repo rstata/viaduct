@@ -1,11 +1,12 @@
 package semantics.resolver26
 
+import semantics.contract.selectionValues
+
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
 import model.TypeExpr
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -64,7 +65,7 @@ class ResolverOccurrenceWitnessTest {
                                     "fragment PayloadInput on Payload { base }",
                                 ),
                             ) { input, _ ->
-                                input.fieldValues.getValue(baseKey.field.fieldName)
+                                input.selectionValues().getValue(baseKey.field.fieldName)
                             },
                     )
                 },

@@ -9,13 +9,13 @@ import model.EngineInputObjectData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.OpenArguments
+import model.Arguments
 import model.PathComponent
 import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.TypeExpr
-import model.Value
+import viaduct.engine.api.EngineObjectData
 import model.registry.ResolverRegistry
 import java.security.MessageDigest
 
@@ -57,7 +57,7 @@ value class ResolutionFingerprint(
 /** The canonical field identity of one field-resolver application after fixture lowering. */
 data class ResolverApplicationKey(
     val field: FieldCoordinate,
-    val arguments: Value.Arguments,
+    val arguments: Arguments.Resolved,
 )
 
 /**
@@ -102,8 +102,8 @@ data class ResolverApplicationRecord(
     companion object {
         fun capture(
             field: FieldCoordinate,
-            arguments: Value.Arguments,
-            input: Value.Object,
+            arguments: Arguments.Resolved,
+            input: EngineObjectData.Sync,
             suppliedDemand: SelectionForest? = null,
             bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
         ): ResolverApplicationRecord =
@@ -133,8 +133,8 @@ data class ResolverOccurrenceApplicationRecord(
         fun capture(
             occurrencePath: List<PathComponent>,
             field: FieldCoordinate,
-            arguments: Value.Arguments,
-            input: Value.Object,
+            arguments: Arguments.Resolved,
+            input: EngineObjectData.Sync,
             suppliedDemand: SelectionForest? = null,
             bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
         ): ResolverOccurrenceApplicationRecord =
@@ -163,8 +163,8 @@ class ResolutionApplicationLog(
 
     fun record(
         field: FieldCoordinate,
-        arguments: Value.Arguments,
-        input: Value.Object,
+        arguments: Arguments.Resolved,
+        input: EngineObjectData.Sync,
         suppliedDemand: SelectionForest? = null,
     ) {
         if (!recording) return
@@ -224,8 +224,8 @@ class ResolutionOccurrenceApplicationLog(
     fun record(
         occurrencePath: List<PathComponent>,
         field: FieldCoordinate,
-        arguments: Value.Arguments,
-        input: Value.Object,
+        arguments: Arguments.Resolved,
+        input: EngineObjectData.Sync,
         suppliedDemand: SelectionForest? = null,
     ) {
         val record =
@@ -328,7 +328,7 @@ fun EngineResult?.registeredResolverOccurrences(
                     .forEach { key ->
                         val canonicalField = key.field.fieldCoordinate()
                         val fieldPath = path + key
-                        val arguments = key.arguments as? Value.Arguments
+                        val arguments = key.arguments as? Arguments.Resolved
                         if (key.field in registry && arguments != null) {
                             result +=
                                 RegisteredResolverOccurrence(
@@ -436,7 +436,7 @@ fun SelectionForest.allowedResolverClosure(
     )
 }
 
-fun Value.Arguments.resolutionFingerprint(
+fun Arguments.Resolved.resolutionFingerprint(
     expectedType: Schema.FieldArguments,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): ResolutionFingerprint =
@@ -444,7 +444,7 @@ fun Value.Arguments.resolutionFingerprint(
         FingerprintBudget(bounds).arguments(this, expectedType),
     )
 
-fun Value.Object.resolutionFingerprint(
+fun EngineObjectData.Sync.resolutionFingerprint(
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): ResolutionFingerprint =
     ResolutionFingerprint(
@@ -477,12 +477,12 @@ private class FingerprintBudget(
     private var nodes = 0
 
     fun arguments(
-        arguments: OpenArguments,
+        arguments: Arguments,
         expectedType: Schema.FieldArguments,
     ): String =
         when (arguments) {
-            OpenArguments.Ground.Error -> node("error-args")
-            is Value.Arguments ->
+            Arguments.Error -> node("error-args")
+            is Arguments.Resolved ->
                 node(
                     "args(" +
                         arguments.fieldValues.entries
@@ -511,12 +511,12 @@ private class FingerprintBudget(
                         value.joinToString(separator = ",", transform = ::output) +
                         "]",
                 )
-            value is Value.Object ->
+            value is EngineObjectData.Sync ->
                 node(
-                    "object:${atom(value.schemaType.typeName)}{" +
-                        value.fieldValues.entries
-                            .map { (key, fieldValue) ->
-                                atom(key) + "=" + output(fieldValue)
+                    "object:${atom(value.type.name)}{" +
+                        value.getSelections()
+                            .map { selection ->
+                                atom(selection) + "=" + output(value.get(selection))
                             }.sorted()
                             .joinToString(",") +
                         "}",

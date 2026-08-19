@@ -1,16 +1,18 @@
 package model
 
+import viaduct.engine.api.EngineObjectData
+
 /** Constructs an object value by resolving type and field names in this reasoning world. */
 fun Assumptions.objectOf(
     typeName: String,
     block: ObjectValueScope.() -> Unit = {},
-): Value.Object = schema.objectOf(typeName, block)
+): EngineObjectData.Sync = schema.objectOf(typeName, block)
 
 /** Constructs an object value by resolving type and field names in this schema. */
 fun Schema.objectOf(
     typeName: String,
     block: ObjectValueScope.() -> Unit = {},
-): Value.Object {
+): EngineObjectData.Sync {
     val type = type(typeName)
     require(type is Schema.ObjectType) {
         "$typeName is not an object type"
@@ -30,7 +32,7 @@ class ObjectValueScope internal constructor(
     private val type: Schema.ObjectType,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val fields = linkedMapOf<String, Value.Object.FieldValue>()
+    private val fields = linkedMapOf<String, EngineObjectDataEntry>()
     private var isBuilt = false
 
     /** Selects a field coordinate on this scope's object type. */
@@ -70,7 +72,7 @@ class ObjectValueScope internal constructor(
             "A field reference cannot be assigned in another object scope"
         }
         val arguments = key.arguments
-        require(arguments is Value.Arguments && arguments.fieldValues.isEmpty()) {
+        require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
             "Passive object field ${type.typeName}/${key.field.fieldName} must be argumentless"
         }
         val fieldName = key.field.fieldName
@@ -78,8 +80,8 @@ class ObjectValueScope internal constructor(
             "Duplicate object field ${type.typeName}/${key.field.fieldName}"
         }
         fields[fieldName] =
-            Value.Object.FieldValue.of(
-                key = fieldName,
+            EngineObjectDataEntry.of(
+                selection = fieldName,
                 field = key.field,
                 value =
                     sourceSchema.lowerOutput(
@@ -93,12 +95,12 @@ class ObjectValueScope internal constructor(
     fun objectOf(
         typeName: String,
         block: ObjectValueScope.() -> Unit = {},
-    ): Value.Object = schema.objectOf(typeName, block)
+    ): EngineObjectData.Sync = schema.objectOf(typeName, block)
 
-    internal fun build(): Value.Object {
+    internal fun build(): EngineObjectData.Sync {
         isBuilt = true
-        return Value.Object.of(
-            type = type,
+        return engineObjectDataOf(
+            schemaType = type,
             fields = fields.values,
         )
     }
@@ -129,7 +131,12 @@ private fun coerceOutputValue(
             when (val type = typeExpr.baseType) {
                 is Schema.SimpleType -> coerceSimpleValue(type, value)
                 is Schema.CompositeType -> {
-                    require(value is Value.Object && value.schemaType in type.possibleTypes) {
+                    require(
+                        value is EngineObjectData.Sync &&
+                            type.possibleTypes.any { possibleType ->
+                                possibleType.typeName == value.type.name
+                            },
+                    ) {
                         "Expected an object value for ${type.typeName}"
                     }
                     value

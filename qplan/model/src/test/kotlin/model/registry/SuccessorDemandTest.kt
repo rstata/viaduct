@@ -1,14 +1,12 @@
 package model.registry
 
-import model.ObjectEngineResult
-
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineErrorData
-import model.OpenArguments
+import model.ObjectEngineResult
+import model.Arguments
 import model.Schema
 import model.Selection
-import model.Value
 import model.emptyFragmentOf
 import model.fetchBindings
 import model.fragmentFrom
@@ -23,6 +21,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import viaduct.engine.api.EngineObjectData
 
 class SuccessorDemandTest {
     @Test
@@ -49,13 +48,13 @@ class SuccessorDemandTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "root") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 EngineErrorData
                             },
                         schema.field("Root", "consumer") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 objectFragment =
                                     schema.fragmentFrom(
                                         """
@@ -73,7 +72,7 @@ class SuccessorDemandTest {
                                 "consumer"
                             },
                         schema.field("Box", "computed") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Box"),
                             ) { _, _ ->
                                 "computed"
@@ -182,7 +181,7 @@ class SuccessorDemandTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Item", "result")
                     mapOf(
-                        Value.Variable.of(result, "value") to
+                        Arguments.Variable.of(result, "value") to
                             schema.fromObjectField(resultFragment, listOf("source")),
                     )
                 },
@@ -237,7 +236,7 @@ class SuccessorDemandTest {
                 },
             ).assumptions
         val successor = world.schema.objectField("Query", "successor")
-        val variable = Value.Variable.of(successor, "value")
+        val variable = Arguments.Variable.of(successor, "value")
         val first =
             variable.stamp(
                 listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 1))),
@@ -253,7 +252,7 @@ class SuccessorDemandTest {
         val firstKey =
             ObjectEngineResult.Key.of(
                 successor,
-                OpenArguments.of(successor, mapOf("value" to first)),
+                Arguments.of(successor, mapOf("value" to first)),
             )
         val selections =
             selectionForestOf(
@@ -266,7 +265,7 @@ class SuccessorDemandTest {
                     key =
                         ObjectEngineResult.Key.of(
                             successor,
-                            OpenArguments.of(successor, mapOf("value" to second)),
+                            Arguments.of(successor, mapOf("value" to second)),
                         ),
                     possibleTypes = setOf(world.schema.query),
                     subselections = selectionForestOf(),
@@ -427,7 +426,7 @@ private class CountingResolverRegistry(
     var resolverLookups: Int = 0
         private set
 
-    override fun resolveRootQuery(): Value.Object = delegate.resolveRootQuery()
+    override fun resolveRootQuery(): EngineObjectData.Sync = delegate.resolveRootQuery()
 
     override fun contains(field: Schema.ObjectField): Boolean = field in delegate
 

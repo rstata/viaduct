@@ -1,8 +1,9 @@
 package semantics.contract
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
-import model.Value
 import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -40,7 +41,7 @@ interface ObjectFragmentFromArgumentResolverContract :
             )
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Query", "result")
-        val variable = Value.Variable.of(resultField, "seed")
+        val variable = Arguments.Variable.of(resultField, "seed")
         val firstKey =
             ObjectEngineResult.GroundKey.of(
                 resultField,
@@ -111,7 +112,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                     mapOf(
                         result to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
-                                input.fieldValues.getValue("consume")
+                                input.selectionValues().getValue("consume")
                             },
                         consume to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
@@ -122,7 +123,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                 variableProviders = { schema ->
                     val result = schema.objectField("Query", "result")
                     mapOf(
-                        Value.Variable.of(result, "argumentValue") to
+                        Arguments.Variable.of(result, "argumentValue") to
                             schema.fromArgument(result, "value"),
                     )
                 },

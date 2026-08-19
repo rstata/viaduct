@@ -5,10 +5,9 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.OpenArguments
+import model.Arguments
 import model.PathComponent
 import model.Stamp
-import model.Value
 import model.applicableGroundSelections
 import model.usedVariables
 
@@ -92,5 +91,5 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
         else -> true
     }
 
-internal fun OpenArguments.Ground.argumentsContainErrorValue(): Boolean =
-    this == OpenArguments.Ground.Error
+internal fun Arguments.Ground.argumentsContainErrorValue(): Boolean =
+    this == Arguments.Error

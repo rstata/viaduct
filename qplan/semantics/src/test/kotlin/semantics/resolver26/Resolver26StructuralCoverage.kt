@@ -1,10 +1,11 @@
 package semantics.resolver26
 
+import model.Arguments
+
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Stamp
-import model.Value
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.RegisteredResolverOccurrence
@@ -140,7 +141,7 @@ internal fun resolver26StructuralSignatures(
 private data class VisibleResolverOccurrence(
     val containingObjectPath: List<PathComponent>,
     val field: FieldCoordinate,
-    val arguments: Value.Arguments,
+    val arguments: Arguments.Resolved,
 )
 
 // Returns the exact stored key at this registered resolver occurrence.

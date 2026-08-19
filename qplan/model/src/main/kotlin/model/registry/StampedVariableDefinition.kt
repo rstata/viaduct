@@ -1,7 +1,8 @@
 package model.registry
 
+import model.Arguments
+
 import model.ObjectEngineResult
-import model.Value
 
 /**
  * One occurrence-specific variable and its occurrence-specific object provider path.
@@ -10,13 +11,13 @@ import model.Value
  * equal.
  */
 sealed interface StampedObjectPathDefinition {
-    val variable: Value.Variable
+    val variable: Arguments.Variable
     val path: List<ObjectEngineResult.Key>
 
     companion object {
         /** Returns an object-path definition for the stamped [variable]. */
         fun of(
-            variable: Value.Variable,
+            variable: Arguments.Variable,
             path: List<ObjectEngineResult.Key>,
         ): StampedObjectPathDefinition {
             require(variable.isStamped) {
@@ -34,13 +35,13 @@ sealed interface StampedObjectPathDefinition {
  * are equal.
  */
 sealed interface SelectionStampedVariableDefinition {
-    val variable: Value.Variable
+    val variable: Arguments.Variable
     val definition: VariableDefinition
 
     companion object {
         /** Returns a definition for a variable stamped at one selection occurrence. */
         fun of(
-            variable: Value.Variable,
+            variable: Arguments.Variable,
             definition: VariableDefinition,
         ): SelectionStampedVariableDefinition {
             require(variable.stamp?.occurrenceLineage?.isNotEmpty() == true) {
@@ -52,11 +53,11 @@ sealed interface SelectionStampedVariableDefinition {
 }
 
 private data class StampedObjectPathDefinitionImpl(
-    override val variable: Value.Variable,
+    override val variable: Arguments.Variable,
     override val path: List<ObjectEngineResult.Key>,
 ) : StampedObjectPathDefinition
 
 private data class SelectionStampedVariableDefinitionImpl(
-    override val variable: Value.Variable,
+    override val variable: Arguments.Variable,
     override val definition: VariableDefinition,
 ) : SelectionStampedVariableDefinition

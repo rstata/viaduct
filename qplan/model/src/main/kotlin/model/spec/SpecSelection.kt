@@ -1,9 +1,8 @@
 package model.spec
 
 import model.Assumptions
+import model.Arguments
 import model.Schema
-import model.OpenValue
-import model.Value
 
 /**
  * A post-validation selection in a GraphQL-spec selection set.
@@ -39,20 +38,14 @@ sealed interface SpecSelection {
         val fieldName: String
 
         /**
-         * The field arguments as an unordered map from schema argument name to semantic value.
+         * The schema-checked field argument tuple.
          *
          * ### Invariant: spec-field-arguments
          *
-         * Every key names an argument of [fieldName] in the surrounding validated type context.
-         * Declared defaults have been applied, every required argument is present, omitted optional
-         * arguments without defaults are absent, and every present non-variable value conforms
-         * recursively to its argument type.
-         *
-         * ### Representation
-         *
-         * Non-variable values are in coerced form. A value may contain a [Value.Variable].
+         * Declared defaults have been applied, every required argument is present, and every
+         * non-variable expression recursively conforms to its argument type.
          */
-        val arguments: Map<String, OpenValue?>
+        val arguments: Arguments
 
         /**
          * The selection set on this field's result.
@@ -75,7 +68,7 @@ sealed interface SpecSelection {
             fun of(
                 alias: String?,
                 field: Schema.OutputField,
-                arguments: Map<String, OpenValue?>,
+                arguments: Map<String, Any?>,
                 subselections: List<SpecSelection>?,
             ): Field {
                 when (field.typeExpr.baseType) {
@@ -91,7 +84,12 @@ sealed interface SpecSelection {
                                 "requires a non-empty selection set"
                         }
                 }
-                return FieldImpl(alias, field.fieldName, arguments, subselections)
+                return FieldImpl(
+                    alias,
+                    field.fieldName,
+                    Arguments.of(field, arguments),
+                    subselections,
+                )
             }
         }
     }
@@ -148,7 +146,7 @@ sealed interface SpecSelection {
 private class FieldImpl(
     override val alias: String?,
     override val fieldName: String,
-    override val arguments: Map<String, OpenValue?>,
+    override val arguments: Arguments,
     override val subselections: List<SpecSelection>?,
 ) : SpecSelection.Field
 

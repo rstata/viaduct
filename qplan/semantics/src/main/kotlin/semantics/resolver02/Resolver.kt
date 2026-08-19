@@ -7,6 +7,7 @@ import model.SelectionForest
 import model.registry.successorBoundaryDemand
 import semantics.RuntimeSupport
 import semantics.orchestrateKeys
+import model.schemaType
 
 /**
  * Resolves [selections] with non-selective resolver applications. Results may contain more OER

@@ -6,7 +6,6 @@ import model.Assumptions
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.Value
 import model.concatenateSelectionForests
 import model.flatMapToSelectionForest
 import model.objectKey

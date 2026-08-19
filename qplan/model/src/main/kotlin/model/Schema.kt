@@ -1,5 +1,7 @@
 package model
 
+import graphql.schema.GraphQLObjectType
+
 /**
  * A finite GraphQL schema view used as an input to the correctness model.
  *
@@ -16,13 +18,13 @@ package model
  * owner map contains `d` by its declared name for nested definitions. Every [TypeExpr.baseType]
  * reachable from the schema is likewise the canonical result of [type].
  *
- * Construct every [Value.Object], [Value.Arguments], and [ObjectEngineResult.Key] through a factory
- * on its precise semantic category. The one-schema world
+ * Construct every [Arguments.Resolved] and [ObjectEngineResult.Key] through a factory on its precise
+ * semantic category, and every engine object through qplan's validating EOD factory. The one-schema world
  * stipulates that every definition supplied to those factories is canonical in this schema; the
  * factories do not revalidate that ownership. Nested definitions navigate to their canonical owners through
  * [OutputField.containingType] and [InputLikeField.containingType]. Compare definitions with ordinary
  * `==`, `!=`, and collection equality operations. Only acyclic value objects such as [TypeExpr] and
- * [Value.Default] add structural equality over their properties.
+ * [Schema.DefaultValue] add structural equality over their properties.
  *
  * ### Invariant: schema-supported-domain
  *
@@ -38,6 +40,25 @@ package model
  * concrete implementation, and mutability are not modeled.
  */
 interface Schema {
+    /**
+     * An optional, fully coerced semantic schema default.
+     *
+     * [Absent] means that no default is declared. [Present.value] may be null, denoting an explicit
+     * GraphQL null; absence and explicit null are distinct. When attached to a field or argument,
+     * [Present] is valid for its declaring [TypeExpr]. Default values use structural equality.
+     */
+    sealed interface DefaultValue {
+        data object Absent : DefaultValue
+
+        sealed interface Present : DefaultValue {
+            val value: EngineInputData?
+        }
+
+        companion object {
+            fun of(value: EngineInputData?): Present = PresentDefaultValueImpl(value)
+        }
+    }
+
     /**
      * The canonical query root.
      *
@@ -286,9 +307,21 @@ interface Schema {
      * [fields] contains `__typename` and the object's effective fields after flattening type
      * extensions and inherited interface fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
+     *
+     * [graphQLJavaDefinition] is a canonical opaque attachment for integration with Viaduct engine
+     * APIs. It is not part of the mathematical schema model and must not be inspected for schema
+     * reasoning, equality, hashing, conformance, or subtype decisions.
      */
     interface ObjectType : CompositeType {
         override val fields: Map<String, ObjectField>
+
+        /**
+         * The canonical GraphQL-Java definition representing this lowered object type.
+         *
+         * Repeated reads return the same instance within one schema. Semantic logic treats this as
+         * an opaque foreign value; only integration boundaries may unwrap or pass it through.
+         */
+        val graphQLJavaDefinition: GraphQLObjectType
     }
 
     /**
@@ -395,10 +428,10 @@ interface Schema {
         val name: String
         val containingType: InputObjectLike
         val typeExpr: TypeExpr<InputType>
-        val defaultValue: Value.Default
+        val defaultValue: Schema.DefaultValue
 
         val isRequired: Boolean
-            get() = !typeExpr.isNullable && defaultValue == Value.Default.Absent
+            get() = !typeExpr.isNullable && defaultValue == Schema.DefaultValue.Absent
     }
 
     /** The canonical input-object field at [containingType]/[fieldName]. */
@@ -443,3 +476,7 @@ interface Schema {
 private data class IDImpl(
     override val value: String,
 ) : Schema.ID
+
+private data class PresentDefaultValueImpl(
+    override val value: EngineInputData?,
+) : Schema.DefaultValue.Present

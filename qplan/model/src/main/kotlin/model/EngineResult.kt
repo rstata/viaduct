@@ -26,8 +26,8 @@ sealed interface PathComponent
  * A null path or any path containing a [ListEngineResult.Index] has no corresponding selection
  * path and yields null.
  */
-internal fun kotlin.collections.List<PathComponent>?.toSelectionPath():
-    kotlin.collections.List<ObjectEngineResult.GroundKey>? =
+internal fun List<PathComponent>?.toSelectionPath():
+    List<ObjectEngineResult.GroundKey>? =
     this?.map { component -> component as? ObjectEngineResult.GroundKey ?: return null }
 
 /**
@@ -99,7 +99,7 @@ sealed interface ObjectEngineResult {
      */
     sealed interface Key {
         val field: Schema.OutputField
-        val arguments: OpenArguments
+        val arguments: Arguments
         val stamp: Stamp?
 
         companion object {
@@ -111,7 +111,7 @@ sealed interface ObjectEngineResult {
             fun of(
                 stamp: Stamp.Occurrence,
                 field: Schema.OutputField,
-                arguments: OpenArguments,
+                arguments: Arguments,
             ): Key {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Stamped key arguments do not belong to its output field"
@@ -126,7 +126,7 @@ sealed interface ObjectEngineResult {
             fun of(
                 stamp: Stamp.Occurrence,
                 field: Schema.ObjectField,
-                arguments: OpenArguments,
+                arguments: Arguments,
             ): ObjectKey = ObjectKey.of(stamp, field, arguments)
 
             /**
@@ -137,7 +137,7 @@ sealed interface ObjectEngineResult {
             fun of(
                 field: Schema.OutputField,
                 arguments: Map<String, Any?>,
-            ): Key = of(field, OpenArguments.of(field, arguments))
+            ): Key = of(field, Arguments.of(field, arguments))
 
             /** Constructs the precise key category for a field on a concrete object type. */
             fun of(
@@ -152,7 +152,7 @@ sealed interface ObjectEngineResult {
              */
             fun of(
                 field: Schema.OutputField,
-                arguments: OpenArguments,
+                arguments: Arguments,
             ): Key {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
@@ -166,13 +166,13 @@ sealed interface ObjectEngineResult {
             /** Constructs the precise key category for a field on a concrete object type. */
             fun of(
                 field: Schema.ObjectField,
-                arguments: OpenArguments,
+                arguments: Arguments,
             ): ObjectKey = ObjectKey.of(field, arguments)
 
             /** Constructs the precise ground key category. */
             fun of(
                 field: Schema.ObjectField,
-                arguments: OpenArguments.Ground,
+                arguments: Arguments.Ground,
             ): GroundKey = GroundKey.of(field, arguments)
         }
     }
@@ -185,12 +185,12 @@ sealed interface ObjectEngineResult {
      * and reports a binding when the path terminates at this component.
      */
     sealed interface VariableKey : Key {
-        val variableDefinedByThisKey: Value.Variable
+        val variableDefinedByThisKey: Arguments.Variable
 
         companion object {
             fun of(
                 key: Key,
-                variableDefinedByThisKey: Value.Variable,
+                variableDefinedByThisKey: Arguments.Variable,
             ): VariableKey {
                 require(variableDefinedByThisKey.isStamped) {
                     "A provider-path key must define a stamped variable"
@@ -218,24 +218,24 @@ sealed interface ObjectEngineResult {
     /**
      * A key whose field belongs to a concrete object type.
      *
-     * Every instance carries a [Schema.ObjectField] and [OpenArguments]. Equality includes the
+     * Every instance carries a [Schema.ObjectField] and [Arguments]. Equality includes the
      * key's [stamp], so an explicitly occurrence-stamped key remains distinct from an ordinary key
      * with equal visible arguments.
      */
     sealed interface ObjectKey : Key {
         override val field: Schema.ObjectField
-        override val arguments: OpenArguments
+        override val arguments: Arguments
 
         companion object {
             fun of(
                 stamp: Stamp.Occurrence,
                 field: Schema.ObjectField,
-                arguments: OpenArguments,
+                arguments: Arguments,
             ): ObjectKey {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Stamped object-key arguments do not belong to its output field"
                 }
-                return if (arguments is OpenArguments.Ground) {
+                return if (arguments is Arguments.Ground) {
                     GroundKey.of(stamp, field, arguments)
                 } else {
                     StampedObjectKeyImpl(field, arguments, stamp)
@@ -245,16 +245,16 @@ sealed interface ObjectEngineResult {
             fun of(
                 field: Schema.ObjectField,
                 arguments: Map<String, Any?>,
-            ): ObjectKey = of(field, OpenArguments.of(field, arguments))
+            ): ObjectKey = of(field, Arguments.of(field, arguments))
 
             fun of(
                 field: Schema.ObjectField,
-                arguments: OpenArguments,
+                arguments: Arguments,
             ): ObjectKey {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
                 }
-                return if (arguments is OpenArguments.Ground) {
+                return if (arguments is Arguments.Ground) {
                     GroundKeyImpl(field, arguments, Stamp.VariableFreeOccurrence)
                 } else {
                     ObjectKeyImpl(field, arguments, arguments.inferredKeyStamp())
@@ -267,7 +267,7 @@ sealed interface ObjectEngineResult {
      * A concrete-object key whose arguments are ground and which can therefore select an OER field.
      */
     sealed interface GroundKey : ObjectKey, PathComponent {
-        override val arguments: OpenArguments.Ground
+        override val arguments: Arguments.Ground
         override val stamp: Stamp
 
         companion object {
@@ -280,7 +280,7 @@ sealed interface ObjectEngineResult {
             fun of(
                 stamp: Stamp.Occurrence,
                 field: Schema.ObjectField,
-                arguments: OpenArguments.Ground,
+                arguments: Arguments.Ground,
             ): GroundKey {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Ground arguments do not belong to the stamped selection field"
@@ -296,8 +296,8 @@ sealed interface ObjectEngineResult {
                 field: Schema.ObjectField,
                 arguments: Map<String, Any?>,
             ): GroundKey {
-                val grounded = OpenArguments.of(field, arguments)
-                require(grounded is OpenArguments.Ground) {
+                val grounded = Arguments.of(field, arguments)
+                require(grounded is Arguments.Ground) {
                     "Ground-key arguments cannot contain variables"
                 }
                 return of(field, grounded)
@@ -305,7 +305,7 @@ sealed interface ObjectEngineResult {
 
             fun of(
                 field: Schema.ObjectField,
-                arguments: OpenArguments.Ground,
+                arguments: Arguments.Ground,
             ): GroundKey {
                 require(arguments.conformsToArgumentDefinition(field.arguments)) {
                     "Key arguments do not belong to its output field"
@@ -412,8 +412,8 @@ sealed interface ListEngineResult : List<EngineResultCell> {
          */
         fun of(
             typeExpr: TypeExpr<Schema.OutputType>,
-            values: kotlin.collections.List<EngineResult?>,
-            accessResults: kotlin.collections.List<EngineResult?> =
+            values: List<EngineResult?>,
+            accessResults: List<EngineResult?> =
                 values.map { true },
             mutableCells: Boolean = false,
         ): ListEngineResult {
@@ -773,7 +773,7 @@ private class ObjectCellStore(
     val keys: Set<ObjectEngineResult.GroundKey>
         get() = synchronized(lock) { cells.keys.toSet() }
 
-    val cellValues: kotlin.collections.List<EngineResultCell>
+    val cellValues: List<EngineResultCell>
         get() = synchronized(lock) { cells.values.toList() }
 
     fun isSet(field: ObjectEngineResult.GroundKey): Boolean = synchronized(lock) { field in cells }
@@ -832,9 +832,9 @@ private fun missingResultCell(
 
 private class ListResultImpl(
     override val typeExpr: TypeExpr<Schema.OutputType>,
-    private val cells: kotlin.collections.List<EngineResultCell>,
+    private val cells: List<EngineResultCell>,
 ) : ListEngineResult,
-    kotlin.collections.List<EngineResultCell> by cells {
+    List<EngineResultCell> by cells {
     override fun equals(other: Any?): Boolean =
         other is ListEngineResult &&
             typeExpr == other.typeExpr &&
@@ -849,57 +849,57 @@ private data class ListIndexImpl(
 
 private data class KeyImpl(
     override val field: Schema.OutputField,
-    override val arguments: OpenArguments,
+    override val arguments: Arguments,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.Key
 
 private data class StampedKeyImpl(
     override val field: Schema.OutputField,
-    override val arguments: OpenArguments,
+    override val arguments: Arguments,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.Key
 
 private data class VariableKeyImpl(
     override val field: Schema.OutputField,
-    override val arguments: OpenArguments,
-    override val variableDefinedByThisKey: Value.Variable,
+    override val arguments: Arguments,
+    override val variableDefinedByThisKey: Arguments.Variable,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.VariableKey
 
 private data class StampedVariableKeyImpl(
     override val field: Schema.OutputField,
-    override val arguments: OpenArguments,
-    override val variableDefinedByThisKey: Value.Variable,
+    override val arguments: Arguments,
+    override val variableDefinedByThisKey: Arguments.Variable,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.VariableKey
 
 private data class ObjectKeyImpl(
     override val field: Schema.ObjectField,
-    override val arguments: OpenArguments,
+    override val arguments: Arguments,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.ObjectKey
 
 private data class StampedObjectKeyImpl(
     override val field: Schema.ObjectField,
-    override val arguments: OpenArguments,
+    override val arguments: Arguments,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.ObjectKey
 
 private data class GroundKeyImpl(
     override val field: Schema.ObjectField,
-    override val arguments: OpenArguments.Ground,
+    override val arguments: Arguments.Ground,
     override val stamp: Stamp,
 ) : ObjectEngineResult.GroundKey
 
 private data class StampedGroundKeyImpl(
     override val field: Schema.ObjectField,
-    override val arguments: OpenArguments.Ground,
+    override val arguments: Arguments.Ground,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.GroundKey
 
-private fun OpenArguments.inferredKeyStamp(): Stamp? {
+private fun Arguments.inferredKeyStamp(): Stamp? {
     val variables = usedVariables()
-    return if (variables.any(Value.Variable::isTemplate)) {
+    return if (variables.any(Arguments.Variable::isTemplate)) {
         null
     } else {
         Stamp.VariableFreeOccurrence
@@ -1015,7 +1015,7 @@ private fun validateObjectValue(
     field: ObjectEngineResult.GroundKey,
     value: EngineResult?,
 ) {
-    if (field.arguments == OpenArguments.Ground.Error) {
+    if (field.arguments == Arguments.Error) {
         require(value == ErrorEngineResult) {
             "A key with erroneous arguments must contain an error value"
         }

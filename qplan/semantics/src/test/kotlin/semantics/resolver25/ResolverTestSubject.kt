@@ -1,12 +1,15 @@
 package semantics.resolver25
 
+import viaduct.engine.api.EngineObjectData
+
 import model.Assumptions
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.Schema
 import model.SelectionForest
-import model.Value
+import semantics.contract.GeneratedResolutionObservation
 import semantics.contract.ResolverResolutionObservation
 import semantics.contract.assertValidResolver25LifecycleTrace
 
@@ -17,14 +20,14 @@ internal data class Resolver25ResolutionObservation(
 
 internal fun resolveWithLifecycleValidation(
     world: Assumptions,
-    root: Value.Object,
+    root: EngineObjectData.Sync,
     selections: SelectionForest,
 ): ObjectEngineResult =
     observeWithLifecycleValidation(world, root, selections).result
 
 internal fun observeWithLifecycleValidation(
     world: Assumptions,
-    root: Value.Object,
+    root: EngineObjectData.Sync,
     selections: SelectionForest,
 ): Resolver25ResolutionObservation =
     observeResolver25Resolution(world, root, selections)
@@ -34,7 +37,7 @@ internal fun observeWithLifecycleValidation(
 
 internal fun observeResolver25Resolution(
     world: Assumptions,
-    root: Value.Object,
+    root: EngineObjectData.Sync,
     selections: SelectionForest,
 ): Resolver25ResolutionObservation {
     val events = mutableListOf<Resolver25LifecycleEvent>()
@@ -87,7 +90,7 @@ private fun List<PathComponent>.debugSummary(): String =
         }
     }
 
-private fun model.Schema.ObjectField.debugSummary(): String =
+private fun Schema.ObjectField.debugSummary(): String =
     "${containingType.typeName}/$fieldName"
 
 private fun SelectionForest.debugFields(): Set<String> =

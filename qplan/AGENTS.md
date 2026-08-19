@@ -1,8 +1,8 @@
 # Qplan Documentation
 
-- [`README.md`](./README.md) - Start here for qplan's purpose, integration direction, project layout, and documentation map.
-- [`handoff.md`](./handoff.md) - Read before acting for the current objective, explicit scope boundaries, open decisions, and next work.
-- [`design-principles.md`](./design-principles.md) - Use for durable modeling rules, semantic boundaries, occurrence identity, one-shot correctness, and Engine API alignment principles.
+- [`README.md`](./README.md) - Start here for qplan's purpose, integration state, project layout, and documentation map.
+- [`handoff.md`](./handoff.md) - Read before acting for the current implementation state, explicit scope boundaries, validation evidence, and longer-term context.
+- [`design-principles.md`](./design-principles.md) - Use for durable modeling rules, semantic boundaries, occurrence identity, one-shot correctness, and the Engine API boundary.
 - [`research-evidence.md`](./research-evidence.md) - Use for the evidence, obligations, hard cases, prior art, acceptance cases, and provenance behind the design principles.
 - [`maintainer-guide.md`](./maintainer-guide.md) - Use for validation, replay, failure classification, debugging, documentation conventions, and investigation workflow.
 - [`resolver-versions.md`](./resolver-versions.md) - Use to understand the maintained resolver grid and choose a simpler comparison implementation.
@@ -16,6 +16,10 @@
 - [`tla/README.md`](./tla/README.md) - Read before changing or citing the machine-checked TLA+ baseline.
 - [`semantics/resolver-benchmarks.md`](./semantics/resolver-benchmarks.md) - Read before running, changing, or reporting resolver benchmarks.
 
-When writing resolver-test DSL schemas in tests, documentation, or counterexamples, present them
-top-down: start with `extend type Query`, then define the types reached from its fields, followed by
-their dependencies.
+## Writing resolver-test DSL schemas
+
+When writing resolver-test DSL schemas in tests, documentation, or counterexamples, present them top-down: start with `extend type Query`, then define the types reached from its fields, followed by their dependencies.
+
+## Markdown formatting
+
+Write each prose paragraph in Markdown on one physical line, including paragraphs within list items; do not hard-wrap prose. Preserve structural line boundaries for headings, separate list items, tables, and fenced code blocks.

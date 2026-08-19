@@ -1,9 +1,10 @@
 package semantics.contract
 
+import model.Arguments
+
 import io.kotest.matchers.collections.shouldContainExactly
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Value
 import model.testing.TestWorld
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.Test
@@ -100,7 +101,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
     @Test
     fun `orders argument-bearing applications through a path-variable dependency`() {
         val argumentApplications =
-            ConcurrentLinkedQueue<Pair<String, Value.Arguments>>()
+            ConcurrentLinkedQueue<Pair<String, Arguments.Resolved>>()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -135,12 +136,12 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
         assertEquals(4, resolved.getCell(resultKey).get())
         argumentApplications.toList().shouldContainExactly(
             "first" to
-                Value.Arguments.of(
+                Arguments.Resolved.of(
                     world.schema.objectField("Query", "first"),
                     mapOf("value" to 1),
                 ),
             "consume" to
-                Value.Arguments.of(
+                Arguments.Resolved.of(
                     world.schema.objectField("Query", "consume"),
                     mapOf("value" to 2),
                 ),

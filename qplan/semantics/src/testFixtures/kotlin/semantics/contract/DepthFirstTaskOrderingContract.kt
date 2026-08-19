@@ -1,14 +1,16 @@
 package semantics.contract
 
+import viaduct.engine.api.EngineObjectData
+
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -32,7 +34,7 @@ sealed interface ResolverTaskObservation {
 interface DepthFirstTaskOrderingContract : ResolverContract {
     fun resolveAndObserveTasks(
         world: Assumptions,
-        root: Value.Object,
+        root: EngineObjectData.Sync,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
     ): ObjectEngineResult
@@ -57,7 +59,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "container") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 schema.objectOf("Container") {
@@ -66,13 +68,13 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
                                 }
                             },
                         schema.field("Child", "nested") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ ->
                                 "nested"
                             },
                         schema.field("Query", "after") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 "after"

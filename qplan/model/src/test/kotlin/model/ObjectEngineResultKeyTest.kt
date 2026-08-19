@@ -44,12 +44,12 @@ class ObjectEngineResultKeyTest {
     fun `concrete fields with open arguments construct object keys`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val field = schema.objectField("Query", "find_V_A_node")
-        val variable = Value.Variable.of(field, "id")
+        val variable = Arguments.Variable.of(field, "id")
 
         val key =
             ObjectEngineResult.Key.of(
                 field = field as Schema.OutputField,
-                arguments = OpenArguments.of(field, mapOf("id" to variable)),
+                arguments = Arguments.of(field, mapOf("id" to variable)),
             )
 
         assertIs<ObjectEngineResult.ObjectKey>(key)
@@ -71,11 +71,11 @@ class ObjectEngineResultKeyTest {
             ).schema
         val source = schema.objectField("Query", "source")
         val consume = schema.objectField("Query", "consume")
-        val variable = Value.Variable.of(source, "value")
+        val variable = Arguments.Variable.of(source, "value")
         val templateKey =
             ObjectEngineResult.Key.of(
                 consume,
-                OpenArguments.of(consume, mapOf("value" to variable)),
+                Arguments.of(consume, mapOf("value" to variable)),
             )
         val ordinaryKey = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 7))
         val occurrence =
@@ -128,13 +128,13 @@ class ObjectEngineResultKeyTest {
         val source = schema.objectField("Query", "source")
         val consume = schema.objectField("Query", "consume")
         val stampedVariable =
-            Value.Variable
+            Arguments.Variable
                 .of(source, "value")
                 .stamp(listOf(ListEngineResult.Index.of(0)))
         val key =
             ObjectEngineResult.Key.of(
                 consume,
-                OpenArguments.of(consume, mapOf("value" to stampedVariable)),
+                Arguments.of(consume, mapOf("value" to stampedVariable)),
             )
 
         assertEquals(Stamp.VariableFreeOccurrence, key.stamp)
@@ -162,11 +162,11 @@ class ObjectEngineResultKeyTest {
         val source = schema.objectField("Query", "source")
         val abstractField = schema.field("Item", "computed")
         val concreteType = schema.type("ConcreteItem") as Schema.ObjectType
-        val variable = Value.Variable.of(source, "factor")
+        val variable = Arguments.Variable.of(source, "factor")
         val sourceKey =
             ObjectEngineResult.Key.of(
                 abstractField,
-                OpenArguments.of(abstractField, mapOf("factor" to variable)),
+                Arguments.of(abstractField, mapOf("factor" to variable)),
             )
         val selectionStamp =
             Stamp.Occurrence.of(
@@ -174,7 +174,7 @@ class ObjectEngineResultKeyTest {
                 occurrenceLineage = listOf(SelectionOccurrenceId(sourceKey)),
             )
         val arguments =
-            OpenArguments.Template
+            Arguments.Template
                 .of(abstractField.arguments, sourceKey.arguments)
                 .stamp(abstractField.arguments, selectionStamp)
         val stampedKey =

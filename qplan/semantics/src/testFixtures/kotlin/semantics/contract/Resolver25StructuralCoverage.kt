@@ -5,11 +5,10 @@ import model.EngineInputListData
 import model.EngineInputObjectData
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.OpenArguments
+import model.Arguments
 import model.PathComponent
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.VariableBinding
 import model.usedVariables
 import semantics.resolver25.Resolver25BindingSource
@@ -253,22 +252,22 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
 }
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.stampedVariables():
-    Set<Value.Variable> =
+    Set<Arguments.Variable> =
     selection.key.arguments
         .usedVariables()
-        .filterTo(linkedSetOf(), Value.Variable::isStamped)
+        .filterTo(linkedSetOf(), Arguments.Variable::isStamped)
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.subselectionFields() =
     selection.subselections.fields()
 
-private fun OpenArguments.Ground.containsBinding(binding: VariableBinding): Boolean =
+private fun Arguments.Ground.containsBinding(binding: VariableBinding): Boolean =
     when (this) {
-        OpenArguments.Ground.Error -> binding == VariableBinding.Error
-        is Value.Arguments ->
+        Arguments.Error -> binding == VariableBinding.Error
+        is Arguments.Resolved ->
             binding is VariableBinding.Input && containsValue(binding.value)
     }
 
-private fun Value.Arguments.containsValue(value: EngineInputData?): Boolean =
+private fun Arguments.Resolved.containsValue(value: EngineInputData?): Boolean =
     fieldValues.values.any { argument -> argument.containsValue(value) }
 
 private fun EngineInputData?.containsValue(value: EngineInputData?): Boolean =

@@ -20,7 +20,6 @@ import org.openjdk.jmh.infra.BenchmarkParams
 import org.openjdk.jmh.infra.Blackhole
 import model.PathComponent
 import model.Stamp
-import model.Value
 import model.variableArgumentNames
 import model.variableSourceSelectionStamps
 import semantics.benchmark.CurrentProfileBenchmarkSupport

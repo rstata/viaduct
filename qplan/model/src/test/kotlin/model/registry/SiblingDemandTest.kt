@@ -5,12 +5,12 @@ import model.ObjectEngineResult
 import model.Fragment
 import model.Schema
 import model.Selection
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -110,17 +110,17 @@ class SiblingDemandTest {
                 val emptyFragment = schema.emptyFragmentOf("Query")
                 mapOf(
                     schema.field("Query", "consumer") to
-                        model.testing.fieldResolverOf(
+                        fieldResolverOf(
                             objectFragment = consumerFragment,
                             function = { _, _ -> "consumer" },
                         ),
                     schema.field("Query", "sibling") to
-                        model.testing.fieldResolverOf(
+                        fieldResolverOf(
                             objectFragment = emptyFragment,
                             function = { _, _ -> schema.objectOf("Payload") },
                         ),
                     schema.field("Query", "other") to
-                        model.testing.fieldResolverOf(
+                        fieldResolverOf(
                             objectFragment = emptyFragment,
                             function = { _, _ -> "other" },
                         ),

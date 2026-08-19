@@ -10,6 +10,10 @@ import graphql.language.ObjectValue
 import graphql.language.StringValue
 import graphql.language.Value as GraphQLValue
 import graphql.language.VariableReference
+import graphql.schema.GraphQLArgument
+import graphql.schema.GraphQLEnumType
+import graphql.schema.GraphQLFieldDefinition
+import graphql.schema.GraphQLFieldsContainer
 import graphql.schema.GraphQLImplementingType
 import graphql.schema.GraphQLInputObjectType
 import graphql.schema.GraphQLInputType
@@ -22,18 +26,19 @@ import graphql.schema.GraphQLOutputType
 import graphql.schema.GraphQLScalarType
 import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLType
+import graphql.schema.GraphQLTypeReference
 import graphql.schema.GraphQLTypeUtil
 import graphql.schema.GraphQLUnionType
 import graphql.schema.InputValueWithState
+import model.ArgumentResolutionError
+import model.Arguments
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
 import model.EngineSimpleData
-import model.ArgumentResolutionError
-import model.OpenValue
 import model.Schema
 import model.TypeExpr
-import model.Value
+import model.coerceArgumentExpression
 
 /** Names reserved for fixture-generated canonical node bridge types and fields. */
 internal const val SYNTHETIC_NAME_TOKEN = "V_A"
@@ -102,6 +107,7 @@ internal class GJSchemaDecoder(
         populateInputFields()
         populateCompositeFields()
         populateNodeBridgeTypes()
+        populateGraphQLJavaObjectDefinitions()
 
         return schema
     }
@@ -125,7 +131,7 @@ internal class GJSchemaDecoder(
                 when (graphQLType) {
                     is GraphQLScalarType -> types[graphQLType.name]!!
 
-                    is graphql.schema.GraphQLEnumType ->
+                    is GraphQLEnumType ->
                         types[graphQLType.name] =
                             EnumTypeImpl(
                                 typeName = graphQLType.name,
@@ -186,7 +192,7 @@ internal class GJSchemaDecoder(
     private fun usedNodeOutputTypeNames(): Set<String> {
         val node = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return emptySet()
         return graphQLSchema.allTypesAsList
-            .filterIsInstance<graphql.schema.GraphQLFieldsContainer>()
+            .filterIsInstance<GraphQLFieldsContainer>()
             .filter { it is GraphQLObjectType || it is GraphQLInterfaceType }
             .flatMap { it.fieldDefinitions }
             .map { GraphQLTypeUtil.unwrapAll(it.type) }
@@ -258,7 +264,7 @@ internal class GJSchemaDecoder(
             .forEach(::addTypeNameField)
 
         graphQLSchema.allTypesAsList
-            .filterIsInstance<graphql.schema.GraphQLFieldsContainer>()
+            .filterIsInstance<GraphQLFieldsContainer>()
             .filter { it is GraphQLObjectType || it is GraphQLInterfaceType }
             .filterNot { it.name.startsWith("__") }
             .forEach { graphQLType ->
@@ -336,6 +342,61 @@ internal class GJSchemaDecoder(
                     arguments = Schema.NoArguments,
                 ),
             )
+        }
+    }
+
+    private fun populateGraphQLJavaObjectDefinitions() {
+        objectFields.keys.forEach { objectType ->
+            val sourceDefinition = graphQLSchema.getObjectType(objectType.typeName)
+            val modeledFieldNames = objectType.fields.keys - "__typename"
+            val definition =
+                sourceDefinition
+                    ?.takeIf { source ->
+                        source.fieldDefinitions.mapTo(linkedSetOf()) { it.name } ==
+                            modeledFieldNames
+                    }
+                    ?: graphQLJavaDefinitionOf(objectType)
+            (objectType as ObjectTypeImpl).initializeGraphQLJavaDefinition(definition)
+        }
+    }
+
+    private fun graphQLJavaDefinitionOf(
+        objectType: Schema.ObjectType,
+    ): GraphQLObjectType =
+        GraphQLObjectType
+            .newObject()
+            .name(objectType.typeName)
+            .fields(
+                objectType.fields.values
+                    .filterNot { field -> field.fieldName == "__typename" }
+                    .map { field ->
+                        GraphQLFieldDefinition
+                            .newFieldDefinition()
+                            .name(field.fieldName)
+                            .type(field.typeExpr.toGraphQLType() as GraphQLOutputType)
+                            .arguments(
+                                field.arguments.fields.values.map { argument ->
+                                    GraphQLArgument
+                                        .newArgument()
+                                        .name(argument.name)
+                                        .type(
+                                            argument.typeExpr.toGraphQLType() as GraphQLInputType,
+                                        ).build()
+                                },
+                            ).build()
+                    },
+            ).build()
+
+    private fun TypeExpr<Schema.Type>.toGraphQLType(): GraphQLType {
+        val nullableType: GraphQLType =
+            when (this) {
+                is TypeExpr.Named -> GraphQLTypeReference.typeRef(baseType.typeName)
+                is TypeExpr.List -> GraphQLList(elementType.toGraphQLType())
+            }
+        return if (isNullable) {
+            nullableType
+        } else {
+            GraphQLNonNull(nullableType)
         }
     }
 
@@ -433,9 +494,9 @@ internal class GJSchemaDecoder(
     private fun decodeDefault(
         type: GraphQLInputType,
         value: InputValueWithState,
-    ): Value.Default =
+    ): Schema.DefaultValue =
         if (value.isNotSet) {
-            Value.Default.Absent
+            Schema.DefaultValue.Absent
         } else {
             val decoded =
                 decodeInputValue(
@@ -444,8 +505,8 @@ internal class GJSchemaDecoder(
                     noVariableValues,
                     schema,
                 )
-            check(decoded == null || decoded is OpenValue.Ground)
-            Value.Default.of((decoded as? OpenValue.Ground)?.data)
+            check(decoded != ArgumentResolutionError && decoded !is Arguments.Variable)
+            Schema.DefaultValue.of(decoded)
         }
 
     private fun implementsInterface(
@@ -462,7 +523,7 @@ internal fun decodeInputValue(
     variableValues: Map<String, EngineInputData?>,
     schema: Schema,
     variableField: Schema.ObjectField? = null,
-): OpenValue? =
+): Any? =
     if (value.isLiteral) {
         decodeLiteral(
             type,
@@ -472,7 +533,7 @@ internal fun decodeInputValue(
             variableField,
         )
     } else {
-        OpenValue.of(
+        coerceArgumentExpression(
             decodeModelInputType(type, schema),
             decodeExternal(type, value.value, variableValues, schema),
         )
@@ -484,14 +545,14 @@ internal fun decodeLiteral(
     variableValues: Map<String, EngineInputData?>,
     schema: Schema,
     variableField: Schema.ObjectField? = null,
-): OpenValue? {
+): Any? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
             val bound = variableValues.getValue(value.name)
             if (bound === ErroneousVariableValue) {
                 ArgumentResolutionError
             } else {
-                OpenValue.of(
+                coerceArgumentExpression(
                     decodeModelInputType(type, schema),
                     bound,
                 )
@@ -500,7 +561,7 @@ internal fun decodeLiteral(
             requireNotNull(variableField) {
                 "Unbound operation variable \$${value.name}"
             }
-            Value.Variable.of(variableField, value.name)
+            Arguments.Variable.of(variableField, value.name)
         }
     }
     if (value is NullValue) {
@@ -519,7 +580,7 @@ internal fun decodeLiteral(
 
         is GraphQLList -> {
             val values = if (value is ArrayValue) value.values else listOf(value)
-            OpenValue.of(
+            coerceArgumentExpression(
                 typeExpr = decodeModelInputType(type, schema),
                 value = values.map {
                     decodeLiteral(
@@ -534,7 +595,7 @@ internal fun decodeLiteral(
         }
 
         is GraphQLScalarType ->
-            OpenValue.of(
+            coerceArgumentExpression(
                 decodeModelInputType(type, schema),
                 decodeScalarLiteral(
                     schema,
@@ -542,8 +603,8 @@ internal fun decodeLiteral(
                     value,
                 ),
             )
-        is graphql.schema.GraphQLEnumType ->
-            OpenValue.of(
+        is GraphQLEnumType ->
+            coerceArgumentExpression(
                 decodeModelInputType(type, schema),
                 (value as EnumValue).name,
             )
@@ -589,12 +650,12 @@ private fun decodeScalarLiteral(
 private inline fun decodeInputObjectFields(
     type: GraphQLInputObjectType,
     isFieldSupplied: (String) -> Boolean,
-    decodeSupplied: (GraphQLInputType, String) -> OpenValue?,
+    decodeSupplied: (GraphQLInputType, String) -> Any?,
     variableValues: Map<String, EngineInputData?>,
     schema: Schema,
-): OpenValue {
+): Any {
     val fields =
-        buildMap<String, OpenValue?> {
+        buildMap<String, Any?> {
             type.fieldDefinitions.forEach { field ->
                 when {
                     isFieldSupplied(field.name) ->
@@ -614,7 +675,7 @@ private inline fun decodeInputObjectFields(
             }
         }
     return requireNotNull(
-        OpenValue.of(
+        coerceArgumentExpression(
             typeExpr =
                 TypeExpr.Named.of(
                     schema.type(type.name) as Schema.InputObjectType,
@@ -630,7 +691,7 @@ private fun decodeObjectLiteral(
     variableValues: Map<String, EngineInputData?>,
     schema: Schema,
     variableField: Schema.ObjectField?,
-): OpenValue {
+): Any {
     val suppliedFields = value.objectFields.associateBy { it.name }
     return decodeInputObjectFields(
         type = type,
@@ -687,7 +748,7 @@ private fun decodeExternal(
                 schema.type(type.name) as Schema.ScalarType,
                 value,
             )
-        is graphql.schema.GraphQLEnumType -> value.toString()
+        is GraphQLEnumType -> value.toString()
 
         is GraphQLInputObjectType ->
             decodeObjectExternal(type, value, variableValues, schema)
@@ -792,7 +853,7 @@ private fun decodeObjectExternal(
         type = type,
         isFieldSupplied = { valueMap.containsKey(it) },
         decodeSupplied = { fieldType, fieldName ->
-            OpenValue.of(
+            coerceArgumentExpression(
                 decodeModelInputType(fieldType, schema),
                 decodeExternal(fieldType, valueMap[fieldName], variableValues, schema),
             )
@@ -800,8 +861,7 @@ private fun decodeObjectExternal(
         variableValues = variableValues,
         schema = schema,
     )
-    check(decoded is OpenValue.Ground)
-    return requireType(decoded.data)
+    return requireType(decoded)
 }
 
 private inline fun <reified T> requireType(value: EngineInputData): T {
@@ -826,7 +886,22 @@ private class ObjectTypeImpl(
     override val typeName: String,
     override val fields: Map<String, Schema.ObjectField>,
     override val possibleTypes: Set<Schema.ObjectType>,
-) : Schema.ObjectType
+) : Schema.ObjectType {
+    private var definition: GraphQLObjectType? = null
+
+    override val graphQLJavaDefinition: GraphQLObjectType
+        get() = checkNotNull(definition) { "$typeName GraphQL-Java definition is not initialized" }
+
+    fun initializeGraphQLJavaDefinition(definition: GraphQLObjectType) {
+        check(this.definition == null) {
+            "$typeName GraphQL-Java definition is already initialized"
+        }
+        require(definition.name == typeName) {
+            "GraphQL-Java definition ${definition.name} does not represent $typeName"
+        }
+        this.definition = definition
+    }
+}
 
 private class InterfaceTypeImpl(
     override val typeName: String,
@@ -879,14 +954,14 @@ private class InputFieldImpl(
     override val fieldName: String,
     override val containingType: Schema.InputObjectType,
     override val typeExpr: TypeExpr<Schema.InputType>,
-    override val defaultValue: Value.Default,
+    override val defaultValue: Schema.DefaultValue,
 ) : Schema.InputField
 
 private class FieldArgumentImpl(
     override val argumentName: String,
     override val containingType: Schema.FieldArguments,
     override val typeExpr: TypeExpr<Schema.InputType>,
-    override val defaultValue: Value.Default,
+    override val defaultValue: Schema.DefaultValue,
 ) : Schema.FieldArgument
 
 private fun <T> fieldArgumentsOf(

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Every maintained resolver participates in the Engine API alignment. The versions form a comparison grid that separates semantic capability from execution structure; they are not eleven production candidates. Resolver26 is the primary algorithm, while earlier versions make its essential ideas easier to isolate and verify.
+Every maintained resolver uses the aligned Engine API carrier boundary. The versions form a comparison grid that separates semantic capability from execution structure; they are not eleven production candidates. Resolver26 is the primary algorithm, while earlier versions make its essential ideas easier to isolate and verify.
 
 ## Comparison Grid
 
@@ -40,7 +40,7 @@ This current activation implementation is authoritative; the retired static prep
 
 Resolver26 gives each variable-bearing resolver-fragment selection an occurrence lineage. It synchronously closes symbolic demand before local installation, prepares every binding, reserves active cells as their keys ground, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
 
-Resolver26 is the primary algorithm and eventual implementation blueprint. Engine API alignment should keep its qplan shape close to what a future Viaduct query executor can use, but that future executor is not part of an ordinary qplan refactor.
+Resolver26 is the primary algorithm and eventual implementation blueprint. Its aligned qplan shape remains close to what a future Viaduct query executor can use, but that future executor is not part of an ordinary qplan refactor.
 
 ## Debugging Reduction
 

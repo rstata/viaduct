@@ -4,7 +4,6 @@ import model.ObjectEngineResult
 
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.instantiateBindings
@@ -56,7 +55,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                                 ),
                             ) { input, _ ->
                                 val base =
-                                    input.fieldValues.getValue(
+                                    input.selectionValues().getValue(
                                         "base",
                                     ) as String
                                 "computed:$base"

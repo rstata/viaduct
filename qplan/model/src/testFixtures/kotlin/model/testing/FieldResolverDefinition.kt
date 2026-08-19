@@ -1,12 +1,13 @@
 package model.testing
 
+import model.Arguments
+
 import model.Fragment
 import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.materializeSelectionForestOf
 import model.objectKey
 import model.registry.FieldResolver
@@ -72,7 +73,7 @@ class FieldResolverDefinition private constructor(
 
     internal fun assemble(
         field: Schema.ObjectField,
-        variables: Map<Value.Variable, VariableDefinition>,
+        variables: Map<Arguments.Variable, VariableDefinition>,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {
         val objectType = field.containingType

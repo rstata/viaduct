@@ -4,13 +4,13 @@
 
 These are the canonical concrete design and implementation rules for public semantic model types and semantic model logic.
 
-For example, `EngineResult`, `Value`, and `Selection` are semantic model types because reasoning is defined over their values. An exception class, a dependency-injection qualifier, or `TestWorld` is not a semantic model type merely because it occurs in the same Gradle project.
+For example, `EngineResult`, `Arguments`, and `Selection` are semantic model types because reasoning is defined over their values. An exception class, a dependency-injection qualifier, or `TestWorld` is not a semantic model type merely because it occurs in the same Gradle project.
 
 Exceptions, annotations, dependency-injection qualifiers, test utilities, parsing, schema decoding, registry assembly, and other composition infrastructure are outside these policies unless a rule explicitly includes them.
 
 ## Carrier Boundary
 
-The active carrier target treats `EngineInputData`, `EngineOutputData`, and `EngineResult` as distinct checked semantic unions represented by Kotlin `Any` typealiases. Their members are defined by domain-specific conformance relations rather than Kotlin subtyping. Nullable uses add GraphQL null. The aliases cannot distinguish overloads or prevent arbitrary `Any` values from crossing unchecked programming boundaries, so construction, publication, conversion, and observation operations enforce the appropriate domain relation.
+The carrier model treats `EngineInputData`, `EngineOutputData`, and `EngineResult` as distinct checked semantic unions represented by Kotlin `Any` typealiases. Their members are defined by domain-specific conformance relations rather than Kotlin subtyping. Nullable uses add GraphQL null. The aliases cannot distinguish overloads or prevent arbitrary `Any` values from crossing unchecked programming boundaries, so construction, publication, conversion, and observation operations enforce the appropriate domain relation.
 
 `EngineResult` values are finite and well-founded. Pre-domain scalar values use structural equality, cells and OERs use reference equality, and lists use structural equality over their type expression and positional cell identity. Use `sameCompletedResultAs` for explicit extensional comparison of completed result trees.
 
@@ -20,36 +20,27 @@ Mutable OERs may gain validated exact cells monotonically. Each cell has indepen
 
 Use canonical schema relations for GraphQL semantics rather than Kotlin inheritance. In particular, use schema-canonical definitions, `Schema.TypeRelation`, and `CompositeType.possibleTypes` as appropriate for field ownership, type overlap, applicability, and subtype reasoning.
 
+Each `Schema.ObjectType` also retains one canonical GraphQL-Java definition for Engine API integration. This attached object is canonical in the operational sense that repeated access within one schema returns the same instance, so it introduces no competing identity. It is otherwise not part of the mathematical model: reasoning must treat it as opaque and must not inspect it for equality, hashing, conformance, field ownership, applicability, or subtype decisions. Infrastructure accesses it through `Schema.ObjectType.gjDef`, mirroring ViaductSchema's GraphQL-Java-backed extension vocabulary.
+
 ## Variables And Keys
 
-A variable template is identified by its local name and defining concrete resolver field. Its `stamp`
-is null. Stamping at an exact OER path creates an occurrence-specific variable carrying a
-`Stamp.Occurrence`. Resolver1 through Resolver25 use an empty occurrence lineage; Resolver26 adds
-selection-occurrence lineage as it crosses ungrounded resolver boundaries. Request-local
-`Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read
-completed bindings, while coroutine operations may suspend for them.
+A variable template is identified by its local name and defining concrete resolver field. Its `stamp` is null. Stamping at an exact OER path creates an occurrence-specific variable carrying a `Stamp.Occurrence`. Resolver1 through Resolver25 use an empty occurrence lineage; Resolver26 adds selection-occurrence lineage as it crosses ungrounded resolver boundaries. Request-local `Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read completed bindings, while coroutine operations may suspend for them.
 
 Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
 
 `ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to OER cells, exact paths, materialization lookup, dependency ordering, and resolver application.
 
-`ObjectEngineResult.Key.stamp` distinguishes three states. A variable-bearing registry template has
-a null stamp. An ordinary concrete key carries `Stamp.VariableFreeOccurrence`, meaning that its
-selection occurrence needs no variable-derived identity. Resolver26 explicitly assigns
-`Stamp.Occurrence` to a variable-bearing resolver-fragment selection; every occurrence-stamped
-variable in that key's arguments carries the same stamp. Ordinary key factories never infer this
-identity from stamped variables. Specialization, localization, and grounding preserve an explicit
-occurrence stamp.
+`ObjectEngineResult.Key.stamp` distinguishes three states. A variable-bearing registry template has a null stamp. An ordinary concrete key carries `Stamp.VariableFreeOccurrence`, meaning that its selection occurrence needs no variable-derived identity. Resolver26 explicitly assigns `Stamp.Occurrence` to a variable-bearing resolver-fragment selection; every occurrence-stamped variable in that key's arguments carries the same stamp. Ordinary key factories never infer this identity from stamped variables. Specialization, localization, and grounding preserve an explicit occurrence stamp.
 
-Keys belong exclusively to the engine-result domain. `Value.Object` and `Value.ObjectFields` use string keys. Passive source and resolver-produced objects use canonical argumentless field names. Resolver inputs materialized from object fragments use GraphQL response keys, including aliases. Those response keys select entries in the resolver-visible value only; exact grounded and localized OER keys continue to address cells.
+Keys belong exclusively to the engine-result domain. `EngineObjectData.Sync` uses string selections. Passive source and resolver-produced objects use canonical argumentless field names. Resolver inputs materialized from object fragments use GraphQL response keys, including aliases. Those response keys select entries in the resolver-visible value only; exact grounded and localized OER keys continue to address cells.
 
-`Value.Object.FieldValue` carries a string key, canonical object field, and value only through object construction so the factory can validate schema conformance before retaining the string map. A completed object does not retain hidden OER keys or schema-field metadata. Argument-bearing passive fields are outside the source and resolver-output domain and must be rejected.
+`EngineObjectDataEntry` carries a string selection, canonical object field, and value only through object construction so the factory can validate schema conformance before retaining the string map. A completed EOD does not retain hidden OER keys or schema-field metadata. Argument-bearing passive fields are outside the source and resolver-output domain and must be rejected.
 
-`OpenValue.Ground` wraps canonical `EngineInputData`; other open values contain variables. Engine input data has no error sentinel. `OpenArguments.Ground` is either an error-free `Value.Arguments` or one tuple-level argument-resolution error, and variable bindings likewise distinguish error-free engine input data from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
+`Arguments` is the broad argument-tuple category. `Arguments.Resolved` contains canonical `EngineInputData`, `Arguments.Error` is the tuple-level argument-resolution error, and `Arguments.Template` retains resolver-registry variable templates. Recursive argument expressions are an internal natural union of engine input data, ordinary lists and input-object maps, `Arguments.Variable`, and `ArgumentResolutionError`; there is no public open-value wrapper. Engine input data has no error sentinel, and variable bindings likewise distinguish error-free engine input data from an error outcome. Grounding throws on an unbound stamped variable or an unstamped template.
 
 ## Result Representation
 
-The target `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `Schema.ID`, canonical `Schema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
+The `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `Schema.ID`, canonical `Schema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
 
 Every object-field and list-element value slot contains `EngineResult?`. Null represents GraphQL null. Every non-null child is another member of the result domain. Schema conformance admits `ErrorEngineResult` at every output type expression, including non-null types, so an error may occupy any value location in a result tree. `ErrorEngineResult` is an inhabited sentinel rather than Kotlin's bottom type and exposes no scalar, object, or list properties.
 
@@ -57,15 +48,13 @@ Every object-field and list-element value slot contains `EngineResult?`. Null re
 
 `ListEngineResult` remains a nominal typed result wrapper and implements `List<EngineResultCell>` by delegation to a private backing list. The wrapper carries the element `typeExpr`; its equality is structural over that type expression and positional cell identities. A builder may transfer a mutable list into the wrapper without copying only when ownership transfer is exclusive and the builder retains no post-publication mutation path. The read-only `List` interface and a private delegate do not by themselves make an aliased mutable list immutable.
 
-`EngineOutputData` represents resolver output without result cells or access decisions. Its target members are production-compatible scalar representations, recursive `List<EngineOutputData?>`, the temporarily retained `Value.Object`, and the singleton `EngineErrorData`. `EngineErrorData` belongs to the broad output domain but not to narrower simple, list, or object categories. Do not collapse resolver output and engine result into one carrier merely because they contain corresponding successful values.
+`EngineOutputData` represents resolver output without result cells or access decisions. Its members are production-compatible scalar representations, recursive `List<EngineOutputData?>`, `EngineObjectData.Sync`, and the singleton `EngineErrorData`. `EngineErrorData` belongs to the broad output domain but not to narrower simple, list, or object categories. Do not collapse resolver output and engine result into one carrier merely because they contain corresponding successful values.
 
-Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `Schema.ID` for ID, and the canonical `Schema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the target model.
+Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `Schema.ID` for ID, and the canonical `Schema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the model.
 
 `Schema.EnumType` owns a name-keyed map of canonical `Schema.EnumValue` definitions. Each enum value exposes its name and containing enum type and uses the schema-canonical equality documented by `Schema`; same-named values of different enum types are distinct. `Schema.ID` is a structurally equal runtime value containing one string, not a canonical schema definition.
 
-Input-object and argument field values use ordinary maps. Use `getValue` when presence is a
-precondition and test membership before an optional lookup so an absent entry remains distinct from
-a present null. `Value.ObjectFields` deliberately throws when indexed outside its lookup domain.
+Input-object and argument field values use ordinary maps. Use `getValue` when presence is a precondition and test membership before an optional lookup so an absent entry remains distinct from a present null. EOD uses `isPresent` for passive presence tests and strict `get` when presence is a precondition.
 
 Cells are allocated by their containing OER or LER and use reference identity as their occurrence ID. Object construction is immutable by default. Opt-in mutable objects atomically install each absent exact cell once and throw on unset reads, repeated claims, or repeated writes. Lists have immutable positions and may opt into mutable cell slots.
 
@@ -75,31 +64,23 @@ Response aliases and response ordering remain outside field-resolution identity.
 
 The fixture retains an unchanged GraphQL-Java source schema for validation and derives a separate model-only lowered schema. Source Node-valued fields are absent from that model schema: `foo: W<T>` is represented only by `foo_V_A_node: W<T_V_A_Bridge>`, and each concrete bridge has ordinary `id` and `node` fields with no generated hierarchy. Source schema names containing `V_A` are rejected. Because there is no bridge hierarchy, fixture composition also rejects object implementations that narrow the named return type of a Node-valued interface field.
 
-Raw node references exist only as fixture inputs. Source-facing object construction and resolver adaptation lower them through `foo_V_A_node` producers and argumentless `T_V_A_Bridge.node` loaders before semantic reasoning. `Value.Object` itself stores only canonical lowered fields.
+Raw node references exist only as fixture inputs. Source-facing object construction and resolver adaptation lower them through `foo_V_A_node` producers and argumentless `T_V_A_Bridge.node` loaders before semantic reasoning. EOD stores only canonical lowered fields at that boundary.
 
 Ordinary model and semantics tests use canonical `Schema.field` and `Schema.objectField` coordinates, including explicit synthetic names for lowered Node fields. Source-name translation is confined to explicit pre-reasoning boundaries: GraphQL parsing, source-facing object construction, source declaration compilation, resolver adaptation, arbitrary source-recipe materialization, and focused tests of those adapters. Canonical assertions and resolver oracles must not use source-name lookup. Fixture code exposes this translation through `SourceSchemaAdapter`, not generic extensions on `Schema`.
 
-## Engine API Alignment
+## Engine API Boundary
 
-Viaduct's `EngineObjectData.Sync` is the target synchronous partial-object boundary for the current migration. It is name-keyed and distinguishes absent selections from present-null values through `isPresent`.
+Viaduct's `EngineObjectData.Sync` is the synchronous partial-object boundary. It is name-keyed and distinguishes absent selections from present-null values through `isPresent`. Qplan's validating implementation retains its canonical `Schema.ObjectType` and exposes the production GraphQL-Java type witness through the EOD interface.
 
-Align storage and access with that API where it preserves the modeled meaning, but retain explicit qplan structure for schema-canonical keys, occurrence identity, write-once ownership, and access decisions when EOD does not represent those facts directly. Record current migration choices in [`../handoff.md`](../handoff.md); update this guide only when a choice becomes a stable model rule.
+Storage and access use that API where it preserves the modeled meaning, while explicit qplan structure retains schema-canonical keys, occurrence identity, write-once ownership, and access decisions that EOD does not represent directly. [`../handoff.md`](../handoff.md) records the resulting carrier state; this guide records its stable model rules.
 
-The qplan EOD implementation must preserve EOD's three-way read state. An absent selection makes
-`isPresent` false, makes `getOrNull` return null, and makes strict `get` throw production
-`UnsetFieldException`. A present selection whose value is null makes `isPresent` true and both
-getters return null. A present `EngineErrorData` selection likewise remains present: presence and
-selection-enumeration operations must not read or materialize it, and it must not be mistaken for
-an unset selection. The `Sync` subtype's suspending `fetch` methods delegate to the corresponding
-synchronous operations without changing these outcomes.
+The qplan EOD implementation must preserve EOD's three-way read state. An absent selection makes `isPresent` false, makes `getOrNull` return null, and makes strict `get` throw production `UnsetFieldException`. A present selection whose value is null makes `isPresent` true and both getters return null. A present `EngineErrorData` selection likewise remains present: presence and selection-enumeration operations must not read or materialize it, and it must not be mistaken for an unset selection. The `Sync` subtype's suspending `fetch` methods delegate to the corresponding synchronous operations without changing these outcomes.
 
-Missing OER cells are not unset EOD selections. They are internal result-tree lookup failures and
-use ordinary `NoSuchElementException`; they must not surface as tenant-facing
-`UnsetFieldException`.
+Missing OER cells are not unset EOD selections. They are internal result-tree lookup failures and use ordinary `NoSuchElementException`; they must not surface as tenant-facing `UnsetFieldException`.
 
 ## Working Vocabulary
 
-A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `Schema.Type`, or intensionally by a checked `Any` typealias, such as the target `EngineResult`.
+A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `Schema.Type`, or intensionally by a checked `Any` typealias, such as `EngineResult`.
 
 A concrete variant is one particular form of value in a nominal category, such as `TypeExpr.List` within `TypeExpr`. A semantic union member is one admitted representation in an intentional `Any`-represented domain, such as `Schema.ID` within `EngineResult`.
 
@@ -127,7 +108,7 @@ Public nominal semantic categories are sealed interfaces unless the category its
 
 Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `ObjectEngineResult` is sealed around its private implementation, while externally implemented `Schema.ObjectType` is an open leaf. Its enclosing category, `Schema.Type`, remains sealed.
 
-Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `Value.Default.Absent`, and built-in scalar type definitions are examples.
+Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `Schema.DefaultValue.Absent`, and built-in scalar type definitions are examples.
 
 Public enums represent finite scalar sets of unique values, such as the five possible results of `Schema.TypeRelation`. They are not used as substitutes for algebraic categories or checked semantic unions.
 
@@ -173,9 +154,9 @@ Keep schema decoding, GraphQL parsing, resolver-function definitions, registry a
 
 Constructors are private where possible and otherwise internal. Internal model code may call an internal constructor directly, but factory use remains preferred.
 
-Factories return the most precise public type available. For example, a factory that always creates `Value.Default.Present` returns `Present`, not the broader `Value.Default`.
+Factories return the most precise public type available. For example, a factory that always creates `Schema.DefaultValue.Present` returns `Present`, not the broader `Schema.DefaultValue`.
 
-Place a factory on the highest semantic category where its meaning remains coherent and Kotlin overload resolution remains unambiguous. For example, `Value.Default.of(value)` belongs on `Value.Default`, while scalar factories should not be collapsed into an ambiguous `Value.of`. Prefer overloads that select precise variants when their parameter types are unambiguous.
+Place a factory on the highest semantic category where its meaning remains coherent and Kotlin overload resolution remains unambiguous. For example, `Schema.DefaultValue.of(value)` belongs on `Schema.DefaultValue`, while resolved argument construction belongs on `Arguments.Resolved`. Prefer overloads that select precise variants when their parameter types are unambiguous.
 
 An `of` factory normally accepts already semantic components. For example, `Promise.of` accepts the semantic value it immediately contains. Parsing GraphQL text and decoding SDL are pre-reasoning infrastructure rather than `of` factory behavior.
 
@@ -187,4 +168,4 @@ Use compositional validation for nested typed values. For example, a list factor
 
 ## Type Expressions
 
-Every property whose value is a `TypeExpr` is named `typeExpr`, such as `Schema.OutputField.typeExpr` and `ListEngineResult.typeExpr`. Properties containing named schema definitions normally remain `type`, such as `ObjectEngineResult.type`. `Value.Object.schemaType` is explicitly qualified to avoid colliding with the `GraphQLObjectType` property required by the target `EngineObjectData` interface. Private parameters may use the shorter name `type` when the local type is unambiguous.
+Every property whose value is a `TypeExpr` is named `typeExpr`, such as `Schema.OutputField.typeExpr` and `ListEngineResult.typeExpr`. Properties containing named schema definitions normally remain `type`, such as `ObjectEngineResult.type`. EOD's production API uses `type` for its opaque `GraphQLObjectType`; qplan's implementation separately retains the canonical qplan `Schema.ObjectType`, exposed through the context-free `schemaType` extension. Private parameters may use the shorter name `type` when the local type is unambiguous.

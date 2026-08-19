@@ -1,9 +1,10 @@
 package semantics.arbitrary
 
+import model.Arguments
+
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
-import model.Value
 import model.objectOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,7 +66,7 @@ class GeneratorTest {
                 coordinate.fieldName,
             )
         val input = countWorld.schema.objectOf("Query")
-        val arguments = Value.Arguments.of(field, emptyMap())
+        val arguments = Arguments.Resolved.of(field, emptyMap())
 
         registry.clearResolutionApplicationCounts()
         countWorld.resolverRegistry.resolver(field)(input, arguments)
@@ -334,7 +335,7 @@ class GeneratorTest {
 
                 val field = world.schema.objectField(coordinate.typeName, coordinate.fieldName)
                 val input = world.schema.objectOf(coordinate.typeName)
-                val arguments = Value.Arguments.of(field, emptyMap())
+                val arguments = Arguments.Resolved.of(field, emptyMap())
                 val resolver = world.resolverRegistry.resolver(field)
 
                 assertEquals(
@@ -813,5 +814,5 @@ private data class ArgumentInvocation(
     val argument: String,
 )
 
-private fun Value.Arguments.containsErrorValue(): Boolean =
+private fun Arguments.Resolved.containsErrorValue(): Boolean =
     false

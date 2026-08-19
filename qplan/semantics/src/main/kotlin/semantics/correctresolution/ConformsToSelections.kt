@@ -8,7 +8,6 @@ import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
-import model.Value
 import model.applicableGroundSelections
 import model.groundKey
 import model.localizeTopLevelSelectionStamps

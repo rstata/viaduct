@@ -3,7 +3,6 @@ package semantics
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Value
 import semantics.contract.ResolverTaskObservation
 
 internal fun ReactorEvent.toContractObservation(): ResolverTaskObservation? =

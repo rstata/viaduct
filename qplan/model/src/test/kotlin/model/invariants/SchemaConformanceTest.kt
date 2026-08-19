@@ -1,10 +1,8 @@
 package model.invariants
 
-import model.ObjectEngineResult
-
 import model.Schema
-import model.Value
 import model.engineResultOf
+import model.engineObjectDataOf
 import model.objectOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -50,8 +48,8 @@ class SchemaConformanceTest {
         val user = schema.type("User") as Schema.ObjectType
 
         assertFailsWith<IllegalArgumentException> {
-            Value.Object.of(
-                type = user,
+            engineObjectDataOf(
+                schemaType = user,
                 fields =
                     mapOf(
                         "name" to 1,

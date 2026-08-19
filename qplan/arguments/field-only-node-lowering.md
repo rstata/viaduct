@@ -4,7 +4,7 @@ This claim concerns the pre-reasoning translation performed by `TestWorld`, not 
 
 The GraphQL-Java source schema remains unchanged and is retained for source validation. The separately decoded model schema rejects source names containing the reserved token `V_A`. For each Node subtype `T` actually used as a source field's named output type, model decoding adds one concrete internal type `T_V_A_Bridge { id: ID, node: T }`. These bridge types have no generated type hierarchy. For each source field `foo(args): W<T>`, where `W` is its complete list and nullability wrapper, the model schema omits `foo` and contains `foo_V_A_node(args): W<T_V_A_Bridge>` instead.
 
-When `foo` has a source field resolver, fixture composition registers that resolver at `foo_V_A_node` and maps its source-shaped node-reference output pointwise to bridge objects containing typed IDs. The source-facing object builder performs the same conversion for passive nested fields, while `Value.Object` storage remains strictly canonical and lowered.
+When `foo` has a source field resolver, fixture composition registers that resolver at `foo_V_A_node` and maps its source-shaped node-reference output pointwise to bridge EODs containing typed IDs. The source-facing object builder performs the same conversion for passive nested fields, while EOD storage remains strictly canonical and lowered.
 
 Arguments occur only at `foo_V_A_node`. Consequently `foo(a)` and `foo(b)` lower to distinct `foo_V_A_node(a)` and `foo_V_A_node(b)` keys without argument transfer to `node`, which is argumentless. Null, error, and list structure are mapped recursively without changing their positions or list/nullability declarations.
 

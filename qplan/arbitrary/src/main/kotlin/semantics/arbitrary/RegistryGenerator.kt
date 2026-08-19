@@ -1,5 +1,7 @@
 package semantics.arbitrary
 
+import model.Arguments
+
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.arbitrary
@@ -18,9 +20,11 @@ import model.Selection
 import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.TypeExpr
-import model.Value
+import viaduct.engine.api.EngineObjectData
 import model.fragmentFrom
+import model.materializeSelectionForestOf
 import model.objectOf
+import model.selectionForestOf
 import model.toMaterializeSelectionForest
 import model.testing.CanonicalFieldResolverApplicationObserver
 import model.testing.TestWorld
@@ -276,13 +280,13 @@ class ArbitraryRegistry internal constructor(
         require(!(captureResolutionWitness && captureResolutionApplicationCounts)) {
             "Resolution witness and application-count capture are mutually exclusive"
         }
-        val firstInputs = ConcurrentHashMap<FieldCoordinate, Value.Object>()
-        val firstArguments = ConcurrentHashMap<FieldCoordinate, Value.Arguments>()
+        val firstInputs = ConcurrentHashMap<FieldCoordinate, EngineObjectData.Sync>()
+        val firstArguments = ConcurrentHashMap<FieldCoordinate, Arguments.Resolved>()
         val applicationOrdinals = ConcurrentHashMap<FieldCoordinate, AtomicInteger>()
         fun recordApplication(
             coordinate: FieldCoordinate,
-            arguments: Value.Arguments,
-            input: Value.Object,
+            arguments: Arguments.Resolved,
+            input: EngineObjectData.Sync,
             suppliedDemand: SelectionForest?,
         ) {
             if (captureResolutionWitness) {
@@ -362,7 +366,7 @@ class ArbitraryRegistry internal constructor(
                             function = { input, arguments ->
                                 field.arguments.fields.values
                                     .filter { argument ->
-                                        argument.defaultValue is Value.Default.Present
+                                        argument.defaultValue is Schema.DefaultValue.Present
                                     }.forEach { argument ->
                                         require(argument.name in arguments.fieldValues) {
                                             "Concrete default ${coordinate.typeName}/" +
@@ -444,7 +448,7 @@ class ArbitraryRegistry internal constructor(
                             provider.owner.typeName,
                             provider.owner.fieldName,
                         ) as Schema.ObjectField
-                    Value.Variable.of(
+                    Arguments.Variable.of(
                         field,
                         provider.variableName,
                     ) to
@@ -1554,7 +1558,7 @@ internal data class FragmentPlan(
         if (selections.isEmpty()) {
             Fragment.of(
                 nominalType = schema.type(ownerName) as Schema.ObjectType,
-                subselections = model.selectionForestOf(),
+                subselections = selectionForestOf(),
             )
         } else {
             val parsed = schema.fragmentFrom(source(), variableField = variableField)
@@ -1667,7 +1671,7 @@ private fun List<FragmentSelectionPlan>.materialize(
                         key = materializedSelection.key,
                         possibleTypes = materializedSelection.possibleTypes,
                         subselections =
-                            model.materializeSelectionForestOf(
+                            materializeSelectionForestOf(
                                 MaterializeSelection.of(
                                     responseKey = payload.responseKey,
                                     key = payload.key,
@@ -1915,8 +1919,8 @@ private fun FragmentSelectionPlan.pathLength(): Int =
 
 private fun sensitiveScalar(
     scalar: ScalarKind,
-    input: Value.Object,
-    arguments: Value.Arguments,
+    input: EngineObjectData.Sync,
+    arguments: Arguments.Resolved,
     argumentType: Schema.FieldArguments,
     applicationOrdinal: Int? = null,
 ): EngineOutputData {
@@ -2208,14 +2212,14 @@ internal data class ObjectPlan(
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: String?,
         generatedHashSeed: Int,
-    ): Value.Object =
+    ): EngineObjectData.Sync =
         materializeObject(schema, inputId, generatedHashSeed)
 
     fun materializeObject(
         schema: Schema,
         inputId: String?,
         generatedHashSeed: Int = 0,
-    ): Value.Object {
+    ): EngineObjectData.Sync {
         val sourceSchema = SourceSchemaAdapter(schema)
         return schema.objectOf(typeName) {
             fields.forEach { (coordinate, plan) ->
@@ -2258,7 +2262,7 @@ internal data class GeneratedHashPlan(
         typeExpr: TypeExpr<Schema.OutputType>,
         inputId: String?,
         generatedHashSeed: Int,
-    ): Value.Object {
+    ): EngineObjectData.Sync {
         require(typeExpr.baseType.typeName == GENERATED_HASH_TYPE)
         val rootHash = mixGeneratedHash(generatedHashSeed, salt)
         return generatedHashObject(
@@ -2293,7 +2297,7 @@ private fun generatedHashObject(
     schema: Schema,
     hash: Int,
     remainingDepth: Int,
-): Value.Object =
+): EngineObjectData.Sync =
     schema.objectOf(GENERATED_HASH_TYPE) {
         GENERATED_HASH_FIELD setTo hash
         if (remainingDepth > 0) {

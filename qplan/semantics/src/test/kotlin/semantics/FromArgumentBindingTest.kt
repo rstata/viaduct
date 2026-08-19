@@ -1,12 +1,14 @@
 package semantics
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
 import kotlinx.coroutines.runBlocking
-import model.Value
 import model.VariableBinding
 import model.emptyFragmentOf
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -21,7 +23,7 @@ class FromArgumentBindingTest {
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.field("Query", "echo") to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
                                 0
@@ -31,7 +33,7 @@ class FromArgumentBindingTest {
                 variableProviders = { schema ->
                     val field = schema.objectField("Query", "echo")
                     mapOf(
-                        Value.Variable.of(field, "value") to
+                        Arguments.Variable.of(field, "value") to
                             schema.fromArgument(field, "value"),
                     )
                 },
@@ -43,7 +45,7 @@ class FromArgumentBindingTest {
         context(world) {
             listOf(key).bindFromArguments(emptyList())
             val variable =
-                Value.Variable.of(field, "value").stamp(listOf(key))
+                Arguments.Variable.of(field, "value").stamp(listOf(key))
             assertEquals(VariableBinding.of(1), world.getBinding(variable))
             assertEquals(
                 VariableBinding.of(1),

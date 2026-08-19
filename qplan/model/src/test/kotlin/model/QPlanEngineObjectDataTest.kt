@@ -1,5 +1,6 @@
 package model
 
+import graphql.schema.GraphQLObjectType
 import kotlinx.coroutines.runBlocking
 import model.testing.GJSchema
 import viaduct.engine.api.EngineObjectData
@@ -24,7 +25,6 @@ class QPlanEngineObjectDataTest {
         val data =
             engineObjectDataOf(
                 schemaType = userType,
-                graphQLType = graphQLUserType,
                 fields =
                     linkedMapOf(
                         "name" to "Ada",
@@ -53,7 +53,6 @@ class QPlanEngineObjectDataTest {
             val data =
                 engineObjectDataOf(
                     schemaType = userType,
-                    graphQLType = graphQLUserType,
                     fields =
                         linkedMapOf(
                             "name" to "Ada",
@@ -78,7 +77,6 @@ class QPlanEngineObjectDataTest {
         val data =
             engineObjectDataOf(
                 schemaType = userType,
-                graphQLType = graphQLUserType,
                 fields =
                     listOf(
                         entry("displayName", "name", "Ada"),
@@ -102,7 +100,7 @@ class QPlanEngineObjectDataTest {
             linkedMapOf<String, EngineOutputData?>(
                 "name" to "Ada",
             )
-        val data = engineObjectDataOf(userType, graphQLUserType, fields)
+        val data = engineObjectDataOf(userType, fields)
 
         fields["name"] = "Grace"
         fields["nickname"] = "Countess"
@@ -117,7 +115,6 @@ class QPlanEngineObjectDataTest {
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(
                 schemaType = userType,
-                graphQLType = graphQLUserType,
                 fields = mapOf("name" to 1),
             )
         }
@@ -130,7 +127,6 @@ class QPlanEngineObjectDataTest {
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(
                 schemaType = userType,
-                graphQLType = graphQLUserType,
                 fields =
                     listOf(
                         EngineObjectDataEntry.of("viewer", queryField, null),
@@ -144,7 +140,6 @@ class QPlanEngineObjectDataTest {
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(
                 schemaType = userType,
-                graphQLType = graphQLUserType,
                 fields =
                     listOf(
                         entry("value", "name", "Ada"),
@@ -159,20 +154,18 @@ class QPlanEngineObjectDataTest {
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(
                 schemaType = userType,
-                graphQLType = graphQLUserType,
                 fields = mapOf("friend" to null),
             )
         }
     }
 
     @Test
-    fun `rejects a GraphQL object type with a different name`() {
-        assertFailsWith<IllegalArgumentException> {
-            engineObjectDataOf(
-                schemaType = userType,
-                graphQLType = fixture.graphQLSchema.queryType,
-            )
-        }
+    fun `uses the schema types canonical GraphQL Java definition`() {
+        val data = engineObjectDataOf(userType)
+
+        assertSame(userType, data.schemaType)
+        assertSame(userType.gjDef, data.type)
+        assertSame(graphQLUserType, data.type)
     }
 
     @Test
@@ -180,19 +173,16 @@ class QPlanEngineObjectDataTest {
         val first =
             engineObjectDataOf(
                 userType,
-                graphQLUserType,
                 linkedMapOf("name" to "Ada", "nickname" to null),
             )
         val equal =
             engineObjectDataOf(
                 userType,
-                graphQLUserType,
                 linkedMapOf("name" to "Ada", "nickname" to null),
             )
         val different =
             engineObjectDataOf(
                 userType,
-                graphQLUserType,
                 linkedMapOf("name" to "Grace", "nickname" to null),
             )
 
@@ -214,7 +204,7 @@ class QPlanEngineObjectDataTest {
         )
 
     private class OtherEngineObjectData(
-        override val type: graphql.schema.GraphQLObjectType,
+        override val type: GraphQLObjectType,
     ) : EngineObjectData.Sync {
         override suspend fun fetch(selection: String): Any? = null
 

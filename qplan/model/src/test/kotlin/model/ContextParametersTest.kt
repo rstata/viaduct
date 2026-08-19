@@ -1,7 +1,10 @@
 package model
 
+import viaduct.engine.api.EngineObjectData
+
 import model.registry.snipToDemand
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -17,7 +20,7 @@ class ContextParametersTest {
                 source.copyInWorld()
             }
 
-        assertIs<Value.Object>(result)
+        assertIs<EngineObjectData.Sync>(result)
         assertEquals(source, result)
         assertEquals(world.schema.query, result.schemaType)
     }
@@ -41,7 +44,7 @@ class ContextParametersTest {
         val source = world.sourceObject()
 
         val result =
-            assertIs<Value.Object>(
+            assertIs<EngineObjectData.Sync>(
                 context(world) {
                     source.snipToDemand(selectionForestOf())
                 },
@@ -49,19 +52,19 @@ class ContextParametersTest {
 
         assertEquals(world.schema.query, result.schemaType)
         assertEquals(
-            emptyMap<String, EngineOutputData?>(),
-            result.fieldValues,
+            emptyList(),
+            result.getSelections().toList(),
         )
     }
 
     context(world: Assumptions)
-    private fun Value.Object.copyInWorld(): Value.Object = world.run {
-        val copiedFields = fieldValues.toMap()
-        Value.Object.of(schemaType, copiedFields)
+    private fun EngineObjectData.Sync.copyInWorld(): EngineObjectData.Sync = world.run {
+        val copiedFields = getSelections().associateWith(::get)
+        engineObjectDataOf(this@copyInWorld.schemaType, copiedFields)
     }
 
     context(world: Assumptions)
-    private fun Value.Object.copyTwiceInWorld(): Value.Object =
+    private fun EngineObjectData.Sync.copyTwiceInWorld(): EngineObjectData.Sync =
         copyInWorld().copyInWorld()
 
     private fun assumptions(): Assumptions =
@@ -72,7 +75,7 @@ class ContextParametersTest {
                 schema.query.fields.values
                     .filter { it.fieldName != "__typename" }
                     .associateWith {
-                        model.testing.fieldResolverOf(
+                        fieldResolverOf(
                             objectFragment = fragment,
                             function = { _, _ -> error("Not invoked") },
                         )
@@ -80,7 +83,7 @@ class ContextParametersTest {
             },
         ).assumptions
 
-    private fun Assumptions.sourceObject(): Value.Object =
+    private fun Assumptions.sourceObject(): EngineObjectData.Sync =
         objectOf("Query") {
             "id" setTo "query"
             "name" setTo "Query"

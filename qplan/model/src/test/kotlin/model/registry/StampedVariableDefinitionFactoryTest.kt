@@ -1,10 +1,11 @@
 package model.registry
 
+import model.Arguments
+
 import model.ObjectEngineResult
 import model.SelectionOccurrenceId
 import model.Schema
 import model.Stamp
-import model.Value
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,7 +25,7 @@ class StampedVariableDefinitionFactoryTest {
         )
     private val result = world.schema.objectField("Query", "result")
     private val source = world.schema.objectField("Query", "source")
-    private val template = Value.Variable.of(result, "seed")
+    private val template = Arguments.Variable.of(result, "seed")
     private val path =
         listOf(ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 1)))
 

@@ -7,6 +7,7 @@ import model.SelectionForest
 import model.registry.successorDemand
 import semantics.RuntimeSupport
 import semantics.orchestrateKeys
+import model.schemaType
 
 /**
  * Resolves [selections] with selective resolver applications. Whether the results contain only the

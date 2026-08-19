@@ -2,12 +2,14 @@ package semantics.benchmark
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.TimeoutCancellationException
+import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
-import model.Value
+import model.PathComponent
+import model.Stamp
 import model.fragmentFrom
 import model.objectOf
 import model.ownerResolverStamp
@@ -25,7 +27,10 @@ import semantics.resolver26.Resolver26ApplicationObservation
 import semantics.resolver26.resolveObserved
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Collections
 import kotlin.io.path.createDirectories
+import kotlin.math.abs
+import kotlin.math.ceil
 
 object ResolverBenchmarkCorpusSearch {
     @JvmStatic
@@ -99,13 +104,13 @@ object ResolverBenchmarkCorpusSearch {
     }
 
     private fun Candidate.observe(
-        world: model.Assumptions,
+        world: Assumptions,
         testCase: ResolverTestCase,
     ) {
         val fragment: Fragment = world.fragmentFrom(testCase.query.source)
         registry.clearResolutionWitness()
         val applicationObservations =
-            java.util.Collections.synchronizedList(
+            Collections.synchronizedList(
                 mutableListOf<Resolver26ApplicationObservation>(),
             )
         val result =
@@ -264,11 +269,11 @@ object ResolverBenchmarkCorpusSearch {
 
     private sealed interface ResolverOccurrenceIdentity {
         data class Ordinary(
-            val path: List<model.PathComponent>,
+            val path: List<PathComponent>,
         ) : ResolverOccurrenceIdentity
 
         data class Stamped(
-            val stamp: model.Stamp.Occurrence,
+            val stamp: Stamp.Occurrence,
         ) : ResolverOccurrenceIdentity
     }
 
@@ -515,14 +520,13 @@ object ResolverBenchmarkCorpusSearch {
             value: Long,
             target: Long,
             radius: Long,
-        ): Long = (radius - kotlin.math.abs(value - target)).coerceAtLeast(0)
+        ): Long = (radius - abs(value - target)).coerceAtLeast(0)
 
         private fun List<Long>.percentile(percentile: Double): Long {
             if (isEmpty()) return 0
             val sorted = sorted()
             val index =
-                kotlin.math
-                    .ceil(sorted.size * percentile)
+                ceil(sorted.size * percentile)
                     .toInt()
                     .coerceAtLeast(1) - 1
             return sorted[index]

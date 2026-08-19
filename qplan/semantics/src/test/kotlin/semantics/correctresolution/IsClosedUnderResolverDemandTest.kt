@@ -1,12 +1,14 @@
 package semantics.correctresolution
 
+import model.Arguments
+
 import model.ObjectEngineResult
 
-import model.Value
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
 import model.testing.TestWorld
+import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -48,7 +50,7 @@ class IsClosedUnderResolverDemandTest {
                     val parent = schema.objectField("Query", "parent")
                     mapOf(
                         result to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.fragmentFrom(
                                     """
                                     fragment ignored on Parent {
@@ -60,11 +62,11 @@ class IsClosedUnderResolverDemandTest {
                                 ),
                             ) { _, _ -> 14 },
                         consume to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Child"),
                             ) { _, _ -> 14 },
                         parent to
-                            model.testing.fieldResolverOf(
+                            fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ -> null },
                     )
@@ -72,7 +74,7 @@ class IsClosedUnderResolverDemandTest {
                 variableProviders = { schema ->
                     val result = schema.objectField("Parent", "result")
                     mapOf(
-                        Value.Variable.of(result, "seed") to
+                        Arguments.Variable.of(result, "seed") to
                             schema.fromArgument(result, "seed"),
                     )
                 },
@@ -80,7 +82,7 @@ class IsClosedUnderResolverDemandTest {
         val world = testWorld.assumptions
         val resultField = world.schema.objectField("Parent", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
-        val variable = Value.Variable.of(resultField, "seed")
+        val variable = Arguments.Variable.of(resultField, "seed")
         val stamped = variable.stamp(listOf(resultKey))
         world.declareBinding(stamped)
         world.completeBinding(stamped, 7)

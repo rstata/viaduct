@@ -1,12 +1,11 @@
 package model.spec
 
 import model.EngineInputObjectData
-import model.OpenValue
 import model.Schema
 import model.SelectionForest
-import model.Value
 import model.fieldExpressions
 import model.testing.TestWorld
+import model.spec.flatten as flattenSpecSelections
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -68,9 +67,7 @@ class SpecSelectionFlattenerTest {
         assertEquals(field, release.key.field)
         assertEquals(
             "beta",
-            assertIs<OpenValue.Ground>(
-                release.key.arguments.fieldExpressions()["channel"],
-            ).data,
+            release.key.arguments.fieldExpressions()["channel"],
         )
     }
 
@@ -210,13 +207,7 @@ class SpecSelectionFlattenerTest {
                     SpecSelection.Field.of(
                         alias = alias,
                         field = field,
-                        arguments =
-                            arguments.mapValues { (name, value) ->
-                                OpenValue.of(
-                                    field.arguments.fields.getValue(name).typeExpr,
-                                    value,
-                                )
-                            },
+                        arguments = arguments,
                         subselections = subselections,
                     )
                 }
@@ -232,7 +223,7 @@ class SpecSelectionFlattenerTest {
             selectionSet: List<SpecSelection>,
         ): SelectionForest =
             context(assumptions) {
-                model.spec.flatten(typeInScope, selectionSet)
+                flattenSpecSelections(typeInScope, selectionSet)
             }
     }
 

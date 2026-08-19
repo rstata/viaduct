@@ -1,14 +1,6 @@
 package execution
 
-import graphql.GraphQL
-import graphql.schema.idl.RuntimeWiring
-import graphql.schema.idl.SchemaGenerator
-import graphql.schema.idl.SchemaParser
-import model.Assumptions
-import model.ErrorEngineResult
-import model.ObjectEngineResult
-import model.engineResultOf
-import model.testing.TestWorld
+import execution.testing.ExecutionTestFixture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -17,32 +9,23 @@ import kotlin.test.assertTrue
 class NullAndErrorCompletionTest {
     @Test
     fun `completes nullable fields and list elements without errors`() {
-        val world = TestWorld.fromSDL(SCHEMA).assumptions
-        val user =
-            world.engineResultOf("User") {
-                "requiredName" resolvesTo "Ada"
-                "optionalNote" resolvesTo null
-            }
-        val root =
-            world.engineResultOf("Query") {
-                "healthy" resolvesTo "ready"
-                "nullableText" resolvesTo null
-                "nullableUser" resolvesTo user
-                "nullableItems" resolvesTo listOf("first", null, "third")
-                "strictItems" resolvesTo listOf("first", "second", "third")
-            }
+        val fixture =
+            ExecutionTestFixture.fromResolverDSL(
+                schemaSDL = SCHEMA,
+                resolverSchemaSDL = RESOLVERS,
+            )
 
         val result =
-            graphQLFor(world, root).execute(
+            fixture.runQuery(
                 """
                 {
                   healthy
-                  nullableText
-                  nullableUser {
-                    requiredName
+                  nullValue
+                  user {
+                    requiredValue
                     optionalNote
                   }
-                  nullableItems
+                  items
                 }
                 """.trimIndent(),
             )
@@ -50,14 +33,14 @@ class NullAndErrorCompletionTest {
         assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
         assertEquals(
             mapOf(
-                "healthy" to "ready",
-                "nullableText" to null,
-                "nullableUser" to
+                "healthy" to 1,
+                "nullValue" to null,
+                "user" to
                     mapOf(
-                        "requiredName" to "Ada",
+                        "requiredValue" to 7,
                         "optionalNote" to null,
                     ),
-                "nullableItems" to listOf("first", null, "third"),
+                "items" to listOf(1, null, 3),
             ),
             result.getData(),
         )
@@ -65,33 +48,22 @@ class NullAndErrorCompletionTest {
 
     @Test
     fun `reports errors and applies GraphQL null bubbling`() {
-        val world = TestWorld.fromSDL(SCHEMA).assumptions
-        val user =
-            world.engineResultOf("User") {
-                "requiredName" resolvesTo ErrorEngineResult
-                "optionalNote" resolvesTo "unselected"
-            }
-        val root =
-            world.engineResultOf("Query") {
-                "healthy" resolvesTo "ready"
-                "nullableText" resolvesTo ErrorEngineResult
-                "nullableUser" resolvesTo user
-                "nullableItems" resolvesTo
-                    listOf("first", ErrorEngineResult, "third")
-                "strictItems" resolvesTo
-                    listOf("first", ErrorEngineResult, "third")
-            }
+        val fixture =
+            ExecutionTestFixture.fromResolverDSL(
+                schemaSDL = SCHEMA,
+                resolverSchemaSDL = RESOLVERS,
+            )
 
         val result =
-            graphQLFor(world, root).execute(
+            fixture.runQuery(
                 """
                 {
                   healthy
-                  nullableText
-                  nullableUser {
-                    requiredName
+                  failedValue
+                  failedUser {
+                    requiredValue
                   }
-                  nullableItems
+                  failedItems
                   strictItems
                 }
                 """.trimIndent(),
@@ -99,10 +71,10 @@ class NullAndErrorCompletionTest {
 
         assertEquals(
             mapOf(
-                "healthy" to "ready",
-                "nullableText" to null,
-                "nullableUser" to null,
-                "nullableItems" to listOf("first", null, "third"),
+                "healthy" to 1,
+                "failedValue" to null,
+                "failedUser" to null,
+                "failedItems" to listOf(1, null, 3),
                 "strictItems" to null,
             ),
             result.getData(),
@@ -110,9 +82,9 @@ class NullAndErrorCompletionTest {
         assertEquals(4, result.errors.size)
         assertEquals(
             setOf<List<Any>>(
-                listOf("nullableText"),
-                listOf("nullableUser", "requiredName"),
-                listOf("nullableItems", 1),
+                listOf("failedValue"),
+                listOf("failedUser", "requiredValue"),
+                listOf("failedItems", 1),
                 listOf("strictItems", 1),
             ),
             result.errors.mapTo(linkedSetOf()) { error -> assertNotNull(error.path) },
@@ -124,40 +96,44 @@ class NullAndErrorCompletionTest {
         )
     }
 
-    private fun graphQLFor(
-        assumptions: Assumptions,
-        root: ObjectEngineResult,
-    ): GraphQL {
-        val runtimeWiring =
-            RuntimeWiring
-                .newRuntimeWiring()
-                .wiringFactory(QPlanWiringFactory(assumptions.schema))
-                .build()
-        val graphQLSchema =
-            SchemaGenerator().makeExecutableSchema(
-                SchemaParser().parse(SCHEMA),
-                runtimeWiring,
-            )
-        return GraphQL
-            .newGraphQL(graphQLSchema)
-            .queryExecutionStrategy(QPlanExecutionStrategy(assumptions, root))
-            .build()
-    }
-
     private companion object {
         val SCHEMA =
             """
             type Query {
-              healthy: String!
-              nullableText: String
-              nullableUser: User
-              nullableItems: [String]
-              strictItems: [String!]
+              healthy: Int!
+              nullValue: Int
+              user: User!
+              items: [Int]
+              failedValue: Int
+              failedUser: User
+              failedItems: [Int]
+              strictItems: [Int!]
             }
 
             type User {
-              requiredName: String!
-              optionalNote: String
+              requiredValue: Int!
+              optionalNote: Int
+            }
+            """.trimIndent()
+
+        val RESOLVERS =
+            """
+            extend type Query {
+              healthy: Int! @resolver(result: 1)
+              nullValue: Int @resolver(result: null)
+              user: User!
+                @resolver(result: {requiredValue: 7, optionalNote: null})
+              items: [Int] @resolver(result: [1, null, 3])
+              failedValue: Int @resolver(result: "ERROR")
+              failedUser: User
+                @resolver(result: {requiredValue: "ERROR"})
+              failedItems: [Int] @resolver(result: [1, "ERROR", 3])
+              strictItems: [Int!] @resolver(result: [1, "ERROR", 3])
+            }
+
+            type User {
+              requiredValue: Int!
+              optionalNote: Int
             }
             """.trimIndent()
     }

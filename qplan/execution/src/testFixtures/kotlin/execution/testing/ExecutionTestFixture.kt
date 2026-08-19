@@ -33,11 +33,30 @@ class ExecutionTestFixture private constructor(
     }
 
     companion object {
-        fun fromSDL(
+        fun fromSDL(schemaSDL: String): ExecutionTestFixture =
+            fromWorld(
+                schemaSDL = schemaSDL,
+                world = TestWorld.fromSDL(schemaSDL),
+            )
+
+        fun fromResolverDSL(
             schemaSDL: String,
-            runtimeWiring: RuntimeWiring = RuntimeWiring.newRuntimeWiring().build(),
+            resolverSchemaSDL: String,
+        ): ExecutionTestFixture =
+            fromWorld(
+                schemaSDL = schemaSDL,
+                world = TestWorld.fromDSL(resolverSchemaSDL),
+            )
+
+        private fun fromWorld(
+            schemaSDL: String,
+            world: TestWorld,
         ): ExecutionTestFixture {
-            val world = TestWorld.fromSDL(schemaSDL)
+            val runtimeWiring =
+                RuntimeWiring
+                    .newRuntimeWiring()
+                    .wiringFactory(QPlanWiringFactory(world.schema))
+                    .build()
             val graphQLSchema =
                 SchemaGenerator().makeExecutableSchema(
                     SchemaParser().parse(schemaSDL),

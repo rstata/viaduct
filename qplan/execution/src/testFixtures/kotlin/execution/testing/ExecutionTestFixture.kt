@@ -1,12 +1,15 @@
 package execution.testing
 
 import execution.QPlanExecutionStrategy
+import execution.QPlanWiringFactory
 import graphql.ExecutionInput
 import graphql.ExecutionResult
 import graphql.GraphQL
 import graphql.schema.idl.RuntimeWiring
 import graphql.schema.idl.SchemaGenerator
 import graphql.schema.idl.SchemaParser
+import model.ObjectEngineResult
+import model.Schema
 import model.testing.TestWorld
 
 /**
@@ -14,18 +17,20 @@ import model.testing.TestWorld
  */
 class ExecutionTestFixture private constructor(
     private val graphQL: GraphQL,
+    private val root: ObjectEngineResult? = null,
 ) {
     fun runQuery(
         query: String,
         variables: Map<String, Any?> = emptyMap(),
-    ): ExecutionResult =
-        graphQL.execute(
+    ): ExecutionResult {
+        val input =
             ExecutionInput
                 .newExecutionInput()
                 .query(query)
                 .variables(variables)
-                .build(),
-        )
+        root?.let(input::root)
+        return graphQL.execute(input.build())
+    }
 
     companion object {
         fun fromSDL(
@@ -44,6 +49,30 @@ class ExecutionTestFixture private constructor(
                     .queryExecutionStrategy(QPlanExecutionStrategy(world.assumptions))
                     .build()
             return ExecutionTestFixture(graphQL)
+        }
+
+        /**
+         * Builds a vanilla GraphQL-Java executor that completes fields from [root].
+         */
+        fun fromResolvedRoot(
+            schemaSDL: String,
+            schema: Schema,
+            root: ObjectEngineResult,
+        ): ExecutionTestFixture {
+            val runtimeWiring =
+                RuntimeWiring
+                    .newRuntimeWiring()
+                    .wiringFactory(QPlanWiringFactory(schema))
+                    .build()
+            val graphQLSchema =
+                SchemaGenerator().makeExecutableSchema(
+                    SchemaParser().parse(schemaSDL),
+                    runtimeWiring,
+                )
+            return ExecutionTestFixture(
+                graphQL = GraphQL.newGraphQL(graphQLSchema).build(),
+                root = root,
+            )
         }
     }
 }

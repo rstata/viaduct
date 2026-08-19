@@ -38,7 +38,7 @@ interface PassiveObjectPathProviderResolverContract : ResolverContract {
         val world = testWorld.assumptions
 
         val resolved =
-            resolveAndValidate(world, "fragment ignored on Query { item { result } }")
+            resolveAndValidate(world, "query { item { result } }")
         val item =
             resolved.getCell(
                 ObjectEngineResult.GroundKey.of(

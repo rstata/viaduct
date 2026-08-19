@@ -9,8 +9,8 @@ import model.EngineOutputData
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.VariableBinding
-import model.fragmentFrom
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertTimeoutPreemptively
@@ -109,9 +109,9 @@ class AdversarialRegressionTest {
                     world = world,
                     root = world.objectOf("Query"),
                     selections =
-                        world.fragmentFrom(
-                            "fragment ignored on Query { result }",
-                        ).subselections,
+                        world.operationSelectionsFrom(
+                            "query { result }",
+                        ),
                 )
             val resolved: ObjectEngineResult = observation.result
             val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()

@@ -37,12 +37,12 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
         resolveAndValidate(
             world,
             """
-                fragment ignored on Query {
+                query {
                   item {
-                    children(depth: 1) {
+                    atOne: children(depth: 1) {
                       children(depth: 2) { __typename }
                     }
-                    children(depth: 2) {
+                    atTwo: children(depth: 2) {
                       children(depth: 1) { __typename }
                     }
                   }

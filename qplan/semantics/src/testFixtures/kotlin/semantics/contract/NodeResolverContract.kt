@@ -55,7 +55,7 @@ interface NodeResolverContract : ResolverContract {
         resolveAndValidate(
             world,
             """
-                fragment ignored on Query {
+                query {
                   viewer(id: "1") {
                     id
                     name
@@ -123,7 +123,7 @@ interface NodeResolverContract : ResolverContract {
         val result =
             resolveAndValidate(
                 world,
-                "fragment ignored on Query { viewer { card { profile { id name } } } }",
+                "query { viewer { card { profile { id name } } } }",
             )
         val viewer =
             assertIs<ObjectEngineResult>(
@@ -213,7 +213,7 @@ interface NodeResolverContract : ResolverContract {
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
+                query {
                   first: nodes(group: "first") {
                     id
                     ... on User { name }
@@ -305,7 +305,7 @@ interface NodeResolverContract : ResolverContract {
         val world = testWorld.newAssumptions()
         val schema = world.schema
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { matrix { id name } }")
+            resolveAndValidate(world, "query { matrix { id name } }")
         val matrix =
             assertIs<ListEngineResult>(
                 result.getCell(schema.contractKey("Query", "matrix_V_A_node")).get(),

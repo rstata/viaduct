@@ -39,7 +39,7 @@ interface NestedObjectPathUseResolverContract : ResolverContract {
                 emptyMap(),
             )
 
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+        val resolved = resolveAndValidate(world, "query { result }")
 
         assertEquals(7, resolved.getCell(resultKey).get())
     }

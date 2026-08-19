@@ -756,6 +756,16 @@ private fun decodeExternal(
     }
 }
 
+internal fun decodeExternalInputValue(
+    type: GraphQLInputType,
+    value: Any?,
+    schema: Schema,
+): Any? =
+    coerceArgumentExpression(
+        decodeModelInputType(type, schema),
+        decodeExternal(type, value, emptyMap(), schema),
+    )
+
 private fun decodeScalarExternal(
     schema: Schema,
     scalarType: Schema.ScalarType,

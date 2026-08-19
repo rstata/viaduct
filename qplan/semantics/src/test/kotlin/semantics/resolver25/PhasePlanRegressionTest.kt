@@ -2,8 +2,8 @@ package semantics.resolver25
 
 import model.ObjectEngineResult
 
-import model.fragmentFrom
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import semantics.contract.Resolver25StructuralSignature
 import semantics.contract.assertArguments
@@ -50,9 +50,9 @@ class PhasePlanRegressionTest {
                 world = world,
                 root = world.objectOf("Query"),
                 selections =
-                    world.fragmentFrom(
-                        "fragment ignored on Query { outer }",
-                    ).subselections,
+                    world.operationSelectionsFrom(
+                        "query { outer }",
+                    ),
             )
         val resolved = observation.result
 

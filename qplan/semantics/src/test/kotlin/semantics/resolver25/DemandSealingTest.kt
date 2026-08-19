@@ -12,6 +12,7 @@ import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
@@ -481,9 +482,9 @@ class DemandSealingTest {
             context(testWorld.assumptions) {
                 resolve(
                     testWorld.assumptions
-                        .fragmentFrom(
-                            "fragment ignored on Query { result c(value: 7) }",
-                        ).subselections,
+                        .operationSelectionsFrom(
+                            "query { result c(value: 7) }",
+                        ),
                 )
             }
         val payloadType = testWorld.schema.type("Payload") as Schema.ObjectType
@@ -535,9 +536,9 @@ class DemandSealingTest {
             world = world,
             root = world.objectOf("Query"),
             selections =
-                world.fragmentFrom(
-                    "fragment ignored on Query { result }",
-                ).subselections,
+                world.operationSelectionsFrom(
+                    "query { result }",
+                ),
         )
     }
 }

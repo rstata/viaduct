@@ -1,8 +1,8 @@
 package semantics.resolver25
 
 import model.ObjectEngineResult
-import model.fragmentFrom
 import model.objectOf
+import model.operationSelectionsFrom
 import model.testing.TestWorld
 import semantics.contract.Resolver25StructuralSignature
 import semantics.contract.assertDistinctArguments
@@ -65,9 +65,9 @@ class MixedVariablePhaseRegressionTest {
                 world = world,
                 root = world.objectOf("Query"),
                 selections =
-                    world.fragmentFrom(
-                        "fragment ignored on Query { result }",
-                    ).subselections,
+                    world.operationSelectionsFrom(
+                        "query { result }",
+                    ),
             )
         val result = observation.result
         val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
@@ -152,9 +152,9 @@ class MixedVariablePhaseRegressionTest {
                 world = world,
                 root = world.objectOf("Query"),
                 selections =
-                    world.fragmentFrom(
-                        "fragment ignored on Query { result }",
-                    ).subselections,
+                    world.operationSelectionsFrom(
+                        "query { result }",
+                    ),
             )
         val result = observation.result
         val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()

@@ -52,11 +52,12 @@ interface ObjectFragmentFromArgumentResolverContract :
             resolveAndValidate(
                 world,
                 """
-                fragment ignored on Query {
-                  first: result(seed: 7)
-                  second: result(seed: 8)
+                query Resolve(${'$'}first: Int!, ${'$'}second: Int!) {
+                  first: result(seed: ${'$'}first)
+                  second: result(seed: ${'$'}second)
                 }
                 """.trimIndent(),
+                variables = mapOf("first" to 7, "second" to 8),
             )
 
         assertEquals(14, resolved.getCell(firstKey).get())
@@ -135,7 +136,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                 mapOf("value" to 7),
             )
         val resolved =
-            resolveAndValidate(world, "fragment ignored on Query { result(value: 7) }")
+            resolveAndValidate(world, "query { result(value: 7) }")
 
         assertEquals(7, resolved.getCell(resultKey).get())
     }
@@ -163,7 +164,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                 world.schema.objectField("Query", "one"),
                 mapOf("seed" to 7),
             )
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { one(seed: 7) }")
+        val resolved = resolveAndValidate(world, "query { one(seed: 7) }")
 
         assertEquals(8, resolved.getCell(oneKey).get())
     }

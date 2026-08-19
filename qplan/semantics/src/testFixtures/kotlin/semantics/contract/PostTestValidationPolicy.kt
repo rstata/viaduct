@@ -5,9 +5,11 @@ import viaduct.engine.api.EngineObjectData
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Fragment
-import model.fragmentFrom
+import model.SelectionForest
+import model.instantiateBindings
+import model.merge
 import model.objectOf
+import model.operationSelectionsFrom
 import org.junit.jupiter.api.AfterEach
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
@@ -29,7 +31,7 @@ interface CorrectResolutionPostTestPolicy : ResolverContract {
 
 private data class PendingResolutionValidation(
     val world: Assumptions,
-    val fragment: Fragment,
+    val selections: SelectionForest,
     val result: ObjectEngineResult,
 )
 
@@ -49,12 +51,16 @@ private object ContractPostTestState {
         validations.forEach { validation ->
             assertTrue(
                 context(validation.world) {
-                    validation.result.correctResolution(validation.fragment)
+                    validation.result.correctResolution(
+                        validation.selections
+                            .merge(validation.world.schema.query)
+                            .instantiateBindings(),
+                    )
                 },
                 context(validation.world) {
                     "rooted=${validation.result.rootedAndWellTyped()}, " +
                         "selections=" +
-                        validation.result.conformsToSelections(validation.fragment.subselections) +
+                        validation.result.conformsToSelections(validation.selections) +
                         ", closed=${validation.result.isClosedUnderResolverDemand()}, " +
                         "resolvers=${validation.result.conformsToResolvers()}, " +
                         "typename=${validation.result.conformsToTypename()}"
@@ -67,14 +73,14 @@ private object ContractPostTestState {
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     root: EngineObjectData.Sync,
-    fragment: Fragment,
+    selections: SelectionForest,
 ): ObjectEngineResult {
-    val result = resolve(world, root, fragment.subselections)
+    val result = resolve(world, root, selections)
     if (this is CorrectResolutionPostTestPolicy) {
         ContractPostTestState.record(
             PendingResolutionValidation(
                 world = world,
-                fragment = fragment,
+                selections = selections,
                 result = result,
             ),
         )
@@ -84,19 +90,26 @@ internal fun ResolverContract.resolveAndValidate(
 
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
-    fragment: Fragment,
+    selections: SelectionForest,
 ): ObjectEngineResult =
     resolveAndValidate(
         world = world,
         root = world.objectOf("Query"),
-        fragment = fragment,
+        selections = selections,
     )
 
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
-    fragmentSource: String,
+    documentSource: String,
+    variables: Map<String, Any?> = emptyMap(),
+    operationName: String? = null,
 ): ObjectEngineResult =
     resolveAndValidate(
         world = world,
-        fragment = world.fragmentFrom(fragmentSource),
+        selections =
+            world.operationSelectionsFrom(
+                documentSource = documentSource,
+                variables = variables,
+                operationName = operationName,
+            ),
     )

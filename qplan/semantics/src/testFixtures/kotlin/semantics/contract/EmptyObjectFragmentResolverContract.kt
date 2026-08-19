@@ -24,7 +24,7 @@ interface EmptyObjectFragmentResolverContract :
                 schemaSDL = "type Query { value: Int }",
                 selectiveResolvers = selectiveResolvers,
             ).assumptions
-        val result = resolveAndValidate(world, "fragment ignored on Query { __typename }")
+        val result = resolveAndValidate(world, "query { __typename }")
 
         assertEquals(
             "Query",
@@ -59,7 +59,7 @@ interface EmptyObjectFragmentResolverContract :
                 },
             )
         val world = testWorld.assumptions
-        resolveAndValidate(world, "fragment ignored on Query { items { selected } }")
+        resolveAndValidate(world, "query { items { selected } }")
     }
 
     @Test
@@ -101,7 +101,7 @@ interface EmptyObjectFragmentResolverContract :
                 },
             )
         val world = testWorld.assumptions
-        val result = resolveAndValidate(world, "fragment ignored on Query { items { computed } }")
+        val result = resolveAndValidate(world, "query { items { computed } }")
         val items =
             assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
@@ -149,7 +149,7 @@ interface EmptyObjectFragmentResolverContract :
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "fragment ignored on Query { item { computed } }")
+            resolveAndValidate(world, "query { item { computed } }")
         val item =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "item")).get(),

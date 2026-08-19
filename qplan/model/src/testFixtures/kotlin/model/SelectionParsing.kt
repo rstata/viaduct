@@ -1,11 +1,75 @@
 package model
 
+import graphql.GraphQLContext
+import graphql.execution.CoercedVariables
+import graphql.execution.RawVariables
+import graphql.execution.ValuesResolver
+import graphql.language.OperationDefinition
+import graphql.parser.Parser
+import graphql.validation.Validator
+import java.util.Locale
 import model.testing.GJSelectionParser
 import model.testing.GJSchema
 
 /** Parses one post-validation fragment as test-fixture preparation outside semantic model logic. */
 fun Assumptions.selectionsFrom(fragment: String): Pair<Schema.CompositeType, SelectionForest> =
     schema.selectionParser().selectionsFrom(fragment)
+
+/**
+ * Decodes one post-validation query operation with already-coerced operation variables.
+ *
+ * Applied directives and named fragment spreads are outside the current selection model.
+ */
+fun Assumptions.selectionsFrom(
+    operation: OperationDefinition,
+    variables: CoercedVariables,
+    graphQLContext: GraphQLContext = GraphQLContext.getDefault(),
+    locale: Locale = Locale.getDefault(),
+): SelectionForest =
+    schema
+        .selectionParser()
+        .selectionsFrom(operation, variables, graphQLContext, locale)
+
+/** Parses and decodes one validated query operation with raw request variables. */
+fun Assumptions.operationSelectionsFrom(
+    documentSource: String,
+    variables: Map<String, Any?> = emptyMap(),
+    operationName: String? = null,
+    graphQLContext: GraphQLContext = GraphQLContext.getDefault(),
+    locale: Locale = Locale.getDefault(),
+): SelectionForest {
+    val graphQLSchema = (schema as GJSchema).graphQLSchema
+    val document = Parser.parse(documentSource)
+    val errors = Validator().validateDocument(graphQLSchema, document, locale)
+    require(errors.isEmpty()) {
+        errors.joinToString(
+            prefix = "Invalid GraphQL document: ",
+            separator = "; ",
+        ) { it.message }
+    }
+    val operations = document.getDefinitionsOfType(OperationDefinition::class.java)
+    val operation =
+        if (operationName == null) {
+            require(operations.size == 1) {
+                "An operation name is required for a document containing multiple operations"
+            }
+            operations.single()
+        } else {
+            operations.singleOrNull { it.name == operationName }
+                ?: throw IllegalArgumentException("Unknown operation: $operationName")
+        }
+    @Suppress("UNCHECKED_CAST")
+    val rawVariables = RawVariables.of(variables as Map<String, Any>)
+    val coercedVariables =
+        ValuesResolver.coerceVariableValues(
+            graphQLSchema,
+            operation.variableDefinitions,
+            rawVariables,
+            graphQLContext,
+            locale,
+        )
+    return selectionsFrom(operation, coercedVariables, graphQLContext, locale)
+}
 
 /** Parses one post-validation GraphQL fragment into the model fragment used by tests. */
 fun Schema.fragmentFrom(

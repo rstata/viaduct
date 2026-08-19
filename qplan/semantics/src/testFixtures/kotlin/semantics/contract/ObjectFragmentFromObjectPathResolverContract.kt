@@ -44,7 +44,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val resultField = world.schema.objectField("Query", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
         val resolver = world.resolverRegistry.resolver(resultField)
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+        val resolved = resolveAndValidate(world, "query { result }")
         val boundVariable =
             context(world) {
                 resolver
@@ -102,7 +102,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val resultField = world.schema.objectField("Query", "result")
             val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
             val resolver = world.resolverRegistry.resolver(resultField)
-            val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+            val resolved = resolveAndValidate(world, "query { result }")
             val boundVariable =
                 context(world) {
                     resolver
@@ -160,7 +160,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 emptyMap(),
             )
 
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+        val resolved = resolveAndValidate(world, "query { result }")
 
         assertEquals(9, resolved.getCell(resultKey).get())
     }
@@ -191,7 +191,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 emptyMap(),
             )
 
-        val resolved = resolveAndValidate(world, "fragment ignored on Query { result }")
+        val resolved = resolveAndValidate(world, "query { result }")
 
         assertEquals(10, resolved.getCell(resultKey).get())
         testWorld.applicationArguments.assertArguments(

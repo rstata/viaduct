@@ -67,7 +67,7 @@ interface NodeResolverContract : ResolverContract {
                   }
                 }
                 """.trimIndent(),
-        )
+            )
         testWorld.applicationArguments.assertArguments(
             world.schema.requireObjectField("Query", "viewer_V_A_node"),
             mapOf("id" to "1"),
@@ -226,10 +226,8 @@ interface NodeResolverContract : ResolverContract {
                   second: nodes(group: "second") { id }
                 }
                 """.trimIndent(),
-            )
+        )
         val bridgeField = schema.requireObjectField("Query", "nodes_V_A_node")
-        val bridgeType = schema.contractObjectType("Node_V_A_Bridge")
-        val payloadKey = schema.contractKey("Node_V_A_Bridge", "node")
         val firstKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "first"))
         val secondKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "second"))
 
@@ -238,11 +236,14 @@ interface NodeResolverContract : ResolverContract {
             result.keys,
         )
         val first = assertIs<ListEngineResult>(result.getCell(firstKey).get())
+        val expectedTypes = listOf("User", "Admin")
         assertEquals(
-            listOf("User", "Admin"),
-            first.map { cell ->
+            expectedTypes,
+            first.zip(expectedTypes).map { (cell, expectedType) ->
                 val bridge = assertIs<ObjectEngineResult>(cell.get())
+                val bridgeType = schema.contractObjectType("${expectedType}_V_A_Bridge")
                 assertEquals(bridgeType, bridge.type)
+                val payloadKey = schema.contractKey(bridgeType.name, "node")
                 assertIs<ObjectEngineResult>(
                     bridge.getCell(payloadKey).get(),
                 ).type.name

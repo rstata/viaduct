@@ -98,7 +98,7 @@ class OperationSelectionParsingTest {
             root.key.arguments.fieldExpressions(),
         )
 
-        val bridgeType = root.key.field.type.baseTypeDef as Schema.Object
+        val bridgeType = fixture.schema.requireType("User_V_A_Bridge") as Schema.Object
         val payload = root.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
 

@@ -68,11 +68,12 @@ internal fun nodeBridgeFieldName(sourceFieldName: String): String =
 /**
  * Decodes external GraphQL SDL into the canonical fixture schema.
  *
- * For each Node subtype used as a source field's named output type, the decoded schema contains one
- * concrete `T_V_A_Bridge` type with `id: ID` and `node: T`. A source field `foo: W<T>` is omitted
- * and represented by `foo_V_A_node: W<T_V_A_Bridge>`, preserving its arguments, list structure,
- * and nullability. These definitions belong only to the lowered reasoning world and are never
- * parsed from GraphQL text.
+ * For every Node object or interface `T`, the decoded schema contains a matching
+ * `T_V_A_Bridge` object or interface with `id: ID` and `node: T`. Bridge possible-object
+ * relationships mirror the source Node hierarchy. A source field `foo: W<T>` is omitted and
+ * represented by `foo_V_A_node: W<T_V_A_Bridge>`, preserving its arguments, list structure, and
+ * nullability. These definitions belong only to the lowered reasoning world and are never parsed
+ * from GraphQL text.
  */
 internal class GJSchemaDecoder(
     private val graphQLSchema: GraphQLSchema,
@@ -83,7 +84,7 @@ internal class GJSchemaDecoder(
         linkedMapOf<Schema.CompositeTypeDef, MutableMap<String, Schema.Field>>()
     private val objectFields =
         linkedMapOf<Schema.Object, MutableMap<String, Schema.ObjectField>>()
-    private val nodeBridgeTypes = linkedSetOf<Schema.Object>()
+    private val nodeBridgeTypes = linkedSetOf<Schema.CompositeTypeDef>()
     private val inputFields =
         linkedMapOf<Schema.Input, MutableMap<String, Schema.InputField>>()
     private val possibleTypeSets =
@@ -114,6 +115,7 @@ internal class GJSchemaDecoder(
                 types = types.toMap(),
             )
         populatePossibleTypes()
+        populateNodeBridgePossibleTypes()
         populateAllSourceObjectsPossibleTypes()
         populateInputFields()
         populateCompositeFields()
@@ -182,18 +184,29 @@ internal class GJSchemaDecoder(
     }
 
     private fun createNodeBridgeTypeShells() {
-        usedNodeOutputTypeNames().forEach { nodeTypeName ->
-            val bridgeTypeName = nodeTypeName + NODE_BRIDGE_TYPE_SUFFIX
+        sourceNodeTypes().forEach { nodeType ->
+            val bridgeTypeName = nodeType.name + NODE_BRIDGE_TYPE_SUFFIX
             require(bridgeTypeName !in types) {
                 "Synthetic node bridge type collides with $bridgeTypeName"
             }
             val possibleTypes = linkedSetOf<Schema.Object>()
-            val bridgeType = ObjectTypeImpl(bridgeTypeName, possibleTypes)
-            possibleTypes += bridgeType
+            val bridgeType: Schema.CompositeTypeDef =
+                when (nodeType) {
+                    is GraphQLObjectType -> {
+                        val type = ObjectTypeImpl(bridgeTypeName, possibleTypes)
+                        types[bridgeTypeName] = type
+                        objectFields[type] = linkedMapOf()
+                        possibleTypeSets[type] = possibleTypes
+                        type
+                    }
+                    is GraphQLInterfaceType -> {
+                        val type = InterfaceTypeImpl(bridgeTypeName, possibleTypes)
+                        registerComposite(type, possibleTypes)
+                        type
+                    }
+                    else -> error("Unexpected Node subtype: $nodeType")
+                }
             nodeBridgeTypes += bridgeType
-            types[bridgeTypeName] = bridgeType
-            objectFields[bridgeType] = linkedMapOf()
-            possibleTypeSets[bridgeType] = possibleTypes
         }
     }
 
@@ -208,18 +221,14 @@ internal class GJSchemaDecoder(
         )
     }
 
-    private fun usedNodeOutputTypeNames(): Set<String> {
-        val node = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return emptySet()
+    private fun sourceNodeTypes(): List<GraphQLImplementingType> {
+        val node = graphQLSchema.getType("Node") as? GraphQLInterfaceType ?: return emptyList()
         return graphQLSchema.allTypesAsList
-            .filterIsInstance<GraphQLFieldsContainer>()
-            .filter { it is GraphQLObjectType || it is GraphQLInterfaceType }
-            .flatMap { it.fieldDefinitions }
-            .map { GraphQLTypeUtil.unwrapAll(it.type) }
             .filterIsInstance<GraphQLImplementingType>()
             .filter { outputType ->
                 typeRelations.relationUnwrapped(node, outputType) in
                     setOf(GraphQLTypeRelation.Same, GraphQLTypeRelation.WiderThan)
-            }.mapTo(linkedSetOf()) { it.name }
+            }
     }
 
     private fun registerComposite(
@@ -243,6 +252,19 @@ internal class GJSchemaDecoder(
                         types.getValue(it.name) as Schema.Object
                     }
             }
+    }
+
+    private fun populateNodeBridgePossibleTypes() {
+        sourceNodeTypes().forEach { sourceType ->
+            val bridgeType =
+                types.getValue(sourceType.name + NODE_BRIDGE_TYPE_SUFFIX)
+                    as Schema.CompositeTypeDef
+            typeRelations
+                .possibleObjectTypes(sourceType)
+                .mapTo(possibleTypeSets.getValue(bridgeType)) { sourceObject ->
+                    types.getValue(sourceObject.name + NODE_BRIDGE_TYPE_SUFFIX) as Schema.Object
+                }
+        }
     }
 
     private fun populateAllSourceObjectsPossibleTypes() {
@@ -341,9 +363,11 @@ internal class GJSchemaDecoder(
     }
 
     private fun populateNodeBridgeTypes() {
-        usedNodeOutputTypeNames().forEach { nodeTypeName ->
-            val nodeType = types.getValue(nodeTypeName) as Schema.CompositeTypeDef
-            val bridgeType = types.getValue(nodeTypeName + NODE_BRIDGE_TYPE_SUFFIX) as Schema.Object
+        sourceNodeTypes().forEach { sourceType ->
+            val nodeType = types.getValue(sourceType.name) as Schema.CompositeTypeDef
+            val bridgeType =
+                types.getValue(sourceType.name + NODE_BRIDGE_TYPE_SUFFIX)
+                    as Schema.CompositeTypeDef
             addCompositeField(
                 bridgeType,
                 outputFieldOf(
@@ -458,7 +482,7 @@ internal class GJSchemaDecoder(
                     types.getValue(
                         (typeExpr.baseTypeDef as Schema.CompositeTypeDef).name +
                             NODE_BRIDGE_TYPE_SUFFIX,
-                    ) as Schema.Object,
+                    ) as Schema.CompositeTypeDef,
                 isNullable = typeExpr.isNullable,
             )
         } else {

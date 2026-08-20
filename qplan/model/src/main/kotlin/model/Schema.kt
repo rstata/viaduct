@@ -100,9 +100,11 @@ interface Schema {
      * - `f.args.isEmpty()`; and
      * - `t.field("V_A_typename") == f`.
      *
-     * Unions own no fields. Synthetic node-bridge objects own only their `id` and `node` fields.
-     * The synthetic interface `V_A_AllSourceObjects` owns the field selected for union-scoped source
-     * `__typename` and has every lowered source object, but no node bridge, in [possibleObjectTypes].
+     * Unions own no fields. Every source Node object or interface has a corresponding same-kind
+     * node-bridge definition owning only `id` and `node`; bridge [possibleObjectTypes] mirror the
+     * source Node hierarchy with source objects replaced by their bridge objects. The synthetic
+     * interface `V_A_AllSourceObjects` owns the field selected for union-scoped source `__typename`
+     * and has every lowered source object, but no node bridge, in [possibleObjectTypes].
      *
      * Each field's [Field.containingDef] is this definition. Conversely, every [Field] in the
      * schema occurs exactly once in its containing definition's map. Flattened copies at different
@@ -189,8 +191,9 @@ interface Schema {
      *
      * For source objects, [fields] contains `V_A_typename` and the object's effective fields after
      * flattening type extensions and inherited interface fields. Synthetic node-bridge objects
-     * contain only their `id` and `node` fields. Interface implementation relationships are
-     * represented by the schema's relation operations rather than stored on this definition.
+     * contain only their `id` and `node` fields and participate in the bridge hierarchy through
+     * [possibleObjectTypes]. Interface implementation relationships are represented by the
+     * schema's relation operations rather than stored on this definition.
      *
      * [graphQLJavaDefinition] is a canonical opaque attachment for integration with Viaduct engine
      * APIs. It is not part of the mathematical schema model and must not be inspected for schema
@@ -212,9 +215,10 @@ interface Schema {
     /**
      * An interface type.
      *
-     * [fields] contains `V_A_typename` and the interface's effective fields after flattening type
-     * extensions and inherited interface fields. Parent-interface and implementation
-     * relationships are represented by the schema's relation operations rather than stored here.
+     * For source interfaces, [fields] contains `V_A_typename` and the effective fields after
+     * flattening type extensions and inherited interface fields. Synthetic node-bridge interfaces
+     * contain only `id` and `node`. Parent-interface and implementation relationships are
+     * represented by the schema's relation operations rather than stored here.
      */
     interface Interface : CompositeTypeDef
 

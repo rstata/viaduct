@@ -7,6 +7,7 @@ import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.objectOf
 import model.requireObjectField
+import model.schemaType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -91,18 +92,8 @@ class ResolverCoverageAdversarialTest {
                     ?: error("Could not generate a Node-valued resolver with list=$listOutput")
             val (schema, registry, sourceField) = generated
             val world = registry.world(schema).assumptions
-            val sourceDefinition =
-                schema
-                    .objectNamed(sourceField.typeName)
-                    .fields
-                    .single { field -> field.name == sourceField.fieldName }
             val bridgeField =
                 world.schema.requireObjectField(sourceField.typeName, sourceField.fieldName + "_V_A_node")
-            val payloadField =
-                world.schema.requireObjectField(
-                    sourceDefinition.type.namedType + "_V_A_Bridge",
-                    "node",
-                )
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
                 world.resolverRegistry
@@ -115,6 +106,11 @@ class ResolverCoverageAdversarialTest {
                 } else {
                     assertIs<EngineObjectData.Sync>(bridgeValue)
                 }
+            val payloadField =
+                world.schema.requireObjectField(
+                    payloadInput.schemaType.name,
+                    "node",
+                )
 
             registry.clearResolutionWitness()
             world.resolverRegistry
@@ -128,7 +124,7 @@ class ResolverCoverageAdversarialTest {
             assertEquals(
                 listOf(
                     FieldCoordinate(sourceField.typeName, sourceField.fieldName + "_V_A_node"),
-                    FieldCoordinate(sourceDefinition.type.namedType + "_V_A_Bridge", "node"),
+                    FieldCoordinate(payloadInput.schemaType.name, "node"),
                 ),
                 registry.resolutionWitness().applications.map { application ->
                     application.key.field

@@ -23,7 +23,7 @@ import model.MaterializeSelectionForest
 import model.Schema
 import model.SourceSchemaAdapter
 import model.SelectionForest
-import model.requireObjectField
+import model.requireField
 import model.requireQueryTypeDef
 import model.requireType
 import model.spec.SpecSelection
@@ -222,9 +222,10 @@ internal class GJSelectionParser(
         val loweredNodeField = schema.isLoweredNodeField(canonicalField)
         val canonicalSubselections =
             if (loweredNodeField) {
-                val bridgeType = canonicalField.type.baseTypeDef as Schema.Object
+                val bridgeType =
+                    canonicalField.type.baseTypeDef as Schema.CompositeTypeDef
                 val payloadField =
-                    schema.requireObjectField(bridgeType.name, NODE_BRIDGE_PAYLOAD_FIELD)
+                    schema.requireField(bridgeType.name, NODE_BRIDGE_PAYLOAD_FIELD)
                 listOf(
                     SpecSelection.Field.of(
                         alias = null,

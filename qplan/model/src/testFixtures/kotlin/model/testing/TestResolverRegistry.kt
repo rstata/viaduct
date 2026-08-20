@@ -103,9 +103,8 @@ internal fun resolverRegistryOf(
  *
  * For each node-valued source field `foo(args)`, fixture composition identifies its canonical
  * `foo_V_A_node(args)` producer and adapts source-shaped node references to same-shaped bridge
- * objects. For each used declared Node subtype `T` whose possible concrete types have raw node
- * lookups, one generated resolver at `T_V_A_Bridge.node` requires `id` and dispatches that typed ID
- * to the raw lookup.
+ * objects. For each concrete Node object `O` with a raw node lookup, one generated resolver at
+ * `O_V_A_Bridge.node` requires `id` and dispatches that typed ID to the raw lookup.
  *
  * A lowered field must be declared as `Node` or a subtype whose every possible concrete type has a
  * raw node lookup. Mixed node-resolved and inline possible types are rejected at this composition
@@ -119,14 +118,7 @@ private class NodeResolverLowering(
     private val sourceSchema = SourceSchemaAdapter(schema)
     private val nodeType: Schema.Interface? = canonicalNodeType()
     private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
-    private val payloadTypes: Set<Schema.CompositeTypeDef> =
-        loweredFields
-            .mapTo(linkedSetOf()) { field ->
-                sourceSchema.typeExpr(field).baseTypeDef as Schema.CompositeTypeDef
-            }.filterTo(linkedSetOf()) { type ->
-                type.possibleObjectTypes.isNotEmpty() &&
-                    type.possibleObjectTypes.all { it in nodeResolvers }
-            }
+    private val payloadTypes: Set<Schema.Object> = nodeResolvers.keys
 
     val fieldResolvers: Map<Schema.Field, FieldResolverDefinition>
 
@@ -259,8 +251,8 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun payloadResolver(nodeOutputType: Schema.CompositeTypeDef): FieldResolverDefinition {
-        val bridgeType = schema.nodeBridgeType(nodeOutputType)
+    private fun payloadResolver(nodeOutputType: Schema.Object): FieldResolverDefinition {
+        val bridgeType = schema.nodeBridgeType(nodeOutputType) as Schema.Object
         val idField = schema.requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
         val objectFragment =
             Fragment.of(
@@ -290,7 +282,7 @@ private class NodeResolverLowering(
 
     private fun loadNode(
         typedId: EngineOutputData?,
-        nodeOutputType: Schema.CompositeTypeDef,
+        nodeOutputType: Schema.Object,
     ): EngineOutputData? {
         if (typedId == null || typedId == EngineErrorData) return typedId
         require(typedId is String) {
@@ -322,7 +314,7 @@ private class NodeResolverLowering(
         return result
     }
 
-    private fun payloadField(nodeOutputType: Schema.CompositeTypeDef): Schema.ObjectField =
+    private fun payloadField(nodeOutputType: Schema.Object): Schema.ObjectField =
         schema.requireObjectField(
             nodeBridgeTypeName(nodeOutputType),
             NODE_BRIDGE_PAYLOAD_FIELD,

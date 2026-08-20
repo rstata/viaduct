@@ -16,11 +16,11 @@ The carrier model treats `EngineInputData`, `EngineOutputData`, and `EngineResul
 
 Mutable OERs may gain validated exact cells monotonically. Each cell has independent write-once value and access-result promises, and a written parent cell may retain a mutable child OER while that child gains cells. Self-reference and cyclic result graphs are outside the result domain.
 
-`Schema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition may decode schemas, lower source node resolvers, canonicalize variables, validate provider paths, and assemble registries; semantic code receives only the resulting interfaces and model-owned `FieldResolver` values.
+`ViaductSchema` and `ResolverRegistry` are externally supplied canonical worlds. Test-fixture composition lowers the retained source schema, canonicalizes variables, validates provider paths, and assembles registries; semantic code receives only the canonical lowered schema and model-owned `FieldResolver` values.
 
-Use canonical schema definitions and `Schema.CompositeTypeDef.possibleObjectTypes` for field ownership and concrete applicability rather than Kotlin inheritance. Source-facing fixture and lowering infrastructure delegates nominal relation, overlap, and fragment-spread reasoning to the shared `GraphQLTypeRelations` built from the retained source `GraphQLSchema`; it does not reproduce those relations in the qplan schema model.
+Use canonical schema definitions and `ViaductSchema.CompositeTypeDef.possibleObjectTypes` for field ownership and concrete applicability rather than Kotlin inheritance. Source-facing fixture infrastructure delegates nominal relation, overlap, and fragment-spread reasoning to the shared `GraphQLTypeRelations` built from the retained source `GraphQLSchema`; lowered-world reasoning uses the canonical `ViaductSchema`.
 
-Each `Schema.Object` also retains one GraphQL-Java definition for Engine API integration. A source-backed object retains the exact definition from the unchanged source schema; a synthetic object may retain a generated definition for internal EODs. This attachment is not part of the mathematical model: reasoning must treat it as opaque and must not inspect it for equality, hashing, conformance, field ownership, applicability, or subtype decisions. Infrastructure accesses it through `Schema.Object.gjDef`, mirroring ViaductSchema's GraphQL-Java-backed extension vocabulary.
+Each source-backed canonical `ViaductSchema.Object` retains the exact GraphQL-Java definition from the unchanged source schema. Synthetic bridge objects retain generated definitions only for internal EODs. These attachments are not part of the mathematical model: reasoning must not inspect them for equality, hashing, conformance, field ownership, applicability, or subtype decisions.
 
 ## Variables And Keys
 
@@ -40,7 +40,7 @@ Keys belong exclusively to the engine-result domain. `EngineObjectData.Sync` use
 
 ## Result Representation
 
-The `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `EngineIDResult`, canonical `Schema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
+The `EngineResult` domain admits Kotlin `Int`, finite `Double`, `Boolean`, and `String`, structural `EngineIDResult`, canonical `ViaductSchema.EnumValue`, `ObjectEngineResult`, `ListEngineResult`, and the singleton `ErrorEngineResult`. These are semantic union members rather than implementations of a common nominal result interface.
 
 Every object-field and list-element value slot contains `EngineResult?`. Null represents GraphQL null. Every non-null child is another member of the result domain. Schema conformance admits `ErrorEngineResult` at every output type expression, including non-null types, so an error may occupy any value location in a result tree. `ErrorEngineResult` is an inhabited sentinel rather than Kotlin's bottom type and exposes no scalar, object, or list properties.
 
@@ -50,9 +50,9 @@ Every object-field and list-element value slot contains `EngineResult?`. Null re
 
 `EngineOutputData` represents resolver output without result cells or access decisions. Its members are production-compatible scalar representations, recursive `List<EngineOutputData?>`, `EngineObjectData.Sync`, and the singleton `EngineErrorData`. `EngineErrorData` belongs to the broad output domain but not to narrower simple, list, or object categories. Do not collapse resolver output and engine result into one carrier merely because they contain corresponding successful values.
 
-Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `EngineIDResult` for ID, and the canonical `Schema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the model.
+Current production engine input and output data use Kotlin `String` for GraphQL String, ID, and enum values. Qplan preserves that representation in `EngineInputData` and `EngineOutputData`. The result domain instead admits `String` only for GraphQL String, `EngineIDResult` for ID, and the canonical `ViaductSchema.EnumValue` owned by the expected enum type. Schema-directed publication converts output strings to those result representations, and resolver-input materialization converts them back to strings. `EngineIDData` and `EngineEnumValueData` are not part of the model.
 
-`Schema.Enum` owns a collection of canonical `Schema.EnumValue` definitions and exposes nullable lookup through `value(name)`. Each enum value exposes its name and containing enum type and uses the schema-canonical equality documented by `Schema`; same-named values of different enum types are distinct. `EngineIDResult` is a structurally equal runtime value containing one string, not a canonical schema definition.
+`ViaductSchema.Enum` owns a collection of canonical `ViaductSchema.EnumValue` definitions and exposes nullable lookup through `value(name)`. Each enum value exposes its name and containing enum type; same-named values of different enum types are distinct. `EngineIDResult` is a structurally equal runtime value containing one string, not a canonical schema definition.
 
 Input-object and argument field values use ordinary maps. Use `getValue` when presence is a precondition and test membership before an optional lookup so an absent entry remains distinct from a present null. EOD uses `isPresent` for passive presence tests and strict `get` when presence is a precondition.
 
@@ -62,19 +62,17 @@ An exact result path contains only `ObjectEngineResult.GroundKey` object steps a
 
 Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to resolver-input materialization and must not create parallel OER or exact-path identities.
 
-The fixture retains an unchanged GraphQL-Java source schema for validation and derives a separate model-only lowered schema. Source Node-valued fields are absent from that model schema: `foo: W<T>` is represented only by `foo_V_A_node: W<T_V_A_Bridge>`. Every Node object or interface has a matching object or interface bridge with ordinary `id` and `node` fields, and bridge possible-object relationships mirror the source implementation hierarchy. Runtime node references always materialize concrete object bridges. The `V_A` namespace is reserved for all lowered definitions, so source schema names containing `V_A` are rejected.
+The fixture retains an unchanged GraphQL-Java source schema for validation and derives a separate canonical lowered `ViaductSchema` for reasoning. Source Node-valued fields are absent from the lowered schema: `foo: W<T>` is represented only by `foo_V_A_node: W<T_V_A_Bridge>`. Every Node object or interface has a matching object or interface bridge with ordinary `id` and `node` fields, and bridge possible-object relationships mirror the source implementation hierarchy. Runtime node references always materialize concrete object bridges. The `V_A` namespace is reserved for all lowered definitions, so source schema names containing `V_A` are rejected.
 
 The lowered schema represents internal typename demand with ordinary active fields. `V_A_AllSourceObjects` is a synthetic interface owning `V_A_typename: String!` and containing every lowered source object in `possibleTypes`; every lowered source object and source interface owns its own argumentless `V_A_typename`, while unions and synthetic node bridges own no typename field. External operation translation erases source `__typename` recursively and preserves enclosing composite selections even when they become empty, leaving GraphQL Java to complete client typename fields from the concrete OER type. Internal resolver fragments lower source `__typename` to the owner field, to `V_A_AllSourceObjects.V_A_typename` in a union scope, and through the `node` payload for Node-valued source fields. Registry composition supplies one dependency-free constant resolver for every concrete `V_A_typename`. Resolver outputs and the root EOD contain no implicit typename selection.
 
 Raw node references exist only as fixture inputs. Source-facing object construction and resolver adaptation lower them through `foo_V_A_node` producers and argumentless `T_V_A_Bridge.node` loaders before semantic reasoning. Resolver adaptation also recursively converts ordinary source-shaped object and list outputs into qplan-owned EODs. EOD stores only canonical lowered fields at that boundary.
 
-Ordinary model and semantics tests use canonical `requireField` and `requireObjectField` coordinates, including explicit synthetic names for lowered Node and typename fields. Source-name translation is confined to explicit pre-reasoning boundaries: GraphQL parsing, source-facing object construction, source declaration compilation, resolver adaptation, arbitrary source-recipe materialization, and focused tests of those adapters. Canonical assertions and resolver oracles must not use source-name lookup. Fixture code exposes this translation through `SourceSchemaAdapter`, not generic extensions on `Schema`.
+Ordinary model and semantics tests use canonical `requireField` and `requireObjectField` coordinates, including explicit synthetic names for lowered Node and typename fields. Source-name translation is confined to explicit pre-reasoning boundaries: GraphQL parsing, source-facing object construction, source declaration compilation, resolver adaptation, arbitrary source-recipe materialization, and focused tests of those adapters. Canonical assertions and resolver oracles must not use source-name lookup. Fixture code exposes this translation through `SourceSchemaAdapter`, which requires the explicit source/lowered fixture pair.
 
 ## Engine API Boundary
 
-Viaduct's `EngineObjectData.Sync` is the synchronous partial-object boundary. It is name-keyed and distinguishes absent selections from present-null values through `isPresent`. Qplan's validating implementation retains its canonical `Schema.Object` and exposes the production GraphQL-Java type witness through the EOD interface.
-
-For source-backed values, the canonical `Schema.Object` is lowered semantic identity while the EOD type witness is the exact object from the retained source GraphQL schema. Tenant-visible materialization projects node bridge producers and payloads back to source field and value shape. Fixture composition performs the inverse adaptation for tenant-produced EODs before semantic code uses the strict `schemaType` accessor; semantic code never recovers lowered identity from `EngineObjectData.type`.
+Viaduct's `EngineObjectData.Sync` is the synchronous partial-object boundary. It is name-keyed and distinguishes absent selections from present-null values through `isPresent`. Qplan's validating implementation retains its canonical lowered `ViaductSchema.Object` while source-backed EODs expose the exact source GraphQL-Java object through the EOD interface. Tenant-visible materialization projects Node bridge producers and payloads back to source field and value shape. Fixture composition performs the inverse adaptation for tenant-produced EODs before semantic code uses the strict `schemaType` accessor.
 
 Storage and access use that API where it preserves the modeled meaning, while explicit qplan structure retains schema-canonical keys, occurrence identity, write-once ownership, and access decisions that EOD does not represent directly. [`../handoff.md`](../handoff.md) records the resulting carrier state; this guide records its stable model rules.
 
@@ -84,15 +82,15 @@ Missing OER cells are not unset EOD selections. They are internal result-tree lo
 
 ## Working Vocabulary
 
-A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `Schema.TypeDef`, or intensionally by a checked `Any` typealias, such as `EngineResult`.
+A semantic category is a modeled set of values. It may be represented nominally by an interface hierarchy, such as `ViaductSchema.TypeDef`, or intensionally by a checked `Any` typealias, such as `EngineResult`.
 
-A concrete variant is one particular form of value in a nominal category, such as `TypeExpr.List` within `TypeExpr`. A semantic union member is one admitted representation in an intentional `Any`-represented domain, such as `EngineIDResult` within `EngineResult`.
+A concrete variant is one particular form of value in a nominal category, such as `ViaductSchema.Object` within `ViaductSchema.TypeDef`. A semantic union member is one admitted representation in an intentional `Any`-represented domain, such as `EngineIDResult` within `EngineResult`.
 
-A pre-domain type is an unambiguous runtime representation that may be admitted by one or more semantic domains. A pre-domain type does not inherit from or otherwise nominally belong to those domains. Kotlin primitives, `String`, `EngineIDResult`, and `Schema.EnumValue` are examples.
+A pre-domain type is an unambiguous runtime representation that may be admitted by one or more semantic domains. A pre-domain type does not inherit from or otherwise nominally belong to those domains. Kotlin primitives, `String`, `EngineIDResult`, and `ViaductSchema.EnumValue` are examples.
 
 A logic-constructible type is a concrete semantic type that reasoning code is allowed to create through a model factory. `ObjectEngineResult`, `Promise`, `ObjectEngineResult.Key`, and `FieldResolver` are examples.
 
-An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `Schema` and `ResolverRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `FieldResolver`.
+An externally supplied type is a semantic input that reasoning code may inspect but does not construct. `ViaductSchema` and `ResolverRegistry` are examples. An externally supplied registry may contain logic-constructible model values such as `FieldResolver`.
 
 Pre-reasoning infrastructure is code that prepares externally supplied inputs before semantic reasoning begins. SDL decoding, GraphQL parsing, registry assembly, and private test-fixture implementations are examples.
 
@@ -108,11 +106,11 @@ Keep functions requiring non-mathematical inputs or producing non-mathematical o
 
 ## Public Type Forms
 
-Public nominal semantic categories are sealed interfaces unless the category itself is intentionally supplied by external composition code. For example, `Schema.TypeDef` is sealed, while externally supplied roots such as `Schema` and `ResolverRegistry` are open interfaces. A performance-sensitive untyped union may instead be a documented `Any` typealias with explicit conformance operations.
+Public qplan-owned nominal semantic categories are sealed interfaces unless the category itself is intentionally supplied by external composition code. Externally supplied categories such as `ViaductSchema.TypeDef` and `ResolverRegistry` follow their owning libraries' extension rules. A performance-sensitive untyped union may instead be a documented `Any` typealias with explicit conformance operations.
 
-Public leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `ObjectEngineResult` is sealed around its private implementation, while externally implemented `Schema.Object` is an open leaf. Its enclosing category, `Schema.TypeDef`, remains sealed.
+Public qplan-owned leaf interfaces are also sealed unless their implementations are intentionally supplied by external composition code. For example, a logic-constructible `ObjectEngineResult` is sealed around its private implementation.
 
-Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, `CoercedDefaultValue.Absent`, and built-in scalar type definitions are examples.
+Public singleton semantic values are `data object` declarations. `ErrorEngineResult`, `EngineErrorData`, and `CoercedDefaultValue.Absent` are examples.
 
 Do not expose public data classes or public sealed classes. For example, expose `Promise` as a sealed interface backed by private implementations rather than exposing their generated component operations.
 
@@ -126,11 +124,11 @@ Structural equality means that two values are equal exactly when they have the s
 
 Reference equality means that two values are equal exactly when they are the same runtime occurrence. `EngineResultCell` and `ObjectEngineResult` use reference equality because their promise state is monotonically mutable. Their identity hashes are stable while cells or promises are installed and completed, so either may be used safely as a map key. A cell is allocated by its containing OER or LER, and its reference identity is its occurrence ID. `ListEngineResult` remains structural over its type expression and positional cell identity. Use `sameCompletedResultAs` when an explicit extensional comparison of completed result trees is required.
 
-Schema-canonical equality applies only to `Schema` and schema-definition graph elements: `Schema.TypeDef`, `Schema.EnumValue`, `Schema.Field`, and `Schema.InputLikeField`. Two schemas are equal exactly when they denote the same canonical schema. Two schema elements from that schema are equal exactly when they denote the same canonical element. Applying `==` to elements from different schemas is outside the modeled equality domain, regardless of the host-language result.
+Schema-canonical equality applies only to the canonical `ViaductSchema` and its definition graph elements, including `TypeDef`, `EnumValue`, `Field`, and `FieldArg`. Two schema elements are compared only when they belong to the same canonical lowered schema. Applying `==` to elements from different schemas is outside the modeled equality domain, regardless of the host-language result.
 
 Undefined equality means that Kotlin `==`, `equals`, hashing, membership in equality-based collections, map-key use, deduplication, and other equality-dependent operations have no semantic interpretation for that category. `Selection`, resolver values, resolver functions, and `Assumptions` are examples.
 
-Semantic logic must not apply equality-dependent operations to undefined-equality values. For example, key a resolver-demand graph by canonical `Schema.ObjectField` elements rather than resolver objects, and represent selections with an equality-free occurrence family rather than a `Multiset<Selection>`.
+Semantic logic must not apply equality-dependent operations to undefined-equality values. For example, key a resolver-demand graph by canonical `ViaductSchema.ObjectField` elements rather than resolver objects, and represent selections with an equality-free occurrence family rather than a `Multiset<Selection>`.
 
 `SelectionForest` supports current-member count, emptiness, permutation-invariant traversal, filtering, transformation, and concatenation. The one-member-per-source-field property belongs specifically to the corresponding forests returned by GraphQL selection flattening; it is not a carrier invariant. No operation internally compares whole `Selection` values. `merge(type)` filters and specializes occurrences to one concrete parent type, coalesces ordinary-equal open `ObjectKey` values, and returns an `ObjectSelectionForest`. `ObjectSelectionForest.instantiateBindings()` is the separate grounding boundary: it throws unless every current argument expression can be grounded and coalesces keys that become equal after substitution. Checked ground-key views are required before exact OER operations. Neither forest exposes selection membership, equality-based selection counting, hashing, forest equality, or observable ordering.
 
@@ -144,13 +142,13 @@ Prefer a private data-class implementation when its generated structural equalit
 
 ## Construction
 
-Distinguish logic-constructible types from externally supplied types. OERs, schema values, and model-owned field-resolver wrappers are logic-constructible; `Schema` and `ResolverRegistry` are externally supplied. Field-resolver functions are supplied during pre-reasoning assembly and encapsulated by `FieldResolver` behind a model-owned factory and public demand-projection operation. External raw node lookups, when accepted by composition infrastructure, are lowered to field resolvers before the canonical registry is exposed.
+Distinguish logic-constructible types from externally supplied types. OERs, runtime values, and model-owned field-resolver wrappers are logic-constructible; `ViaductSchema` and `ResolverRegistry` are externally supplied. Field-resolver functions are supplied during pre-reasoning assembly and encapsulated by `FieldResolver` behind a model-owned factory and public demand-projection operation. External raw node lookups, when accepted by composition infrastructure, are lowered to field resolvers before the canonical registry is exposed.
 
 Every independently constructible non-singleton semantic type has a public factory, conventionally named `of`. For example, `ObjectEngineResult`, `EngineIDResult`, `Promise`, and `FieldResolver` have factories. `EngineResultCell` is deliberately not independently constructible: OER and LER factories allocate their cells so a cell cannot be shared by two containers. Pre-domain Kotlin values and abstract semantic domains need no domain-wide factory.
 
 Logic-constructible types use private `FooImpl` classes by preference, such as `KeyImpl` implementing `ObjectEngineResult.Key` and `GroundKeyImpl` implementing `ObjectEngineResult.GroundKey`. Use an internal `FooImpl` only when cross-file implementation access is necessary. Anonymous implementations are not used.
 
-Externally supplied types have no model construction factory or main-source implementation. For example, test-fixture code privately implements `Schema.Object` and `ResolverRegistry` while semantic code sees only their public interfaces.
+Externally supplied types have no qplan model construction factory or main-source implementation. Fixture composition obtains definitions from the canonical lowered `ViaductSchema` and privately implements `ResolverRegistry`; semantic code sees only those public interfaces.
 
 Keep schema decoding, GraphQL parsing, resolver-function definitions, registry assembly, dependency-injection modules, and other pre-reasoning composition outside production semantic source sets. The model-owned resolver wrappers are the boundary that hides those functions from semantic algorithms. Tests that need a complete reasoning world construct it through `model.testing.TestWorld`; ordinary test sources do not decode schemas or assemble registries directly.
 
@@ -170,4 +168,4 @@ Use compositional validation for nested typed values. For example, a list factor
 
 ## Type Expressions
 
-Schema definitions follow ViaductSchema's vocabulary: `Schema.Field.type` and `Schema.InputLikeField.type` contain type expressions. Qplan-owned result containers retain the more explicit `typeExpr` name, such as `ListEngineResult.typeExpr`, while properties containing named schema definitions normally remain `type`, such as `ObjectEngineResult.type`. EOD's production API uses `type` for its opaque `GraphQLObjectType`; qplan's implementation separately retains the canonical qplan `Schema.Object`, exposed through the context-free `schemaType` extension. Private parameters may use the shorter name `type` when the local type is unambiguous.
+Schema definitions use `ViaductSchema.TypeExpr` directly. Its flat wrapper data is traversed with `isList`, `listDepth`, `nullableAtDepth`, `baseTypeNullable`, `unwrapList`, and `unwrapLists`; qplan does not reconstruct a recursive type-expression hierarchy. Qplan-owned result containers retain the explicit `typeExpr` name, such as `ListEngineResult.typeExpr`, while properties containing named schema definitions normally remain `type`, such as `ObjectEngineResult.type`. EOD's production API uses `type` for its `GraphQLObjectType`; qplan's implementation separately retains the canonical `ViaductSchema.Object`, exposed through the context-free `schemaType` extension.

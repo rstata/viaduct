@@ -143,7 +143,7 @@ The production documentation calls this fragment a [required selection set](http
 
 ## Canonical Field-Only Lowering
 
-The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. It retains the unchanged GraphQL-Java schema for source validation and derives a separate model-only lowered schema. Source schema names containing the reserved token `V_A` are rejected so generated coordinates cannot collide with source coordinates.
+The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. It retains the unchanged GraphQL-Java schema for source validation and derives a separate canonical lowered `ViaductSchema` for reasoning. Source schema names containing the reserved token `V_A` are rejected so generated coordinates cannot collide with source coordinates.
 
 For every Node object or interface `T`, model decoding adds a matching object or interface `T_V_A_Bridge { id: ID, node: T }`, with bridge possible-object relationships mirroring the source implementation hierarchy. Every source `foo(args): W<T>` is omitted from the model schema and represented only by `foo_V_A_node(args): W<T_V_A_Bridge>`, preserving the complete list and nullability wrapper `W`. The GraphQL-Java schema continues to contain `foo` and contains neither synthetic coordinate. The bridge hierarchy therefore preserves an object implementation that narrows a Node-valued interface field's named return type.
 

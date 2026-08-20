@@ -28,7 +28,7 @@ checkResolverTestCases(counts, config) { testWorld, testCase ->
 
 Resolver programs may be constant, input-sensitive, argument-sensitive, or sensitive to both. Structured outputs derive bounded occurrence-distinct values from canonical input and argument fingerprints, never from application order or mutable randomness.
 
-Generated node implementations are fixture inputs. Composition retains the generated GraphQL-Java schema for source validation and derives a separate model schema in which `foo: W<T>` is replaced by `foo_V_A_node: W<T_V_A_Bridge>`. Generated resolvers return source-shaped node references; fixture composition lowers them and supplies argumentless `T_V_A_Bridge.node` loaders. Generated non-`Node` abstract types remain disjoint from node-resolved objects.
+Generated node implementations are fixture inputs. Composition retains the generated GraphQL-Java schema for source validation and derives a separate canonical lowered `ViaductSchema` in which `foo: W<T>` is replaced by `foo_V_A_node: W<T_V_A_Bridge>`. Generated resolvers return source-shaped node references; fixture composition lowers them and supplies argumentless `T_V_A_Bridge.node` loaders. Generated non-`Node` abstract types remain disjoint from node-resolved objects.
 
 Resolver dependencies and variable provider/use branches are generated in one acyclic rank order and then validated by canonical registry assembly. Provider paths are inserted into the defining resolver's fixed object fragment before compilation.
 

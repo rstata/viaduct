@@ -158,7 +158,14 @@ internal class GJSchema private constructor(
                 require(id != EngineErrorData && id is String) {
                     "Node reference ${outputType.name}/id must contain a non-error ID"
                 }
-                val bridgeType = bridgeTypeExpr.baseTypeDef as Schema.Object
+                val declaredBridgeType =
+                    bridgeTypeExpr.baseTypeDef as Schema.CompositeTypeDef
+                val bridgeType =
+                    requireType(nodeBridgeTypeName(outputType)) as Schema.Object
+                require(bridgeType in declaredBridgeType.possibleObjectTypes) {
+                    "Node reference ${outputType.name} is not valid for " +
+                        sourceTypeExpr.baseTypeDef.name
+                }
                 val bridgeId = requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
                 engineObjectDataOf(
                     schemaType = bridgeType,
@@ -182,7 +189,6 @@ internal class GJSchema private constructor(
         fun fromSDL(schemaSDL: String): GJSchema {
             val graphQLSchema = parseSchema(schemaSDL)
             val typeRelations = GraphQLTypeRelations(graphQLSchema)
-            validateNodeFieldCovariance(graphQLSchema, typeRelations)
             return GJSchema(
                 graphQLSchema = graphQLSchema,
                 typeRelations = typeRelations,
@@ -212,57 +218,6 @@ internal class GJSchema private constructor(
 
             return UnExecutableSchemaGenerator
                 .makeUnExecutableSchema(registry)
-        }
-
-        private fun validateNodeFieldCovariance(
-            schema: GraphQLSchema,
-            typeRelations: GraphQLTypeRelations,
-        ) {
-            val node = schema.getType("Node") as? GraphQLInterfaceType ?: return
-            val interfaces =
-                schema.allTypesAsList
-                    .filterIsInstance<GraphQLInterfaceType>()
-                    .filterNot { it.name.startsWith("__") }
-
-            schema.allTypesAsList
-                .filterIsInstance<GraphQLObjectType>()
-                .filterNot { it.name.startsWith("__") }
-                .forEach { objectType ->
-                    interfaces
-                        .filter { interfaceType ->
-                            typeRelations.relationUnwrapped(interfaceType, objectType) ==
-                                GraphQLTypeRelation.WiderThan
-                        }.forEach { interfaceType ->
-                            interfaceType.fieldDefinitions.forEach { interfaceField ->
-                                val interfaceOutput =
-                                    interfaceField.nodeOutputName(typeRelations, node)
-                                        ?: return@forEach
-                                val objectOutput =
-                                    objectType
-                                        .getFieldDefinition(interfaceField.name)
-                                        ?.nodeOutputName(typeRelations, node)
-                                        ?: return@forEach
-                                require(objectOutput == interfaceOutput) {
-                                    "Node-valued interface field covariance is outside model " +
-                                        "lowering without a bridge hierarchy: " +
-                                        "${interfaceType.name}.${interfaceField.name}: " +
-                                        "$interfaceOutput, ${objectType.name}." +
-                                        "${interfaceField.name}: $objectOutput"
-                                }
-                            }
-                        }
-                }
-        }
-
-        private fun GraphQLFieldDefinition.nodeOutputName(
-            typeRelations: GraphQLTypeRelations,
-            node: GraphQLInterfaceType,
-        ): String? {
-            val output = GraphQLTypeUtil.unwrapAll(type) as? GraphQLImplementingType ?: return null
-            return output.name.takeIf {
-                typeRelations.relationUnwrapped(node, output) in
-                    setOf(GraphQLTypeRelation.Same, GraphQLTypeRelation.WiderThan)
-            }
         }
 
         private fun validateReservedNames(schemaSDL: String) {

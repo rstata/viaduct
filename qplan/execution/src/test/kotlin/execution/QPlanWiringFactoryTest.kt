@@ -87,7 +87,7 @@ class QPlanWiringFactoryTest {
                 "name" resolvesTo "Ada"
             }
         val bridge =
-            world.engineResultOf("Node_V_A_Bridge") {
+            world.engineResultOf("User_V_A_Bridge") {
                 "id" resolvesTo "user-1"
                 "node" resolvesTo user
             }

@@ -1,19 +1,26 @@
 package model.testing
 
+import model.engineObjectDataOf
+import model.fragmentFrom
+import model.merge
+import model.objectKey
 import model.requireQueryTypeDef
 import model.requireField
 import model.requireType
 import model.Schema
 import model.SourceSchemaAdapter
 import model.gjDef
+import model.schemaType
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import viaduct.engine.api.EngineObjectData
 
 class NodeBridgeLoweringTest {
     @Test
@@ -45,12 +52,14 @@ class NodeBridgeLoweringTest {
         }
         val producer = schema.requireField("Query", "user_V_A_node")
         val bridge = schema.requireType("User_V_A_Bridge") as Schema.Object
+        val nodeBridge = schema.requireType("Node_V_A_Bridge") as Schema.Interface
         assertEquals(bridge, producer.type.baseTypeDef)
         assertEquals(
             setOf("id", "node"),
             bridge.fields.mapTo(linkedSetOf(), Schema.Field::name),
         )
         assertEquals(setOf(bridge), bridge.possibleObjectTypes)
+        assertEquals(setOf(bridge), nodeBridge.possibleObjectTypes)
 
         val query = schema.requireQueryTypeDef()
         val sourceQuery = schema.graphQLSchema.queryType
@@ -154,37 +163,90 @@ class NodeBridgeLoweringTest {
     }
 
     @Test
-    fun `rejects node return covariance that would require a bridge hierarchy`() {
-        val exception =
-            assertFailsWith<IllegalArgumentException> {
-                TestWorld.fromSDL(
-                    """
-                    interface Node {
-                      id: ID!
-                    }
+    fun `lowers every Node record and transfers its interface hierarchy`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                interface Node {
+                  id: ID!
+                }
 
-                    interface Container {
-                      item: Node
-                    }
+                interface NamedNode implements Node {
+                  id: ID!
+                  name: String!
+                }
 
-                    type User implements Node {
-                      id: ID!
-                    }
+                interface UnusedNode implements Node {
+                  id: ID!
+                }
 
-                    type Shelf implements Container {
-                      item: User
-                    }
+                interface Container {
+                  item: Node
+                }
 
-                    type Query {
-                      container: Container
-                    }
-                    """.trimIndent(),
-                )
-            }
+                type User implements NamedNode & Node {
+                  id: ID!
+                  name: String!
+                }
 
-        assertContains(exception.message.orEmpty(), "bridge hierarchy")
-        assertContains(exception.message.orEmpty(), "Container.item")
-        assertContains(exception.message.orEmpty(), "Shelf.item")
+                type Admin implements Node {
+                  id: ID!
+                }
+
+                type Shelf implements Container {
+                  item: User
+                }
+
+                type Query {
+                  container: Container
+                }
+                """.trimIndent(),
+            ).schema as GJSchema
+
+        val nodeBridge = schema.requireType("Node_V_A_Bridge") as Schema.Interface
+        val namedBridge = schema.requireType("NamedNode_V_A_Bridge") as Schema.Interface
+        val unusedBridge = schema.requireType("UnusedNode_V_A_Bridge") as Schema.Interface
+        val userBridge = schema.requireType("User_V_A_Bridge") as Schema.Object
+        val adminBridge = schema.requireType("Admin_V_A_Bridge") as Schema.Object
+
+        assertEquals(setOf(userBridge, adminBridge), nodeBridge.possibleObjectTypes)
+        assertEquals(setOf(userBridge), namedBridge.possibleObjectTypes)
+        assertTrue(unusedBridge.possibleObjectTypes.isEmpty())
+        listOf(nodeBridge, namedBridge, unusedBridge, userBridge, adminBridge).forEach { bridge ->
+            assertEquals(
+                setOf("id", "node"),
+                bridge.fields.mapTo(linkedSetOf(), Schema.Field::name),
+            )
+            assertEquals(
+                bridge.name.removeSuffix("_V_A_Bridge"),
+                bridge.requireField("node").type.baseTypeDef.name,
+            )
+        }
+
+        val containerField = schema.requireField("Container", "item_V_A_node")
+        val shelfField = schema.requireField("Shelf", "item_V_A_node")
+        assertEquals(nodeBridge, containerField.type.baseTypeDef)
+        assertEquals(userBridge, shelfField.type.baseTypeDef)
+
+        val fragment = schema.fragmentFrom("fragment F on Container { item { id } }")
+        val abstractProducer = fragment.subselections.single()
+        assertEquals(containerField, abstractProducer.key.field)
+        assertEquals(
+            shelfField,
+            abstractProducer
+                .objectKey(schema.requireType("Shelf") as Schema.Object)
+                .field,
+        )
+        val payload = abstractProducer.subselections.merge(userBridge).single()
+        assertEquals(userBridge.requireField("node"), payload.key.field)
+
+        val user = schema.requireType("User") as Schema.Object
+        val lowered =
+            schema.lowerSourceOutput(
+                containerField,
+                engineObjectDataOf(user, mapOf("id" to "user-1")),
+            )
+        assertEquals(userBridge, assertIs<EngineObjectData.Sync>(lowered).schemaType)
     }
 
     @Test

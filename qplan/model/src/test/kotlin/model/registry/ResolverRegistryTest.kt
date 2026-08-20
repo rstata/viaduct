@@ -166,11 +166,9 @@ class ResolverRegistryTest {
         assertNotNull(schema.requireQueryTypeDef().field("user_V_A_node"))
         assertNotNull(schema.requireQueryTypeDef().field("users_V_A_node"))
         assertNotNull(schema.requireQueryTypeDef().field("matrix_V_A_node"))
-        assertFailsWith<Schema.MissingSchemaElementException> {
-            schema.requireType("Node_V_A_Bridge")
-        }
-
         val userBridge = schema.requireType("User_V_A_Bridge") as Schema.Object
+        val nodeBridge = schema.requireType("Node_V_A_Bridge") as Schema.Interface
+        assertEquals(setOf(userBridge), nodeBridge.possibleObjectTypes)
         assertEquals(
             setOf("id", "node"),
             userBridge.fields.mapTo(linkedSetOf(), Schema.Field::name),

@@ -215,7 +215,8 @@ private fun GJSchema.matchingFields(
                         }
                     val payloadKey =
                         payloadSelection?.let { payload ->
-                            val bridgeType = field.type.baseTypeDef as Schema.Object
+                            val bridgeType =
+                                field.type.baseTypeDef as Schema.CompositeTypeDef
                             ObjectEngineResult.Key.of(
                                 field =
                                     this@matchingFields.requireField(

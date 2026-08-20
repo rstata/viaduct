@@ -102,7 +102,7 @@ class TypenameLoweringTest {
             schema.fragmentFrom("fragment F on Query { node { __typename } }")
                 .subselections
                 .single()
-        val bridgeType = nodeSelection.key.field.type.baseTypeDef as Schema.Object
+        val bridgeType = schema.requireType("A_V_A_Bridge") as Schema.Object
         val payload = nodeSelection.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
         assertEquals(

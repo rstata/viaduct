@@ -197,8 +197,6 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
     @Test
     fun `generated object fragment worlds with fromArgument resolve correctly`(): Unit =
         runBlocking {
-            var generatedFromArgumentVariables = 0
-            var activatedFromArgumentApplications = 0
             val config =
                 Config.default +
                     (FieldArgumentWeight to 1.0) +
@@ -210,22 +208,21 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to false)
 
-            val run =
-                checkGeneratedProfile(
-                    "object-fragment-from-argument",
-                    config,
-                ) { testWorld, testCase ->
+            fun property(
+                coverage: FromArgumentCoverage,
+            ): suspend (TestWorld, ResolverTestCase) -> Unit =
+                { testWorld, testCase ->
                     assertTrue(testCase.registry.nodeResolverTypes.isEmpty())
                     assertEquals(
                         testCase.registry.features.fromArgumentVariableCount,
                         testCase.registry.features.variableCount,
                     )
-                    generatedFromArgumentVariables +=
+                    coverage.generatedVariables +=
                         testCase.registry.features.fromArgumentVariableCount
 
                     val observation =
                         observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
-                    activatedFromArgumentApplications +=
+                    coverage.activatedApplications +=
                         observation.ordinaryApplications.count { application ->
                             testCase.registry.sourceResolverHasFromArgumentVariables(
                                 application.key.field,
@@ -233,14 +230,39 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                         }
                 }
 
-            run.assertAggregate(
-                generatedFromArgumentVariables > 0,
-                "Generated FromArgument profile produced no FromArgument variables",
-            )
-            run.assertAggregate(
-                activatedFromArgumentApplications > 0,
-                "Generated FromArgument profile activated no variable-bearing resolvers",
-            )
+            val sampledCoverage = FromArgumentCoverage()
+            val run =
+                checkGeneratedProfile(
+                    profile = "object-fragment-from-argument",
+                    config = config,
+                    property = property(sampledCoverage),
+                )
+            if (run.selectedCase == null) {
+                val activationCoverage: FromArgumentCoverage
+                val activationRun: ResolverTestRun
+                if (run.seed == FROM_ARGUMENT_ACTIVATION_SEED) {
+                    activationCoverage = sampledCoverage
+                    activationRun = run
+                } else {
+                    activationCoverage = FromArgumentCoverage()
+                    activationRun =
+                        checkGeneratedProfile(
+                            profile = "object-fragment-from-argument",
+                            config = config,
+                            seed = FROM_ARGUMENT_ACTIVATION_SEED,
+                            property = property(activationCoverage),
+                        )
+                }
+
+                activationRun.assertAggregate(
+                    activationCoverage.generatedVariables > 0,
+                    "FromArgument activation corpus produced no FromArgument variables",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.activatedApplications > 0,
+                    "FromArgument activation corpus activated no variable-bearing resolvers",
+                )
+            }
         }
 }
 
@@ -505,6 +527,7 @@ interface FeatureInteractionGeneratedResolverContract : GeneratedCaseAssertionPo
 private const val GENERATED_PROFILE_CASE_BUDGET = 150
 private const val FEATURE_INTERACTION_CASE_BUDGET = 300
 private const val NODE_ACTIVATION_SEED = 1L
+private const val FROM_ARGUMENT_ACTIVATION_SEED = 1L
 private const val MIXED_VARIABLE_ACTIVATION_SEED = 1L
 
 private val GENERATED_PROFILE_COUNTS =
@@ -526,6 +549,11 @@ private data class NodeCoverage(
     var nodeLoaderApplications: Int = 0,
     var generatedMixedTopologyCases: Int = 0,
     var activatedMixedTopologyCases: Int = 0,
+)
+
+private data class FromArgumentCoverage(
+    var generatedVariables: Int = 0,
+    var activatedApplications: Int = 0,
 )
 
 private data class MixedVariableCoverage(

@@ -62,11 +62,16 @@ data object EngineErrorData
 /** Converts a simple engine result to production-compatible engine input data. */
 fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleTypeDef): EngineSimpleData =
     when (expectedType) {
-        Schema.IntType -> cast<Int>()
-        Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
-        Schema.StringType -> cast<String>()
-        Schema.BooleanType -> cast<Boolean>()
-        Schema.IDType -> cast<EngineIDResult>().value
+        is Schema.Scalar ->
+            when (expectedType.name) {
+                "Int" -> cast<Int>()
+                "Float" ->
+                    cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
+                "String" -> cast<String>()
+                "Boolean" -> cast<Boolean>()
+                "ID" -> cast<EngineIDResult>().value
+                else -> error("Unsupported scalar: ${expectedType.name}")
+            }
         is Schema.Enum -> {
             val value = cast<Schema.EnumValue>()
             if (value.containingDef != expectedType) throw ClassCastException()
@@ -84,35 +89,38 @@ internal fun toEngineInputData(
         return null
     }
 
-    return when (expectedType) {
-        is TypeExpr.Named -> toEngineNamedInputData(expectedType.baseType, value)
-        is TypeExpr.List -> {
-            val elements = value.cast<EngineInputListData>()
-            toEngineInputListData(expectedType, elements)
-        }
+    val elementType = expectedType.unwrapList()
+    return if (elementType == null) {
+        toEngineNamedInputData(expectedType.baseTypeDef, value)
+    } else {
+        val elements = value.cast<EngineInputListData>()
+        toEngineInputListData(expectedType, elements)
     }
 }
 
 /** Converts [value] to canonical [EngineSimpleData] conforming to [expectedType]. */
 internal fun toEngineSimpleData(
-    expectedType: TypeExpr.Named<Schema.SimpleTypeDef>,
+    expectedType: TypeExpr<Schema.SimpleTypeDef>,
     value: EngineSimpleData?,
 ): EngineSimpleData? {
     if (value == null) {
         if (!expectedType.isNullable) throw ClassCastException()
         return null
     }
-    return toEngineSimpleData(expectedType.baseType, value)
+    if (expectedType.isList) throw ClassCastException()
+    return toEngineSimpleData(expectedType.baseTypeDef, value)
 }
 
 /** Recursively copies [value] as canonical list data conforming to [expectedType]. */
 fun toEngineInputListData(
-    expectedType: TypeExpr.List<Schema.InputTypeDef>,
+    expectedType: TypeExpr<Schema.InputTypeDef>,
     value: EngineInputListData,
-): EngineInputListData =
-    value.map { element ->
-        toEngineInputData(expectedType.elementType, element)
+): EngineInputListData {
+    val elementType = expectedType.unwrapList() ?: throw ClassCastException()
+    return value.map { element ->
+        toEngineInputData(elementType, element)
     }
+}
 
 /** Recursively copies [value] as canonical input-object data conforming to [expectedType]. */
 internal fun toEngineInputObjectData(
@@ -137,12 +145,18 @@ private fun toEngineSimpleData(
     value: EngineSimpleData,
 ): EngineSimpleData =
     when (expectedType) {
-        Schema.IntType -> value.cast<Int>()
-        Schema.FloatType ->
-            value.cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
-        Schema.StringType -> value.cast<String>()
-        Schema.BooleanType -> value.cast<Boolean>()
-        Schema.IDType -> value.cast<String>()
+        is Schema.Scalar ->
+            when (expectedType.name) {
+                "Int" -> value.cast<Int>()
+                "Float" ->
+                    value.cast<Double>().also {
+                        if (!it.isFinite()) throw ClassCastException()
+                    }
+                "String" -> value.cast<String>()
+                "Boolean" -> value.cast<Boolean>()
+                "ID" -> value.cast<String>()
+                else -> error("Unsupported scalar: ${expectedType.name}")
+            }
         is Schema.Enum ->
             value.cast<String>().also {
                 if (expectedType.value(it) == null) throw ClassCastException()
@@ -154,22 +168,32 @@ private inline fun <reified T> Any.cast(): T = this as? T ?: throw ClassCastExce
 /** Converts simple resolver output to the result representation selected by [expectedType]. */
 fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleTypeDef): EngineResult =
     when (expectedType) {
-        Schema.IntType -> cast<Int>()
-        Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
-        Schema.StringType -> cast<String>()
-        Schema.BooleanType -> cast<Boolean>()
-        Schema.IDType -> EngineIDResult.of(cast())
+        is Schema.Scalar ->
+            when (expectedType.name) {
+                "Int" -> cast<Int>()
+                "Float" ->
+                    cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
+                "String" -> cast<String>()
+                "Boolean" -> cast<Boolean>()
+                "ID" -> EngineIDResult.of(cast())
+                else -> error("Unsupported scalar: ${expectedType.name}")
+            }
         is Schema.Enum -> expectedType.requireValue(cast())
     }
 
 /** Converts a simple engine result to production-compatible resolver output. */
 fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleTypeDef): EngineOutputData =
     when (expectedType) {
-        Schema.IntType -> cast<Int>()
-        Schema.FloatType -> cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
-        Schema.StringType -> cast<String>()
-        Schema.BooleanType -> cast<Boolean>()
-        Schema.IDType -> cast<EngineIDResult>().value
+        is Schema.Scalar ->
+            when (expectedType.name) {
+                "Int" -> cast<Int>()
+                "Float" ->
+                    cast<Double>().also { if (!it.isFinite()) throw ClassCastException() }
+                "String" -> cast<String>()
+                "Boolean" -> cast<Boolean>()
+                "ID" -> cast<EngineIDResult>().value
+                else -> error("Unsupported scalar: ${expectedType.name}")
+            }
         is Schema.Enum -> {
             val value = cast<Schema.EnumValue>()
             if (value.containingDef != expectedType) throw ClassCastException()

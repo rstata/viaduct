@@ -11,7 +11,6 @@ import model.ObjectEngineResult
 import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.TypeExpr
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -177,12 +176,12 @@ class ResolverRegistryTest {
             userBridge.fields.mapTo(linkedSetOf(), Schema.Field::name),
         )
         val matrixBridge = schema.requireField("Query", "matrix_V_A_node")
-        val outer = assertIs<TypeExpr.List<Schema.OutputTypeDef>>(matrixBridge.type)
-        val inner = assertIs<TypeExpr.List<Schema.OutputTypeDef>>(outer.elementType)
-        assertEquals(userBridge, inner.elementType.baseType)
-        assertFalse(outer.isNullable)
+        val inner = checkNotNull(matrixBridge.type.unwrapList())
+        val element = checkNotNull(inner.unwrapList())
+        assertEquals(userBridge, element.baseTypeDef)
+        assertFalse(matrixBridge.type.isNullable)
         assertFalse(inner.isNullable)
-        assertFalse(inner.elementType.isNullable)
+        assertFalse(element.isNullable)
     }
 
     @Test

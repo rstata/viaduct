@@ -166,7 +166,7 @@ private fun GJSchema.compilePath(
     val isTerminal = index == responsePath.lastIndex
 
     if (isTerminal) {
-        require(typeExpr.baseType is Schema.SimpleTypeDef) {
+        require(typeExpr.baseTypeDef is Schema.SimpleTypeDef) {
             "fromObjectField path ${responsePath.joinToString(".")} must terminate at a scalar " +
                 "or enum"
         }
@@ -177,12 +177,12 @@ private fun GJSchema.compilePath(
         )
     }
 
-    require(typeExpr is TypeExpr.Named && typeExpr.baseType is Schema.CompositeTypeDef) {
+    require(!typeExpr.isList && typeExpr.baseTypeDef is Schema.CompositeTypeDef) {
         "fromObjectField path ${responsePath.joinToString(".")} cannot traverse list or simple " +
             "field ${key.field.containingDef.name}/${key.field.name}"
     }
     return compilePath(
-        typeInScope = typeExpr.baseType as Schema.CompositeTypeDef,
+        typeInScope = typeExpr.baseTypeDef as Schema.CompositeTypeDef,
         selections = matches.flatMap(MatchingField::subselections),
         responsePath = responsePath,
         index = index + 1,
@@ -215,7 +215,7 @@ private fun GJSchema.matchingFields(
                         }
                     val payloadKey =
                         payloadSelection?.let { payload ->
-                            val bridgeType = field.type.baseType as Schema.Object
+                            val bridgeType = field.type.baseTypeDef as Schema.Object
                             ObjectEngineResult.Key.of(
                                 field =
                                     this@matchingFields.requireField(
@@ -272,7 +272,7 @@ private fun GJSchema.matchingFields(
 
 @Suppress("UNCHECKED_CAST")
 private fun TypeExpr<Schema.OutputTypeDef>.asInputType(): TypeExpr<Schema.InputTypeDef> {
-    require(baseType is Schema.InputTypeDef)
+    require(baseTypeDef is Schema.InputTypeDef)
     return this as TypeExpr<Schema.InputTypeDef>
 }
 
@@ -295,48 +295,40 @@ private tailrec fun compatibleTypes(
         !locationType.isNullable -> {
             val unwrappedLocation = locationType.withNullable(true)
             val unwrappedSource = sourceType.withNullable(true)
-            when {
-                sourceEffectivelyNullable -> false
-                unwrappedLocation is TypeExpr.List ->
-                    compatibleTypes(
-                        locationType = unwrappedLocation,
-                        sourceType =
-                            if (unwrappedSource is TypeExpr.List) {
-                                unwrappedSource
-                            } else {
-                                sourceType
-                            },
-                        nullableTraversal = nullableTraversal,
-                        locationHasDefault = false,
-                    )
-                else ->
-                    compatibleTypes(
-                        locationType = unwrappedLocation,
-                        sourceType = unwrappedSource,
-                        nullableTraversal = nullableTraversal,
-                        locationHasDefault = false,
-                    )
+            if (sourceEffectivelyNullable) {
+                false
+            } else {
+                compatibleTypes(
+                    locationType = unwrappedLocation,
+                    sourceType = unwrappedSource,
+                    nullableTraversal = nullableTraversal,
+                    locationHasDefault = false,
+                )
             }
         }
 
-        locationType is TypeExpr.List -> {
-            if (sourceType !is TypeExpr.List) return false
+        locationType.isList -> {
+            val locationElement = checkNotNull(locationType.unwrapList())
+            val sourceElement = sourceType.unwrapList() ?: return false
             compatibleTypes(
-                locationType = locationType.elementType,
-                sourceType = sourceType.elementType,
+                locationType = locationElement,
+                sourceType = sourceElement,
                 nullableTraversal = false,
                 locationHasDefault = false,
             )
         }
 
         else ->
-            sourceType is TypeExpr.Named &&
-                locationType.baseType == sourceType.baseType
+            !sourceType.isList &&
+                locationType.baseTypeDef == sourceType.baseTypeDef
     }
 }
 
-private fun <T : Schema.TypeDef> TypeExpr<T>.withNullable(nullable: Boolean): TypeExpr<T> =
-    when (this) {
-        is TypeExpr.Named -> TypeExpr.Named.of(baseType, nullable)
-        is TypeExpr.List -> TypeExpr.List.of(elementType, nullable)
+private fun <T : Schema.TypeDef> TypeExpr<T>.withNullable(nullable: Boolean): TypeExpr<T> {
+    val elementType = unwrapList()
+    return if (elementType == null) {
+        TypeExpr.Named.of(baseTypeDef, nullable)
+    } else {
+        TypeExpr.List.of(elementType, nullable)
     }
+}

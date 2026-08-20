@@ -134,19 +134,21 @@ internal class GJSchema private constructor(
     ): EngineOutputData? =
         when {
             output == null || output == EngineErrorData -> output
-            sourceTypeExpr is TypeExpr.List && bridgeTypeExpr is TypeExpr.List -> {
+            sourceTypeExpr.isList && bridgeTypeExpr.isList -> {
                 require(output is List<*>) {
                     "Node-list field resolver did not return a list"
                 }
+                val sourceElementType = checkNotNull(sourceTypeExpr.unwrapList())
+                val bridgeElementType = checkNotNull(bridgeTypeExpr.unwrapList())
                 output.map { value ->
                     lowerNodeReferences(
                         output = value,
-                        sourceTypeExpr = sourceTypeExpr.elementType,
-                        bridgeTypeExpr = bridgeTypeExpr.elementType,
+                        sourceTypeExpr = sourceElementType,
+                        bridgeTypeExpr = bridgeElementType,
                     )
                 }
             }
-            sourceTypeExpr is TypeExpr.Named && bridgeTypeExpr is TypeExpr.Named -> {
+            !sourceTypeExpr.isList && !bridgeTypeExpr.isList -> {
                 require(output is EngineObjectData.Sync) {
                     "Node field resolver did not return a node reference"
                 }
@@ -156,7 +158,7 @@ internal class GJSchema private constructor(
                 require(id != EngineErrorData && id is String) {
                     "Node reference ${outputType.name}/id must contain a non-error ID"
                 }
-                val bridgeType = bridgeTypeExpr.baseType as Schema.Object
+                val bridgeType = bridgeTypeExpr.baseTypeDef as Schema.Object
                 val bridgeId = requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
                 engineObjectDataOf(
                     schemaType = bridgeType,

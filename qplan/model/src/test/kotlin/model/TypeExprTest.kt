@@ -2,7 +2,10 @@ package model
 
 import model.testing.TestWorld
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class TypeExprTest {
@@ -33,6 +36,20 @@ class TypeExprTest {
         assertFalse(strings.canContainPure(nullableStrings))
         assertFalse(strings.canContainPure(ints))
         assertFalse(strings.canContainPure(TypeExpr.Named.of(Schema.StringType)))
+    }
+
+    @Test
+    fun `viaductschema-shaped traversal exposes one list layer at a time`() {
+        val named = TypeExpr.Named.of(Schema.StringType, isNullable = false)
+        val inner = TypeExpr.List.of(named)
+        val outer = TypeExpr.List.of(inner, isNullable = false)
+
+        assertEquals(Schema.StringType, outer.baseTypeDef)
+        assertTrue(outer.isList)
+        assertSame(inner, outer.unwrapList())
+        assertSame(named, outer.unwrapList()?.unwrapList())
+        assertFalse(named.isList)
+        assertNull(named.unwrapList())
     }
 
     @Test

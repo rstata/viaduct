@@ -122,28 +122,25 @@ private fun coerceEngineResult(
 ): EngineResult? {
     if (value.conformsToResultSchemaType(typeExpr)) return value
 
-    return when (typeExpr) {
-        is TypeExpr.List -> {
-            require(value is List<*>) {
-                "Expected a list result for $typeExpr"
-            }
-            ListEngineResult.of(
-                typeExpr = typeExpr.elementType,
-                values =
-                    value.map { element ->
-                        coerceEngineResult(typeExpr.elementType, element)
-                    },
-            )
+    val elementType = typeExpr.unwrapList()
+    if (elementType != null) {
+        require(value is List<*>) {
+            "Expected a list result for $typeExpr"
         }
-
-        is TypeExpr.Named ->
-            when (val type = typeExpr.baseType) {
-                is Schema.SimpleTypeDef ->
-                    coerceSimpleValue(type, requireNotNull(value)).toEngineResult(type)
-                is Schema.CompositeTypeDef ->
-                    throw IllegalArgumentException(
-                        "Expected an object engine result for ${type.name}",
-                    )
-            }
+        return ListEngineResult.of(
+            typeExpr = elementType,
+            values =
+                value.map { element ->
+                    coerceEngineResult(elementType, element)
+                },
+        )
+    }
+    return when (val type = typeExpr.baseTypeDef) {
+        is Schema.SimpleTypeDef ->
+            coerceSimpleValue(type, requireNotNull(value)).toEngineResult(type)
+        is Schema.CompositeTypeDef ->
+            throw IllegalArgumentException(
+                "Expected an object engine result for ${type.name}",
+            )
     }
 }

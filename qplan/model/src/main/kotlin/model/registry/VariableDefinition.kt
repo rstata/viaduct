@@ -42,15 +42,15 @@ sealed interface VariableDefinition {
                 }
                 path.dropLast(1).forEach { key ->
                     require(
-                        key.field.type is TypeExpr.Named &&
-                            key.field.type.baseType is Schema.CompositeTypeDef,
+                        !key.field.type.isList &&
+                            key.field.type.baseTypeDef is Schema.CompositeTypeDef,
                     ) {
                         "From-object-field variable path cannot cross list or simple field " +
                             "${key.field.containingDef.name}/${key.field.name}"
                     }
                 }
                 val terminal = path.last().field
-                require(terminal.type.baseType is Schema.SimpleTypeDef) {
+                require(terminal.type.baseTypeDef is Schema.SimpleTypeDef) {
                     "From-object-field variable path must end at a simple field, not " +
                         "${terminal.containingDef.name}/${terminal.name}"
                 }

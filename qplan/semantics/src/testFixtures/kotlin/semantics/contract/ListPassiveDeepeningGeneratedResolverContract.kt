@@ -7,7 +7,6 @@ import io.kotest.property.arbitrary.next
 import model.Assumptions
 import model.Schema
 import model.SelectionForest
-import model.TypeExpr
 import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
@@ -118,11 +117,11 @@ private fun countListPassiveDeepening(
             .byGroundKey()
             .forEach { (requiredKey, requiredPassive) ->
                 val passiveField = requiredKey.field
-                val passiveType = passiveField.type.baseType as? Schema.CompositeTypeDef
+                val passiveType = passiveField.type.baseTypeDef as? Schema.CompositeTypeDef
                     ?: return@forEach
                 if (
                     passiveField in world.resolverRegistry ||
-                    passiveField.type !is TypeExpr.List
+                    !passiveField.type.isList
                 ) {
                     return@forEach
                 }
@@ -141,7 +140,7 @@ private fun countListPassiveDeepening(
     }
 
     incoming.byGroundKey().forEach { (key, selection) ->
-        val childType = key.field.type.baseType as? Schema.CompositeTypeDef
+        val childType = key.field.type.baseTypeDef as? Schema.CompositeTypeDef
             ?: return@forEach
         childType.possibleObjectTypes.forEach { possibleType ->
             count += countListPassiveDeepening(selection.subselections, possibleType)
@@ -167,7 +166,7 @@ private fun hasMissingDemand(
                 if (match == null) {
                     false
                 } else {
-                    val childType = requirementKey.field.type.baseType as? Schema.CompositeTypeDef
+                    val childType = requirementKey.field.type.baseTypeDef as? Schema.CompositeTypeDef
                     childType == null ||
                         !hasMissingDemand(
                             requirement.subselections,

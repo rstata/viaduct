@@ -260,9 +260,9 @@ class MaterializeSelectionFlattenerTest {
             )
 
         val bundles = selections.collect(fixture.query)["bundles"]
-        assertEquals(fixture.pack, bundles.key.field.type.baseType)
+        assertEquals(fixture.pack, bundles.key.field.type.baseTypeDef)
         val animals = bundles.subselections.collect(fixture.pack)["animals"]
-        assertEquals(fixture.pet, animals.key.field.type.baseType)
+        assertEquals(fixture.pet, animals.key.field.type.baseTypeDef)
         assertEquals(
             setOf("label"),
             animals.subselections.collect(fixture.dog).responseKeys(),
@@ -309,7 +309,7 @@ class MaterializeSelectionFlattenerTest {
                 .mapTo(linkedSetOf()) { key -> key.field.name },
         )
 
-        val bridge = account.key.field.type.baseType as Schema.Object
+        val bridge = account.key.field.type.baseTypeDef as Schema.Object
         val payload = account.subselections.collect(bridge)["node"]
         assertEquals("node", payload.key.field.name)
         assertEquals(

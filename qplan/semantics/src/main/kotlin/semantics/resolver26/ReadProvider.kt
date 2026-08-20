@@ -69,13 +69,13 @@ private fun EngineResult?.toProviderBinding(
             error("A path-variable provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseType as Schema.SimpleTypeDef),
+                toEngineSimpleData(expectedType.baseTypeDef as Schema.SimpleTypeDef),
             )
     }
 
 // Converts a provider list to an input list after checking its element type.
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputTypeDef) {
+    require(typeExpr.baseTypeDef is Schema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()

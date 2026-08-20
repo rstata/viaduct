@@ -119,28 +119,25 @@ private fun coerceOutputValue(
 ): EngineOutputData? {
     if (value == null || value == EngineErrorData) return value
 
-    return when (typeExpr) {
-        is TypeExpr.List -> {
-            require(value is List<*>) {
-                "Expected a list value for $typeExpr"
-            }
-            value.map { coerceOutputValue(typeExpr.elementType, it) }
+    val elementType = typeExpr.unwrapList()
+    if (elementType != null) {
+        require(value is List<*>) {
+            "Expected a list value for $typeExpr"
         }
-
-        is TypeExpr.Named ->
-            when (val type = typeExpr.baseType) {
-                is Schema.SimpleTypeDef -> coerceSimpleValue(type, value)
-                is Schema.CompositeTypeDef -> {
-                    require(
-                        value is EngineObjectData.Sync &&
-                            type.possibleObjectTypes.any { possibleType ->
-                                possibleType.name == value.type.name
-                            },
-                    ) {
-                        "Expected an object value for ${type.name}"
+        return value.map { coerceOutputValue(elementType, it) }
+    }
+    return when (val type = typeExpr.baseTypeDef) {
+        is Schema.SimpleTypeDef -> coerceSimpleValue(type, value)
+        is Schema.CompositeTypeDef -> {
+            require(
+                value is EngineObjectData.Sync &&
+                    type.possibleObjectTypes.any { possibleType ->
+                        possibleType.name == value.type.name
+                    },
+            ) {
+                "Expected an object value for ${type.name}"
                     }
-                    value
-                }
-            }
+            value
+        }
     }
 }

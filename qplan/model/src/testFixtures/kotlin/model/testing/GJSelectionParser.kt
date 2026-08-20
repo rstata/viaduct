@@ -222,7 +222,7 @@ internal class GJSelectionParser(
         val loweredNodeField = schema.isLoweredNodeField(canonicalField)
         val canonicalSubselections =
             if (loweredNodeField) {
-                val bridgeType = canonicalField.type.baseType as Schema.Object
+                val bridgeType = canonicalField.type.baseTypeDef as Schema.Object
                 val payloadField =
                     schema.requireObjectField(bridgeType.name, NODE_BRIDGE_PAYLOAD_FIELD)
                 listOf(

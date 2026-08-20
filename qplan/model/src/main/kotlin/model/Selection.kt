@@ -240,14 +240,15 @@ private fun EngineResult?.toPathVariableBinding(
             error("A path-variable provider cannot terminate at an object")
         else -> {
             val simpleType =
-                (expectedType as? TypeExpr.Named)?.baseType as? Schema.SimpleTypeDef
+                expectedType.baseTypeDef.takeUnless { expectedType.isList }
+                    as? Schema.SimpleTypeDef
                     ?: error("A path-variable provider has a non-simple terminal type")
             VariableBinding.of(toEngineSimpleData(simpleType))
         }
     }
 
 private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputTypeDef) {
+    require(typeExpr.baseTypeDef is Schema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()
@@ -587,7 +588,7 @@ sealed interface Selection {
      * The field's type expression may wrap that base type in lists or non-null constraints.
      */
     val isLeaf: Boolean
-        get() = key.field.type.baseType is Schema.SimpleTypeDef
+        get() = key.field.type.baseTypeDef is Schema.SimpleTypeDef
 
     companion object {
         /**
@@ -650,7 +651,7 @@ private fun validateSelection(
         "Selection possible types must be contained by ${fieldOwner.name}"
     }
     require(
-        key.field.type.baseType is Schema.CompositeTypeDef || subselections.isEmpty(),
+        key.field.type.baseTypeDef is Schema.CompositeTypeDef || subselections.isEmpty(),
     ) {
         "Leaf selection ${fieldOwner.name}.${key.field.name} has subselections"
     }

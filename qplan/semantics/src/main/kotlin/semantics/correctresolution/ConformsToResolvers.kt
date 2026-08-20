@@ -163,7 +163,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                     )
                 }
         else ->
-            toEngineOutputData(expectedType.baseType as Schema.SimpleTypeDef) == resolverValue
+            toEngineOutputData(expectedType.baseTypeDef as Schema.SimpleTypeDef) == resolverValue
     }
 
 context(world: Assumptions)

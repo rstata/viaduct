@@ -60,7 +60,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     ) {
                         suppliedDemandFields +=
                             demand
-                                .merge(field.type.baseType as Schema.Object)
+                                .merge(field.type.baseTypeDef as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { key ->
                                     key.field.name
@@ -152,7 +152,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     ) {
                         suppliedDemandFields +=
                             demand
-                                .merge(field.type.baseType as Schema.Object)
+                                .merge(field.type.baseTypeDef as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { key ->
                                     key.field.name

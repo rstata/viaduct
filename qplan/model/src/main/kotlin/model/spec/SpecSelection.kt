@@ -76,7 +76,7 @@ sealed interface SpecSelection {
                 arguments: Map<String, Any?>,
                 subselections: List<SpecSelection>?,
             ): Field {
-                when (field.type.baseType) {
+                when (field.type.baseTypeDef) {
                     is Schema.SimpleTypeDef ->
                         require(subselections == null) {
                             "Simple field ${field.containingDef.name}.${field.name} " +

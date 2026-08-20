@@ -55,12 +55,13 @@ private fun ArgumentExpression?.instantiateBindings(
                 error("Variable template $this must be stamped before it can be instantiated")
             }
         is List<*> -> {
-            require(expectedType is TypeExpr.List) {
+            val elementType = expectedType.unwrapList()
+            require(elementType != null) {
                 "Argument list expression does not match $expectedType"
             }
             val grounded = mutableListOf<EngineInputData?>()
             forEach { value ->
-                when (val binding = value.instantiateBindings(expectedType.elementType)) {
+                when (val binding = value.instantiateBindings(elementType)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded += binding.value
                 }
@@ -68,7 +69,7 @@ private fun ArgumentExpression?.instantiateBindings(
             VariableBinding.of(grounded.toList())
         }
         is Map<*, *> -> {
-            val expectedObjectType = (expectedType as? TypeExpr.Named)?.baseType
+            val expectedObjectType = expectedType.baseTypeDef.takeUnless { expectedType.isList }
             require(expectedObjectType is Schema.Input) {
                 "Argument input-object expression does not match $expectedType"
             }
@@ -99,12 +100,13 @@ private suspend fun ArgumentExpression?.fetchBindings(
                 error("Variable template $this must be stamped before it can be instantiated")
             }
         is List<*> -> {
-            require(expectedType is TypeExpr.List) {
+            val elementType = expectedType.unwrapList()
+            require(elementType != null) {
                 "Argument list expression does not match $expectedType"
             }
             val grounded = mutableListOf<EngineInputData?>()
             for (value in this) {
-                when (val binding = value.fetchBindings(expectedType.elementType)) {
+                when (val binding = value.fetchBindings(elementType)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded += binding.value
                 }
@@ -112,7 +114,7 @@ private suspend fun ArgumentExpression?.fetchBindings(
             VariableBinding.of(grounded.toList())
         }
         is Map<*, *> -> {
-            val expectedObjectType = (expectedType as? TypeExpr.Named)?.baseType
+            val expectedObjectType = expectedType.baseTypeDef.takeUnless { expectedType.isList }
             require(expectedObjectType is Schema.Input) {
                 "Argument input-object expression does not match $expectedType"
             }

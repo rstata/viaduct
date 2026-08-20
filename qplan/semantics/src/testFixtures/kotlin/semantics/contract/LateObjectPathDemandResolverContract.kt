@@ -54,7 +54,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         fooApplications += 1
                         fooDemandFields =
                             demand
-                                .merge(field.type.baseType as Schema.Object)
+                                .merge(field.type.baseTypeDef as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { groundKey ->
                                     groundKey.field.name
@@ -132,7 +132,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         nodeApplications += 1
                         nodeDemandFields =
                             demand
-                                .merge(field.type.baseType as Schema.Object)
+                                .merge(field.type.baseTypeDef as Schema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { groundKey ->
                                     groundKey.field.name
@@ -190,7 +190,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         parentDemandFields =
                             linkedSetOf<String>().also { fields ->
                                 demand
-                                    .merge(field.type.baseType as Schema.Object)
+                                    .merge(field.type.baseTypeDef as Schema.Object)
                                     .forEach { selection ->
                                         fields += selection.key.field.name
                                     }

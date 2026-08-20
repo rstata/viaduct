@@ -15,7 +15,7 @@ import graphql.schema.GraphQLObjectType
  * classes do not override `Any.equals` or `Any.hashCode`, so `==` is reference equality and two
  * definitions are equal exactly when they represent the same schema element. For every definition
  * `d` reachable from this schema, `types[d.name] == d` when `d` is a [TypeDef]; the corresponding
- * owner collection contains `d` by its declared name for nested definitions. Every [TypeExpr.baseType]
+ * owner collection contains `d` by its declared name for nested definitions. Every [TypeExpr.baseTypeDef]
  * reachable from the schema is likewise the canonical result of [types].
  *
  * Construct every [Arguments.Resolved] and [ObjectEngineResult.Key] through a factory on its precise

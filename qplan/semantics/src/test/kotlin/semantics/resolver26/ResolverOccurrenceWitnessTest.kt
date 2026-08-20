@@ -6,7 +6,6 @@ import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.TypeExpr
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -40,8 +39,7 @@ class ResolverOccurrenceWitnessTest {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val items = schema.requireObjectField("Query", "items")
-                    val payloadType =
-                        (items.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val payloadType = checkNotNull(items.type.unwrapList())
                     val baseKey =
                         ObjectEngineResult.GroundKey.of(
                             schema.requireObjectField("Payload", "base"),

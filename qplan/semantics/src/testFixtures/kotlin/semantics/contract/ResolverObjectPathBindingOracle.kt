@@ -126,13 +126,13 @@ private fun EngineResult.toVariableBinding(
             error("An object-path provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseType as Schema.SimpleTypeDef),
+                toEngineSimpleData(expectedType.baseTypeDef as Schema.SimpleTypeDef),
             )
     }
 
 @Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputTypeDef)
+    require(typeExpr.baseTypeDef is Schema.InputTypeDef)
     val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         val result = get(index).get()

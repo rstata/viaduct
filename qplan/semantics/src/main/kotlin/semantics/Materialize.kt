@@ -126,14 +126,14 @@ private suspend fun EngineResult?.materializeEngineResultValue(
                 selectionPath = resultPath,
             )
         is ListEngineResult -> {
-            require(expectedType is TypeExpr.List)
+            require(expectedType.isList)
             materializeValues(
                 selections = selections,
                 reader = reader,
                 resultPath = resultPath,
             )
         }
-        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleTypeDef)
+        else -> toEngineOutputData(expectedType.baseTypeDef as Schema.SimpleTypeDef)
     }
 
 // Materializes each list element at a path containing its concrete list index.

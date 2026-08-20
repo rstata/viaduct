@@ -88,7 +88,7 @@ private suspend fun EngineResult?.materializeSelectedValue(
             )
         }
         is ListEngineResult -> {
-            require(expectedType is TypeExpr.List)
+            require(expectedType.isList)
             val values: EngineOutputListData =
                 indices.map { index ->
                     get(index).getValue().await().materializeSelectedValue(
@@ -100,6 +100,6 @@ private suspend fun EngineResult?.materializeSelectedValue(
                 }
             values
         }
-        else -> toEngineOutputData(expectedType.baseType as Schema.SimpleTypeDef)
+        else -> toEngineOutputData(expectedType.baseTypeDef as Schema.SimpleTypeDef)
     }
 }

@@ -129,7 +129,7 @@ class GraphQLExecuteSmokeTest {
                 "choice" to mapOf("__typename" to "B"),
             ),
         )
-        assertTrue(applications.none { it.endsWith(".V_I_typename") })
+        assertTrue(applications.none { it.endsWith(".V_A_typename") })
     }
 
     @Test

@@ -360,7 +360,7 @@ class FromObjectFieldTest {
             schemaSDL = schemaSDL,
             fieldResolvers = { schema ->
                 schema.requireQueryTypeDef().fields
-                    .filter { field -> field.name != "V_I_typename" }
+                    .filter { field -> field.name != "V_A_typename" }
                     .associateWith {
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                             EngineErrorData

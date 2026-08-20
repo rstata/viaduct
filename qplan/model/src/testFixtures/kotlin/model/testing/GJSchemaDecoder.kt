@@ -46,10 +46,9 @@ import viaduct.graphql.utils.GraphQLTypeRelation
 import viaduct.graphql.utils.GraphQLTypeRelations
 
 /** Names reserved for fixture-generated canonical types and fields. */
-internal const val NODE_SYNTHETIC_NAME_TOKEN = "V_A"
-internal const val TYPENAME_SYNTHETIC_NAME_TOKEN = "V_I"
-internal const val TYPENAME_TOP_TYPE = "V_I_Top"
-internal const val LOWERED_TYPENAME_FIELD = "V_I_typename"
+internal const val LOWERING_SYNTHETIC_NAME_TOKEN = "V_A"
+internal const val ALL_SOURCE_OBJECTS_TYPE = "V_A_AllSourceObjects"
+internal const val LOWERED_TYPENAME_FIELD = "V_A_typename"
 internal const val VIADUCT_IGNORE_SYMBOL = "VIADUCT_IGNORE"
 internal const val NODE_BRIDGE_TYPE_SUFFIX = "_V_A_Bridge"
 internal const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
@@ -105,7 +104,7 @@ internal class GJSchemaDecoder(
 
         registerBuiltInScalars()
         createTypeShells()
-        createTypenameTopTypeShell()
+        createAllSourceObjectsTypeShell()
         createNodeBridgeTypeShells()
 
         val query = types["Query"] as Schema.Object
@@ -115,7 +114,7 @@ internal class GJSchemaDecoder(
                 types = types.toMap(),
             )
         populatePossibleTypes()
-        populateTypenameTopPossibleTypes()
+        populateAllSourceObjectsPossibleTypes()
         populateInputFields()
         populateCompositeFields()
         populateNodeBridgeTypes()
@@ -198,13 +197,13 @@ internal class GJSchemaDecoder(
         }
     }
 
-    private fun createTypenameTopTypeShell() {
-        require(TYPENAME_TOP_TYPE !in types) {
-            "Synthetic typename interface collides with $TYPENAME_TOP_TYPE"
+    private fun createAllSourceObjectsTypeShell() {
+        require(ALL_SOURCE_OBJECTS_TYPE !in types) {
+            "Synthetic typename interface collides with $ALL_SOURCE_OBJECTS_TYPE"
         }
         val possibleTypes = linkedSetOf<Schema.Object>()
         registerComposite(
-            InterfaceTypeImpl(TYPENAME_TOP_TYPE, possibleTypes),
+            InterfaceTypeImpl(ALL_SOURCE_OBJECTS_TYPE, possibleTypes),
             possibleTypes,
         )
     }
@@ -246,12 +245,12 @@ internal class GJSchemaDecoder(
             }
     }
 
-    private fun populateTypenameTopPossibleTypes() {
-        val top = types.getValue(TYPENAME_TOP_TYPE) as Schema.Interface
+    private fun populateAllSourceObjectsPossibleTypes() {
+        val allSourceObjects = types.getValue(ALL_SOURCE_OBJECTS_TYPE) as Schema.Interface
         types.values
             .filterIsInstance<Schema.Object>()
             .filterNot(nodeBridgeTypes::contains)
-            .toCollection(possibleTypeSets.getValue(top))
+            .toCollection(possibleTypeSets.getValue(allSourceObjects))
     }
 
     private fun populateInputFields() {

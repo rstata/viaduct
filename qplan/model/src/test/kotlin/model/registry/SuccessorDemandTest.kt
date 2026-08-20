@@ -117,7 +117,7 @@ class SuccessorDemandTest {
         val fullBox = fullRoot[schema.key(rootType, "box")]
         val boundaryBox = boundaryRoot[schema.key(rootType, "box")]
         assertEquals(
-            setOf("passive", "computed", "V_I_typename"),
+            setOf("passive", "computed", "V_A_typename"),
             context(world) {
                 fullBox.subselections
                     .merge(boxType)
@@ -127,7 +127,7 @@ class SuccessorDemandTest {
             },
         )
         assertEquals(
-            setOf("computed", "V_I_typename"),
+            setOf("computed", "V_A_typename"),
             context(world) {
                 boundaryBox.subselections
                     .merge(boxType)

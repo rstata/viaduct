@@ -19,16 +19,20 @@ import kotlin.test.assertTrue
 
 class TypenameLoweringTest {
     @Test
-    fun `lowered schema owns ordinary typename fields and a universal top interface`() {
+    fun `lowered schema owns ordinary typename fields and an all-source-objects interface`() {
         val world = TestWorld.fromSDL(SCHEMA)
         val schema = world.schema
-        val top = assertIs<Schema.Interface>(schema.requireType("V_I_Top"))
+        val allSourceObjects =
+            assertIs<Schema.Interface>(schema.requireType("V_A_AllSourceObjects"))
         val objectTypes =
             listOf("Query", "A", "B")
                 .map { name -> schema.requireType(name) as Schema.Object }
 
-        assertEquals(objectTypes.toSet(), top.possibleObjectTypes)
-        assertEquals(setOf("V_I_typename"), top.fields.mapTo(linkedSetOf(), Schema.Field::name))
+        assertEquals(objectTypes.toSet(), allSourceObjects.possibleObjectTypes)
+        assertEquals(
+            setOf("V_A_typename"),
+            allSourceObjects.fields.mapTo(linkedSetOf(), Schema.Field::name),
+        )
         listOf(
             "Query",
             "Item",
@@ -36,7 +40,7 @@ class TypenameLoweringTest {
             "A",
             "B",
         ).forEach { typeName ->
-            val field = schema.requireField(typeName, "V_I_typename")
+            val field = schema.requireField(typeName, "V_A_typename")
             assertEquals(typeName, field.containingDef.name)
             assertTrue(field.args.isEmpty())
             assertEquals(Schema.StringType, field.type.baseTypeDef)
@@ -44,7 +48,7 @@ class TypenameLoweringTest {
         }
         listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
             assertFailsWith<Schema.MissingSchemaElementException> {
-                schema.requireField(typeName, "V_I_typename")
+                schema.requireField(typeName, "V_A_typename")
             }
         }
         assertTrue((schema.requireType("Choice") as Schema.Union).fields.isEmpty())
@@ -71,9 +75,9 @@ class TypenameLoweringTest {
         val objectFragment = schema.fragmentFrom("fragment F on A { __typename }")
         val objectSelection = objectFragment.subselections.single()
         assertEquals("A", objectSelection.key.field.containingDef.name)
-        assertEquals("V_I_typename", objectSelection.key.field.name)
+        assertEquals("V_A_typename", objectSelection.key.field.name)
         assertEquals(
-            "V_I_typename",
+            "V_A_typename",
             objectFragment.materializeSelections.single().responseKey,
         )
 
@@ -88,7 +92,7 @@ class TypenameLoweringTest {
 
         val unionFragment = schema.fragmentFrom("fragment F on Choice { kind: __typename }")
         val unionSelection = unionFragment.subselections.single()
-        assertEquals("V_I_Top", unionSelection.key.field.containingDef.name)
+        assertEquals("V_A_AllSourceObjects", unionSelection.key.field.containingDef.name)
         assertEquals(
             "kind",
             unionFragment.materializeSelections.single().responseKey,
@@ -102,7 +106,7 @@ class TypenameLoweringTest {
         val payload = nodeSelection.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
         assertEquals(
-            "V_I_typename",
+            "V_A_typename",
             payload.subselections.single().key.field.name,
         )
     }
@@ -144,10 +148,11 @@ class TypenameLoweringTest {
         val world = TestWorld.fromSDL(SCHEMA)
         val schema = world.schema
         val registry = world.resolverRegistry
-        val top = schema.requireType("V_I_Top") as Schema.Interface
+        val allSourceObjects =
+            schema.requireType("V_A_AllSourceObjects") as Schema.Interface
 
-        top.possibleObjectTypes.forEach { type ->
-            val field = schema.requireObjectField(type.name, "V_I_typename")
+        allSourceObjects.possibleObjectTypes.forEach { type ->
+            val field = schema.requireObjectField(type.name, "V_A_typename")
             val resolver = registry.resolver(field)
             assertTrue(field in registry)
             assertTrue(field.args.isEmpty())
@@ -168,11 +173,11 @@ class TypenameLoweringTest {
     fun `rejects source names in the typename lowering namespace`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {
-                TestWorld.fromSDL("type Query { V_I_typename: String }")
+                TestWorld.fromSDL("type Query { V_A_typename: String }")
             }
 
-        assertTrue(exception.message.orEmpty().contains("reserved token V_I"))
-        assertTrue(exception.message.orEmpty().contains("V_I_typename"))
+        assertTrue(exception.message.orEmpty().contains("reserved token V_A"))
+        assertTrue(exception.message.orEmpty().contains("V_A_typename"))
     }
 
     private companion object {

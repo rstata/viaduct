@@ -91,16 +91,17 @@ interface Schema {
      *
      * [fields] contains all canonical lowered fields selectable at this type, rather than only
      * fields declared in source SDL. Every source object and interface type `t`, together with the
-     * synthetic `V_I_Top` interface, has exactly one owner-specific synthetic field `f` for which:
+     * synthetic `V_A_AllSourceObjects` interface, has exactly one owner-specific synthetic field
+     * `f` for which:
      *
-     * - `f.name == "V_I_typename"`;
+     * - `f.name == "V_A_typename"`;
      * - `f.containingDef == t`;
      * - `f.type == TypeExpr.Named.of(StringType, isNullable = false)`;
      * - `f.args.isEmpty()`; and
-     * - `t.field("V_I_typename") == f`.
+     * - `t.field("V_A_typename") == f`.
      *
      * Unions own no fields. Synthetic node-bridge objects own only their `id` and `node` fields.
-     * The synthetic interface `V_I_Top` owns the field selected for union-scoped source
+     * The synthetic interface `V_A_AllSourceObjects` owns the field selected for union-scoped source
      * `__typename` and has every lowered source object, but no node bridge, in [possibleObjectTypes].
      *
      * Each field's [Field.containingDef] is this definition. Conversely, every [Field] in the
@@ -186,7 +187,7 @@ interface Schema {
     /**
      * An object type.
      *
-     * For source objects, [fields] contains `V_I_typename` and the object's effective fields after
+     * For source objects, [fields] contains `V_A_typename` and the object's effective fields after
      * flattening type extensions and inherited interface fields. Synthetic node-bridge objects
      * contain only their `id` and `node` fields. Interface implementation relationships are
      * represented by the schema's relation operations rather than stored on this definition.
@@ -211,7 +212,7 @@ interface Schema {
     /**
      * An interface type.
      *
-     * [fields] contains `V_I_typename` and the interface's effective fields after flattening type
+     * [fields] contains `V_A_typename` and the interface's effective fields after flattening type
      * extensions and inherited interface fields. Parent-interface and implementation
      * relationships are represented by the schema's relation operations rather than stored here.
      */

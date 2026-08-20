@@ -189,7 +189,7 @@ class ArbitraryRegistry internal constructor(
         applicationCounts.toMap()
 
     fun resolverProgram(sourceField: FieldCoordinate): ResolverProgramKind =
-        if (sourceField.fieldName == "V_I_typename") {
+        if (sourceField.fieldName == "V_A_typename") {
             ResolverProgramKind.CONSTANT
         } else {
             resolverPrograms.getValue(sourceField)
@@ -210,7 +210,7 @@ class ArbitraryRegistry internal constructor(
         canonicalField: FieldCoordinate,
     ): Boolean =
         when {
-            canonicalField.fieldName == "V_I_typename" -> false
+            canonicalField.fieldName == "V_A_typename" -> false
             canonicalField.isNodeLoader(schema) -> true
             else -> objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
         }

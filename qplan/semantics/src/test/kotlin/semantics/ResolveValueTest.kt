@@ -69,7 +69,7 @@ class ResolveValueTest {
         val profileType = schema.requireType("Profile") as Schema.Object
         val typeNameKey =
             ObjectEngineResult.GroundKey.of(
-                schema.requireObjectField("User", "V_I_typename"),
+                schema.requireObjectField("User", "V_A_typename"),
                 emptyMap(),
             )
         val computedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("User", "computed"), emptyMap())

@@ -67,7 +67,7 @@ class NodeBridgeLoweringTest {
 
         val user = schema.requireType("User") as Schema.Object
         assertTrue(schema.graphQLSchema.getObjectType("User") !== user.gjDef)
-        assertNotNull(user.gjDef.getFieldDefinition("V_I_typename"))
+        assertNotNull(user.gjDef.getFieldDefinition("V_A_typename"))
     }
 
     @Test

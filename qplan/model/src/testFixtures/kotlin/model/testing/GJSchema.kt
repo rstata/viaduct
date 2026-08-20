@@ -67,7 +67,7 @@ internal class GJSchema private constructor(
             val sourceType = graphQLSchema.getType(typeName)
             val canonicalOwner =
                 if (sourceType is GraphQLUnionType) {
-                    TYPENAME_TOP_TYPE
+                    ALL_SOURCE_OBJECTS_TYPE
                 } else {
                     typeName
                 }
@@ -266,21 +266,13 @@ internal class GJSchema private constructor(
         }
 
         private fun validateReservedNames(schemaSDL: String) {
-            val invalidNamesByToken =
-                linkedMapOf(
-                    NODE_SYNTHETIC_NAME_TOKEN to linkedSetOf<String>(),
-                    TYPENAME_SYNTHETIC_NAME_TOKEN to linkedSetOf(),
-                )
+            val invalidNames = linkedSetOf<String>()
             val ignoredNames = linkedSetOf<String>()
 
             fun visit(node: Node<*>) {
                 val name = (node as? NamedNode<*>)?.name
-                if (name != null) {
-                    invalidNamesByToken.forEach { (token, invalidNames) ->
-                        if (name.contains(token)) {
-                            invalidNames.add(name)
-                        }
-                    }
+                if (name != null && name.contains(LOWERING_SYNTHETIC_NAME_TOKEN)) {
+                    invalidNames.add(name)
                 }
                 if (name == VIADUCT_IGNORE_SYMBOL) {
                     ignoredNames.add(name)
@@ -289,15 +281,9 @@ internal class GJSchema private constructor(
             }
 
             Parser.parse(schemaSDL).children.forEach(::visit)
-            val collisions =
-                invalidNamesByToken.filterValues { invalidNames -> invalidNames.isNotEmpty() }
-            require(collisions.isEmpty()) {
-                collisions.entries.joinToString(
-                    separator = "; ",
-                ) { (token, invalidNames) ->
-                    "Source schema names cannot contain reserved token $token: " +
-                        invalidNames.sorted().joinToString()
-                }
+            require(invalidNames.isEmpty()) {
+                "Source schema names cannot contain reserved token " +
+                    "$LOWERING_SYNTHETIC_NAME_TOKEN: ${invalidNames.sorted().joinToString()}"
             }
             require(ignoredNames.isEmpty()) {
                 "Source schema names cannot use reserved symbol $VIADUCT_IGNORE_SYMBOL"

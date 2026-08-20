@@ -185,7 +185,7 @@ class AssumptionsTest {
         assertEquals(setOf(user, admin), node.possibleObjectTypes)
         assertEquals(setOf(user, admin), actor.possibleObjectTypes)
 
-        val typeName = schema.requireField("Node", "V_I_typename")
+        val typeName = schema.requireField("Node", "V_A_typename")
         assertEquals(node, typeName.containingDef)
         assertEquals(emptyList(), typeName.args)
         assertEquals(

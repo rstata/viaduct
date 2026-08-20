@@ -73,7 +73,7 @@ class ContextParametersTest {
             fieldResolvers = { schema ->
                 val fragment = schema.emptyFragmentOf("Query")
                 schema.requireQueryTypeDef().fields
-                    .filter { it.name != "V_I_typename" }
+                    .filter { it.name != "V_A_typename" }
                     .associateWith {
                         fieldResolverOf(
                             objectFragment = fragment,

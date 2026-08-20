@@ -153,7 +153,7 @@ private class NodeResolverLowering(
                 payload to payloadResolver(type)
             }
         val typenameResolvers =
-            (schema.requireType(TYPENAME_TOP_TYPE) as Schema.Interface)
+            (schema.requireType(ALL_SOURCE_OBJECTS_TYPE) as Schema.Interface)
                 .possibleObjectTypes
                 .associate { type ->
                     val field = schema.requireObjectField(type.name, LOWERED_TYPENAME_FIELD)

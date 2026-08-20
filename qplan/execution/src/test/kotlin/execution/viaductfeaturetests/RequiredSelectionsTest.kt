@@ -1,11 +1,14 @@
-package execution
+package execution.viaductfeaturetests
 
 // core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/RequiredSelectionsTest.kt
+// Implemented 12 out of 60 tests as of 2026-08-20
 
 import execution.testing.runQPlanFeatureTest
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.jupiter.api.Disabled
+import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
@@ -60,6 +63,30 @@ class RequiredSelectionsTest {
         }.runQPlanFeatureTest {
             runQuery("{foo}")
                 .assertJson("""{"data": {"foo": 6}}""")
+        }
+
+    @Test
+    @Disabled("Fails under qplan; investigate production parity")
+    fun `required selections use deep aliases`() =
+        EngineTestModule("extend type Query { string1: String, bar: Bar } type Bar { value: String }") {
+            field("Query" to "bar") {
+                resolver {
+                    fn { _, _, _, _, _ -> mapOf("value" to "B") }
+                }
+            }
+            field("Query" to "string1") {
+                resolver {
+                    objectSelections("aliasedBar: bar { aliasedValue: value }")
+                    fn { _, obj, _, _, _ ->
+                        val bar = obj.fetchAs<EngineObjectData>("aliasedBar")
+                        val value = bar.fetch("aliasedValue")
+                        "A:$value"
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{string1}")
+                .assertJson("""{"data": {"string1": "A:B"}}""")
         }
 
     @Test
@@ -122,6 +149,36 @@ class RequiredSelectionsTest {
         }
 
     @Test
+    fun `required selections use untyped inline fragments`() =
+        EngineTestModule("extend type Query { foo: Int, bar: Int }") {
+            fieldWithValue("Query" to "bar", 3)
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections("... { bar }")
+                    fn { _, obj, _, _, _ -> obj.fetchAs<Int>("bar") * 2 }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{foo}")
+                .assertJson("""{"data": {"foo": 6}}""")
+        }
+
+    @Test
+    fun `required selections use typed inline fragments`() =
+        EngineTestModule("extend type Query { foo: Int, bar: Int }") {
+            fieldWithValue("Query" to "bar", 3)
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections("... on Query { bar }")
+                    fn { _, obj, _, _, _ -> obj.fetchAs<Int>("bar") * 2 }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{foo}")
+                .assertJson("""{"data": {"foo": 6}}""")
+        }
+
+    @Test
     fun `resolve fields with shared requirement`() {
         val bazCount = AtomicInteger()
         EngineTestModule("extend type Query { foo: Int, bar: Int, baz: Int }") {
@@ -166,4 +223,56 @@ class RequiredSelectionsTest {
             runQuery("{foo}")
                 .assertJson("""{"data": {"foo": 15}}""")
         }
+
+    @Test
+    @Disabled("Fails under qplan; investigate production parity")
+    fun `resolve fields multiple mergeable requirements`() {
+        val barCount = AtomicInteger()
+        EngineTestModule("extend type Query { foo: Int, bar: Int }") {
+            field("Query" to "bar") {
+                resolver {
+                    fn { _, _, _, _, _ -> 3.also { barCount.incrementAndGet() } }
+                }
+            }
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections(
+                        """
+                        fragment F on Query { bar }
+                        fragment Main on Query {
+                          bar
+                          aliasedBar: bar
+                          ... {
+                            bar
+                            ... {
+                              bar
+                              ... F
+                            }
+                          }
+                          ... on Query {
+                            bar
+                            ... on Query {
+                              bar
+                              ... F
+                            }
+                          }
+                          ... F
+                        }
+                        """.trimIndent(),
+                    )
+                    fn { _, obj, _, _, _ ->
+                        // make sure we wait for aliasedBar
+                        obj.fetchAs<Int>("aliasedBar")
+
+                        // but ultimately just return 2 * "bar"
+                        obj.fetchAs<Int>("bar") * 2
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{foo bar}")
+                .assertJson("""{"data": {"foo": 6, "bar": 3}}""")
+                .also { assertEquals(2, barCount.get()) }
+        }
+    }
 }

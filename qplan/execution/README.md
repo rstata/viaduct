@@ -72,6 +72,9 @@ The adapter rejects or does not yet model:
 - From-object-field provider paths containing a field that declares arguments, an explicit Resolver26 restriction even when those arguments are ground.
 - From-Query-field and arbitrary callback variable providers.
 - Batched or selective field and node resolvers.
+- Production node executors that omit `id` from their returned object; production's lazy node wrapper supplies the reference ID separately, while qplan's current node lowering requires the executor result to repeat it.
+- Inline object values from a Node-valued field when that concrete type also has a node resolver; current lowering treats every such producer output as a node reference.
+- Partially populated Query executor maps; qplan registry construction currently requires a resolver for every lowered Query field even when a feature test never selects it.
 - Query required selections.
 - Checker and type-checker executors.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
@@ -80,24 +83,32 @@ The test-only adapter uses `runBlocking` to cross the suspend executor SPI. That
 
 ## Testing
 
-Tests under `src/test/kotlin/execution` exercise the GraphQL boundary, resolver semantics, completion, and the executor adapter. `EngineTestModuleQPlanFeatureTest` covers adapter-specific behavior and rejection boundaries.
+Tests under `src/test/kotlin/execution` exercise the GraphQL boundary, resolver semantics, completion, and the executor adapter. `EngineTestModuleQPlanFeatureTest` covers adapter-specific behavior and rejection boundaries. Ports of production Viaduct runtime feature tests live separately under `src/test/kotlin/execution/viaductfeaturetests` in the `execution.viaductfeaturetests` package.
 
-Runtime feature tests ported into this module retain the originating filename. Immediately after the package declaration, each ported file records its source path from the repository root:
+Runtime feature-test ports should remain as close to their source as qplan's supported surface permits: preserve the source filename, test names, test order, fixture structure, and local helpers; make only the adaptations needed to use `runQPlanFeatureTest`, qplan-compatible assertions, or supported executor shapes. Partial ports are expected. Do not silently rewrite an unsupported production behavior into a different passing test.
+
+A copied production test that fails under qplan must keep its fixture, behavior, and assertions unchanged and be marked `@Disabled` with a short investigation reason. This keeps the incompatibility available as executable evidence for follow-up work rather than replacing it with an easier passing scenario.
+
+Immediately after the package declaration, every ported file records its source path from the repository root and its implemented/source test count as of the review date:
 
 ```kotlin
-package execution
+package execution.viaductfeaturetests
 
 // core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/RequiredSelectionsTest.kt
+// Implemented 12 out of 60 tests as of 2026-08-20
 ```
 
-The current ports are `EngineFeatureTestExample.kt`, `RequiredSelectionsTest.kt`, and supported from-argument and from-object-field cases in `FromFieldVariablesFeatureTest.kt`, totaling twenty-one runtime tests. Run the adapter and ported tests with:
+Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. The current ports are `EngineFeatureTestExample.kt`, `NodeResolverTest.kt`, `RequiredSelectionsTest.kt`, and supported from-argument and from-object-field cases in `FromFieldVariablesFeatureTest.kt`, totaling thirty-one runtime tests. Eight copied tests are disabled as preserved incompatibility cases. The remaining suites and recommended next ports are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
+
+Run the adapter and ported tests with:
 
 ```shell
 ./gradlew :execution:test \
   --tests execution.EngineTestModuleQPlanFeatureTest \
-  --tests execution.EngineFeatureTestExample \
-  --tests execution.RequiredSelectionsTest \
-  --tests execution.FromFieldVariablesFeatureTest \
+  --tests execution.viaductfeaturetests.EngineFeatureTestExample \
+  --tests execution.viaductfeaturetests.NodeResolverTest \
+  --tests execution.viaductfeaturetests.RequiredSelectionsTest \
+  --tests execution.viaductfeaturetests.FromFieldVariablesFeatureTest \
   --tests execution.testing.RequiredSelectionSetVariableRecoveryTest
 ```
 

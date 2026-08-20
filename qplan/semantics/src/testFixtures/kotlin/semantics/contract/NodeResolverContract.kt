@@ -7,16 +7,17 @@ import model.EngineIDResult
 import model.EngineOutputListData
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
-import model.TypeExpr
+import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.objectOf
+import model.requireOutputType
 import model.requireType
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import org.junit.jupiter.api.Test
+import viaduct.graphql.schema.toTypeExpr
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
@@ -280,16 +281,7 @@ interface NodeResolverContract : ResolverContract {
                 fieldResolvers = { schema ->
                     val matrix = schema.requireField("Query", "matrix_V_A_node")
                     val outer =
-                        TypeExpr.List.of(
-                            TypeExpr.List.of(
-                                TypeExpr.Named.of(
-                                    schema.requireType("User") as Schema.OutputTypeDef,
-                                    isNullable = false,
-                                ),
-                                isNullable = false,
-                            ),
-                            isNullable = false,
-                        )
+                        schema.toTypeExpr("!!!", "User").requireOutputType()
                     fun row(vararg ids: String): EngineOutputListData =
                         ids.map { id ->
                             schema.objectOf("User") {

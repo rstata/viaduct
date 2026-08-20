@@ -16,10 +16,11 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelection
 import model.ObjectEngineResult
+import model.outputType
 import model.PathComponent
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.fragmentFrom
-import model.gjDef
+import viaduct.graphql.schema.graphqljava.gjDef
 import model.materializeSelectionForestOf
 import model.testing.TestWorld
 import model.testing.occurrenceStampOf
@@ -117,7 +118,7 @@ class MaterializeTest {
                     type Child { value: String! }
                     """.trimIndent(),
                 ).assumptions
-        val childType = world.schema.requireType("Child") as Schema.Object
+        val childType = world.schema.requireType("Child") as ViaductSchema.Object
         val childKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "child"),
@@ -190,9 +191,9 @@ class MaterializeTest {
                         }
                         """.trimIndent(),
                     ).assumptions
-            val parent = world.schema.requireType("Parent") as Schema.Object
-            val user = world.schema.requireType("User") as Schema.Object
-            val bridge = world.schema.requireType("User_V_A_Bridge") as Schema.Object
+            val parent = world.schema.requireType("Parent") as ViaductSchema.Object
+            val user = world.schema.requireType("User") as ViaductSchema.Object
+            val bridge = world.schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
             val producer =
                 ObjectEngineResult.GroundKey.of(
                     world.schema.requireObjectField("Parent", "user_V_A_node"),
@@ -231,7 +232,7 @@ class MaterializeTest {
                             producer to bridgeResult,
                             listProducer to
                                 ListEngineResult.of(
-                                    typeExpr = listProducer.field.type.unwrapList()!!,
+                                    typeExpr = listProducer.field.outputType.unwrapList()!!,
                                     values =
                                         listOf(
                                             bridgeResult,

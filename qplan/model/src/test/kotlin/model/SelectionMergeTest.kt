@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -543,15 +545,15 @@ class SelectionMergeTest {
         val world = testWorld.assumptions
         val schema = world.schema
         val query = schema.requireQueryTypeDef()
-        val item = schema.requireType("ConcreteItem") as Schema.Object
-        val filter = schema.requireType("Filter") as Schema.Input
+        val item = schema.requireType("ConcreteItem") as ViaductSchema.Object
+        val filter = schema.requireType("Filter") as ViaductSchema.Input
 
         fun selection(
             typeName: String,
             fieldName: String,
             arguments: Map<String, Any?> = emptyMap(),
-            possibleTypes: Set<Schema.Object> =
-                (schema.requireType(typeName) as Schema.CompositeTypeDef).possibleObjectTypes,
+            possibleTypes: Set<ViaductSchema.Object> =
+                (schema.requireType(typeName) as ViaductSchema.CompositeTypeDef).possibleObjectTypes,
             subselections: SelectionForest = selectionForestOf(),
         ): Selection =
             Selection.of(

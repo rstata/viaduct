@@ -1,5 +1,7 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 
 import java.util.IdentityHashMap
@@ -10,7 +12,6 @@ import model.MaterializeSelectionForest
 import model.ObjectSelectionForest
 import model.Arguments
 import model.PathComponent
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SelectionOccurrenceId
@@ -62,7 +63,7 @@ sealed interface ResolverObjectFragment {
  * at a simple value.
  */
 class FieldResolver private constructor(
-    val field: Schema.ObjectField,
+    val field: ViaductSchema.ObjectField,
     private val objectFragmentTemplate: MaterializeSelectionForest,
     val variables: Map<Arguments.Variable, VariableDefinition>,
     private val function: FieldResolverFunction,
@@ -289,7 +290,7 @@ class FieldResolver private constructor(
          * observers before calling this factory.
          */
         fun of(
-            field: Schema.ObjectField,
+            field: ViaductSchema.ObjectField,
             objectFragment: MaterializeSelectionForest,
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: FieldResolverFunction,
@@ -345,7 +346,7 @@ class FieldResolver private constructor(
         }
 
         fun of(
-            field: Schema.ObjectField,
+            field: ViaductSchema.ObjectField,
             objectFragment: SelectionForest,
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: FieldResolverFunction,

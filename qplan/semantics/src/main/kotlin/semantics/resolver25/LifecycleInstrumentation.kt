@@ -1,12 +1,13 @@
 package semantics.resolver25
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 
 import model.ObjectEngineResult
 
 import model.ObjectSelection
 import model.PathComponent
-import model.Schema
 import model.Selection
 import model.VariableBinding
 
@@ -155,7 +156,7 @@ internal class Resolver25LifecycleInstrumentation(
 
     fun orchestratorCreated(
         path: List<PathComponent>,
-        objectType: Schema.Object,
+        objectType: ViaductSchema.Object,
     ) {
         emit { sequence ->
             Resolver25LifecycleEvent.OrchestratorCreated(

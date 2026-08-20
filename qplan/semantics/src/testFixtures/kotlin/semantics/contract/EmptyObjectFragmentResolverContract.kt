@@ -4,7 +4,7 @@ import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.requireObjectField
 import model.requireType
 import model.testing.TestWorld
@@ -165,10 +165,10 @@ interface EmptyObjectFragmentResolverContract :
     }
 }
 
-internal fun Schema.contractObjectType(typeName: String): Schema.Object =
-    requireType(typeName) as Schema.Object
+internal fun ViaductSchema.contractObjectType(typeName: String): ViaductSchema.Object =
+    requireType(typeName) as ViaductSchema.Object
 
-internal fun Schema.contractKey(
+internal fun ViaductSchema.contractKey(
     typeName: String,
     fieldName: String,
     arguments: Map<String, Any?> = emptyMap(),

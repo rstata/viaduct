@@ -5,7 +5,7 @@ import model.requireObjectField
 import model.Arguments
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -215,7 +215,7 @@ class NestedDescendantVariableUseRegressionTest {
             Resolver25StructuralSignature.DESCENDANT_VARIABLE_OWNER,
         )
         val item = resolved.getCell(itemKey).getValue().get() as ObjectEngineResult
-        val payloadType = world.schema.requireType("Payload") as Schema.Object
+        val payloadType = world.schema.requireType("Payload") as ViaductSchema.Object
 
         assertEquals(5, item.getCell(resultKey).getValue().get())
         assertEquals(1, consumeApplications)

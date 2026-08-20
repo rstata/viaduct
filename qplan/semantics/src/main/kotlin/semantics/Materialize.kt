@@ -1,5 +1,7 @@
 package semantics
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 
 import model.Assumptions
@@ -12,12 +14,11 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
+import model.outputType
 import model.ObjectMaterializeSelection
 import model.PathComponent
-import model.Schema
 import model.Selection
 import model.Stamp
-import model.TypeExpr
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
 import model.materializedEngineObjectDataOf
@@ -54,7 +55,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selectionPath: List<PathComponent>,
 ): EngineObjectData.Sync {
     val selectedValues =
-        linkedMapOf<String, Pair<Schema.ObjectField, EngineOutputData?>>()
+        linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedKey = selection.materializedGroundKey(selectionPath)
         val cell = getCell(storedKey)
@@ -64,7 +65,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
             promise
                 .await()
                 .materializeEngineResultValue(
-                    expectedType = storedKey.field.type,
+                    expectedType = storedKey.field.outputType,
                     selections = selection.subselections,
                     reader = reader,
                     resultPath = resultPath + storedKey,
@@ -110,7 +111,7 @@ internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
 // Recursively materializes one selected result while retaining its exact stored path.
 context(world: Assumptions, runtimeSupport: RuntimeSupport)
 private suspend fun EngineResult?.materializeEngineResultValue(
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
@@ -133,7 +134,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
                 resultPath = resultPath,
             )
         }
-        else -> toEngineOutputData(expectedType.baseTypeDef as Schema.SimpleTypeDef)
+        else -> toEngineOutputData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef)
     }
 
 // Materializes each list element at a path containing its concrete list index.

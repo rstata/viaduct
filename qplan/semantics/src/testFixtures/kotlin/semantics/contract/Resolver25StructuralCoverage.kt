@@ -7,7 +7,7 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.VariableBinding
 import model.usedVariables
@@ -290,12 +290,12 @@ private inline fun <reified T> requireType(value: EngineInputData): T {
     return value
 }
 
-private fun SelectionForest.fields(): Set<Schema.Field> =
+private fun SelectionForest.fields(): Set<ViaductSchema.Field> =
     buildSet {
         this@fields.forEach { selection -> add(selection.key.field) }
     }
 
-private fun List<PathComponent>.fieldOccurrence(): Pair<List<PathComponent>, Schema.ObjectField> {
+private fun List<PathComponent>.fieldOccurrence(): Pair<List<PathComponent>, ViaductSchema.ObjectField> {
     val groundedKey = last() as ObjectEngineResult.GroundKey
     return dropLast(1) to groundedKey.field
 }

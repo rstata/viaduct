@@ -1,5 +1,7 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.requireField
@@ -9,7 +11,6 @@ import model.Assumptions
 import model.EngineErrorData
 import model.ObjectEngineResult
 import model.Arguments
-import model.Schema
 import model.Selection
 import model.emptyFragmentOf
 import model.fetchBindings
@@ -100,7 +101,7 @@ class SuccessorDemandTest {
                 selections.successorBoundaryDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
             }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
-        val rootType = schema.requireType("Root") as Schema.Object
+        val rootType = schema.requireType("Root") as ViaductSchema.Object
         val fullRoot = context(world) { full.merge(rootType).instantiateBindings() }
         val boundaryRoot = context(world) { boundaries.merge(rootType).instantiateBindings() }
 
@@ -113,7 +114,7 @@ class SuccessorDemandTest {
             boundaryRoot.groundKeys().fieldNames(),
         )
 
-        val boxType = schema.requireType("Box") as Schema.Object
+        val boxType = schema.requireType("Box") as ViaductSchema.Object
         val fullBox = fullRoot[schema.key(rootType, "box")]
         val boundaryBox = boundaryRoot[schema.key(rootType, "box")]
         assertEquals(
@@ -206,7 +207,7 @@ class SuccessorDemandTest {
                     selections.fetchSuccessorDemandDeferringTemplates()
                 }
             }
-        val itemType = world.schema.requireType("Item") as Schema.Object
+        val itemType = world.schema.requireType("Item") as ViaductSchema.Object
         val itemSelections =
             deferred
                 .merge(world.schema.requireQueryTypeDef())
@@ -414,8 +415,8 @@ class SuccessorDemandTest {
     private fun Set<ObjectEngineResult.GroundKey>.fieldNames(): Set<String> =
         mapTo(mutableSetOf()) { key -> key.field.name }
 
-    private fun Schema.key(
-        type: Schema.Object,
+    private fun ViaductSchema.key(
+        type: ViaductSchema.Object,
         fieldName: String,
     ): ObjectEngineResult.GroundKey =
         ObjectEngineResult.GroundKey.of(
@@ -432,13 +433,13 @@ private class CountingResolverRegistry(
 
     override fun resolveRootQuery(): EngineObjectData.Sync = delegate.resolveRootQuery()
 
-    override fun contains(field: Schema.ObjectField): Boolean = field in delegate
+    override fun contains(field: ViaductSchema.ObjectField): Boolean = field in delegate
 
-    override fun resolver(field: Schema.ObjectField): FieldResolver {
+    override fun resolver(field: ViaductSchema.ObjectField): FieldResolver {
         resolverLookups += 1
         return delegate.resolver(field)
     }
 
-    override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> =
+    override fun mayDemandFrom(field: ViaductSchema.ObjectField): Set<ViaductSchema.ObjectField> =
         delegate.mayDemandFrom(field)
 }

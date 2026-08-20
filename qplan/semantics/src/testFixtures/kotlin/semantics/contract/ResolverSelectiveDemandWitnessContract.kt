@@ -2,7 +2,7 @@ package semantics.contract
 
 import model.requireField
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -66,7 +66,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
             )
         val world = testWorld.assumptions
         val fragment = world.fragmentFrom("fragment ignored on Query { item { computed } }")
-        val itemType = world.schema.requireType("Item") as Schema.Object
+        val itemType = world.schema.requireType("Item") as ViaductSchema.Object
 
         val result =
             resolve(

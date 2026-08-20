@@ -8,13 +8,13 @@ import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Schema
-import model.TypeExpr
+import viaduct.graphql.schema.ViaductSchema
 import model.EngineObjectDataEntry
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
+import model.outputType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import kotlin.test.Test
@@ -65,8 +65,8 @@ class ResolveValueTest {
             )
         val world = testWorld.assumptions
         val schema = world.schema
-        val userType = schema.requireType("User") as Schema.Object
-        val profileType = schema.requireType("Profile") as Schema.Object
+        val userType = schema.requireType("User") as ViaductSchema.Object
+        val profileType = schema.requireType("Profile") as ViaductSchema.Object
         val typeNameKey =
             ObjectEngineResult.GroundKey.of(
                 schema.requireObjectField("User", "V_A_typename"),
@@ -101,7 +101,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.requireObjectField("Query", "user").type,
+                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -189,7 +189,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.requireObjectField("Query", "user").type,
+                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = resolverDemand,
                 )
@@ -235,7 +235,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.requireObjectField("Query", "user").type,
+                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -276,7 +276,7 @@ class ResolveValueTest {
         val resolved =
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.requireObjectField("Query", "user").type,
+                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -301,7 +301,7 @@ class ResolveValueTest {
                     }
                     """.trimIndent(),
                 ).assumptions
-        val itemType = world.schema.requireType("Item") as Schema.Object
+        val itemType = world.schema.requireType("Item") as ViaductSchema.Object
         val field = world.schema.requireObjectField("Item", "value")
         val value =
             engineObjectDataOf(
@@ -323,7 +323,7 @@ class ResolveValueTest {
         assertFailsWith<IllegalArgumentException> {
             context(world) {
                 value.resolveValue(
-                    expectedType = world.schema.requireObjectField("Query", "item").type,
+                    expectedType = world.schema.requireObjectField("Query", "item").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
                 )
@@ -409,7 +409,7 @@ class ResolveValueTest {
         val resolvedValue =
             context(world) {
                 output.resolveValue(
-                    expectedType = itemsField.type,
+                    expectedType = itemsField.outputType,
                     path = rootPath,
                     resolverDemand = selections,
                 )

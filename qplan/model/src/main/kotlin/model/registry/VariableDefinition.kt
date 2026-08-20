@@ -1,9 +1,9 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 
-import model.Schema
-import model.TypeExpr
 
 /**
  * The source of one field-relative variable defined by a field resolver.
@@ -14,11 +14,11 @@ import model.TypeExpr
 sealed interface VariableDefinition {
     /** A variable whose value is taken from an argument of its defining resolver field. */
     sealed interface FromArgument : VariableDefinition {
-        val argument: Schema.FieldArg
+        val argument: ViaductSchema.FieldArg
 
         companion object {
             /** Returns the definition that reads [argument]. */
-            fun of(argument: Schema.FieldArg): FromArgument =
+            fun of(argument: ViaductSchema.FieldArg): FromArgument =
                 FromArgumentImpl(argument)
         }
     }
@@ -43,14 +43,14 @@ sealed interface VariableDefinition {
                 path.dropLast(1).forEach { key ->
                     require(
                         !key.field.type.isList &&
-                            key.field.type.baseTypeDef is Schema.CompositeTypeDef,
+                            key.field.type.baseTypeDef is ViaductSchema.CompositeTypeDef,
                     ) {
                         "From-object-field variable path cannot cross list or simple field " +
                             "${key.field.containingDef.name}/${key.field.name}"
                     }
                 }
                 val terminal = path.last().field
-                require(terminal.type.baseTypeDef is Schema.SimpleTypeDef) {
+                require(terminal.type.baseTypeDef is ViaductSchema.SimpleTypeDef) {
                     "From-object-field variable path must end at a simple field, not " +
                         "${terminal.containingDef.name}/${terminal.name}"
                 }
@@ -61,7 +61,7 @@ sealed interface VariableDefinition {
 }
 
 private data class FromArgumentImpl(
-    override val argument: Schema.FieldArg,
+    override val argument: ViaductSchema.FieldArg,
 ) : VariableDefinition.FromArgument
 
 private data class FromObjectFieldImpl(

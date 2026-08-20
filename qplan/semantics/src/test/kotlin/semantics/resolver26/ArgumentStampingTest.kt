@@ -7,7 +7,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.Stamp
 import model.emptyFragmentOf
@@ -78,12 +78,12 @@ class ArgumentStampingTest {
                 },
             )
         val world: Assumptions = testWorld.assumptions
-        val resultField: Schema.ObjectField =
+        val resultField: ViaductSchema.ObjectField =
             world.schema.requireObjectField("Query", "result")
         val resultKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
-        val boxType: Schema.Object =
-            world.schema.requireType("Box") as Schema.Object
+        val boxType: ViaductSchema.Object =
+            world.schema.requireType("Box") as ViaductSchema.Object
         val boxKey: ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "box"),
@@ -93,7 +93,7 @@ class ArgumentStampingTest {
             world.resolverRegistry
                 .resolver(resultField)
                 .stamp(listOf(resultKey))
-                .merge(world.schema.requireType("Query") as Schema.Object)[boxKey]
+                .merge(world.schema.requireType("Query") as ViaductSchema.Object)[boxKey]
                 .subselections
         val sourceVariable: Arguments.Variable =
             childDemand.stampedVariables().single()
@@ -312,7 +312,7 @@ class ArgumentStampingTest {
                                     frankDemandFields +=
                                         demand
                                             .merge(
-                                                schema.requireType("Payload") as Schema.Object,
+                                                schema.requireType("Payload") as ViaductSchema.Object,
                                             ).groundKeys()
                                             .mapTo(linkedSetOf()) { groundKey ->
                                                 groundKey.field.name
@@ -386,7 +386,7 @@ class ArgumentStampingTest {
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
-                    val payloadType = schema.requireType("Payload") as Schema.Object
+                    val payloadType = schema.requireType("Payload") as ViaductSchema.Object
                     val frank = schema.requireObjectField("Query", "frank")
                     val frankKey = ObjectEngineResult.GroundKey.of(frank, mapOf("arg" to "hi"))
                     val oneKey =

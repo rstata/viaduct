@@ -4,7 +4,7 @@ import model.requireField
 import io.kotest.property.PropertyTesting
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.fragmentFrom
 import model.objectOf
 import semantics.arbitrary.ArbitraryRegistry
@@ -283,12 +283,12 @@ interface DeepResolverStressContract : ResolverContract {
         activatedSourceResolvers: Set<FieldCoordinate>,
         roots: Set<FieldCoordinate>,
     ): Int {
-        fun canonicalField(coordinate: FieldCoordinate): Schema.ObjectField? =
-            world.schema.requireField(coordinate.typeName, coordinate.fieldName) as? Schema.ObjectField
+        fun canonicalField(coordinate: FieldCoordinate): ViaductSchema.ObjectField? =
+            world.schema.requireField(coordinate.typeName, coordinate.fieldName) as? ViaductSchema.ObjectField
 
         fun depth(
-            field: Schema.ObjectField,
-            visited: Set<Schema.ObjectField>,
+            field: ViaductSchema.ObjectField,
+            visited: Set<ViaductSchema.ObjectField>,
         ): Int =
             1 +
                 world.resolverRegistry

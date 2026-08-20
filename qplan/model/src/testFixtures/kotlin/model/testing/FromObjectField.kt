@@ -1,12 +1,12 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 import model.ObjectEngineResult
 import model.Fragment
 import model.EngineInputData
-import model.Schema
 import model.SourceSchemaAdapter
-import model.TypeExpr
 import model.spec.SpecSelection
 import model.requireField
 import model.spec.flatten
@@ -24,7 +24,7 @@ class FromObjectField private constructor(
     val responsePath: List<String>,
     internal val objectFragment: Fragment,
     internal val keyPath: List<ObjectEngineResult.Key>,
-    internal val terminalType: TypeExpr<Schema.OutputTypeDef>,
+    internal val terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     private val nullableTraversal: Boolean,
 ) : VariableDeclaration {
     internal fun mapVariables(
@@ -39,7 +39,7 @@ class FromObjectField private constructor(
         )
 
     internal fun isCompatibleWith(
-        locationType: TypeExpr<Schema.InputTypeDef>,
+        locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
         locationHasDefault: Boolean,
     ): Boolean =
         compatibleTypes(
@@ -54,7 +54,7 @@ class FromObjectField private constructor(
             schema: GJSchema,
             objectFragmentSource: String,
             responsePath: List<String>,
-            variableField: Schema.ObjectField?,
+            variableField: ViaductSchema.ObjectField?,
             bindings: Map<String, EngineInputData?>,
         ): FromObjectField {
             require(responsePath.isNotEmpty()) {
@@ -97,10 +97,10 @@ class FromObjectField private constructor(
 }
 
 /** Compiles a production-shaped response-key path against an alias-preserving object fragment. */
-fun Schema.fromObjectField(
+fun ViaductSchema.fromObjectField(
     objectFragmentSource: String,
     responsePath: List<String>,
-    variableField: Schema.ObjectField? = null,
+    variableField: ViaductSchema.ObjectField? = null,
     bindings: Map<String, EngineInputData?> = emptyMap(),
 ): FromObjectField =
     FromObjectField.compile(
@@ -113,19 +113,19 @@ fun Schema.fromObjectField(
 
 private data class CompiledPath(
     val keys: List<ObjectEngineResult.Key>,
-    val terminalType: TypeExpr<Schema.OutputTypeDef>,
+    val terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     val nullableTraversal: Boolean,
 )
 
 private data class MatchingField(
     val keys: List<ObjectEngineResult.Key>,
-    val typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    val typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     val subselections: List<SpecSelection>,
-    val lossyCondition: Pair<Schema.CompositeTypeDef, Schema.CompositeTypeDef>?,
+    val lossyCondition: Pair<ViaductSchema.CompositeTypeDef, ViaductSchema.CompositeTypeDef>?,
 )
 
 private fun GJSchema.compilePath(
-    typeInScope: Schema.CompositeTypeDef,
+    typeInScope: ViaductSchema.CompositeTypeDef,
     selections: List<SpecSelection>,
     responsePath: List<String>,
     index: Int = 0,
@@ -166,7 +166,7 @@ private fun GJSchema.compilePath(
     val isTerminal = index == responsePath.lastIndex
 
     if (isTerminal) {
-        require(typeExpr.baseTypeDef is Schema.SimpleTypeDef) {
+        require(typeExpr.baseTypeDef is ViaductSchema.SimpleTypeDef) {
             "fromObjectField path ${responsePath.joinToString(".")} must terminate at a scalar " +
                 "or enum"
         }
@@ -177,12 +177,12 @@ private fun GJSchema.compilePath(
         )
     }
 
-    require(!typeExpr.isList && typeExpr.baseTypeDef is Schema.CompositeTypeDef) {
+    require(!typeExpr.isList && typeExpr.baseTypeDef is ViaductSchema.CompositeTypeDef) {
         "fromObjectField path ${responsePath.joinToString(".")} cannot traverse list or simple " +
             "field ${key.field.containingDef.name}/${key.field.name}"
     }
     return compilePath(
-        typeInScope = typeExpr.baseTypeDef as Schema.CompositeTypeDef,
+        typeInScope = typeExpr.baseTypeDef as ViaductSchema.CompositeTypeDef,
         selections = matches.flatMap(MatchingField::subselections),
         responsePath = responsePath,
         index = index + 1,
@@ -193,9 +193,9 @@ private fun GJSchema.compilePath(
 
 private fun GJSchema.matchingFields(
     selections: List<SpecSelection>,
-    typeInScope: Schema.CompositeTypeDef,
+    typeInScope: ViaductSchema.CompositeTypeDef,
     responseKey: String,
-    lossyCondition: Pair<Schema.CompositeTypeDef, Schema.CompositeTypeDef>? = null,
+    lossyCondition: Pair<ViaductSchema.CompositeTypeDef, ViaductSchema.CompositeTypeDef>? = null,
 ): List<MatchingField> =
     selections.flatMap { selection ->
         when (selection) {
@@ -216,7 +216,7 @@ private fun GJSchema.matchingFields(
                     val payloadKey =
                         payloadSelection?.let { payload ->
                             val bridgeType =
-                                field.type.baseTypeDef as Schema.CompositeTypeDef
+                                field.type.baseTypeDef as ViaductSchema.CompositeTypeDef
                             ObjectEngineResult.Key.of(
                                 field =
                                     this@matchingFields.requireField(
@@ -272,14 +272,14 @@ private fun GJSchema.matchingFields(
     }
 
 @Suppress("UNCHECKED_CAST")
-private fun TypeExpr<Schema.OutputTypeDef>.asInputType(): TypeExpr<Schema.InputTypeDef> {
-    require(baseTypeDef is Schema.InputTypeDef)
-    return this as TypeExpr<Schema.InputTypeDef>
+private fun ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>.asInputType(): ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef> {
+    require(baseTypeDef is ViaductSchema.InputTypeDef)
+    return this as ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>
 }
 
 private tailrec fun compatibleTypes(
-    locationType: TypeExpr<Schema.InputTypeDef>,
-    sourceType: TypeExpr<Schema.InputTypeDef>,
+    locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+    sourceType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     nullableTraversal: Boolean,
     locationHasDefault: Boolean,
 ): Boolean {
@@ -325,11 +325,12 @@ private tailrec fun compatibleTypes(
     }
 }
 
-private fun <T : Schema.TypeDef> TypeExpr<T>.withNullable(nullable: Boolean): TypeExpr<T> {
-    val elementType = unwrapList()
-    return if (elementType == null) {
-        TypeExpr.Named.of(baseTypeDef, nullable)
+private fun <T : ViaductSchema.TypeDef> ViaductSchema.TypeExpr<T>.withNullable(nullable: Boolean): ViaductSchema.TypeExpr<T> {
+    return if (!isList) {
+        ViaductSchema.TypeExpr(baseTypeDef, nullable)
     } else {
-        TypeExpr.List.of(elementType, nullable)
+        val wrappers = listNullable.copy()
+        if (nullable) wrappers.set(0) else wrappers.clear(0)
+        ViaductSchema.TypeExpr(baseTypeDef, baseTypeNullable, wrappers)
     }
 }

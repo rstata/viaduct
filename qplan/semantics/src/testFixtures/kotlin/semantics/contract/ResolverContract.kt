@@ -4,7 +4,7 @@ import viaduct.engine.api.EngineObjectData
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.requireField
 import model.SelectionForest
 
@@ -44,7 +44,7 @@ interface ResolverContract {
 
     fun expectedPassiveResultKeys(
         @Suppress("UNUSED_PARAMETER")
-        type: Schema.Object,
+        type: ViaductSchema.Object,
         keys: Set<ObjectEngineResult.GroundKey>,
     ): Set<ObjectEngineResult.GroundKey> = keys
 }

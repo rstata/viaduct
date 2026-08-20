@@ -9,7 +9,7 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf

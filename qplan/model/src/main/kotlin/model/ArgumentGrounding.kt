@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 /**
  * Grounds this argument tuple under [world] for [expectedField].
  *
@@ -7,7 +9,7 @@ package model
  */
 context(world: Assumptions)
 internal fun Arguments.instantiateBindings(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
 ): Arguments.Ground {
     if (this == Arguments.Error) return Arguments.Error
     return groundedArguments(expectedField) { value, typeExpr ->
@@ -18,7 +20,7 @@ internal fun Arguments.instantiateBindings(
 /** Grounds this argument tuple for [expectedField], suspending for incomplete stamped variables. */
 context(world: Assumptions)
 suspend fun Arguments.fetchBindings(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
 ): Arguments.Ground {
     if (this == Arguments.Error) return Arguments.Error
     return groundedArguments(expectedField) { value, typeExpr ->
@@ -27,12 +29,12 @@ suspend fun Arguments.fetchBindings(
 }
 
 private inline fun Arguments.groundedArguments(
-    expectedField: Schema.Field,
-    ground: (ArgumentExpression?, TypeExpr<Schema.InputTypeDef>) -> VariableBinding,
+    expectedField: ViaductSchema.Field,
+    ground: (ArgumentExpression?, ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>) -> VariableBinding,
 ): Arguments.Ground {
     val fields = linkedMapOf<String, EngineInputData?>()
     fieldExpressions().forEach { (name, value) ->
-        val typeExpr = expectedField.requireArg(name).type
+        val typeExpr = expectedField.requireArg(name).inputType
         when (val binding = ground(value, typeExpr)) {
             VariableBinding.Error -> return Arguments.Error
             is VariableBinding.Input -> fields[name] = binding.value
@@ -43,7 +45,7 @@ private inline fun Arguments.groundedArguments(
 
 context(world: Assumptions)
 private fun ArgumentExpression?.instantiateBindings(
-    expectedType: TypeExpr<Schema.InputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
@@ -70,12 +72,12 @@ private fun ArgumentExpression?.instantiateBindings(
         }
         is Map<*, *> -> {
             val expectedObjectType = expectedType.baseTypeDef.takeUnless { expectedType.isList }
-            require(expectedObjectType is Schema.Input) {
+            require(expectedObjectType is ViaductSchema.Input) {
                 "Argument input-object expression does not match $expectedType"
             }
             val grounded = linkedMapOf<String, EngineInputData?>()
             toStringKeyedArgumentMap().forEach { (name, value) ->
-                val fieldType = expectedObjectType.requireField(name).type
+            val fieldType = expectedObjectType.requireField(name).inputType
                 when (val binding = value.instantiateBindings(fieldType)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded[name] = binding.value
@@ -88,7 +90,7 @@ private fun ArgumentExpression?.instantiateBindings(
 
 context(world: Assumptions)
 private suspend fun ArgumentExpression?.fetchBindings(
-    expectedType: TypeExpr<Schema.InputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): VariableBinding {
     return when (this) {
         null -> VariableBinding.of(null)
@@ -115,12 +117,12 @@ private suspend fun ArgumentExpression?.fetchBindings(
         }
         is Map<*, *> -> {
             val expectedObjectType = expectedType.baseTypeDef.takeUnless { expectedType.isList }
-            require(expectedObjectType is Schema.Input) {
+            require(expectedObjectType is ViaductSchema.Input) {
                 "Argument input-object expression does not match $expectedType"
             }
             val grounded = linkedMapOf<String, EngineInputData?>()
             for ((name, value) in toStringKeyedArgumentMap()) {
-                val fieldType = expectedObjectType.requireField(name).type
+            val fieldType = expectedObjectType.requireField(name).inputType
                 when (val binding = value.fetchBindings(fieldType)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded[name] = binding.value
@@ -133,7 +135,7 @@ private suspend fun ArgumentExpression?.fetchBindings(
 }
 
 private fun VariableBinding.coerceTo(
-    expectedType: TypeExpr<Schema.InputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): VariableBinding =
     when (this) {
         VariableBinding.Error -> this

@@ -1,5 +1,7 @@
 package semantics.resolver26
 
+import viaduct.graphql.schema.ViaductSchema
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -14,16 +16,15 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
+import model.outputType
 import model.Arguments
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.Promise
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Stamp
-import model.TypeExpr
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import model.VariableBinding
@@ -283,7 +284,7 @@ private suspend fun orchestrateObject(
             if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(
-                        expectedType = groundKey.field.type,
+                        expectedType = groundKey.field.outputType,
                         path = path + groundKey,
                         resolverDemand = selection.subselections,
                     )
@@ -296,7 +297,7 @@ private suspend fun orchestrateObject(
                 path = path + groundKey,
                 source = sourceValue,
                 target = target.getCell(groundKey).getValue().get(),
-                expectedType = groundKey.field.type,
+                expectedType = groundKey.field.outputType,
                 initialDemand = selection.subselections,
                 runtime = runtime,
             )
@@ -440,7 +441,7 @@ private fun SelectionForest.localizeTopLevelStamps(
                     .localizeTopLevelSelectionStamps(path)
                     .single()
             val sourceVariables:
-                Map<Pair<Schema.ObjectField, String>, Arguments.Variable> =
+                Map<Pair<ViaductSchema.ObjectField, String>, Arguments.Variable> =
                 selection.key
                     .selectionStampedVariables()
                     .associateBy { variable -> variable.field to variable.variableName }
@@ -548,7 +549,7 @@ private suspend fun resolveField(
         )
     val resolvedValue: ResolvedValue =
         fieldValue.resolveValue(
-            expectedType = groundKey.field.type,
+            expectedType = groundKey.field.outputType,
             path = coordinate,
             resolverDemand = invocationDemand,
         )
@@ -590,7 +591,7 @@ private fun launchPassiveChildOrchestrations(
     path: List<PathComponent>,
     source: EngineOutputData?,
     target: EngineResult?,
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     initialDemand: SelectionForest,
     runtime: ResolverRuntime,
 ) {
@@ -612,7 +613,7 @@ private fun launchPassiveChildOrchestrations(
         is String,
         is Boolean,
         -> {
-            val simpleType = expectedType.baseTypeDef as Schema.SimpleTypeDef
+            val simpleType = expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef
             check(target == source.toEngineResult(simpleType)) {
                 "Resolver26 passive simple source has different result at $path"
             }

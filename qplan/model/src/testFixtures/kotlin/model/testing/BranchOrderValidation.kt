@@ -1,7 +1,8 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.registry.FieldResolver
@@ -13,18 +14,18 @@ import model.requireField
  * Validates the argument-insensitive structural branch order before semantic reasoning begins.
  */
 internal class BranchOrderValidator(
-    private val fieldResolvers: Map<Schema.Field, FieldResolver>,
+    private val fieldResolvers: Map<ViaductSchema.Field, FieldResolver>,
 ) {
     private data class Edge(
-        val prerequisite: Schema.ObjectField,
-        val consumer: Schema.ObjectField,
+        val prerequisite: ViaductSchema.ObjectField,
+        val consumer: ViaductSchema.ObjectField,
     )
 
     private sealed interface EdgeReason {
         fun describe(): String
 
         data class ResolverInput(
-            val resolver: Schema.ObjectField,
+            val resolver: ViaductSchema.ObjectField,
         ) : EdgeReason {
             override fun describe(): String =
                 "resolver ${resolver.coordinate()} requires the branch"
@@ -46,7 +47,7 @@ internal class BranchOrderValidator(
 
     private val graphs =
         fieldResolvers.keys
-            .map { field -> field.containingDef as Schema.Object }
+            .map { field -> field.containingDef as ViaductSchema.Object }
             .distinct()
             .associateWith { BranchGraph(it) }
 
@@ -58,7 +59,7 @@ internal class BranchOrderValidator(
 
     private fun addResolverInputEdges() {
         fieldResolvers.forEach { (outputField, resolver) ->
-            val consumer = outputField as Schema.ObjectField
+            val consumer = outputField as ViaductSchema.ObjectField
             val graph = graphs.getValue(consumer.containingDef)
             resolver.objectFragment.forEach { selection ->
                 selection.branchOn(consumer.containingDef)?.let { prerequisite ->
@@ -115,7 +116,7 @@ internal class BranchOrderValidator(
     }
 
     private class BranchGraph(
-        private val type: Schema.Object,
+        private val type: ViaductSchema.Object,
     ) {
         private val reasons = linkedMapOf<Edge, MutableSet<EdgeReason>>()
 
@@ -133,10 +134,10 @@ internal class BranchOrderValidator(
         }
 
         fun prerequisitePathsTo(
-            branch: Schema.ObjectField,
-        ): Map<Schema.ObjectField, List<Schema.ObjectField>> {
+            branch: ViaductSchema.ObjectField,
+        ): Map<ViaductSchema.ObjectField, List<ViaductSchema.ObjectField>> {
             val result = linkedMapOf(branch to listOf(branch))
-            val pending = ArrayDeque<Schema.ObjectField>()
+            val pending = ArrayDeque<ViaductSchema.ObjectField>()
             pending += branch
             while (pending.isNotEmpty()) {
                 val consumer = pending.removeFirst()
@@ -169,17 +170,17 @@ internal class BranchOrderValidator(
             )
         }
 
-        private fun findCycle(): List<Schema.ObjectField>? {
-            val visited = linkedSetOf<Schema.ObjectField>()
-            val active = linkedSetOf<Schema.ObjectField>()
-            val path = mutableListOf<Schema.ObjectField>()
+        private fun findCycle(): List<ViaductSchema.ObjectField>? {
+            val visited = linkedSetOf<ViaductSchema.ObjectField>()
+            val active = linkedSetOf<ViaductSchema.ObjectField>()
+            val path = mutableListOf<ViaductSchema.ObjectField>()
             val vertices =
                 reasons.keys
                     .flatMap { edge -> listOf(edge.prerequisite, edge.consumer) }
                     .distinct()
-                    .sortedBy(Schema.ObjectField::name)
+                    .sortedBy(ViaductSchema.ObjectField::name)
 
-            fun visit(vertex: Schema.ObjectField): List<Schema.ObjectField>? {
+            fun visit(vertex: ViaductSchema.ObjectField): List<ViaductSchema.ObjectField>? {
                 if (vertex in active) {
                     val start = path.indexOf(vertex)
                     return path.subList(start, path.size).toList() + vertex
@@ -193,7 +194,7 @@ internal class BranchOrderValidator(
                         .filter { edge -> edge.prerequisite == vertex }
                         .map(Edge::consumer)
                         .distinct()
-                        .sortedBy(Schema.ObjectField::name)
+                        .sortedBy(ViaductSchema.ObjectField::name)
                         .firstNotNullOfOrNull(::visit)
                 path.removeAt(path.lastIndex)
                 active -= vertex
@@ -205,7 +206,7 @@ internal class BranchOrderValidator(
     }
 }
 
-private fun Selection.branchOn(type: Schema.Object): Schema.ObjectField? =
+private fun Selection.branchOn(type: ViaductSchema.Object): ViaductSchema.ObjectField? =
     if (type in possibleTypes) {
         type.requireField(key.field.name)
     } else {
@@ -214,9 +215,9 @@ private fun Selection.branchOn(type: Schema.Object): Schema.ObjectField? =
 
 private fun SelectionForest.variableUsePaths(
     variable: Arguments.Variable,
-    type: Schema.Object,
-): Map<Schema.ObjectField, Set<String>> {
-    val result = linkedMapOf<Schema.ObjectField, MutableSet<String>>()
+    type: ViaductSchema.Object,
+): Map<ViaductSchema.ObjectField, Set<String>> {
+    val result = linkedMapOf<ViaductSchema.ObjectField, MutableSet<String>>()
     forEach { selection ->
         val branch = selection.branchOn(type) ?: return@forEach
         selection.pathsContaining(variable).forEach { path ->
@@ -241,5 +242,5 @@ private fun Selection.pathsContaining(
     return result
 }
 
-private fun Schema.ObjectField.coordinate(): String =
+private fun ViaductSchema.ObjectField.coordinate(): String =
     "${containingDef.name}/$name"

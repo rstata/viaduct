@@ -1,11 +1,12 @@
 package semantics.arbitrary
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 import model.EngineResult
 import model.EngineErrorData
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
@@ -494,7 +495,7 @@ class ResolutionWitnessTest {
         )
 
     private fun arguments(
-        field: Schema.Field,
+        field: ViaductSchema.Field,
         limit: Int,
         rank: Int,
         tags: List<Int>,
@@ -583,6 +584,6 @@ class ResolutionWitnessTest {
             },
         )
 
-    private fun coordinate(field: Schema.ObjectField): FieldCoordinate =
+    private fun coordinate(field: ViaductSchema.ObjectField): FieldCoordinate =
         FieldCoordinate(field.containingDef.name, field.name)
 }

@@ -1,10 +1,11 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 import model.Assumptions
 import model.EngineInputData
 import model.Arguments
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.Stamp
@@ -92,7 +93,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
 
     addDemand(this)
     val deferredSelections = mutableSetOf<SelectionIdentity>()
-    val expandedTemplateFields = mutableSetOf<Schema.ObjectField>()
+    val expandedTemplateFields = mutableSetOf<ViaductSchema.ObjectField>()
     val expandedGroundedKeys = mutableSetOf<ObjectEngineResult.GroundKey>()
     var pendingIndex = 0
     while (pendingIndex < pendingSelections.size) {
@@ -178,7 +179,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
 // demand avoids expanding the same resolver-demand DAG once per incoming path.
 private data class SelectionIdentity(
     val key: ObjectEngineResult.Key,
-    val possibleTypes: Set<Schema.Object>,
+    val possibleTypes: Set<ViaductSchema.Object>,
 )
 
 context(world: Assumptions)

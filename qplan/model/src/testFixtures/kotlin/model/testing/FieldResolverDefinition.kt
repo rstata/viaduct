@@ -1,12 +1,13 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 
 import model.Fragment
 import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
-import model.Schema
 import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.objectKey
@@ -72,7 +73,7 @@ class FieldResolverDefinition private constructor(
         )
 
     internal fun assemble(
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
         variables: Map<Arguments.Variable, VariableDefinition>,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {

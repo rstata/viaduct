@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import viaduct.engine.api.EngineObjectData
 
 /** Constructs an object value by resolving type and field names in this reasoning world. */
@@ -9,12 +11,12 @@ fun Assumptions.objectOf(
 ): EngineObjectData.Sync = schema.objectOf(typeName, block)
 
 /** Constructs an object value by resolving type and field names in this schema. */
-fun Schema.objectOf(
+fun ViaductSchema.objectOf(
     typeName: String,
     block: ObjectValueScope.() -> Unit = {},
 ): EngineObjectData.Sync {
     val type = requireType(typeName)
-    require(type is Schema.Object) {
+    require(type is ViaductSchema.Object) {
         "$typeName is not an object type"
     }
     return ObjectValueScope(this, type)
@@ -28,8 +30,8 @@ annotation class ObjectValueDsl
 /** Field-construction scope for [objectOf]. */
 @ObjectValueDsl
 class ObjectValueScope internal constructor(
-    private val schema: Schema,
-    private val type: Schema.Object,
+    private val schema: ViaductSchema,
+    private val type: ViaductSchema.Object,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
     private val fields = linkedMapOf<String, EngineObjectDataEntry>()
@@ -44,7 +46,7 @@ class ObjectValueScope internal constructor(
             "Arguments for ${type.name}/$fieldName must have distinct names"
         }
         val field = sourceSchema.field(type.name, fieldName)
-        require(field is Schema.ObjectField) {
+        require(field is ViaductSchema.ObjectField) {
             "${type.name}/$fieldName does not lower to an object field"
         }
         return ObjectFieldReference(
@@ -110,11 +112,11 @@ class ObjectValueScope internal constructor(
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
     internal val key: ObjectEngineResult.GroundKey,
-    internal val sourceTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+    internal val sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 )
 
 private fun coerceOutputValue(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     value: Any?,
 ): EngineOutputData? {
     if (value == null || value == EngineErrorData) return value
@@ -127,8 +129,8 @@ private fun coerceOutputValue(
         return value.map { coerceOutputValue(elementType, it) }
     }
     return when (val type = typeExpr.baseTypeDef) {
-        is Schema.SimpleTypeDef -> coerceSimpleValue(type, value)
-        is Schema.CompositeTypeDef -> {
+        is ViaductSchema.SimpleTypeDef -> coerceSimpleValue(type, value)
+        is ViaductSchema.CompositeTypeDef -> {
             require(
                 value is EngineObjectData.Sync &&
                     type.possibleObjectTypes.any { possibleType ->
@@ -139,5 +141,6 @@ private fun coerceOutputValue(
                     }
             value
         }
+        else -> error("Output field has a non-output type")
     }
 }

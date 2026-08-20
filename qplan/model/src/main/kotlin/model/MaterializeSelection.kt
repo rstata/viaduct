@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 /**
  * One response-key-preserving source field occurrence used to materialize resolver input.
  *
@@ -21,14 +23,14 @@ sealed interface MaterializeSelection {
     val key: ObjectEngineResult.Key
 
     /** The concrete runtime parent types for which this source occurrence applies. */
-    val possibleTypes: Set<Schema.Object>
+    val possibleTypes: Set<ViaductSchema.Object>
 
     /** Response-key-preserving selections on this field's result. */
     val subselections: MaterializeSelectionForest
 
     /** Whether this selection's field has a simple base output type. */
     val isLeaf: Boolean
-        get() = key.field.type.baseTypeDef is Schema.SimpleTypeDef
+        get() = key.field.type.baseTypeDef is ViaductSchema.SimpleTypeDef
 
     companion object {
         /**
@@ -40,7 +42,7 @@ sealed interface MaterializeSelection {
         fun of(
             responseKey: String,
             key: ObjectEngineResult.Key,
-            possibleTypes: Set<Schema.Object>,
+            possibleTypes: Set<ViaductSchema.Object>,
             subselections: MaterializeSelectionForest,
         ): MaterializeSelection {
             require(responseKey.isNotEmpty()) {
@@ -54,7 +56,7 @@ sealed interface MaterializeSelection {
                 "Materialize selection possible types must be contained by ${fieldOwner.name}"
             }
             require(
-                key.field.type.baseTypeDef is Schema.CompositeTypeDef || subselections.isEmpty(),
+                key.field.type.baseTypeDef is ViaductSchema.CompositeTypeDef || subselections.isEmpty(),
             ) {
                 "Leaf materialize selection ${fieldOwner.name}.${key.field.name} " +
                     "has subselections"
@@ -116,7 +118,7 @@ sealed interface MaterializeSelectionForest {
      * @throws IllegalArgumentException when one co-applicable response-key group contains
      * incompatible field invocations
      */
-    fun collect(type: Schema.Object): ObjectMaterializeSelectionForest
+    fun collect(type: ViaductSchema.Object): ObjectMaterializeSelectionForest
 }
 
 /**
@@ -131,12 +133,12 @@ sealed interface ObjectMaterializeSelection {
     val subselections: MaterializeSelectionForest
 
     val isLeaf: Boolean
-        get() = key.field.type.baseTypeDef is Schema.SimpleTypeDef
+        get() = key.field.type.baseTypeDef is ViaductSchema.SimpleTypeDef
 }
 
 /** A concrete-parent materialize forest containing one group per response key. */
 sealed interface ObjectMaterializeSelectionForest {
-    val type: Schema.Object
+    val type: ViaductSchema.Object
     val size: Int
 
     fun isEmpty(): Boolean
@@ -190,7 +192,7 @@ fun SelectionForest.toCanonicalMaterializeSelectionForest(): MaterializeSelectio
 private class MaterializeSelectionImpl(
     override val responseKey: String,
     override val key: ObjectEngineResult.Key,
-    override val possibleTypes: Set<Schema.Object>,
+    override val possibleTypes: Set<ViaductSchema.Object>,
     override val subselections: MaterializeSelectionForest,
 ) : MaterializeSelection
 
@@ -240,7 +242,7 @@ private class MaterializeSelectionForestImpl(
                 )
             }.toSelectionForest()
 
-    override fun collect(type: Schema.Object): ObjectMaterializeSelectionForest {
+    override fun collect(type: ViaductSchema.Object): ObjectMaterializeSelectionForest {
         val membersByResponseKey =
             linkedMapOf<
                 String,
@@ -281,7 +283,7 @@ private class MaterializeSelectionForestImpl(
 }
 
 private class ObjectMaterializeSelectionForestImpl(
-    override val type: Schema.Object,
+    override val type: ViaductSchema.Object,
     private val selectionsByResponseKey: Map<String, ObjectMaterializeSelection>,
 ) : ObjectMaterializeSelectionForest {
     override val size: Int

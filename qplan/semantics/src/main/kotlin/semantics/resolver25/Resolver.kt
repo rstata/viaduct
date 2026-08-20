@@ -1,5 +1,7 @@
 package semantics.resolver25
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -23,14 +25,13 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
+import model.outputType
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.Promise
-import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.TypeExpr
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import model.VariableBinding
@@ -158,14 +159,14 @@ private class ResolverRuntime(
 // Closes demand under each activated resolver field's fixed object fragment. A resolver field is
 // expanded once regardless of how many open or ground keys currently select it.
 context(world: Assumptions)
-private fun Schema.Object.closeStructuralDemand(
+private fun ViaductSchema.Object.closeStructuralDemand(
     incoming: SelectionForest,
 ): ObjectSelectionForest {
     var demand = incoming
-    val expandedFields = linkedSetOf<Schema.ObjectField>()
+    val expandedFields = linkedSetOf<ViaductSchema.ObjectField>()
     while (true) {
         val merged: ObjectSelectionForest = demand.merge(this)
-        val newlyActivatedFields: List<Schema.ObjectField> =
+        val newlyActivatedFields: List<ViaductSchema.ObjectField> =
             merged
                 .byKey()
                 .values
@@ -185,7 +186,7 @@ private fun Schema.Object.closeStructuralDemand(
     }
 }
 
-private fun Schema.Object.newObjectResult(): ObjectEngineResult =
+private fun ViaductSchema.Object.newObjectResult(): ObjectEngineResult =
     ObjectEngineResult.of(
         type = this,
         mutable = true,
@@ -207,7 +208,7 @@ private class ObjectResultOrchestrator(
 ) {
     val orchestrationReady: CompletableDeferred<Unit> = CompletableDeferred()
 
-    private val fields: Map<Schema.ObjectField, FieldState> =
+    private val fields: Map<ViaductSchema.ObjectField, FieldState> =
         target.type.fields.associateWith(::FieldState)
 
     private val activationLock = Any()
@@ -598,7 +599,7 @@ private class ObjectResultOrchestrator(
             if (value == null) return VariableBinding.of(null)
             if (value == ErrorEngineResult) return VariableBinding.Error
             if (index == definition.path.lastIndex) {
-                return value.toProviderBinding(groundedKey.field.type)
+                return value.toProviderBinding(groundedKey.field.outputType)
             }
             current =
                 value as? ObjectEngineResult
@@ -765,7 +766,7 @@ private class ObjectResultOrchestrator(
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(
-                        expectedType = groundedKey.field.type,
+                        expectedType = groundedKey.field.outputType,
                         path = path + groundedKey,
                         resolverDemand = resolutionSelections,
                         potentialDemand =
@@ -799,7 +800,7 @@ private class ObjectResultOrchestrator(
     }
 
     private class FieldState(
-        val field: Schema.ObjectField,
+        val field: ViaductSchema.ObjectField,
     ) {
         private var potentialSelections: SelectionForest = selectionForestOf()
         val groundedKeys: MutableMap<ObjectEngineResult.GroundKey, KeyState> = linkedMapOf()
@@ -820,7 +821,7 @@ private class ObjectResultOrchestrator(
         fun activate(
             groundedKey: ObjectEngineResult.GroundKey,
             groundedSelection: ObjectSelection,
-            concreteType: Schema.Object,
+            concreteType: ViaductSchema.Object,
         ): KeyActivation {
             groundedKeys[groundedKey]?.let { keyState ->
                 return KeyActivation(
@@ -924,7 +925,7 @@ private class ObjectResultOrchestrator(
         @Synchronized
         fun mergeDemandBeforeLaunch(
             groundedSelection: ObjectSelection,
-            concreteType: Schema.Object,
+            concreteType: ViaductSchema.Object,
         ): Boolean {
             if (sealedDemand != null) return false
             openDemand =
@@ -973,7 +974,7 @@ private class ObjectResultOrchestrator(
  */
 context(world: Assumptions)
 private suspend fun EngineOutputData?.resolveValue(
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
@@ -1014,7 +1015,7 @@ private suspend fun EngineOutputData?.resolveValue(
         else ->
             ResolvedValue(
                 engineResult =
-                    toEngineResult(expectedType.baseTypeDef as Schema.SimpleTypeDef),
+                    toEngineResult(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
                 objectsNeedingResolution = emptyList(),
             )
     }
@@ -1036,7 +1037,7 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
         mergedDemand.byGroundKey()
     val closedPotentialDemand: ObjectSelectionForest =
         schemaType.closeStructuralDemand(potentialDemand)
-    val potentialSubselectionsByField: Map<Schema.ObjectField, SelectionForest> =
+    val potentialSubselectionsByField: Map<ViaductSchema.ObjectField, SelectionForest> =
         closedPotentialDemand
             .byKey()
             .values
@@ -1069,7 +1070,7 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
             val resolvedValue: ResolvedValue =
                 get(groundedKey.field.name)
                     .resolveValue(
-                        expectedType = groundedKey.field.type,
+                        expectedType = groundedKey.field.outputType,
                         path = path + groundedKey,
                         resolverDemand =
                             resolverDemandByGroundedKey
@@ -1133,7 +1134,7 @@ private class ResolvedField(
 )
 
 private fun EngineResult.toProviderBinding(
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
@@ -1142,12 +1143,12 @@ private fun EngineResult.toProviderBinding(
             error("A path-variable provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseTypeDef as Schema.SimpleTypeDef),
+                toEngineSimpleData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
             )
     }
 
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
-    require(typeExpr.baseTypeDef is Schema.InputTypeDef) {
+    require(typeExpr.baseTypeDef is ViaductSchema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()

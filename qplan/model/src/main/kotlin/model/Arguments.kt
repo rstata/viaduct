@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 /**
  * One schema-checked output-field argument tuple.
  *
@@ -33,7 +35,7 @@ sealed interface Arguments {
              * defaults are materialized for arguments absent from [fields].
              */
             fun of(
-                field: Schema.Field,
+                field: ViaductSchema.Field,
                 fields: Map<String, Any?>,
             ): Resolved {
                 val arguments = Arguments.of(field, fields)
@@ -60,7 +62,7 @@ sealed interface Arguments {
          * [expectedField].
          */
         fun stamp(
-            expectedField: Schema.Field,
+            expectedField: ViaductSchema.Field,
             selectionStamp: Stamp.Occurrence,
         ): Arguments
 
@@ -71,7 +73,7 @@ sealed interface Arguments {
              * [arguments] may contain only variable templates, never stamped variables.
              */
             fun of(
-                expectedField: Schema.Field,
+                expectedField: ViaductSchema.Field,
                 arguments: Arguments,
             ): Template = argumentTemplateOf(expectedField, arguments)
         }
@@ -84,7 +86,7 @@ sealed interface Arguments {
      * occurrence-specific structures so separate resolver occurrences have distinct variables.
      */
     sealed interface Variable {
-        val field: Schema.ObjectField
+        val field: ViaductSchema.ObjectField
         val variableName: String
 
         /** Whether this is the registry template rather than an occurrence-specific variable. */
@@ -118,7 +120,7 @@ sealed interface Arguments {
              * equal templates.
              */
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 variableName: String,
             ): Variable = TemplateVariableImpl(variableName, field)
         }
@@ -132,7 +134,7 @@ sealed interface Arguments {
          * when any supplied expression recursively contains [ArgumentResolutionError].
          */
         fun of(
-            field: Schema.Field,
+            field: ViaductSchema.Field,
             fields: Map<String, Any?>,
         ): Arguments = argumentsOf(field, fields)
     }
@@ -152,7 +154,7 @@ private data class ResolvedArgumentsImpl(
 
 private data class TemplateVariableImpl(
     override val variableName: String,
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
 ) : Arguments.Variable {
     override val isTemplate: Boolean
         get() = true
@@ -169,7 +171,7 @@ private data class TemplateVariableImpl(
 
 private data class OccurrenceVariableImpl(
     override val variableName: String,
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
     override val stamp: Stamp.Occurrence,
 ) : Arguments.Variable {
     override val isTemplate: Boolean

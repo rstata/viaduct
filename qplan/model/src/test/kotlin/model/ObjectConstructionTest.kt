@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import viaduct.engine.api.EngineObjectData
 
 import model.testing.TestWorld
@@ -79,7 +81,7 @@ class ObjectConstructionTest {
     @Test
     fun `object values retain only explicitly supplied fields`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val userType = schema.requireType("User") as Schema.Object
+        val userType = schema.requireType("User") as ViaductSchema.Object
         val typenameKey = "V_A_typename"
         val typenameValue = "User"
 
@@ -141,7 +143,7 @@ class ObjectConstructionTest {
     @Test
     fun `object fields reject keys owned by another concrete object type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val userType = schema.requireType("User") as Schema.Object
+        val userType = schema.requireType("User") as ViaductSchema.Object
         val user = schema.objectOf("User")
         val viewerField = schema.requireObjectField("Query", "viewer")
 
@@ -178,7 +180,7 @@ class ObjectConstructionTest {
     }
 
     private fun key(
-        schema: Schema,
+        schema: ViaductSchema,
         fieldName: String,
     ): String {
         schema.requireObjectField("User", fieldName)

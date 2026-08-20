@@ -5,6 +5,7 @@ import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.objectOf
+import model.outputType
 import model.requireObjectField
 import model.requireQueryTypeDef
 import model.requireField
@@ -361,25 +362,25 @@ class GeneratorTest {
         val first =
             plan.materialize(
                 schema = world.schema,
-                typeExpr = hashField.type,
+                typeExpr = hashField.outputType,
                 generatedHashSeed = 23,
             )
         val repeated =
             plan.materialize(
                 schema = world.schema,
-                typeExpr = hashField.type,
+                typeExpr = hashField.outputType,
                 generatedHashSeed = 23,
             )
         val different =
             plan.materialize(
                 schema = world.schema,
-                typeExpr = hashField.type,
+                typeExpr = hashField.outputType,
                 generatedHashSeed = 24,
             )
         val differentSalt =
             GeneratedHashPlan(salt = 18).materialize(
                 schema = world.schema,
-                typeExpr = hashField.type,
+                typeExpr = hashField.outputType,
                 generatedHashSeed = 23,
             )
 

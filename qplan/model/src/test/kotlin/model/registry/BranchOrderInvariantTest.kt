@@ -1,10 +1,11 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireField
 import model.requireType
 import model.Arguments
 import model.Fragment
-import model.Schema
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.FieldResolverDefinition
@@ -84,7 +85,7 @@ class BranchOrderInvariantTest {
                         )
                     },
                     variableProviders = { schema ->
-                        val owner = schema.requireField("Parent", "result") as Schema.ObjectField
+                        val owner = schema.requireField("Parent", "result") as ViaductSchema.ObjectField
                         mapOf(
                             Arguments.Variable.of(owner, "value") to
                                 schema.fromObjectField(
@@ -394,7 +395,7 @@ class BranchOrderInvariantTest {
                 }
                 """.trimIndent(),
             nodeResolvers = { schema ->
-                val user = schema.requireType("User") as Schema.Object
+                val user = schema.requireType("User") as ViaductSchema.Object
                 mapOf(user to nodeResolverOf { error("Not invoked") })
             },
             fieldResolvers = { schema ->
@@ -455,7 +456,7 @@ class BranchOrderInvariantTest {
             }
             """.trimIndent()
 
-        fun branchResolvers(schema: Schema): Map<Schema.Field, FieldResolverDefinition> =
+        fun branchResolvers(schema: ViaductSchema): Map<ViaductSchema.Field, FieldResolverDefinition> =
             mapOf(
                 schema.requireField("Query", "result") to
                     resolver(
@@ -476,9 +477,9 @@ class BranchOrderInvariantTest {
             )
 
         fun twoBranchResolvers(
-            schema: Schema,
+            schema: ViaductSchema,
             resultFragment: String,
-        ): Map<Schema.Field, FieldResolverDefinition> =
+        ): Map<ViaductSchema.Field, FieldResolverDefinition> =
             mapOf(
                 schema.requireField("Query", "result") to
                     resolver(schema.fragmentFrom(resultFragment)),
@@ -489,12 +490,12 @@ class BranchOrderInvariantTest {
             )
 
         fun variable(
-            schema: Schema,
+            schema: ViaductSchema,
             name: String,
             provider: String,
             responsePath: List<String>,
         ): Map<Arguments.Variable, FromObjectField> {
-            val owner = schema.requireField("Query", "result") as Schema.ObjectField
+            val owner = schema.requireField("Query", "result") as ViaductSchema.ObjectField
             return mapOf(
                 Arguments.Variable.of(owner, name) to
                     schema.fromObjectField(provider, responsePath),

@@ -3,7 +3,6 @@ package model.registry
 import model.ObjectEngineResult
 import model.Assumptions
 import model.PathComponent
-import model.Schema
 import model.requireField
 
 /**

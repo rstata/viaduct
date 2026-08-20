@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,12 +16,12 @@ class ObjectEngineResultKeyTest {
     @Test
     fun `object fields always construct object keys with structural equality`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = schema.requireType("User") as Schema.Object
+        val user = schema.requireType("User") as ViaductSchema.Object
         val field = user.requireField("id")
 
         val general =
             ObjectEngineResult.Key.of(
-                field = field as Schema.Field,
+                field = field as ViaductSchema.Field,
                 arguments = emptyMap(),
             )
         val precise = ObjectEngineResult.GroundKey.of(field, emptyMap())
@@ -48,7 +50,7 @@ class ObjectEngineResultKeyTest {
 
         val key =
             ObjectEngineResult.Key.of(
-                field = field as Schema.Field,
+                field = field as ViaductSchema.Field,
                 arguments = Arguments.of(field, mapOf("id" to variable)),
             )
 
@@ -161,7 +163,7 @@ class ObjectEngineResultKeyTest {
             ).schema
         val source = schema.requireObjectField("Query", "source")
         val abstractField = schema.requireField("Item", "computed")
-        val concreteType = schema.requireType("ConcreteItem") as Schema.Object
+        val concreteType = schema.requireType("ConcreteItem") as ViaductSchema.Object
         val variable = Arguments.Variable.of(source, "factor")
         val sourceKey =
             ObjectEngineResult.Key.of(

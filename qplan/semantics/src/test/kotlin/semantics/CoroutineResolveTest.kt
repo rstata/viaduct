@@ -10,7 +10,7 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.UncompletedPromiseException
 import model.emptyFragmentOf
@@ -316,26 +316,26 @@ private fun assertCompletedAndWriteOnce(result: EngineResult?) {
 
 private fun registryOverride(
     delegate: ResolverRegistry,
-    resolver: (Schema.ObjectField, ResolverRegistry) -> FieldResolver?,
+    resolver: (ViaductSchema.ObjectField, ResolverRegistry) -> FieldResolver?,
 ): ResolverRegistry =
     object : ResolverRegistry {
         override fun resolveRootQuery(): EngineObjectData.Sync = delegate.resolveRootQuery()
 
-        override fun contains(field: Schema.ObjectField): Boolean =
+        override fun contains(field: ViaductSchema.ObjectField): Boolean =
             resolver(field, delegate) != null
 
-        override fun resolver(field: Schema.ObjectField): FieldResolver =
+        override fun resolver(field: ViaductSchema.ObjectField): FieldResolver =
             resolver(field, delegate)
                 ?: error(
                     "Missing overridden resolver: " +
                         "${field.containingDef.name}.${field.name}",
                 )
 
-        override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> =
+        override fun mayDemandFrom(field: ViaductSchema.ObjectField): Set<ViaductSchema.ObjectField> =
             delegate.mayDemandFrom(field)
     }
 
-private fun Schema.groundKey(
+private fun ViaductSchema.groundKey(
     typeName: String,
     fieldName: String,
 ): ObjectEngineResult.GroundKey =
@@ -344,5 +344,5 @@ private fun Schema.groundKey(
         emptyMap(),
     )
 
-private fun Schema.ObjectField.groundKey(): ObjectEngineResult.GroundKey =
+private fun ViaductSchema.ObjectField.groundKey(): ObjectEngineResult.GroundKey =
     ObjectEngineResult.GroundKey.of(this, emptyMap())

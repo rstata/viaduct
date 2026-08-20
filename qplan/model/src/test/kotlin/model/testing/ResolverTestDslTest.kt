@@ -1,12 +1,13 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireObjectField
 import model.ArgumentResolutionError
 import model.EngineErrorData
 import model.EngineOutputData
 import model.ObjectEngineResult
 import model.Arguments
-import model.Schema
 import model.SourceSchemaAdapter
 import model.fieldExpressions
 import model.objectOf
@@ -59,7 +60,7 @@ class ResolverTestDslTest {
             world.applicationArguments.arguments(total),
         )
         assertEquals(
-            mapOf<Schema.Field, List<Arguments.Resolved>>(
+            mapOf<ViaductSchema.Field, List<Arguments.Resolved>>(
                 containerField to
                     listOf(Arguments.Resolved.of(containerField, emptyMap())),
                 total to listOf(Arguments.Resolved.of(total, mapOf("extra" to 4))),
@@ -320,7 +321,7 @@ class ResolverTestDslTest {
 }
 
 private fun TestWorld.apply(
-    field: Schema.ObjectField,
+    field: ViaductSchema.ObjectField,
     input: EngineObjectData.Sync = resolverRegistry.resolveRootQuery(),
     arguments: Map<String, Any?> = emptyMap(),
 ): EngineOutputData? =

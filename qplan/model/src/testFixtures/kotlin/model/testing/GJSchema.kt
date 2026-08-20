@@ -18,13 +18,14 @@ import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
 import model.Schema
 import model.EngineErrorData
+import model.EngineObjectDataEntry
 import model.EngineOutputData
 import model.TypeExpr
 import model.engineObjectDataOf
+import model.qplanSchemaTypeOrNull
 import model.requireField
 import model.requireObjectField
 import model.requireType
-import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.utils.GraphQLTypeRelation
 import viaduct.graphql.utils.GraphQLTypeRelations
@@ -99,12 +100,20 @@ internal class GJSchema private constructor(
         field: Schema.Field,
         output: EngineOutputData?,
     ): EngineOutputData? {
-        if (!isLoweredNodeField(field)) return output
-        return lowerNodeReferences(
-            output = output,
-            sourceTypeExpr = sourceTypeExpr(field),
-            bridgeTypeExpr = field.type,
-        )
+        val sourceTypeExpr = sourceTypeExpr(field)
+        return if (isLoweredNodeField(field)) {
+            lowerNodeReferences(
+                output = output,
+                sourceTypeExpr = sourceTypeExpr,
+                bridgeTypeExpr = field.type,
+            )
+        } else {
+            lowerOrdinaryOutput(
+                output = output,
+                sourceTypeExpr = sourceTypeExpr,
+                loweredTypeExpr = field.type,
+            )
+        }
     }
 
     private fun sourceField(
@@ -152,7 +161,11 @@ internal class GJSchema private constructor(
                 require(output is EngineObjectData.Sync) {
                     "Node field resolver did not return a node reference"
                 }
-                val outputType = output.schemaType
+                val outputType =
+                    requireType(output.type.name) as? Schema.Object
+                        ?: throw IllegalArgumentException(
+                            "Node field resolver returned unknown object type ${output.type.name}",
+                        )
                 val idField = requireObjectField(outputType.name, "id")
                 val id = output.get(idField.name)
                 require(id != EngineErrorData && id is String) {
@@ -179,6 +192,82 @@ internal class GJSchema private constructor(
             }
             else -> error("Node and bridge type expressions have different list shapes")
         }
+
+    private fun lowerOrdinaryOutput(
+        output: EngineOutputData?,
+        sourceTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+        loweredTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+    ): EngineOutputData? =
+        when {
+            output == null || output == EngineErrorData -> output
+            sourceTypeExpr.isList && loweredTypeExpr.isList -> {
+                require(output is List<*>) {
+                    "Source output for $sourceTypeExpr is not a list"
+                }
+                val sourceElementType = checkNotNull(sourceTypeExpr.unwrapList())
+                val loweredElementType = checkNotNull(loweredTypeExpr.unwrapList())
+                output.map { value ->
+                    lowerOrdinaryOutput(
+                        output = value,
+                        sourceTypeExpr = sourceElementType,
+                        loweredTypeExpr = loweredElementType,
+                    )
+                }
+            }
+            !sourceTypeExpr.isList && !loweredTypeExpr.isList -> {
+                val sourceType = sourceTypeExpr.baseTypeDef
+                if (sourceType !is Schema.CompositeTypeDef) {
+                    output
+                } else {
+                    require(output is EngineObjectData.Sync) {
+                        "Source output for ${sourceType.name} is not an object"
+                    }
+                    lowerOrdinaryObject(output, loweredTypeExpr)
+                }
+            }
+            else -> error("Source and lowered type expressions have different list shapes")
+        }
+
+    private fun lowerOrdinaryObject(
+        output: EngineObjectData.Sync,
+        loweredTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+    ): EngineObjectData.Sync {
+        output.qplanSchemaTypeOrNull?.let { return output }
+
+        val outputType =
+            requireType(output.type.name) as? Schema.Object
+                ?: throw IllegalArgumentException(
+                    "Source resolver returned unknown object type ${output.type.name}",
+                )
+        val declaredType = loweredTypeExpr.baseTypeDef as Schema.CompositeTypeDef
+        require(outputType in declaredType.possibleObjectTypes) {
+            "Source object ${outputType.name} is not valid for ${declaredType.name}"
+        }
+        val sourceObject =
+            graphQLSchema.getObjectType(outputType.name)
+                ?: throw IllegalArgumentException(
+                    "${outputType.name} is not a source GraphQL object type",
+                )
+        val fields =
+            output.getSelections().map { selection ->
+                requireNotNull(sourceObject.getFieldDefinition(selection)) {
+                    "Source object ${outputType.name} has no field named $selection"
+                }
+                val loweredField = fieldFromSource(outputType.name, selection)
+                require(loweredField is Schema.ObjectField) {
+                    "${outputType.name}/$selection does not lower to an object field"
+                }
+                require(loweredField.args.isEmpty()) {
+                    "Passive object field ${outputType.name}/$selection must be argumentless"
+                }
+                EngineObjectDataEntry.of(
+                    selection = loweredField.name,
+                    field = loweredField,
+                    value = lowerSourceOutput(loweredField, output.get(selection)),
+                )
+            }
+        return engineObjectDataOf(outputType, fields)
+    }
 
     companion object {
         private val STANDARD_SCALAR_NAMES = setOf("Int", "Float", "String", "Boolean", "ID")

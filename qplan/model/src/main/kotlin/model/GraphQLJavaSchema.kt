@@ -3,10 +3,10 @@ package model
 import graphql.schema.GraphQLObjectType
 
 /**
- * The canonical opaque GraphQL-Java definition attached to this qplan object type.
+ * The Engine API GraphQL-Java witness attached to this qplan object type.
  *
- * This mirrors ViaductSchema's GraphQL-Java-backed `gjDef` accessors so a future schema migration
- * can replace the backing model without changing Engine API call sites.
+ * Source-backed objects expose the exact definition from the retained source schema. Synthetic
+ * objects may expose an internal generated definition, but must not cross the tenant boundary.
  */
 val Schema.Object.gjDef: GraphQLObjectType
     get() = graphQLJavaDefinition

@@ -6,9 +6,11 @@ import model.merge
 import model.objectKey
 import model.requireQueryTypeDef
 import model.requireField
+import model.requireObjectField
 import model.requireType
 import model.Schema
 import model.SourceSchemaAdapter
+import model.emptyFragmentOf
 import model.gjDef
 import model.schemaType
 import kotlin.test.Test
@@ -21,6 +23,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
+import viaduct.engine.api.EngineObjectDataBuilder
 
 class NodeBridgeLoweringTest {
     @Test
@@ -63,10 +66,9 @@ class NodeBridgeLoweringTest {
 
         val query = schema.requireQueryTypeDef()
         val sourceQuery = schema.graphQLSchema.queryType
-        assertSame(query.gjDef, query.gjDef)
-        assertTrue(query.gjDef !== sourceQuery)
-        assertNotNull(query.gjDef.getFieldDefinition("user_V_A_node"))
-        assertNull(query.gjDef.getFieldDefinition("user"))
+        assertSame(sourceQuery, query.gjDef)
+        assertNotNull(query.gjDef.getFieldDefinition("user"))
+        assertNull(query.gjDef.getFieldDefinition("user_V_A_node"))
 
         assertSame(bridge.gjDef, bridge.gjDef)
         assertEquals(
@@ -75,8 +77,8 @@ class NodeBridgeLoweringTest {
         )
 
         val user = schema.requireType("User") as Schema.Object
-        assertTrue(schema.graphQLSchema.getObjectType("User") !== user.gjDef)
-        assertNotNull(user.gjDef.getFieldDefinition("V_A_typename"))
+        assertSame(schema.graphQLSchema.getObjectType("User"), user.gjDef)
+        assertNull(user.gjDef.getFieldDefinition("V_A_typename"))
     }
 
     @Test
@@ -281,5 +283,94 @@ class NodeBridgeLoweringTest {
         }
         assertSame(bridge, schema.nodeBridgeFieldOrNull(bridge))
         assertNull(schema.nodeBridgeFieldOrNull(schema.requireField("Query", "seed")))
+    }
+
+    @Test
+    fun `accepts tenant-produced Node values without a private qplan EOD downcast`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                interface Node {
+                  id: ID!
+                }
+
+                type User implements Node {
+                  id: ID!
+                }
+
+                type Query {
+                  user: User!
+                }
+                """.trimIndent(),
+            ).schema as GJSchema
+        val producer = schema.requireField("Query", "user_V_A_node")
+        val sourceUser = requireNotNull(schema.graphQLSchema.getObjectType("User"))
+        val tenantValue =
+            EngineObjectDataBuilder
+                .from(sourceUser)
+                .put("id", "user-1")
+                .build()
+
+        val lowered = schema.lowerSourceOutput(producer, tenantValue)
+
+        val bridge = assertIs<EngineObjectData.Sync>(lowered)
+        assertEquals("User_V_A_Bridge", bridge.schemaType.name)
+        assertEquals("\$node:4:Useruser-1", bridge.get("id"))
+    }
+
+    @Test
+    fun `adapts tenant-produced ordinary object output into the canonical lowered schema`() {
+        lateinit var tenantValue: EngineObjectData.Sync
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Item {
+                      value: String!
+                    }
+
+                    type Payload {
+                      items: [Item!]!
+                    }
+
+                    type Query {
+                      payload: Payload!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val sourceSchema = (schema as GJSchema).graphQLSchema
+                    val item =
+                        EngineObjectDataBuilder
+                            .from(requireNotNull(sourceSchema.getObjectType("Item")))
+                            .put("value", "one")
+                            .build()
+                    tenantValue =
+                        EngineObjectDataBuilder
+                            .from(requireNotNull(sourceSchema.getObjectType("Payload")))
+                            .put("items", listOf(item))
+                            .build()
+                    mapOf(
+                        schema.requireField("Query", "payload") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                tenantValue
+                            },
+                    )
+                },
+            )
+        val field = world.schema.requireObjectField("Query", "payload")
+
+        val lowered =
+            world.resolverRegistry.resolver(field)(
+                world.resolverRegistry.resolveRootQuery(),
+                model.Arguments.Resolved.of(field, emptyMap()),
+            )
+
+        assertTrue(lowered !== tenantValue)
+        val payload = assertIs<EngineObjectData.Sync>(lowered)
+        assertEquals(world.schema.requireType("Payload"), payload.schemaType)
+        val items = assertIs<List<*>>(payload.get("items"))
+        val item = assertIs<EngineObjectData.Sync>(items.single())
+        assertEquals(world.schema.requireType("Item"), item.schemaType)
+        assertEquals("one", item.get("value"))
     }
 }

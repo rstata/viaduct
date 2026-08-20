@@ -13,7 +13,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.TypeExpr
-import model.engineObjectDataOf
+import model.materializedEngineObjectDataOf
 import model.toEngineOutputData
 import semantics.RuntimeSupport
 import semantics.materializedGroundKey
@@ -59,7 +59,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                 )
         selectedValues[responseKey] = storedGroundKey.field to selectedValue
     }
-    return engineObjectDataOf(
+    return materializedEngineObjectDataOf(
         schemaType = type,
         fields =
             selectedValues.map { (key, fieldAndValue) ->

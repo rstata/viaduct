@@ -390,14 +390,7 @@ internal class GJSchemaDecoder(
     private fun populateGraphQLJavaObjectDefinitions() {
         objectFields.keys.forEach { objectType ->
             val sourceDefinition = graphQLSchema.getObjectType(objectType.name)
-            val modeledFieldNames = objectType.fields.mapTo(linkedSetOf(), Schema.Field::name)
-            val definition =
-                sourceDefinition
-                    ?.takeIf { source ->
-                        source.fieldDefinitions.mapTo(linkedSetOf()) { it.name } ==
-                            modeledFieldNames
-                    }
-                    ?: graphQLJavaDefinitionOf(objectType)
+            val definition = sourceDefinition ?: graphQLJavaDefinitionOf(objectType)
             (objectType as ObjectTypeImpl).initializeGraphQLJavaDefinition(definition)
         }
     }

@@ -38,10 +38,21 @@ class NodeBridgeLoweringTest {
         assertNull(source.getType("User_V_A_Bridge"))
 
         assertNull(lowered.requireRecord("Query").field("user"))
+        val loweredQuery = assertIs<ViaductSchema.Object>(lowered.requireType("Query"))
         val producer = lowered.requireField("Query", "user_V_A_node")
         val bridge = assertIs<ViaductSchema.Object>(lowered.requireType("User_V_A_Bridge"))
         val nodeBridge =
             assertIs<ViaductSchema.Interface>(lowered.requireType("Node_V_A_Bridge"))
+        assertSame(source.queryType, loweredQuery.sourceGraphQLJavaDefinitionOrNull)
+        assertTrue(
+            loweredQuery.sourceGraphQLJavaDefinitionOrNull
+                ?.getFieldDefinition("user") != null,
+        )
+        assertNull(
+            loweredQuery.sourceGraphQLJavaDefinitionOrNull
+                ?.getFieldDefinition("user_V_A_node"),
+        )
+        assertNull(bridge.sourceGraphQLJavaDefinitionOrNull)
         assertSame(bridge, producer.type.baseTypeDef)
         assertEquals(setOf("id", "node"), bridge.fields.mapTo(linkedSetOf()) { it.name })
         assertEquals(setOf(bridge), nodeBridge.possibleObjectTypes)

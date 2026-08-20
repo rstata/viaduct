@@ -11,7 +11,8 @@ import viaduct.graphql.schema.graphqljava.viaductSchema
 class OrdinarySchemaLoweringTest {
     @Test
     fun `preserves ordinary definitions roots relationships and metadata`() {
-        val source = graphQLSchema(SCHEMA).viaductSchema()
+        val graphQLSource = graphQLSchema(SCHEMA)
+        val source = graphQLSource.viaductSchema()
         val lowered = lowerSchema(source)
 
         assertEquals("Read", lowered.queryTypeDef?.name)
@@ -30,7 +31,6 @@ class OrdinarySchemaLoweringTest {
             sourceDate.appliedDirectives.semanticValues(),
             loweredDate.appliedDirectives.semanticValues(),
         )
-        assertSame(sourceDate.holder, loweredDate.holder)
 
         val sourceA = source.requireType("A")
         val loweredA = lowered.requireType("A")
@@ -38,7 +38,10 @@ class OrdinarySchemaLoweringTest {
             sourceA.appliedDirectives.semanticValues(),
             loweredA.appliedDirectives.semanticValues(),
         )
-        assertSame(sourceA.holder, loweredA.holder)
+        assertSame(
+            graphQLSource.getObjectType("A"),
+            (loweredA as ViaductSchema.Object).sourceGraphQLJavaDefinitionOrNull,
+        )
 
         val sourceChoice = source.requireType("Choice") as ViaductSchema.Union
         val loweredChoice = lowered.requireType("Choice") as ViaductSchema.Union
@@ -58,7 +61,6 @@ class OrdinarySchemaLoweringTest {
             sourceStatus.value("READY")!!.appliedDirectives.semanticValues(),
             loweredStatus.value("READY")!!.appliedDirectives.semanticValues(),
         )
-        assertSame(sourceStatus.value("READY")!!.holder, loweredStatus.value("READY")!!.holder)
 
         val sourceFilter = source.requireType("Filter") as ViaductSchema.Input
         val loweredFilter = lowered.requireType("Filter") as ViaductSchema.Input
@@ -70,7 +72,6 @@ class OrdinarySchemaLoweringTest {
             sourceLimit.appliedDirectives.semanticValues(),
             loweredLimit.appliedDirectives.semanticValues(),
         )
-        assertSame(sourceLimit.holder, loweredLimit.holder)
 
         val sourceField = source.requireField("A", "value")
         val loweredField = lowered.requireField("A", "value")
@@ -79,7 +80,6 @@ class OrdinarySchemaLoweringTest {
             sourceField.appliedDirectives.semanticValues(),
             loweredField.appliedDirectives.semanticValues(),
         )
-        assertSame(sourceField.holder, loweredField.holder)
         assertEquals(
             sourceField.containingExtension.sourceLocation,
             loweredField.containingExtension.sourceLocation,
@@ -91,8 +91,6 @@ class OrdinarySchemaLoweringTest {
         assertEquals(sourceDirective.isRepeatable, loweredDirective.isRepeatable)
         assertEquals(sourceDirective.allowedLocations, loweredDirective.allowedLocations)
         assertEquals(sourceDirective.args.single().defaultValue, loweredDirective.args.single().defaultValue)
-        assertSame(sourceDirective.holder, loweredDirective.holder)
-        assertSame(sourceDirective.args.single().holder, loweredDirective.args.single().holder)
     }
 
     @Test

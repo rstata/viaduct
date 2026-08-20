@@ -18,9 +18,9 @@ import model.Schema
 import model.Selection
 import model.Stamp
 import model.TypeExpr
-import model.engineObjectDataOf
 import model.fetchBindings
 import model.localizeTopLevelSelectionStamps
+import model.materializedEngineObjectDataOf
 import model.selectionForestOf
 import model.toEngineOutputData
 import viaduct.engine.api.EngineObjectData
@@ -71,7 +71,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
                 )
         selectedValues[responseKey] = storedKey.field to selectedValue
     }
-    return engineObjectDataOf(
+    return materializedEngineObjectDataOf(
         schemaType = type,
         fields =
             selectedValues.map { (key, fieldAndValue) ->

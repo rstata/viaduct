@@ -195,19 +195,20 @@ interface Schema {
      * [possibleObjectTypes]. Interface implementation relationships are represented by the
      * schema's relation operations rather than stored on this definition.
      *
-     * [graphQLJavaDefinition] is a canonical opaque attachment for integration with Viaduct engine
-     * APIs. It is not part of the mathematical schema model and must not be inspected for schema
-     * reasoning, equality, hashing, conformance, or subtype decisions.
+     * [graphQLJavaDefinition] is the Engine API witness for integration with Viaduct. For a
+     * source-backed object it is the exact object from the retained source schema. It is not part
+     * of the mathematical schema model and must not be inspected for schema reasoning, equality,
+     * hashing, conformance, or subtype decisions.
      */
     interface Object : CompositeTypeDef {
         override val fields: Collection<ObjectField>
         override fun field(name: String): ObjectField? = fields.find { it.name == name }
 
         /**
-         * The canonical GraphQL-Java definition representing this lowered object type.
+         * The GraphQL-Java definition exposed through [EngineObjectData.type].
          *
-         * Repeated reads return the same instance within one schema. Semantic logic treats this as
-         * an opaque foreign value; only integration boundaries may unwrap or pass it through.
+         * Source-backed objects use the exact source definition. Synthetic internal objects use a
+         * generated definition. Semantic logic treats this as an opaque foreign value.
          */
         val graphQLJavaDefinition: GraphQLObjectType
     }

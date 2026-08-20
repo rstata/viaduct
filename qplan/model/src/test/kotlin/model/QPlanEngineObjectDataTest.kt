@@ -33,8 +33,7 @@ class QPlanEngineObjectDataTest {
                     ),
             )
 
-        assertSame(userType.gjDef, data.type)
-        assertNotEquals(graphQLUserType, data.type)
+        assertSame(graphQLUserType, data.type)
         assertEquals("Ada", data.get("name"))
         assertTrue(data.isPresent("nickname"))
         assertNull(data.get("nickname"))
@@ -161,13 +160,13 @@ class QPlanEngineObjectDataTest {
     }
 
     @Test
-    fun `uses the schema types canonical GraphQL Java definition`() {
+    fun `uses the exact source GraphQL Java definition while retaining lowered semantic identity`() {
         val data = engineObjectDataOf(userType)
 
         assertSame(userType, data.schemaType)
-        assertSame(userType.gjDef, data.type)
-        assertNotEquals(graphQLUserType, data.type)
-        assertTrue(data.type.getFieldDefinition("V_A_typename") != null)
+        assertSame(graphQLUserType, data.type)
+        assertTrue(data.type.getFieldDefinition("name") != null)
+        assertNull(data.type.getFieldDefinition("V_A_typename"))
     }
 
     @Test

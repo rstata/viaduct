@@ -1,5 +1,6 @@
 package semantics
 
+import graphql.schema.GraphQLTypeUtil
 import model.requireQueryTypeDef
 import model.requireType
 import model.requireObjectField
@@ -8,13 +9,17 @@ import semantics.contract.selectionValues
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import model.EngineErrorData
+import model.EngineIDResult
 import model.EngineResult
+import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelection
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Schema
 import model.fragmentFrom
+import model.gjDef
 import model.materializeSelectionForestOf
 import model.testing.TestWorld
 import model.testing.occurrenceStampOf
@@ -22,6 +27,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import viaduct.engine.api.EngineObjectData
 
 class MaterializeTest {
     private val runtimeSupport = RuntimeSupport.noCycleChecking()
@@ -154,6 +164,117 @@ class MaterializeTest {
 
         assertEquals(listOf(reader, reader), failure.cycle)
     }
+
+    @Test
+    fun `Node bridges do not escape into tenant-visible materialized input`() =
+        runBlocking {
+            val world =
+                TestWorld
+                    .fromSDL(
+                        """
+                        interface Node {
+                          id: ID!
+                        }
+
+                        type User implements Node {
+                          id: ID!
+                        }
+
+                        type Parent {
+                          user: Node!
+                          users: [Node]!
+                        }
+
+                        type Query {
+                          parent: Parent!
+                        }
+                        """.trimIndent(),
+                    ).assumptions
+            val parent = world.schema.requireType("Parent") as Schema.Object
+            val user = world.schema.requireType("User") as Schema.Object
+            val bridge = world.schema.requireType("User_V_A_Bridge") as Schema.Object
+            val producer =
+                ObjectEngineResult.GroundKey.of(
+                    world.schema.requireObjectField("Parent", "user_V_A_node"),
+                    emptyMap(),
+                )
+            val listProducer =
+                ObjectEngineResult.GroundKey.of(
+                    world.schema.requireObjectField("Parent", "users_V_A_node"),
+                    emptyMap(),
+                )
+            val payload =
+                ObjectEngineResult.GroundKey.of(
+                    world.schema.requireObjectField("User_V_A_Bridge", "node"),
+                    emptyMap(),
+                )
+            val id =
+                ObjectEngineResult.GroundKey.of(
+                    world.schema.requireObjectField("User", "id"),
+                    emptyMap(),
+                )
+            val userResult =
+                ObjectEngineResult.of(
+                    type = user,
+                    values = mapOf(id to EngineIDResult.of("user-1")),
+                )
+            val bridgeResult =
+                ObjectEngineResult.of(
+                    type = bridge,
+                    values = mapOf(payload to userResult),
+                )
+            val parentResult =
+                ObjectEngineResult.of(
+                    type = parent,
+                    values =
+                        mapOf(
+                            producer to bridgeResult,
+                            listProducer to
+                                ListEngineResult.of(
+                                    typeExpr = listProducer.field.type.unwrapList()!!,
+                                    values =
+                                        listOf(
+                                            bridgeResult,
+                                            null,
+                                            ErrorEngineResult,
+                                        ),
+                                ),
+                        ),
+                )
+            val selections =
+                world
+                    .fragmentFrom(
+                        "fragment ParentInput on Parent { user { id } users { id } }",
+                    )
+                    .materializeSelections
+
+            val materialized =
+                context(world, runtimeSupport) {
+                    parentResult.materialize(selections, emptyList())
+                }
+
+            assertSame(parent.gjDef, materialized.type)
+            assertNotNull(materialized.type.getFieldDefinition("user"))
+            assertNull(materialized.type.getFieldDefinition("user_V_A_node"))
+            val nested = assertIs<EngineObjectData.Sync>(materialized.get("user"))
+            assertEquals("User", nested.type.name)
+            assertSame(user.gjDef, nested.type)
+            assertEquals("user-1", nested.get("id"))
+            assertEquals(
+                "Node",
+                GraphQLTypeUtil
+                    .unwrapAll(materialized.type.getFieldDefinition("user").type)
+                    .name,
+            )
+
+            val users = assertIs<List<*>>(materialized.get("users"))
+            assertEquals(3, users.size)
+            val listedUser = assertIs<EngineObjectData.Sync>(users[0])
+            assertSame(user.gjDef, listedUser.type)
+            assertEquals("user-1", listedUser.get("id"))
+            assertNull(users[1])
+            assertSame(EngineErrorData, users[2])
+        }
 
     @Test
     fun `distinct response aliases can read one exact stored key`() =

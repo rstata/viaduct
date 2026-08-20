@@ -10,7 +10,7 @@ Compiling Kotlin is qplan's primary specification language. Model declarations d
 
 Each reasoning exercise fixes one canonical `Assumptions`, `Schema`, and resolver registry. Schema decoding, GraphQL parsing, registry assembly, node lowering, and provider-path compilation are pre-reasoning composition. Semantic code trusts the carrier invariants established at that boundary.
 
-A schema definition may retain a canonical opaque foreign attachment needed at an integration boundary. Such an attachment is not a model value: semantic logic does not inspect it or use it in equality, hashing, conformance, or schema relations. Qplan object types currently retain their canonical GraphQL-Java definitions solely to supply Viaduct Engine API type witnesses.
+A schema definition may retain a canonical opaque foreign attachment needed at an integration boundary. Such an attachment is not a model value: semantic logic does not inspect it or use it in equality, hashing, conformance, or schema relations. Qplan source-backed object types retain the exact object definitions from the unchanged source GraphQL-Java schema solely to supply Viaduct Engine API type witnesses; synthetic objects may retain generated definitions for internal values.
 
 Compilation, examples, generated tests, stress campaigns, and cross-resolver agreement are finite consistency evidence. They are not mathematical proof. The TLA+ baseline proves only its explicitly stated finite calculus and assumptions.
 
@@ -99,6 +99,8 @@ Generated presence is weaker than runtime activation. Directed profiles should r
 The qplan model owns carriers such as `EngineResult`, typed keys, schema validation, and occurrence-aware cells. Viaduct's `EngineObjectData.Sync` is the synchronous partial-object boundary and distinguishes an absent field from a present null value. Qplan supplies its own validating implementation so it can preserve schema preconditions and instrumentation points.
 
 Qplan uses Viaduct engine API carriers where they express the same semantic fact while preserving qplan-only structure needed for formal reasoning. Do not erase occurrence identity, ground-key validation, or model invariants merely to reduce source-level differences.
+
+Qplan-owned EODs retain canonical lowered `Schema.Object` identity for semantic reasoning, but source-backed EODs expose the exact retained source `GraphQLObjectType` through the Engine API. Resolver inputs must have source-schema field shape, and source resolver outputs must be normalized into qplan-owned lowered values before semantic reasoning. Synthetic bridge witnesses and bridge payload objects remain internal to qplan.
 
 Alignment does not require preserving every fragile production representation inside the result tree. In particular, qplan intentionally distinguishes result-domain ID and enum values even though current production engine input and output data represent both as strings. Keep that mismatch isolated in explicit adapters so a future production migration can remove conversions without changing result semantics.
 

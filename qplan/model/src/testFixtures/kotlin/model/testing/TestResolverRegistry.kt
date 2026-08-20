@@ -128,7 +128,11 @@ private class NodeResolverLowering(
         val ordinaryResolvers =
             rawFieldResolvers
                 .filterKeys { it !in loweredFields }
-                .mapValues { (_, resolver) -> resolver }
+                .mapValues { (field, resolver) ->
+                    resolver.mapOutput { output ->
+                        sourceSchema.lowerOutput(field, output)
+                    }
+                }
         val bridgeResolvers =
             loweredFields.mapNotNull { field ->
                 rawFieldResolvers[field]?.let { resolver ->
@@ -295,11 +299,14 @@ private class NodeResolverLowering(
         val resolver =
             nodeResolvers[type]
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.name}")
-        val result = resolver(id)
-        if (result == null || result == EngineErrorData) return result
-        require(result is EngineObjectData.Sync) {
+        val sourceResult = resolver(id)
+        if (sourceResult == null || sourceResult == EngineErrorData) return sourceResult
+        require(sourceResult is EngineObjectData.Sync) {
             "Node resolver for ${type.name} returned a non-object value"
         }
+        val result =
+            sourceSchema.lowerOutput(payloadField(type), sourceResult)
+                as EngineObjectData.Sync
         val resultType = result.schemaType
         require(resultType == type) {
             "Node resolver for ${type.name} returned ${resultType.name}"

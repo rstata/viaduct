@@ -52,12 +52,39 @@ fun engineObjectDataOf(
 /**
  * Constructs a partial synchronous EOD from schema-associated selection values.
  *
- * [schemaType] supplies qplan's canonical validation definition and its canonical opaque
- * GraphQL-Java definition for the production EOD type.
+ * [schemaType] supplies qplan's canonical lowered validation definition and the Engine API witness
+ * associated with it. Source-backed objects expose the exact retained source GraphQL-Java object.
  */
 fun engineObjectDataOf(
     schemaType: Schema.Object,
     fields: Iterable<EngineObjectDataEntry>,
+): EngineObjectData.Sync =
+    engineObjectDataOf(
+        schemaType = schemaType,
+        fields = fields,
+        projectNodeBridges = false,
+    )
+
+/**
+ * Constructs tenant-visible resolver input from values already validated in the lowered schema.
+ *
+ * Node bridge producers remain part of qplan's semantic field coordinates, but their bridge
+ * objects are projected back to source-shaped values before crossing the Engine API boundary.
+ */
+fun materializedEngineObjectDataOf(
+    schemaType: Schema.Object,
+    fields: Iterable<EngineObjectDataEntry>,
+): EngineObjectData.Sync =
+    engineObjectDataOf(
+        schemaType = schemaType,
+        fields = fields,
+        projectNodeBridges = true,
+    )
+
+private fun engineObjectDataOf(
+    schemaType: Schema.Object,
+    fields: Iterable<EngineObjectDataEntry>,
+    projectNodeBridges: Boolean,
 ): EngineObjectData.Sync {
     val entries = fields.toList()
     entries.forEach { entry ->
@@ -70,7 +97,15 @@ fun engineObjectDataOf(
                 entry.field.type
         }
     }
-    val values = entries.associate { entry -> entry.selection to entry.value }
+    val values =
+        entries.associate { entry ->
+            entry.selection to
+                if (projectNodeBridges) {
+                    entry.sourceFacingValue()
+                } else {
+                    entry.value
+                }
+        }
     require(values.size == entries.size) {
         "Object ${schemaType.name} contains duplicate string selections"
     }
@@ -81,6 +116,33 @@ fun engineObjectDataOf(
     )
 }
 
+private fun EngineObjectDataEntry.sourceFacingValue(): EngineOutputData? =
+    if (field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)) {
+        value.unwrapNodeBridge(field.type)
+    } else {
+        value
+    }
+
+private fun EngineOutputData?.unwrapNodeBridge(
+    type: TypeExpr<Schema.OutputTypeDef>,
+): EngineOutputData? {
+    if (this == null || this == EngineErrorData) return this
+    val elementType = type.unwrapList()
+    if (elementType != null) {
+        require(this is List<*>) {
+            "Node bridge value for $type is not a list"
+        }
+        return map { element -> element.unwrapNodeBridge(elementType) }
+    }
+    require(this is EngineObjectData.Sync) {
+        "Node bridge value for $type is not an object"
+    }
+    return get(NODE_BRIDGE_PAYLOAD_FIELD)
+}
+
+private const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
+private const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
+
 /**
  * The canonical qplan schema type retained by this qplan-owned EOD.
  *
@@ -89,7 +151,13 @@ fun engineObjectDataOf(
  * inspecting the opaque GraphQL-Java [EngineObjectData.type] witness.
  */
 val EngineObjectData.Sync.schemaType: Schema.Object
-    get() = (this as QPlanEngineObjectDataImpl).schemaType
+    get() =
+        requireNotNull(qplanSchemaTypeOrNull) {
+            "Engine object data for ${type.name} is not owned by qplan"
+        }
+
+internal val EngineObjectData.Sync.qplanSchemaTypeOrNull: Schema.Object?
+    get() = (this as? QPlanEngineObjectDataImpl)?.schemaType
 
 private data class EngineObjectDataEntryImpl(
     override val selection: String,

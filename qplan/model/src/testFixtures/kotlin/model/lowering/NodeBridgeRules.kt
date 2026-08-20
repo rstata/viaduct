@@ -1,5 +1,9 @@
 package model.lowering
 
+import graphql.schema.GraphQLFieldDefinition
+import graphql.schema.GraphQLObjectType
+import graphql.schema.GraphQLTypeReference
+import model.qplanEngineObjectDataTypeKey
 import viaduct.graphql.schema.ViaductSchema
 import viaduct.graphql.schema.builder.AppliedDirectiveBuilder
 import viaduct.graphql.schema.builder.ArgumentBuilder
@@ -71,6 +75,25 @@ internal class NodeBridgeFieldRule :
                 TypeExprBuilder(source.name),
             ),
         )
+        if (bridge is viaduct.graphql.schema.builder.ObjectTypeBuilder) {
+            bridge.put(
+                qplanEngineObjectDataTypeKey,
+                GraphQLObjectType
+                    .newObject()
+                    .name(nodeBridgeTypeName(source.name))
+                    .field(
+                        GraphQLFieldDefinition
+                            .newFieldDefinition()
+                            .name(NODE_BRIDGE_ID_FIELD)
+                            .type(GraphQLTypeReference.typeRef("ID")),
+                    ).field(
+                        GraphQLFieldDefinition
+                            .newFieldDefinition()
+                            .name(NODE_BRIDGE_PAYLOAD_FIELD)
+                            .type(GraphQLTypeReference.typeRef(source.name)),
+                    ).build(),
+            )
+        }
     }
 }
 

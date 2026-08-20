@@ -16,8 +16,9 @@ import graphql.schema.idl.RuntimeWiring
 import graphql.schema.idl.SchemaGenerator
 import graphql.schema.idl.SchemaParser
 import model.ObjectEngineResult
-import model.Schema
+import model.SourceSchemaAdapter
 import model.testing.TestWorld
+import viaduct.graphql.schema.ViaductSchema
 
 /**
  * End-to-end GraphQL-Java harness backed by one qplan reasoning world.
@@ -74,7 +75,7 @@ class ExecutionTestFixture private constructor(
             val runtimeWiring =
                 RuntimeWiring
                     .newRuntimeWiring()
-                    .wiringFactory(QPlanWiringFactory(world.schema))
+                    .wiringFactory(QPlanWiringFactory(SourceSchemaAdapter(world.schema)))
                     .build()
             val graphQLSchema =
                 SchemaGenerator().makeExecutableSchema(
@@ -94,13 +95,13 @@ class ExecutionTestFixture private constructor(
          */
         fun fromResolvedRoot(
             schemaSDL: String,
-            schema: Schema,
+            schema: ViaductSchema,
             root: ObjectEngineResult,
         ): ExecutionTestFixture {
             val runtimeWiring =
                 RuntimeWiring
                     .newRuntimeWiring()
-                    .wiringFactory(QPlanWiringFactory(schema))
+                    .wiringFactory(QPlanWiringFactory(SourceSchemaAdapter(schema)))
                     .build()
             val graphQLSchema =
                 SchemaGenerator().makeExecutableSchema(

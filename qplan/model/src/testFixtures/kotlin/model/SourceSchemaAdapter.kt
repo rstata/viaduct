@@ -1,44 +1,37 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.testing.GJSchema
 
 /**
  * Explicit source-to-canonical adapter for fixture composition boundaries.
  *
- * Semantic code and tests should use [Schema.requireField] and [Schema.requireObjectField] with canonical model
+ * Semantic code and tests should use [ViaductSchema.requireField] and [ViaductSchema.requireObjectField] with canonical model
  * coordinates. This adapter is reserved for inputs that are intentionally expressed in the
  * retained GraphQL source schema.
  */
 class SourceSchemaAdapter(
-    private val schema: Schema,
+    schema: ViaductSchema,
 ) {
+    private val schema =
+        requireNotNull(schema as? GJSchema) {
+            "SourceSchemaAdapter requires the canonical source/lowered fixture schema pair"
+        }
+
     /** Resolves a source GraphQL field to its canonical lowered fixture coordinate. */
     fun field(
         typeName: String,
         fieldName: String,
-    ): Schema.Field =
-        if (schema is GJSchema) {
-            schema.fieldFromSource(typeName, fieldName)
-        } else {
-            schema.requireField(typeName, fieldName)
-        }
+    ): ViaductSchema.Field = schema.fieldFromSource(typeName, fieldName)
 
     /** Returns the source GraphQL output type represented by a canonical fixture field. */
-    fun typeExpr(field: Schema.Field): TypeExpr<Schema.OutputTypeDef> =
-        if (schema is GJSchema) {
-            schema.sourceTypeExpr(field)
-        } else {
-            field.type
-        }
+    fun typeExpr(field: ViaductSchema.Field): ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef> =
+        schema.sourceTypeExpr(field)
 
     /** Lowers a source-shaped output for storage at a canonical fixture field. */
     fun lowerOutput(
-        field: Schema.Field,
+        field: ViaductSchema.Field,
         output: EngineOutputData?,
-    ): EngineOutputData? =
-        if (schema is GJSchema) {
-            schema.lowerSourceOutput(field, output)
-        } else {
-            output
-        }
-    }
+    ): EngineOutputData? = schema.lowerSourceOutput(field, output)
+}

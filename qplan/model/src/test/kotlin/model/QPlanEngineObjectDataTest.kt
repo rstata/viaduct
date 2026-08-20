@@ -1,10 +1,13 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import graphql.schema.GraphQLObjectType
 import kotlinx.coroutines.runBlocking
 import model.testing.GJSchema
 import viaduct.engine.api.EngineObjectData
 import viaduct.errors.UnsetFieldException
+import viaduct.graphql.schema.graphqljava.gjDef
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -16,8 +19,8 @@ import kotlin.test.assertTrue
 
 class QPlanEngineObjectDataTest {
     private val fixture = GJSchema.fromSDL(SCHEMA_SDL)
-    private val schema: Schema = fixture
-    private val userType = schema.requireType("User") as Schema.Object
+    private val schema: ViaductSchema = fixture
+    private val userType = schema.requireType("User") as ViaductSchema.Object
     private val graphQLUserType = requireNotNull(fixture.graphQLSchema.getObjectType("User"))
 
     @Test

@@ -1,6 +1,9 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.engineObjectDataOf
+import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
 import model.objectKey
@@ -8,10 +11,8 @@ import model.requireQueryTypeDef
 import model.requireField
 import model.requireObjectField
 import model.requireType
-import model.Schema
 import model.SourceSchemaAdapter
-import model.emptyFragmentOf
-import model.gjDef
+import model.lowering.VIADUCT_IGNORE_SYMBOL
 import model.schemaType
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -24,6 +25,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.EngineObjectDataBuilder
+import viaduct.graphql.schema.graphqljava.gjDef
 
 class NodeBridgeLoweringTest {
     @Test
@@ -50,16 +52,16 @@ class NodeBridgeLoweringTest {
         assertNull(schema.graphQLSchema.queryType.getFieldDefinition("user_V_A_node"))
         assertNull(schema.graphQLSchema.getType("User_V_A_Bridge"))
 
-        assertFailsWith<Schema.MissingSchemaElementException> {
+        assertFailsWith<IllegalStateException> {
             schema.requireField("Query", "user")
         }
         val producer = schema.requireField("Query", "user_V_A_node")
-        val bridge = schema.requireType("User_V_A_Bridge") as Schema.Object
-        val nodeBridge = schema.requireType("Node_V_A_Bridge") as Schema.Interface
+        val bridge = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
+        val nodeBridge = schema.requireType("Node_V_A_Bridge") as ViaductSchema.Interface
         assertEquals(bridge, producer.type.baseTypeDef)
         assertEquals(
             setOf("id", "node"),
-            bridge.fields.mapTo(linkedSetOf(), Schema.Field::name),
+            bridge.fields.mapTo(linkedSetOf(), ViaductSchema.Field::name),
         )
         assertEquals(setOf(bridge), bridge.possibleObjectTypes)
         assertEquals(setOf(bridge), nodeBridge.possibleObjectTypes)
@@ -70,13 +72,14 @@ class NodeBridgeLoweringTest {
         assertNotNull(query.gjDef.getFieldDefinition("user"))
         assertNull(query.gjDef.getFieldDefinition("user_V_A_node"))
 
-        assertSame(bridge.gjDef, bridge.gjDef)
+        val bridgeWitness = engineObjectDataOf(bridge).type
+        assertSame(bridgeWitness, engineObjectDataOf(bridge).type)
         assertEquals(
             setOf("id", "node"),
-            bridge.gjDef.fieldDefinitions.mapTo(linkedSetOf()) { it.name },
+            bridgeWitness.fieldDefinitions.mapTo(linkedSetOf()) { it.name },
         )
 
-        val user = schema.requireType("User") as Schema.Object
+        val user = schema.requireType("User") as ViaductSchema.Object
         assertSame(schema.graphQLSchema.getObjectType("User"), user.gjDef)
         assertNull(user.gjDef.getFieldDefinition("V_A_typename"))
     }
@@ -205,11 +208,11 @@ class NodeBridgeLoweringTest {
                 """.trimIndent(),
             ).schema as GJSchema
 
-        val nodeBridge = schema.requireType("Node_V_A_Bridge") as Schema.Interface
-        val namedBridge = schema.requireType("NamedNode_V_A_Bridge") as Schema.Interface
-        val unusedBridge = schema.requireType("UnusedNode_V_A_Bridge") as Schema.Interface
-        val userBridge = schema.requireType("User_V_A_Bridge") as Schema.Object
-        val adminBridge = schema.requireType("Admin_V_A_Bridge") as Schema.Object
+        val nodeBridge = schema.requireType("Node_V_A_Bridge") as ViaductSchema.Interface
+        val namedBridge = schema.requireType("NamedNode_V_A_Bridge") as ViaductSchema.Interface
+        val unusedBridge = schema.requireType("UnusedNode_V_A_Bridge") as ViaductSchema.Interface
+        val userBridge = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
+        val adminBridge = schema.requireType("Admin_V_A_Bridge") as ViaductSchema.Object
 
         assertEquals(setOf(userBridge, adminBridge), nodeBridge.possibleObjectTypes)
         assertEquals(setOf(userBridge), namedBridge.possibleObjectTypes)
@@ -217,7 +220,7 @@ class NodeBridgeLoweringTest {
         listOf(nodeBridge, namedBridge, unusedBridge, userBridge, adminBridge).forEach { bridge ->
             assertEquals(
                 setOf("id", "node"),
-                bridge.fields.mapTo(linkedSetOf(), Schema.Field::name),
+                bridge.fields.mapTo(linkedSetOf(), ViaductSchema.Field::name),
             )
             assertEquals(
                 bridge.name.removeSuffix("_V_A_Bridge"),
@@ -236,13 +239,13 @@ class NodeBridgeLoweringTest {
         assertEquals(
             shelfField,
             abstractProducer
-                .objectKey(schema.requireType("Shelf") as Schema.Object)
+                .objectKey(schema.requireType("Shelf") as ViaductSchema.Object)
                 .field,
         )
         val payload = abstractProducer.subselections.merge(userBridge).single()
         assertEquals(userBridge.requireField("node"), payload.key.field)
 
-        val user = schema.requireType("User") as Schema.Object
+        val user = schema.requireType("User") as ViaductSchema.Object
         val lowered =
             schema.lowerSourceOutput(
                 containerField,
@@ -271,14 +274,14 @@ class NodeBridgeLoweringTest {
                     }
                     """.trimIndent(),
                 nodeResolvers = { schema ->
-                    val user = schema.requireType("User") as Schema.Object
+                    val user = schema.requireType("User") as ViaductSchema.Object
                     mapOf(user to nodeResolverOf { error("Not invoked") })
                 },
             )
         val schema = world.schema as GJSchema
         val bridge = SourceSchemaAdapter(schema).field("Query", "user")
 
-        assertFailsWith<Schema.MissingSchemaElementException> {
+        assertFailsWith<IllegalStateException> {
             schema.requireField("Query", "user")
         }
         assertSame(bridge, schema.nodeBridgeFieldOrNull(bridge))

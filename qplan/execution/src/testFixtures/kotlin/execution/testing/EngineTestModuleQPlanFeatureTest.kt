@@ -7,8 +7,11 @@ import graphql.schema.GraphQLList
 import graphql.schema.GraphQLNonNull
 import graphql.schema.GraphQLOutputType
 import graphql.schema.idl.SchemaPrinter
+import java.util.IdentityHashMap
 import kotlinx.coroutines.runBlocking
+import model.Arguments
 import model.EngineErrorData
+import model.Fragment
 import model.SourceSchemaAdapter
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -17,6 +20,7 @@ import model.requireType
 import model.testing.FieldResolverDefinition
 import model.testing.NodeResolverFunction
 import model.testing.TestWorld
+import model.testing.VariableDeclaration
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import viaduct.engine.api.EngineExecutionContext
@@ -59,16 +63,24 @@ class QPlanFeatureTest internal constructor(
 fun EngineTestModule.runQPlanFeatureTest(block: QPlanFeatureTest.() -> Unit) {
     val schemaSDL = qplanSchemaSDL(fullSchema)
     val context = ContextMocks(myFullSchema = fullSchema).engineExecutionContext
+    val registryInputs = IdentityHashMap<QPlanSchema, QPlanRegistryInputs>()
     validateSupportedExecutors()
 
     val world =
         TestWorld.fromSDL(
             schemaSDL = schemaSDL,
             fieldResolvers = { schema ->
-                qplanFieldResolvers(schema, context)
+                registryInputs
+                    .getOrPut(schema) { qplanRegistryInputs(schema, context) }
+                    .fieldResolvers
             },
             nodeResolvers = { schema ->
                 qplanNodeResolvers(schema, context)
+            },
+            variableProviders = { schema ->
+                registryInputs
+                    .getOrPut(schema) { qplanRegistryInputs(schema, context) }
+                    .variableProviders
             },
         )
     QPlanFeatureTest(ExecutionTestFixture.fromWorld(schemaSDL, world)).block()
@@ -88,9 +100,6 @@ private fun EngineTestModule.validateSupportedExecutors() {
         require(executor.querySelectionSet == null) {
             "Qplan feature tests do not support query required selections for ${coordinate.render()}"
         }
-        require(executor.objectSelectionSet?.variablesResolvers.orEmpty().isEmpty()) {
-            "Qplan feature tests do not support variables in object required selections for ${coordinate.render()}"
-        }
     }
     nodeResolverExecutors.forEach { (typeName, executor) ->
         require(!executor.isBatching) {
@@ -102,11 +111,18 @@ private fun EngineTestModule.validateSupportedExecutors() {
     }
 }
 
-private fun EngineTestModule.qplanFieldResolvers(
+private data class QPlanRegistryInputs(
+    val fieldResolvers: Map<QPlanSchema.Field, FieldResolverDefinition>,
+    val variableProviders: Map<Arguments.Variable, VariableDeclaration>,
+)
+
+private fun EngineTestModule.qplanRegistryInputs(
     schema: QPlanSchema,
     context: EngineExecutionContext,
-): Map<QPlanSchema.Field, FieldResolverDefinition> {
+): QPlanRegistryInputs {
     val sourceSchema = SourceSchemaAdapter(schema)
+    val variableRecovery = RequiredSelectionSetVariableRecovery(schema)
+    val variableProviders = linkedMapOf<Arguments.Variable, VariableDeclaration>()
     val queryData =
         ResolvedEngineObjectData(
             fullSchema.schema.queryType,
@@ -114,13 +130,26 @@ private fun EngineTestModule.qplanFieldResolvers(
         )
     val supplied =
         fieldResolverExecutors.associate { (coordinate, executor) ->
-            val field = sourceSchema.field(coordinate.first, coordinate.second)
+            val field =
+                sourceSchema.field(coordinate.first, coordinate.second)
+                    as? QPlanSchema.ObjectField
+                    ?: throw IllegalArgumentException(
+                        "Field executor ${coordinate.render()} does not map to a concrete object field",
+                    )
             val sourceField =
                 requireNotNull(fullSchema.schema.getObjectType(coordinate.first))
                     .getFieldDefinition(coordinate.second)
+            val objectFragment = executor.objectFragment(schema, field)
+            variableRecovery
+                .recover(field, objectFragment, executor.objectSelectionSet)
+                .forEach { (variable, declaration) ->
+                    require(variableProviders.put(variable, declaration) == null) {
+                        "Duplicate variable provider \$${variable.variableName} for ${coordinate.render()}"
+                    }
+                }
             field to
                 fieldResolverOf(
-                    objectFragment = executor.objectFragment(schema, coordinate.first),
+                    objectFragment = objectFragment,
                     function = { input, arguments ->
                         val selector =
                             FieldResolverExecutor.Selector(
@@ -149,19 +178,23 @@ private fun EngineTestModule.qplanFieldResolvers(
     require(duplicateCount == 0) {
         "Qplan feature tests require unique field executor coordinates"
     }
-    return supplied + builtInNodeFieldResolvers(schema, context, supplied.keys)
+    return QPlanRegistryInputs(
+        fieldResolvers = supplied + builtInNodeFieldResolvers(schema, context, supplied.keys),
+        variableProviders = variableProviders,
+    )
 }
 
 private fun FieldResolverExecutor.objectFragment(
     schema: QPlanSchema,
-    typeName: String,
-) =
+    field: QPlanSchema.ObjectField,
+): Fragment =
     objectSelectionSet?.let { required ->
         schema.fragmentFrom(
             "fragment _ on ${required.selections.typeName} " +
                 AstPrinter.printAst(required.selections.selections),
+            variableField = field,
         )
-    } ?: schema.emptyFragmentOf(typeName)
+    } ?: schema.emptyFragmentOf(field.containingDef.name)
 
 private fun EngineTestModule.builtInNodeFieldResolvers(
     schema: QPlanSchema,

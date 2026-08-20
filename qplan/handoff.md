@@ -29,9 +29,11 @@ Node executors remain a fixture-composition input rather than a second resolver 
 
 Typename also remains shared lowering. The schema lowerer owns synthetic typename fields, `resolverRegistryOf` owns their generated resolvers, and GraphQL-Java completion maps source `__typename` through `SourceSchemaAdapter`.
 
-The current executor slice supports unbatched, non-selective field and node executors; field arguments; object required selections without variables; synchronous scalar, enum, list, object, and node-reference outputs; built-in node lookup; and typename completion. It rejects batching, selectivity, query required selections, object required-selection variables, checkers, and asynchronous EOD outputs. Executor failures currently collapse to `EngineErrorData`.
+The current executor slice supports unbatched, non-selective field and node executors; field arguments; object required selections; top-level from-argument variables; object response-path variables through singular fields to simple or simple-list terminals; synchronous scalar, enum, list, object, and node-reference outputs; built-in node lookup; and typename completion. Object paths support aliases, nullable traversal, multiple variables, and non-root resolver owners. It rejects batching, selectivity, query required selections, nested input-object argument paths, from-Query-field/arbitrary callback variable providers, checkers, and asynchronous EOD outputs. Resolver26 also explicitly rejects an object provider path if any field on that path declares arguments. Executor failures currently collapse to `EngineErrorData`.
 
-The next intended slice is declarative variables in object required selections. Start with concrete Engine API `FromArgument` values whose path is one top-level argument and concrete `FromFieldVariablesResolver` values whose non-list object path terminates at a scalar or enum. Translate them to `TestWorld.fromSDL(variableProviders = ...)`; do not initially execute arbitrary mock variable-resolver callbacks or support nested input paths, from-Query paths, or recursively variable-dependent providers. See [`execution/README.md`](./execution/README.md) for the architecture and testing details.
+`RequiredSelectionSetVariableRecovery` reverse engineers the production RSS compilation recipes into `TestWorld.fromSDL(variableProviders = ...)`. It recursively unwraps `Validated`, accepts concrete Engine API `FromArgument` values with one path segment, and accepts `FromFieldVariablesResolver` only when its nested RSS proves a path in the root object RSS. It recursively validates provider dependencies, requires repeated nested recipes to agree, associates each provider with the exact variable occurrence owned by the decoded resolver fragment, and preserves renamed bindings and response-key aliases. It rejects missing, unused, duplicate, or inconsistent providers and every unsupported resolver shape rather than invoking callbacks or approximating semantics. See [`execution/README.md`](./execution/README.md) for production-code pointers, architecture, and testing details.
+
+The next variable decision is whether to lift Resolver26's argument-free object-provider-path restriction. Recovery can already reconstruct nested provider dependencies, including arguments sourced by another provider, but execution rejects that path shape. Nested input paths need a deliberate registry representation; from-Query paths and arbitrary providers remain later work.
 
 ## Lowered Representation
 
@@ -60,12 +62,12 @@ The following gates pass from `qplan`:
 ./gradlew :model:test
 ./gradlew :arbitrary:test
 ./gradlew :semantics:test
-./gradlew :execution:test --tests execution.EngineTestModuleQPlanFeatureTest --tests execution.EngineFeatureTestExample --tests execution.RequiredSelectionsTest
+./gradlew :execution:test --tests execution.EngineTestModuleQPlanFeatureTest --tests execution.EngineFeatureTestExample --tests execution.RequiredSelectionsTest --tests execution.FromFieldVariablesFeatureTest --tests execution.testing.RequiredSelectionSetVariableRecoveryTest
 ./gradlew :execution:test
 ./gradlew check
 ```
 
-The executor-focused gate passes 15 tests: 5 adapter tests and 10 ports from `core/engine/runtime`. The ports retain their originating filenames and source-path comments, and the complete execution suite runs 39 tests. The full `check` passed on 2026-08-20. The model suite ran 237 tests, the semantics suite ran 458 tests with 3 existing skips, and generated resolver profiles passed.
+The executor-focused gate passes 35 tests: 5 adapter tests, 21 ports from `core/engine/runtime`, and 9 direct RSS-recovery tests. The ports retain their originating filenames and source-path comments, and the complete execution suite runs 59 tests. The full `check` passed on 2026-08-20. The model suite ran 237 tests, the semantics suite ran 458 tests with 3 existing skips, and generated resolver profiles passed.
 
 The final source audits return no references to qplan's retired schema representation:
 

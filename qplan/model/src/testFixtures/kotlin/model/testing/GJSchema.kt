@@ -1,5 +1,7 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 import graphql.language.NamedNode
 import graphql.language.Node
@@ -10,28 +12,38 @@ import graphql.schema.GraphQLFieldsContainer
 import graphql.schema.GraphQLImplementingType
 import graphql.schema.GraphQLInterfaceType
 import graphql.schema.GraphQLObjectType
-import graphql.schema.GraphQLOutputType
 import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLTypeUtil
 import graphql.schema.GraphQLUnionType
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
-import model.Schema
 import model.EngineErrorData
 import model.EngineObjectDataEntry
 import model.EngineOutputData
-import model.TypeExpr
 import model.engineObjectDataOf
+import model.lowering.ALL_SOURCE_OBJECTS_TYPE
+import model.lowering.LOWERED_TYPENAME_FIELD
+import model.lowering.LOWERING_SYNTHETIC_NAME_TOKEN
+import model.lowering.NODE_BRIDGE_FIELD_SUFFIX
+import model.lowering.NODE_BRIDGE_ID_FIELD
+import model.lowering.TYPED_NODE_ID_PREFIX
+import model.lowering.VIADUCT_IGNORE_SYMBOL
+import model.lowering.lowerSchema
+import model.lowering.nodeBridgeFieldName
+import model.lowering.nodeBridgeTypeName
+import model.outputType
 import model.qplanSchemaTypeOrNull
 import model.requireField
 import model.requireObjectField
 import model.requireType
 import viaduct.engine.api.EngineObjectData
+import viaduct.graphql.schema.graphqljava.toGraphQLSchema
+import viaduct.graphql.schema.graphqljava.viaductSchema
 import viaduct.graphql.utils.GraphQLTypeRelation
 import viaduct.graphql.utils.GraphQLTypeRelations
 
 /**
- * A fixture pair of the GraphQL-visible source schema and the canonical decoded [Schema].
+ * A fixture pair of the GraphQL-visible source schema and the canonical decoded [ViaductSchema].
  *
  * Construct the reasoning world's one schema before its values and assumptions so every non-error
  * value is created through this exact canonical graph. The canonical graph may contain synthetic
@@ -42,9 +54,10 @@ import viaduct.graphql.utils.GraphQLTypeRelations
 internal class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,
     internal val typeRelations: GraphQLTypeRelations,
-    private val decodedSchema: Schema,
-) : Schema by decodedSchema {
-    internal fun sourceCompositeType(type: Schema.CompositeTypeDef): GraphQLCompositeType {
+    private val sourceSchema: ViaductSchema,
+    internal val loweredSchema: ViaductSchema,
+) : ViaductSchema by loweredSchema {
+    internal fun sourceCompositeType(type: ViaductSchema.CompositeTypeDef): GraphQLCompositeType {
         require(requireType(type.name) == type) {
             "${type.name} is not canonical in this schema"
         }
@@ -53,17 +66,17 @@ internal class GJSchema private constructor(
     }
 
     /** The canonical concrete object types available to fixture registry lowering. */
-    internal val objectTypes: List<Schema.Object>
+    internal val objectTypes: List<ViaductSchema.Object>
         get() =
             graphQLSchema.allTypesAsList
                 .filterIsInstance<GraphQLObjectType>()
                 .filterNot { it.name.startsWith("__") }
-                .map { requireType(it.name) as Schema.Object }
+                .map { requireType(it.name) as ViaductSchema.Object }
 
     internal fun fieldFromSource(
         typeName: String,
         fieldName: String,
-    ): Schema.Field {
+    ): ViaductSchema.Field {
         if (fieldName == "__typename") {
             val sourceType = graphQLSchema.getType(typeName)
             val canonicalOwner =
@@ -87,17 +100,26 @@ internal class GJSchema private constructor(
         return requireField(typeName, canonicalName)
     }
 
-    internal fun sourceTypeExpr(field: Schema.Field): TypeExpr<Schema.OutputTypeDef> {
-        val sourceField = sourceField(field) ?: return field.type
-        return decodeModelOutputType(sourceField.type, this)
+    internal fun sourceTypeExpr(field: ViaductSchema.Field): ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef> {
+        val sourceField = sourceField(field) ?: return field.outputType
+        val sourceOwner = sourceSchema.types.getValue(sourceFieldOwner(field).name)
+            as ViaductSchema.OutputRecord
+        val sourceType = sourceOwner.field(sourceField.name)!!.outputType
+        val canonicalBase = requireType(sourceType.baseTypeDef.name)
+            as ViaductSchema.OutputTypeDef
+        return ViaductSchema.TypeExpr(
+            canonicalBase,
+            sourceType.baseTypeNullable,
+            sourceType.listNullable,
+        )
     }
 
-    internal fun isLoweredNodeField(field: Schema.Field): Boolean =
+    internal fun isLoweredNodeField(field: ViaductSchema.Field): Boolean =
         sourceField(field)?.isNodeValued() == true &&
             field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)
 
     internal fun lowerSourceOutput(
-        field: Schema.Field,
+        field: ViaductSchema.Field,
         output: EngineOutputData?,
     ): EngineOutputData? {
         val sourceTypeExpr = sourceTypeExpr(field)
@@ -105,19 +127,23 @@ internal class GJSchema private constructor(
             lowerNodeReferences(
                 output = output,
                 sourceTypeExpr = sourceTypeExpr,
-                bridgeTypeExpr = field.type,
+                bridgeTypeExpr = field.outputType,
             )
         } else {
             lowerOrdinaryOutput(
                 output = output,
                 sourceTypeExpr = sourceTypeExpr,
-                loweredTypeExpr = field.type,
+                loweredTypeExpr = field.outputType,
             )
         }
     }
 
+    private fun sourceFieldOwner(field: ViaductSchema.Field): GraphQLFieldsContainer =
+        graphQLSchema.getType(field.containingDef.name) as? GraphQLFieldsContainer
+            ?: error("${field.containingDef.name} is not a source field owner")
+
     private fun sourceField(
-        field: Schema.Field,
+        field: ViaductSchema.Field,
     ): GraphQLFieldDefinition? {
         val sourceContainer =
             graphQLSchema.getType(field.containingDef.name) as? GraphQLFieldsContainer
@@ -138,8 +164,8 @@ internal class GJSchema private constructor(
 
     private fun lowerNodeReferences(
         output: EngineOutputData?,
-        sourceTypeExpr: TypeExpr<Schema.OutputTypeDef>,
-        bridgeTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+        sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        bridgeTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
             output == null || output == EngineErrorData -> output
@@ -162,7 +188,7 @@ internal class GJSchema private constructor(
                     "Node field resolver did not return a node reference"
                 }
                 val outputType =
-                    requireType(output.type.name) as? Schema.Object
+                    requireType(output.type.name) as? ViaductSchema.Object
                         ?: throw IllegalArgumentException(
                             "Node field resolver returned unknown object type ${output.type.name}",
                         )
@@ -172,9 +198,9 @@ internal class GJSchema private constructor(
                     "Node reference ${outputType.name}/id must contain a non-error ID"
                 }
                 val declaredBridgeType =
-                    bridgeTypeExpr.baseTypeDef as Schema.CompositeTypeDef
+                    bridgeTypeExpr.baseTypeDef as ViaductSchema.CompositeTypeDef
                 val bridgeType =
-                    requireType(nodeBridgeTypeName(outputType)) as Schema.Object
+                    requireType(nodeBridgeTypeName(outputType.name)) as ViaductSchema.Object
                 require(bridgeType in declaredBridgeType.possibleObjectTypes) {
                     "Node reference ${outputType.name} is not valid for " +
                         sourceTypeExpr.baseTypeDef.name
@@ -195,8 +221,8 @@ internal class GJSchema private constructor(
 
     private fun lowerOrdinaryOutput(
         output: EngineOutputData?,
-        sourceTypeExpr: TypeExpr<Schema.OutputTypeDef>,
-        loweredTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+        sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        loweredTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
             output == null || output == EngineErrorData -> output
@@ -216,7 +242,7 @@ internal class GJSchema private constructor(
             }
             !sourceTypeExpr.isList && !loweredTypeExpr.isList -> {
                 val sourceType = sourceTypeExpr.baseTypeDef
-                if (sourceType !is Schema.CompositeTypeDef) {
+                if (sourceType !is ViaductSchema.CompositeTypeDef) {
                     output
                 } else {
                     require(output is EngineObjectData.Sync) {
@@ -230,16 +256,16 @@ internal class GJSchema private constructor(
 
     private fun lowerOrdinaryObject(
         output: EngineObjectData.Sync,
-        loweredTypeExpr: TypeExpr<Schema.OutputTypeDef>,
+        loweredTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineObjectData.Sync {
         output.qplanSchemaTypeOrNull?.let { return output }
 
         val outputType =
-            requireType(output.type.name) as? Schema.Object
+            requireType(output.type.name) as? ViaductSchema.Object
                 ?: throw IllegalArgumentException(
                     "Source resolver returned unknown object type ${output.type.name}",
                 )
-        val declaredType = loweredTypeExpr.baseTypeDef as Schema.CompositeTypeDef
+        val declaredType = loweredTypeExpr.baseTypeDef as ViaductSchema.CompositeTypeDef
         require(outputType in declaredType.possibleObjectTypes) {
             "Source object ${outputType.name} is not valid for ${declaredType.name}"
         }
@@ -254,7 +280,7 @@ internal class GJSchema private constructor(
                     "Source object ${outputType.name} has no field named $selection"
                 }
                 val loweredField = fieldFromSource(outputType.name, selection)
-                require(loweredField is Schema.ObjectField) {
+                require(loweredField is ViaductSchema.ObjectField) {
                     "${outputType.name}/$selection does not lower to an object field"
                 }
                 require(loweredField.args.isEmpty()) {
@@ -271,17 +297,35 @@ internal class GJSchema private constructor(
 
     companion object {
         private val STANDARD_SCALAR_NAMES = setOf("Int", "Float", "String", "Boolean", "ID")
+        private val SCALARS_REQUIRING_REGISTRATION = setOf("Int", "Float", "ID")
         private val STANDARD_DIRECTIVE_NAMES =
             setOf("skip", "include", "deprecated", "specifiedBy", "oneOf")
 
         @JvmStatic
         fun fromSDL(schemaSDL: String): GJSchema {
             val graphQLSchema = parseSchema(schemaSDL)
+            require(graphQLSchema.mutationType == null) {
+                "Mutation roots are outside the model"
+            }
+            require(graphQLSchema.subscriptionType == null) {
+                "Subscription roots are outside the model"
+            }
+            require(graphQLSchema.queryType.name == "Query") {
+                "The model requires the query root to be named Query"
+            }
             val typeRelations = GraphQLTypeRelations(graphQLSchema)
+            val sourceSchema = graphQLSchema.viaductSchema()
+            val builtLowered = lowerSchema(sourceSchema)
+            val scalarsNeeded =
+                SCALARS_REQUIRING_REGISTRATION.filterTo(mutableSetOf()) {
+                    graphQLSchema.getType(it) != null
+                }
+            builtLowered.toGraphQLSchema(scalarsNeeded = scalarsNeeded)
             return GJSchema(
                 graphQLSchema = graphQLSchema,
                 typeRelations = typeRelations,
-                decodedSchema = GJSchemaDecoder(graphQLSchema, typeRelations).decode(),
+                sourceSchema = sourceSchema,
+                loweredSchema = builtLowered,
             )
         }
 

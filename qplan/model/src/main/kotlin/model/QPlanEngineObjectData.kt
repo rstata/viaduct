@@ -1,10 +1,14 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import graphql.schema.GraphQLObjectType
 import model.invariants.conformsToOutputSchemaType
 import viaduct.apiannotations.InternalApi
 import viaduct.engine.api.EngineObjectData
 import viaduct.errors.UnsetFieldException
+import viaduct.graphql.schema.graphqljava.gjDef
+import viaduct.utils.collections.Holder
 
 /**
  * One construction-time EOD entry whose selection may be a field name or response alias.
@@ -13,13 +17,13 @@ import viaduct.errors.UnsetFieldException
  */
 sealed interface EngineObjectDataEntry {
     val selection: String
-    val field: Schema.ObjectField
+    val field: ViaductSchema.ObjectField
     val value: EngineOutputData?
 
     companion object {
         fun of(
             selection: String,
-            field: Schema.ObjectField,
+            field: ViaductSchema.ObjectField,
             value: EngineOutputData?,
         ): EngineObjectDataEntry = EngineObjectDataEntryImpl(selection, field, value)
     }
@@ -31,7 +35,7 @@ sealed interface EngineObjectDataEntry {
  * Every supplied value conforms to its field's output type.
  */
 fun engineObjectDataOf(
-    schemaType: Schema.Object,
+    schemaType: ViaductSchema.Object,
     fields: Map<String, EngineOutputData?> = emptyMap(),
 ): EngineObjectData.Sync =
     engineObjectDataOf(
@@ -39,7 +43,7 @@ fun engineObjectDataOf(
         fields =
             fields.map { (name, value) ->
                 val field = schemaType.field(name)
-                require(field is Schema.ObjectField) {
+                require(field is ViaductSchema.ObjectField) {
                     "${schemaType.name} has no canonical object field named $name"
                 }
                 require(field.args.isEmpty()) {
@@ -56,7 +60,7 @@ fun engineObjectDataOf(
  * associated with it. Source-backed objects expose the exact retained source GraphQL-Java object.
  */
 fun engineObjectDataOf(
-    schemaType: Schema.Object,
+    schemaType: ViaductSchema.Object,
     fields: Iterable<EngineObjectDataEntry>,
 ): EngineObjectData.Sync =
     engineObjectDataOf(
@@ -72,7 +76,7 @@ fun engineObjectDataOf(
  * objects are projected back to source-shaped values before crossing the Engine API boundary.
  */
 fun materializedEngineObjectDataOf(
-    schemaType: Schema.Object,
+    schemaType: ViaductSchema.Object,
     fields: Iterable<EngineObjectDataEntry>,
 ): EngineObjectData.Sync =
     engineObjectDataOf(
@@ -82,7 +86,7 @@ fun materializedEngineObjectDataOf(
     )
 
 private fun engineObjectDataOf(
-    schemaType: Schema.Object,
+    schemaType: ViaductSchema.Object,
     fields: Iterable<EngineObjectDataEntry>,
     projectNodeBridges: Boolean,
 ): EngineObjectData.Sync {
@@ -92,7 +96,7 @@ private fun engineObjectDataOf(
             "${schemaType.name} cannot contain output field " +
                 "${entry.field.containingDef.name}/${entry.field.name}"
         }
-        require(entry.value.conformsToOutputSchemaType(entry.field.type)) {
+        require(entry.value.conformsToOutputSchemaType(entry.field.outputType)) {
             "${schemaType.name}/${entry.field.name} value does not conform to " +
                 entry.field.type
         }
@@ -110,7 +114,7 @@ private fun engineObjectDataOf(
         "Object ${schemaType.name} contains duplicate string selections"
     }
     return QPlanEngineObjectDataImpl(
-        type = schemaType.gjDef,
+        type = schemaType.engineObjectDataType,
         schemaType = schemaType,
         values = values,
     )
@@ -118,13 +122,13 @@ private fun engineObjectDataOf(
 
 private fun EngineObjectDataEntry.sourceFacingValue(): EngineOutputData? =
     if (field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)) {
-        value.unwrapNodeBridge(field.type)
+        value.unwrapNodeBridge(field.outputType)
     } else {
         value
     }
 
 private fun EngineOutputData?.unwrapNodeBridge(
-    type: TypeExpr<Schema.OutputTypeDef>,
+    type: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): EngineOutputData? {
     if (this == null || this == EngineErrorData) return this
     val elementType = type.unwrapList()
@@ -140,6 +144,17 @@ private fun EngineOutputData?.unwrapNodeBridge(
     return get(NODE_BRIDGE_PAYLOAD_FIELD)
 }
 
+internal val qplanEngineObjectDataTypeKey =
+    Holder.Key.of<GraphQLObjectType>("QPlanEngineObjectDataType")
+
+private val ViaductSchema.Object.engineObjectDataType: GraphQLObjectType
+    get() =
+        try {
+            holder[qplanEngineObjectDataTypeKey]
+        } catch (_: NoSuchElementException) {
+            gjDef
+        }
+
 private const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
 private const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
 
@@ -150,25 +165,25 @@ private const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
  * concrete implementation private while making its canonical model type available without
  * inspecting the opaque GraphQL-Java [EngineObjectData.type] witness.
  */
-val EngineObjectData.Sync.schemaType: Schema.Object
+val EngineObjectData.Sync.schemaType: ViaductSchema.Object
     get() =
         requireNotNull(qplanSchemaTypeOrNull) {
             "Engine object data for ${type.name} is not owned by qplan"
         }
 
-internal val EngineObjectData.Sync.qplanSchemaTypeOrNull: Schema.Object?
+internal val EngineObjectData.Sync.qplanSchemaTypeOrNull: ViaductSchema.Object?
     get() = (this as? QPlanEngineObjectDataImpl)?.schemaType
 
 private data class EngineObjectDataEntryImpl(
     override val selection: String,
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
     override val value: EngineOutputData?,
 ) : EngineObjectDataEntry
 
 @OptIn(InternalApi::class)
 private class QPlanEngineObjectDataImpl(
     override val type: GraphQLObjectType,
-    val schemaType: Schema.Object,
+    val schemaType: ViaductSchema.Object,
     values: Map<String, EngineOutputData?>,
 ) : EngineObjectData.Sync {
     private val values = values.toMap()

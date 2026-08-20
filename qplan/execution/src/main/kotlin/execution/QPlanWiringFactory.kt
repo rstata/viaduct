@@ -17,8 +17,8 @@ import model.EngineIDResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
 import model.SourceSchemaAdapter
+import viaduct.graphql.schema.ViaductSchema
 
 /**
  * GraphQL-Java completion wiring backed by an already-resolved qplan result tree.
@@ -27,9 +27,9 @@ import model.SourceSchemaAdapter
  * remain OERs so the same data fetcher can traverse the complete tree.
  */
 class QPlanWiringFactory(
-    schema: Schema,
+    sourceSchema: SourceSchemaAdapter,
 ) : WiringFactory {
-    private val dataFetcher = ObjectEngineResultDataFetcher(SourceSchemaAdapter(schema))
+    private val dataFetcher = ObjectEngineResultDataFetcher(sourceSchema)
 
     override fun getDefaultDataFetcher(
         environment: FieldWiringEnvironment,
@@ -58,7 +58,7 @@ private class ObjectEngineResultDataFetcher(
                 )
         val sourceFieldName = environment.fieldDefinition.name
         val field = sourceSchema.field(source.type.name, sourceFieldName)
-        require(field is Schema.ObjectField) {
+        require(field is ViaductSchema.ObjectField) {
             "QPlan completion requires a concrete field for " +
                 "${source.type.name}/$sourceFieldName"
         }
@@ -108,7 +108,7 @@ private fun EngineResult?.toGraphQLJavaValue(
                     .toGraphQLJavaValue(environment, path.segment(index))
             }
         is EngineIDResult -> value
-        is Schema.EnumValue -> name
+        is ViaductSchema.EnumValue -> name
         is Int,
         is Double,
         is Boolean,

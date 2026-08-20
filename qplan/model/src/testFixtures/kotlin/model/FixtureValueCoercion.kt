@@ -1,11 +1,13 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 internal fun coerceSimpleValue(
-    type: Schema.SimpleTypeDef,
+    type: ViaductSchema.SimpleTypeDef,
     value: Any,
 ): EngineOutputData =
     when (type) {
-        is Schema.Scalar ->
+        is ViaductSchema.Scalar ->
             when (type.name) {
                 "Int" -> requireType<Int>(value, type)
                 "Float" ->
@@ -17,15 +19,16 @@ internal fun coerceSimpleValue(
                 "ID" -> requireType<String>(value, type)
                 else -> error("Unsupported scalar: ${type.name}")
             }
-        is Schema.Enum ->
+        is ViaductSchema.Enum ->
             requireType<String>(value, type).also {
                 require(type.value(it) != null) { "$it is not a value of ${type.name}" }
             }
+        else -> error("Unsupported simple type: ${type.name}")
     }
 
 private inline fun <reified T : Any> requireType(
     value: Any,
-    type: Schema.TypeDef,
+    type: ViaductSchema.TypeDef,
 ): T {
     require(value is T) {
         "Expected ${T::class.simpleName} for ${type.name}"

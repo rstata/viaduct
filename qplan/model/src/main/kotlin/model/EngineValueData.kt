@@ -1,5 +1,8 @@
 package model
 
+import java.math.BigDecimal
+import viaduct.graphql.schema.ViaductSchema
+
 import viaduct.engine.api.EngineObjectData
 
 /**
@@ -22,7 +25,7 @@ typealias EngineInputData = Any
  *
  * [Absent] means that no default is declared. [Present.value] may be null, denoting an explicit
  * GraphQL null; absence and explicit null are distinct. When attached to a field or argument,
- * [Present] is valid for its declaring [TypeExpr]. Default values use structural equality.
+ * [Present] is valid for its declaring [ViaductSchema.TypeExpr]. Default values use structural equality.
  */
 sealed interface CoercedDefaultValue {
     data object Absent : CoercedDefaultValue
@@ -60,9 +63,9 @@ typealias EngineOutputListData = List<EngineOutputData?>
 data object EngineErrorData
 
 /** Converts a simple engine result to production-compatible engine input data. */
-fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleTypeDef): EngineSimpleData =
+fun EngineResult.toEngineSimpleData(expectedType: ViaductSchema.SimpleTypeDef): EngineSimpleData =
     when (expectedType) {
-        is Schema.Scalar ->
+        is ViaductSchema.Scalar ->
             when (expectedType.name) {
                 "Int" -> cast<Int>()
                 "Float" ->
@@ -72,16 +75,17 @@ fun EngineResult.toEngineSimpleData(expectedType: Schema.SimpleTypeDef): EngineS
                 "ID" -> cast<EngineIDResult>().value
                 else -> error("Unsupported scalar: ${expectedType.name}")
             }
-        is Schema.Enum -> {
-            val value = cast<Schema.EnumValue>()
+        is ViaductSchema.Enum -> {
+            val value = cast<ViaductSchema.EnumValue>()
             if (value.containingDef != expectedType) throw ClassCastException()
             value.name
         }
+        else -> error("Unsupported simple type: ${expectedType.name}")
     }
 
 /** Recursively copies [value] as [EngineInputData] conforming to [expectedType]. */
 internal fun toEngineInputData(
-    expectedType: TypeExpr<Schema.InputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     value: EngineInputData?,
 ): EngineInputData? {
     if (value == null) {
@@ -100,7 +104,7 @@ internal fun toEngineInputData(
 
 /** Converts [value] to canonical [EngineSimpleData] conforming to [expectedType]. */
 internal fun toEngineSimpleData(
-    expectedType: TypeExpr<Schema.SimpleTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.SimpleTypeDef>,
     value: EngineSimpleData?,
 ): EngineSimpleData? {
     if (value == null) {
@@ -113,7 +117,7 @@ internal fun toEngineSimpleData(
 
 /** Recursively copies [value] as canonical list data conforming to [expectedType]. */
 fun toEngineInputListData(
-    expectedType: TypeExpr<Schema.InputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     value: EngineInputListData,
 ): EngineInputListData {
     val elementType = expectedType.unwrapList() ?: throw ClassCastException()
@@ -124,28 +128,29 @@ fun toEngineInputListData(
 
 /** Recursively copies [value] as canonical input-object data conforming to [expectedType]. */
 internal fun toEngineInputObjectData(
-    expectedType: Schema.Input,
+    expectedType: ViaductSchema.Input,
     value: EngineInputObjectData,
 ): EngineInputObjectData = toEngineInputFields(expectedType, value)
 
 private fun toEngineNamedInputData(
-    expectedType: Schema.InputTypeDef,
+    expectedType: ViaductSchema.InputTypeDef,
     value: EngineInputData,
 ): EngineInputData =
     when (expectedType) {
-        is Schema.SimpleTypeDef -> toEngineSimpleData(expectedType, value)
-        is Schema.Input -> {
+        is ViaductSchema.SimpleTypeDef -> toEngineSimpleData(expectedType, value)
+        is ViaductSchema.Input -> {
             val fields = value as? Map<*, *> ?: throw ClassCastException()
             toEngineInputObjectData(expectedType, fields.toStringKeyedMap())
         }
+        else -> error("Unsupported input type: ${expectedType.name}")
     }
 
 private fun toEngineSimpleData(
-    expectedType: Schema.SimpleTypeDef,
+    expectedType: ViaductSchema.SimpleTypeDef,
     value: EngineSimpleData,
 ): EngineSimpleData =
     when (expectedType) {
-        is Schema.Scalar ->
+        is ViaductSchema.Scalar ->
             when (expectedType.name) {
                 "Int" -> value.cast<Int>()
                 "Float" ->
@@ -157,18 +162,19 @@ private fun toEngineSimpleData(
                 "ID" -> value.cast<String>()
                 else -> error("Unsupported scalar: ${expectedType.name}")
             }
-        is Schema.Enum ->
+        is ViaductSchema.Enum ->
             value.cast<String>().also {
                 if (expectedType.value(it) == null) throw ClassCastException()
             }
+        else -> error("Unsupported simple type: ${expectedType.name}")
     }
 
 private inline fun <reified T> Any.cast(): T = this as? T ?: throw ClassCastException()
 
 /** Converts simple resolver output to the result representation selected by [expectedType]. */
-fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleTypeDef): EngineResult =
+fun EngineOutputData.toEngineResult(expectedType: ViaductSchema.SimpleTypeDef): EngineResult =
     when (expectedType) {
-        is Schema.Scalar ->
+        is ViaductSchema.Scalar ->
             when (expectedType.name) {
                 "Int" -> cast<Int>()
                 "Float" ->
@@ -178,13 +184,14 @@ fun EngineOutputData.toEngineResult(expectedType: Schema.SimpleTypeDef): EngineR
                 "ID" -> EngineIDResult.of(cast())
                 else -> error("Unsupported scalar: ${expectedType.name}")
             }
-        is Schema.Enum -> expectedType.requireValue(cast())
+        is ViaductSchema.Enum -> expectedType.requireValue(cast())
+        else -> error("Unsupported simple type: ${expectedType.name}")
     }
 
 /** Converts a simple engine result to production-compatible resolver output. */
-fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleTypeDef): EngineOutputData =
+fun EngineResult.toEngineOutputData(expectedType: ViaductSchema.SimpleTypeDef): EngineOutputData =
     when (expectedType) {
-        is Schema.Scalar ->
+        is ViaductSchema.Scalar ->
             when (expectedType.name) {
                 "Int" -> cast<Int>()
                 "Float" ->
@@ -194,26 +201,27 @@ fun EngineResult.toEngineOutputData(expectedType: Schema.SimpleTypeDef): EngineO
                 "ID" -> cast<EngineIDResult>().value
                 else -> error("Unsupported scalar: ${expectedType.name}")
             }
-        is Schema.Enum -> {
-            val value = cast<Schema.EnumValue>()
+        is ViaductSchema.Enum -> {
+            val value = cast<ViaductSchema.EnumValue>()
             if (value.containingDef != expectedType) throw ClassCastException()
             value.name
         }
+        else -> error("Unsupported simple type: ${expectedType.name}")
     }
 
 private fun toEngineInputFields(
-    expectedType: Schema.Input,
+    expectedType: ViaductSchema.Input,
     fields: EngineInputObjectData,
 ): EngineInputObjectData {
     val supplied =
         fields.mapValues { (name, value) ->
             val field = expectedType.field(name) ?: throw ClassCastException()
-            toEngineInputData(field.type, value)
+            toEngineInputData(field.inputType, value)
         }
 
     return buildMap {
         expectedType.fields.forEach { field ->
-            val defaultValue = field.defaultValue
+            val defaultValue = field.coercedDefaultValue()
             if (defaultValue is CoercedDefaultValue.Present) {
                 put(field.name, defaultValue.value)
             }
@@ -223,17 +231,88 @@ private fun toEngineInputFields(
     }
 }
 
-internal fun Schema.Input.requiredFieldNames(): Set<String> =
+internal fun ViaductSchema.Input.requiredFieldNames(): Set<String> =
     fields
         .filterTo(linkedSetOf()) { field ->
-            !field.type.isNullable && field.defaultValue == CoercedDefaultValue.Absent
-        }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
+            !field.type.isNullable && !field.hasDefault
+        }.mapTo(linkedSetOf(), ViaductSchema.Field::name)
 
-internal fun Schema.Field.requiredArgNames(): Set<String> =
+internal fun ViaductSchema.Field.requiredArgNames(): Set<String> =
     args
         .filterTo(linkedSetOf()) { arg ->
-            !arg.type.isNullable && arg.defaultValue == CoercedDefaultValue.Absent
-        }.mapTo(linkedSetOf(), Schema.InputLikeField::name)
+            !arg.type.isNullable && !arg.hasDefault
+        }.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name)
+
+internal fun ViaductSchema.HasDefaultValue.coercedDefaultValue(): CoercedDefaultValue =
+    if (hasDefault) {
+        CoercedDefaultValue.of(defaultValue.toEngineInputData(inputType))
+    } else {
+        CoercedDefaultValue.Absent
+    }
+
+private fun ViaductSchema.Literal.toEngineInputData(
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+): EngineInputData? {
+    if (this is ViaductSchema.NullLiteral) {
+        require(expectedType.isNullable)
+        return null
+    }
+
+    val elementType = expectedType.unwrapList()
+    if (elementType != null) {
+        val elements =
+            if (this is ViaductSchema.ListLiteral) {
+                this
+            } else {
+                listOf(this)
+            }
+        return elements.map { it.toEngineInputData(elementType) }
+    }
+
+    return when (val type = expectedType.baseTypeDef) {
+        is ViaductSchema.Scalar ->
+            when (type.name) {
+                "Int" -> (this as ViaductSchema.IntLiteral).value.intValueExact()
+                "Float" ->
+                    when (this) {
+                        is ViaductSchema.FloatLiteral -> value
+                        is ViaductSchema.IntLiteral -> value.toBigDecimal()
+                        else -> throw ClassCastException()
+                    }.toFiniteDouble()
+                "String" -> (this as ViaductSchema.StringLiteral).value
+                "Boolean" -> (this as ViaductSchema.BooleanLiteral).value
+                "ID" ->
+                    when (this) {
+                        is ViaductSchema.StringLiteral -> value
+                        is ViaductSchema.IntLiteral -> value.toString()
+                        else -> throw ClassCastException()
+                    }
+                else -> error("Unsupported scalar: ${type.name}")
+            }
+        is ViaductSchema.Enum ->
+            (this as ViaductSchema.EnumLit).value.also(type::requireValue)
+        is ViaductSchema.Input -> {
+            val supplied = this as ViaductSchema.ObjectLiteral
+            buildMap {
+                type.fields.forEach { field ->
+                    val defaultValue = field.coercedDefaultValue()
+                    if (defaultValue is CoercedDefaultValue.Present) {
+                        put(field.name, defaultValue.value)
+                    }
+                }
+                supplied.forEach { (name, literal) ->
+                    val field = type.requireField(name)
+                    put(name, literal.toEngineInputData(field.inputType))
+                }
+                require(keys.containsAll(type.requiredFieldNames()))
+            }
+        }
+        else -> error("Unsupported input type: ${type.name}")
+    }
+}
+
+private fun BigDecimal.toFiniteDouble(): Double =
+    toDouble().also { require(it.isFinite()) }
 
 private fun Map<*, *>.toStringKeyedMap(): EngineInputObjectData =
     entries.associate { (key, value) ->

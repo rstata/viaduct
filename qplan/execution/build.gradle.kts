@@ -12,9 +12,13 @@ dependencies {
     testFixturesImplementation(project(":model"))
     testFixturesImplementation(testFixtures(project(":model")))
     testFixturesImplementation("com.graphql-java:graphql-java:26.0")
+    testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+    testFixturesImplementation(testFixtures(viaductLibs.viaduct.engine.api))
+    testFixturesImplementation(testFixtures(viaductLibs.viaduct.shared.graphql))
     testFixturesImplementation(kotlin("test"))
 
     testImplementation(kotlin("test-junit5"))
+    testImplementation(testFixtures(viaductLibs.viaduct.engine.api))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

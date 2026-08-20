@@ -90,7 +90,7 @@ private fun EngineObjectData.Sync.snipObjectToDemand(
                 }
                 val value = get(concreteField.name)
                 val selectedValue =
-                    if (concreteField.type.baseType is Schema.SimpleTypeDef) {
+                    if (concreteField.type.baseTypeDef is Schema.SimpleTypeDef) {
                         value
                     } else {
                         value.snipToDemand(selection.subselections)

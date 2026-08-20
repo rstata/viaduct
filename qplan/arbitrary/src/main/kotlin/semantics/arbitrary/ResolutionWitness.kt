@@ -561,50 +561,52 @@ private class FingerprintBudget(
     ): String {
         if (value == null) return node("null")
 
-        return when (expectedType) {
-            is TypeExpr.List -> {
-                val values = requireType<EngineInputListData>(value)
+        val elementType = expectedType.unwrapList()
+        if (elementType != null) {
+            val values = requireType<EngineInputListData>(value)
+            return node(
+                "list:${typeExpr(elementType)}[" +
+                    values.joinToString(separator = ",") { element ->
+                        input(element, elementType)
+                    } +
+                    "]",
+            )
+        }
+        return when (val expectedNamedType = expectedType.baseTypeDef) {
+            is Schema.Scalar ->
+                when (expectedNamedType.name) {
+                    "Int" -> node("int:${value as Int}")
+                    "Float" ->
+                        node("float:${(value as Double).toBits()}")
+                    "String" ->
+                        node("string:${atom(value as String)}")
+                    "Boolean" ->
+                        node("boolean:${value as Boolean}")
+                    "ID" -> node("id:${atom(value as String)}")
+                    else -> error("Unsupported scalar: ${expectedNamedType.name}")
+                }
+            is Schema.Enum ->
                 node(
-                    "list:${typeExpr(expectedType.elementType)}[" +
-                        values.joinToString(separator = ",") { element ->
-                            input(element, expectedType.elementType)
-                        } +
-                        "]",
+                    "enum:${atom(expectedNamedType.name)}:" +
+                        atom(value as String),
+                )
+            is Schema.Input -> {
+                val fields = requireType<EngineInputObjectData>(value)
+                node(
+                    "input-object:${atom(expectedNamedType.name)}{" +
+                        fields.entries
+                            .sortedBy(Map.Entry<String, EngineInputData?>::key)
+                            .joinToString(",") { (name, fieldValue) ->
+                                atom(name) +
+                                    "=" +
+                                    input(
+                                        fieldValue,
+                                        expectedNamedType.requireField(name).type,
+                                    )
+                            } +
+                        "}",
                 )
             }
-            is TypeExpr.Named ->
-                when (val expectedNamedType = expectedType.baseType) {
-                    Schema.IntType -> node("int:${value as Int}")
-                    Schema.FloatType ->
-                        node("float:${(value as Double).toBits()}")
-                    Schema.StringType ->
-                        node("string:${atom(value as String)}")
-                    Schema.BooleanType ->
-                        node("boolean:${value as Boolean}")
-                    Schema.IDType -> node("id:${atom(value as String)}")
-                    is Schema.Enum ->
-                        node(
-                            "enum:${atom(expectedNamedType.name)}:" +
-                                atom(value as String),
-                        )
-                    is Schema.Input -> {
-                        val fields = requireType<EngineInputObjectData>(value)
-                        node(
-                            "input-object:${atom(expectedNamedType.name)}{" +
-                                fields.entries
-                                    .sortedBy(Map.Entry<String, EngineInputData?>::key)
-                                    .joinToString(",") { (name, fieldValue) ->
-                                        atom(name) +
-                                            "=" +
-                                            input(
-                                                fieldValue,
-                                                expectedNamedType.requireField(name).type,
-                                            )
-                                    } +
-                                "}",
-                        )
-                    }
-                }
         }
     }
 
@@ -613,13 +615,14 @@ private class FingerprintBudget(
         return value
     }
 
-    private fun typeExpr(typeExpr: TypeExpr<Schema.TypeDef>): String =
-        when (typeExpr) {
-            is TypeExpr.Named ->
-                "named(${atom(typeExpr.baseType.name)},nullable=${typeExpr.isNullable})"
-            is TypeExpr.List ->
-                "list(${typeExpr(typeExpr.elementType)},nullable=${typeExpr.isNullable})"
+    private fun typeExpr(typeExpr: TypeExpr<Schema.TypeDef>): String {
+        val elementType = typeExpr.unwrapList()
+        return if (elementType == null) {
+            "named(${atom(typeExpr.baseTypeDef.name)},nullable=${typeExpr.isNullable})"
+        } else {
+            "list(${typeExpr(elementType)},nullable=${typeExpr.isNullable})"
         }
+    }
 
     private fun node(value: String): String {
         nodes += 1

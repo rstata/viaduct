@@ -6,16 +6,22 @@ package model
  * ### Invariant: schema-type-expression-well-foundedness
  *
  * Nullability belongs independently to every named or list layer. [isNullable] describes the
- * outermost layer, and [baseType] is the named type beneath every list wrapper. Wherever an
- * expression is embedded in a schema definition, [baseType] is that schema's canonical type
+ * outermost layer, and [baseTypeDef] is the named type beneath every list wrapper. Wherever an
+ * expression is embedded in a schema definition, [baseTypeDef] is that schema's canonical type
  * definition.
  *
  * Type expressions use structural equality over their complete wrapper shape, nullability, and
  * canonical base type.
  */
 sealed interface TypeExpr<out T : Schema.TypeDef> {
-    val baseType: T
+    val baseTypeDef: T
     val isNullable: Boolean
+
+    val isList: Boolean
+        get() = this is List
+
+    /** Returns this expression with one outer list wrapper removed, or null when it is not a list. */
+    fun unwrapList(): TypeExpr<T>? = (this as? List)?.elementType
 
     sealed interface Named<out T : Schema.TypeDef> : TypeExpr<T> {
         companion object {
@@ -29,8 +35,8 @@ sealed interface TypeExpr<out T : Schema.TypeDef> {
     sealed interface List<out T : Schema.TypeDef> : TypeExpr<T> {
         val elementType: TypeExpr<T>
 
-        override val baseType: T
-            get() = elementType.baseType
+        override val baseTypeDef: T
+            get() = elementType.baseTypeDef
 
         companion object {
             fun <T : Schema.TypeDef> of(
@@ -42,7 +48,7 @@ sealed interface TypeExpr<out T : Schema.TypeDef> {
 }
 
 private data class NamedTypeExprImpl<out T : Schema.TypeDef>(
-    override val baseType: T,
+    override val baseTypeDef: T,
     override val isNullable: Boolean,
 ) : TypeExpr.Named<T>
 
@@ -55,20 +61,21 @@ internal fun TypeExpr<Schema.TypeDef>.canContainPure(
     inner: TypeExpr<Schema.TypeDef>,
 ): Boolean {
     if (!isNullable && inner.isNullable) return false
-    return when (this) {
-        is TypeExpr.List ->
-            inner is TypeExpr.List && elementType.canContainPure(inner.elementType)
-        is TypeExpr.Named -> {
-            if (inner !is TypeExpr.Named) return false
-            val outerType = baseType
-            val innerType = inner.baseType
-            when {
-                outerType is Schema.InputTypeDef || innerType is Schema.InputTypeDef ->
-                    outerType == innerType
-                outerType is Schema.CompositeTypeDef && innerType is Schema.Object ->
-                    innerType in outerType.possibleObjectTypes
-                else -> outerType == innerType
-            }
-        }
+    val outerElement = unwrapList()
+    val innerElement = inner.unwrapList()
+    if (outerElement != null || innerElement != null) {
+        return outerElement != null &&
+            innerElement != null &&
+            outerElement.canContainPure(innerElement)
+    }
+
+    val outerType = baseTypeDef
+    val innerType = inner.baseTypeDef
+    return when {
+        outerType is Schema.InputTypeDef || innerType is Schema.InputTypeDef ->
+            outerType == innerType
+        outerType is Schema.CompositeTypeDef && innerType is Schema.Object ->
+            innerType in outerType.possibleObjectTypes
+        else -> outerType == innerType
     }
 }

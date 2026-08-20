@@ -39,7 +39,7 @@ class TypenameLoweringTest {
             val field = schema.requireField(typeName, "V_I_typename")
             assertEquals(typeName, field.containingDef.name)
             assertTrue(field.args.isEmpty())
-            assertEquals(Schema.StringType, field.type.baseType)
+            assertEquals(Schema.StringType, field.type.baseTypeDef)
             assertTrue(!field.type.isNullable)
         }
         listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
@@ -98,7 +98,7 @@ class TypenameLoweringTest {
             schema.fragmentFrom("fragment F on Query { node { __typename } }")
                 .subselections
                 .single()
-        val bridgeType = nodeSelection.key.field.type.baseType as Schema.Object
+        val bridgeType = nodeSelection.key.field.type.baseTypeDef as Schema.Object
         val payload = nodeSelection.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
         assertEquals(
@@ -133,7 +133,7 @@ class TypenameLoweringTest {
             )
         val a = nested.merge(world.schema.requireQueryTypeDef()).single()
         assertEquals("a_V_A_node", a.key.field.name)
-        val bridgeType = a.key.field.type.baseType as Schema.Object
+        val bridgeType = a.key.field.type.baseTypeDef as Schema.Object
         val payload = a.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
         assertTrue(payload.subselections.isEmpty())

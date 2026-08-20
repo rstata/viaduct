@@ -612,8 +612,7 @@ private fun launchPassiveChildOrchestrations(
         is String,
         is Boolean,
         -> {
-            val simpleType =
-                (expectedType as TypeExpr.Named).baseType as Schema.SimpleTypeDef
+            val simpleType = expectedType.baseTypeDef as Schema.SimpleTypeDef
             check(target == source.toEngineResult(simpleType)) {
                 "Resolver26 passive simple source has different result at $path"
             }
@@ -635,7 +634,7 @@ private fun launchPassiveChildOrchestrations(
         }
 
         is List<*> -> {
-            val listType = expectedType as TypeExpr.List
+            val elementType = checkNotNull(expectedType.unwrapList())
             check(target is ListEngineResult && target.size == source.size) {
                 "Resolver26 passive list source has different result shape at $path"
             }
@@ -644,7 +643,7 @@ private fun launchPassiveChildOrchestrations(
                     path = path + ListEngineResult.Index.of(index),
                     source = value,
                     target = target[index].getValue().get(),
-                    expectedType = listType.elementType,
+                    expectedType = elementType,
                     initialDemand = initialDemand,
                     runtime = runtime,
                 )

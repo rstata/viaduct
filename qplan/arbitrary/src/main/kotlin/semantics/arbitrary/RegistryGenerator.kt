@@ -422,14 +422,14 @@ class ArbitraryRegistry internal constructor(
                                     ResolverProgramKind.CONSTANT -> constant
                                     else ->
                                         if (
-                                            field.type !is TypeExpr.List &&
-                                            field.type.baseType is Schema.SimpleTypeDef
+                                            !field.type.isList &&
+                                            field.type.baseTypeDef is Schema.SimpleTypeDef
                                         ) {
                                             sensitiveScalar(
                                                 scalar =
                                                     ScalarKind.entries.single {
                                                         it.graphQLName ==
-                                                            field.type.baseType.name
+                                                            field.type.baseTypeDef.name
                                                     },
                                                 input = effectiveInput,
                                                 arguments = effectiveArguments,
@@ -2196,9 +2196,9 @@ internal data class ListPlan(
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputListData {
-        require(typeExpr is TypeExpr.List)
+        val elementType = checkNotNull(typeExpr.unwrapList())
         return elements.map {
-            it.materialize(schema, typeExpr.elementType, inputId, generatedHashSeed)
+            it.materialize(schema, elementType, inputId, generatedHashSeed)
         }
     }
 
@@ -2271,7 +2271,7 @@ internal data class GeneratedHashPlan(
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineObjectData.Sync {
-        require(typeExpr.baseType.name == GENERATED_HASH_TYPE)
+        require(typeExpr.baseTypeDef.name == GENERATED_HASH_TYPE)
         val rootHash = mixGeneratedHash(generatedHashSeed, salt)
         return generatedHashObject(
             schema = schema,

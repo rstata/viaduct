@@ -28,7 +28,7 @@ sealed interface MaterializeSelection {
 
     /** Whether this selection's field has a simple base output type. */
     val isLeaf: Boolean
-        get() = key.field.type.baseType is Schema.SimpleTypeDef
+        get() = key.field.type.baseTypeDef is Schema.SimpleTypeDef
 
     companion object {
         /**
@@ -54,7 +54,7 @@ sealed interface MaterializeSelection {
                 "Materialize selection possible types must be contained by ${fieldOwner.name}"
             }
             require(
-                key.field.type.baseType is Schema.CompositeTypeDef || subselections.isEmpty(),
+                key.field.type.baseTypeDef is Schema.CompositeTypeDef || subselections.isEmpty(),
             ) {
                 "Leaf materialize selection ${fieldOwner.name}.${key.field.name} " +
                     "has subselections"
@@ -131,7 +131,7 @@ sealed interface ObjectMaterializeSelection {
     val subselections: MaterializeSelectionForest
 
     val isLeaf: Boolean
-        get() = key.field.type.baseType is Schema.SimpleTypeDef
+        get() = key.field.type.baseTypeDef is Schema.SimpleTypeDef
 }
 
 /** A concrete-parent materialize forest containing one group per response key. */

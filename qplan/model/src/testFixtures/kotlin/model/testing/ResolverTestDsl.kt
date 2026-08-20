@@ -510,29 +510,34 @@ private class ResultEvaluator(
             require(typeExpr.isNullable) { "null does not conform to $typeExpr" }
             return null
         }
-        return when (typeExpr) {
-            is TypeExpr.List -> {
-                require(source is ArrayValue) { "Expected a list result for $typeExpr" }
-                source.values.map { value ->
-                    evaluate(typeExpr.elementType, value, context)
-                }
+        val elementType = typeExpr.unwrapList()
+        if (elementType != null) {
+            require(source is ArrayValue) { "Expected a list result for $typeExpr" }
+            return source.values.map { value ->
+                evaluate(elementType, value, context)
             }
-            is TypeExpr.Named ->
-                when (val type = typeExpr.baseType) {
-                    Schema.IntType ->
+        }
+        return when (val type = typeExpr.baseTypeDef) {
+            is Schema.Scalar ->
+                when (type.name) {
+                    "Int" ->
                         evaluateInt(source, context).also { result ->
                             require(result != null || typeExpr.isNullable) {
                                 "null does not conform to $typeExpr"
                             }
                         }
-                    Schema.IDType -> parseResultId(source, context)
-                    is Schema.SimpleTypeDef ->
+                    "ID" -> parseResultId(source, context)
+                    else ->
                         throw IllegalArgumentException(
                             "Resolver-test DSL leaves must be Int, not ${type.name}",
                         )
-                    is Schema.CompositeTypeDef ->
-                        evaluateComposite(type, source, context, nodeRoot)
                 }
+            is Schema.Enum ->
+                throw IllegalArgumentException(
+                    "Resolver-test DSL leaves must be Int, not ${type.name}",
+                )
+            is Schema.CompositeTypeDef ->
+                evaluateComposite(type, source, context, nodeRoot)
         }
     }
 
@@ -816,8 +821,9 @@ private class ResultEvaluator(
                             ?.arg(argumentName)
                             ?.type
                     when {
-                        argumentType !is TypeExpr.Named ||
-                            argumentType.baseType != Schema.IDType ->
+                        argumentType == null ||
+                            argumentType.isList ||
+                            (argumentType.baseTypeDef as? Schema.Scalar)?.name != "ID" ->
                             throw IllegalArgumentException(
                                 "idFrom(\$$argumentName) requires an ID argument",
                             )

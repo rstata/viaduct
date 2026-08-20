@@ -125,28 +125,33 @@ private fun EngineInputData.conformsToInputObjectType(
 
 internal fun EngineInputData?.conformsToInputSchemaType(
     typeExpr: TypeExpr<Schema.InputTypeDef>,
-): Boolean =
-    when {
-        this == null -> typeExpr.isNullable
-        typeExpr is TypeExpr.List ->
-            asEngineInputListDataOrNull()
-                ?.all { value -> value.conformsToInputSchemaType(typeExpr.elementType) }
-                ?: false
-        typeExpr is TypeExpr.Named ->
-            when (val expectedType = typeExpr.baseType) {
-                Schema.IntType -> this is Int
-                Schema.FloatType -> this is Double && isFinite()
-                Schema.StringType -> this is String
-                Schema.BooleanType -> this is Boolean
-                Schema.IDType -> this is String
-                is Schema.Enum ->
-                    this is String &&
-                        expectedType.value(this) != null
-                is Schema.Input ->
-                    conformsToInputObjectType(expectedType)
-            }
-        else -> false
+): Boolean {
+    if (this == null) return typeExpr.isNullable
+
+    val elementType = typeExpr.unwrapList()
+    if (elementType != null) {
+        return asEngineInputListDataOrNull()
+            ?.all { value -> value.conformsToInputSchemaType(elementType) }
+            ?: false
     }
+
+    return when (val expectedType = typeExpr.baseTypeDef) {
+        is Schema.Scalar ->
+            when (expectedType.name) {
+                "Int" -> this is Int
+                "Float" -> this is Double && isFinite()
+                "String" -> this is String
+                "Boolean" -> this is Boolean
+                "ID" -> this is String
+                else -> false
+            }
+        is Schema.Enum ->
+            this is String &&
+                expectedType.value(this) != null
+        is Schema.Input ->
+            conformsToInputObjectType(expectedType)
+    }
+}
 
 private fun EngineInputData.asEngineInputListDataOrNull(): EngineInputListData? {
     val values = this as? List<*> ?: return null
@@ -168,28 +173,27 @@ fun EngineOutputData?.conformsToOutputSchemaType(
         null -> typeExpr.isNullable
         EngineErrorData -> true
         is List<*> ->
-            typeExpr is TypeExpr.List &&
-                all { value -> value.conformsToOutputSchemaType(typeExpr.elementType) }
+            typeExpr.unwrapList()
+                ?.let { elementType ->
+                    all { value -> value.conformsToOutputSchemaType(elementType) }
+                } == true
         is EngineObjectData.Sync ->
-            typeExpr is TypeExpr.Named &&
-                (typeExpr.baseType as? Schema.CompositeTypeDef)
+            !typeExpr.isList &&
+                (typeExpr.baseTypeDef as? Schema.CompositeTypeDef)
                     ?.possibleObjectTypes
                     ?.any { possibleType -> possibleType.name == type.name } == true
-        is Int -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IntType
+        is Int -> typeExpr.hasScalarType("Int")
         is Double ->
             isFinite() &&
-                typeExpr is TypeExpr.Named &&
-                typeExpr.baseType == Schema.FloatType
+                typeExpr.hasScalarType("Float")
         is String ->
-            typeExpr is TypeExpr.Named &&
-                when (val expected = typeExpr.baseType) {
-                    Schema.StringType,
-                    Schema.IDType,
-                    -> true
+            !typeExpr.isList &&
+                when (val expected = typeExpr.baseTypeDef) {
+                    is Schema.Scalar -> expected.name == "String" || expected.name == "ID"
                     is Schema.Enum -> expected.value(this) != null
                     else -> false
                 }
-        is Boolean -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.BooleanType
+        is Boolean -> typeExpr.hasScalarType("Boolean")
         else -> false
     }
 
@@ -215,29 +219,31 @@ internal fun EngineResult?.conformsToResultSchemaType(
         null -> typeExpr.isNullable
         ErrorEngineResult -> true
         is ObjectEngineResult ->
-            if (typeExpr is TypeExpr.Named) {
-                val declaredType = typeExpr.baseType
+            if (!typeExpr.isList) {
+                val declaredType = typeExpr.baseTypeDef
                 declaredType is Schema.CompositeTypeDef && type in declaredType.possibleObjectTypes
             } else {
                 false
             }
         is ListEngineResult ->
-            typeExpr is TypeExpr.List &&
-                typeExpr.elementType.canContainPure(this.typeExpr)
-        is Int -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IntType
+            typeExpr.unwrapList()?.canContainPure(this.typeExpr) == true
+        is Int -> typeExpr.hasScalarType("Int")
         is Double ->
             isFinite() &&
-                typeExpr is TypeExpr.Named &&
-                typeExpr.baseType == Schema.FloatType
-        is String -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.StringType
-        is Boolean -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.BooleanType
-        is EngineIDResult -> typeExpr is TypeExpr.Named && typeExpr.baseType == Schema.IDType
+                typeExpr.hasScalarType("Float")
+        is String -> typeExpr.hasScalarType("String")
+        is Boolean -> typeExpr.hasScalarType("Boolean")
+        is EngineIDResult -> typeExpr.hasScalarType("ID")
         is Schema.EnumValue ->
-            typeExpr is TypeExpr.Named &&
-                typeExpr.baseType == containingDef &&
+            !typeExpr.isList &&
+                typeExpr.baseTypeDef == containingDef &&
                 containingDef.value(name) == this
         else -> false
     }
+
+private fun TypeExpr<*>.hasScalarType(expectedName: String): Boolean =
+    !isList &&
+        (baseTypeDef as? Schema.Scalar)?.name == expectedName
 
 internal fun EngineResult.conformsToAccessResult(): Boolean =
     this is Boolean || this == ErrorEngineResult

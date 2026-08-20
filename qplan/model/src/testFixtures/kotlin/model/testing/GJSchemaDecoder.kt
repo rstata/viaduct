@@ -296,14 +296,14 @@ internal class GJSchemaDecoder(
                     val modelField =
                         outputFieldOf(
                             name =
-                                if (isNodeType(sourceTypeExpr.baseType)) {
+                                if (isNodeType(sourceTypeExpr.baseTypeDef)) {
                                     nodeBridgeFieldName(graphQLField.name)
                                 } else {
                                     graphQLField.name
                                 },
                             containingDef = modelType,
                             type =
-                                if (isNodeType(sourceTypeExpr.baseType)) {
+                                if (isNodeType(sourceTypeExpr.baseTypeDef)) {
                                     nodeBridgeTypeExpr(sourceTypeExpr)
                                 } else {
                                     sourceTypeExpr
@@ -406,10 +406,12 @@ internal class GJSchemaDecoder(
             ).build()
 
     private fun TypeExpr<Schema.TypeDef>.toGraphQLType(): GraphQLType {
+        val elementType = unwrapList()
         val nullableType: GraphQLType =
-            when (this) {
-                is TypeExpr.Named -> GraphQLTypeReference.typeRef(baseType.name)
-                is TypeExpr.List -> GraphQLList(elementType.toGraphQLType())
+            if (elementType == null) {
+                GraphQLTypeReference.typeRef(baseTypeDef.name)
+            } else {
+                GraphQLList(elementType.toGraphQLType())
             }
         return if (isNullable) {
             nullableType
@@ -449,23 +451,24 @@ internal class GJSchemaDecoder(
 
     private fun nodeBridgeTypeExpr(
         typeExpr: TypeExpr<Schema.OutputTypeDef>,
-    ): TypeExpr<Schema.OutputTypeDef> =
-        when (typeExpr) {
-            is TypeExpr.Named ->
-                TypeExpr.Named.of(
-                    baseType =
-                        types.getValue(
-                            (typeExpr.baseType as Schema.CompositeTypeDef).name +
-                                NODE_BRIDGE_TYPE_SUFFIX,
-                        ) as Schema.Object,
-                    isNullable = typeExpr.isNullable,
-                )
-            is TypeExpr.List ->
-                TypeExpr.List.of(
-                    elementType = nodeBridgeTypeExpr(typeExpr.elementType),
-                    isNullable = typeExpr.isNullable,
-                )
+    ): TypeExpr<Schema.OutputTypeDef> {
+        val elementType = typeExpr.unwrapList()
+        return if (elementType == null) {
+            TypeExpr.Named.of(
+                baseType =
+                    types.getValue(
+                        (typeExpr.baseTypeDef as Schema.CompositeTypeDef).name +
+                            NODE_BRIDGE_TYPE_SUFFIX,
+                    ) as Schema.Object,
+                isNullable = typeExpr.isNullable,
+            )
+        } else {
+            TypeExpr.List.of(
+                elementType = nodeBridgeTypeExpr(elementType),
+                isNullable = typeExpr.isNullable,
+            )
         }
+    }
 
     private fun decodeOutputType(type: GraphQLOutputType): TypeExpr<Schema.OutputTypeDef> =
         decodeModelOutputType(type, schema)
@@ -648,24 +651,25 @@ private fun decodeScalarLiteral(
     scalarType: Schema.Scalar,
     value: GraphQLValue<*>,
 ): EngineSimpleData =
-    when (scalarType) {
-        Schema.IntType ->
+    when (scalarType.name) {
+        "Int" ->
             (value as IntValue).value.intValueExact()
-        Schema.FloatType ->
+        "Float" ->
             when (value) {
                 is FloatValue -> value.value.toDouble()
                 is IntValue -> value.value.toDouble()
                 else -> error("Invalid Float literal: $value")
             }
 
-        Schema.StringType -> (value as StringValue).value!!
-        Schema.BooleanType -> (value as BooleanValue).isValue
-        Schema.IDType ->
+        "String" -> (value as StringValue).value!!
+        "Boolean" -> (value as BooleanValue).isValue
+        "ID" ->
             when (value) {
                 is StringValue -> value.value!!
                 is IntValue -> value.value.toString()
                 else -> error("Invalid ID literal: $value")
             }
+        else -> error("Unsupported scalar: ${scalarType.name}")
     }
 
 private inline fun decodeInputObjectFields(
@@ -792,12 +796,13 @@ private fun decodeScalarExternal(
     scalarType: Schema.Scalar,
     value: Any,
 ): EngineSimpleData =
-    when (scalarType) {
-        Schema.IntType -> (value as Number).toInt()
-        Schema.FloatType -> (value as Number).toDouble()
-        Schema.StringType -> value as String
-        Schema.BooleanType -> value as Boolean
-        Schema.IDType -> value.toString()
+    when (scalarType.name) {
+        "Int" -> (value as Number).toInt()
+        "Float" -> (value as Number).toDouble()
+        "String" -> value as String
+        "Boolean" -> value as Boolean
+        "ID" -> value.toString()
+        else -> error("Unsupported scalar: ${scalarType.name}")
     }
 
 private fun decodeModelInputType(

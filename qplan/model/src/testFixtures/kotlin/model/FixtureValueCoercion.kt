@@ -5,14 +5,18 @@ internal fun coerceSimpleValue(
     value: Any,
 ): EngineOutputData =
     when (type) {
-        Schema.IntType -> requireType<Int>(value, type)
-        Schema.FloatType ->
-            requireType<Double>(value, type).also {
-                require(it.isFinite()) { "GraphQL Float values must be finite" }
+        is Schema.Scalar ->
+            when (type.name) {
+                "Int" -> requireType<Int>(value, type)
+                "Float" ->
+                    requireType<Double>(value, type).also {
+                        require(it.isFinite()) { "GraphQL Float values must be finite" }
+                    }
+                "String" -> requireType<String>(value, type)
+                "Boolean" -> requireType<Boolean>(value, type)
+                "ID" -> requireType<String>(value, type)
+                else -> error("Unsupported scalar: ${type.name}")
             }
-        Schema.StringType -> requireType<String>(value, type)
-        Schema.BooleanType -> requireType<Boolean>(value, type)
-        Schema.IDType -> requireType<String>(value, type)
         is Schema.Enum ->
             requireType<String>(value, type).also {
                 require(type.value(it) != null) { "$it is not a value of ${type.name}" }

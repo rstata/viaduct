@@ -61,7 +61,7 @@ internal fun EngineOutputData?.resolveValue(
         EngineErrorData -> ResolvedValue(ErrorEngineResult, emptyList(), emptyList())
         is EngineObjectData.Sync -> resolveObjectValue(resolverDemand, path)
         is List<*> -> {
-            val listType = expectedType as TypeExpr.List
+            val elementType = checkNotNull(expectedType.unwrapList())
             this
                 .withIndex()
                 .fold(
@@ -73,7 +73,7 @@ internal fun EngineOutputData?.resolveValue(
                 ) { resolved, (index, value) ->
                     val element =
                         value.resolveValue(
-                            expectedType = listType.elementType,
+                            expectedType = elementType,
                             path = path + ListEngineResult.Index.of(index),
                             resolverDemand = resolverDemand,
                         )
@@ -89,7 +89,7 @@ internal fun EngineOutputData?.resolveValue(
                 }.let { resolved ->
                     ResolvedValue(
                         engineResult =
-                            ListEngineResult.of(listType.elementType, resolved.values),
+                            ListEngineResult.of(elementType, resolved.values),
                         objectsNeedingResolution = resolved.objectsNeedingResolution,
                         objectOccurrences = resolved.objectOccurrences,
                     )
@@ -97,7 +97,7 @@ internal fun EngineOutputData?.resolveValue(
         }
         else ->
             ResolvedValue(
-                toEngineResult((expectedType as TypeExpr.Named).baseType as Schema.SimpleTypeDef),
+                toEngineResult(expectedType.baseTypeDef as Schema.SimpleTypeDef),
                 emptyList(),
                 emptyList(),
             )

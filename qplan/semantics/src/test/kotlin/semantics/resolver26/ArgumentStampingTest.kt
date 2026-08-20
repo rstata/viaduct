@@ -10,7 +10,6 @@ import model.ObjectEngineResult
 import model.Schema
 import model.SelectionForest
 import model.Stamp
-import model.TypeExpr
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.instantiateBindings
@@ -167,8 +166,7 @@ class ArgumentStampingTest {
                     val result = schema.requireObjectField("Query", "result")
                     val items = schema.requireObjectField("Query", "items")
                     val itemsKey = ObjectEngineResult.GroundKey.of(items, emptyMap())
-                    val itemType =
-                        (items.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val itemType = checkNotNull(items.type.unwrapList())
                     val child = schema.requireObjectField("Item", "child")
                     val visibleChildKey = ObjectEngineResult.GroundKey.of(child, mapOf("value" to 7))
                     mapOf(

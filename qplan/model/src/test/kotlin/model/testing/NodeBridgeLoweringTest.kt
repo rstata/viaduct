@@ -45,7 +45,7 @@ class NodeBridgeLoweringTest {
         }
         val producer = schema.requireField("Query", "user_V_A_node")
         val bridge = schema.requireType("User_V_A_Bridge") as Schema.Object
-        assertEquals(bridge, producer.type.baseType)
+        assertEquals(bridge, producer.type.baseTypeDef)
         assertEquals(
             setOf("id", "node"),
             bridge.fields.mapTo(linkedSetOf(), Schema.Field::name),

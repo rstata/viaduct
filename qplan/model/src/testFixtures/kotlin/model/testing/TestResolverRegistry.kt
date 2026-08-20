@@ -122,7 +122,7 @@ private class NodeResolverLowering(
     private val payloadTypes: Set<Schema.CompositeTypeDef> =
         loweredFields
             .mapTo(linkedSetOf()) { field ->
-                sourceSchema.typeExpr(field).baseType as Schema.CompositeTypeDef
+                sourceSchema.typeExpr(field).baseTypeDef as Schema.CompositeTypeDef
             }.filterTo(linkedSetOf()) { type ->
                 type.possibleObjectTypes.isNotEmpty() &&
                     type.possibleObjectTypes.all { it in nodeResolvers }
@@ -199,7 +199,7 @@ private class NodeResolverLowering(
             .mapNotNullTo(linkedSetOf()) { field ->
                 if (!schema.isLoweredNodeField(field)) return@mapNotNullTo null
                 val outputType =
-                    sourceSchema.typeExpr(field).baseType as Schema.CompositeTypeDef
+                    sourceSchema.typeExpr(field).baseTypeDef as Schema.CompositeTypeDef
                 val registeredTypes = outputType.possibleObjectTypes.filterTo(linkedSetOf()) {
                     it in nodeResolvers
                 }
@@ -355,7 +355,9 @@ private class NodeResolverLowering(
         require(idField.args.isEmpty()) {
             "Node id field ${type.name}/id must take no arguments"
         }
-        require(idField.type.baseType == Schema.IDType) {
+        require(
+            (idField.type.baseTypeDef as? Schema.Scalar)?.name == "ID",
+        ) {
             "Node id field ${type.name}/id must be ID-typed"
         }
         return idField
@@ -640,7 +642,7 @@ private class TestResolverRegistry(
     ): Selection {
         val key = first()
         val remaining = drop(1)
-        val outputType = key.field.type.baseType
+        val outputType = key.field.type.baseTypeDef
         return Selection.of(
             key = key,
             possibleTypes = possibleTypes,

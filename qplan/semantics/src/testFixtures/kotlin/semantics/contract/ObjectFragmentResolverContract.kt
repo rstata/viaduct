@@ -10,7 +10,6 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Schema
-import model.TypeExpr
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -610,8 +609,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val groups = schema.requireField("Query", "groups")
-                    val groupElement =
-                        (groups.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val groupElement = checkNotNull(groups.type.unwrapList())
                     val seedKey = schema.contractKey("Group", "seed")
 
                     fun computedResolver(typeName: String) =
@@ -744,11 +742,9 @@ interface ObjectFragmentResolverContract : ResolverContract {
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val groups = schema.requireField("Query", "groups")
-                    val groupElement =
-                        (groups.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val groupElement = checkNotNull(groups.type.unwrapList())
                     val entries = schema.requireField("Group", "entries")
-                    val entryElement =
-                        (entries.type as TypeExpr.List<Schema.OutputTypeDef>).elementType
+                    val entryElement = checkNotNull(entries.type.unwrapList())
                     val seedKey = schema.contractKey("Group", "seed")
                     val rawKey = schema.contractKey("Entry", "raw")
                     mapOf(

@@ -991,11 +991,11 @@ private suspend fun EngineOutputData?.resolveValue(
                 potentialDemand = potentialDemand,
             )
         is List<*> -> {
-            val listType = expectedType as TypeExpr.List
+            val elementType = checkNotNull(expectedType.unwrapList())
             val resolvedElements: List<ResolvedValue> =
                 mapIndexed { index, value ->
                     value.resolveValue(
-                        expectedType = listType.elementType,
+                        expectedType = elementType,
                         path = path + ListEngineResult.Index.of(index),
                         resolverDemand = resolverDemand,
                         potentialDemand = potentialDemand,
@@ -1004,7 +1004,7 @@ private suspend fun EngineOutputData?.resolveValue(
             ResolvedValue(
                 engineResult =
                     ListEngineResult.of(
-                        typeExpr = listType.elementType,
+                        typeExpr = elementType,
                         values = resolvedElements.map(ResolvedValue::engineResult),
                     ),
                 objectsNeedingResolution =
@@ -1014,9 +1014,7 @@ private suspend fun EngineOutputData?.resolveValue(
         else ->
             ResolvedValue(
                 engineResult =
-                    toEngineResult(
-                        (expectedType as TypeExpr.Named).baseType as Schema.SimpleTypeDef,
-                    ),
+                    toEngineResult(expectedType.baseTypeDef as Schema.SimpleTypeDef),
                 objectsNeedingResolution = emptyList(),
             )
     }
@@ -1144,12 +1142,12 @@ private fun EngineResult.toProviderBinding(
             error("A path-variable provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseType as Schema.SimpleTypeDef),
+                toEngineSimpleData(expectedType.baseTypeDef as Schema.SimpleTypeDef),
             )
     }
 
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
-    require(typeExpr.baseType is Schema.InputTypeDef) {
+    require(typeExpr.baseTypeDef is Schema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()

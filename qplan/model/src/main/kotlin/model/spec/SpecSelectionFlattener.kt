@@ -102,7 +102,7 @@ private fun SpecSelection.Field.flattenField(
 ): MaterializeSelection {
     val field = schemaField
     val flattenedSubselections =
-        when (val resultType = field.type.baseType) {
+        when (val resultType = field.type.baseTypeDef) {
             is Schema.SimpleTypeDef -> materializeSelectionForestOf()
 
             is Schema.CompositeTypeDef ->

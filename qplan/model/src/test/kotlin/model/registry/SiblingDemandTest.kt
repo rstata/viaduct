@@ -1,12 +1,13 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.requireField
 import model.requireType
 import model.ObjectEngineResult
 import model.Fragment
-import model.Schema
 import model.Selection
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -71,7 +72,7 @@ class SiblingDemandTest {
             context(world) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(
-                        schema.requireType("Payload") as Schema.Object,
+                        schema.requireType("Payload") as ViaductSchema.Object,
                         "nested",
                     ),
                 )
@@ -131,8 +132,8 @@ class SiblingDemandTest {
             },
         )
 
-    private fun Schema.key(
-        type: Schema.Object,
+    private fun ViaductSchema.key(
+        type: ViaductSchema.Object,
         fieldName: String,
         arguments: Map<String, Any?> = emptyMap(),
     ): ObjectEngineResult.GroundKey =

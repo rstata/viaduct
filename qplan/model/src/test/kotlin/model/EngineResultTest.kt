@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
@@ -61,7 +63,7 @@ class EngineResultTest {
     fun `list engine result retains its elements`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val schema = world.schema
-        val elementType = schema.requireField("Query", "value").type
+        val elementType = schema.requireField("Query", "value").outputType
         val result = world.listResultOf(elementType, "one", null)
 
         assertEquals(
@@ -74,7 +76,7 @@ class EngineResultTest {
     @Test
     fun `typed empty list retains its intended element type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val elementType = schema.requireField("Query", "value").type
+        val elementType = schema.requireField("Query", "value").outputType
 
         val result = ListEngineResult.of(elementType, emptyList())
 
@@ -230,7 +232,7 @@ class EngineResultTest {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val firstKey = schema.key("Query", "first")
         val secondKey = schema.key("Query", "second")
-        val elementType = schema.requireField("Query", "value").type
+        val elementType = schema.requireField("Query", "value").outputType
         val completed =
             ObjectEngineResult.of(
                 type = schema.requireQueryTypeDef(),
@@ -273,7 +275,7 @@ class EngineResultTest {
     @Test
     fun `list allocates stable cells whose access promises complete independently`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val elementType = schema.requireField("Query", "value").type
+        val elementType = schema.requireField("Query", "value").outputType
         val result =
             ListEngineResult.of(
                 typeExpr = elementType,
@@ -504,7 +506,7 @@ class EngineResultTest {
     @Test
     fun `list equality includes type expression and cell occurrence identity`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val elementType = schema.requireField("Query", "user").type
+        val elementType = schema.requireField("Query", "user").outputType
         val shared =
             schema.engineResultOf("User") {
                 "first" resolvesTo "same"
@@ -523,8 +525,8 @@ class EngineResultTest {
             ListEngineResult.of(elementType, listOf(equivalent)),
         )
         assertNotEquals(
-            ListEngineResult.of(schema.requireField("Query", "value").type, emptyList()),
-            ListEngineResult.of(schema.requireField("Query", "integer").type, emptyList()),
+            ListEngineResult.of(schema.requireField("Query", "value").outputType, emptyList()),
+            ListEngineResult.of(schema.requireField("Query", "integer").outputType, emptyList()),
         )
     }
 
@@ -588,7 +590,7 @@ class EngineResultTest {
     @Test
     fun `list result factory rejects incompatible element values`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val elementType = schema.requireField("Query", "value").type
+        val elementType = schema.requireField("Query", "value").outputType
 
         assertFailsWith<IllegalArgumentException> {
             ListEngineResult.of(elementType, listOf(1))
@@ -603,6 +605,11 @@ class EngineResultTest {
                     """
                     type Query {
                       status: Status
+                      int: Int
+                      float: Float
+                      string: String
+                      boolean: Boolean
+                      id: ID
                     }
 
                     enum Status {
@@ -610,18 +617,23 @@ class EngineResultTest {
                     }
                     """.trimIndent(),
                 ).schema
-        val status = schema.requireType("Status") as Schema.Enum
+        val status = schema.requireType("Status") as ViaductSchema.Enum
+        val intType = schema.requireType("Int") as ViaductSchema.Scalar
+        val floatType = schema.requireType("Float") as ViaductSchema.Scalar
+        val stringType = schema.requireType("String") as ViaductSchema.Scalar
+        val booleanType = schema.requireType("Boolean") as ViaductSchema.Scalar
+        val idType = schema.requireType("ID") as ViaductSchema.Scalar
         val cases =
             listOf(
-                Triple<EngineOutputData, EngineResult, Schema.SimpleTypeDef>(
+                Triple<EngineOutputData, EngineResult, ViaductSchema.SimpleTypeDef>(
                     1,
                     1,
-                    Schema.IntType,
+                    intType,
                 ),
-                Triple(2.5, 2.5, Schema.FloatType),
-                Triple("three", "three", Schema.StringType),
-                Triple(true, true, Schema.BooleanType),
-                Triple("four", EngineIDResult.of("four"), Schema.IDType),
+                Triple(2.5, 2.5, floatType),
+                Triple("three", "three", stringType),
+                Triple(true, true, booleanType),
+                Triple("four", EngineIDResult.of("four"), idType),
                 Triple(
                     "READY",
                     status.requireValue("READY"),
@@ -646,6 +658,7 @@ class EngineResultTest {
                     """
                     type Query {
                       status: Status
+                      float: Float
                     }
 
                     enum Status {
@@ -657,10 +670,11 @@ class EngineResultTest {
                     }
                     """.trimIndent(),
                 ).schema
-        val status = schema.requireType("Status") as Schema.Enum
-        val otherStatus = schema.requireType("OtherStatus") as Schema.Enum
-        val floatType = TypeExpr.Named.of(Schema.FloatType)
-        val statusType = TypeExpr.Named.of(status)
+        val status = schema.requireType("Status") as ViaductSchema.Enum
+        val otherStatus = schema.requireType("OtherStatus") as ViaductSchema.Enum
+        val floatType =
+            ViaductSchema.TypeExpr(schema.requireType("Float") as ViaductSchema.Scalar)
+        val statusType = ViaductSchema.TypeExpr(status)
 
         assertFailsWith<IllegalArgumentException> {
             ListEngineResult.of(floatType, listOf(Double.NaN))
@@ -698,7 +712,7 @@ class EngineResultTest {
         val simple: EngineResult = "value"
         val list: EngineResult =
             ListEngineResult.of(
-                schema.requireField("Query", "value").type,
+                schema.requireField("Query", "value").outputType,
                 emptyList(),
             )
 
@@ -719,7 +733,7 @@ class EngineResultTest {
     @Test
     fun `list engine results union corresponding cells`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val elementType = schema.requireField("Query", "value").type
+        val elementType = schema.requireField("Query", "value").outputType
         val left = schema.listResultOf(elementType, "same", null)
         val right = schema.listResultOf(elementType, "same", null)
 
@@ -729,8 +743,8 @@ class EngineResultTest {
     @Test
     fun `list engine results with incompatible shapes have no union`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val stringType = schema.requireField("Query", "value").type
-        val intType = schema.requireField("Query", "integer").type
+        val stringType = schema.requireField("Query", "value").outputType
+        val intType = schema.requireField("Query", "integer").outputType
         val stringResult = schema.listResultOf(stringType, "value")
 
         assertFailsWith<IllegalArgumentException> {
@@ -835,7 +849,7 @@ class EngineResultTest {
         }
     }
 
-    private fun Schema.key(
+    private fun ViaductSchema.key(
         typeName: String,
         fieldName: String,
         vararg arguments: Pair<String, Any?>,

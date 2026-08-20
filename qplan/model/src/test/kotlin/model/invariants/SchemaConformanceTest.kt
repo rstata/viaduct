@@ -1,9 +1,11 @@
 package model.invariants
 
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
+
 import model.engineResultOf
 import model.engineObjectDataOf
 import model.objectOf
+import model.outputType
 import model.requireField
 import model.requireType
 import model.testing.TestWorld
@@ -24,7 +26,7 @@ class SchemaConformanceTest {
         assertTrue(
             context(world) {
                 value.conformsToSchema() &&
-                    value.conformsToOutputSchema(schema.requireField("Query", "user").type)
+                    value.conformsToOutputSchema(schema.requireField("Query", "user").outputType)
             },
         )
     }
@@ -47,7 +49,7 @@ class SchemaConformanceTest {
     @Test
     fun `object value factory rejects a field value with the wrong type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val user = schema.requireType("User") as Schema.Object
+        val user = schema.requireType("User") as ViaductSchema.Object
 
         assertFailsWith<IllegalArgumentException> {
             engineObjectDataOf(

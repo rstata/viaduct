@@ -9,6 +9,7 @@ internal const val NODE_BRIDGE_TYPE_SUFFIX = "_V_A_Bridge"
 internal const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
 internal const val NODE_BRIDGE_ID_FIELD = "id"
 internal const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
+internal const val TYPED_NODE_ID_PREFIX = "\$node:"
 internal const val VIADUCT_IGNORE_SYMBOL = ViaductSchema.VIADUCT_IGNORE_SYMBOL
 
 internal fun nodeBridgeTypeName(sourceTypeName: String): String =

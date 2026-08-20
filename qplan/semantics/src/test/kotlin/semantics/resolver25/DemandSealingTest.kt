@@ -5,7 +5,7 @@ import model.requireObjectField
 import model.Arguments
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.VariableBinding
 import model.emptyFragmentOf
@@ -147,7 +147,7 @@ class DemandSealingTest {
 
         val observation = observeResult(testWorld)
         val resolved = observation.result
-        val payloadType = testWorld.schema.requireType("Payload") as Schema.Object
+        val payloadType = testWorld.schema.requireType("Payload") as ViaductSchema.Object
         val signatures = observation.lifecycleEvents.resolver25StructuralSignatures()
 
         assertEquals(1, producerApplications)
@@ -259,7 +259,7 @@ class DemandSealingTest {
 
         val observation = observeResult(testWorld)
         val resolved = observation.result
-        val payloadType = testWorld.schema.requireType("Payload") as Schema.Object
+        val payloadType = testWorld.schema.requireType("Payload") as ViaductSchema.Object
 
         assertEquals(1, producerApplications)
         assertContains(
@@ -488,8 +488,8 @@ class DemandSealingTest {
                         ),
                 )
             }
-        val payloadType = testWorld.schema.requireType("Payload") as Schema.Object
-        val seedsType = testWorld.schema.requireType("Seeds") as Schema.Object
+        val payloadType = testWorld.schema.requireType("Payload") as ViaductSchema.Object
+        val seedsType = testWorld.schema.requireType("Seeds") as ViaductSchema.Object
 
         assertEquals(2, consumerApplications)
         assertEquals(setOf(4, 7), consumerArguments)

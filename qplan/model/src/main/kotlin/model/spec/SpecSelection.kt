@@ -1,8 +1,9 @@
 package model.spec
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Assumptions
 import model.Arguments
-import model.Schema
 
 /**
  * A post-validation selection in a GraphQL-spec selection set.
@@ -35,7 +36,7 @@ sealed interface SpecSelection {
         val alias: String?
 
         /** The canonical schema field selected at this source occurrence. */
-        val schemaField: Schema.Field
+        val schemaField: ViaductSchema.Field
 
         /** The schema field name. */
         val fieldName: String
@@ -56,8 +57,8 @@ sealed interface SpecSelection {
          *
          * ### Invariant: spec-field-shape
          *
-         * This is null exactly when the field's base type is a [Schema.SimpleTypeDef]. When the base
-         * type is a [Schema.CompositeTypeDef], this is non-null. It may be empty after an external
+         * This is null exactly when the field's base type is a [ViaductSchema.SimpleTypeDef]. When the base
+         * type is a [ViaductSchema.CompositeTypeDef], this is non-null. It may be empty after an external
          * operation's `__typename` selections have been erased.
          */
         val subselections: List<SpecSelection>?
@@ -72,18 +73,18 @@ sealed interface SpecSelection {
             @JvmStatic
             fun of(
                 alias: String?,
-                field: Schema.Field,
+                field: ViaductSchema.Field,
                 arguments: Map<String, Any?>,
                 subselections: List<SpecSelection>?,
             ): Field {
                 when (field.type.baseTypeDef) {
-                    is Schema.SimpleTypeDef ->
+                    is ViaductSchema.SimpleTypeDef ->
                         require(subselections == null) {
                             "Simple field ${field.containingDef.name}.${field.name} " +
                                 "must not have subselections"
                         }
 
-                    is Schema.CompositeTypeDef ->
+                    is ViaductSchema.CompositeTypeDef ->
                         require(subselections != null) {
                             "Composite field ${field.containingDef.name}.${field.name} " +
                                 "requires a selection set"
@@ -119,7 +120,7 @@ sealed interface SpecSelection {
          * A null condition leaves the surrounding type condition unchanged. A non-null condition is
          * a definition in [Assumptions.schema].
          */
-        val typeCondition: Schema.CompositeTypeDef?
+        val typeCondition: ViaductSchema.CompositeTypeDef?
 
         /**
          * ### Invariant: spec-inline-fragment-shape
@@ -136,7 +137,7 @@ sealed interface SpecSelection {
              */
             @JvmStatic
             fun of(
-                typeCondition: Schema.CompositeTypeDef?,
+                typeCondition: ViaductSchema.CompositeTypeDef?,
                 selections: List<SpecSelection>,
             ): InlineFragment {
                 require(selections.isNotEmpty()) {
@@ -150,12 +151,12 @@ sealed interface SpecSelection {
 
 private class FieldImpl(
     override val alias: String?,
-    override val schemaField: Schema.Field,
+    override val schemaField: ViaductSchema.Field,
     override val arguments: Arguments,
     override val subselections: List<SpecSelection>?,
 ) : SpecSelection.Field
 
 private class InlineFragmentImpl(
-    override val typeCondition: Schema.CompositeTypeDef?,
+    override val typeCondition: ViaductSchema.CompositeTypeDef?,
     override val selections: List<SpecSelection>,
 ) : SpecSelection.InlineFragment

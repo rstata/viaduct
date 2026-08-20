@@ -1,11 +1,12 @@
 package semantics
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
-import model.Schema
 import model.SelectionForest
 import model.groundKey
 import model.schemaType
@@ -61,7 +62,7 @@ internal interface DepthFirstReactor {
 }
 
 private class PriorityQueueDepthFirstReactor(
-    schemaType: Schema.Object,
+    schemaType: ViaductSchema.Object,
     eventObserver: ReactorEventObserver,
 ) : DepthFirstReactor {
     private val result = ObjectEngineResult.of(schemaType, emptyMap(), mutable = true)

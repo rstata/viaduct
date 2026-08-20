@@ -5,6 +5,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ObjectEngineResult
+import model.outputType
 import model.ObjectSelection
 import model.Arguments
 import model.PathComponent
@@ -144,7 +145,7 @@ internal fun EngineObjectData.Sync.resolveKey(
                 }
             val resolvedValue =
                 fieldValue.resolveValue(
-                    expectedType = key.field.type,
+                    expectedType = key.field.outputType,
                     path = path + key,
                     resolverDemand = resolutionSelections,
                 )

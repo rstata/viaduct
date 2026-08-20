@@ -1,16 +1,24 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 import model.CoercedDefaultValue
 import model.Fragment
 import model.EngineErrorData
 import model.EngineOutputData
 import model.Arguments
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SourceSchemaAdapter
-import model.TypeExpr
+import model.inputType
+import model.lowering.ALL_SOURCE_OBJECTS_TYPE
+import model.lowering.LOWERED_TYPENAME_FIELD
+import model.lowering.NODE_BRIDGE_ID_FIELD
+import model.lowering.NODE_BRIDGE_PAYLOAD_FIELD
+import model.lowering.NODE_BRIDGE_TYPE_SUFFIX
+import model.lowering.TYPED_NODE_ID_PREFIX
+import model.lowering.nodeBridgeTypeName
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fieldExpressions
@@ -43,12 +51,12 @@ typealias NodeResolverFunction = (String) -> EngineOutputData?
 fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
 
 typealias CanonicalFieldResolverApplicationObserver =
-    (Schema.Field, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
+    (ViaductSchema.Field, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
 
 internal fun resolverRegistryOf(
     schema: GJSchema,
-    nodeResolvers: Map<Schema.Object, NodeResolverFunction>,
-    fieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
+    nodeResolvers: Map<ViaductSchema.Object, NodeResolverFunction>,
+    fieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>,
     variableProviders: Map<Arguments.Variable, VariableDeclaration>,
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
@@ -112,15 +120,15 @@ internal fun resolverRegistryOf(
  */
 private class NodeResolverLowering(
     private val schema: GJSchema,
-    private val nodeResolvers: Map<Schema.Object, NodeResolverFunction>,
-    rawFieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
+    private val nodeResolvers: Map<ViaductSchema.Object, NodeResolverFunction>,
+    rawFieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val nodeType: Schema.Interface? = canonicalNodeType()
-    private val loweredFields: Set<Schema.ObjectField> = loweredNodeFields()
-    private val payloadTypes: Set<Schema.Object> = nodeResolvers.keys
+    private val nodeType: ViaductSchema.Interface? = canonicalNodeType()
+    private val loweredFields: Set<ViaductSchema.ObjectField> = loweredNodeFields()
+    private val payloadTypes: Set<ViaductSchema.Object> = nodeResolvers.keys
 
-    val fieldResolvers: Map<Schema.Field, FieldResolverDefinition>
+    val fieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>
 
     init {
         validateRawFieldResolvers(rawFieldResolvers)
@@ -149,7 +157,7 @@ private class NodeResolverLowering(
                 payload to payloadResolver(type)
             }
         val typenameResolvers =
-            (schema.requireType(ALL_SOURCE_OBJECTS_TYPE) as Schema.Interface)
+            (schema.requireType(ALL_SOURCE_OBJECTS_TYPE) as ViaductSchema.Interface)
                 .possibleObjectTypes
                 .associate { type ->
                     val field = schema.requireObjectField(type.name, LOWERED_TYPENAME_FIELD)
@@ -164,19 +172,14 @@ private class NodeResolverLowering(
             ordinaryResolvers + bridgeResolvers + payloadResolvers + typenameResolvers
     }
 
-    private fun canonicalNodeType(): Schema.Interface? {
-        val candidate =
-            try {
-                schema.requireType("Node")
-            } catch (_: Schema.MissingSchemaElementException) {
-                null
-            }
+    private fun canonicalNodeType(): ViaductSchema.Interface? {
+        val candidate = schema.types["Node"]
         if (candidate == null && nodeResolvers.isEmpty()) return null
-        return candidate as? Schema.Interface
+        return candidate as? ViaductSchema.Interface
             ?: throw IllegalArgumentException("Node resolvers require a canonical Node interface")
     }
 
-    private fun loweredNodeFields(): Set<Schema.ObjectField> {
+    private fun loweredNodeFields(): Set<ViaductSchema.ObjectField> {
         nodeResolvers.forEach { (type, _) ->
             validateCanonicalType(type)
             require(
@@ -195,7 +198,7 @@ private class NodeResolverLowering(
             .mapNotNullTo(linkedSetOf()) { field ->
                 if (!schema.isLoweredNodeField(field)) return@mapNotNullTo null
                 val outputType =
-                    sourceSchema.typeExpr(field).baseTypeDef as Schema.CompositeTypeDef
+                    sourceSchema.typeExpr(field).baseTypeDef as ViaductSchema.CompositeTypeDef
                 val registeredTypes = outputType.possibleObjectTypes.filterTo(linkedSetOf()) {
                     it in nodeResolvers
                 }
@@ -226,13 +229,13 @@ private class NodeResolverLowering(
     }
 
     private fun validateRawFieldResolvers(
-        fieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
+        fieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>,
     ) {
         val nodeIdFields = nodeResolvers.keys.mapTo(linkedSetOf(), ::validateNodeIdField)
         fieldResolvers.forEach { (field, resolver) ->
             validateCanonicalField(field, "field-resolver field")
             val typeName = field.containingDef.name
-            require(field.containingDef is Schema.Object) {
+            require(field.containingDef is ViaductSchema.Object) {
                 "Field resolver $typeName/${field.name} must belong to a concrete object type"
             }
             require(!field.containingDef.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX)) {
@@ -255,8 +258,8 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun payloadResolver(nodeOutputType: Schema.Object): FieldResolverDefinition {
-        val bridgeType = schema.nodeBridgeType(nodeOutputType) as Schema.Object
+    private fun payloadResolver(nodeOutputType: ViaductSchema.Object): FieldResolverDefinition {
+        val bridgeType = schema.nodeBridgeType(nodeOutputType) as ViaductSchema.Object
         val idField = schema.requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
         val objectFragment =
             Fragment.of(
@@ -286,11 +289,11 @@ private class NodeResolverLowering(
 
     private fun loadNode(
         typedId: EngineOutputData?,
-        nodeOutputType: Schema.Object,
+        nodeOutputType: ViaductSchema.Object,
     ): EngineOutputData? {
         if (typedId == null || typedId == EngineErrorData) return typedId
         require(typedId is String) {
-            "Node bridge ${nodeBridgeTypeName(nodeOutputType)} did not contain an ID"
+            "Node bridge ${nodeBridgeTypeName(nodeOutputType.name)} did not contain an ID"
         }
         val (type, id) = decodeTypedId(typedId)
         require(type in nodeOutputType.possibleObjectTypes) {
@@ -321,13 +324,13 @@ private class NodeResolverLowering(
         return result
     }
 
-    private fun payloadField(nodeOutputType: Schema.Object): Schema.ObjectField =
+    private fun payloadField(nodeOutputType: ViaductSchema.Object): ViaductSchema.ObjectField =
         schema.requireObjectField(
-            nodeBridgeTypeName(nodeOutputType),
+            nodeBridgeTypeName(nodeOutputType.name),
             NODE_BRIDGE_PAYLOAD_FIELD,
         )
 
-    private fun decodeTypedId(id: String): Pair<Schema.Object, String> {
+    private fun decodeTypedId(id: String): Pair<ViaductSchema.Object, String> {
         require(id.startsWith(TYPED_NODE_ID_PREFIX)) {
             "Synthetic node-ID bridge contains an untyped ID"
         }
@@ -338,11 +341,11 @@ private class NodeResolverLowering(
         val typeNameStart = separator + 1
         val typeNameEnd = typeNameStart + typeNameLength
         require(typeNameEnd <= encoded.length) { "Malformed typed node ID" }
-        val type = schema.requireType(encoded.substring(typeNameStart, typeNameEnd)) as Schema.Object
+        val type = schema.requireType(encoded.substring(typeNameStart, typeNameEnd)) as ViaductSchema.Object
         return type to encoded.substring(typeNameEnd)
     }
 
-    private fun validateNodeIdField(type: Schema.Object): Schema.ObjectField {
+    private fun validateNodeIdField(type: ViaductSchema.Object): ViaductSchema.ObjectField {
         val idField =
             type.field("id")
                 ?: throw IllegalArgumentException(
@@ -355,21 +358,21 @@ private class NodeResolverLowering(
             "Node id field ${type.name}/id must take no arguments"
         }
         require(
-            (idField.type.baseTypeDef as? Schema.Scalar)?.name == "ID",
+            (idField.type.baseTypeDef as? ViaductSchema.Scalar)?.name == "ID",
         ) {
             "Node id field ${type.name}/id must be ID-typed"
         }
         return idField
     }
 
-    private fun validateCanonicalType(type: Schema.Object) {
+    private fun validateCanonicalType(type: ViaductSchema.Object) {
         require(schema.requireType(type.name) == type) {
             "${type.name} is not canonical in this registry's schema"
         }
     }
 
     private fun validateCanonicalField(
-        field: Schema.Field,
+        field: ViaductSchema.Field,
         role: String = "field",
     ) {
         val typeName = field.containingDef.name
@@ -382,7 +385,7 @@ private class NodeResolverLowering(
 
 private sealed interface DependencyVertex {
     data class Field(
-        val field: Schema.ObjectField,
+        val field: ViaductSchema.ObjectField,
     ) : DependencyVertex
 
     data class Variable(
@@ -391,12 +394,12 @@ private sealed interface DependencyVertex {
 }
 
 private class TestResolverRegistry(
-    private val schema: Schema,
-    fieldResolverDefinitions: Map<Schema.Field, FieldResolverDefinition>,
+    private val schema: ViaductSchema,
+    fieldResolverDefinitions: Map<ViaductSchema.Field, FieldResolverDefinition>,
     variableDeclarations: Map<Arguments.Variable, VariableDeclaration>,
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
-    private val fieldResolvers: Map<Schema.Field, FieldResolver>
+    private val fieldResolvers: Map<ViaductSchema.Field, FieldResolver>
     private val variableDefinitions =
         variableDeclarations.mapValues { (_, declaration) ->
             when (declaration) {
@@ -412,7 +415,7 @@ private class TestResolverRegistry(
         fieldResolverDefinitions.forEach { (field, resolver) ->
             validateCanonicalField(field, "field-resolver field")
             val typeName = field.containingDef.name
-            require(field.containingDef is Schema.Object) {
+            require(field.containingDef is ViaductSchema.Object) {
                 "Field resolver $typeName/${field.name} must belong to a concrete object type"
             }
             val fragmentType = resolver.objectFragment.nominalType
@@ -464,7 +467,7 @@ private class TestResolverRegistry(
         }
 
         val objectFieldResolvers =
-            fieldResolverDefinitions.mapKeys { (field, _) -> field as Schema.ObjectField }
+            fieldResolverDefinitions.mapKeys { (field, _) -> field as ViaductSchema.ObjectField }
         outgoing =
             buildMap {
                 objectFieldResolvers.forEach { (field, resolver) ->
@@ -494,7 +497,7 @@ private class TestResolverRegistry(
                     )
                 }
             }
-        val assembledResolvers = mutableMapOf<Schema.Field, FieldResolver>()
+        val assembledResolvers = mutableMapOf<ViaductSchema.Field, FieldResolver>()
         dependencyOrder(outgoing).forEach { site ->
             when (site) {
                 is DependencyVertex.Field -> {
@@ -520,7 +523,7 @@ private class TestResolverRegistry(
         ).validate()
     }
 
-    override fun contains(field: Schema.ObjectField): Boolean {
+    override fun contains(field: ViaductSchema.ObjectField): Boolean {
         validateCanonicalField(field)
         return field in fieldResolvers
     }
@@ -530,13 +533,13 @@ private class TestResolverRegistry(
         return engineObjectDataOf(schemaType = query)
     }
 
-    override fun resolver(field: Schema.ObjectField): FieldResolver {
+    override fun resolver(field: ViaductSchema.ObjectField): FieldResolver {
         validateCanonicalField(field)
         return fieldResolvers[field]
             ?: throw MissingResolverException(field.containingDef.name, field.name)
     }
 
-    override fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField> {
+    override fun mayDemandFrom(field: ViaductSchema.ObjectField): Set<ViaductSchema.ObjectField> {
         require(field in this) { "Resolver field is not registered" }
         return outgoing
             .getValue(DependencyVertex.Field(field))
@@ -546,7 +549,7 @@ private class TestResolverRegistry(
     }
 
     private fun validateProviderContainment(
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
         fragment: Fragment,
     ) {
         variableDefinitions.forEach { (variable, definition) ->
@@ -598,7 +601,7 @@ private class TestResolverRegistry(
         }
 
     private data class VariableUse(
-        val typeExpr: TypeExpr<Schema.InputTypeDef>,
+        val typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
         val hasDefault: Boolean,
     )
 
@@ -614,8 +617,8 @@ private class TestResolverRegistry(
                             value
                                 .matchingVariableTypes(
                                     variable = variable,
-                                    typeExpr = argument.type,
-                                    hasDefault = argument.defaultValue is CoercedDefaultValue.Present,
+                                    typeExpr = argument.inputType,
+                                    hasDefault = argument.hasDefault,
                                 ).map { (typeExpr, hasDefault) ->
                                     VariableUse(typeExpr, hasDefault)
                                 },
@@ -627,7 +630,7 @@ private class TestResolverRegistry(
         }
 
     private fun validateCanonicalField(
-        field: Schema.Field,
+        field: ViaductSchema.Field,
         role: String = "field",
     ) {
         val typeName = field.containingDef.name
@@ -637,7 +640,7 @@ private class TestResolverRegistry(
     }
 
     private fun List<ObjectEngineResult.Key>.toSelection(
-        possibleTypes: Set<Schema.Object>,
+        possibleTypes: Set<ViaductSchema.Object>,
     ): Selection {
         val key = first()
         val remaining = drop(1)
@@ -649,7 +652,7 @@ private class TestResolverRegistry(
                 if (remaining.isEmpty()) {
                     selectionForestOf()
                 } else {
-                    require(outputType is Schema.CompositeTypeDef)
+                    require(outputType is ViaductSchema.CompositeTypeDef)
                     selectionForestOf(remaining.toSelection(outputType.possibleObjectTypes))
                 },
         )
@@ -657,7 +660,7 @@ private class TestResolverRegistry(
 
     private fun implicatedVertices(
         fragment: Fragment,
-        ownerField: Schema.ObjectField,
+        ownerField: ViaductSchema.ObjectField,
     ): Set<DependencyVertex> {
         val result = mutableSetOf<DependencyVertex>()
         fragment.subselections.forEach { selection ->
@@ -668,12 +671,12 @@ private class TestResolverRegistry(
 
     private fun MutableSet<DependencyVertex>.addImplicatedBy(
         selection: Selection,
-        ownerField: Schema.ObjectField,
+        ownerField: ViaductSchema.ObjectField,
     ) {
         selection.possibleTypes.forEach { possibleType ->
             possibleType.field(selection.key.field.name)
                 ?.takeIf { it in sourceFieldResolvers }
-                ?.let { add(DependencyVertex.Field(it as Schema.ObjectField)) }
+                ?.let { add(DependencyVertex.Field(it as ViaductSchema.ObjectField)) }
         }
         selection.key.arguments.variableTemplates().forEach { variable ->
             require(variable in variableDefinitions) {

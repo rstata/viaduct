@@ -1,5 +1,7 @@
 package semantics
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
@@ -8,10 +10,9 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.outputType
 import model.PathComponent
-import model.Schema
 import model.SelectionForest
-import model.TypeExpr
 import viaduct.engine.api.EngineObjectData
 import model.applicableGroundSelections
 import model.invariants.conformsToOutputSchemaType
@@ -49,7 +50,7 @@ internal class ObjectResolution(
  */
 context(world: Assumptions)
 internal fun EngineOutputData?.resolveValue(
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
 ): ResolvedValue {
@@ -97,7 +98,7 @@ internal fun EngineOutputData?.resolveValue(
         }
         else ->
             ResolvedValue(
-                toEngineResult(expectedType.baseTypeDef as Schema.SimpleTypeDef),
+                toEngineResult(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
                 emptyList(),
                 emptyList(),
             )
@@ -152,7 +153,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
             val fieldValue =
                 get(key.field.name)
                     .resolveValue(
-                        expectedType = key.field.type,
+                        expectedType = key.field.outputType,
                         path = path + key,
                         resolverDemand =
                             resolverDemandByKey[key]

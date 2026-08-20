@@ -1,7 +1,8 @@
 package semantics.arbitrary
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
-import model.CoercedDefaultValue
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.arbitrary
@@ -15,11 +16,9 @@ import model.EngineOutputListData
 import model.Fragment
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.SourceSchemaAdapter
-import model.TypeExpr
 import viaduct.engine.api.EngineObjectData
 import model.fragmentFrom
 import model.materializeSelectionForestOf
@@ -334,7 +333,7 @@ class ArbitraryRegistry internal constructor(
             schemaSDL = schemaSDL,
             nodeResolvers = { canonicalSchema ->
                 nodeValues.map { (typeName, plan) ->
-                    val type = canonicalSchema.requireType(typeName) as Schema.Object
+                    val type = canonicalSchema.requireType(typeName) as ViaductSchema.Object
                     type to
                         nodeResolverOf { id ->
                             plan.materializeObject(
@@ -355,7 +354,7 @@ class ArbitraryRegistry internal constructor(
                             coordinate.typeName,
                             coordinate.fieldName,
                         )
-                    val owner = field.containingDef as Schema.Object
+                    val owner = field.containingDef as ViaductSchema.Object
                     val constant =
                         plan.materialize(
                             canonicalSchema,
@@ -369,13 +368,12 @@ class ArbitraryRegistry internal constructor(
                                     .getValue(coordinate)
                                     .materialize(
                                         canonicalSchema,
-                                        field as Schema.ObjectField,
+                                        field as ViaductSchema.ObjectField,
                                     ),
                             function = { input, arguments ->
                                 field.args
-                                    .filter { argument ->
-                                        argument.defaultValue is CoercedDefaultValue.Present
-                                    }.forEach { argument ->
+                                    .filter { argument -> argument.hasDefault }
+                                    .forEach { argument ->
                                         require(argument.name in arguments.fieldValues) {
                                             "Concrete default ${coordinate.typeName}/" +
                                                 "${coordinate.fieldName}(${argument.name}) " +
@@ -423,7 +421,7 @@ class ArbitraryRegistry internal constructor(
                                     else ->
                                         if (
                                             !field.type.isList &&
-                                            field.type.baseTypeDef is Schema.SimpleTypeDef
+                                            field.type.baseTypeDef is ViaductSchema.SimpleTypeDef
                                         ) {
                                             sensitiveScalar(
                                                 scalar =
@@ -455,7 +453,7 @@ class ArbitraryRegistry internal constructor(
                         sourceSchema.field(
                             provider.owner.typeName,
                             provider.owner.fieldName,
-                        ) as Schema.ObjectField
+                        ) as ViaductSchema.ObjectField
                     Arguments.Variable.of(
                         field,
                         provider.variableName,
@@ -1560,12 +1558,12 @@ internal data class FragmentPlan(
     val selections: List<FragmentSelectionPlan>,
 ) {
     fun materialize(
-        schema: Schema,
-        variableField: Schema.ObjectField,
+        schema: ViaductSchema,
+        variableField: ViaductSchema.ObjectField,
     ): Fragment =
         if (selections.isEmpty()) {
             Fragment.of(
-                nominalType = schema.requireType(ownerName) as Schema.Object,
+                nominalType = schema.requireType(ownerName) as ViaductSchema.Object,
                 subselections = selectionForestOf(),
             )
         } else {
@@ -1634,9 +1632,9 @@ internal data class FragmentSelectionPlan(
         }
 
     fun materialize(
-        schema: Schema,
-        owner: Schema.Object,
-        variableField: Schema.ObjectField,
+        schema: ViaductSchema,
+        owner: ViaductSchema.Object,
+        variableField: ViaductSchema.ObjectField,
     ): Selection =
         FragmentPlan(owner.name, listOf(this))
             .materialize(schema, variableField)
@@ -1655,7 +1653,7 @@ internal data class FragmentSelectionPlan(
 }
 
 private fun List<FragmentSelectionPlan>.materialize(
-    schema: Schema,
+    schema: ViaductSchema,
     parsedSelections: MaterializeSelectionForest,
 ): MaterializeSelectionForest {
     val parsed =
@@ -1929,7 +1927,7 @@ private fun sensitiveScalar(
     scalar: ScalarKind,
     input: EngineObjectData.Sync,
     arguments: Arguments.Resolved,
-    argumentField: Schema.Field,
+    argumentField: ViaductSchema.Field,
     applicationOrdinal: Int? = null,
 ): EngineOutputData {
     val fingerprint =
@@ -2122,8 +2120,8 @@ internal sealed interface ValuePlan {
      * subtrees; equal seeds and other arguments produce equal values.
      */
     fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String? = null,
         generatedHashSeed: Int = 0,
     ): EngineOutputData?
@@ -2135,8 +2133,8 @@ internal sealed interface ValuePlan {
 
 internal data object NullPlan : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData? = null
@@ -2146,8 +2144,8 @@ internal data object NullPlan : ValuePlan {
 
 internal data object ErrorPlan : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData = EngineErrorData
@@ -2157,8 +2155,8 @@ internal data object ErrorPlan : ValuePlan {
 
 internal data object InputIdPlan : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData = requireNotNull(inputId)
@@ -2171,8 +2169,8 @@ internal data class ScalarPlan(
     val value: Any,
 ) : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputData =
@@ -2191,8 +2189,8 @@ internal data class ListPlan(
     val elements: List<ValuePlan>,
 ) : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineOutputListData {
@@ -2216,15 +2214,15 @@ internal data class ObjectPlan(
     val fields: Map<FieldCoordinate, ValuePlan>,
 ) : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineObjectData.Sync =
         materializeObject(schema, inputId, generatedHashSeed)
 
     fun materializeObject(
-        schema: Schema,
+        schema: ViaductSchema,
         inputId: String?,
         generatedHashSeed: Int = 0,
     ): EngineObjectData.Sync {
@@ -2266,8 +2264,8 @@ internal data class GeneratedHashPlan(
     val salt: Int,
 ) : ValuePlan {
     override fun materialize(
-        schema: Schema,
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
     ): EngineObjectData.Sync {
@@ -2302,7 +2300,7 @@ private const val MAX_GENERATED_HASH_DEPTH = 4
 private const val GENERATED_HASH_NESTED_SALT = -1640531527
 
 private fun generatedHashObject(
-    schema: Schema,
+    schema: ViaductSchema,
     hash: Int,
     remainingDepth: Int,
 ): EngineObjectData.Sync =

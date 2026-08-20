@@ -1,10 +1,11 @@
 package model.spec
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 import model.Assumptions
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.flatMapToMaterializeSelectionForest
@@ -23,7 +24,7 @@ import model.requireField
  */
 context(world: Assumptions)
 fun flatten(
-    typeInScope: Schema.CompositeTypeDef,
+    typeInScope: ViaductSchema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): SelectionForest =
     flattenForMaterialization(
@@ -40,7 +41,7 @@ fun flatten(
  */
 context(world: Assumptions)
 fun flattenForMaterialization(
-    typeInScope: Schema.CompositeTypeDef,
+    typeInScope: ViaductSchema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): MaterializeSelectionForest =
     flattenForMaterialization(
@@ -50,8 +51,8 @@ fun flattenForMaterialization(
     )
 
 internal fun flatten(
-    schema: Schema,
-    typeInScope: Schema.CompositeTypeDef,
+    schema: ViaductSchema,
+    typeInScope: ViaductSchema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): SelectionForest =
     flattenForMaterialization(
@@ -61,8 +62,8 @@ internal fun flatten(
     ).constructionSelections()
 
 internal fun flattenForMaterialization(
-    schema: Schema,
-    typeInScope: Schema.CompositeTypeDef,
+    schema: ViaductSchema,
+    typeInScope: ViaductSchema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): MaterializeSelectionForest {
     val initialContext =
@@ -74,7 +75,7 @@ internal fun flattenForMaterialization(
 }
 
 private fun flattenSelectionSet(
-    schema: Schema,
+    schema: ViaductSchema,
     selections: List<SpecSelection>,
     context: SelectionContext,
 ): MaterializeSelectionForest =
@@ -97,15 +98,15 @@ private fun flattenSelectionSet(
     }
 
 private fun SpecSelection.Field.flattenField(
-    schema: Schema,
+    schema: ViaductSchema,
     context: SelectionContext,
 ): MaterializeSelection {
     val field = schemaField
     val flattenedSubselections =
         when (val resultType = field.type.baseTypeDef) {
-            is Schema.SimpleTypeDef -> materializeSelectionForestOf()
+            is ViaductSchema.SimpleTypeDef -> materializeSelectionForestOf()
 
-            is Schema.CompositeTypeDef ->
+            is ViaductSchema.CompositeTypeDef ->
                 flattenSelectionSet(
                     schema,
                     subselections.orEmpty(),
@@ -130,6 +131,6 @@ private fun SpecSelection.Field.flattenField(
 }
 
 private class SelectionContext(
-    val nominalType: Schema.CompositeTypeDef,
-    val possibleTypes: Set<Schema.Object>,
+    val nominalType: ViaductSchema.CompositeTypeDef,
+    val possibleTypes: Set<ViaductSchema.Object>,
 )

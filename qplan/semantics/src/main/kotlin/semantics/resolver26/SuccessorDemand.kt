@@ -1,9 +1,10 @@
 package semantics.resolver26
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 
 import model.Assumptions
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.containsErrorValue
@@ -19,7 +20,7 @@ internal fun SelectionForest.successorDemand(): SelectionForest =
 // Retains requested ground boundaries and adds each active boundary's fixed passive OF demand.
 context(world: Assumptions)
 private fun SelectionForest.successorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     flatMap { selection ->
         selection.possibleTypes.flatMapToSelectionForest { possibleType ->
@@ -66,8 +67,8 @@ private fun SelectionForest.successorDemand(
 
 // Memoizes passive demand reachable from one resolver OF before another resolver boundary.
 context(world: Assumptions)
-private fun Schema.ObjectField.fixedPassivePredecessorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+private fun ViaductSchema.ObjectField.fixedPassivePredecessorDemand(
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     passiveDemandByResolverField[this]
         ?: world.resolverRegistry
@@ -79,7 +80,7 @@ private fun Schema.ObjectField.fixedPassivePredecessorDemand(
 // Retains passive OF selections and replaces active selections with their own passive OF demand.
 context(world: Assumptions)
 private fun SelectionForest.passivePredecessorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     flatMap { selection ->
         selection.possibleTypes.flatMapToSelectionForest { possibleType ->

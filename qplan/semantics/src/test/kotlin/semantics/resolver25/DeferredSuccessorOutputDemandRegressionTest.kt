@@ -2,7 +2,7 @@ package semantics.resolver25
 
 import model.requireType
 import model.requireObjectField
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
@@ -73,9 +73,9 @@ class DeferredSuccessorOutputDemandRegressionTest {
                     "fragment Demand on Item { driver }",
                 ).subselections.projectionDemandDeferringTemplates()
             }
-        val item = world.schema.requireType("Item") as Schema.Object
-        val branch = world.schema.requireType("Branch") as Schema.Object
-        val payload = world.schema.requireType("Payload") as Schema.Object
+        val item = world.schema.requireType("Item") as ViaductSchema.Object
+        val branch = world.schema.requireType("Branch") as ViaductSchema.Object
+        val payload = world.schema.requireType("Payload") as ViaductSchema.Object
         val branchSelection =
             projected
                 .merge(item)

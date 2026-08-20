@@ -1,7 +1,8 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
-import model.Schema
 import viaduct.engine.api.EngineObjectData
 
 /**
@@ -42,10 +43,10 @@ interface ResolverRegistry {
     /** Creates the root resolver input. Every Query field is supplied by a registered resolver. */
     fun resolveRootQuery(): EngineObjectData.Sync
 
-    operator fun contains(field: Schema.ObjectField): Boolean
+    operator fun contains(field: ViaductSchema.ObjectField): Boolean
 
     /** Defined only when [field] is registered. */
-    fun resolver(field: Schema.ObjectField): FieldResolver
+    fun resolver(field: ViaductSchema.ObjectField): FieldResolver
 
     /**
      * The registered fields that may be directly demanded by [field].
@@ -53,7 +54,7 @@ interface ResolverRegistry {
      * This conservative coordinate relation is not specialized to one exact argument tuple or
      * runtime type assignment.
      */
-    fun mayDemandFrom(field: Schema.ObjectField): Set<Schema.ObjectField>
+    fun mayDemandFrom(field: ViaductSchema.ObjectField): Set<ViaductSchema.ObjectField>
 
 }
 

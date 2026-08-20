@@ -4,7 +4,7 @@ import model.requireQueryTypeDef
 import model.requireObjectField
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.Stamp
 import model.instantiateBindings
 import model.merge
@@ -60,7 +60,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     ) {
                         suppliedDemandFields +=
                             demand
-                                .merge(field.type.baseTypeDef as Schema.Object)
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { key ->
                                     key.field.name
@@ -152,7 +152,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                     ) {
                         suppliedDemandFields +=
                             demand
-                                .merge(field.type.baseTypeDef as Schema.Object)
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { key ->
                                     key.field.name

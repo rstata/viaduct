@@ -2,7 +2,7 @@ package semantics.correctresolution
 
 import model.requireType
 import model.ObjectSelectionForest
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.engineResultOf
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -15,7 +15,7 @@ class CorrectResolutionTest {
         val result = world.engineResultOf("Query")
         val profileSelections =
             ObjectSelectionForest.of(
-                type = world.schema.requireType("Profile") as Schema.Object,
+                type = world.schema.requireType("Profile") as ViaductSchema.Object,
                 selections = emptyList(),
             )
 

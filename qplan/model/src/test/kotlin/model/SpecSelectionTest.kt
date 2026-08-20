@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.spec.SpecSelection
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -62,7 +64,7 @@ class SpecSelectionTest {
 
         assertFailsWith<IllegalArgumentException> {
             SpecSelection.InlineFragment.of(
-                typeCondition = schema.requireType("User") as Schema.Object,
+                typeCondition = schema.requireType("User") as ViaductSchema.Object,
                 selections = emptyList(),
             )
         }

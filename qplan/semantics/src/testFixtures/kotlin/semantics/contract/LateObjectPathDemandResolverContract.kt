@@ -4,7 +4,7 @@ import model.requireQueryTypeDef
 import model.requireObjectField
 import model.EngineResult
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.instantiateBindings
 import model.merge
 import model.operationSelectionsFrom
@@ -54,7 +54,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         fooApplications += 1
                         fooDemandFields =
                             demand
-                                .merge(field.type.baseTypeDef as Schema.Object)
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { groundKey ->
                                     groundKey.field.name
@@ -132,7 +132,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         nodeApplications += 1
                         nodeDemandFields =
                             demand
-                                .merge(field.type.baseTypeDef as Schema.Object)
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
                                 .groundKeys()
                                 .mapTo(linkedSetOf()) { groundKey ->
                                     groundKey.field.name
@@ -190,7 +190,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         parentDemandFields =
                             linkedSetOf<String>().also { fields ->
                                 demand
-                                    .merge(field.type.baseTypeDef as Schema.Object)
+                                    .merge(field.type.baseTypeDef as ViaductSchema.Object)
                                     .forEach { selection ->
                                         fields += selection.key.field.name
                                     }

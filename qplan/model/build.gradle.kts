@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     api(viaductLibs.viaduct.engine.api)
+    api(viaductLibs.viaduct.shared.viaductschema)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
     testFixturesImplementation("com.graphql-java:graphql-java:26.0")

@@ -1,11 +1,12 @@
 package semantics.resolver26
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import model.PathComponent
-import model.Schema
 import model.SelectionForest
 import model.Stamp
 import viaduct.engine.api.EngineObjectData
@@ -20,7 +21,7 @@ internal const val RESOLVER26_THREAD_COUNT_ENVIRONMENT = "RESOLVER26_THREAD_COUN
 
 internal data class Resolver26ApplicationObservation(
     val occurrencePath: List<PathComponent>,
-    val field: Schema.ObjectField,
+    val field: ViaductSchema.ObjectField,
     val input: EngineObjectData.Sync,
     val arguments: Arguments.Resolved,
     val suppliedDemand: SelectionForest,

@@ -1,10 +1,11 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireQueryTypeDef
 import model.requireField
 import model.Arguments
 import model.ObjectEngineResult
-import model.Schema
 import model.EngineErrorData
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -374,7 +375,7 @@ class FromObjectFieldTest {
                     )
             },
             variableProviders = { schema ->
-                val owner = schema.requireField("Query", "result") as Schema.ObjectField
+                val owner = schema.requireField("Query", "result") as ViaductSchema.ObjectField
                 mapOf(
                     Arguments.Variable.of(owner, "value") to
                         schema.fromObjectField(objectFragment, responsePath),

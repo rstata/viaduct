@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 /**
  * A nominal type and unnormalized nested selections interpreted as one selection requirement.
  *
@@ -20,7 +22,7 @@ package model
  */
 sealed interface Fragment {
     /** The nominal type carried by this fragment. */
-    val nominalType: Schema.CompositeTypeDef
+    val nominalType: ViaductSchema.CompositeTypeDef
 
     /** The response-key-preserving selections nested within this fragment. */
     val materializeSelections: MaterializeSelectionForest
@@ -31,12 +33,12 @@ sealed interface Fragment {
 
     companion object {
         fun of(
-            nominalType: Schema.CompositeTypeDef,
+            nominalType: ViaductSchema.CompositeTypeDef,
             materializeSelections: MaterializeSelectionForest,
         ): Fragment = FragmentImpl(nominalType, materializeSelections)
 
         fun of(
-            nominalType: Schema.CompositeTypeDef,
+            nominalType: ViaductSchema.CompositeTypeDef,
             subselections: SelectionForest,
         ): Fragment =
             FragmentImpl(
@@ -47,6 +49,6 @@ sealed interface Fragment {
 }
 
 private class FragmentImpl(
-    override val nominalType: Schema.CompositeTypeDef,
+    override val nominalType: ViaductSchema.CompositeTypeDef,
     override val materializeSelections: MaterializeSelectionForest,
 ) : Fragment

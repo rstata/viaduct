@@ -6,7 +6,7 @@ import model.requireObjectField
 import model.Arguments
 import model.Assumptions
 import model.ObjectEngineResult
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -30,7 +30,7 @@ class WorldInjectionTest {
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
                 nodeResolvers = { schema ->
-                    val user = schema.requireType("User") as Schema.Object
+                    val user = schema.requireType("User") as ViaductSchema.Object
                     mapOf(
                         user to
                             nodeResolverOf { id ->
@@ -43,7 +43,7 @@ class WorldInjectionTest {
                 fieldResolvers = { schema ->
                     val userField = schema.requireField("Query", "user_V_A_node")
                     val queryFragment = schema.emptyFragmentOf("Query")
-                    mapOf<Schema.Field, FieldResolverDefinition>(
+                    mapOf<ViaductSchema.Field, FieldResolverDefinition>(
                         userField to
                             fieldResolverOf(
                                 objectFragment = queryFragment,
@@ -103,7 +103,7 @@ class WorldInjectionTest {
             field.selectionValues()["id"],
         )
 
-        assertFailsWith<Schema.MissingSchemaElementException> {
+        assertFailsWith<IllegalStateException> {
             schema.requireObjectField("Query", "user")
         }
         assertEquals(bridgeField, selections.single().key.field)
@@ -145,8 +145,8 @@ class WorldInjectionTest {
     }
 }
 
-private fun Schema.key(
-    type: Schema.Object,
+private fun ViaductSchema.key(
+    type: ViaductSchema.Object,
     fieldName: String,
 ): ObjectEngineResult.GroundKey =
     ObjectEngineResult.GroundKey.of(

@@ -1,5 +1,7 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 import model.ObjectEngineResult
 import graphql.language.ArrayValue
@@ -26,9 +28,9 @@ import model.EngineInputData
 import model.EngineErrorData
 import model.EngineOutputData
 import model.Fragment
-import model.Schema
 import model.SourceSchemaAdapter
-import model.TypeExpr
+import model.lowering.NODE_BRIDGE_PAYLOAD_FIELD
+import model.lowering.NODE_BRIDGE_TYPE_SUFFIX
 import model.arg
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -46,13 +48,13 @@ internal class ResolverTestDsl private constructor(
     private val fieldDefinitions: List<DslFieldResolver>,
     private val nodeDefinitions: List<DslNodeResolver>,
 ) {
-    fun nodeResolvers(schema: Schema): Map<Schema.Object, NodeResolverFunction> =
+    fun nodeResolvers(schema: ViaductSchema): Map<ViaductSchema.Object, NodeResolverFunction> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).nodeResolvers()
 
-    fun fieldResolvers(schema: Schema): Map<Schema.Field, FieldResolverDefinition> =
+    fun fieldResolvers(schema: ViaductSchema): Map<ViaductSchema.Field, FieldResolverDefinition> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).fieldResolvers()
 
-    fun variableProviders(schema: Schema): Map<Arguments.Variable, VariableDeclaration> =
+    fun variableProviders(schema: ViaductSchema): Map<Arguments.Variable, VariableDeclaration> =
         Compiler(schema, fieldDefinitions, nodeDefinitions).variableProviders()
 
     companion object {
@@ -277,7 +279,7 @@ internal class ResolverTestDsl private constructor(
 }
 
 private class Compiler(
-    private val schema: Schema,
+    private val schema: ViaductSchema,
     private val fieldDefinitions: List<DslFieldResolver>,
     private val nodeDefinitions: List<DslNodeResolver>,
 ) {
@@ -286,7 +288,7 @@ private class Compiler(
         fieldDefinitions.mapTo(linkedSetOf()) { it.typeName to it.fieldName }
     private val nodeEntries: List<CompiledNodeResult> =
         nodeDefinitions.flatMap { definition ->
-            val type = schema.requireType(definition.typeName) as? Schema.Object
+            val type = schema.requireType(definition.typeName) as? ViaductSchema.Object
                 ?: throw IllegalArgumentException(
                     "@$NODE_RESOLVER_DIRECTIVE requires an object type: ${definition.typeName}",
                 )
@@ -310,7 +312,7 @@ private class Compiler(
             nodesById = nodesById,
         )
 
-    fun nodeResolvers(): Map<Schema.Object, NodeResolverFunction> =
+    fun nodeResolvers(): Map<ViaductSchema.Object, NodeResolverFunction> =
         nodeEntries
             .groupBy(CompiledNodeResult::type)
             .mapValues { (type, entries) ->
@@ -322,11 +324,11 @@ private class Compiler(
                 }
             }
 
-    fun fieldResolvers(): Map<Schema.Field, FieldResolverDefinition> {
-        val compiled = mutableMapOf<Schema.Field, FieldResolverDefinition>()
+    fun fieldResolvers(): Map<ViaductSchema.Field, FieldResolverDefinition> {
+        val compiled = mutableMapOf<ViaductSchema.Field, FieldResolverDefinition>()
         fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)
-                require(field is Schema.ObjectField) {
+                require(field is ViaductSchema.ObjectField) {
                     "@$RESOLVER_DIRECTIVE requires a concrete object field: " +
                         "${definition.typeName}.${definition.fieldName}"
                 }
@@ -343,7 +345,7 @@ private class Compiler(
             }
 
         val queryNode = sourceSchema.field("Query", "node")
-        require(queryNode is Schema.ObjectField)
+        require(queryNode is ViaductSchema.ObjectField)
         compiled[queryNode] =
             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
                 val id = arguments.fieldValues.getValue(ID_FIELD)
@@ -365,8 +367,8 @@ private class Compiler(
         buildMap {
             fieldDefinitions.forEach { definition ->
                 val field = sourceSchema.field(definition.typeName, definition.fieldName)
-                require(field is Schema.ObjectField)
-                val argumentNames = field.args.mapTo(linkedSetOf(), Schema.InputLikeField::name)
+                require(field is ViaductSchema.ObjectField)
+                val argumentNames = field.args.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name)
                 val pathVariables = definition.pathVariables.associateBy(DslPathVariable::name)
                 require(pathVariables.keys.intersect(argumentNames).isEmpty()) {
                     "${definition.typeName}.${definition.fieldName} $PATH_VARS_ARGUMENT may not " +
@@ -406,7 +408,7 @@ private class Compiler(
         }
 
     private fun objectFragment(
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
         source: String,
     ): Fragment =
         if (source.isBlank()) {
@@ -422,7 +424,7 @@ private class Compiler(
 
     private fun variablesIn(
         definition: DslFieldResolver,
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
     ): Set<String> {
         if (definition.of.isBlank()) return emptySet()
         val fragment = preparedObjectFragment(field, definition.of)
@@ -434,13 +436,13 @@ private class Compiler(
     }
 
     private fun objectFragmentSource(
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
         source: String,
     ): String =
         "fragment ResolverTestDsl on ${field.containingDef.name} { $source }"
 
     private fun preparedObjectFragment(
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
         source: String,
     ): PreparedObjectFragment {
         val fragmentSource = objectFragmentSource(field, source)
@@ -466,21 +468,21 @@ private class Compiler(
         return PreparedObjectFragment(preparedSource, bindings)
     }
 
-    private fun nodeType(): Schema.Interface =
-        schema.requireType("Node") as? Schema.Interface
+    private fun nodeType(): ViaductSchema.Interface =
+        schema.requireType("Node") as? ViaductSchema.Interface
             ?: throw IllegalArgumentException("The resolver-test DSL requires interface Node")
 }
 
 private class ResultEvaluator(
-    private val schema: Schema,
+    private val schema: ViaductSchema,
     private val resolverCoordinates: Set<Pair<String, String>>,
     private val nodesById: Map<String, CompiledNodeResult>,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val nodeType = schema.requireType("Node") as Schema.Interface
+    private val nodeType = schema.requireType("Node") as ViaductSchema.Interface
 
     fun evaluateFieldResult(
-        field: Schema.ObjectField,
+        field: ViaductSchema.ObjectField,
         result: GraphQLValue<*>,
         input: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
@@ -493,14 +495,14 @@ private class ResultEvaluator(
 
     fun evaluateNodeResult(entry: CompiledNodeResult): EngineOutputData? =
         evaluate(
-            typeExpr = TypeExpr.Named.of(entry.type, isNullable = true),
+            typeExpr = ViaductSchema.TypeExpr(entry.type),
             source = entry.result,
             context = EvaluationContext(schema.objectOf(entry.type.name), null, null),
             nodeRoot = entry,
         )
 
     private fun evaluate(
-        typeExpr: TypeExpr<Schema.OutputTypeDef>,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         source: GraphQLValue<*>,
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult? = null,
@@ -518,7 +520,7 @@ private class ResultEvaluator(
             }
         }
         return when (val type = typeExpr.baseTypeDef) {
-            is Schema.Scalar ->
+            is ViaductSchema.Scalar ->
                 when (type.name) {
                     "Int" ->
                         evaluateInt(source, context).also { result ->
@@ -532,17 +534,18 @@ private class ResultEvaluator(
                             "Resolver-test DSL leaves must be Int, not ${type.name}",
                         )
                 }
-            is Schema.Enum ->
+            is ViaductSchema.Enum ->
                 throw IllegalArgumentException(
                     "Resolver-test DSL leaves must be Int, not ${type.name}",
                 )
-            is Schema.CompositeTypeDef ->
+            is ViaductSchema.CompositeTypeDef ->
                 evaluateComposite(type, source, context, nodeRoot)
+            else -> error("Output field has a non-output type")
         }
     }
 
     private fun evaluateComposite(
-        declaredType: Schema.CompositeTypeDef,
+        declaredType: ViaductSchema.CompositeTypeDef,
         source: GraphQLValue<*>,
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult?,
@@ -566,7 +569,7 @@ private class ResultEvaluator(
         val fields = source.uniqueFields("result for ${declaredType.name}")
         val concreteType =
             when (declaredType) {
-                is Schema.Object -> {
+                is ViaductSchema.Object -> {
                     require(TYPENAME_FIELD !in fields) {
                         "__typename may not be supplied for object type ${declaredType.name}"
                     }
@@ -577,7 +580,7 @@ private class ResultEvaluator(
                     require(typename is StringValue) {
                         "Result for abstract type ${declaredType.name} requires __typename"
                     }
-                    val concrete = schema.requireType(typename.requiredValue()) as? Schema.Object
+                    val concrete = schema.requireType(typename.requiredValue()) as? ViaductSchema.Object
                         ?: throw IllegalArgumentException(
                             "${typename.requiredValue()} is not an object type",
                         )
@@ -591,7 +594,7 @@ private class ResultEvaluator(
     }
 
     private fun evaluateObject(
-        type: Schema.Object,
+        type: ViaductSchema.Object,
         source: ObjectValue,
         context: EvaluationContext,
         injectedNodeId: String? = null,
@@ -615,7 +618,7 @@ private class ResultEvaluator(
                     "Result for ${type.name} may not supply resolver field $fieldName"
                 }
                 val field = sourceSchema.field(type.name, fieldName)
-                require(field is Schema.ObjectField)
+                require(field is ViaductSchema.ObjectField)
                 field(fieldName) setTo
                     evaluate(
                         typeExpr = sourceSchema.typeExpr(field),
@@ -627,7 +630,7 @@ private class ResultEvaluator(
     }
 
     private fun evaluateNodeReference(
-        declaredType: Schema.CompositeTypeDef,
+        declaredType: ViaductSchema.CompositeTypeDef,
         source: ObjectValue,
         context: EvaluationContext,
     ): EngineObjectData.Sync {
@@ -794,7 +797,7 @@ private class ResultEvaluator(
             else -> throw IllegalArgumentException("Malformed lowered Node bridge")
         }
 
-    private fun isNodeType(type: Schema.CompositeTypeDef): Boolean =
+    private fun isNodeType(type: ViaductSchema.CompositeTypeDef): Boolean =
         type.possibleObjectTypes.isNotEmpty() &&
             type.possibleObjectTypes.all(nodeType.possibleObjectTypes::contains)
 
@@ -823,7 +826,7 @@ private class ResultEvaluator(
                     when {
                         argumentType == null ||
                             argumentType.isList ||
-                            (argumentType.baseTypeDef as? Schema.Scalar)?.name != "ID" ->
+                            (argumentType.baseTypeDef as? ViaductSchema.Scalar)?.name != "ID" ->
                             throw IllegalArgumentException(
                                 "idFrom(\$$argumentName) requires an ID argument",
                             )
@@ -844,7 +847,7 @@ private class ResultEvaluator(
 private data class EvaluationContext(
     val input: EngineObjectData.Sync,
     val arguments: Arguments.Resolved?,
-    val argumentDefinitions: Schema.Field?,
+    val argumentDefinitions: ViaductSchema.Field?,
 )
 
 private data class PreparedObjectFragment(
@@ -876,7 +879,7 @@ private data class DslNodeResult(
 )
 
 private data class CompiledNodeResult(
-    val type: Schema.Object,
+    val type: ViaductSchema.Object,
     val id: String,
     val result: GraphQLValue<*>,
 )

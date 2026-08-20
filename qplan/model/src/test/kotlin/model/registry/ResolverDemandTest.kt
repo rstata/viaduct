@@ -1,5 +1,7 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.requireField
@@ -8,7 +10,6 @@ import model.Arguments
 import model.ObjectEngineResult
 import model.ArgumentResolutionError
 import model.Fragment
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.emptyFragmentOf
@@ -288,7 +289,7 @@ class ResolverDemandTest {
                     schemaSDL = schemaSDL,
                     fieldResolvers = { schema ->
                         val resolvers =
-                            mutableMapOf<Schema.Field, FieldResolverDefinition>()
+                            mutableMapOf<ViaductSchema.Field, FieldResolverDefinition>()
                         schema.requireQueryTypeDef().fields
                             .filter { it.name != "V_A_typename" }
                             .forEach { field ->
@@ -426,7 +427,7 @@ class ResolverDemandTest {
                         )
                     },
                     variableProviders = { schema ->
-                        val owner = schema.requireField("Query", "result") as Schema.ObjectField
+                        val owner = schema.requireField("Query", "result") as ViaductSchema.ObjectField
                         mapOf(
                             Arguments.Variable.of(owner, "value") to
                                 schema.fromObjectField(
@@ -455,8 +456,8 @@ class ResolverDemandTest {
             TestWorld.fromSDL(
                 schemaSDL = DEMAND_SCHEMA,
                 nodeResolvers = { schema ->
-                    val user = schema.requireType("User") as Schema.Object
-                    val admin = schema.requireType("Admin") as Schema.Object
+                    val user = schema.requireType("User") as ViaductSchema.Object
+                    val admin = schema.requireType("Admin") as ViaductSchema.Object
                     mapOf(
                         user to nodeResolverOf { error("Not invoked") },
                         admin to nodeResolverOf { error("Not invoked") },
@@ -500,8 +501,8 @@ class ResolverDemandTest {
             )
         val schema = world.schema
         val registry = world.resolverRegistry
-        val user = schema.requireType("User") as Schema.Object
-        val admin = schema.requireType("Admin") as Schema.Object
+        val user = schema.requireType("User") as ViaductSchema.Object
+        val admin = schema.requireType("Admin") as ViaductSchema.Object
         val queryNodeBridge = schema.requireObjectField("Query", "node_V_A_node")
         val userPayload = schema.requireObjectField("User_V_A_Bridge", "node")
         val adminPayload = schema.requireObjectField("Admin_V_A_Bridge", "node")
@@ -699,7 +700,7 @@ class ResolverDemandTest {
                     )
                 },
                 variableProviders = { schema ->
-                    val owner = schema.requireField("Query", "result") as Schema.ObjectField
+                    val owner = schema.requireField("Query", "result") as ViaductSchema.ObjectField
                     mapOf(
                         Arguments.Variable.of(owner, "value") to
                             schema.fromObjectField(

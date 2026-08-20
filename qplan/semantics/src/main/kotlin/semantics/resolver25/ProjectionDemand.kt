@@ -1,9 +1,10 @@
 package semantics.resolver25
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 
 import model.Assumptions
-import model.Schema
 import model.Selection
 import model.SelectionForest
 import model.concatenateSelectionForests
@@ -18,8 +19,8 @@ import model.usedVariables
 // before that producer launches because late deepening cannot recover omitted passive values.
 context(world: Assumptions)
 internal fun SelectionForest.projectionDemandDeferringTemplates(): SelectionForest {
-    val passiveDemandByResolverField = mutableMapOf<Schema.ObjectField, SelectionForest>()
-    val groundedDemandByResolverField = mutableMapOf<Schema.ObjectField, SelectionForest>()
+    val passiveDemandByResolverField = mutableMapOf<ViaductSchema.ObjectField, SelectionForest>()
+    val groundedDemandByResolverField = mutableMapOf<ViaductSchema.ObjectField, SelectionForest>()
     return projectionDemandDeferringTemplates(
         passiveDemandByResolverField,
         groundedDemandByResolverField,
@@ -28,8 +29,8 @@ internal fun SelectionForest.projectionDemandDeferringTemplates(): SelectionFore
 
 context(world: Assumptions)
 private fun SelectionForest.projectionDemandDeferringTemplates(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
-    groundedDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
+    groundedDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     coalesceEquivalentSelections()
         .flatMap { selection ->
@@ -73,9 +74,9 @@ private fun SelectionForest.projectionDemandDeferringTemplates(
         }.coalesceEquivalentSelections()
 
 context(world: Assumptions)
-private fun Schema.ObjectField.fixedGroundedProjectionDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
-    groundedDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+private fun ViaductSchema.ObjectField.fixedGroundedProjectionDemand(
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
+    groundedDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     groundedDemandByResolverField[this]
         ?: world.resolverRegistry
@@ -87,8 +88,8 @@ private fun Schema.ObjectField.fixedGroundedProjectionDemand(
             ).also { demand -> groundedDemandByResolverField[this] = demand }
 
 context(world: Assumptions)
-private fun Schema.ObjectField.fixedPassivePredecessorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+private fun ViaductSchema.ObjectField.fixedPassivePredecessorDemand(
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     passiveDemandByResolverField[this]
         ?: world.resolverRegistry
@@ -99,7 +100,7 @@ private fun Schema.ObjectField.fixedPassivePredecessorDemand(
 
 context(world: Assumptions)
 private fun SelectionForest.passivePredecessorDemand(
-    passiveDemandByResolverField: MutableMap<Schema.ObjectField, SelectionForest>,
+    passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     coalesceEquivalentSelections()
         .flatMap { selection ->
@@ -124,7 +125,7 @@ private fun SelectionForest.passivePredecessorDemand(
 
 private data class ProjectionSelectionIdentity(
     val key: ObjectEngineResult.Key,
-    val possibleTypes: Set<Schema.Object>,
+    val possibleTypes: Set<ViaductSchema.Object>,
 )
 
 private fun SelectionForest.coalesceEquivalentSelections(): SelectionForest {

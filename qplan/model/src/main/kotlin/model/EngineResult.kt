@@ -1,12 +1,14 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.invariants.conformsToResultSchemaType
 
 /**
  * A finite, well-founded field-resolution result.
  *
  * The semantic union contains Int, finite Double, Boolean, String, [EngineIDResult],
- * [Schema.EnumValue], [ObjectEngineResult], [ListEngineResult], or [ErrorEngineResult]. Nullable
+ * [ViaductSchema.EnumValue], [ObjectEngineResult], [ListEngineResult], or [ErrorEngineResult]. Nullable
  * uses additionally represent GraphQL null. Membership and schema compatibility are enforced by
  * result constructors and cell completion boundaries.
  */
@@ -75,7 +77,7 @@ sealed interface EngineResultCell {
 /**
  * The collapsed error result. Error metadata, paths, and multiplicity are intentionally omitted.
  *
- * Schema conformance admits this sibling result variant at every output type expression. It is not
+ * ViaductSchema conformance admits this sibling result variant at every output type expression. It is not
  * a Kotlin bottom subtype and exposes no simple, object, or list result properties.
  */
 data object ErrorEngineResult
@@ -103,7 +105,7 @@ sealed interface ObjectEngineResult {
      *
      * ### Invariant: object-key-field-classification
      *
-     * A key's [field] is a [Schema.ObjectField] exactly when the key is an [ObjectKey].
+     * A key's [field] is a [ViaductSchema.ObjectField] exactly when the key is an [ObjectKey].
      *
      * Key equality is structural over [field], [arguments], and [stamp], using canonical schema
      * equality. Registry templates have a null stamp. Ordinary concrete keys carry
@@ -111,7 +113,7 @@ sealed interface ObjectEngineResult {
      * occurrence carry [Stamp.Occurrence].
      */
     sealed interface Key {
-        val field: Schema.Field
+        val field: ViaductSchema.Field
         val arguments: Arguments
         val stamp: Stamp?
 
@@ -123,14 +125,14 @@ sealed interface ObjectEngineResult {
              */
             fun of(
                 stamp: Stamp.Occurrence,
-                field: Schema.Field,
+                field: ViaductSchema.Field,
                 arguments: Arguments,
             ): Key {
                 require(arguments.conformsToArgumentDefinition(field)) {
                     "Stamped key arguments do not belong to its output field"
                 }
                 return when (field) {
-                    is Schema.ObjectField -> ObjectKey.of(stamp, field, arguments)
+                    is ViaductSchema.ObjectField -> ObjectKey.of(stamp, field, arguments)
                     else -> StampedKeyImpl(field, arguments, stamp)
                 }
             }
@@ -138,7 +140,7 @@ sealed interface ObjectEngineResult {
             /** Constructs the precise stamped key category for a concrete object field. */
             fun of(
                 stamp: Stamp.Occurrence,
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments,
             ): ObjectKey = ObjectKey.of(stamp, field, arguments)
 
@@ -148,13 +150,13 @@ sealed interface ObjectEngineResult {
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.
              */
             fun of(
-                field: Schema.Field,
+                field: ViaductSchema.Field,
                 arguments: Map<String, Any?>,
             ): Key = of(field, Arguments.of(field, arguments))
 
             /** Constructs the precise key category for a field on a concrete object type. */
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Map<String, Any?>,
             ): ObjectKey = ObjectKey.of(field, arguments)
 
@@ -164,27 +166,27 @@ sealed interface ObjectEngineResult {
              * Every result satisfies `result.conformsToSchema()` in its reasoning world.
              */
             fun of(
-                field: Schema.Field,
+                field: ViaductSchema.Field,
                 arguments: Arguments,
             ): Key {
                 require(arguments.conformsToArgumentDefinition(field)) {
                     "Key arguments do not belong to its output field"
                 }
                 return when (field) {
-                    is Schema.ObjectField -> ObjectKey.of(field, arguments)
+                    is ViaductSchema.ObjectField -> ObjectKey.of(field, arguments)
                     else -> KeyImpl(field, arguments, arguments.inferredKeyStamp())
                 }
             }
 
             /** Constructs the precise key category for a field on a concrete object type. */
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments,
             ): ObjectKey = ObjectKey.of(field, arguments)
 
             /** Constructs the precise ground key category. */
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments.Ground,
             ): GroundKey = GroundKey.of(field, arguments)
         }
@@ -231,18 +233,18 @@ sealed interface ObjectEngineResult {
     /**
      * A key whose field belongs to a concrete object type.
      *
-     * Every instance carries a [Schema.ObjectField] and [Arguments]. Equality includes the
+     * Every instance carries a [ViaductSchema.ObjectField] and [Arguments]. Equality includes the
      * key's [stamp], so an explicitly occurrence-stamped key remains distinct from an ordinary key
      * with equal visible arguments.
      */
     sealed interface ObjectKey : Key {
-        override val field: Schema.ObjectField
+        override val field: ViaductSchema.ObjectField
         override val arguments: Arguments
 
         companion object {
             fun of(
                 stamp: Stamp.Occurrence,
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments,
             ): ObjectKey {
                 require(arguments.conformsToArgumentDefinition(field)) {
@@ -256,12 +258,12 @@ sealed interface ObjectEngineResult {
             }
 
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Map<String, Any?>,
             ): ObjectKey = of(field, Arguments.of(field, arguments))
 
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments,
             ): ObjectKey {
                 require(arguments.conformsToArgumentDefinition(field)) {
@@ -292,7 +294,7 @@ sealed interface ObjectEngineResult {
              */
             fun of(
                 stamp: Stamp.Occurrence,
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments.Ground,
             ): GroundKey {
                 require(arguments.conformsToArgumentDefinition(field)) {
@@ -306,7 +308,7 @@ sealed interface ObjectEngineResult {
             }
 
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Map<String, Any?>,
             ): GroundKey {
                 val grounded = Arguments.of(field, arguments)
@@ -317,7 +319,7 @@ sealed interface ObjectEngineResult {
             }
 
             fun of(
-                field: Schema.ObjectField,
+                field: ViaductSchema.ObjectField,
                 arguments: Arguments.Ground,
             ): GroundKey {
                 require(arguments.conformsToArgumentDefinition(field)) {
@@ -328,7 +330,7 @@ sealed interface ObjectEngineResult {
         }
     }
 
-    val type: Schema.Object
+    val type: ViaductSchema.Object
 
     val keys: Set<GroundKey>
 
@@ -360,7 +362,7 @@ sealed interface ObjectEngineResult {
          * installed once and each slot of that cell may be installed once.
          */
         fun of(
-            type: Schema.Object,
+            type: ViaductSchema.Object,
             values: Map<GroundKey, EngineResult?> = emptyMap(),
             accessResults: Map<GroundKey, EngineResult> =
                 values.keys.associateWith { true },
@@ -414,7 +416,7 @@ sealed interface ListEngineResult : List<EngineResultCell> {
         }
     }
 
-    val typeExpr: TypeExpr<Schema.OutputTypeDef>
+    val typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>
 
     companion object {
         /**
@@ -424,7 +426,7 @@ sealed interface ListEngineResult : List<EngineResultCell> {
          * world.
          */
         fun of(
-            typeExpr: TypeExpr<Schema.OutputTypeDef>,
+            typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
             values: List<EngineResult?>,
             accessResults: List<EngineResult?> =
                 values.map { true },
@@ -735,7 +737,7 @@ private class CellValueStore(
 }
 
 private class ObjectResultImpl(
-    override val type: Schema.Object,
+    override val type: ViaductSchema.Object,
     cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
     mutable: Boolean,
 ) : ObjectEngineResult {
@@ -775,7 +777,7 @@ private class ObjectResultImpl(
 }
 
 private class ObjectCellStore(
-    private val type: Schema.Object,
+    private val type: ViaductSchema.Object,
     cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
     private val mutable: Boolean,
 ) {
@@ -836,7 +838,7 @@ private class ObjectCellStore(
 }
 
 private fun missingResultCell(
-    type: Schema.Object,
+    type: ViaductSchema.Object,
     field: ObjectEngineResult.GroundKey,
 ): NoSuchElementException =
     NoSuchElementException(
@@ -844,7 +846,7 @@ private fun missingResultCell(
     )
 
 private class ListResultImpl(
-    override val typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    override val typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     private val cells: List<EngineResultCell>,
 ) : ListEngineResult,
     List<EngineResultCell> by cells {
@@ -861,51 +863,51 @@ private data class ListIndexImpl(
 ) : ListEngineResult.Index
 
 private data class KeyImpl(
-    override val field: Schema.Field,
+    override val field: ViaductSchema.Field,
     override val arguments: Arguments,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.Key
 
 private data class StampedKeyImpl(
-    override val field: Schema.Field,
+    override val field: ViaductSchema.Field,
     override val arguments: Arguments,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.Key
 
 private data class VariableKeyImpl(
-    override val field: Schema.Field,
+    override val field: ViaductSchema.Field,
     override val arguments: Arguments,
     override val variableDefinedByThisKey: Arguments.Variable,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.VariableKey
 
 private data class StampedVariableKeyImpl(
-    override val field: Schema.Field,
+    override val field: ViaductSchema.Field,
     override val arguments: Arguments,
     override val variableDefinedByThisKey: Arguments.Variable,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.VariableKey
 
 private data class ObjectKeyImpl(
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
     override val arguments: Arguments,
     override val stamp: Stamp?,
 ) : ObjectEngineResult.ObjectKey
 
 private data class StampedObjectKeyImpl(
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
     override val arguments: Arguments,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.ObjectKey
 
 private data class GroundKeyImpl(
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
     override val arguments: Arguments.Ground,
     override val stamp: Stamp,
 ) : ObjectEngineResult.GroundKey
 
 private data class StampedGroundKeyImpl(
-    override val field: Schema.ObjectField,
+    override val field: ViaductSchema.ObjectField,
     override val arguments: Arguments.Ground,
     override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.GroundKey
@@ -1017,7 +1019,7 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
         .also { write(key, it) }
 
 private fun validateObjectField(
-    type: Schema.Object,
+    type: ViaductSchema.Object,
     field: ObjectEngineResult.GroundKey,
 ): Unit =
     require(field.field.containingDef == type) {
@@ -1033,7 +1035,7 @@ private fun validateObjectValue(
             "A key with erroneous arguments must contain an error value"
         }
     }
-    require(value.conformsToResultSchemaType(field.field.type)) {
+    require(value.conformsToResultSchemaType(field.field.outputType)) {
         "${field.field.containingDef.name}/${field.field.name} result does not conform to " +
             field.field.type
     }
@@ -1045,7 +1047,7 @@ private fun EngineResult.isScalarResultMember(): Boolean =
         this is Boolean ||
         this is String ||
         this is EngineIDResult ||
-        this is Schema.EnumValue
+        this is ViaductSchema.EnumValue
 
 private fun validateAccessResult(result: EngineResult) {
     require(result is Boolean || result == ErrorEngineResult) {

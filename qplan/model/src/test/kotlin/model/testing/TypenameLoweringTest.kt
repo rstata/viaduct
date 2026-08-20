@@ -1,7 +1,8 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
-import model.Schema
 import model.fragmentFrom
 import model.merge
 import model.objectKey
@@ -23,15 +24,15 @@ class TypenameLoweringTest {
         val world = TestWorld.fromSDL(SCHEMA)
         val schema = world.schema
         val allSourceObjects =
-            assertIs<Schema.Interface>(schema.requireType("V_A_AllSourceObjects"))
+            assertIs<ViaductSchema.Interface>(schema.requireType("V_A_AllSourceObjects"))
         val objectTypes =
             listOf("Query", "A", "B")
-                .map { name -> schema.requireType(name) as Schema.Object }
+                .map { name -> schema.requireType(name) as ViaductSchema.Object }
 
         assertEquals(objectTypes.toSet(), allSourceObjects.possibleObjectTypes)
         assertEquals(
             setOf("V_A_typename"),
-            allSourceObjects.fields.mapTo(linkedSetOf(), Schema.Field::name),
+            allSourceObjects.fields.mapTo(linkedSetOf(), ViaductSchema.Field::name),
         )
         listOf(
             "Query",
@@ -43,15 +44,15 @@ class TypenameLoweringTest {
             val field = schema.requireField(typeName, "V_A_typename")
             assertEquals(typeName, field.containingDef.name)
             assertTrue(field.args.isEmpty())
-            assertEquals(Schema.StringType, field.type.baseTypeDef)
+            assertEquals("String", field.type.baseTypeDef.name)
             assertTrue(!field.type.isNullable)
         }
         listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
-            assertFailsWith<Schema.MissingSchemaElementException> {
+            assertFailsWith<IllegalStateException> {
                 schema.requireField(typeName, "V_A_typename")
             }
         }
-        assertTrue((schema.requireType("Choice") as Schema.Union).fields.isEmpty())
+        assertIs<ViaductSchema.Union>(schema.requireType("Choice"))
         listOf(
             "Query",
             "Item",
@@ -62,7 +63,7 @@ class TypenameLoweringTest {
             "A_V_A_Bridge",
             "Node_V_A_Bridge",
         ).forEach { typeName ->
-            assertFailsWith<Schema.MissingSchemaElementException> {
+            assertFailsWith<IllegalStateException> {
                 schema.requireField(typeName, "__typename")
             }
         }
@@ -86,7 +87,7 @@ class TypenameLoweringTest {
         assertEquals("Item", interfaceSelection.key.field.containingDef.name)
         assertEquals(
             "A",
-            interfaceSelection.key.objectKey(schema.requireType("A") as Schema.Object)
+            interfaceSelection.key.objectKey(schema.requireType("A") as ViaductSchema.Object)
                 .field.containingDef.name,
         )
 
@@ -102,7 +103,7 @@ class TypenameLoweringTest {
             schema.fragmentFrom("fragment F on Query { node { __typename } }")
                 .subselections
                 .single()
-        val bridgeType = schema.requireType("A_V_A_Bridge") as Schema.Object
+        val bridgeType = schema.requireType("A_V_A_Bridge") as ViaductSchema.Object
         val payload = nodeSelection.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
         assertEquals(
@@ -137,7 +138,7 @@ class TypenameLoweringTest {
             )
         val a = nested.merge(world.schema.requireQueryTypeDef()).single()
         assertEquals("a_V_A_node", a.key.field.name)
-        val bridgeType = a.key.field.type.baseTypeDef as Schema.Object
+        val bridgeType = a.key.field.type.baseTypeDef as ViaductSchema.Object
         val payload = a.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
         assertTrue(payload.subselections.isEmpty())
@@ -149,7 +150,7 @@ class TypenameLoweringTest {
         val schema = world.schema
         val registry = world.resolverRegistry
         val allSourceObjects =
-            schema.requireType("V_A_AllSourceObjects") as Schema.Interface
+            schema.requireType("V_A_AllSourceObjects") as ViaductSchema.Interface
 
         allSourceObjects.possibleObjectTypes.forEach { type ->
             val field = schema.requireObjectField(type.name, "V_A_typename")

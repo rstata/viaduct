@@ -1,12 +1,13 @@
 package model.registry
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
-import model.Schema
 import model.SelectionForest
 import model.engineObjectDataOf
 import model.instantiateBindings
@@ -90,7 +91,7 @@ private fun EngineObjectData.Sync.snipObjectToDemand(
                 }
                 val value = get(concreteField.name)
                 val selectedValue =
-                    if (concreteField.type.baseTypeDef is Schema.SimpleTypeDef) {
+                    if (concreteField.type.baseTypeDef is ViaductSchema.SimpleTypeDef) {
                         value
                     } else {
                         value.snipToDemand(selection.subselections)

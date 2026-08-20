@@ -1,5 +1,7 @@
 package semantics.resolver26
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Assumptions
 import model.EngineResult
 import model.EngineInputData
@@ -7,10 +9,9 @@ import model.EngineInputListData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.outputType
 import model.PathComponent
-import model.Schema
 import model.Selection
-import model.TypeExpr
 import model.VariableBinding
 import model.fetchBindings
 import model.objectKey
@@ -45,7 +46,7 @@ internal suspend fun ObjectEngineResult.readProvider(
         diagnosticInstrumentation.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == definition.path.lastIndex) {
-            return value.toProviderBinding(groundKey.field.type)
+            return value.toProviderBinding(groundKey.field.outputType)
         }
         when (value) {
             null -> return VariableBinding.of(null)
@@ -59,7 +60,7 @@ internal suspend fun ObjectEngineResult.readProvider(
 
 // Converts a provider result to an input value and rejects object-valued terminals.
 private fun EngineResult?.toProviderBinding(
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
@@ -69,13 +70,13 @@ private fun EngineResult?.toProviderBinding(
             error("A path-variable provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseTypeDef as Schema.SimpleTypeDef),
+                toEngineSimpleData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
             )
     }
 
 // Converts a provider list to an input list after checking its element type.
 private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
-    require(typeExpr.baseTypeDef is Schema.InputTypeDef) {
+    require(typeExpr.baseTypeDef is ViaductSchema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()

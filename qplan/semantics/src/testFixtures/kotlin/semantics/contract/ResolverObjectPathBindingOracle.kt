@@ -10,13 +10,13 @@ import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.Selection
 import model.Stamp
-import model.TypeExpr
 import model.VariableBinding
 import model.instantiateBindings
 import model.objectKey
+import model.outputType
 import model.registry.FieldResolver
 import model.registry.StampedObjectPathDefinition
 import model.registry.VariableDefinition
@@ -24,6 +24,7 @@ import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
 import semantics.arbitrary.registeredResolverOccurrences
+import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
 
 /**
@@ -107,7 +108,7 @@ private fun ObjectEngineResult.readCompletedProvider(
         if (value == null) return VariableBinding.of(null)
         if (value == ErrorEngineResult) return VariableBinding.Error
         if (index == path.lastIndex) {
-            return value.toVariableBinding(key.field.type)
+            return value.toVariableBinding(key.field.outputType)
         }
         current =
             value as? ObjectEngineResult
@@ -117,7 +118,7 @@ private fun ObjectEngineResult.readCompletedProvider(
 }
 
 private fun EngineResult.toVariableBinding(
-    expectedType: TypeExpr<Schema.OutputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
         ErrorEngineResult -> VariableBinding.Error
@@ -126,13 +127,13 @@ private fun EngineResult.toVariableBinding(
             error("An object-path provider cannot terminate at an object")
         else ->
             VariableBinding.of(
-                toEngineSimpleData(expectedType.baseTypeDef as Schema.SimpleTypeDef),
+                toEngineSimpleData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
             )
     }
 
-@Suppress("UNCHECKED_CAST")
 private fun ListEngineResult.toInputListBinding(): VariableBinding {
-    require(typeExpr.baseTypeDef is Schema.InputTypeDef)
+    val baseType = typeExpr.baseTypeDef
+    require(baseType is ViaductSchema.InputTypeDef)
     val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
         val result = get(index).get()
@@ -149,12 +150,18 @@ private fun ListEngineResult.toInputListBinding(): VariableBinding {
     }
     return VariableBinding.of(
         toEngineInputListData(
-            expectedType =
-                TypeExpr.List.of(
-                    elementType = typeExpr as TypeExpr<Schema.InputTypeDef>,
-                    isNullable = false,
-                ),
+            expectedType = typeExpr.withNonNullListWrapper(baseType),
             value = values,
         ),
     )
+}
+
+private fun ViaductSchema.TypeExpr<*>.withNonNullListWrapper(
+    baseType: ViaductSchema.InputTypeDef,
+): ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef> {
+    val wrappers = BitVector(listDepth + 1)
+    for (depth in 0 until listDepth) {
+        if (nullableAtDepth(depth)) wrappers.set(depth + 1)
+    }
+    return ViaductSchema.TypeExpr(baseType, baseTypeNullable, wrappers)
 }

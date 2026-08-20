@@ -5,7 +5,7 @@ import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.Assumptions
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.fragmentFrom
 import model.instantiateBindings
@@ -99,7 +99,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
 context(world: Assumptions)
 private fun countListPassiveDeepening(
     selections: SelectionForest,
-    type: Schema.Object,
+    type: ViaductSchema.Object,
 ): Int {
     val incoming = selections.merge(type).instantiateBindings()
     val incomingByKey = incoming.byGroundKey()
@@ -117,7 +117,7 @@ private fun countListPassiveDeepening(
             .byGroundKey()
             .forEach { (requiredKey, requiredPassive) ->
                 val passiveField = requiredKey.field
-                val passiveType = passiveField.type.baseTypeDef as? Schema.CompositeTypeDef
+                val passiveType = passiveField.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
                     ?: return@forEach
                 if (
                     passiveField in world.resolverRegistry ||
@@ -140,7 +140,7 @@ private fun countListPassiveDeepening(
     }
 
     incoming.byGroundKey().forEach { (key, selection) ->
-        val childType = key.field.type.baseTypeDef as? Schema.CompositeTypeDef
+        val childType = key.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
             ?: return@forEach
         childType.possibleObjectTypes.forEach { possibleType ->
             count += countListPassiveDeepening(selection.subselections, possibleType)
@@ -153,7 +153,7 @@ context(world: Assumptions)
 private fun hasMissingDemand(
     required: SelectionForest,
     selected: SelectionForest,
-    possibleTypes: Set<Schema.Object>,
+    possibleTypes: Set<ViaductSchema.Object>,
 ): Boolean =
     possibleTypes.any { possibleType ->
         val available = selected.merge(possibleType).instantiateBindings().byGroundKey()
@@ -166,7 +166,7 @@ private fun hasMissingDemand(
                 if (match == null) {
                     false
                 } else {
-                    val childType = requirementKey.field.type.baseTypeDef as? Schema.CompositeTypeDef
+                    val childType = requirementKey.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
                     childType == null ||
                         !hasMissingDemand(
                             requirement.subselections,

@@ -3,12 +3,12 @@ package semantics.contract
 import model.Arguments
 
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.testing.ResolverApplicationArguments
 import kotlin.test.assertEquals
 
 internal fun ResolverApplicationArguments.assertApplicationCount(
-    field: Schema.Field,
+    field: ViaductSchema.Field,
     expected: Int,
 ) {
     assertEquals(expected, arguments(field).size)
@@ -16,7 +16,7 @@ internal fun ResolverApplicationArguments.assertApplicationCount(
 
 /** Asserts the complete field-to-arguments application ledger. */
 internal fun ResolverApplicationArguments.assertApplications(
-    expected: Map<Schema.Field, List<Map<String, Any?>>>,
+    expected: Map<ViaductSchema.Field, List<Map<String, Any?>>>,
 ) {
     assertEquals(
         expected.mapValues { (field, applications) ->
@@ -27,7 +27,7 @@ internal fun ResolverApplicationArguments.assertApplications(
 }
 
 internal fun ResolverApplicationArguments.assertArguments(
-    field: Schema.Field,
+    field: ViaductSchema.Field,
     vararg expected: Map<String, Any?>,
 ) {
     arguments(field).shouldContainExactlyInAnyOrder(
@@ -39,7 +39,7 @@ internal fun ResolverApplicationArguments.assertArguments(
  * Asserts which argument tuples occurred without constraining duplicate application counts.
  */
 internal fun ResolverApplicationArguments.assertDistinctArguments(
-    field: Schema.Field,
+    field: ViaductSchema.Field,
     vararg expected: Map<String, Any?>,
 ) {
     assertEquals(

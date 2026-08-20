@@ -1,5 +1,7 @@
 package model.testing
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 import com.google.inject.AbstractModule
 import com.google.inject.Guice
@@ -9,9 +11,9 @@ import com.google.inject.ProvisionException
 import jakarta.inject.Singleton
 import model.Assumptions
 import model.EngineErrorData
-import model.Schema
 import model.SelectionForest
 import model.emptyFragmentOf
+import model.lowering.LOWERED_TYPENAME_FIELD
 import model.requireQueryTypeDef
 import model.registry.ResolverRegistry
 import model.selectionsFrom
@@ -24,7 +26,7 @@ class TestWorld private constructor(
     private val recordedApplicationArguments: ResolverApplicationArguments?,
 ) {
     private val gjSchema: GJSchema = injector.getInstance(GJSchema::class.java)
-    val schema: Schema = gjSchema
+    val schema: ViaductSchema = gjSchema
     val resolverRegistry: ResolverRegistry =
         injector.getInstance(ResolverRegistry::class.java)
     val assumptions: Assumptions =
@@ -53,7 +55,7 @@ class TestWorld private constructor(
 
     fun <T : Any> instance(type: Class<T>): T = injector.getInstance(type)
 
-    fun selectionsFrom(fragment: String): Pair<Schema.CompositeTypeDef, SelectionForest> =
+    fun selectionsFrom(fragment: String): Pair<ViaductSchema.CompositeTypeDef, SelectionForest> =
         assumptions.selectionsFrom(fragment)
 
     companion object {
@@ -68,11 +70,11 @@ class TestWorld private constructor(
         fun fromSDL(
             schemaSDL: String,
             nodeResolvers:
-                (Schema) -> Map<Schema.Object, NodeResolverFunction> = { emptyMap() },
+                (ViaductSchema) -> Map<ViaductSchema.Object, NodeResolverFunction> = { emptyMap() },
             fieldResolvers:
-                ((Schema) -> Map<Schema.Field, FieldResolverDefinition>)? = null,
+                ((ViaductSchema) -> Map<ViaductSchema.Field, FieldResolverDefinition>)? = null,
             variableProviders:
-                (Schema) -> Map<Arguments.Variable, VariableDeclaration> = { emptyMap() },
+                (ViaductSchema) -> Map<Arguments.Variable, VariableDeclaration> = { emptyMap() },
             selectiveResolvers: Boolean = true,
             applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld =
@@ -88,9 +90,9 @@ class TestWorld private constructor(
 
         private fun create(
             schemaSDL: String,
-            nodeResolvers: (Schema) -> Map<Schema.Object, NodeResolverFunction>,
-            fieldResolvers: ((Schema) -> Map<Schema.Field, FieldResolverDefinition>)?,
-            variableProviders: (Schema) -> Map<Arguments.Variable, VariableDeclaration>,
+            nodeResolvers: (ViaductSchema) -> Map<ViaductSchema.Object, NodeResolverFunction>,
+            fieldResolvers: ((ViaductSchema) -> Map<ViaductSchema.Field, FieldResolverDefinition>)?,
+            variableProviders: (ViaductSchema) -> Map<Arguments.Variable, VariableDeclaration>,
             selectiveResolvers: Boolean,
             applicationObserver: CanonicalFieldResolverApplicationObserver?,
             applicationArguments: ResolverApplicationArguments?,
@@ -146,9 +148,9 @@ class TestWorld private constructor(
 @JvmSuppressWildcards
 private class TestWorldModule(
     private val schemaSDL: String,
-    private val nodeResolvers: (Schema) -> Map<Schema.Object, NodeResolverFunction>,
-    private val fieldResolvers: ((Schema) -> Map<Schema.Field, FieldResolverDefinition>)?,
-    private val variableProviders: (Schema) -> Map<Arguments.Variable, VariableDeclaration>,
+    private val nodeResolvers: (ViaductSchema) -> Map<ViaductSchema.Object, NodeResolverFunction>,
+    private val fieldResolvers: ((ViaductSchema) -> Map<ViaductSchema.Field, FieldResolverDefinition>)?,
+    private val variableProviders: (ViaductSchema) -> Map<Arguments.Variable, VariableDeclaration>,
     private val selectiveResolvers: Boolean,
     private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ) : AbstractModule() {
@@ -166,12 +168,12 @@ private class TestWorldModule(
 
     @Provides
     @NodeResolvers
-    fun nodeResolvers(schema: GJSchema): Map<Schema.Object, NodeResolverFunction> =
+    fun nodeResolvers(schema: GJSchema): Map<ViaductSchema.Object, NodeResolverFunction> =
         nodeResolvers.invoke(schema)
 
     @Provides
     @FieldResolvers
-    fun fieldResolvers(schema: GJSchema): Map<Schema.Field, FieldResolverDefinition> =
+    fun fieldResolvers(schema: GJSchema): Map<ViaductSchema.Field, FieldResolverDefinition> =
         fieldResolvers?.invoke(schema) ?: defaultQueryResolvers(schema)
 
     @Provides
@@ -183,8 +185,8 @@ private class TestWorldModule(
     @Singleton
     fun resolverRegistry(
         schema: GJSchema,
-        @NodeResolvers nodeResolvers: Map<Schema.Object, NodeResolverFunction>,
-        @FieldResolvers fieldResolvers: Map<Schema.Field, FieldResolverDefinition>,
+        @NodeResolvers nodeResolvers: Map<ViaductSchema.Object, NodeResolverFunction>,
+        @FieldResolvers fieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>,
         @VariableProviders
         variableProviders: Map<Arguments.Variable, VariableDeclaration>,
     ): ResolverRegistry =
@@ -210,7 +212,7 @@ private class TestWorldModule(
 
     private fun defaultQueryResolvers(
         schema: GJSchema,
-    ): Map<Schema.Field, FieldResolverDefinition> {
+    ): Map<ViaductSchema.Field, FieldResolverDefinition> {
         val queryFragment = schema.emptyFragmentOf("Query")
         return schema.requireQueryTypeDef().fields
             .filter {

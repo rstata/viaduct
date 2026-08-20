@@ -7,7 +7,7 @@ import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Schema
+import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import semantics.contract.GeneratedResolutionObservation
 import semantics.contract.ResolverResolutionObservation
@@ -90,7 +90,7 @@ private fun List<PathComponent>.debugSummary(): String =
         }
     }
 
-private fun Schema.ObjectField.debugSummary(): String =
+private fun ViaductSchema.ObjectField.debugSummary(): String =
     "${containingDef.name}/$name"
 
 private fun SelectionForest.debugFields(): Set<String> =

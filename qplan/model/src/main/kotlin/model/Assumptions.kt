@@ -1,6 +1,7 @@
 package model
 
 import model.registry.ResolverRegistry
+import viaduct.graphql.schema.ViaductSchema
 
 /**
  * The schema, field resolvers, and monotonic variable bindings under which model values and
@@ -17,7 +18,7 @@ import model.registry.ResolverRegistry
  * [getBinding] and [fetchBinding] are defined exactly on declared bindings.
  */
 sealed interface Assumptions {
-    val schema: Schema
+    val schema: ViaductSchema
     val resolverRegistry: ResolverRegistry
 
     /** Whether resolver invocation and passive output traversal are selective to supplied demand. */
@@ -80,7 +81,7 @@ sealed interface Assumptions {
 
     companion object {
         fun of(
-            schema: Schema,
+            schema: ViaductSchema,
             resolverRegistry: ResolverRegistry,
             selectiveResolvers: Boolean = true,
         ): Assumptions =
@@ -93,7 +94,7 @@ sealed interface Assumptions {
 }
 
 private class AssumptionsImpl(
-    override val schema: Schema,
+    override val schema: ViaductSchema,
     override val resolverRegistry: ResolverRegistry,
     override val selectiveResolvers: Boolean,
 ) : Assumptions {

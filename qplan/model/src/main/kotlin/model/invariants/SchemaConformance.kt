@@ -1,5 +1,7 @@
 package model.invariants
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.Arguments
 
 import model.Assumptions
@@ -14,10 +16,10 @@ import model.ErrorEngineResult
 import model.CoercedDefaultValue
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Schema
-import model.TypeExpr
 import model.canContainPure
 import model.conformsToArgumentDefinition
+import model.inputType
+import model.outputType
 import viaduct.engine.api.EngineObjectData
 
 /**
@@ -37,7 +39,7 @@ internal fun EngineObjectData.Sync.conformsToSchema(): Boolean = this.conformsTo
  */
 context(world: Assumptions)
 internal fun EngineInputData?.conformsToSchema(
-    typeExpr: TypeExpr<Schema.InputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): Boolean = conformsToInputSchemaType(typeExpr)
 
 /**
@@ -48,7 +50,7 @@ internal fun EngineInputData?.conformsToSchema(
  */
 context(world: Assumptions)
 internal fun EngineOutputData?.conformsToOutputSchema(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): Boolean =
     conformsToOutputSchemaType(typeExpr) &&
         (this !is EngineObjectData.Sync || conformsToOutputData())
@@ -56,7 +58,7 @@ internal fun EngineOutputData?.conformsToOutputSchema(
 /** Whether this argument tuple recursively conforms to [expectedType]. */
 context(world: Assumptions)
 internal fun Arguments.Resolved.conformsToSchema(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
 ): Boolean = conformsToArgumentDefinition(expectedField)
 
 /** Whether this key's arguments recursively conform to its output field. */
@@ -82,7 +84,7 @@ internal fun EngineResult.conformsToSchema(): Boolean =
                 val value = getCell(key).getValue().get()
                 key.field.containingDef == type &&
                     key.conformsToSchema() &&
-                    value.conformsToResultSchemaType(key.field.type) &&
+                    value.conformsToResultSchemaType(key.field.outputType) &&
                     (value?.conformsToSchema() ?: true) &&
                     cell.getAccessResult().get().conformsToAccessResult()
             }
@@ -93,7 +95,7 @@ internal fun EngineResult.conformsToSchema(): Boolean =
                     (value?.conformsToSchema() ?: true) &&
                     cell.getAccessResult().get().conformsToAccessResult()
             }
-        is Schema.EnumValue ->
+        is ViaductSchema.EnumValue ->
             containingDef.value(name) == this
         is Double -> isFinite()
         is Int,
@@ -105,13 +107,13 @@ internal fun EngineResult.conformsToSchema(): Boolean =
     }
 
 private fun EngineInputData.conformsToInputObjectType(
-    expectedType: Schema.Input,
+    expectedType: ViaductSchema.Input,
 ): Boolean {
     val fieldValues = asEngineInputObjectDataOrNull() ?: return false
     if (
         expectedType.fields.any { field ->
             !field.type.isNullable &&
-                field.defaultValue == CoercedDefaultValue.Absent &&
+                !field.hasDefault &&
                 field.name !in fieldValues
         }
     ) {
@@ -119,12 +121,12 @@ private fun EngineInputData.conformsToInputObjectType(
     }
     return fieldValues.all { (fieldName, value) ->
         val field = expectedType.field(fieldName) ?: return@all false
-        value.conformsToInputSchemaType(field.type)
+        value.conformsToInputSchemaType(field.inputType)
     }
 }
 
 internal fun EngineInputData?.conformsToInputSchemaType(
-    typeExpr: TypeExpr<Schema.InputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): Boolean {
     if (this == null) return typeExpr.isNullable
 
@@ -136,7 +138,7 @@ internal fun EngineInputData?.conformsToInputSchemaType(
     }
 
     return when (val expectedType = typeExpr.baseTypeDef) {
-        is Schema.Scalar ->
+        is ViaductSchema.Scalar ->
             when (expectedType.name) {
                 "Int" -> this is Int
                 "Float" -> this is Double && isFinite()
@@ -145,11 +147,12 @@ internal fun EngineInputData?.conformsToInputSchemaType(
                 "ID" -> this is String
                 else -> false
             }
-        is Schema.Enum ->
+        is ViaductSchema.Enum ->
             this is String &&
                 expectedType.value(this) != null
-        is Schema.Input ->
+        is ViaductSchema.Input ->
             conformsToInputObjectType(expectedType)
+        else -> false
     }
 }
 
@@ -167,7 +170,7 @@ private fun EngineInputData.asEngineInputObjectDataOrNull(): EngineInputObjectDa
 }
 
 fun EngineOutputData?.conformsToOutputSchemaType(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
@@ -179,7 +182,7 @@ fun EngineOutputData?.conformsToOutputSchemaType(
                 } == true
         is EngineObjectData.Sync ->
             !typeExpr.isList &&
-                (typeExpr.baseTypeDef as? Schema.CompositeTypeDef)
+                (typeExpr.baseTypeDef as? ViaductSchema.CompositeTypeDef)
                     ?.possibleObjectTypes
                     ?.any { possibleType -> possibleType.name == type.name } == true
         is Int -> typeExpr.hasScalarType("Int")
@@ -189,8 +192,8 @@ fun EngineOutputData?.conformsToOutputSchemaType(
         is String ->
             !typeExpr.isList &&
                 when (val expected = typeExpr.baseTypeDef) {
-                    is Schema.Scalar -> expected.name == "String" || expected.name == "ID"
-                    is Schema.Enum -> expected.value(this) != null
+                    is ViaductSchema.Scalar -> expected.name == "String" || expected.name == "ID"
+                    is ViaductSchema.Enum -> expected.value(this) != null
                     else -> false
                 }
         is Boolean -> typeExpr.hasScalarType("Boolean")
@@ -213,7 +216,7 @@ private fun EngineOutputData?.conformsToOutputData(): Boolean =
     }
 
 internal fun EngineResult?.conformsToResultSchemaType(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
@@ -221,7 +224,7 @@ internal fun EngineResult?.conformsToResultSchemaType(
         is ObjectEngineResult ->
             if (!typeExpr.isList) {
                 val declaredType = typeExpr.baseTypeDef
-                declaredType is Schema.CompositeTypeDef && type in declaredType.possibleObjectTypes
+                declaredType is ViaductSchema.CompositeTypeDef && type in declaredType.possibleObjectTypes
             } else {
                 false
             }
@@ -234,16 +237,16 @@ internal fun EngineResult?.conformsToResultSchemaType(
         is String -> typeExpr.hasScalarType("String")
         is Boolean -> typeExpr.hasScalarType("Boolean")
         is EngineIDResult -> typeExpr.hasScalarType("ID")
-        is Schema.EnumValue ->
+        is ViaductSchema.EnumValue ->
             !typeExpr.isList &&
                 typeExpr.baseTypeDef == containingDef &&
                 containingDef.value(name) == this
         else -> false
     }
 
-private fun TypeExpr<*>.hasScalarType(expectedName: String): Boolean =
+private fun ViaductSchema.TypeExpr<*>.hasScalarType(expectedName: String): Boolean =
     !isList &&
-        (baseTypeDef as? Schema.Scalar)?.name == expectedName
+        (baseTypeDef as? ViaductSchema.Scalar)?.name == expectedName
 
 internal fun EngineResult.conformsToAccessResult(): Boolean =
     this is Boolean || this == ErrorEngineResult

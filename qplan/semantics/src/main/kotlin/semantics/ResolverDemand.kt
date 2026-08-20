@@ -1,11 +1,12 @@
 package semantics
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.ObjectEngineResult
 
 import model.Assumptions
 import model.ObjectSelectionForest
 import model.PathComponent
-import model.Schema
 import model.SelectionForest
 import model.applicableGroundSelections
 import model.flatMapToSelectionForest
@@ -18,7 +19,7 @@ import semantics.correctresolution.argumentsContainErrorValue
  * resolver occurrences, and stamps those occurrences' direct object fragments at their exact paths.
  */
 context(world: Assumptions)
-fun Schema.Object.closeResolverDemand(
+fun ViaductSchema.Object.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
 ): ObjectSelectionForest =
@@ -29,7 +30,7 @@ fun Schema.Object.closeResolverDemand(
     )
 
 context(world: Assumptions)
-private fun Schema.Object.closeResolverDemand(
+private fun ViaductSchema.Object.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
     expanded: Set<ObjectEngineResult.GroundKey>,

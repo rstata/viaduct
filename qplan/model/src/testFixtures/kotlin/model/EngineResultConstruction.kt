@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.invariants.conformsToResultSchemaType
 
 /** Constructs an object engine result by resolving type and field names in this reasoning world. */
@@ -9,12 +11,12 @@ fun Assumptions.engineResultOf(
 ): ObjectEngineResult = schema.engineResultOf(typeName, block)
 
 /** Constructs an object engine result by resolving type and field names in this schema. */
-fun Schema.engineResultOf(
+fun ViaductSchema.engineResultOf(
     typeName: String,
     block: EngineResultScope.() -> Unit = {},
 ): ObjectEngineResult {
     val type = requireType(typeName)
-    require(type is Schema.Object) {
+    require(type is ViaductSchema.Object) {
         "$typeName is not an object type"
     }
     return EngineResultScope(this, type)
@@ -24,13 +26,13 @@ fun Schema.engineResultOf(
 
 /** Constructs a list engine result in this reasoning world. */
 fun Assumptions.listResultOf(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     vararg values: Any?,
 ): ListEngineResult = schema.listResultOf(typeExpr, *values)
 
 /** Constructs a list engine result whose elements have [typeExpr]. */
-fun Schema.listResultOf(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+fun ViaductSchema.listResultOf(
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     vararg values: Any?,
 ): ListEngineResult =
     ListEngineResult.of(
@@ -44,8 +46,8 @@ annotation class EngineResultDsl
 /** Field-construction scope for [engineResultOf]. */
 @EngineResultDsl
 class EngineResultScope internal constructor(
-    private val schema: Schema,
-    private val type: Schema.Object,
+    private val schema: ViaductSchema,
+    private val type: ViaductSchema.Object,
 ) {
     private val values = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult?>()
     private val accessResults = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult>()
@@ -93,7 +95,7 @@ class EngineResultScope internal constructor(
         require(key !in values) {
             "Duplicate engine-result field ${type.name}/${key.field.name}"
         }
-        values[key] = coerceEngineResult(key.field.type, value)
+        values[key] = coerceEngineResult(key.field.outputType, value)
         accessResults[key] = accessResult
     }
 
@@ -117,7 +119,7 @@ class EngineResultFieldReference internal constructor(
 )
 
 private fun coerceEngineResult(
-    typeExpr: TypeExpr<Schema.OutputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     value: Any?,
 ): EngineResult? {
     if (value.conformsToResultSchemaType(typeExpr)) return value
@@ -136,11 +138,12 @@ private fun coerceEngineResult(
         )
     }
     return when (val type = typeExpr.baseTypeDef) {
-        is Schema.SimpleTypeDef ->
+        is ViaductSchema.SimpleTypeDef ->
             coerceSimpleValue(type, requireNotNull(value)).toEngineResult(type)
-        is Schema.CompositeTypeDef ->
+        is ViaductSchema.CompositeTypeDef ->
             throw IllegalArgumentException(
                 "Expected an object engine result for ${type.name}",
             )
+        else -> error("Output field has a non-output type")
     }
 }

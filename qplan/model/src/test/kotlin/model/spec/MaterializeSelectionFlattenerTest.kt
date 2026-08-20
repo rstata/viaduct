@@ -1,5 +1,7 @@
 package model.spec
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.requireField
@@ -8,7 +10,6 @@ import model.Arguments
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.Schema
 import model.Stamp
 import model.materializeSelectionForestOf
 import model.merge
@@ -309,13 +310,13 @@ class MaterializeSelectionFlattenerTest {
                 .mapTo(linkedSetOf()) { key -> key.field.name },
         )
 
-        val bridge = account.key.field.type.baseTypeDef as Schema.Object
+        val bridge = account.key.field.type.baseTypeDef as ViaductSchema.Object
         val payload = account.subselections.collect(bridge)["node"]
         assertEquals("node", payload.key.field.name)
         assertEquals(
             setOf("id"),
             payload.subselections
-                .collect(schema.requireType("User") as Schema.Object)
+                .collect(schema.requireType("User") as ViaductSchema.Object)
                 .responseKeys(),
         )
     }
@@ -326,11 +327,11 @@ class MaterializeSelectionFlattenerTest {
         val schema = world.schema
 
         val query = schema.requireQueryTypeDef()
-        val item = schema.requireType("Item") as Schema.Object
-        val pack = schema.requireType("Pack") as Schema.Object
-        val dog = schema.requireType("Dog") as Schema.Object
-        val cat = schema.requireType("Cat") as Schema.Object
-        val pet = schema.requireType("Pet") as Schema.Interface
+        val item = schema.requireType("Item") as ViaductSchema.Object
+        val pack = schema.requireType("Pack") as ViaductSchema.Object
+        val dog = schema.requireType("Dog") as ViaductSchema.Object
+        val cat = schema.requireType("Cat") as ViaductSchema.Object
+        val pet = schema.requireType("Pet") as ViaductSchema.Interface
 
         fun field(
             containingType: String,
@@ -349,13 +350,13 @@ class MaterializeSelectionFlattenerTest {
         }
 
         fun inlineFragment(
-            typeCondition: Schema.CompositeTypeDef?,
+            typeCondition: ViaductSchema.CompositeTypeDef?,
             selections: List<SpecSelection>,
         ): SpecSelection.InlineFragment =
             SpecSelection.InlineFragment.of(typeCondition, selections)
 
         fun flatten(
-            typeInScope: Schema.CompositeTypeDef,
+            typeInScope: ViaductSchema.CompositeTypeDef,
             selectionSet: List<SpecSelection>,
         ): MaterializeSelectionForest =
             context(assumptions) {

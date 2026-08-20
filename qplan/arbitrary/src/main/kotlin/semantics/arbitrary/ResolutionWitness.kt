@@ -1,5 +1,7 @@
 package semantics.arbitrary
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.EngineResult
 import model.EngineErrorData
 import model.EngineOutputData
@@ -11,10 +13,9 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
-import model.Schema
 import model.Selection
 import model.SelectionForest
-import model.TypeExpr
+import model.inputType
 import model.requireArg
 import model.requireField
 import viaduct.engine.api.EngineObjectData
@@ -374,7 +375,7 @@ fun EngineResult?.registeredResolverOccurrenceCounts(
 
 /** Resolver fields conservatively reachable from fields directly selected by an operation. */
 data class AllowedResolverClosure(
-    val directlySelectedFields: Set<Schema.ObjectField>,
+    val directlySelectedFields: Set<ViaductSchema.ObjectField>,
     val canonicalFields: Set<FieldCoordinate>,
 )
 
@@ -382,7 +383,7 @@ fun SelectionForest.allowedResolverClosure(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): AllowedResolverClosure {
-    val directlySelected = linkedSetOf<Schema.ObjectField>()
+    val directlySelected = linkedSetOf<ViaductSchema.ObjectField>()
     var visitedSelections = 0
 
     fun collect(selections: SelectionForest) {
@@ -396,7 +397,7 @@ fun SelectionForest.allowedResolverClosure(
             }
             selection.possibleTypes.forEach { possibleType ->
                 val field = possibleType.field(selection.key.field.name)
-                if (field is Schema.ObjectField && field in registry) {
+                if (field is ViaductSchema.ObjectField && field in registry) {
                     directlySelected += field
                 }
             }
@@ -405,8 +406,8 @@ fun SelectionForest.allowedResolverClosure(
     }
 
     collect(this)
-    val closure = linkedSetOf<Schema.ObjectField>()
-    val pending = ArrayDeque<Schema.ObjectField>()
+    val closure = linkedSetOf<ViaductSchema.ObjectField>()
+    val pending = ArrayDeque<ViaductSchema.ObjectField>()
     directlySelected.forEach { site ->
         closure += site
         pending += site
@@ -434,12 +435,12 @@ fun SelectionForest.allowedResolverClosure(
 
     return AllowedResolverClosure(
         directlySelectedFields = directlySelected,
-        canonicalFields = closure.mapTo(linkedSetOf(), Schema.Field::fieldCoordinate),
+        canonicalFields = closure.mapTo(linkedSetOf(), ViaductSchema.Field::fieldCoordinate),
     )
 }
 
 fun Arguments.Resolved.resolutionFingerprint(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): ResolutionFingerprint =
     ResolutionFingerprint(
@@ -480,7 +481,7 @@ private class FingerprintBudget(
 
     fun arguments(
         arguments: Arguments,
-        expectedField: Schema.Field,
+        expectedField: ViaductSchema.Field,
     ): String =
         when (arguments) {
             Arguments.Error -> node("error-args")
@@ -492,7 +493,7 @@ private class FingerprintBudget(
                             .joinToString(",") { (name, value) ->
                                 atom(name) +
                                     "=" +
-                                    input(value, expectedField.requireArg(name).type)
+                                    input(value, expectedField.requireArg(name).inputType)
                             } +
                         ")",
                 )
@@ -557,7 +558,7 @@ private class FingerprintBudget(
 
     private fun input(
         value: EngineInputData?,
-        expectedType: TypeExpr<Schema.InputTypeDef>,
+        expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     ): String {
         if (value == null) return node("null")
 
@@ -573,7 +574,7 @@ private class FingerprintBudget(
             )
         }
         return when (val expectedNamedType = expectedType.baseTypeDef) {
-            is Schema.Scalar ->
+            is ViaductSchema.Scalar ->
                 when (expectedNamedType.name) {
                     "Int" -> node("int:${value as Int}")
                     "Float" ->
@@ -585,12 +586,12 @@ private class FingerprintBudget(
                     "ID" -> node("id:${atom(value as String)}")
                     else -> error("Unsupported scalar: ${expectedNamedType.name}")
                 }
-            is Schema.Enum ->
+            is ViaductSchema.Enum ->
                 node(
                     "enum:${atom(expectedNamedType.name)}:" +
                         atom(value as String),
                 )
-            is Schema.Input -> {
+            is ViaductSchema.Input -> {
                 val fields = requireType<EngineInputObjectData>(value)
                 node(
                     "input-object:${atom(expectedNamedType.name)}{" +
@@ -601,12 +602,13 @@ private class FingerprintBudget(
                                     "=" +
                                     input(
                                         fieldValue,
-                                        expectedNamedType.requireField(name).type,
+                                        expectedNamedType.requireField(name).inputType,
                                     )
                             } +
                         "}",
                 )
             }
+            else -> error("Unsupported input type: ${expectedNamedType.name}")
         }
     }
 
@@ -615,7 +617,7 @@ private class FingerprintBudget(
         return value
     }
 
-    private fun typeExpr(typeExpr: TypeExpr<Schema.TypeDef>): String {
+    private fun typeExpr(typeExpr: ViaductSchema.TypeExpr<ViaductSchema.TypeDef>): String {
         val elementType = typeExpr.unwrapList()
         return if (elementType == null) {
             "named(${atom(typeExpr.baseTypeDef.name)},nullable=${typeExpr.isNullable})"
@@ -653,5 +655,5 @@ private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
             FingerprintBudget(bounds).arguments(arguments, field),
     )
 
-private fun Schema.Field.fieldCoordinate(): FieldCoordinate =
+private fun ViaductSchema.Field.fieldCoordinate(): FieldCoordinate =
     FieldCoordinate(containingDef.name, name)

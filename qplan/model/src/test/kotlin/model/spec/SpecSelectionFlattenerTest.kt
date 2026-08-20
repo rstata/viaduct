@@ -1,10 +1,11 @@
 package model.spec
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.requireQueryTypeDef
 import model.requireField
 import model.requireType
 import model.EngineInputObjectData
-import model.Schema
 import model.SelectionForest
 import model.fieldExpressions
 import model.testing.TestWorld
@@ -190,12 +191,12 @@ class SpecSelectionFlattenerTest {
         val schema = world.schema
 
         val query = schema.requireQueryTypeDef()
-        val dog = schema.requireType("Dog") as Schema.Object
-        val cat = schema.requireType("Cat") as Schema.Object
-        val pet = schema.requireType("Pet") as Schema.Interface
-        val i1 = schema.requireType("I1") as Schema.Interface
-        val i2 = schema.requireType("I2") as Schema.Interface
-        val i3 = schema.requireType("I3") as Schema.Interface
+        val dog = schema.requireType("Dog") as ViaductSchema.Object
+        val cat = schema.requireType("Cat") as ViaductSchema.Object
+        val pet = schema.requireType("Pet") as ViaductSchema.Interface
+        val i1 = schema.requireType("I1") as ViaductSchema.Interface
+        val i2 = schema.requireType("I2") as ViaductSchema.Interface
+        val i3 = schema.requireType("I3") as ViaductSchema.Interface
 
         fun field(
             containingType: String,
@@ -216,13 +217,13 @@ class SpecSelectionFlattenerTest {
                 }
 
         fun inlineFragment(
-            typeCondition: Schema.CompositeTypeDef?,
+            typeCondition: ViaductSchema.CompositeTypeDef?,
             selections: List<SpecSelection>,
         ): SpecSelection.InlineFragment =
             SpecSelection.InlineFragment.of(typeCondition, selections)
 
         fun flatten(
-            typeInScope: Schema.CompositeTypeDef,
+            typeInScope: ViaductSchema.CompositeTypeDef,
             selectionSet: List<SpecSelection>,
         ): SelectionForest =
             context(assumptions) {

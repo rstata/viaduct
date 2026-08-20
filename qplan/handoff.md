@@ -6,6 +6,8 @@ Qplan uses `viaduct.graphql.schema.ViaductSchema` and `ViaductSchema.TypeExpr` d
 
 Every reasoning world uses one canonical lowered `ViaductSchema`. Fields, arguments, enum values, object types, type conditions, possible-object-type sets, type expressions, resolver keys, selections, and EOD schema types all come from that schema instance.
 
+The execution module now has an executor-backed feature-test path. `EngineTestModule.runQPlanFeatureTest` translates an in-memory engine module's pre-dispatcher field and node executor maps into the ordinary `TestWorld` fixture inputs, then runs GraphQL operations through `QPlanExecutionStrategy`. It does not construct runtime dispatchers or data loaders.
+
 ## Schema Boundaries
 
 Fixture composition retains two distinct schemas:
@@ -16,6 +18,20 @@ Fixture composition retains two distinct schemas:
 `GJSchema.fromSDL` parses the source schema, enforces qplan's query-only and built-in-scalar restrictions, and lowers it to the final canonical `ViaductSchema`. It converts that schema to GraphQL Java only to validate the lowered graph, then discards the reconstruction. Copied source holders therefore continue to expose exact source objects, while the Node bridge rule attaches generated internal witnesses to synthetic bridge objects.
 
 `SourceSchemaAdapter` is the explicit source-to-lowered boundary. It requires the canonical source/lowered fixture pair and has no identity fallback for a bare lowered schema. `QPlanWiringFactory` receives this adapter explicitly.
+
+## Executor-Backed Execution
+
+The feature-test bootstrap path is `EngineTestModule -> source schema SDL -> TestWorld.fromSDL -> ResolverRegistry -> Assumptions -> ExecutionTestFixture`. Registry construction remains centralized in `TestWorld` and `resolverRegistryOf`; the execution adapter only converts Engine API executors into field resolver definitions and raw node lookup functions.
+
+Field executor coordinates and required selections are mapped through `SourceSchemaAdapter` into the canonical lowered schema. Resolver invocation uses one selector containing resolved arguments, the resolved object value, and a synchronous Query root value. Source-shaped outputs are normalized before fixture lowering.
+
+Node executors remain a fixture-composition input rather than a second resolver algebra. Existing `NodeResolverLowering` creates bridge producers and payload resolvers, adapts `NodeReference` values, and verifies canonical Node types. Local built-in `Query.node` and `Query.nodes` resolvers produce the same source-shaped node references when the engine module does not supply those fields.
+
+Typename also remains shared lowering. The schema lowerer owns synthetic typename fields, `resolverRegistryOf` owns their generated resolvers, and GraphQL-Java completion maps source `__typename` through `SourceSchemaAdapter`.
+
+The current executor slice supports unbatched, non-selective field and node executors; field arguments; object required selections without variables; synchronous scalar, enum, list, object, and node-reference outputs; built-in node lookup; and typename completion. It rejects batching, selectivity, query required selections, object required-selection variables, checkers, and asynchronous EOD outputs. Executor failures currently collapse to `EngineErrorData`.
+
+The next intended slice is declarative variables in object required selections. Start with concrete Engine API `FromArgument` values whose path is one top-level argument and concrete `FromFieldVariablesResolver` values whose non-list object path terminates at a scalar or enum. Translate them to `TestWorld.fromSDL(variableProviders = ...)`; do not initially execute arbitrary mock variable-resolver callbacks or support nested input paths, from-Query paths, or recursively variable-dependent providers. See [`execution/README.md`](./execution/README.md) for the architecture and testing details.
 
 ## Lowered Representation
 
@@ -44,11 +60,12 @@ The following gates pass from `qplan`:
 ./gradlew :model:test
 ./gradlew :arbitrary:test
 ./gradlew :semantics:test
+./gradlew :execution:test --tests execution.EngineTestModuleQPlanFeatureTest --tests execution.EngineFeatureTestExample --tests execution.RequiredSelectionsTest
 ./gradlew :execution:test
 ./gradlew check
 ```
 
-The full `check` passed on 2026-08-20. The model suite ran 237 tests, the semantics suite ran 458 tests with 3 existing skips, and generated resolver profiles passed.
+The executor-focused gate passes 15 tests: 5 adapter tests and 10 ports from `core/engine/runtime`. The ports retain their originating filenames and source-path comments, and the complete execution suite runs 39 tests. The full `check` passed on 2026-08-20. The model suite ran 237 tests, the semantics suite ran 458 tests with 3 existing skips, and generated resolver profiles passed.
 
 The final source audits return no references to qplan's retired schema representation:
 
@@ -62,4 +79,4 @@ Remaining `.gjDef` uses are intentional: source-backed qplan objects obtain exac
 
 ## Scope
 
-The schema-representation migration is complete. Future work must preserve selection occurrence identity, resolver scheduling, response-key materialization, OER identity, variable occurrence identity, and the explicit source/lowered schema boundary. Custom scalars, mutations, subscriptions, and production `execution2` integration remain separate work.
+The schema-representation migration is complete. The executor feature-test adapter is a pre-dispatcher integration surface, not a production `execution2` implementation. Future work must preserve selection occurrence identity, resolver scheduling, response-key materialization, OER identity, variable occurrence identity, and the explicit source/lowered schema boundary. Custom scalars, mutations, subscriptions, dispatcher and data-loader integration, and production `execution2` integration remain separate work.

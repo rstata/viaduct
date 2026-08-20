@@ -16,6 +16,7 @@ The longer-term `viaduct.engine.runtime.execution2` goal is query execution only
 - [`viaduct-execution.md`](./viaduct-execution.md) describes the idealized source-world execution model that qplan represents.
 - [`examples.md`](./examples.md) gives complete GraphQL examples of demand closure and output projection.
 - [`resolver-test-dsl.md`](./resolver-test-dsl.md) defines the schema-embedded deterministic resolver-world DSL.
+- [`execution/README.md`](./execution/README.md) describes GraphQL execution, executor-backed feature tests, current limitations, and the next integration slices.
 - [`from-object-field-census.md`](./from-object-field-census.md) preserves a dated production-shape census used to choose representative provider-path fixtures.
 - [`maintainer-guide.md`](./maintainer-guide.md) contains the practical testing, replay, debugging, and investigation workflow.
 - [`claims.md`](./claims.md) indexes scoped propositions; `arguments/` contains their supporting reasoning.
@@ -26,5 +27,6 @@ The longer-term `viaduct.engine.runtime.execution2` goal is query execution only
 - [`model`](./model/guidelines.md) defines semantic carriers, construction rules, equality, and factory-established invariants.
 - [`semantics`](./semantics/README.md) defines transformations, correctness judgments, resolver implementations, and test contracts.
 - [`arbitrary`](./arbitrary/README.md) generates canonical schemas, resolver registries, and operations for property testing.
+- [`execution`](./execution/README.md) executes queries through Resolver26 and provides the Engine API executor feature-test adapter.
 
 The nearest `AGENTS.md` is an annotated index to the documents relevant to work in that directory.

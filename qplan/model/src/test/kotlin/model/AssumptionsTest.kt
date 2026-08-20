@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
@@ -104,7 +106,7 @@ class AssumptionsTest {
     @Test
     fun `parses a fragment from a schema with explicit variable bindings`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.requireType("Filter") as Schema.Input
+        val filterType = schema.requireType("Filter") as ViaductSchema.Input
         val filter =
             toEngineInputObjectData(
                 expectedType = filterType,
@@ -135,7 +137,7 @@ class AssumptionsTest {
     @Test
     fun `ground input object construction rejects unresolved variables`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.requireType("Filter") as Schema.Input
+        val filterType = schema.requireType("Filter") as ViaductSchema.Input
         val variableField = schema.requireObjectField("Query", "node_V_A_node")
 
         assertFailsWith<ClassCastException> {
@@ -171,27 +173,24 @@ class AssumptionsTest {
 
         val schema = assumptions.schema
         val query = schema.requireQueryTypeDef()
-        val node = assertIs<Schema.Interface>(schema.requireType("Node"))
-        val user = assertIs<Schema.Object>(schema.requireType("User"))
-        val admin = assertIs<Schema.Object>(schema.requireType("Admin"))
-        val actor = assertIs<Schema.Union>(schema.requireType("Actor"))
+        val node = assertIs<ViaductSchema.Interface>(schema.requireType("Node"))
+        val user = assertIs<ViaductSchema.Object>(schema.requireType("User"))
+        val admin = assertIs<ViaductSchema.Object>(schema.requireType("Admin"))
+        val actor = assertIs<ViaductSchema.Union>(schema.requireType("Actor"))
 
         assertEquals(query, schema.requireType("Query"))
-        assertEquals(Schema.IntType, schema.requireType("Int"))
-        assertEquals(Schema.FloatType, schema.requireType("Float"))
-        assertEquals(Schema.StringType, schema.requireType("String"))
-        assertEquals(Schema.BooleanType, schema.requireType("Boolean"))
-        assertEquals(Schema.IDType, schema.requireType("ID"))
+        listOf("Int", "String", "ID").forEach { scalarName ->
+            assertIs<ViaductSchema.Scalar>(schema.requireType(scalarName))
+        }
         assertEquals(setOf(user, admin), node.possibleObjectTypes)
         assertEquals(setOf(user, admin), actor.possibleObjectTypes)
 
         val typeName = schema.requireField("Node", "V_A_typename")
         assertEquals(node, typeName.containingDef)
         assertEquals(emptyList(), typeName.args)
-        assertEquals(
-            TypeExpr.Named.of(Schema.StringType, isNullable = false),
-            typeName.type,
-        )
+        assertEquals("String", typeName.type.baseTypeDef.name)
+        assertFalse(typeName.type.isNullable)
+        assertFalse(typeName.type.isList)
 
         val actors = schema.requireField("Query", "actors")
         listOf(
@@ -205,13 +204,10 @@ class AssumptionsTest {
         val emptyArguments = Arguments.Resolved.of(actors, emptyMap())
         val otherEmptyArguments = Arguments.Resolved.of(typeName, emptyMap())
         assertEquals(emptyArguments, otherEmptyArguments)
-        assertEquals(
-            TypeExpr.List.of(
-                elementType = TypeExpr.Named.of(actor, isNullable = false),
-                isNullable = false,
-            ),
-            actors.type,
-        )
+        assertEquals(actor, actors.type.baseTypeDef)
+        assertEquals(1, actors.type.listDepth)
+        assertFalse(actors.type.nullableAtDepth(0))
+        assertFalse(actors.type.baseTypeNullable)
 
         val nodeField = schema.requireField("Query", "node_V_A_node")
         assertEquals(query, nodeField.containingDef)
@@ -219,9 +215,9 @@ class AssumptionsTest {
         val filterArgument = nodeField.requireArg("filter")
         assertEquals(nodeField, filterArgument.containingDef)
         assertEquals("filter", filterArgument.name)
-        assertFalse(filterArgument.isRequired)
+        assertFalse(!filterArgument.type.isNullable && !filterArgument.hasDefault)
         val filterDefault =
-            assertIs<CoercedDefaultValue.Present>(filterArgument.defaultValue)
+            assertIs<CoercedDefaultValue.Present>(filterArgument.coercedDefaultValue())
         val filterValue = assertIs<EngineInputObjectData>(filterDefault.value)
         val nodeArguments =
             Arguments.Resolved.of(
@@ -272,17 +268,17 @@ class AssumptionsTest {
 
         val friendField = schema.requireField("User", "friend_V_A_node")
         assertTrue(friendField.args.isNotEmpty())
-        val limitArgument: Schema.FieldArg =
+        val limitArgument: ViaductSchema.FieldArg =
             friendField.requireArg("limit")
         assertEquals(friendField, limitArgument.containingDef)
         assertEquals("limit", limitArgument.name)
-        assertFalse(limitArgument.isRequired)
+        assertFalse(!limitArgument.type.isNullable && !limitArgument.hasDefault)
 
-        val filter = assertIs<Schema.Input>(schema.requireType("Filter"))
-        val limitInputField: Schema.InputField = filter.requireField("limit")
+        val filter = assertIs<ViaductSchema.Input>(schema.requireType("Filter"))
+        val limitInputField: ViaductSchema.Field = filter.requireField("limit")
         assertEquals(filter, limitInputField.containingDef)
         assertEquals("limit", limitInputField.name)
-        assertFalse(limitInputField.isRequired)
+        assertFalse(!limitInputField.type.isNullable && !limitInputField.hasDefault)
         val tagsElementType = checkNotNull(filter.requireField("tags").type.unwrapList())
         assertFalse(tagsElementType.isNullable)
     }
@@ -383,7 +379,7 @@ class AssumptionsTest {
         val binding = Arguments.Variable.of(field, "binding").stamp(emptyList())
         val filter =
             toEngineInputObjectData(
-                expectedType = assumptions.schema.requireType("Filter") as Schema.Input,
+                expectedType = assumptions.schema.requireType("Filter") as ViaductSchema.Input,
                 value = mapOf("limit" to 1),
             )
 
@@ -400,7 +396,7 @@ class AssumptionsTest {
         val variable = Arguments.Variable.of(node, "filter").stamp(emptyList())
         val filter =
             toEngineInputObjectData(
-                expectedType = assumptions.schema.requireType("Filter") as Schema.Input,
+                expectedType = assumptions.schema.requireType("Filter") as ViaductSchema.Input,
                 value = mapOf("limit" to 3),
             )
         val arguments =
@@ -498,7 +494,7 @@ class AssumptionsTest {
     @Test
     fun `input-like factories convert host values according to the schema`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.requireType("Filter") as Schema.Input
+        val filterType = schema.requireType("Filter") as ViaductSchema.Input
         val filter =
             toEngineInputObjectData(
                 expectedType = filterType,
@@ -571,7 +567,7 @@ class AssumptionsTest {
 
         val explicitFilter =
             toEngineInputObjectData(
-                expectedType = schema.requireType("Filter") as Schema.Input,
+                expectedType = schema.requireType("Filter") as ViaductSchema.Input,
                 value = mapOf("limit" to 20, "role" to null),
             )
         assertEquals(
@@ -593,7 +589,7 @@ class AssumptionsTest {
     @Test
     fun `input-like factories reject values that do not match the schema`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val filterType = schema.requireType("Filter") as Schema.Input
+        val filterType = schema.requireType("Filter") as ViaductSchema.Input
 
         assertFailsWith<ClassCastException> {
             toEngineInputObjectData(

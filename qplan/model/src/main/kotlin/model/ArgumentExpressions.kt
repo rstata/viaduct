@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import model.invariants.conformsToInputSchemaType
 
 /**
@@ -19,7 +21,7 @@ private data class ArgumentsTemplateImpl(
     val fieldValues: Map<String, ArgumentExpression?>,
 ) : Arguments.Template {
     override fun stamp(
-        expectedField: Schema.Field,
+        expectedField: ViaductSchema.Field,
         selectionStamp: Stamp.Occurrence,
     ): Arguments =
         argumentsOfExpressions(
@@ -30,7 +32,7 @@ private data class ArgumentsTemplateImpl(
 }
 
 internal fun argumentsOf(
-    field: Schema.Field,
+    field: ViaductSchema.Field,
     fields: Map<String, Any?>,
 ): Arguments =
     argumentsOfExpressions(
@@ -38,7 +40,7 @@ internal fun argumentsOf(
     )
 
 internal fun argumentTemplateOf(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
     arguments: Arguments,
 ): Arguments.Template {
     require(arguments != Arguments.Error) {
@@ -57,7 +59,7 @@ internal fun argumentTemplateOf(
 }
 
 internal fun coerceArgumentExpression(
-    typeExpr: TypeExpr<Schema.InputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     value: Any?,
 ): ArgumentExpression? {
     if (value == null) {
@@ -74,31 +76,32 @@ internal fun coerceArgumentExpression(
         }
     }
     return when (val type = typeExpr.baseTypeDef) {
-        is Schema.SimpleTypeDef ->
+        is ViaductSchema.SimpleTypeDef ->
             requireNotNull(toEngineInputData(typeExpr, value)) {
                 "A non-null argument expression cannot coerce to null"
             }
-        is Schema.Input -> {
+        is ViaductSchema.Input -> {
             val fields = value.toStringKeyedArgumentMap()
             coerceArgumentFields(type, fields)
         }
+        else -> error("Unsupported input type: ${type.name}")
     }
 }
 
 private fun coerceArgumentFields(
-    type: Schema.Input,
+    type: ViaductSchema.Input,
     fields: Map<String, Any?>,
 ): Map<String, ArgumentExpression?> {
     val suppliedFields =
         fields.mapValues { (fieldName, value) ->
             val field = type.field(fieldName) ?: throw ClassCastException()
-            coerceArgumentExpression(field.type, value)
+            coerceArgumentExpression(field.inputType, value)
         }
 
     val values =
         type.fields
             .mapNotNull { field ->
-                val defaultValue = field.defaultValue
+                val defaultValue = field.coercedDefaultValue()
                 if (defaultValue is CoercedDefaultValue.Present) {
                     field.name to defaultValue.value
                 } else {
@@ -110,19 +113,19 @@ private fun coerceArgumentFields(
 }
 
 private fun coerceArgumentFields(
-    field: Schema.Field,
+    field: ViaductSchema.Field,
     fields: Map<String, Any?>,
 ): Map<String, ArgumentExpression?> {
     val suppliedFields =
         fields.mapValues { (argName, value) ->
             val arg = field.arg(argName) ?: throw ClassCastException()
-            coerceArgumentExpression(arg.type, value)
+            coerceArgumentExpression(arg.inputType, value)
         }
 
     val values =
         field.args
             .mapNotNull { arg ->
-                val defaultValue = arg.defaultValue
+                val defaultValue = arg.coercedDefaultValue()
                 if (defaultValue is CoercedDefaultValue.Present) {
                     arg.name to defaultValue.value
                 } else {
@@ -154,7 +157,7 @@ internal fun Arguments.fieldExpressions(): Map<String, ArgumentExpression?> =
     }
 
 private fun <T : Arguments> T.validatedAgainst(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
 ): T {
     require(conformsToArgumentDefinition(expectedField)) {
         "Argument expressions do not conform to the expected field"
@@ -163,7 +166,7 @@ private fun <T : Arguments> T.validatedAgainst(
 }
 
 internal fun Arguments.conformsToArgumentDefinition(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
 ): Boolean =
     when (this) {
         Arguments.Error -> true
@@ -172,13 +175,13 @@ internal fun Arguments.conformsToArgumentDefinition(
                 fields.keys.containsAll(expectedField.requiredArgNames()) &&
                     fields.all { (name, value) ->
                         val arg = expectedField.arg(name) ?: return@all false
-                        value.conformsToArgumentType(arg.type)
+                        value.conformsToArgumentType(arg.inputType)
                     }
             }
     }
 
 private fun ArgumentExpression?.conformsToArgumentType(
-    typeExpr: TypeExpr<Schema.InputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): Boolean {
     if (this == null) return typeExpr.isNullable
     if (this == ArgumentResolutionError || this is Arguments.Variable) return true
@@ -190,14 +193,14 @@ private fun ArgumentExpression?.conformsToArgumentType(
     }
 
     return when (val expectedType = typeExpr.baseTypeDef) {
-        is Schema.Input -> {
+        is ViaductSchema.Input -> {
             val fields = this as? Map<*, *> ?: return false
             val names = fields.keys
             names.all { it is String } &&
                 names.containsAll(expectedType.requiredFieldNames()) &&
                 fields.all { (name, value) ->
                     val field = expectedType.field(name as String) ?: return@all false
-                    value.conformsToArgumentType(field.type)
+                    value.conformsToArgumentType(field.inputType)
                 }
         }
         else -> conformsToInputSchemaType(typeExpr)
@@ -209,7 +212,7 @@ private fun ArgumentExpression?.conformsToArgumentType(
  * contained selection-stamped variable.
  */
 internal fun Arguments.restampSelectionVariables(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
     selectionStamp: Stamp.Occurrence,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -221,7 +224,7 @@ internal fun Arguments.restampSelectionVariables(
 }
 
 internal fun Arguments.stampVars(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
     path: List<PathComponent>,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -275,7 +278,7 @@ private fun ArgumentExpression?.restampVariables(
     }
 
 internal fun Arguments.substituteTemplates(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
     bindings: Map<Arguments.Variable, EngineInputData?>,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -286,7 +289,7 @@ internal fun Arguments.substituteTemplates(
         fieldExpressions().mapValues { (name, value) ->
             value.substituteTemplates(
                 bindings,
-                expectedField.requireArg(name).type,
+                expectedField.requireArg(name).inputType,
             )
         }
     return argumentsOfExpressions(substituted).validatedAgainst(expectedField)
@@ -294,7 +297,7 @@ internal fun Arguments.substituteTemplates(
 
 private fun ArgumentExpression?.substituteTemplates(
     bindings: Map<Arguments.Variable, EngineInputData?>,
-    expectedType: TypeExpr<Schema.InputTypeDef>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): ArgumentExpression? =
     when (this) {
         is Arguments.Variable ->
@@ -312,11 +315,11 @@ private fun ArgumentExpression?.substituteTemplates(
         is Map<*, *> -> {
             check(!expectedType.isList)
             val expectedObjectType = expectedType.baseTypeDef
-            check(expectedObjectType is Schema.Input)
+            check(expectedObjectType is ViaductSchema.Input)
             toStringKeyedArgumentMap().mapValues { (name, value) ->
                 value.substituteTemplates(
                     bindings,
-                    expectedObjectType.requireField(name).type,
+                    expectedObjectType.requireField(name).inputType,
                 )
             }
         }
@@ -324,7 +327,7 @@ private fun ArgumentExpression?.substituteTemplates(
     }
 
 internal fun Arguments.mapVariableTemplates(
-    expectedField: Schema.Field,
+    expectedField: ViaductSchema.Field,
     transform: (Arguments.Variable) -> Arguments.Variable,
 ): Arguments {
     if (this == Arguments.Error) return this
@@ -409,7 +412,7 @@ private fun ArgumentExpression?.containsVariable(): Boolean =
 internal fun Arguments.variableTemplates(): Set<Arguments.Variable> =
     variables().filterTo(linkedSetOf(), Arguments.Variable::isTemplate)
 
-internal fun Arguments.retarget(field: Schema.Field): Arguments {
+internal fun Arguments.retarget(field: ViaductSchema.Field): Arguments {
     if (this == Arguments.Error) return this
     val retargeted = Arguments.of(field, fieldExpressions())
     return when (this) {
@@ -420,9 +423,9 @@ internal fun Arguments.retarget(field: Schema.Field): Arguments {
 
 internal fun ArgumentExpression?.matchingVariableTypes(
     variable: Arguments.Variable,
-    typeExpr: TypeExpr<Schema.InputTypeDef>,
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     hasDefault: Boolean,
-): List<Pair<TypeExpr<Schema.InputTypeDef>, Boolean>> {
+): List<Pair<ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>, Boolean>> {
     require(variable.isTemplate) { "Variable type matching requires a template" }
     val elementType = typeExpr.unwrapList()
     return when {
@@ -433,14 +436,14 @@ internal fun ArgumentExpression?.matchingVariableTypes(
             }
         this is Map<*, *> &&
             !typeExpr.isList &&
-            typeExpr.baseTypeDef is Schema.Input -> {
-            val expectedType = typeExpr.baseTypeDef as Schema.Input
+            typeExpr.baseTypeDef is ViaductSchema.Input -> {
+            val expectedType = typeExpr.baseTypeDef as ViaductSchema.Input
             toStringKeyedArgumentMap().flatMap { (name, value) ->
                 val field = expectedType.requireField(name)
                 value.matchingVariableTypes(
                     variable,
-                    field.type,
-                    field.defaultValue is CoercedDefaultValue.Present,
+                    field.inputType,
+                    field.hasDefault,
                 )
             }
         }

@@ -1,5 +1,7 @@
 package model
 
+import viaduct.graphql.schema.ViaductSchema
+
 import graphql.GraphQLContext
 import graphql.execution.CoercedVariables
 import graphql.language.OperationDefinition
@@ -98,11 +100,11 @@ class OperationSelectionParsingTest {
             root.key.arguments.fieldExpressions(),
         )
 
-        val bridgeType = fixture.schema.requireType("User_V_A_Bridge") as Schema.Object
+        val bridgeType = fixture.schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
         val payload = root.subselections.merge(bridgeType).single()
         assertEquals("node", payload.key.field.name)
 
-        val userType = fixture.schema.requireType("User") as Schema.Object
+        val userType = fixture.schema.requireType("User") as ViaductSchema.Object
         assertEquals(
             setOf("id", "handle"),
             payload.subselections

@@ -56,9 +56,6 @@ internal const val NODE_BRIDGE_ID_FIELD = "id"
 internal const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
 internal const val TYPED_NODE_ID_PREFIX = "\$node:"
 
-/** Fixture-only variable binding that denotes failure outside the engine-input value domain. */
-internal data object ErroneousVariableValue
-
 internal fun nodeBridgeTypeName(nodeType: Schema.CompositeTypeDef): String =
     nodeType.name + NODE_BRIDGE_TYPE_SUFFIX
 
@@ -545,7 +542,7 @@ internal class GJSchemaDecoder(
             CoercedDefaultValue.Absent
         } else {
             val decoded =
-                decodeInputValue(
+                decodeLegacyInputValue(
                     type,
                     value,
                     noVariableValues,
@@ -557,7 +554,7 @@ internal class GJSchemaDecoder(
 
 }
 
-internal fun decodeInputValue(
+private fun decodeLegacyInputValue(
     type: GraphQLInputType,
     value: InputValueWithState,
     variableValues: Map<String, EngineInputData?>,
@@ -565,7 +562,7 @@ internal fun decodeInputValue(
     variableField: Schema.ObjectField? = null,
 ): Any? =
     if (value.isLiteral) {
-        decodeLiteral(
+        decodeLegacyLiteral(
             type,
             value.value as GraphQLValue<*>,
             variableValues,
@@ -579,7 +576,7 @@ internal fun decodeInputValue(
         )
     }
 
-internal fun decodeLiteral(
+private fun decodeLegacyLiteral(
     type: GraphQLInputType,
     value: GraphQLValue<*>,
     variableValues: Map<String, EngineInputData?>,
@@ -610,7 +607,7 @@ internal fun decodeLiteral(
 
     return when (type) {
         is GraphQLNonNull ->
-            decodeLiteral(
+            decodeLegacyLiteral(
                 type.wrappedType as GraphQLInputType,
                 value,
                 variableValues,
@@ -623,7 +620,7 @@ internal fun decodeLiteral(
             coerceArgumentExpression(
                 typeExpr = decodeModelInputType(type, schema),
                 value = values.map {
-                    decodeLiteral(
+                    decodeLegacyLiteral(
                         type.wrappedType as GraphQLInputType,
                         it,
                         variableValues,
@@ -705,7 +702,7 @@ private inline fun decodeInputObjectFields(
                     field.hasSetDefaultValue() ->
                         put(
                             field.name,
-                            decodeInputValue(
+                            decodeLegacyInputValue(
                                 field.type,
                                 field.inputFieldDefaultValue,
                                 variableValues,
@@ -738,7 +735,7 @@ private fun decodeObjectLiteral(
         type = type,
         isFieldSupplied = { suppliedFields.containsKey(it) },
         decodeSupplied = { fieldType, fieldName ->
-            decodeLiteral(
+            decodeLegacyLiteral(
                 fieldType,
                 suppliedFields.getValue(fieldName).value,
                 variableValues,
@@ -796,16 +793,6 @@ private fun decodeExternal(
         else -> error("Unexpected input type: $type")
     }
 }
-
-internal fun decodeExternalInputValue(
-    type: GraphQLInputType,
-    value: Any?,
-    schema: Schema,
-): Any? =
-    coerceArgumentExpression(
-        decodeModelInputType(type, schema),
-        decodeExternal(type, value, emptyMap(), schema),
-    )
 
 private fun decodeScalarExternal(
     schema: Schema,

@@ -12,7 +12,6 @@ import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
-import viaduct.engine.api.mocks.runFeatureTest
 import viaduct.engine.runtime.tenantloading.RequiredSelectionsAreInvalid
 
 /**
@@ -48,7 +47,7 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `simple query selections test`() {
         EngineTestModule(
@@ -71,13 +70,13 @@ class EngineFeatureTestExample {
                     fn { _, _, qry, _, _ -> qry.fetchAs<Int>("one") + 1 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("""{ twoContainer { two } }""")
                 .assertJson("""{"data": {"twoContainer": {"two": 2}}}""")
         }
     }
 
-    @Disabled("Test loops due to bug in engine - exposes issue with fieldWithValue + checker on same field")
+    @Disabled("TODO: AccessChk QplanBug")
     @Test
     fun `resolver with checker test`() {
         var checkerExecuted = false
@@ -98,14 +97,14 @@ class EngineFeatureTestExample {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ secureField }")
                 .assertJson("""{"data": {"secureField": "secure data"}}""")
         }
         assertTrue(checkerExecuted)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `resolver with checker test copy`() {
         var checkerExecuted = false
@@ -125,7 +124,7 @@ class EngineFeatureTestExample {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ secureField }")
                 .assertJson("""{"data": {"secureField": "secure data"}}""")
         }
@@ -167,7 +166,7 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: VarCallbk AccessChk")
     @Test
     fun `test from kdoc`() {
         EngineTestModule(
@@ -211,7 +210,7 @@ class EngineFeatureTestExample {
                     fn { _, _ -> /* validation logic */ }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ answer greeting }")
                 .assertJson("""{ data: { answer: 42, greeting: "Hello, World!" } }""")
         }
@@ -234,7 +233,7 @@ class EngineFeatureTestExample {
                         fn { _, _, _, _, _ -> null }
                     }
                 }
-            }.runFeatureTest {
+            }.runQPlanFeatureTest {
                 runQuery("{ foo }")
             }
         }
@@ -257,7 +256,7 @@ class EngineFeatureTestExample {
                         fn { _, _, _, _, _ -> null }
                     }
                 }
-            }.runFeatureTest {
+            }.runQPlanFeatureTest {
                 runQuery("{ foo }")
                     .assertJson("""{ data: { answer: 42, greeting: "Hello, World!" } }""")
             }

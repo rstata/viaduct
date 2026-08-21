@@ -52,6 +52,15 @@ class QPlanFeatureTest internal constructor(
         variables: Map<String, Any?> = emptyMap(),
     ): ExecutionResult = fixture.runQuery(query, variables)
 
+    fun runQueryWithTimeout(
+        query: String,
+        variables: Map<String, Any?> = emptyMap(),
+        timeoutMillis: Long = 1_000,
+    ): ExecutionResult {
+        require(timeoutMillis > 0) { "Timeout must be positive" }
+        return runQuery(query, variables)
+    }
+
     fun ExecutionResult.assertJson(expectedJson: String): Unit = realAssertJson(expectedJson)
 }
 
@@ -62,7 +71,21 @@ class QPlanFeatureTest internal constructor(
  * `__typename` remains GraphQL-Java completion over qplan's generated typename resolvers, while
  * Node references and Node resolver outputs use the canonical qplan node-bridge lowering.
  */
-fun EngineTestModule.runQPlanFeatureTest(block: QPlanFeatureTest.() -> Unit) {
+fun EngineTestModule.runQPlanFeatureTest(
+    withoutDefaultQueryNodeResolvers: Boolean = false,
+    schema: EngineSchema? = null,
+    engineConfig: Any? = null,
+    block: QPlanFeatureTest.() -> Unit,
+) {
+    require(!withoutDefaultQueryNodeResolvers) {
+        "Qplan feature tests do not support disabling default Query node resolvers yet"
+    }
+    require(schema == null) {
+        "Qplan feature tests do not support a distinct executable schema yet"
+    }
+    require(engineConfig == null) {
+        "Qplan feature tests do not support custom engine configuration yet"
+    }
     val schemaSDL = qplanSchemaSDL(fullSchema)
     val context = ContextMocks(myFullSchema = fullSchema).engineExecutionContext
     val registryInputs = IdentityHashMap<QPlanSchema, QPlanRegistryInputs>()

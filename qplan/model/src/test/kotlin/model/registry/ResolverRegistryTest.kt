@@ -448,10 +448,10 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `fills missing Query resolvers with errors and preserves supplied resolvers`() {
+    fun `fills missing Query resolvers by nullability and preserves supplied resolvers`() {
         val world =
             TestWorld.fromSDL(
-                schemaSDL = "type Query { supplied: Int, missing: Int }",
+                schemaSDL = "type Query { supplied: Int, nullable: Int, required: Int! }",
                 fieldResolvers = { schema ->
                     mapOf(
                         schema.requireField("Query", "supplied") to
@@ -474,7 +474,8 @@ class ResolverRegistryTest {
         }
 
         assertEquals(7, resolve("supplied"))
-        assertEquals(EngineErrorData, resolve("missing"))
+        assertEquals(null, resolve("nullable"))
+        assertEquals(EngineErrorData, resolve("required"))
     }
 
     @Test

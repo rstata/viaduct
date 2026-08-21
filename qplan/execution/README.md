@@ -82,6 +82,7 @@ The feature-test adapter currently supports:
 - Top-level from-argument variables in object required selections, including variable names that differ from their source argument names.
 - From-object-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, and non-root resolver owners.
 - Synchronous scalar, enum, list, object, and `NodeReference` outputs, including raw map sources for concrete object fields.
+- Partially populated Query executor maps, with missing nullable fields resolving to null and missing non-null fields resolving to an error.
 - Node-valued fields and built-in `Query.node` and `Query.nodes`.
 - `__typename` through canonical qplan lowering and GraphQL-Java completion.
 

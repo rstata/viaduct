@@ -149,9 +149,9 @@ internal val qplanEngineObjectDataTypeKey =
 
 private val ViaductSchema.Object.engineObjectDataType: GraphQLObjectType
     get() =
-        try {
+        if (qplanEngineObjectDataTypeKey in holder) {
             holder[qplanEngineObjectDataTypeKey]
-        } catch (_: NoSuchElementException) {
+        } else {
             gjDef
         }
 

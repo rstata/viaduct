@@ -33,6 +33,41 @@ val resolverBenchmarkQuerySeed =
     providers.gradleProperty("resolverBenchmarkQuerySeed").orElse("1")
 val resolverBenchmarkLoopCount =
     providers.gradleProperty("resolverBenchmarkLoopCount").orElse("1")
+val correctResolutionBenchmarkInputCount =
+    providers.gradleProperty("correctResolutionBenchmarkInputCount").orElse("50")
+val correctResolutionBenchmarkQuerySeed =
+    providers.gradleProperty("correctResolutionBenchmarkQuerySeed").orElse("1")
+val correctResolutionBenchmarkLoopCount =
+    providers.gradleProperty("correctResolutionBenchmarkLoopCount").orElse("1")
+val correctResolutionProfileOutput =
+    providers
+        .gradleProperty("correctResolutionProfileOutput")
+        .map { configured -> file(configured) }
+        .orElse(
+            layout.buildDirectory
+                .file("reports/resolver-benchmarks/correct-resolution.jfr")
+                .map { regularFile -> regularFile.asFile },
+        )
+val propertyTestBenchmarkLoopCount =
+    providers.gradleProperty("propertyTestBenchmarkLoopCount").orElse("1")
+val propertyTestProfileOutput =
+    providers
+        .gradleProperty("propertyTestProfileOutput")
+        .map { configured -> file(configured) }
+        .orElse(
+            layout.buildDirectory
+                .file("reports/resolver-benchmarks/property-test.jfr")
+                .map { regularFile -> regularFile.asFile },
+        )
+val resolver26OverheadProfileOutput =
+    providers
+        .gradleProperty("resolver26OverheadProfileOutput")
+        .map { configured -> file(configured) }
+        .orElse(
+            layout.buildDirectory
+                .file("reports/resolver-benchmarks/resolver26-overhead.jfr")
+                .map { regularFile -> regularFile.asFile },
+        )
 val resolverBenchmarkCorpusSeed =
     providers.gradleProperty("resolverBenchmarkCorpusSeed").orElse("1")
 val resolverBenchmarkCorpusSize =
@@ -58,6 +93,27 @@ tasks.register<JavaExec>("generateResolverBenchmarkCorpus") {
                 resolverBenchmarkCorpusDirectory.asFile.absolutePath,
                 resolverBenchmarkCorpusSeed.get(),
                 resolverBenchmarkCorpusSize.get(),
+            )
+    }
+}
+
+val propertyTestBenchmarkCorpusDirectory =
+    layout.projectDirectory.dir("src/jmh/resources/semantics/benchmark/property-test")
+
+tasks.register<JavaExec>("generatePropertyTestBenchmarkCorpus") {
+    group = "benchmark"
+    description = "Snapshots the historical Resolver26 property-test benchmark case."
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("semantics.resolver26.PropertyTestBenchmarkCorpusWriter")
+    maxHeapSize = "4g"
+    outputs.dir(propertyTestBenchmarkCorpusDirectory)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        args =
+            listOf(
+                propertyTestBenchmarkCorpusDirectory.asFile.absolutePath,
             )
     }
 }
@@ -118,6 +174,174 @@ fun registerResolverBenchmarkTask(
 listOf("resolver25", "resolver26").forEach { resolver ->
     registerResolverBenchmarkTask(resolver, "full")
     registerResolverBenchmarkTask(resolver, "overhead")
+}
+
+tasks.register<JavaExec>("resolver26OverheadProfile") {
+    group = "benchmark"
+    description = "Profiles only a measured Resolver26 fixed-corpus overhead iteration with JFR."
+    val benchmarkJar = tasks.named<org.gradle.jvm.tasks.Jar>("jmhJar")
+    dependsOn(benchmarkJar)
+    classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
+    mainClass.set("org.openjdk.jmh.Main")
+    inputs.property("queryCount", resolverBenchmarkQueryCount)
+    inputs.property("querySeed", resolverBenchmarkQuerySeed)
+    inputs.property("loopCount", resolverBenchmarkLoopCount)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        val profileFile = resolver26OverheadProfileOutput.get().absoluteFile
+        profileFile.parentFile.mkdirs()
+        profileFile.delete()
+        args =
+            listOf(
+                "semantics\\.resolver26\\.ResolverBenchmark\\.overhead",
+                "-p",
+                "queryCount=${resolverBenchmarkQueryCount.get()}",
+                "-p",
+                "querySeed=${resolverBenchmarkQuerySeed.get()}",
+                "-p",
+                "loopCount=${resolverBenchmarkLoopCount.get()}",
+                "-wi",
+                "1",
+                "-i",
+                "1",
+                "-f",
+                "1",
+                "-jvmArgsAppend",
+                "-Dresolver26OverheadProfileOutput=${profileFile.absolutePath} " +
+                    "-XX:FlightRecorderOptions=stackdepth=256",
+            )
+    }
+
+    doLast {
+        println()
+        println("Resolver26 overhead JFR: ${resolver26OverheadProfileOutput.get().absolutePath}")
+    }
+}
+
+tasks.register<JavaExec>("correctResolutionBenchmark") {
+    group = "benchmark"
+    description = "Benchmarks correctResolution over a prepared fixed corpus."
+    val benchmarkJar = tasks.named<org.gradle.jvm.tasks.Jar>("jmhJar")
+    dependsOn(benchmarkJar)
+    classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
+    mainClass.set("org.openjdk.jmh.Main")
+    inputs.property("inputCount", correctResolutionBenchmarkInputCount)
+    inputs.property("querySeed", correctResolutionBenchmarkQuerySeed)
+    inputs.property("loopCount", correctResolutionBenchmarkLoopCount)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        args =
+            listOf(
+                "semantics\\.correctresolution\\.CorrectResolutionBenchmark\\.correctResolution",
+                "-p",
+                "inputCount=${correctResolutionBenchmarkInputCount.get()}",
+                "-p",
+                "querySeed=${correctResolutionBenchmarkQuerySeed.get()}",
+                "-p",
+                "loopCount=${correctResolutionBenchmarkLoopCount.get()}",
+            )
+    }
+}
+
+tasks.register<JavaExec>("correctResolutionProfile") {
+    group = "benchmark"
+    description = "Profiles only a measured correctResolution iteration with JFR."
+    val benchmarkJar = tasks.named<org.gradle.jvm.tasks.Jar>("jmhJar")
+    dependsOn(benchmarkJar)
+    classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
+    mainClass.set("org.openjdk.jmh.Main")
+    inputs.property("inputCount", correctResolutionBenchmarkInputCount)
+    inputs.property("querySeed", correctResolutionBenchmarkQuerySeed)
+    inputs.property("loopCount", correctResolutionBenchmarkLoopCount)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        val profileFile = correctResolutionProfileOutput.get().absoluteFile
+        profileFile.parentFile.mkdirs()
+        profileFile.delete()
+        args =
+            listOf(
+                "semantics\\.correctresolution\\.CorrectResolutionBenchmark\\.correctResolution",
+                "-p",
+                "inputCount=${correctResolutionBenchmarkInputCount.get()}",
+                "-p",
+                "querySeed=${correctResolutionBenchmarkQuerySeed.get()}",
+                "-p",
+                "loopCount=${correctResolutionBenchmarkLoopCount.get()}",
+                "-wi",
+                "1",
+                "-i",
+                "1",
+                "-f",
+                "1",
+                "-jvmArgsAppend",
+                "-DcorrectResolutionProfileOutput=${profileFile.absolutePath}",
+            )
+    }
+
+    doLast {
+        println()
+        println("CorrectResolution JFR: ${correctResolutionProfileOutput.get().absolutePath}")
+    }
+}
+
+tasks.register<JavaExec>("propertyTestBenchmark") {
+    group = "benchmark"
+    description = "Benchmarks one frozen Resolver26 property-test case and all of its oracles."
+    val benchmarkJar = tasks.named<org.gradle.jvm.tasks.Jar>("jmhJar")
+    dependsOn(benchmarkJar)
+    classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
+    mainClass.set("org.openjdk.jmh.Main")
+    inputs.property("loopCount", propertyTestBenchmarkLoopCount)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        args =
+            listOf(
+                "semantics\\.resolver26\\.PropertyTestBenchmark\\.propertyTest",
+                "-p",
+                "loopCount=${propertyTestBenchmarkLoopCount.get()}",
+            )
+    }
+}
+
+tasks.register<JavaExec>("propertyTestProfile") {
+    group = "benchmark"
+    description = "Profiles one measured frozen Resolver26 property-test case with JFR."
+    val benchmarkJar = tasks.named<org.gradle.jvm.tasks.Jar>("jmhJar")
+    dependsOn(benchmarkJar)
+    classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
+    mainClass.set("org.openjdk.jmh.Main")
+    inputs.property("loopCount", propertyTestBenchmarkLoopCount)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        val profileFile = propertyTestProfileOutput.get().absoluteFile
+        profileFile.parentFile.mkdirs()
+        profileFile.delete()
+        args =
+            listOf(
+                "semantics\\.resolver26\\.PropertyTestBenchmark\\.propertyTest",
+                "-p",
+                "loopCount=${propertyTestBenchmarkLoopCount.get()}",
+                "-wi",
+                "1",
+                "-i",
+                "1",
+                "-f",
+                "1",
+                "-jvmArgsAppend",
+                "-DpropertyTestProfileOutput=${profileFile.absolutePath} " +
+                    "-XX:FlightRecorderOptions=stackdepth=256",
+            )
+    }
+
+    doLast {
+        println()
+        println("Property-test JFR: ${propertyTestProfileOutput.get().absolutePath}")
+    }
 }
 
 kotlin {

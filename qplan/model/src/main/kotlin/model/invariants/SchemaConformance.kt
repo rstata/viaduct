@@ -20,6 +20,7 @@ import model.canContainPure
 import model.conformsToArgumentDefinition
 import model.inputType
 import model.outputType
+import model.qplanSchemaTypeOrNull
 import viaduct.engine.api.EngineObjectData
 
 /**
@@ -179,12 +180,26 @@ fun EngineOutputData?.conformsToOutputSchemaType(
             typeExpr.unwrapList()
                 ?.let { elementType ->
                     all { value -> value.conformsToOutputSchemaType(elementType) }
-                } == true
+                } ?: false
         is EngineObjectData.Sync ->
-            !typeExpr.isList &&
+            if (typeExpr.isList) {
+                false
+            } else {
                 (typeExpr.baseTypeDef as? ViaductSchema.CompositeTypeDef)
                     ?.possibleObjectTypes
-                    ?.any { possibleType -> possibleType.name == type.name } == true
+                    ?.let { possibleTypes ->
+                        // Ensure the resolved object's runtime type is one of the expected output
+                        // type's possible concrete types.
+                        val qplanType = qplanSchemaTypeOrNull
+                        if (qplanType != null) {
+                            qplanType in possibleTypes
+                        } else {
+                            possibleTypes.any { possibleType ->
+                                possibleType.name == type.name
+                            }
+                        }
+                    } ?: false
+            }
         is Int -> typeExpr.hasScalarType("Int")
         is Double ->
             isFinite() &&

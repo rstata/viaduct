@@ -6,7 +6,11 @@ Resolver25 and Resolver26 implement the current benchmark profile: selective nod
 
 Run `./gradlew :semantics:resolver25FullBenchmark --console=plain` or `./gradlew :semantics:resolver26FullBenchmark --console=plain` for the full workflow. Use the corresponding `resolver25OverheadBenchmark` or `resolver26OverheadBenchmark` task for the fixed-corpus overhead benchmark.
 
-After every run, report each measured iteration, the final JMH score and error, units, the number of top-level resolutions in one JMH operation, and mean time per resolution. For overhead runs, also report every emitted corpus statistic with its actual percentile label rather than describing all percentiles as P90.
+Run `./gradlew :semantics:correctResolutionBenchmark --console=plain` for the isolated correctness-judgment benchmark.
+
+Run `./gradlew :semantics:propertyTestBenchmark --console=plain` for the frozen Resolver26 property-test case.
+
+After every run, report each measured iteration, the final JMH score and error, units, the number of top-level resolutions, property cases, or correctness judgments in one JMH operation, and mean time per resolution, case, or judgment. For overhead runs, also report every emitted corpus statistic with its actual percentile label rather than describing all percentiles as P90.
 
 ## Full Benchmark
 
@@ -27,6 +31,28 @@ After the measured trial, an untimed reporting pass resolves the `N` queries onc
 The report also separates active from passive result fields, reports their ratio, and describes the fixed registry's active/passive fields per non-Query object plus object-fragment recursive selection counts and depths.
 
 For Resolver26, each measured call includes `runBlocking` on the process-scoped configured dispatcher, the 15-second request timeout, coroutine launch/join work, successor-demand computation, Query-source and result allocation, promise and access checks, and request-local cycle protection. Cycle protection registers each Cell writer and records reader-to-writer edges in concurrent maps before a potentially blocking read; it throws on a detected dependency cycle. The ordinary benchmark passes a no-op application observer, but Resolver26 still constructs and submits each observation to that no-op. Query generation, parsing, `Assumptions` construction, resolution-witness capture, correctness validation, and statistics traversal are outside the measured method.
+
+To profile only the Resolver26 measured body, run `./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=M --console=plain`. The recording starts after invocation setup and stops immediately after the measured method, so it excludes query generation, parsing, request preparation, the warmup, and the reporting pass. It is written to `semantics/build/reports/resolver-benchmarks/resolver26-overhead.jfr`; override that location with `-Presolver26OverheadProfileOutput=PATH`.
+
+## Correct Resolution Benchmark
+
+`correctResolutionBenchmark` loads the checked-in benchmark schema and registry, generates 50 distinct queries from a fixed seed, and prepares one completed Resolver26 result, bound request-local `Assumptions`, and grounded root `ObjectSelectionForest` per query during trial setup. Setup also verifies each prepared judgment once. The measured method invokes only `correctResolution` over the prepared corpus and consumes each Boolean result; query generation, parsing, Resolver26 execution, witness capture, fragment merging, binding instantiation, and every other validation remain outside measurement.
+
+Control the input corpus with `-PcorrectResolutionBenchmarkInputCount=N` and `-PcorrectResolutionBenchmarkQuerySeed=S`, and repeat the prepared corpus with `-PcorrectResolutionBenchmarkLoopCount=M`. One JMH operation contains exactly `N * M` correctness judgments. The prepared results and assumptions are reused because `correctResolution` is read-only; changing that purity contract requires changing the benchmark setup.
+
+To profile only the correctness judgments, run `./gradlew :semantics:correctResolutionProfile --console=plain`. This runs one unrecorded warmup iteration, then starts a JFR recording after trial setup and immediately before the single measured iteration. The recording therefore excludes query generation, Resolver26 execution, correctness-witness preparation, and the warmup. It is written to `semantics/build/reports/resolver-benchmarks/correct-resolution.jfr`; override that location with `-PcorrectResolutionProfileOutput=PATH`. Resolver and object-materialization frames can still legitimately appear: `conformsToResolvers` invokes each activated field resolver as part of the correctness judgment.
+
+Inspect the recording with `jfr view hot-methods semantics/build/reports/resolver-benchmarks/correct-resolution.jfr`, `jfr view allocation-by-site semantics/build/reports/resolver-benchmarks/correct-resolution.jfr`, and `jfr view gc-pauses semantics/build/reports/resolver-benchmarks/correct-resolution.jfr`.
+
+## Property Test Benchmark
+
+`propertyTestBenchmark` replays one checked-in snapshot of Resolver26 broad campaign round 46's `stamp-collisions` case at `S=10 R=4 Q=3`. The resource records property seed `2026081300464`, the exact generated schema, executable registry recipe, and exact query source. It therefore remains the same workload when property-test generators, profiles, and random-consumption order change.
+
+One measured property case creates fresh request-local `Assumptions`, parses the frozen query, invokes Resolver26, reconstructs and compares all 12,763 resolver-application identities, runs `correctResolution`, and validates object-path bindings. Resource decoding and `TestWorld` assembly happen once during trial setup. Two warmup cases precede five measured cases. Repeat the frozen case within each measured JMH operation with `-PpropertyTestBenchmarkLoopCount=M`; the default is one.
+
+To profile the full measured property case, run `./gradlew :semantics:propertyTestProfile --console=plain`. This runs one unrecorded warmup case, then records one measured case to `semantics/build/reports/resolver-benchmarks/property-test.jfr`. Override the output with `-PpropertyTestProfileOutput=PATH`, and repeat the case inside the recording with `-PpropertyTestBenchmarkLoopCount=M`. The recording includes `qplan.PropertyTestPhase` duration events for request preparation, Resolver26, witness snapshotting, application-identity reconstruction, `correctResolution`, and object-path binding validation.
+
+`generatePropertyTestBenchmarkCorpus` is the provenance-preserving snapshot writer, not part of ordinary benchmark execution. It regenerates the historical coordinate through the current property generator and will intentionally fail if that generator no longer reproduces 12,763 applications. Do not regenerate the checked-in snapshot when generator evolution changes the coordinate; the benchmark's purpose is to retain the original serialized workload.
 
 ## Corpus Search
 

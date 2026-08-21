@@ -100,20 +100,20 @@ The test-only adapter uses `runBlocking` to cross the suspend executor SPI. That
 
 Tests under `src/test/kotlin/execution` exercise the GraphQL boundary, resolver semantics, completion, and the executor adapter. `EngineTestModuleQPlanFeatureTest` covers adapter-specific behavior and rejection boundaries. Ports of production Viaduct runtime feature tests live separately under `src/test/kotlin/execution/viaductfeaturetests` in the `execution.viaductfeaturetests` package.
 
-Runtime feature-test ports should remain as close to their source as qplan's supported surface permits: preserve the source filename, test names, test order, fixture structure, and local helpers; make only the adaptations needed to use `runQPlanFeatureTest`, qplan-compatible assertions, or supported executor shapes. Partial ports are expected. Do not silently rewrite an unsupported production behavior into a different passing test.
+The migration unit is an entire production feature-test file. Once a source file is brought into qplan, copy every test in source order together with its fixture structure and local helpers; do not select only the tests expected to pass. Preserve the source filename and test names. A newly copied test may retain its production `runFeatureTest` call only while disabled; before enabling it, adapt the test to `runQPlanFeatureTest` and any qplan-compatible assertions without changing its fixture or expected behavior. No enabled test in this package may execute through the production feature-test harness. A file with omitted source tests is an unfinished migration, not a partial port that may be treated as complete.
 
-A copied production test that fails under qplan must keep its fixture, behavior, and assertions unchanged and be marked `@Disabled` with a short investigation reason. This keeps the incompatibility available as executable evidence for follow-up work rather than replacing it with an easier passing scenario.
+A copied production test that does not pass under qplan must remain in the port with its fixture, behavior, and assertions unchanged and be marked `@Disabled` with a short investigation reason. This applies whether the blocker is an implementation bug, an adapter gap, or a documented qplan restriction. Never omit or rewrite an unsupported production behavior into a different passing test.
 
-Immediately after the package declaration, every ported file records its source path from the repository root and its implemented/source test count as of the review date:
+Immediately after the package declaration, every migrated file records its source path from the repository root and its copied/source test count as of the review date:
 
 ```kotlin
 package execution.viaductfeaturetests
 
 // core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/RequiredSelectionsTest.kt
-// Implemented 12 out of 60 tests as of 2026-08-20
+// Copied 60 out of 60 tests as of 2026-08-20
 ```
 
-Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. The current ports are `EngineFeatureTestExample.kt`, `NodeResolverTest.kt`, `RequiredSelectionsTest.kt`, and supported from-argument and from-object-field cases in `FromFieldVariablesFeatureTest.kt`, totaling thirty-one runtime tests. Two copied tests are disabled as preserved incompatibility cases. The remaining suites and recommended next ports are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
+Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. A completed migration always records equal copied and source counts; unequal counts expose unfinished legacy migration work and must not be normalized as the steady state. The current inventory and next whole-file migrations are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
 
 Run the adapter and ported tests with:
 

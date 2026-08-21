@@ -20,6 +20,11 @@ dependencies {
 
     testImplementation(kotlin("test-junit5"))
     testImplementation(testFixtures(viaductLibs.viaduct.engine.api))
+    testImplementation(viaductLibs.viaduct.engine.runtime)
+    testImplementation(viaductLibs.viaduct.engine.wiring)
+    testImplementation(viaductLibs.viaduct.shared.graphql)
+    testImplementation(viaductLibs.viaduct.service.api)
+    testImplementation(testFixtures(viaductLibs.viaduct.service.api))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

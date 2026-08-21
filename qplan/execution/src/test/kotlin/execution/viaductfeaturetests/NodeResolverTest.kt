@@ -187,7 +187,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests production's pending-OER/Dispatcher scheduling policy, not resolver correctness.")
     @Test
     fun `node field executes in parallel with node resolver`() {
         var yInvoked = false
@@ -371,7 +371,7 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("flaky")
+    @Disabled("N/A: Tests request-scoped NodeDataLoader caching; production already marks it flaky.")
     fun `node resolver reads from dataloader cache`() {
         val execCounts = ConcurrentHashMap<String, AtomicInteger>()
         EngineTestModule(schemaSDL) {
@@ -404,7 +404,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests production's non-selective data-loader cache-key policy.")
     @Test
     fun `non-selective node resolver reads from dataloader cache for different selection sets`() {
         // Non-selective resolvers always return their full output regardless of requested fields,
@@ -442,7 +442,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests selective data-loader cache coverage and cache-key policy, not qplan resolution semantics.")
     @Test
     fun `selective node resolver does not read from dataloader cache if selection set does not cover`() {
         // Selective resolvers tailor their response based on requested fields,

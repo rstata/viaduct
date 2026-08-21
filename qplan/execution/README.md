@@ -61,10 +61,12 @@ A failing production feature-test port is evidence of a disagreement, but not by
 
 Classify the disagreement before choosing a repair:
 
-1. A normative engine contract should be enforced by the model and semantics.
+1. A normative engine contract should be enforced by the model and semantics -- **DO NOT FIX THESE**.
 2. A feature-test convenience that falls outside that contract should be normalized by the test adapter before it enters qplan.
 3. A documented qplan restriction should remain an unchanged, disabled production test until that restriction is deliberately lifted.
 4. An implementation that violates its claimed contract should be fixed at the narrowest owning boundary.
+
+When you find resolver (engine contract) errors, do not fix them.  Instead report them to the User.
 
 Compatibility belongs at ingress. Do not make qplan's engine accept a representation excluded by its contract merely because a production fixture or mock executor can produce it. Conversely, an ingress adapter must not conceal a contract violation produced inside qplan.
 
@@ -100,7 +102,7 @@ The test-only adapter uses `runBlocking` to cross the suspend executor SPI. That
 
 Tests under `src/test/kotlin/execution` exercise the GraphQL boundary, resolver semantics, completion, and the executor adapter. `EngineTestModuleQPlanFeatureTest` covers adapter-specific behavior and rejection boundaries. Ports of production Viaduct runtime feature tests live separately under `src/test/kotlin/execution/viaductfeaturetests` in the `execution.viaductfeaturetests` package.
 
-The migration unit is an entire production feature-test file. Once a source file is brought into qplan, copy every test in source order together with its fixture structure and local helpers; do not select only the tests expected to pass. Preserve the source filename and test names. A newly copied test may retain its production `runFeatureTest` call only while disabled; before enabling it, adapt the test to `runQPlanFeatureTest` and any qplan-compatible assertions without changing its fixture or expected behavior. No enabled test in this package may execute through the production feature-test harness. A file with omitted source tests is an unfinished migration, not a partial port that may be treated as complete.
+The migration unit is an entire production feature-test file. Once a source file is brought into qplan, copy every test in source order together with its fixture structure and local helpers; do not select only the tests expected to pass. Preserve the source filename and test names, and replace every production `runFeatureTest` call with `runQPlanFeatureTest` without changing the fixture or expected behavior. No copied test in this package, enabled or disabled, may execute through the production feature-test harness. A file with omitted source tests is an unfinished migration, not a partial port that may be treated as complete.
 
 A copied production test that does not pass under qplan must remain in the port with its fixture, behavior, and assertions unchanged and be marked `@Disabled` with a short investigation reason. This applies whether the blocker is an implementation bug, an adapter gap, or a documented qplan restriction. Never omit or rewrite an unsupported production behavior into a different passing test.
 

@@ -28,7 +28,6 @@ import viaduct.engine.api.mocks.createRSS
 import viaduct.engine.api.mocks.featureTestDefault
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
-import viaduct.engine.api.mocks.runFeatureTest
 import viaduct.engine.runtime.execution.DefaultCoroutineInterop
 import viaduct.engine.runtime.execution.ExecutionParameters
 import viaduct.engine.runtime.execution.FieldChildPlan
@@ -175,7 +174,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"foo": 60}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
     @Test
     fun `required selections use fragments`() =
         EngineTestModule("extend type Query { foo: Int, bar: Int }") {
@@ -186,12 +184,12 @@ class RequiredSelectionsTest {
                     fn { _, obj, _, _, _ -> obj.fetchAs<Int>("bar") * 2 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{foo}")
                 .assertJson("""{"data": {"foo": 6}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective Directive MechAdapt")
     @Test
     fun `child RSS keeps pruned fragments separate from operation fragments`() {
         val module = EngineTestModule(
@@ -250,7 +248,7 @@ class RequiredSelectionsTest {
             MockFlagManager.create(FlagManager.Flags.ENABLE_MAT_RESOLUTION),
         )
         for (flagManager in flagManagers) {
-            module.runFeatureTest(
+            module.runQPlanFeatureTest(
                 engineConfig = EngineConfiguration.featureTestDefault.copy(flagManager = flagManager)
             ) {
                 runQuery(
@@ -321,7 +319,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective")
     @Test
     fun `selective field executes once for a single selection shape`() {
         val detailsCount = AtomicInteger()
@@ -357,7 +355,7 @@ class RequiredSelectionsTest {
                     )
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ details { a } }")
                 .assertJson("""{"data": {"details": {"a": 1}}}""")
         }
@@ -366,7 +364,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective QueryRss")
     @Test
     fun `selective field executes separately for client and resolver rss shapes`() {
         val detailsCount = AtomicInteger()
@@ -410,7 +408,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ details { a } fromB }")
                 .assertJson("""{"data": {"details": {"a": 1}, "fromB": 2}}""")
         }
@@ -419,7 +417,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective")
     @Test
     fun `selective required selection is resolved independently from client query selection`() {
         val detailsCount = AtomicInteger()
@@ -471,7 +469,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ container { details { a } summary } }")
                 .assertJson("""{"data": {"container": {"details": {"a": 1}, "summary": 20}}}""")
         }
@@ -480,7 +478,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld")
     @Test
     fun `parent field accesses already requested parent fields through named fragment`() {
         EngineTestModule(
@@ -515,7 +513,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery(
                 """
                 query {
@@ -535,7 +533,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld")
     @Test
     fun `nested parent field accesses already requested grandparent fields`() {
         EngineTestModule(
@@ -580,13 +578,13 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ organization { name company { user { parentOrganizationName } } } }")
                 .assertJson("""{"data": {"organization": {"name": "Engineering", "company": {"user": {"parentOrganizationName": "Engineering"}}}}}""")
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld VarCallbk")
     @Test
     fun `parent field with resolver argument variables runs child plan`() {
         val resolvedNameLocales = ConcurrentHashMap.newKeySet<String>()
@@ -633,7 +631,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             val result = runQuery("{ company { user { localizedCompanyName(locale: \"en\") } } }")
 
             // name(locale: $locale) is resolved by the RSS child plan after
@@ -652,7 +650,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("en"), resolvedNameLocales)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld VarCallbk")
     @Test
     fun `parent field with child object field variables runs child plan`() {
         val resolvedNameLocales = ConcurrentHashMap.newKeySet<String>()
@@ -702,7 +700,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             val result = runQuery("{ company { user { localizedCompanyName } } }")
 
             // name(locale: $locale) is resolved by the RSS child plan after Company.user has
@@ -721,7 +719,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("de"), resolvedNameLocales)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld AccessChk")
     @Test
     fun `parent field in checker required selection is available to checker`() {
         val checkedCompanyNames = ConcurrentHashMap.newKeySet<String>()
@@ -765,7 +763,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ company { user { sensitiveProfile } } }")
                 .assertJson("""{"data": {"company": {"user": {"sensitiveProfile": "allowed"}}}}""")
         }
@@ -773,7 +771,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("Airbnb"), checkedCompanyNames)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld VarCallbk")
     @Test
     fun `parent field in variable resolver required selection is available to variables resolver`() {
         val resolvedNameLocales = ConcurrentHashMap.newKeySet<String>()
@@ -830,7 +828,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ company { user { localizedCompanyName } } }")
                 .assertJson("""{"data": {"company": {"user": {"localizedCompanyName": "Airbnb-fr"}}}}""")
         }
@@ -839,7 +837,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("fr"), resolvedNameLocales)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ParentFld VarCallbk Directive")
     @Test
     fun `parent field selections honor conditional directives`() {
         val companyNameCount = AtomicInteger()
@@ -899,7 +897,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ company { users { parentCompanyName } } }")
                 .assertJson("""{"data": {"company": {"users": [{"parentCompanyName": "Airbnb"}, {"parentCompanyName": "skipped"}]}}}""")
         }
@@ -907,7 +905,7 @@ class RequiredSelectionsTest {
         assertEquals(1, companyNameCount.get())
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective MechAdapt ErrorData")
     @Test
     fun `plain OER keys cause required selections to reuse client selection shape`() {
         val detailsCount = AtomicInteger()
@@ -960,7 +958,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest(engineConfig = engineConfig) {
+        }.runQPlanFeatureTest(engineConfig = engineConfig) {
             val result = runQuery("{ container { details { a } summary } }")
 
             assertEquals(
@@ -980,7 +978,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective")
     @Test
     fun `non-selective required selection is shared across client query and dependency selections`() {
         val detailsCount = AtomicInteger()
@@ -1028,7 +1026,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ container { details { a } summary } }")
                 .assertJson("""{"data": {"container": {"details": {"a": 1}, "summary": 20}}}""")
         }
@@ -1037,7 +1035,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective")
     @Test
     fun `selective required selection is resolved independently across resolver rss variants`() {
         val detailsCount = AtomicInteger()
@@ -1097,7 +1095,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ container { fromA fromB } }")
                 .assertJson("""{"data": {"container": {"fromA": 1, "fromB": 2}}}""")
         }
@@ -1106,7 +1104,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Abstract NodeLower")
     @Test
     fun `object rss node selection ignores nested fragment on other implementation`() {
         // Query.foo's object RSS reads Query.node with a selection whose outer fragment is on Bar,
@@ -1162,7 +1160,7 @@ class RequiredSelectionsTest {
                     )
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery(
                 """
                     query {
@@ -1185,7 +1183,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Abstract QueryRss VarCallbk Directive MechAdapt")
     @Test
     fun `required selection with impossible sibling implementation dependency can be resolved`() {
         // Foo.x has an object RSS rooted at Foo. The outer `... on Node` branch can match Foo,
@@ -1279,13 +1277,13 @@ class RequiredSelectionsTest {
                     createEngineObjectData(objectType, emptyMap())
                 }
             }
-        }.runFeatureTest(withoutDefaultQueryNodeResolvers = true) {
+        }.runQPlanFeatureTest(withoutDefaultQueryNodeResolvers = true) {
             runQueryWithTimeout("{ trigger }")
                 .assertJson("{data: {trigger: 1}}")
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: AccessChk MechAdapt")
     @Test
     fun `sibling cyclic required selections keep direct materializations during execution`() {
         val bInAPlanChildPlanCount = AtomicInteger(-1)
@@ -1327,14 +1325,14 @@ class RequiredSelectionsTest {
                     fn { _, _ -> }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ a b }").assertJson("{data: {a: 1, b: 2}}")
         }
 
         assertEquals(1, bInAPlanChildPlanCount.get())
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective QueryRss AccessChk")
     @Test
     fun `selective query field resolves matching resolver and checker selections independently`() {
         val detailsCount = AtomicInteger()
@@ -1399,7 +1397,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ details { a } fromObjectB fromQueryB checked }")
                 .assertJson("""{"data": {"details": {"a": 1}, "fromObjectB": 2, "fromQueryB": 2, "checked": 1}}""")
         }
@@ -1409,7 +1407,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective AccessChk")
     @Test
     fun `selective required selection resolves resolver and type checker selections independently`() {
         val detailsCount = AtomicInteger()
@@ -1473,7 +1471,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ container { details { a } fromObjectB } }")
                 .assertJson("""{"data": {"container": {"details": {"a": 1}, "fromObjectB": 2}}}""")
         }
@@ -1483,7 +1481,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective Abstract")
     @Test
     fun `selective required selection through interface inline fragment uses concrete runtime type`() {
         val detailsCount = AtomicInteger()
@@ -1539,7 +1537,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ container { ... on ConcreteContainer { fromObjectB } } }")
                 .assertJson("""{"data": {"container": {"fromObjectB": 2}}}""")
         }
@@ -1547,7 +1545,7 @@ class RequiredSelectionsTest {
         assertEquals(1, detailsCount.get())
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective")
     @Test
     fun `descendant fields of a selective resolver are not keyed selectively`() {
         EngineTestModule(
@@ -1592,7 +1590,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             val result = runQuery("{ fromProfileName }")
             result.assertJson("""{"data": {"fromProfileName": "Ada"}}""")
         }
@@ -1617,7 +1615,7 @@ class RequiredSelectionsTest {
         }
 
     @Test
-    @Disabled("Production expects alias-shaped required-selection demand to execute Query.bar twice; qplan intentionally coalesces it into one resolver application")
+    @Disabled("ALT: Production expects alias-shaped required-selection demand to execute Query.bar twice; qplan intentionally coalesces it into one resolver application")
     fun `resolve fields multiple mergeable requirements`() {
         val barCount = AtomicInteger()
         EngineTestModule("extend type Query { foo: Int, bar: Int }") {
@@ -1719,7 +1717,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective")
     @Test
     fun `proxy engine object data reads required selections through two nested client and rss merges`() {
         val outerCount = AtomicInteger()
@@ -1789,7 +1787,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery(
                 """
                 query {
@@ -1812,7 +1810,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), innerSelections)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Selective Abstract VarCallbk")
     @Test
     fun `variable resolver rss reads through multiple selective fields including abstract hop`() {
         val middleCount = AtomicInteger()
@@ -1904,7 +1902,7 @@ class RequiredSelectionsTest {
                     fn { _, obj, _, _, _ -> obj.fetchAs<Int>("compute") }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery(
                 """
                 query {
@@ -1934,7 +1932,7 @@ class RequiredSelectionsTest {
         assertEquals(2, nodeCount.get())
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: VarCallbk")
     @Test
     fun `two resolvers with structurally-equivalent variable-resolver RSSes both resolve correctly`() {
         // Setup: two resolver fields (foo1, foo2) whose objectSelections RSS is structurally
@@ -1976,13 +1974,13 @@ class RequiredSelectionsTest {
                     )
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ foo1 foo2 }")
                 .assertJson("""{"data": {"foo1": 7, "foo2": 7}}""")
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: PrivateFld MechAdapt")
     @Test
     fun `resolve private field in RSS`() {
         // Need to set up both full schema and scoped schema
@@ -2010,13 +2008,13 @@ class RequiredSelectionsTest {
             ).build(SchemaView.Scoped(setOf("scoped"))).filtered
         )
 
-        bootstrapper.runFeatureTest(schema = privateSchema) {
+        bootstrapper.runQPlanFeatureTest(schema = privateSchema) {
             runQuery("{foo}")
                 .assertJson("{data: {foo: 4}}")
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - simple field access`() =
         EngineTestModule("extend type Query { currentUser: String, userGreeting: String }") {
@@ -2030,12 +2028,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{userGreeting}")
                 .assertJson("""{"data": {"userGreeting": "Hello, Alice!"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Directive VarCallbk")
     @Test
     fun `objectSelections conditional directives honor per-item variables`() {
         val selectedValueCount = AtomicInteger()
@@ -2095,7 +2093,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ items { summary } }")
                 .assertJson("""{"data": {"items": [{"summary": "selected"}, {"summary": "skipped"}]}}""")
         }
@@ -2103,7 +2101,7 @@ class RequiredSelectionsTest {
         assertEquals(1, selectedValueCount.get())
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - with aliases`() =
         EngineTestModule("extend type Query { currentUser: String, userCount: Int, summary: String }") {
@@ -2119,12 +2117,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{summary}")
                 .assertJson("""{"data": {"summary": "Bob has 42 items"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - with arguments`() =
         EngineTestModule("extend type Query { user(id: String!): String, userMessage: String }") {
@@ -2145,12 +2143,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{userMessage}")
                 .assertJson("""{"data": {"userMessage": "Message for: User-123"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - using fragments`() =
         EngineTestModule("extend type Query { userName: String, userEmail: String, profile: String }") {
@@ -2166,12 +2164,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{profile}")
                 .assertJson("""{"data": {"profile": "Name: Charlie, Email: charlie@example.com"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment and objectValueFragment together`() =
         EngineTestModule("extend type Query { globalConfig: String, baz: Baz } type Baz { x: Int, y: String }") {
@@ -2188,12 +2186,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{baz { y }}")
                 .assertJson("{data: {baz: {y: \"Premium item with value 100\"}}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - transitive dependencies`() =
         EngineTestModule("extend type Query { baseValue: Int, multipliedValue: Int, finalValue: Int }") {
@@ -2214,12 +2212,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{finalValue}")
                 .assertJson("""{"data": {"finalValue": 20}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - multiple query selections`() {
         val userCount = AtomicInteger()
@@ -2251,7 +2249,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{combined}")
                 .assertJson("""{"data": {"combined": "David - Advanced mode"}}""")
                 .also {
@@ -2261,7 +2259,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - inline fragment without type condition`() =
         EngineTestModule("extend type Query { isEnabled: Boolean, config: String, result: String }") {
@@ -2277,12 +2275,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{result}")
                 .assertJson("""{"data": {"result": "Running in production"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - handles null gracefully`() =
         EngineTestModule("extend type Query { optionalValue: String, result: String }") {
@@ -2296,12 +2294,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{result}")
                 .assertJson("""{"data": {"result": "No value provided"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss Mutation")
     @Test
     fun `resolve mutation with queryValueFragment`() =
         EngineTestModule("extend type Query { string1: String } extend type Mutation { string1: String }") {
@@ -2315,12 +2313,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("mutation { string1 }")
                 .assertJson("{data: {string1: \"Mutated from: InitialValue\"}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - nested object access`() =
         EngineTestModule("extend type Query { bar: Bar, baz: Baz } type Bar { value: String } type Baz { x: Int, y: String }") {
@@ -2337,12 +2335,12 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{baz { y }}")
                 .assertJson("{data: {baz: {y: \"Baz sees bar value: BarValue\"}}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - typed inline fragment`() =
         EngineTestModule("extend type Query { enabled: Boolean, message: String, status: String }") {
@@ -2358,7 +2356,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{status}")
                 .assertJson("""{"data": {"status": "System offline"}}""")
         }
@@ -2375,7 +2373,7 @@ class RequiredSelectionsTest {
                         fn { _, _, _, _, _ -> "should not execute" }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }
     }
 
@@ -2407,7 +2405,7 @@ class RequiredSelectionsTest {
                         fn { _, _, _, _, _ -> "should not execute" }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }
     }
 
@@ -2454,7 +2452,7 @@ class RequiredSelectionsTest {
                         fn { _, _, _, _, _ -> "should not execute" }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }
     }
 
@@ -2470,11 +2468,11 @@ class RequiredSelectionsTest {
                         fn { _, _, _, _, _ -> "should not execute" }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss VarCallbk Directive QplanBug")
     @Test
     fun `query rss variable resolver is planned when repeated fragment spread has runtime directive`() {
         // Query.a has a query RSS that spreads the same fragment twice: once behind a runtime
@@ -2511,7 +2509,7 @@ class RequiredSelectionsTest {
                     fn { _, _, _, _, _ -> 1 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ a }").assertJson("{data: {a: 1}}")
         }
     }
@@ -2521,7 +2519,7 @@ class RequiredSelectionsTest {
      * must not fire when the runtime type is Foo, not Bar. Before the fix, Bar.value's checker
      * could leak into resolution of Foo.value because isRootType permitted any root-type parent.
      */
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: AccessChk QueryRss Abstract QplanBug")
     @Test
     fun `field-level checker RSS rooted on Query does not leak into sibling interface implementor`() {
         val sdl = """
@@ -2567,7 +2565,7 @@ class RequiredSelectionsTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ iface { value } }").assertJson("""{"data": {"iface": {"value": "foo-value"}}}""")
 
             assertEquals(1, checkerInvocations["Foo.value"]?.get()) { "Foo.value checker should run exactly once" }

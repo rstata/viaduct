@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.createEngineObjectData
-import viaduct.engine.api.mocks.runFeatureTest
 
 @ExperimentalCoroutinesApi
 class NodeResolverTest {
@@ -64,7 +63,7 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Production permits a Node-valued field resolver to materialize the Node directly; qplan requires every Node value to cross its node resolver")
+    @Disabled("ALT: Production permits a Node-valued field resolver to materialize the Node directly; qplan requires every Node value to cross its node resolver")
     fun `node reference nested inside resolver response`() {
         EngineTestModule(schemaSDL) {
             field("Query" to "baz") {
@@ -213,7 +212,7 @@ class NodeResolverTest {
                     throw RuntimeException("msg")
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             val result = runQuery("{ baz { y } }")
             assertTrue(yInvoked)
             assertEquals(mapOf("baz" to null), result.getData())
@@ -222,7 +221,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QplanBug ErrorData")
     @Test
     fun `awaits completion for node in required selection set`() {
         EngineTestModule(schemaSDL) {
@@ -263,7 +262,7 @@ class NodeResolverTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             val result = runQuery("{ baz { z } }")
             assertEquals(mapOf("baz" to mapOf("z" to null)), result.getData())
             assertEquals(listOf(listOf("baz", "z")), result.errors.map { it.path })
@@ -396,7 +395,7 @@ class NodeResolverTest {
                     createEngineObjectData(objectType, mapOf("x" to 2))
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ baz { x anotherBaz { id x }}}")
                 .assertJson("""{"data": {"baz": {"x":2, "anotherBaz":{"id":"1", "x":2}}}}""")
 
@@ -433,7 +432,7 @@ class NodeResolverTest {
                         createEngineObjectData(objectType, mapOf("x" to 2, "x2" to "foo"))
                     }
                 }
-            }.runFeatureTest {
+            }.runQPlanFeatureTest {
                 runQuery("{ baz { x anotherBaz { x x2 }}}")
                     .assertJson("""{"data": {"baz": {"x":2, "anotherBaz":{"x":2, "x2":"foo"}}}}""")
 
@@ -469,7 +468,7 @@ class NodeResolverTest {
                     createEngineObjectData(objectType, mapOf("x" to 2, "x2" to "foo"))
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ baz { x anotherBaz { x x2 }}}")
                 .assertJson("""{"data": {"baz": {"x":2, "anotherBaz":{"x":2, "x2":"foo"}}}}""")
 
@@ -478,7 +477,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: ErrorData")
     @Test
     fun `node reference list with single item failure`() {
         EngineTestModule(schemaSDL) {
@@ -500,7 +499,7 @@ class NodeResolverTest {
                     createEngineObjectData(objectType, mapOf("x" to 7))
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             val result = runQuery("{ bazList { x } }")
             val data = requireNotNull(result.getData<Map<String, Any?>>())
             val bazList = data["bazList"] as List<*>
@@ -511,7 +510,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `node resolver not executed twice for the same query path`() {
         // This is a regression test for NodeEngineObjectDataImpl.resolveData() calling the
@@ -539,7 +538,7 @@ class NodeResolverTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ baz { x x2 }}")
                 .assertJson("""{"data": {"baz": {"x":10, "x2":"10"}}}""")
 

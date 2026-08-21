@@ -24,7 +24,6 @@ import viaduct.engine.api.mocks.MockTenantModuleDSL
 import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
-import viaduct.engine.api.mocks.runFeatureTest
 import viaduct.engine.api.select.SelectionsParser
 import viaduct.engine.runtime.tenantloading.InvalidVariableException
 import viaduct.engine.runtime.tenantloading.RequiredSelectionsCycleException
@@ -85,7 +84,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{ obj { x } }").assertJson("{data: {obj: {x: 30}}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Mutation")
     @Test
     fun `from object field -- simple mutation field`() =
         EngineTestModule(
@@ -107,11 +106,11 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Mutation" to "z", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("mutation { x }").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- selection is field with omitted arg and default value`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z(c:Int = 2):Int }") {
@@ -132,11 +131,11 @@ class FromFieldVariablesFeatureTest {
                     fn { args, _, _, _, _ -> args.getAs<Int>("c") * 3 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ x }").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- selection is field with arg`() =
         EngineTestModule("extend type Query { x:Int!, y(b:Int!):Int!, z(c:Int!):Int! }") {
@@ -157,11 +156,11 @@ class FromFieldVariablesFeatureTest {
                     fn { args, _, _, _, _ -> args.getAs<Int>("c") * 3 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- selection is field with omitted argument value`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z(c:Int):Int }") {
@@ -182,7 +181,7 @@ class FromFieldVariablesFeatureTest {
                     fn { args, _, _, _, _ -> (args["c"] as? Int) ?: -1 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ x }").assertJson("{data: {x: -6}}")
         }
 
@@ -254,7 +253,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- single-field-multiple-variable -- multiple required selections with variables`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z(c:Int):Int, w:Int }") {
@@ -279,7 +278,7 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "w", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
@@ -342,7 +341,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{ x }").assertJson("{data: {x: -15}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Abstract")
     @Test
     fun `from object field -- selection traverses through union`() {
         val err = assertThrows<Throwable> {
@@ -372,7 +371,7 @@ class FromFieldVariablesFeatureTest {
                         }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrapAs<InvalidVariableException>()
 
         assertEquals("x", err.variableName)
@@ -390,7 +389,7 @@ class FromFieldVariablesFeatureTest {
                 ) { _, _, _, _, _ -> 0 }
                 fieldWithValue("Query" to "y", 0)
                 fieldWithValue("Query" to "z", null)
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrapAs<InvalidVariableException>()
 
         assertEquals("b", err.variableName)
@@ -408,13 +407,12 @@ class FromFieldVariablesFeatureTest {
                 ) { _, _, _, _, _ -> 0 }
                 fieldWithValue("Query" to "y", 0)
                 fieldWithValue("Query" to "z", "")
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrapAs<InvalidVariableException>()
 
         assertEquals("b", err.variableName)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
     @Test
     fun `from object field - same variable name used in operation variable and annotation variable`() =
         EngineTestModule("extend type Query { x(a:Int):Int, y(b:Int):Int, z:Int }") {
@@ -431,14 +429,14 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", 3)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery(
                 "query Q(\$vara:Int!) {x(a:\$vara)}",
                 mapOf("vara" to 2),
             ).assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: MechAdapt")
     @Test
     fun `from object field - same variable name used in multiple selection sets`() =
         EngineTestModule("extend type Query { x:Int, y:Int, z(c:Int):Int, w:Int }") {
@@ -461,11 +459,11 @@ class FromFieldVariablesFeatureTest {
                     fn { _, _, _, _, _ -> 2 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x, y}").assertJson("{data: {x: 10, y: 6}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: Directive")
     @Test
     fun `from object field -- variable used in conditional directive`() {
         var yResolved = false
@@ -489,7 +487,7 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", true)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             // Sync path returns null for conditionally-excluded keys (@skip); fetchAs<Boolean>
             // on a null value throws NullPointerException rather than UnsetFieldException.
             runQuery("{x}").assertJson("{data: {x: \"NullPointerException\"}}")
@@ -513,7 +511,7 @@ class FromFieldVariablesFeatureTest {
                         fn { _, _, _, _, _ -> error("should not execute") }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrap()
 
         assertTrue(err is VariableCycleException)
@@ -529,7 +527,7 @@ class FromFieldVariablesFeatureTest {
                     objectSelectionsText = "x(a:\$a)",
                     variables = listOf(FromObjectFieldVariable("a", "x")),
                 ) { _, _, _, _, _ -> error("should not execute") }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrap()
 
         assertTrue(err is VariableCycleException)
@@ -553,7 +551,7 @@ class FromFieldVariablesFeatureTest {
                         fn { _, _, _, _, _ -> error("should not execute") }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrap()
 
         assertTrue(err is VariableCycleException)
@@ -574,7 +572,7 @@ class FromFieldVariablesFeatureTest {
                     objectSelectionsText = "x(a:\$a), z",
                     variables = listOf(FromObjectFieldVariable("a", "z")),
                 ) { _, _, _, _, _ -> error("should not execute") }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrap()
 
         assertTrue(err is RequiredSelectionsCycleException)
@@ -591,7 +589,7 @@ class FromFieldVariablesFeatureTest {
                     variables = listOf(FromQueryFieldVariable("b", "invalidField")),
                 ) { _, _, _, _, _ -> error("should not execute") }
                 fieldWithValue("Query" to "y", 2)
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrapAs<IllegalArgumentException>()
 
         assertTrue(checkNotNull(err.message).contains("No selections found for path"), err.message.orEmpty())
@@ -617,13 +615,13 @@ class FromFieldVariablesFeatureTest {
                         fn { _, _, _, _, _ -> error("should not execute") }
                     }
                 }
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrapAs<InvalidVariableException>()
 
         assertEquals("b", err.variableName)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- simple`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z:Int }") {
@@ -640,11 +638,11 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- variables used by field on non-root object`() =
         EngineTestModule(
@@ -673,11 +671,11 @@ class FromFieldVariablesFeatureTest {
                     }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{ obj { x } }").assertJson("{data: {obj: {x: 30}}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss Mutation")
     @Test
     fun `from query field -- simple mutation field`() =
         EngineTestModule(
@@ -700,11 +698,11 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("mutation {x}").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- binds variable to query field with different name`() =
         EngineTestModule("extend type Query { x:Int, y(a:Int):Int, z:Int }") {
@@ -721,11 +719,11 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- returns null value`() =
         EngineTestModule("extend type Query { x:Int!, y(a:Int):Int!, z:Int }") {
@@ -743,11 +741,11 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", null)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data:{x:-2}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- single-field-multiple-variable -- multiple variables on required selection`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int, c:Int):Int, z:Int, w:Int }") {
@@ -770,7 +768,7 @@ class FromFieldVariablesFeatureTest {
             }
             fieldWithValue("Query" to "z", 3)
             fieldWithValue("Query" to "w", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
@@ -789,7 +787,7 @@ class FromFieldVariablesFeatureTest {
                     ),
                 ) { _, _, _, _, _ -> "result" }
                 fieldWithValue("Query" to "foo", "test")
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrap()
 
         val msg = checkNotNull(err.message)
@@ -814,7 +812,7 @@ class FromFieldVariablesFeatureTest {
                     ),
                 ) { _, _, _, _, _ -> "result" }
                 fieldWithValue("Query" to "foo", "test")
-            }.runFeatureTest { }
+            }.runQPlanFeatureTest { }
         }.unwrap()
 
         val msg = checkNotNull(err.message)
@@ -825,7 +823,7 @@ class FromFieldVariablesFeatureTest {
         )
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `mixed variables -- from query field and from argument`() =
         EngineTestModule("extend type Query { x(a:Int):Int, y(a:Int, b:Int):Int, z:Int }") {
@@ -848,11 +846,11 @@ class FromFieldVariablesFeatureTest {
                 }
             }
             fieldWithValue("Query" to "z", 3)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x(a:2)}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `mixed variables -- from query field and from object field`() =
         EngineTestModule("extend type Query { x:Int, y(a:Int, b:Int):Int, z(w:Int):Int }") {
@@ -879,7 +877,7 @@ class FromFieldVariablesFeatureTest {
                     fn { args, _, _, _, _ -> args.getAs<Int>("w") * 2 }
                 }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 4620}}")
         }
 
@@ -913,7 +911,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{foo(y:2)}").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: NestedArg")
     @Test
     fun `from arg -- path traverses nested input`() =
         EngineTestModule(
@@ -930,11 +928,11 @@ class FromFieldVariablesFeatureTest {
             field("Query" to "bar") {
                 resolver { fn { args, _, _, _, _ -> args.getAs<Int>("x") * 3 } }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{foo(inp:{x:2})}").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: NestedArg")
     @Test
     fun `from arg -- path traverses through null object`() =
         EngineTestModule(
@@ -951,11 +949,10 @@ class FromFieldVariablesFeatureTest {
             field("Query" to "bar") {
                 resolver { fn { args, _, _, _, _ -> (args["x"] as? Int)?.let { it * 3 } } }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{foo(inp:null)}").assertJson("{data: {foo: 7}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
     @Test
     fun `from arg -- arg has default value`() =
         EngineTestModule("extend type Query { foo(x:Int!=2):Int!, bar(x:Int):Int }") {
@@ -967,7 +964,7 @@ class FromFieldVariablesFeatureTest {
             field("Query" to "bar") {
                 resolver { fn { args, _, _, _, _ -> args.getAs<Int>("x") * 3 } }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{foo}").assertJson("{data: {foo: 30}}")
             runQuery("{foo(x:3)}").assertJson("{data: {foo: 45}}")
         }
@@ -990,7 +987,6 @@ class FromFieldVariablesFeatureTest {
             ).assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
     @Test
     fun `from arg -- same variable name used in same argument with different values`() =
         EngineTestModule("extend type Query { foo(x:Int):Int, bar(x:Int):Int, baz(x:Int):Int }") {
@@ -1007,11 +1003,10 @@ class FromFieldVariablesFeatureTest {
             field("Query" to "baz") {
                 resolver { fn { args, _, _, _, _ -> args.getAs<Int>("x") * 5 } }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{foo(x:2) bar(x:3)}").assertJson("{data:{foo:110, bar:105}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
     @Test
     fun `from arg -- uses an arg variable with the same name as an unbound argument`() =
         EngineTestModule("extend type Query { foo(x:Int):Int, bar(x:Int):Int, baz(x:Int):Int }") {
@@ -1027,11 +1022,11 @@ class FromFieldVariablesFeatureTest {
             field("Query" to "baz") {
                 resolver { fn { args, _, _, _, _ -> (args["x"] as? Int)?.let { it * 5 } ?: 0 } }
             }
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{foo(x:2) bar(x:3)}").assertJson("{data:{foo:110, bar:7}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("TODO: QueryRss")
     @Test
     fun `mixed variables -- non-root resolver uses fromObjectField in queryFragment`() =
         EngineTestModule(
@@ -1061,7 +1056,7 @@ class FromFieldVariablesFeatureTest {
                 qry.fetchAs<Int>("x") * 3
             }
             fieldWithValue("Obj" to "y", 2)
-        }.runFeatureTest {
+        }.runQPlanFeatureTest {
             runQuery("{obj{x}}").assertJson("{data: {obj: {x: 30}}}")
         }
 }

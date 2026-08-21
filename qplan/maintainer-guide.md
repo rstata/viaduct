@@ -83,6 +83,10 @@ The preferred investigation sequence is:
 8. Run neighboring contracts and an appropriately directed stress profile.
 9. Improve generation or activation checks so the bug class remains discoverable.
 
+## Fixture Composition Contracts
+
+`TestWorld` makes incomplete test registries deterministic by supplying an error-producing resolver for every expected Query resolver coordinate before overlaying the resolvers declared by the test. A missing declaration therefore remains an explicit error if execution reaches it without forcing unrelated tests to enumerate unused Query resolvers. This is a test-fixture composition contract, not permission for a production resolver registry to omit required entries.
+
 ## Diagnose Liveness And Scale
 
 Silence from Gradle is not evidence of deadlock. Check process CPU, thread stacks, resolver timeouts, generated-world construction, and post-resolution oracle cost before adding synchronization.

@@ -11,9 +11,7 @@ import io.kotest.property.arbitrary.next
 import model.testing.TestWorld
 import kotlin.random.Random
 
-/**
- * A fixed schema, executable registry recipe, and query corpus for resolver microbenchmarks.
- */
+/** A fixed schema and executable registry recipe for resolver microbenchmarks. */
 class ResolverBenchmarkCorpus private constructor(
     val schema: ArbitrarySchema,
     val registry: ArbitraryRegistry,
@@ -81,6 +79,62 @@ class ResolverBenchmarkCorpus private constructor(
     }
 }
 
+/** A versioned, ordered snapshot of the exact query sources used by a resolver benchmark. */
+class ResolverBenchmarkQueryCorpus private constructor(
+    val generationSeed: Long,
+    querySources: List<String>,
+) {
+    val querySources: List<String> = querySources.toList()
+
+    init {
+        require(this.querySources.isNotEmpty()) {
+            "Resolver benchmark query corpus must not be empty"
+        }
+        require(this.querySources.none(String::isBlank)) {
+            "Resolver benchmark query corpus must not contain a blank query"
+        }
+    }
+
+    fun encode(): String =
+        corpusMapper.writeValueAsString(
+            QueryCorpusDocument(
+                version = QUERY_CORPUS_VERSION,
+                generationSeed = generationSeed,
+                queries = querySources,
+            ),
+        ) + "\n"
+
+    companion object {
+        fun create(
+            generationSeed: Long,
+            querySources: List<String>,
+        ): ResolverBenchmarkQueryCorpus =
+            ResolverBenchmarkQueryCorpus(generationSeed, querySources)
+
+        fun decode(json: String): ResolverBenchmarkQueryCorpus {
+            val document: QueryCorpusDocument = corpusMapper.readValue(json)
+            require(document.version == QUERY_CORPUS_VERSION) {
+                "Unsupported resolver benchmark query corpus version ${document.version}"
+            }
+            return ResolverBenchmarkQueryCorpus(
+                generationSeed = document.generationSeed,
+                querySources = document.queries,
+            )
+        }
+
+        fun load(
+            resource: String,
+            classLoader: ClassLoader = ResolverBenchmarkQueryCorpus::class.java.classLoader,
+        ): ResolverBenchmarkQueryCorpus {
+            val json =
+                requireNotNull(classLoader.getResourceAsStream(resource)) {
+                    "Missing resolver benchmark query resource $resource"
+                }.bufferedReader().use { reader -> reader.readText() }
+            return decode(json)
+        }
+    }
+}
+
 fun ArbitraryRegistry.encodeResolverBenchmarkCorpus(
     schema: ArbitrarySchema,
     metrics: Map<String, Long> = emptyMap(),
@@ -96,6 +150,7 @@ fun ArbitraryRegistry.encodeResolverBenchmarkCorpus(
 }
 
 private const val CORPUS_VERSION = 1
+private const val QUERY_CORPUS_VERSION = 1
 
 private val corpusMapper =
     JsonMapper
@@ -111,6 +166,12 @@ private data class CorpusDocument(
     val schema: SchemaDocument,
     val registry: RegistryDocument,
     val metrics: Map<String, Long>,
+)
+
+private data class QueryCorpusDocument(
+    val version: Int,
+    val generationSeed: Long,
+    val queries: List<String>,
 )
 
 private data class SchemaDocument(

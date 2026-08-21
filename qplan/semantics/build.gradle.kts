@@ -74,6 +74,8 @@ val resolverBenchmarkCorpusSize =
     providers.gradleProperty("resolverBenchmarkCorpusSize").orElse("10:5:10")
 val resolverBenchmarkCorpusDirectory =
     layout.projectDirectory.dir("src/jmh/resources/semantics/benchmark/current-profile")
+val resolverBenchmarkQueriesFile =
+    resolverBenchmarkCorpusDirectory.file("queries.json")
 
 tasks.register<JavaExec>("generateResolverBenchmarkCorpus") {
     group = "benchmark"
@@ -84,6 +86,8 @@ tasks.register<JavaExec>("generateResolverBenchmarkCorpus") {
     maxHeapSize = "4g"
     inputs.property("seed", resolverBenchmarkCorpusSeed)
     inputs.property("size", resolverBenchmarkCorpusSize)
+    inputs.property("queryCount", resolverBenchmarkQueryCount)
+    inputs.property("querySeed", resolverBenchmarkQuerySeed)
     outputs.dir(resolverBenchmarkCorpusDirectory)
     outputs.upToDateWhen { false }
 
@@ -93,6 +97,33 @@ tasks.register<JavaExec>("generateResolverBenchmarkCorpus") {
                 resolverBenchmarkCorpusDirectory.asFile.absolutePath,
                 resolverBenchmarkCorpusSeed.get(),
                 resolverBenchmarkCorpusSize.get(),
+                resolverBenchmarkQueryCount.get(),
+                resolverBenchmarkQuerySeed.get(),
+            )
+    }
+}
+
+tasks.register<JavaExec>("generateResolverBenchmarkQueries") {
+    group = "benchmark"
+    description = "Snapshots the exact query batch for the resolver overhead benchmarks."
+    dependsOn("testFixturesClasses")
+    classpath = sourceSets["testFixtures"].runtimeClasspath
+    mainClass.set("semantics.benchmark.ResolverBenchmarkQueryCorpusWriter")
+    inputs.file(resolverBenchmarkCorpusDirectory.file("schema.graphqls"))
+    inputs.file(resolverBenchmarkCorpusDirectory.file("registry.json"))
+    inputs.property("queryCount", resolverBenchmarkQueryCount)
+    inputs.property("querySeed", resolverBenchmarkQuerySeed)
+    outputs.file(resolverBenchmarkQueriesFile)
+    outputs.upToDateWhen { false }
+
+    doFirst {
+        args =
+            listOf(
+                resolverBenchmarkCorpusDirectory.file("schema.graphqls").asFile.absolutePath,
+                resolverBenchmarkCorpusDirectory.file("registry.json").asFile.absolutePath,
+                resolverBenchmarkQueriesFile.asFile.absolutePath,
+                resolverBenchmarkQueryCount.get(),
+                resolverBenchmarkQuerySeed.get(),
             )
     }
 }
@@ -130,8 +161,6 @@ fun registerResolverBenchmarkTask(
         dependsOn(benchmarkJar)
         classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
         mainClass.set("org.openjdk.jmh.Main")
-        inputs.property("queryCount", resolverBenchmarkQueryCount)
-        inputs.property("querySeed", resolverBenchmarkQuerySeed)
         inputs.property("loopCount", resolverBenchmarkLoopCount)
         outputs.upToDateWhen { false }
         val statisticsFile =
@@ -154,10 +183,6 @@ fun registerResolverBenchmarkTask(
             args =
                 listOf(
                     "semantics\\.$resolver\\.ResolverBenchmark\\.$benchmark",
-                    "-p",
-                    "queryCount=${resolverBenchmarkQueryCount.get()}",
-                    "-p",
-                    "querySeed=${resolverBenchmarkQuerySeed.get()}",
                     "-p",
                     "loopCount=${resolverBenchmarkLoopCount.get()}",
                 ) + reportArguments
@@ -183,8 +208,6 @@ tasks.register<JavaExec>("resolver26OverheadProfile") {
     dependsOn(benchmarkJar)
     classpath = files(benchmarkJar.flatMap { jar -> jar.archiveFile })
     mainClass.set("org.openjdk.jmh.Main")
-    inputs.property("queryCount", resolverBenchmarkQueryCount)
-    inputs.property("querySeed", resolverBenchmarkQuerySeed)
     inputs.property("loopCount", resolverBenchmarkLoopCount)
     outputs.upToDateWhen { false }
 
@@ -195,10 +218,6 @@ tasks.register<JavaExec>("resolver26OverheadProfile") {
         args =
             listOf(
                 "semantics\\.resolver26\\.ResolverBenchmark\\.overhead",
-                "-p",
-                "queryCount=${resolverBenchmarkQueryCount.get()}",
-                "-p",
-                "querySeed=${resolverBenchmarkQuerySeed.get()}",
                 "-p",
                 "loopCount=${resolverBenchmarkLoopCount.get()}",
                 "-wi",

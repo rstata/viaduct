@@ -24,8 +24,6 @@ import model.variableArgumentNames
 import model.variableSourceSelectionStamps
 import semantics.benchmark.CurrentProfileBenchmarkSupport
 import semantics.benchmark.DEFAULT_OVERHEAD_LOOP_COUNT
-import semantics.benchmark.DEFAULT_OVERHEAD_QUERY_COUNT
-import semantics.benchmark.DEFAULT_OVERHEAD_QUERY_SEED
 import semantics.benchmark.ObservedResolverBenchmarkSubject
 import semantics.benchmark.ResolverBenchmarkApplicationObservation
 import semantics.benchmark.ResolverBenchmarkSubject
@@ -40,14 +38,6 @@ import java.util.concurrent.TimeUnit
 @Fork(1)
 @Timeout(time = 10, timeUnit = TimeUnit.MINUTES)
 open class ResolverBenchmark {
-    @JvmField
-    @Param("$DEFAULT_OVERHEAD_QUERY_COUNT")
-    var queryCount: Int = DEFAULT_OVERHEAD_QUERY_COUNT
-
-    @JvmField
-    @Param("$DEFAULT_OVERHEAD_QUERY_SEED")
-    var querySeed: Long = DEFAULT_OVERHEAD_QUERY_SEED
-
     @JvmField
     @Param("$DEFAULT_OVERHEAD_LOOP_COUNT")
     var loopCount: Int = DEFAULT_OVERHEAD_LOOP_COUNT
@@ -154,7 +144,7 @@ open class ResolverBenchmark {
     @Setup(Level.Invocation)
     fun prepareOverheadInvocation(parameters: BenchmarkParams) {
         if (parameters.benchmark.endsWith(".overhead")) {
-            support.prepareOverheadInvocation(queryCount, querySeed, loopCount)
+            support.prepareOverheadInvocation(loopCount)
         }
     }
 

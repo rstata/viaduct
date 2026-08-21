@@ -16,6 +16,7 @@
 - [`claims.md`](./claims.md) - Use for the index of stable propositions and links to their scoped arguments.
 - [`tla/README.md`](./tla/README.md) - Read before changing or citing the machine-checked TLA+ baseline.
 - [`semantics/resolver-benchmarks.md`](./semantics/resolver-benchmarks.md) - Read before running, changing, or reporting resolver benchmarks.
+- [`semantics/resolver-profiling.md`](./semantics/resolver-profiling.md) - Read before capturing or interpreting resolver profiles, and update its performance log when an investigation concludes.
 
 ## Writing resolver-test DSL schemas
 

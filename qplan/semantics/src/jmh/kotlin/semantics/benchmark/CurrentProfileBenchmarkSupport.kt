@@ -20,10 +20,10 @@ import model.ownerResolverStamp
 import model.requireQueryTypeDef
 import org.openjdk.jmh.infra.Blackhole
 import semantics.arbitrary.ResolverBenchmarkCorpus
+import semantics.arbitrary.ResolverBenchmarkQueryCorpus
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.resolverBenchmarkFullConfig
-import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
 import semantics.contract.registeredResolverApplicationIdentityCounts
 import semantics.contract.validateObjectPathBindings
 import semantics.correctresolution.correctResolution
@@ -34,13 +34,13 @@ import java.util.Locale
 import kotlin.math.ceil
 
 internal const val DEFAULT_OVERHEAD_LOOP_COUNT = 1
-internal const val DEFAULT_OVERHEAD_QUERY_COUNT = 100
-internal const val DEFAULT_OVERHEAD_QUERY_SEED = 1L
 
 internal const val SCHEMA_RESOURCE =
     "semantics/benchmark/current-profile/schema.graphqls"
 internal const val REGISTRY_RESOURCE =
     "semantics/benchmark/current-profile/registry.json"
+internal const val QUERIES_RESOURCE =
+    "semantics/benchmark/current-profile/queries.json"
 private const val REPORT_FILE_PROPERTY = "resolverBenchmarkReportFile"
 
 internal fun interface ResolverBenchmarkSubject {
@@ -74,27 +74,21 @@ internal class CurrentProfileBenchmarkSupport(
 ) {
     private val corpus: ResolverBenchmarkCorpus =
         ResolverBenchmarkCorpus.load(SCHEMA_RESOURCE, REGISTRY_RESOURCE)
+    private val querySources: Array<String> =
+        ResolverBenchmarkQueryCorpus
+            .load(QUERIES_RESOURCE)
+            .querySources
+            .toTypedArray()
 
     private var overheadCases: Array<PreparedResolution> = emptyArray()
-    private var overheadQuerySources: Array<String> = emptyArray()
 
     fun prepareOverheadInvocation(
-        queryCount: Int,
-        querySeed: Long,
         loopCount: Int,
     ) {
         require(loopCount > 0) { "Resolver benchmark loop count must be positive" }
         val testWorld = corpus.world()
-        overheadQuerySources =
-            corpus
-                .generateQueries(
-                    count = queryCount,
-                    config = resolverBenchmarkOverheadQueryConfig(),
-                    seed = querySeed,
-                ).map { query -> query.source }
-                .toTypedArray()
         val parsedQueries =
-            overheadQuerySources.map { source ->
+            querySources.map { source ->
                 testWorld.assumptions.fragmentFrom(source).subselections
             }
         overheadCases =
@@ -126,13 +120,10 @@ internal class CurrentProfileBenchmarkSupport(
     }
 
     fun reportOverheadStatistics() {
-        check(overheadQuerySources.isNotEmpty()) {
-            "Overhead query corpus was not prepared"
-        }
         val testWorld = corpus.world(captureResolutionWitness = true)
         val variableArgumentCounts = mutableListOf<Long>()
         val samples =
-            overheadQuerySources.map { source ->
+            querySources.map { source ->
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
                 val selections = world.fragmentFrom(source).subselections
                 corpus.registry.clearResolutionWitness()
@@ -176,7 +167,7 @@ internal class CurrentProfileBenchmarkSupport(
             buildString {
                 appendLine(
                     "Resolver overhead corpus statistics " +
-                        "(${overheadQuerySources.size} queries):",
+                        "(${querySources.size} queries):",
                 )
                 appendLine(
                     "  fields returned: " +

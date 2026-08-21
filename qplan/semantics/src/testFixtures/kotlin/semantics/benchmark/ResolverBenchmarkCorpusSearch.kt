@@ -17,12 +17,15 @@ import semantics.arbitrary.ArbitraryQuery
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.ArbitrarySchema
 import semantics.arbitrary.FieldCoordinate
+import semantics.arbitrary.ResolverBenchmarkCorpus
+import semantics.arbitrary.ResolverBenchmarkQueryCorpus
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolutionWitnessBoundExceededException
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.encodeResolverBenchmarkCorpus
 import semantics.arbitrary.resolverBenchmarkCorpusSearchConfig
+import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
 import semantics.resolver26.Resolver26ApplicationObservation
 import semantics.resolver26.resolveObserved
 import java.nio.file.Files
@@ -35,27 +38,53 @@ import kotlin.math.ceil
 object ResolverBenchmarkCorpusSearch {
     @JvmStatic
     fun main(arguments: Array<String>) {
-        require(arguments.size == 3) {
-            "Expected arguments: <output-directory> <seed> <schemas:registries:queries>"
+        require(arguments.size == 5) {
+            "Expected arguments: <output-directory> <seed> <schemas:registries:queries> " +
+                "<benchmark-query-count> <benchmark-query-seed>"
         }
         val outputDirectory = Path.of(arguments[0])
         val seed = arguments[1].toLong()
         val counts = parseCounts(arguments[2])
+        val benchmarkQueryCount = arguments[3].toInt()
+        val benchmarkQuerySeed = arguments[4].toLong()
         val winner =
             runBlocking {
                 search(seed, counts)
             }
         outputDirectory.createDirectories()
         Files.writeString(outputDirectory.resolve("schema.graphqls"), winner.schema.sdl)
-        Files.writeString(
-            outputDirectory.resolve("registry.json"),
+        val registryJson =
             winner.registry.encodeResolverBenchmarkCorpus(
                 schema = winner.schema,
                 metrics = winner.metrics(seed, counts),
-            ),
+            )
+        Files.writeString(
+            outputDirectory.resolve("registry.json"),
+            registryJson,
+        )
+        val querySources =
+            ResolverBenchmarkCorpus
+                .decode(
+                    schemaSDL = winner.schema.sdl,
+                    registryJson = registryJson,
+                ).generateQueries(
+                    count = benchmarkQueryCount,
+                    config = resolverBenchmarkOverheadQueryConfig(),
+                    seed = benchmarkQuerySeed,
+                ).map { query -> query.source }
+        Files.writeString(
+            outputDirectory.resolve("queries.json"),
+            ResolverBenchmarkQueryCorpus
+                .create(
+                    generationSeed = benchmarkQuerySeed,
+                    querySources = querySources,
+                ).encode(),
         )
         println(winner.summary(seed, counts))
-        println("Wrote resolver benchmark corpus to $outputDirectory")
+        println(
+            "Wrote resolver benchmark corpus and $benchmarkQueryCount queries to " +
+                outputDirectory,
+        )
     }
 
     private suspend fun search(

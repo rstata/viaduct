@@ -20,8 +20,6 @@ import org.openjdk.jmh.infra.IterationParams
 import org.openjdk.jmh.runner.IterationType
 import semantics.benchmark.CurrentProfileBenchmarkSupport
 import semantics.benchmark.DEFAULT_OVERHEAD_LOOP_COUNT
-import semantics.benchmark.DEFAULT_OVERHEAD_QUERY_COUNT
-import semantics.benchmark.DEFAULT_OVERHEAD_QUERY_SEED
 import semantics.benchmark.ObservedResolverBenchmarkSubject
 import semantics.benchmark.ResolverBenchmarkApplicationObservation
 import semantics.benchmark.ResolverBenchmarkSubject
@@ -42,14 +40,6 @@ private const val PROFILE_RECORDING_NAME = "resolver26-overhead-measurement"
 @Fork(1)
 @Timeout(time = 10, timeUnit = TimeUnit.MINUTES)
 open class ResolverBenchmark {
-    @JvmField
-    @Param("$DEFAULT_OVERHEAD_QUERY_COUNT")
-    var queryCount: Int = DEFAULT_OVERHEAD_QUERY_COUNT
-
-    @JvmField
-    @Param("$DEFAULT_OVERHEAD_QUERY_SEED")
-    var querySeed: Long = DEFAULT_OVERHEAD_QUERY_SEED
-
     @JvmField
     @Param("$DEFAULT_OVERHEAD_LOOP_COUNT")
     var loopCount: Int = DEFAULT_OVERHEAD_LOOP_COUNT
@@ -94,7 +84,7 @@ open class ResolverBenchmark {
         iterationParams: IterationParams,
     ) {
         if (parameters.benchmark.endsWith(".overhead")) {
-            support.prepareOverheadInvocation(queryCount, querySeed, loopCount)
+            support.prepareOverheadInvocation(loopCount)
             startOverheadProfile(iterationParams)
         }
     }

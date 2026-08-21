@@ -2,6 +2,8 @@
 
 Resolver25 and Resolver26 implement the current benchmark profile: selective node and field resolvers, resolver object fragments, `FromArgument` and `FromObjectField` variables, and no query fragments.
 
+See [`resolver-profiling.md`](./resolver-profiling.md) for the narrow JFR targets, recording inspection commands, and the performance log.
+
 ## Running And Reporting
 
 Run `./gradlew :semantics:resolver25FullBenchmark --console=plain` or `./gradlew :semantics:resolver26FullBenchmark --console=plain` for the full workflow. Use the corresponding `resolver25OverheadBenchmark` or `resolver26OverheadBenchmark` task for the fixed-corpus overhead benchmark.
@@ -18,11 +20,11 @@ After every run, report each measured iteration, the final JMH score and error, 
 
 ## Overhead Benchmark
 
-`resolver25OverheadBenchmark` and `resolver26OverheadBenchmark` load one checked-in schema/registry pair. Before each measured invocation, JMH setup parses the schema and registry once, generates and parses a seeded query batch against those shared static objects, creates fresh request-local `Assumptions` for every resolution, and stores the prepared calls in an array. JMH excludes that setup; the measured method iterates the array, invokes the resolver, and consumes each result. Each resolver invocation obtains its canonical Query source through `ResolverRegistry.resolveRootQuery()` inside the measured call.
+`resolver25OverheadBenchmark` and `resolver26OverheadBenchmark` load one checked-in schema, registry, and ordered batch of 100 exact query sources. Before each measured invocation, JMH setup parses the fixed query batch against those shared static objects, creates fresh request-local `Assumptions` for every resolution, and stores the prepared calls in an array. JMH excludes that setup; the measured method iterates the array, invokes the resolver, and consumes each result. Each resolver invocation obtains its canonical Query source through `ResolverRegistry.resolveRootQuery()` inside the measured call.
 
-Control the random query batch with `-PresolverBenchmarkQueryCount=N` and `-PresolverBenchmarkQuerySeed=S`, and its repetition count with `-PresolverBenchmarkLoopCount=M`. One overhead JMH operation contains exactly `N * M` resolver calls.
+Control the repetition count with `-PresolverBenchmarkLoopCount=M`. One overhead JMH operation contains exactly `100 * M` resolver calls.
 
-After the measured trial, an untimed reporting pass resolves the `N` queries once more with application observation enabled. It reports average, percentile, and maximum statistics for fields returned, resolvers executed, result depth, and three variable-workload measurements:
+After the measured trial, an untimed reporting pass resolves the 100 queries once more with application observation enabled. It reports average, percentile, and maximum statistics for fields returned, resolvers executed, result depth, and three variable-workload measurements:
 
 - Resolver executions with any variable-bearing arguments, using P50 because the corpus target is a median of at least 10 per query. Higher medians are preferred.
 - Variable-bearing arguments per such resolver execution, using P90. An argument is variable-bearing when its open value recursively contains at least one variable.
@@ -30,9 +32,11 @@ After the measured trial, an untimed reporting pass resolves the `N` queries onc
 
 The report also separates active from passive result fields, reports their ratio, and describes the fixed registry's active/passive fields per non-Query object plus object-fragment recursive selection counts and depths.
 
-For Resolver26, each measured call includes `runBlocking` on the process-scoped configured dispatcher, the 15-second request timeout, coroutine launch/join work, successor-demand computation, Query-source and result allocation, promise and access checks, and request-local cycle protection. Cycle protection registers each Cell writer and records reader-to-writer edges in concurrent maps before a potentially blocking read; it throws on a detected dependency cycle. The ordinary benchmark passes a no-op application observer, but Resolver26 still constructs and submits each observation to that no-op. Query generation, parsing, `Assumptions` construction, resolution-witness capture, correctness validation, and statistics traversal are outside the measured method.
+For Resolver26, each measured call includes `runBlocking` on the process-scoped configured dispatcher, the 15-second request timeout, coroutine launch/join work, successor-demand computation, Query-source and result allocation, promise and access checks, and request-local cycle protection. Cycle protection registers each Cell writer and records reader-to-writer edges in concurrent maps before a potentially blocking read; it throws on a detected dependency cycle. The ordinary benchmark passes a no-op application observer, but Resolver26 still constructs and submits each observation to that no-op. Query-resource loading and parsing, `Assumptions` construction, resolution-witness capture, correctness validation, and statistics traversal are outside the measured method.
 
-To profile only the Resolver26 measured body, run `./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=M --console=plain`. The recording starts after invocation setup and stops immediately after the measured method, so it excludes query generation, parsing, request preparation, the warmup, and the reporting pass. It is written to `semantics/build/reports/resolver-benchmarks/resolver26-overhead.jfr`; override that location with `-Presolver26OverheadProfileOutput=PATH`.
+To profile only the Resolver26 measured body, run `./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=M --console=plain`. The recording starts after invocation setup and stops immediately after the measured method, so it excludes query parsing, request preparation, the warmup, and the reporting pass. It is written to `semantics/build/reports/resolver-benchmarks/resolver26-overhead.jfr`; override that location with `-Presolver26OverheadProfileOutput=PATH`.
+
+`generateResolverBenchmarkQueries` deliberately replaces only the checked-in query snapshot by running the current query generator against the checked-in schema and registry. `generateResolverBenchmarkCorpus` writes a new schema, registry, and matching query snapshot together. Their query-generation controls are `-PresolverBenchmarkQueryCount=N` and `-PresolverBenchmarkQuerySeed=S`; ordinary benchmark and profile tasks never regenerate their inputs. Regenerating the snapshot changes the benchmark workload and must be recorded in the performance log.
 
 ## Correct Resolution Benchmark
 
@@ -56,7 +60,7 @@ To profile the full measured property case, run `./gradlew :semantics:propertyTe
 
 ## Corpus Search
 
-Run `./gradlew :semantics:generateResolverBenchmarkCorpus -PresolverBenchmarkCorpusSeed=S -PresolverBenchmarkCorpusSize=Schemas:Registries:Queries`.
+Run `./gradlew :semantics:generateResolverBenchmarkCorpus -PresolverBenchmarkCorpusSeed=S -PresolverBenchmarkCorpusSize=Schemas:Registries:Queries`. The task writes the winning schema and registry together with the exact overhead query snapshot selected by `-PresolverBenchmarkQueryCount=N` and `-PresolverBenchmarkQuerySeed=S`.
 
 The default search evaluates 10 schemas, 5 registries per schema, and 10 random queries per pair. Search generation exposes controls for object-output frequency, scalar-biased nested query breadth, ordinary and long-tail object-fragment selection counts, and argument-field preference inside object fragments.
 
@@ -68,9 +72,9 @@ The search uses Resolver26 to measure actual expanded result size, depth, resolv
 
 - The current profile is evaluated with Resolver26 and covers selective node and field resolvers, resolver object fragments, `FromArgument` and `FromObjectField` variables, and no query fragments.
 - The expensive schema/registry search is offline and reproducible. It writes one winning GraphQL SDL schema and one JSON registry recipe as checked-in resources; benchmark invocations do not repeat that search.
-- Queries are not checked in. Each invocation generates a configurable `N`-query corpus from a configurable seed, parses and prepares it outside the measured method, and executes the complete corpus `M` times.
-- Every measured invocation reuses one parsed schema and resolver registry across its `N * M` resolutions, so static decoding and registry assembly are never part of per-resolution timing. Each resolution receives fresh request-local `Assumptions`, and its public resolver entry obtains a fresh root Query object from `ResolverRegistry.resolveRootQuery()`, because variable bindings are monotonic per-request state and must not leak across resolutions.
-- The timed loop contains resolution and Blackhole consumption, including Resolver26's ordinary runtime instrumentation described above. Query generation, parsing, setup, witness capture, correctness validation, and statistics reporting remain untimed.
+- An ordered batch of 100 exact query sources is checked in. Each invocation parses and prepares that fixed corpus outside the measured method and executes it `M` times.
+- Every measured invocation reuses one parsed schema and resolver registry across its `100 * M` resolutions, so static decoding and registry assembly are never part of per-resolution timing. Each resolution receives fresh request-local `Assumptions`, and its public resolver entry obtains a fresh root Query object from `ResolverRegistry.resolveRootQuery()`, because variable bindings are monotonic per-request state and must not leak across resolutions.
+- The timed loop contains resolution and Blackhole consumption, including Resolver26's ordinary runtime instrumentation described above. Query-resource loading and parsing, setup, witness capture, correctness validation, and statistics reporting remain untimed.
 - Queries should be deep, with paths reaching about ten layers, and large enough to return roughly a thousand or more fields on average with a long list-derived tail, without making one JMH operation excessively long.
 - A representative non-Query object should have about two active fields and fourteen passive fields. The accepted overall schema ratio is approximately five passive fields per active field, with the search currently allowing 4:1 through 7:1.
 - Resolver object fragments should average about four recursive selections and have a long tail: P90 at least 10 and maximum at least 30. Fragment depth is measured separately.

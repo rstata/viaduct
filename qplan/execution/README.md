@@ -104,6 +104,8 @@ The migration unit is an entire production feature-test file. Once a source file
 
 A copied production test that does not pass under qplan must remain in the port with its fixture, behavior, and assertions unchanged and be marked `@Disabled` with a short investigation reason. This applies whether the blocker is an implementation bug, an adapter gap, or a documented qplan restriction. Never omit or rewrite an unsupported production behavior into a different passing test.
 
+When the reason is a deliberate incompatibility with qplan's assumptions, add an enabled test immediately after the disabled production test whose name is exactly `ALTERNATIVE ` followed by the production test name. The alternative preserves the same scenario and makes the smallest possible adjustment needed to state the corresponding qplan behavior. It is qplan-specific coverage rather than a copied production test, so it does not contribute to the copied/source count in the file header.
+
 Immediately after the package declaration, every migrated file records its source path from the repository root and its copied/source test count as of the review date:
 
 ```kotlin

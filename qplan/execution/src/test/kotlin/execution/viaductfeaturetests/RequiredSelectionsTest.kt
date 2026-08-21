@@ -1617,7 +1617,7 @@ class RequiredSelectionsTest {
         }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
+    @Disabled("Production expects alias-shaped required-selection demand to execute Query.bar twice; qplan intentionally coalesces it into one resolver application")
     fun `resolve fields multiple mergeable requirements`() {
         val barCount = AtomicInteger()
         EngineTestModule("extend type Query { foo: Int, bar: Int }") {
@@ -1665,6 +1665,57 @@ class RequiredSelectionsTest {
             runQuery("{foo bar}")
                 .assertJson("""{"data": {"foo": 6, "bar": 3}}""")
                 .also { assertEquals(2, barCount.get()) }
+        }
+    }
+
+    @Test
+    fun `ALTERNATIVE resolve fields multiple mergeable requirements`() {
+        val barCount = AtomicInteger()
+        EngineTestModule("extend type Query { foo: Int, bar: Int }") {
+            field("Query" to "bar") {
+                resolver {
+                    fn { _, _, _, _, _ -> 3.also { barCount.incrementAndGet() } }
+                }
+            }
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections(
+                        """
+                        fragment F on Query { bar }
+                        fragment Main on Query {
+                          bar
+                          aliasedBar: bar
+                          ... {
+                            bar
+                            ... {
+                              bar
+                              ... F
+                            }
+                          }
+                          ... on Query {
+                            bar
+                            ... on Query {
+                              bar
+                              ... F
+                            }
+                          }
+                          ... F
+                        }
+                        """.trimIndent(),
+                    )
+                    fn { _, obj, _, _, _ ->
+                        // make sure we wait for aliasedBar
+                        obj.fetchAs<Int>("aliasedBar")
+
+                        // but ultimately just return 2 * "bar"
+                        obj.fetchAs<Int>("bar") * 2
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{foo bar}")
+                .assertJson("""{"data": {"foo": 6, "bar": 3}}""")
+                .also { assertEquals(1, barCount.get()) }
         }
     }
 

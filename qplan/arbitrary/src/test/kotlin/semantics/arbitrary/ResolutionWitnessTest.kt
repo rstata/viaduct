@@ -20,6 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ResolutionWitnessTest {
@@ -299,6 +300,19 @@ class ResolutionWitnessTest {
             result.registeredResolverOccurrenceCounts(world.resolverRegistry),
         )
         val cells = result.registeredResolverOccurrences(world.resolverRegistry)
+        val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
+        result.forEachRegisteredResolverOccurrence(
+            registry = world.resolverRegistry,
+            visitOccurrence = streamedCells::add,
+        )
+        assertEquals(
+            cells.groupingBy { cell -> cell }.eachCount(),
+            streamedCells.groupingBy { cell -> cell }.eachCount(),
+        )
+        streamedCells.forEach { cell ->
+            val groundKey = cell.occurrencePath.last() as ObjectEngineResult.GroundKey
+            assertSame(groundKey.field, cell.field)
+        }
         assertTrue(
             cells
                 .single { cell -> cell.applicationKey == computedTwoKey }
@@ -352,6 +366,40 @@ class ResolutionWitnessTest {
                 .unrelatedApplications(allowed)
                 .map { application -> application.key.field },
         )
+    }
+
+    @Test
+    fun `streaming traversal skips fingerprint bounds and preserves result-node bounds`() {
+        val world = traversalWorld()
+        val result =
+            world.schema.engineResultOf("Query") {
+                "helper" resolvesTo 1
+                "dead" resolvesTo 2
+            }
+        val fingerprintBounds =
+            ResolutionWitnessBounds(maxFingerprintCharacters = 1)
+
+        assertFailsWith<ResolutionWitnessBoundExceededException> {
+            result.registeredResolverOccurrences(
+                registry = world.resolverRegistry,
+                bounds = fingerprintBounds,
+            )
+        }
+        val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
+        result.forEachRegisteredResolverOccurrence(
+            registry = world.resolverRegistry,
+            bounds = fingerprintBounds,
+            visitOccurrence = streamedCells::add,
+        )
+        assertEquals(2, streamedCells.size)
+
+        assertFailsWith<ResolutionWitnessBoundExceededException> {
+            result.forEachRegisteredResolverOccurrence(
+                registry = world.resolverRegistry,
+                bounds = ResolutionWitnessBounds(maxResultNodes = 1),
+                visitOccurrence = {},
+            )
+        }
     }
 
     @Test

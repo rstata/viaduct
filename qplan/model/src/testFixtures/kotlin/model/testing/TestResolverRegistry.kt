@@ -42,6 +42,10 @@ import viaduct.graphql.utils.GraphQLTypeRelation
 /**
  * A raw external node lookup accepted only by test-fixture composition.
  *
+ * The returned object is partial and need not repeat the input ID. Fixture lowering retains the
+ * authoritative ID supplied by the node-valued producer, matching production's node-reference
+ * behavior.
+ *
  * This alias is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
  * functions and exposes a field-only [ResolverRegistry].
  */
@@ -314,14 +318,19 @@ private class NodeResolverLowering(
         require(resultType == type) {
             "Node resolver for ${type.name} returned ${resultType.name}"
         }
-        val returnedId =
-            result.get(
-                validateNodeIdField(type).name,
-            )
-        require(returnedId == id) {
-            "Node resolver for ${type.name} did not repeat its input ID"
-        }
-        return result
+        val fields =
+            result.getSelections().associateWith { selection ->
+                result.get(selection)
+            }
+
+        /*
+         * Node identity belongs to the producing field's fringe value, which the synthetic bridge
+         * carries into this lookup. Production's NodeEngineObjectDataImpl likewise returns its
+         * NodeReference ID independently of the materialized node-resolver object. Reconstitute
+         * that effective object here, in shared fixture lowering, with the fringe ID authoritative.
+         */
+        val idField = validateNodeIdField(type)
+        return engineObjectDataOf(resultType, fields + (idField.name to id))
     }
 
     private fun payloadField(nodeOutputType: ViaductSchema.Object): ViaductSchema.ObjectField =

@@ -65,7 +65,8 @@ class TestWorld private constructor(
          * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] and node-valued
          * source fields are lowered through synthetic bridge objects and generated `node` field
          * resolvers before [Assumptions] is constructed, so semantic code observes only lowered
-         * field-resolver coordinates.
+         * field-resolver coordinates. Missing Query field resolvers are filled with explicit
+         * [EngineErrorData] producers before supplied field resolvers are overlaid.
          */
         fun fromSDL(
             schemaSDL: String,
@@ -174,7 +175,7 @@ private class TestWorldModule(
     @Provides
     @FieldResolvers
     fun fieldResolvers(schema: GJSchema): Map<ViaductSchema.Field, FieldResolverDefinition> =
-        fieldResolvers?.invoke(schema) ?: defaultQueryResolvers(schema)
+        errorQueryResolvers(schema) + fieldResolvers?.invoke(schema).orEmpty()
 
     @Provides
     @VariableProviders
@@ -210,7 +211,7 @@ private class TestWorldModule(
             selectiveResolvers = selectiveResolvers,
         )
 
-    private fun defaultQueryResolvers(
+    private fun errorQueryResolvers(
         schema: GJSchema,
     ): Map<ViaductSchema.Field, FieldResolverDefinition> {
         val queryFragment = schema.emptyFragmentOf("Query")

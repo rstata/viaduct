@@ -11,6 +11,7 @@ dependencies {
 
     testFixturesImplementation(project(":model"))
     testFixturesImplementation(testFixtures(project(":model")))
+    testFixturesImplementation(testFixtures(project(":semantics")))
     testFixturesImplementation("com.graphql-java:graphql-java:26.0")
     testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     testFixturesImplementation(testFixtures(viaductLibs.viaduct.engine.api))

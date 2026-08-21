@@ -35,7 +35,6 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
     fun `node resolver returns value`() {
         EngineTestModule(schemaSDL) {
             field("Query" to "baz") {
@@ -63,7 +62,7 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
+    @Disabled("Qplan currently requires all Nodes to be resolved by their node resolver")
     fun `node reference nested inside resolver response`() {
         EngineTestModule(schemaSDL) {
             field("Query" to "baz") {
@@ -98,7 +97,6 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
     fun `node resolver is invoked for id-only resolution`() {
         var invoked = false
         EngineTestModule(schemaSDL) {
@@ -125,7 +123,6 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
     fun `node resolver throws`() {
         EngineTestModule(schemaSDL) {
             field("Query" to "baz") {
@@ -151,7 +148,6 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
     fun `list of nodes`() {
         EngineTestModule(schemaSDL) {
             field("Query" to "bazList") {
@@ -198,7 +194,6 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
     fun `node resolver does not batch`() {
         val execCounts = ConcurrentHashMap<String, AtomicInteger>()
         EngineTestModule(schemaSDL) {

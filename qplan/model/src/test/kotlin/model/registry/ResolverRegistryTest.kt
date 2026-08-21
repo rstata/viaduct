@@ -18,9 +18,11 @@ import model.objectOf
 import model.schemaType
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
+import model.testing.GJSchema
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
+import model.testing.resolverRegistryOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -47,7 +49,8 @@ class ResolverRegistryTest {
                             nodeResolverOf { id ->
                                 assertEquals("42", id)
                                 schema.objectOf("User") {
-                                    "id" setTo id
+                                    "id" setTo "lookup-id"
+                                    "name" setTo "Ada"
                                 }
                             },
                     )
@@ -78,6 +81,7 @@ class ResolverRegistryTest {
         val user =
             schema.objectOf("User") {
                 "id" setTo "42"
+                "name" setTo "Ada"
             }
         val bridgeField = schema.requireObjectField("Query", "user_V_A_node")
         val bridgeType = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
@@ -124,6 +128,7 @@ class ResolverRegistryTest {
                             """
                             fragment ignored on User {
                               id
+                              name
                             }
                             """.trimIndent(),
                         ).subselections,
@@ -443,11 +448,45 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `requires a field resolver for every Query field`() {
-        assertFailsWith<IllegalArgumentException> {
+    fun `fills missing Query resolvers with errors and preserves supplied resolvers`() {
+        val world =
             TestWorld.fromSDL(
-                schemaSDL = SCHEMA_SDL,
-                fieldResolvers = { emptyMap() },
+                schemaSDL = "type Query { supplied: Int, missing: Int }",
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireField("Query", "supplied") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                    )
+                },
+            )
+        val schema = world.schema
+        val registry = world.resolverRegistry
+        val query = schema.objectOf("Query")
+
+        fun resolve(fieldName: String): Any? {
+            val field = schema.requireObjectField("Query", fieldName)
+            return context(world.assumptions) {
+                registry.resolver(field)(
+                    input = query,
+                    arguments = Arguments.Resolved.of(field, emptyMap()),
+                )
+            }
+        }
+
+        assertEquals(7, resolve("supplied"))
+        assertEquals(EngineErrorData, resolve("missing"))
+    }
+
+    @Test
+    fun `requires a field resolver for every Query field in a canonical registry`() {
+        val schema = GJSchema.fromSDL("type Query { missing: Int }")
+        assertFailsWith<IllegalArgumentException> {
+            resolverRegistryOf(
+                schema = schema,
+                nodeResolvers = emptyMap(),
+                fieldResolvers = emptyMap(),
+                variableProviders = emptyMap(),
+                applicationObserver = null,
             )
         }
     }

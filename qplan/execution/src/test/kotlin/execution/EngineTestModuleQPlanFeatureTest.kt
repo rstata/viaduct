@@ -35,6 +35,35 @@ class EngineTestModuleQPlanFeatureTest {
     }
 
     @Test
+    fun `supports named fragments in object required selections`() {
+        EngineTestModule(
+            """
+            extend type Query {
+              base: Int!
+              total: Int!
+            }
+            """.trimIndent(),
+        ) {
+            fieldWithValue("Query" to "base", 5)
+            field("Query" to "total") {
+                resolver {
+                    objectSelections(
+                        """
+                        fragment Base on Query { base }
+                        fragment Main on Query { ...Base }
+                        """.trimIndent(),
+                    )
+                    fn { _, objectValue, _, _, _ ->
+                        objectValue.get("base") as Int
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ total }").assertJson("{data: {total: 5}}")
+        }
+    }
+
+    @Test
     fun `completes typename through qplan lowering`() {
         EngineTestModule(
             """

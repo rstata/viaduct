@@ -41,7 +41,9 @@ GraphQL Java parsing, validation, and input coercion
 
 The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object required selections into the canonical schema, recovers supported variable declarations from the same executor RSS, passes resolved arguments and synchronous object data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan.
 
-In keeping with the architecture of qplan, the adapter translates node executors into field resolvers on fields that return Node types.  This is a process called "lowering:" the schema used for field resolution is slightly modified ("lowered") to conveniently support node-resolvers-as-field resolvers, and similarly node-resolver executors are modified to be put into the resolver registry as field resolvers.  The adapter also supplies local equivalents of built-in `Query.node` and `Query.nodes` when the module does not provide those executors.
+The mock field-executor surface returns `Any?` and permits a raw map as the source for a concrete GraphQL object field. Qplan's `EngineOutputData` contract does not: object output must be `EngineObjectData.Sync`. The adapter therefore uses the declared concrete object type to recursively materialize such maps and normalizes the resulting EOD before it crosses into qplan. It does not accept raw maps for interface or union outputs because those values do not provide the concrete runtime type needed for an unambiguous conversion.
+
+In keeping with the architecture of qplan, the adapter translates node executors into field resolvers on fields that return Node types.  This is a process called "lowering:" the schema used for field resolution is slightly modified ("lowered") to conveniently support node-resolvers-as-field resolvers, and similarly node-resolver executors are modified to be put into the resolver registry as field resolvers. A raw node-executor payload may omit the repeated `id`: shared fixture lowering combines its fields with the authoritative ID supplied by the Node-valued fringe before the effective object enters qplan. The adapter also supplies local equivalents of built-in `Query.node` and `Query.nodes` when the module does not provide those executors.
 
 ### Required-Selection Variables
 
@@ -52,6 +54,21 @@ In keeping with the architecture of qplan, the adapter translates node executors
 `FromFieldVariablesResolver(name, path, requiredSelectionSet)` recovery treats `path` as an alias-preserving object response-key path. Because the Engine API type does not retain whether it came from `fromObjectField` or `fromQueryField`, recovery proves the object origin by requiring its nested RSS to equal the executor object RSS filtered to that path. It recursively checks nested RSS variable dependencies against the root object RSS, requires repeated provider recipes to agree, and emits `schema.fromObjectField(objectFragment, path)`.
 
 Recovery requires exact agreement between the fragment's variable occurrences and the RSS provider names. It rejects missing, unused, duplicate, or inconsistent providers; nested argument paths; field paths not proven by the root object RSS; and arbitrary provider callbacks. Query RSS variables remain outside this adapter because query required selections themselves are not yet supported.
+
+## Feature Test Guidelines
+
+A failing production feature-test port is evidence of a disagreement, but not by itself evidence of an engine bug. Before changing code, identify the value or behavior under dispute, who produces it, who consumes it, and which boundary owns the governing contract.
+
+Classify the disagreement before choosing a repair:
+
+1. A normative engine contract should be enforced by the model and semantics.
+2. A feature-test convenience that falls outside that contract should be normalized by the test adapter before it enters qplan.
+3. A documented qplan restriction should remain an unchanged, disabled production test until that restriction is deliberately lifted.
+4. An implementation that violates its claimed contract should be fixed at the narrowest owning boundary.
+
+Compatibility belongs at ingress. Do not make qplan's engine accept a representation excluded by its contract merely because a production fixture or mock executor can produce it. Conversely, an ingress adapter must not conceal a contract violation produced inside qplan.
+
+Keep production test fixtures, behavior, and assertions intact so failures continue to describe the real disagreement. Generated tests are useful for finding invariant failures and interactions; once understood, add focused deterministic regressions that state the contract directly. Validate semantic changes across nested object and list occurrences rather than only against the first failing example.
 
 ## Current Support
 
@@ -72,9 +89,7 @@ The adapter rejects or does not yet model:
 - From-object-field provider paths containing a field that declares arguments, an explicit Resolver26 restriction even when those arguments are ground.
 - From-Query-field and arbitrary callback variable providers.
 - Batched or selective field and node resolvers.
-- Production node executors that omit `id` from their returned object; production's lazy node wrapper supplies the reference ID separately, while qplan's current node lowering requires the executor result to repeat it.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
-- Partially populated Query executor maps; qplan registry construction currently requires a resolver for every lowered Query field even when a feature test never selects it.
 - Query required selections.
 - Checker and type-checker executors.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.

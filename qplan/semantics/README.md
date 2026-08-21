@@ -31,6 +31,8 @@ A producer is a **predecessor** of a consumer when the consumer must materialize
 
 Open selections are specialized to a concrete object type with `merge(type)`. Bindings are then instantiated before exact operations cross through `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()`.
 
+Semantics accepts resolver selection documents that retain named fragment definitions. The current semantic selection carrier cannot represent named fragment spreads, so `fragmentFromDocument` owns lowering those spreads to inline fragments. Keeping that conversion at the semantics boundary allows a future carrier to preserve or optimize named fragments without requiring execution adapters to pre-process them.
+
 `Resolve.kt` contains the recursive monotonic constructor used by Resolver01-03. `ResolveValue.kt` builds passive result structure, retains child OERs that require active work, and populates those children without replacing their published parents.
 
 `DepthFirstReactor` expresses the Resolver06-08 progression as explicit orchestrator and slot-resolver work. `CoroutineResolve.kt` expresses Resolver21-23 through structured suspension and exact promises. [`resolver-versions.md`](../resolver-versions.md) explains the capability grid and how to use it.

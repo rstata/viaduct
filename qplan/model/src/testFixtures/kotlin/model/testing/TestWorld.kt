@@ -65,8 +65,8 @@ class TestWorld private constructor(
          * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] and node-valued
          * source fields are lowered through synthetic bridge objects and generated `node` field
          * resolvers before [Assumptions] is constructed, so semantic code observes only lowered
-         * field-resolver coordinates. Missing Query field resolvers are filled with explicit
-         * [EngineErrorData] producers before supplied field resolvers are overlaid.
+         * field-resolver coordinates. Missing Query field resolvers are filled with
+         * nullability-aware fallback producers before supplied field resolvers are overlaid.
          */
         fun fromSDL(
             schemaSDL: String,
@@ -175,7 +175,7 @@ private class TestWorldModule(
     @Provides
     @FieldResolvers
     fun fieldResolvers(schema: GJSchema): Map<ViaductSchema.Field, FieldResolverDefinition> =
-        errorQueryResolvers(schema) + fieldResolvers?.invoke(schema).orEmpty()
+        fallbackQueryResolvers(schema) + fieldResolvers?.invoke(schema).orEmpty()
 
     @Provides
     @VariableProviders
@@ -211,7 +211,7 @@ private class TestWorldModule(
             selectiveResolvers = selectiveResolvers,
         )
 
-    private fun errorQueryResolvers(
+    private fun fallbackQueryResolvers(
         schema: GJSchema,
     ): Map<ViaductSchema.Field, FieldResolverDefinition> {
         val queryFragment = schema.emptyFragmentOf("Query")
@@ -219,10 +219,12 @@ private class TestWorldModule(
             .filter {
                 it.name != LOWERED_TYPENAME_FIELD
             }
-            .associateWith {
+            .associateWith { field ->
                 fieldResolverOf(
                     objectFragment = queryFragment,
-                    function = { _, _ -> EngineErrorData },
+                    function = { _, _ ->
+                        if (field.type.isNullable) null else EngineErrorData
+                    },
                 )
             }
     }

@@ -436,7 +436,6 @@ class FromFieldVariablesFeatureTest {
             ).assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("TODO: MechAdapt")
     @Test
     fun `from object field - same variable name used in multiple selection sets`() =
         EngineTestModule("extend type Query { x:Int, y:Int, z(c:Int):Int, w:Int }") {

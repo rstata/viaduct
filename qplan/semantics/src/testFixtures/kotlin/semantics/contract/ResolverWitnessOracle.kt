@@ -1,6 +1,5 @@
 package semantics.contract
 
-import model.requireObjectField
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
@@ -15,7 +14,7 @@ import semantics.RuntimeSupport
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
 import semantics.arbitrary.RegisteredResolverOccurrence
-import semantics.arbitrary.registeredResolverOccurrences
+import semantics.arbitrary.forEachRegisteredResolverOccurrence
 import semantics.arbitrary.resolutionFingerprint
 import semantics.correctresolution.conformsToSelections
 import semantics.correctresolution.conformsToSelectionsAt
@@ -29,21 +28,17 @@ import semantics.materialize
  */
 context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
-    Map<ResolverApplicationIdentity, Int> =
+    Map<ResolverApplicationIdentity, Int> {
+    val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
     context(RuntimeSupport.noCycleChecking()) {
-        registeredResolverOccurrences(world.resolverRegistry)
-            .map { cell ->
-                val field =
-                    world.schema.requireObjectField(
-                        cell.canonicalField.typeName,
-                        cell.canonicalField.fieldName,
-                    )
-                val resolver = world.resolverRegistry.resolver(field)
-                val fragment =
-                    resolver.objectFragmentSatisfiedBy(
-                        result = cell.containingObject,
-                        path = cell.occurrencePath,
-                    ) ?: error("Registered resolver occurrence has no complete object fragment")
+        forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+            val resolver = world.resolverRegistry.resolver(cell.field)
+            val fragment =
+                resolver.objectFragmentSatisfiedBy(
+                    result = cell.containingObject,
+                    path = cell.occurrencePath,
+                ) ?: error("Registered resolver occurrence has no complete object fragment")
+            val identity =
                 ResolverApplicationIdentity(
                     key = cell.applicationKey,
                     inputFingerprint =
@@ -55,28 +50,26 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
                                 ).resolutionFingerprint()
                         },
                 )
-            }.groupingBy { identity -> identity }
-            .eachCount()
+            counts.increment(identity)
+        }
     }
+    return counts
+}
 
 /** Expected deterministic resolver applications qualified by their exact result occurrence path. */
 context(world: Assumptions)
 fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
-    Map<ResolverOccurrenceApplicationIdentity, Int> =
+    Map<ResolverOccurrenceApplicationIdentity, Int> {
+    val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
     context(RuntimeSupport.noCycleChecking()) {
-        registeredResolverOccurrences(world.resolverRegistry)
-            .map { cell ->
-                val field =
-                    world.schema.requireObjectField(
-                        cell.canonicalField.typeName,
-                        cell.canonicalField.fieldName,
-                    )
-                val resolver = world.resolverRegistry.resolver(field)
-                val fragment =
-                    resolver.objectFragmentSatisfiedBy(
-                        result = cell.containingObject,
-                        path = cell.occurrencePath,
-                    ) ?: error("Registered resolver occurrence has no complete object fragment")
+        forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+            val resolver = world.resolverRegistry.resolver(cell.field)
+            val fragment =
+                resolver.objectFragmentSatisfiedBy(
+                    result = cell.containingObject,
+                    path = cell.occurrencePath,
+                ) ?: error("Registered resolver occurrence has no complete object fragment")
+            val identity =
                 ResolverOccurrenceApplicationIdentity(
                     occurrencePath = cell.occurrencePath,
                     applicationIdentity =
@@ -92,25 +85,32 @@ fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
                                 },
                         ),
                 )
-            }.groupingBy { identity -> identity }
-            .eachCount()
+            counts.increment(identity)
+        }
     }
+    return counts
+}
 
 context(world: Assumptions)
 fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolverOccurrence> =
-    registeredResolverOccurrences(world.resolverRegistry)
-        .filter { cell ->
-            val field =
-                world.schema.requireObjectField(
-                    cell.canonicalField.typeName,
-                    cell.canonicalField.fieldName,
-                )
-            val resolver = world.resolverRegistry.resolver(field)
-            resolver.objectFragmentSatisfiedBy(
-                result = cell.containingObject,
-                path = cell.occurrencePath,
-            ) == null
-        }
+    buildList {
+        this@unclosedRegisteredResolverOccurrences
+            .forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+                val resolver = world.resolverRegistry.resolver(cell.field)
+                if (
+                    resolver.objectFragmentSatisfiedBy(
+                        result = cell.containingObject,
+                        path = cell.occurrencePath,
+                    ) == null
+                ) {
+                    add(cell)
+                }
+            }
+    }
+
+private fun <T> MutableMap<T, Int>.increment(key: T) {
+    this[key] = getOrDefault(key, 0) + 1
+}
 
 context(world: Assumptions)
 private fun FieldResolver.objectFragmentSatisfiedBy(

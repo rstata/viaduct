@@ -299,16 +299,52 @@ data class ResolutionOccurrenceWitness(
  */
 data class RegisteredResolverOccurrence(
     val applicationKey: ResolverApplicationKey,
-    val canonicalField: FieldCoordinate,
+    val field: ViaductSchema.ObjectField,
     val occurrencePath: List<PathComponent>,
     val containingObject: ObjectEngineResult,
-)
+) {
+    val canonicalField: FieldCoordinate
+        get() = applicationKey.field
+}
 
 fun EngineResult?.registeredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): List<RegisteredResolverOccurrence> {
     val result = mutableListOf<RegisteredResolverOccurrence>()
+    visitRegisteredResolverOccurrences(
+        registry = registry,
+        bounds = bounds,
+        canonicalOrder = true,
+        visitOccurrence = result::add,
+    )
+    return result
+}
+
+/**
+ * Visits registered resolver occurrences without defining a traversal order.
+ *
+ * This avoids canonical sorting and list materialization for order-insensitive consumers.
+ */
+fun EngineResult?.forEachRegisteredResolverOccurrence(
+    registry: ResolverRegistry,
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+    visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
+) {
+    visitRegisteredResolverOccurrences(
+        registry = registry,
+        bounds = bounds,
+        canonicalOrder = false,
+        visitOccurrence = visitOccurrence,
+    )
+}
+
+private fun EngineResult?.visitRegisteredResolverOccurrences(
+    registry: ResolverRegistry,
+    bounds: ResolutionWitnessBounds,
+    canonicalOrder: Boolean,
+    visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
+) {
     var visitedNodes = 0
 
     fun visit(
@@ -326,27 +362,31 @@ fun EngineResult?.registeredResolverOccurrences(
 
         when (value) {
             is ObjectEngineResult -> {
-                value.keys
-                    .sortedBy { key -> key.canonicalFingerprint(bounds).value }
-                    .forEach { key ->
-                        val canonicalField = key.field.fieldCoordinate()
-                        val fieldPath = path + key
-                        val arguments = key.arguments as? Arguments.Resolved
-                        if (key.field in registry && arguments != null) {
-                            result +=
-                                RegisteredResolverOccurrence(
-                                    applicationKey =
-                                        ResolverApplicationKey(
-                                            field = key.field.fieldCoordinate(),
-                                            arguments = arguments,
-                                        ),
-                                    canonicalField = canonicalField,
-                                    occurrencePath = fieldPath,
-                                    containingObject = value,
-                                )
-                        }
-                        visit(value.getCell(key).getValue().get(), fieldPath)
+                val keys =
+                    if (canonicalOrder) {
+                        value.keys.sortedBy { key -> key.canonicalFingerprint(bounds).value }
+                    } else {
+                        value.keys
                     }
+                keys.forEach { key ->
+                    val fieldPath = path + key
+                    val arguments = key.arguments as? Arguments.Resolved
+                    if (key.field in registry && arguments != null) {
+                        visitOccurrence(
+                            RegisteredResolverOccurrence(
+                                applicationKey =
+                                    ResolverApplicationKey(
+                                        field = key.field.fieldCoordinate(),
+                                        arguments = arguments,
+                                    ),
+                                field = key.field,
+                                occurrencePath = fieldPath,
+                                containingObject = value,
+                            ),
+                        )
+                    }
+                    visit(value.getCell(key).getValue().get(), fieldPath)
+                }
             }
 
             is ListEngineResult ->
@@ -362,16 +402,22 @@ fun EngineResult?.registeredResolverOccurrences(
     }
 
     visit(this, emptyList())
-    return result
 }
 
 fun EngineResult?.registeredResolverOccurrenceCounts(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
-): Map<ResolverApplicationKey, Int> =
-    registeredResolverOccurrences(registry, bounds)
-        .groupingBy(RegisteredResolverOccurrence::applicationKey)
-        .eachCount()
+): Map<ResolverApplicationKey, Int> {
+    val counts = linkedMapOf<ResolverApplicationKey, Int>()
+    forEachRegisteredResolverOccurrence(registry, bounds) { occurrence ->
+        counts.increment(occurrence.applicationKey)
+    }
+    return counts
+}
+
+private fun <T> MutableMap<T, Int>.increment(key: T) {
+    this[key] = getOrDefault(key, 0) + 1
+}
 
 /** Resolver fields conservatively reachable from fields directly selected by an operation. */
 data class AllowedResolverClosure(

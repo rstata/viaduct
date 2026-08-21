@@ -1,6 +1,5 @@
 package semantics.contract
 
-import model.requireObjectField
 import model.Assumptions
 import model.EngineInputData
 import model.EngineResult
@@ -23,7 +22,7 @@ import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
-import semantics.arbitrary.registeredResolverOccurrences
+import semantics.arbitrary.forEachRegisteredResolverOccurrence
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
 
@@ -32,14 +31,8 @@ import kotlin.test.assertEquals
  */
 context(world: Assumptions)
 fun ObjectEngineResult.validateObjectPathBindings() {
-    this.registeredResolverOccurrences(world.resolverRegistry).forEach { cell ->
-        val resolver =
-            world.resolverRegistry.resolver(
-                world.schema.requireObjectField(
-                    cell.canonicalField.typeName,
-                    cell.canonicalField.fieldName,
-                ),
-            )
+    this.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+        val resolver = world.resolverRegistry.resolver(cell.field)
         resolver
             .boundObjectPathDefinitions(cell.occurrencePath)
             .forEach { definition ->

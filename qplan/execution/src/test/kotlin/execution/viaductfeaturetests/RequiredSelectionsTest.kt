@@ -2363,7 +2363,7 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"status": "System offline"}}""")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests query-RSS parser failure during module construction.")
     @Test
     fun `queryValueFragment with unclosed brace should fail at build time`() {
         assertThrows<IllegalArgumentException> {
@@ -2379,7 +2379,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests query-RSS parser failure during module construction.")
     @Test
     fun `queryValueFragment with invalid field syntax should fail at build time`() {
         assertThrows<IllegalArgumentException> {
@@ -2395,7 +2395,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests schema validation of a query RSS during bootstrap.")
     @Test
     fun `queryValueFragment referencing non-existent field should fail at build time`() {
         assertThrows<RequiredSelectionsAreInvalid> {
@@ -2411,7 +2411,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests query-RSS parser failure during module construction.")
     @Test
     fun `queryValueFragment with invalid fragment syntax should fail at build time`() {
         assertThrows<IllegalArgumentException> {
@@ -2427,7 +2427,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests query-RSS parser failure during module construction.")
     @Test
     fun `queryValueFragment with invalid variable syntax should fail at build time`() {
         assertThrows<IllegalArgumentException> {
@@ -2443,7 +2443,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests query-RSS parser/shape validation during module construction.")
     @Test
     fun `queryValueFragment with empty selection set should fail at build time`() {
         assertThrows<IllegalArgumentException> {
@@ -2458,7 +2458,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests schema/type-condition validation during bootstrap.")
     @Test
     fun `queryValueFragment with wrong type condition should fail at build time`() {
         assertThrows<RequiredSelectionsAreInvalid> {

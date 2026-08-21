@@ -378,7 +378,7 @@ class FromFieldVariablesFeatureTest {
         assertEquals("x", err.variableName)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests tenant-loading variable type validation, not resolution.")
     @Test
     fun `invalid from object field -- selection output type is not compatible with variable input type -- nullability mismatch`() {
         val err = assertThrows<Throwable> {
@@ -396,7 +396,7 @@ class FromFieldVariablesFeatureTest {
         assertEquals("b", err.variableName)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests tenant-loading variable type validation, not resolution.")
     @Test
     fun `invalid from object field -- selection output type is not compatible with variable input type -- type mismatch`() {
         val err = assertThrows<Throwable> {
@@ -498,7 +498,7 @@ class FromFieldVariablesFeatureTest {
         assertFalse(yResolved)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests static variable-dependency cycle detection.")
     @Test
     fun `invalid from object field -- variable depends on a field in its own subselections`() {
         val err = assertThrows<Throwable> {
@@ -519,7 +519,7 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is VariableCycleException)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests static self-cycle detection.")
     @Test
     fun `invalid from object field -- variable selects a field that uses it`() {
         val err = assertThrows<Throwable> {
@@ -535,7 +535,7 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is VariableCycleException)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests static variable-cycle validation within one RSS.")
     @Test
     fun `invalid from object field -- deadlock between 2 variables -- same selection set`() {
         val err = assertThrows<Throwable> {
@@ -559,7 +559,7 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is VariableCycleException)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests static required-selection cycle validation across RSSes.")
     @Test
     fun `invalid from object field -- deadlock between 2 variables -- diff selection sets`() {
         val err = assertThrows<Throwable> {
@@ -580,7 +580,7 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is RequiredSelectionsCycleException)
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests bootstrap validation of a malformed from-query provider path.")
     @Test
     fun `invalid from query field -- path refers to missing selection`() {
         val err = assertThrows<Throwable> {
@@ -597,7 +597,7 @@ class FromFieldVariablesFeatureTest {
         assertTrue(checkNotNull(err.message).contains("No selections found for path"), err.message.orEmpty())
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests bootstrap validation that provider paths terminate at compatible values.")
     @Test
     fun `invalid from query field -- path ends on object`() {
         val err = assertThrows<Throwable> {
@@ -774,7 +774,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests bootstrap rejection of duplicate provider registrations.")
     @Test
     fun `invalid from query field -- variable name overlaps with object field variable`() {
         val err = assertThrows<Throwable> {
@@ -800,7 +800,7 @@ class FromFieldVariablesFeatureTest {
         )
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Tests bootstrap rejection of duplicate provider registrations.")
     @Test
     fun `invalid from query field -- variable name overlaps with argument variable`() {
         val err = assertThrows<Throwable> {

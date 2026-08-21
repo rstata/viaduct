@@ -217,7 +217,7 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Validates bootstrap rejection of an invalid object RSS; no resolver executes.")
     @Test
     fun `test invalid object fragment`() {
         assertThrows<RequiredSelectionsAreInvalid> {
@@ -240,7 +240,7 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("Copied from production; not yet adapted to qplan")
+    @Disabled("N/A: Validates bootstrap rejection of an invalid query RSS; no resolver executes.")
     @Test
     fun `test invalid query fragment`() {
         assertThrows<RequiredSelectionsAreInvalid> {

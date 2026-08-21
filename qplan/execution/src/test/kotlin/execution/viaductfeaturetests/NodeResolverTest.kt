@@ -64,7 +64,7 @@ class NodeResolverTest {
     }
 
     @Test
-    @Disabled("Qplan currently requires all Nodes to be resolved by their node resolver")
+    @Disabled("Production permits a Node-valued field resolver to materialize the Node directly; qplan requires every Node value to cross its node resolver")
     fun `node reference nested inside resolver response`() {
         EngineTestModule(schemaSDL) {
             field("Query" to "baz") {
@@ -89,6 +89,44 @@ class NodeResolverTest {
                     createEngineObjectData(
                         objectType,
                         mapOf("x" to 99),
+                    )
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{baz { x anotherBaz { x } }}")
+                .assertJson("""{"data": {"baz": {"x": 1, "anotherBaz": {"x": 99}}}}""")
+        }
+    }
+
+    @Test
+    fun `ALTERNATIVE node reference nested inside resolver response`() {
+        EngineTestModule(schemaSDL) {
+            field("Query" to "baz") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        ctx.createNodeReference(
+                            "1",
+                            requireNotNull(schema.schema.getObjectType("Baz")),
+                        )
+                    }
+                }
+            }
+            type("Baz") {
+                nodeUnbatchedExecutor { id, _, ctx ->
+                    createEngineObjectData(
+                        objectType,
+                        when (id) {
+                            "1" ->
+                                mapOf(
+                                    "x" to 1,
+                                    "anotherBaz" to
+                                        ctx.createNodeReference(
+                                            "2",
+                                            requireNotNull(schema.schema.getObjectType("Baz")),
+                                        ),
+                                )
+                            else -> mapOf("x" to 99)
+                        },
                     )
                 }
             }

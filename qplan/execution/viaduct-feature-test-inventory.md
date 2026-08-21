@@ -4,7 +4,7 @@ This inventory covers files under `core/engine/runtime/src/test/kotlin` that inv
 
 Migration is atomic by source file. Once any file is migrated, every source test must be copied in source order; tests outside qplan's current supported surface remain present and are marked `@Disabled` with a specific reason. The counts below report migration state: a copied count smaller than the source count identifies an unfinished legacy migration, not a supported selective port.
 
-The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port test names and order now agree exactly. Together they contain 124 production tests: 28 currently pass through qplan and 96 remain disabled.
+The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port production-test names and order now agree exactly. Together they contain 124 production tests: 28 currently pass through qplan and 96 remain disabled. Two enabled `ALTERNATIVE` tests separately state qplan-compatible behavior for confirmed incompatibilities.
 
 ## Best Next Files
 
@@ -14,8 +14,8 @@ The 2026-08-21 whole-file audit found 93 omitted test declarations across four s
 ## Observed Port Boundaries
 
 - **Execution:** `NodeResolverTest.kt` initially exposed two shared fixture-lowering gaps before Resolver26: incomplete feature-test modules omitted unrelated Query resolvers, and raw node lookups were required to repeat the ID already supplied by the producing field's fringe value. `TestWorld` now fills missing Query fields with explicit error producers and makes the fringe ID authoritative when composing node lookup data, matching production's `NodeEngineObjectDataImpl`. Five node tests currently pass through qplan; eight remain disabled.
-- **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope.
-- **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and two-invocation assertion. Object RSS documents now cross intact into a semantics-owned conversion that currently lowers named spreads into the normalized selection carrier, so Resolver26 is reached and produces the expected response. The remaining discrepancy is invocation parity: Resolver26 invokes `bar` once while production invokes it twice.
+- **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
+- **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.
 - `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` uses a query required selection, which the executor adapter deliberately rejects.
 - `FromFieldVariablesFeatureTest.kt`'s source-success case `from arg -- path traverses nested input` is restored unchanged and disabled; adapter rejection coverage belongs in a separate qplan-specific test.
 - `OperationValidationTest.kt` is not a Resolver26 candidate. Its invalid operations are rejected before `QPlanExecutionStrategy`, while its valid case only executes two independent constant root fields.
@@ -31,7 +31,7 @@ The 2026-08-21 whole-file audit found 93 omitted test declarations across four s
 | `FieldPolicyCheckTest.kt` | 5 | Blocked by checker and policy semantics. |
 | `NamespaceTypeTest.kt` | 2 | Investigate; synchronous fields fit, namespace root synthesis may not. |
 | `NodeDataLoaderTest.kt` | 15 | Primarily data-loader coverage; not a qplan feature-test target yet. |
-| `NodeResolverTest.kt` | 13 | Complete port: 5 pass through qplan and 8 are disabled. Inline Node values, query RSSes, data-loader caching, selectivity, and parallel scheduling remain among the blocked cases. |
+| `NodeResolverTest.kt` | 13 | Complete port: 5 production tests pass through qplan and 8 are disabled; one additional `ALTERNATIVE` passes. Inline Node values, query RSSes, data-loader caching, selectivity, and parallel scheduling remain among the blocked cases. |
 | `OperationValidationTest.kt` | 3 | Not a Resolver26 target; validation occurs before qplan execution, and the valid case adds only trivial resolver coverage. |
 | `ParentManagedValueTest.kt` | 5 | Blocked by `ParentManagedValue` output-policy adaptation. |
 | `RootFieldReferenceResolutionTest.kt` | 21 | Blocked by root-field-reference values, namespace factories, checkers, and directives. |
@@ -47,7 +47,7 @@ The 2026-08-21 whole-file audit found 93 omitted test declarations across four s
 | `execution/FieldResolverExecutionConditionTest.kt` | 2 | Blocked by runtime query-plan execution conditions. |
 | `execution/FromFieldVariablesFeatureTest.kt` | 43 | Complete port: 10 pass through qplan and 33 are disabled. Query paths, directives, mutations, cycles, nested argument paths, and argument-bearing provider paths remain among the blocked cases. |
 | `execution/ParentFieldRequiredSelectionsExecutionTest.kt` | 13 | Blocked by `@parent`, checker, and parent-traversal runtime semantics. |
-| `execution/RequiredSelectionsTest.kt` | 60 | Complete port: 11 pass through qplan and 49 are disabled. Selective, query RSS, checker, parent, directive, and mutation cases remain among the blocked cases. The active discrepancy is Resolver26 invocation parity: `bar` is invoked once while production invokes it twice. |
+| `execution/RequiredSelectionsTest.kt` | 60 | Complete port: 11 production tests pass through qplan and 49 are disabled; one additional `ALTERNATIVE` passes. Selective, query RSS, checker, parent, directive, and mutation cases remain among the blocked cases. |
 | `execution/ResolverInstrumentationFeatureTest.kt` | 5 | Blocked by resolver/checker/fetch instrumentation integration. |
 | `execution/ResolveSelectionSetTest.kt` | 5 | Blocked by runtime `resolveSelectionSet`/subquery APIs outside the qplan adapter. |
 | `execution/SelectiveFieldResolversExecutionTest.kt` | 64 | Blocked by selective executor plumbing and requested selections. |

@@ -62,7 +62,7 @@ The feature-test adapter currently supports:
 - Object required selections, including aliases, arguments, transitive requirements, repeated argumented fields, shared requirements, and multiple requirements.
 - Top-level from-argument variables in object required selections, including variable names that differ from their source argument names.
 - From-object-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, and non-root resolver owners.
-- Synchronous scalar, enum, list, object, and `NodeReference` outputs.
+- Synchronous scalar, enum, list, object, and `NodeReference` outputs, including raw map sources for concrete object fields.
 - Node-valued fields and built-in `Query.node` and `Query.nodes`.
 - `__typename` through canonical qplan lowering and GraphQL-Java completion.
 
@@ -73,7 +73,7 @@ The adapter rejects or does not yet model:
 - From-Query-field and arbitrary callback variable providers.
 - Batched or selective field and node resolvers.
 - Production node executors that omit `id` from their returned object; production's lazy node wrapper supplies the reference ID separately, while qplan's current node lowering requires the executor result to repeat it.
-- Inline object values from a Node-valued field when that concrete type also has a node resolver; current lowering treats every such producer output as a node reference.
+- Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
 - Partially populated Query executor maps; qplan registry construction currently requires a resolver for every lowered Query field even when a feature test never selects it.
 - Query required selections.
 - Checker and type-checker executors.
@@ -98,7 +98,7 @@ package execution.viaductfeaturetests
 // Implemented 12 out of 60 tests as of 2026-08-20
 ```
 
-Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. The current ports are `EngineFeatureTestExample.kt`, `NodeResolverTest.kt`, `RequiredSelectionsTest.kt`, and supported from-argument and from-object-field cases in `FromFieldVariablesFeatureTest.kt`, totaling thirty-one runtime tests. Eight copied tests are disabled as preserved incompatibility cases. The remaining suites and recommended next ports are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
+Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. The current ports are `EngineFeatureTestExample.kt`, `NodeResolverTest.kt`, `RequiredSelectionsTest.kt`, and supported from-argument and from-object-field cases in `FromFieldVariablesFeatureTest.kt`, totaling thirty-one runtime tests. Two copied tests are disabled as preserved incompatibility cases. The remaining suites and recommended next ports are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
 
 Run the adapter and ported tests with:
 

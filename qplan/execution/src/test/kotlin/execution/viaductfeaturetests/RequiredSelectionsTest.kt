@@ -66,7 +66,6 @@ class RequiredSelectionsTest {
         }
 
     @Test
-    @Disabled("Fails under qplan; investigate production parity")
     fun `required selections use deep aliases`() =
         EngineTestModule("extend type Query { string1: String, bar: Bar } type Bar { value: String }") {
             field("Query" to "bar") {

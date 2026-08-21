@@ -1,10 +1,10 @@
 package execution.testing
 
 import graphql.ExecutionResult
-import graphql.language.AstPrinter
 import graphql.schema.GraphQLCompositeType
 import graphql.schema.GraphQLList
 import graphql.schema.GraphQLNonNull
+import graphql.schema.GraphQLObjectType
 import graphql.schema.GraphQLOutputType
 import graphql.schema.idl.SchemaPrinter
 import java.util.IdentityHashMap
@@ -23,12 +23,14 @@ import model.testing.TestWorld
 import model.testing.VariableDeclaration
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
+import semantics.fragmentFromDocument
 import viaduct.engine.api.EngineExecutionContext
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.NodeReference
 import viaduct.engine.api.ResolvedEngineObjectData
 import viaduct.engine.api.ViaductSchema as EngineSchema
 import viaduct.engine.api.mocks.EngineTestModule
+import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.spi.FieldResolverExecutor
 import viaduct.engine.api.spi.NodeResolverExecutor
 import viaduct.engine.runtime.mocks.ContextMocks
@@ -189,9 +191,8 @@ private fun FieldResolverExecutor.objectFragment(
     field: QPlanSchema.ObjectField,
 ): Fragment =
     objectSelectionSet?.let { required ->
-        schema.fragmentFrom(
-            "fragment _ on ${required.selections.typeName} " +
-                AstPrinter.printAst(required.selections.selections),
+        schema.fragmentFromDocument(
+            document = required.selections.toDocument(),
             variableField = field,
         )
     } ?: schema.emptyFragmentOf(field.containingDef.name)
@@ -301,6 +302,13 @@ private fun normalizeSourceOutput(
                 }
             }
         }
+        is GraphQLObjectType ->
+            when (value) {
+                is NodeReference -> normalizeNodeReference(value)
+                is EngineObjectData.Sync -> normalizeSourceObject(value)
+                is Map<*, *> -> normalizeSourceObjectMap(expectedType, value)
+                else -> value
+            }
         is GraphQLCompositeType ->
             when (value) {
                 is NodeReference -> normalizeNodeReference(value)
@@ -309,6 +317,27 @@ private fun normalizeSourceOutput(
             }
         else -> value
     }
+
+private fun normalizeSourceObjectMap(
+    expectedType: GraphQLObjectType,
+    value: Map<*, *>,
+): EngineObjectData.Sync {
+    /*
+     * EngineTestModule field executors may return a raw GraphQL object source as a map because
+     * FieldResolverExecutor's output contract is Any?. Production execution accepts that source,
+     * resolves its child fields into an OER, and only then projects required selections as
+     * EngineObjectData. This pre-dispatcher adapter bypasses those steps, so materialize the map
+     * here before it crosses into qplan's stricter EngineOutputData domain. The declared concrete
+     * object type makes this conversion unambiguous; abstract map outputs remain unsupported.
+     */
+    require(value.keys.all { it is String }) {
+        "Qplan feature tests require string keys in map object executor outputs"
+    }
+    @Suppress("UNCHECKED_CAST")
+    return normalizeSourceObject(
+        createEngineObjectData(expectedType, value as Map<String, Any?>),
+    )
+}
 
 private fun normalizeNodeReference(reference: NodeReference): EngineObjectData.Sync =
     ResolvedEngineObjectData(

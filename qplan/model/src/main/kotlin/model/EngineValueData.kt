@@ -237,11 +237,12 @@ internal fun ViaductSchema.Input.requiredFieldNames(): Set<String> =
             !field.type.isNullable && !field.hasDefault
         }.mapTo(linkedSetOf(), ViaductSchema.Field::name)
 
-internal fun ViaductSchema.Field.requiredArgNames(): Set<String> =
-    args
-        .filterTo(linkedSetOf()) { arg ->
-            !arg.type.isNullable && !arg.hasDefault
-        }.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name)
+internal fun ViaductSchema.Field.requiredArgsArePresentIn(fields: Map<String, *>): Boolean =
+    args.all { arg ->
+        arg.type.isNullable ||
+            arg.hasDefault ||
+            fields.containsKey(arg.name)
+    }
 
 internal fun ViaductSchema.HasDefaultValue.coercedDefaultValue(): CoercedDefaultValue =
     if (hasDefault) {

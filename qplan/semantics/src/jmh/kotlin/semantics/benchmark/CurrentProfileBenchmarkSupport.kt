@@ -17,6 +17,7 @@ import model.instantiateBindings
 import model.merge
 import model.objectOf
 import model.ownerResolverStamp
+import model.requireQueryTypeDef
 import org.openjdk.jmh.infra.Blackhole
 import semantics.arbitrary.ResolverBenchmarkCorpus
 import semantics.arbitrary.TestCaseCount
@@ -36,9 +37,9 @@ internal const val DEFAULT_OVERHEAD_LOOP_COUNT = 1
 internal const val DEFAULT_OVERHEAD_QUERY_COUNT = 100
 internal const val DEFAULT_OVERHEAD_QUERY_SEED = 1L
 
-private const val SCHEMA_RESOURCE =
+internal const val SCHEMA_RESOURCE =
     "semantics/benchmark/current-profile/schema.graphqls"
-private const val REGISTRY_RESOURCE =
+internal const val REGISTRY_RESOURCE =
     "semantics/benchmark/current-profile/registry.json"
 private const val REPORT_FILE_PROPERTY = "resolverBenchmarkReportFile"
 
@@ -269,7 +270,7 @@ internal class CurrentProfileBenchmarkSupport(
                         context(world) {
                             result.correctResolution(
                                 fragment.subselections
-                                    .merge(world.schema.query)
+                                    .merge(world.schema.requireQueryTypeDef())
                                     .instantiateBindings(),
                             )
                         },

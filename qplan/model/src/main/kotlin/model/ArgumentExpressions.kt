@@ -132,7 +132,7 @@ private fun coerceArgumentFields(
                     null
                 }
             }.toMap() + suppliedFields
-    if (!values.keys.containsAll(field.requiredArgNames())) throw ClassCastException()
+    if (!field.requiredArgsArePresentIn(values)) throw ClassCastException()
     return values
 }
 
@@ -172,7 +172,7 @@ internal fun Arguments.conformsToArgumentDefinition(
         Arguments.Error -> true
         else ->
             fieldExpressions().let { fields ->
-                fields.keys.containsAll(expectedField.requiredArgNames()) &&
+                expectedField.requiredArgsArePresentIn(fields) &&
                     fields.all { (name, value) ->
                         val arg = expectedField.arg(name) ?: return@all false
                         value.conformsToArgumentType(arg.inputType)

@@ -23,11 +23,15 @@ import kotlin.test.assertTrue
 class EngineResultTest {
     @Test
     fun `error carriers use reference equality and preserve output error identity`() {
+        val cause = IllegalStateException("source failure")
         val firstErrorData = EngineErrorData.of()
         val secondErrorData = EngineErrorData.of()
+        val causedErrorData = EngineErrorData.of(cause)
         val firstResult = ErrorEngineResult.of(firstErrorData)
         val secondResultForSameData = ErrorEngineResult.of(firstErrorData)
 
+        assertNull(firstErrorData.cause)
+        assertSame(cause, causedErrorData.cause)
         assertNotSame(firstErrorData, secondErrorData)
         assertNotEquals(firstErrorData, secondErrorData)
         assertSame(firstErrorData, firstResult.errorData)

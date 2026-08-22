@@ -193,7 +193,7 @@ private fun EngineTestModule.qplanRegistryInputs(
                             )
                         output.fold(
                             onSuccess = { normalizeSourceOutput(sourceField.type, it) },
-                            onFailure = { EngineErrorData },
+                            onFailure = { EngineErrorData.of(it) },
                         )
                     },
                 )
@@ -247,7 +247,7 @@ private fun EngineTestModule.builtInNodeFieldResolvers(
                     fieldResolverOf(query) { _, arguments ->
                         val ids = arguments.fieldValues["ids"]
                         if (ids !is List<*>) {
-                            EngineErrorData
+                            EngineErrorData.of()
                         } else {
                             ids.map { nodeReference(it, context) }
                         }
@@ -262,14 +262,16 @@ private fun nodeReference(
     globalId: Any?,
     context: EngineExecutionContext,
 ): Any {
-    if (globalId !is String) return EngineErrorData
+    if (globalId !is String) return EngineErrorData.of()
     return try {
         val (typeName) = context.globalIDCodec.deserialize(globalId)
-        val type = context.fullSchema.schema.getObjectType(typeName) ?: return EngineErrorData
-        if (type.interfaces.none { it.name == "Node" }) return EngineErrorData
+        val type =
+            context.fullSchema.schema.getObjectType(typeName)
+                ?: return EngineErrorData.of()
+        if (type.interfaces.none { it.name == "Node" }) return EngineErrorData.of()
         normalizeNodeReference(context.createNodeReference(globalId, type))
     } catch (_: IllegalArgumentException) {
-        EngineErrorData
+        EngineErrorData.of()
     }
 }
 
@@ -299,7 +301,7 @@ private fun EngineTestModule.qplanNodeResolvers(
                         )
                     output.fold(
                         onSuccess = { normalizeSourceObject(it) },
-                        onFailure = { EngineErrorData },
+                        onFailure = { EngineErrorData.of(it) },
                     )
                 }
         }

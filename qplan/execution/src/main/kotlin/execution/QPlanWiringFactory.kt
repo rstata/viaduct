@@ -12,8 +12,9 @@ import graphql.schema.idl.FieldWiringEnvironment
 import graphql.schema.idl.InterfaceWiringEnvironment
 import graphql.schema.idl.UnionWiringEnvironment
 import graphql.schema.idl.WiringFactory
-import model.EngineResult
+import model.EngineErrorData
 import model.EngineIDResult
+import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -98,7 +99,7 @@ private fun EngineResult?.toGraphQLJavaValue(
 ): Any? =
     when (this) {
         null -> null
-        ErrorEngineResult -> errorResult(environment, path)
+        is ErrorEngineResult -> errorResult(errorData, environment, path)
         is ObjectEngineResult -> this
         is ListEngineResult ->
             mapIndexed { index, cell ->
@@ -123,7 +124,7 @@ private fun EngineResult?.toGraphQLJavaNodeValue(
 ): Any? =
     when (this) {
         null -> null
-        ErrorEngineResult -> errorResult(environment, path)
+        is ErrorEngineResult -> errorResult(errorData, environment, path)
         is ListEngineResult ->
             mapIndexed { index, cell ->
                 cell
@@ -147,6 +148,7 @@ private fun EngineResult?.toGraphQLJavaNodeValue(
     }
 
 private fun errorResult(
+    errorData: EngineErrorData,
     environment: DataFetchingEnvironment,
     path: ResultPath,
 ): DataFetcherResult<Any> =
@@ -155,7 +157,7 @@ private fun errorResult(
         .error(
             ExceptionWhileDataFetching(
                 path,
-                QPlanFieldResolutionException(),
+                errorData.cause ?: QPlanFieldResolutionException(),
                 environment.field.sourceLocation,
             ),
         ).build()

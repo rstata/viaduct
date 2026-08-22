@@ -25,7 +25,8 @@ class QPlanEngineObjectDataTest {
 
     @Test
     fun `distinguishes absent null value and error selections`() {
-        val error = EngineErrorData.of()
+        val cause = IllegalStateException("source failure")
+        val error = EngineErrorData.of(cause)
         val data =
             engineObjectDataOf(
                 schemaType = userType,
@@ -44,10 +45,9 @@ class QPlanEngineObjectDataTest {
         assertNull(data.getOrNull("nickname"))
         assertTrue(data.isPresent("age"))
         assertSame(error, data.outputValue("age"))
-        assertSame(
-            error,
-            assertFailsWith<EngineErrorDataReadException> { data.get("age") }.errorData,
-        )
+        val readError = assertFailsWith<EngineErrorDataReadException> { data.get("age") }
+        assertSame(error, readError.errorData)
+        assertSame(cause, readError.cause)
         assertSame(
             error,
             assertFailsWith<EngineErrorDataReadException> { data.getOrNull("age") }.errorData,

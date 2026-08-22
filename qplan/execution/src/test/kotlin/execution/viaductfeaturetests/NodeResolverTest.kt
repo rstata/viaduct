@@ -221,7 +221,6 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("TODO: ErrorData")
     @Test
     fun `awaits completion for node in required selection set`() {
         EngineTestModule(schemaSDL) {
@@ -477,7 +476,6 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("TODO: ErrorData")
     @Test
     fun `node reference list with single item failure`() {
         EngineTestModule(schemaSDL) {

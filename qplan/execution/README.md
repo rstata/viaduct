@@ -140,6 +140,6 @@ The next path-provider question is whether to lift Resolver26's argument-free pr
 
 Nested input-object argument paths need a deliberate qplan representation before they can be recovered from multi-segment `FromArgument.path` values. From-Query paths and custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
 
-After variables, useful incremental steps are richer executor error preservation, asynchronous EOD support, requested-selection plumbing for selective executors, and a deliberate batching design. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
+After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, requested-selection plumbing for selective executors, and a deliberate batching design. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
 
 [Future work: From Qplan Execution Harness to an Engine Implementation](https://slate.airbnb.tools/zGyuI7hCin) analyzes the gap between the current execution harness and a production implementation of the three `Engine` API methods, including the recommended implementation sequence.

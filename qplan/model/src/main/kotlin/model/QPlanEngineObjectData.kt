@@ -204,7 +204,7 @@ internal interface QPlanEngineObjectData : EngineObjectData.Sync {
 
 internal class EngineErrorDataReadException(
     val errorData: EngineErrorData,
-) : RuntimeException()
+) : RuntimeException(errorData.cause)
 
 @OptIn(InternalApi::class)
 private class QPlanEngineObjectDataImpl(

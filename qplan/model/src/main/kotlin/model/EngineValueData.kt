@@ -64,13 +64,21 @@ typealias EngineOutputListData = List<EngineOutputData?>
  * carry complete causal and attributional metadata.
  */
 sealed interface EngineErrorData {
+    /** The executor failure represented by this error, when one crossed the adapter boundary. */
+    val cause: Throwable?
+
     companion object {
         /** Creates an output error with no metadata. */
-        fun of(): EngineErrorData = EngineErrorDataImpl()
+        fun of(): EngineErrorData = EngineErrorDataImpl(null)
+
+        /** Creates an output error retaining the exact executor [cause]. */
+        fun of(cause: Throwable): EngineErrorData = EngineErrorDataImpl(cause)
     }
 }
 
-private class EngineErrorDataImpl : EngineErrorData
+private class EngineErrorDataImpl(
+    override val cause: Throwable?,
+) : EngineErrorData
 
 /** Converts a simple engine result to production-compatible engine input data. */
 fun EngineResult.toEngineSimpleData(expectedType: ViaductSchema.SimpleTypeDef): EngineSimpleData =

@@ -4,11 +4,11 @@ This inventory covers files under `core/engine/runtime/src/test/kotlin` that inv
 
 Migration is atomic by source file. Once any file is migrated, every source test must be copied in source order; tests outside qplan's current supported surface remain present and are marked `@Disabled` with a specific reason. The counts below report migration state: a copied count smaller than the source count identifies an unfinished legacy migration, not a supported selective port.
 
-The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port production-test names and order now agree exactly. Together they contain 124 production tests: 34 currently pass through qplan and 90 remain disabled. Two enabled `ALTERNATIVE` tests separately state qplan-compatible behavior for confirmed incompatibilities.
+The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port production-test names and order now agree exactly. Together they contain 124 production tests: 36 currently pass through qplan and 88 remain disabled. Two enabled `ALTERNATIVE` tests separately state qplan-compatible behavior for confirmed incompatibilities.
 
 ## Observed Port Boundaries
 
-- **Execution:** `NodeResolverTest.kt` initially exposed two shared fixture-lowering gaps before Resolver26: incomplete feature-test modules omitted unrelated Query resolvers, and raw node lookups were required to repeat the ID already supplied by the producing field's fringe value. `TestWorld` now fills missing nullable Query fields with null producers and missing non-null Query fields with error producers, while node lowering makes the fringe ID authoritative when composing node lookup data, matching production's `NodeEngineObjectDataImpl`. Five node tests currently pass through qplan; eight remain disabled.
+- **Execution:** `NodeResolverTest.kt` initially exposed two shared fixture-lowering gaps before Resolver26: incomplete feature-test modules omitted unrelated Query resolvers, and raw node lookups were required to repeat the ID already supplied by the producing field's fringe value. `TestWorld` now fills missing nullable Query fields with null producers and missing non-null Query fields with error producers, while node lowering makes the fringe ID authoritative when composing node lookup data, matching production's `NodeEngineObjectDataImpl`. Seven node tests currently pass through qplan; six remain disabled.
 - **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
 - **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.
 - `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` uses a query required selection, which the executor adapter deliberately rejects.
@@ -33,7 +33,7 @@ intentional incompatibilities whose specific prose reasons are retained.
 | Directives | 6 | `Directive` |
 | Argument-bearing object-provider paths | 4 | `PathArgs` |
 | Mutations | 3 | `Mutation` |
-| Rich executor error preservation | 3 | `ErrorData` |
+| Rich executor error preservation | 1 | `ErrorData` |
 | Nested `FromArgument` paths | 2 | `NestedArg` |
 | Intentional semantic incompatibilities | 2 | `IntentDiff` |
 | Private-field schema adaptation | 1 | `PrivateFld` |

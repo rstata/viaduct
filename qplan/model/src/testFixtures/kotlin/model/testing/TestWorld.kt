@@ -223,7 +223,7 @@ private class TestWorldModule(
                 fieldResolverOf(
                     objectFragment = queryFragment,
                     function = { _, _ ->
-                        if (field.type.isNullable) null else EngineErrorData
+                        if (field.type.isNullable) null else EngineErrorData.of()
                     },
                 )
             }

@@ -208,7 +208,7 @@ suspend fun SelectionForest.mergeWithVariables(
                 if (continues) {
                     when (value) {
                         null -> VariableBinding.of(null)
-                        ErrorEngineResult -> VariableBinding.Error
+                        is ErrorEngineResult -> VariableBinding.Error
                         is ObjectEngineResult -> return@forEach
                         else ->
                             error(
@@ -236,7 +236,7 @@ private fun EngineResult?.toPathVariableBinding(
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
-        ErrorEngineResult -> VariableBinding.Error
+        is ErrorEngineResult -> VariableBinding.Error
         is ListEngineResult -> toPathVariableInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")

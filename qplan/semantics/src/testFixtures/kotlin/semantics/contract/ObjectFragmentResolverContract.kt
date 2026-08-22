@@ -500,7 +500,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
         assertEquals(3, items.size)
         assertEquals(null, items[0].get())
-        assertEquals(ErrorEngineResult, items[1].get())
+        assertIs<ErrorEngineResult>(items[1].get())
         val item = assertIs<ObjectEngineResult>(items[2].get())
         assertEquals(
             6,

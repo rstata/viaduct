@@ -18,6 +18,7 @@ import semantics.contract.Resolver25StructuralSignature
 import semantics.contract.resolver25StructuralSignatures
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class AdversarialRegressionTest {
     @Test
@@ -27,7 +28,7 @@ class AdversarialRegressionTest {
 
     @Test
     fun `nested provider propagates error through an intermediate`() {
-        assertNestedProviderShortCircuit(provided = EngineErrorData, passiveIntermediate = false)
+        assertNestedProviderShortCircuit(provided = EngineErrorData.of(), passiveIntermediate = false)
     }
 
     @Test
@@ -37,20 +38,20 @@ class AdversarialRegressionTest {
 
     @Test
     fun `nested provider propagates error through a passive intermediate`() {
-        assertNestedProviderShortCircuit(provided = EngineErrorData, passiveIntermediate = true)
+        assertNestedProviderShortCircuit(provided = EngineErrorData.of(), passiveIntermediate = true)
     }
 
     private fun assertNestedProviderShortCircuit(
         provided: EngineOutputData?,
         passiveIntermediate: Boolean,
     ) {
+        val isError = provided is EngineErrorData
         val expectedBinding =
-            if (provided == EngineErrorData) {
+            if (isError) {
                 VariableBinding.Error
             } else {
                 VariableBinding.of(null)
             }
-        val expectedResult = if (provided == EngineErrorData) ErrorEngineResult else null
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {
             val providerSelection =
                 if (passiveIntermediate) {
@@ -58,7 +59,7 @@ class AdversarialRegressionTest {
                 } else {
                     "box { value }"
                 }
-            val providedResult = if (provided == EngineErrorData) "\"ERROR\"" else "null"
+            val providedResult = if (isError) "\"ERROR\"" else "null"
             val boxResult =
                 if (passiveIntermediate) {
                     "{nested: $providedResult}"
@@ -125,7 +126,12 @@ class AdversarialRegressionTest {
                 },
             )
 
-            assertEquals<EngineResult?>(expectedResult, resolved.getCell(resultKey).getValue().get())
+            val resultValue = resolved.getCell(resultKey).getValue().get()
+            if (isError) {
+                assertIs<ErrorEngineResult>(resultValue)
+            } else {
+                assertEquals<EngineResult?>(null, resultValue)
+            }
             assertEquals(
                 expectedBinding,
                 world.getBinding(

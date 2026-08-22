@@ -21,7 +21,10 @@ class ContextParametersTest {
             }
 
         assertIs<EngineObjectData.Sync>(result)
-        assertEquals(source, result)
+        assertEquals(source.getSelections().toList(), result.getSelections().toList())
+        source.getSelections().forEach { selection ->
+            assertEquals(source.get(selection), result.get(selection))
+        }
         assertEquals(world.schema.requireQueryTypeDef(), result.schemaType)
     }
 
@@ -35,7 +38,10 @@ class ContextParametersTest {
                 source.copyTwiceInWorld()
             }
 
-        assertEquals(source, result)
+        assertEquals(source.getSelections().toList(), result.getSelections().toList())
+        source.getSelections().forEach { selection ->
+            assertEquals(source.get(selection), result.get(selection))
+        }
     }
 
     @Test

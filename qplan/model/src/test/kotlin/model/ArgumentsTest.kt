@@ -29,7 +29,7 @@ class ArgumentsTest {
 
         assertEquals(7, arguments.fieldValues.getValue("value"))
         assertFailsWith<ClassCastException> {
-            Arguments.Resolved.of(consume, mapOf("value" to EngineErrorData))
+            Arguments.Resolved.of(consume, mapOf("value" to EngineErrorData.of()))
         }
     }
 

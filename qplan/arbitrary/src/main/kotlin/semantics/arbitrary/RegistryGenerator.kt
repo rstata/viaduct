@@ -2148,7 +2148,7 @@ internal data object ErrorPlan : ValuePlan {
         typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
-    ): EngineOutputData = EngineErrorData
+    ): EngineOutputData = EngineErrorData.of()
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
 }

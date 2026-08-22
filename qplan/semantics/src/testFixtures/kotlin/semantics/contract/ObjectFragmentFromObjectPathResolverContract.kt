@@ -10,6 +10,7 @@ import model.VariableBinding
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 /**
  * Contract for resolver variables read from exact paths in the defining object fragment.
@@ -112,10 +113,12 @@ interface ObjectFragmentFromObjectPathResolverContract :
                         .variable
                 }
 
-            assertEquals<EngineResult?>(
-                if (isError) ErrorEngineResult else null,
-                resolved.getCell(resultKey).get(),
-            )
+            val resultValue = resolved.getCell(resultKey).get()
+            if (isError) {
+                assertIs<ErrorEngineResult>(resultValue)
+            } else {
+                assertEquals<EngineResult?>(null, resultValue)
+            }
             assertEquals(
                 if (isError) {
                     VariableBinding.Error
@@ -126,7 +129,11 @@ interface ObjectFragmentFromObjectPathResolverContract :
             )
             assertEquals("consume", consumedKey)
             assertEquals(true, observedResultInput)
-            assertEquals(if (isError) EngineErrorData else null, consumedValue)
+            if (isError) {
+                assertIs<EngineErrorData>(consumedValue)
+            } else {
+                assertEquals(null, consumedValue)
+            }
         }
     }
 

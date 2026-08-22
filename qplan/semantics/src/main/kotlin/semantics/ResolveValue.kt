@@ -59,7 +59,8 @@ internal fun EngineOutputData?.resolveValue(
     }
     return when (this) {
         null -> ResolvedValue(null, emptyList(), emptyList())
-        EngineErrorData -> ResolvedValue(ErrorEngineResult, emptyList(), emptyList())
+        is EngineErrorData ->
+            ResolvedValue(ErrorEngineResult.of(this), emptyList(), emptyList())
         is EngineObjectData.Sync -> resolveObjectValue(resolverDemand, path)
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())

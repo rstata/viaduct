@@ -364,7 +364,7 @@ class FromObjectFieldTest {
                     .filter { field -> field.name != "V_A_typename" }
                     .associateWith {
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                            EngineErrorData
+                            EngineErrorData.of()
                         }
                     } +
                     mapOf(

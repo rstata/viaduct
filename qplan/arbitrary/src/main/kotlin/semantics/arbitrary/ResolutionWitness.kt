@@ -358,7 +358,7 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
                 bounds.maxResultNodes,
             )
         }
-        if (value == null || value == ErrorEngineResult) return
+        if (value == null || value is ErrorEngineResult) return
 
         when (value) {
             is ObjectEngineResult -> {
@@ -500,6 +500,14 @@ fun EngineObjectData.Sync.resolutionFingerprint(
         FingerprintBudget(bounds).output(this),
     )
 
+/** A deterministic structural comparison key for the heterogeneous output-data union. */
+internal fun EngineOutputData?.outputResolutionFingerprint(
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+): ResolutionFingerprint =
+    ResolutionFingerprint(
+        FingerprintBudget(bounds).output(this),
+    )
+
 fun SelectionForest.resolutionFingerprint(
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): ResolutionFingerprint =
@@ -549,7 +557,7 @@ private class FingerprintBudget(
     fun output(value: EngineOutputData?): String =
         when {
             value == null -> node("null")
-            value == EngineErrorData -> node("error")
+            value is EngineErrorData -> node("error")
             value is Int -> node("int:$value")
             value is Double -> node("float:${value.toBits()}")
             value is String -> node("string:${atom(value)}")

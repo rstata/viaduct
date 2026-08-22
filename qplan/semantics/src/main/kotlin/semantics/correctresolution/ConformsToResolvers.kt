@@ -123,7 +123,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
 ): Boolean =
     when (this) {
         null,
-        ErrorEngineResult,
+        is ErrorEngineResult,
         -> true
 
         is ObjectEngineResult -> objectConformsToResolvers(path)
@@ -143,7 +143,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 ): Boolean =
     when (this) {
         null -> resolverValue == null
-        ErrorEngineResult -> resolverValue == EngineErrorData
+        is ErrorEngineResult -> resolverValue is EngineErrorData
 
         is ObjectEngineResult ->
             resolverValue is EngineObjectData.Sync &&

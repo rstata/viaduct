@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import model.Assumptions
+import model.EngineErrorData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
@@ -96,8 +97,9 @@ private suspend fun resolveSlot(
     val valuePromise = cell.getValue()
     when (val arguments = key.arguments) {
         Arguments.Error -> {
-            valuePromise.complete(ErrorEngineResult)
-            cell.setAccessResult(ErrorEngineResult)
+            val errorResult = ErrorEngineResult.of(EngineErrorData.of())
+            valuePromise.complete(errorResult)
+            cell.setAccessResult(errorResult)
         }
         is Arguments.Resolved ->
             coroutineScope {

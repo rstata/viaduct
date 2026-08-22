@@ -66,7 +66,7 @@ private fun EngineResult?.engineResultConformsToSelections(
 ): Boolean =
     when (this) {
         null,
-        ErrorEngineResult,
+        is ErrorEngineResult,
         -> true
 
         is ObjectEngineResult ->

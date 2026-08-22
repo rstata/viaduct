@@ -63,10 +63,8 @@ class ResolverRegistryTest {
                             fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { parent, arguments ->
-                                    assertEquals(
-                                        schema.objectOf("Query"),
-                                        parent,
-                                    )
+                                    assertEquals(schema.requireQueryTypeDef(), parent.schemaType)
+                                    assertTrue(parent.getSelections().none())
                                     assertTrue(arguments.fieldValues.isEmpty())
                                     schema.objectOf("User") {
                                         "id" setTo "42"
@@ -117,9 +115,9 @@ class ResolverRegistryTest {
         val objectFragment = payloadResolver.objectFragment
         assertEquals(1, objectFragment.size)
         assertEquals(bridgeIdField, objectFragment.single().key.field)
-        assertEquals(
-            user,
-            context(assumptions) {
+        val payloadValue =
+            assertIs<EngineObjectData.Sync>(
+                context(assumptions) {
                 payloadResolver(
                     input = bridgeObject,
                     arguments = Arguments.Resolved.of(payloadField, emptyMap()),
@@ -133,8 +131,13 @@ class ResolverRegistryTest {
                             """.trimIndent(),
                         ).subselections,
                 )
-            },
-        )
+                },
+            )
+        assertEquals(user.schemaType, payloadValue.schemaType)
+        assertEquals(user.getSelections().toSet(), payloadValue.getSelections().toSet())
+        user.getSelections().forEach { selection ->
+            assertEquals(user.get(selection), payloadValue.get(selection))
+        }
         assertEquals(listOf("user_V_A_node", "node"), observedFields)
     }
 
@@ -268,7 +271,7 @@ class ResolverRegistryTest {
                         schema.requireField("Query", "nullable") to
                             fieldResolverOf(fragment) { _, _ -> null },
                         schema.requireField("Query", "failed") to
-                            fieldResolverOf(fragment) { _, _ -> EngineErrorData },
+                            fieldResolverOf(fragment) { _, _ -> EngineErrorData.of() },
                     )
                 },
             )
@@ -293,7 +296,7 @@ class ResolverRegistryTest {
             outputs.getValue("list"),
         )
         assertEquals(null, outputs.getValue("nullable"))
-        assertEquals(EngineErrorData, outputs.getValue("failed"))
+        assertIs<EngineErrorData>(outputs.getValue("failed"))
 
         outputs.forEach { (_, output) ->
             val projection =
@@ -475,7 +478,7 @@ class ResolverRegistryTest {
 
         assertEquals(7, resolve("supplied"))
         assertEquals(null, resolve("nullable"))
-        assertEquals(EngineErrorData, resolve("required"))
+        assertIs<EngineErrorData>(resolve("required"))
     }
 
     @Test

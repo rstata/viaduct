@@ -203,7 +203,7 @@ private fun EngineResult?.sameSelectedResultAs(
 ): Boolean {
     if (this == null || other == null) return this == other
     return when (this) {
-        ErrorEngineResult -> other == ErrorEngineResult
+        is ErrorEngineResult -> other is ErrorEngineResult
         is ListEngineResult ->
             other is ListEngineResult &&
                 typeExpr == other.typeExpr &&
@@ -232,7 +232,7 @@ private fun EngineResult?.sameSelectedResultAs(
                                 )
                     }
         else ->
-            other != ErrorEngineResult &&
+            other !is ErrorEngineResult &&
                 other !is ListEngineResult &&
                 other !is ObjectEngineResult &&
                 this == other

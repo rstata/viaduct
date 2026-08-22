@@ -513,7 +513,10 @@ class SelectionMergeTest {
         assertTrue(continued.second.isEmpty())
         assertEquals(mapOf(variable to VariableBinding.of(leafValue)), terminal.second)
 
-        listOf<EngineResult?>(null, ErrorEngineResult).forEach { prematureValue ->
+        listOf<EngineResult?>(
+            null,
+            ErrorEngineResult.of(EngineErrorData.of()),
+        ).forEach { prematureValue ->
             val prematureResult =
                 ObjectEngineResult.of(
                     fixture.query,
@@ -529,7 +532,7 @@ class SelectionMergeTest {
             assertEquals(
                 mapOf<Arguments.Variable, VariableBinding>(
                     variable to
-                        if (prematureValue == ErrorEngineResult) {
+                        if (prematureValue is ErrorEngineResult) {
                             VariableBinding.Error
                         } else {
                             VariableBinding.of(null)

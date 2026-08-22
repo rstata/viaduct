@@ -76,7 +76,7 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("TODO: AccessChk QplanBug")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `resolver with checker test`() {
         var checkerExecuted = false

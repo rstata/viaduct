@@ -31,7 +31,6 @@ intentional incompatibilities whose specific prose reasons are retained.
 | Likely mechanical adapter enablement | 5 | `MechAdapt` |
 | Abstract-type/runtime applicability | 6 | `Abstract` |
 | Directives | 6 | `Directive` |
-| Qplan bugs | 4 | `QplanBug` |
 | Argument-bearing object-provider paths | 4 | `PathArgs` |
 | Mutations | 3 | `Mutation` |
 | Rich executor error preservation | 3 | `ErrorData` |

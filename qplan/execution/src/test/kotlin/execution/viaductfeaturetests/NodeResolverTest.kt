@@ -221,7 +221,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("TODO: QplanBug ErrorData")
+    @Disabled("TODO: ErrorData")
     @Test
     fun `awaits completion for node in required selection set`() {
         EngineTestModule(schemaSDL) {

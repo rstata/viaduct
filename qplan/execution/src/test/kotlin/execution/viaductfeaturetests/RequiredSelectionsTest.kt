@@ -2472,7 +2472,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: QueryRss VarCallbk Directive QplanBug")
+    @Disabled("TODO: QueryRss VarCallbk Directive")
     @Test
     fun `query rss variable resolver is planned when repeated fragment spread has runtime directive`() {
         // Query.a has a query RSS that spreads the same fragment twice: once behind a runtime
@@ -2519,7 +2519,7 @@ class RequiredSelectionsTest {
      * must not fire when the runtime type is Foo, not Bar. Before the fix, Bar.value's checker
      * could leak into resolution of Foo.value because isRootType permitted any root-type parent.
      */
-    @Disabled("TODO: AccessChk QueryRss Abstract QplanBug")
+    @Disabled("TODO: AccessChk QueryRss Abstract")
     @Test
     fun `field-level checker RSS rooted on Query does not leak into sibling interface implementor`() {
         val sdl = """

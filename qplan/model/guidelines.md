@@ -28,7 +28,7 @@ Each source-backed canonical `ViaductSchema.Object` retains the exact GraphQL-Ja
 
 A variable template is identified by its local name and defining concrete resolver field. Its `stamp` is null. Stamping at an exact OER path creates an occurrence-specific variable carrying a `Stamp.Occurrence`. Resolver1 through Resolver25 use an empty occurrence lineage; Resolver26 adds selection-occurrence lineage as it crosses ungrounded resolver boundaries. Request-local `Assumptions` stores one declared promise per stamped variable: synchronous semantic operations read completed bindings, while coroutine operations may suspend for them.
 
-Registry assembly compiles `FromObjectField` declarations to contained canonical key paths and validates an acyclic provider/use order before reasoning. Resolver25 and Resolver26 evaluate those providers at runtime; older maintained resolvers support only `FromArgument`.
+Registry assembly compiles `FromArgument` declarations to canonical input paths rooted at a resolver argument and compiles `FromObjectField` declarations to contained canonical object-key paths. Argument paths may traverse input objects, short-circuit to null at a null intermediate, and never traverse a list. Registry assembly validates an acyclic provider/use order before reasoning. Every maintained resolver evaluates `FromArgument`; Resolver25 and Resolver26 additionally evaluate `FromObjectField` at runtime.
 
 `ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to OER cells, exact paths, materialization lookup, dependency ordering, and resolver application.
 

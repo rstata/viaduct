@@ -414,9 +414,7 @@ private fun CloseInputDemandResult.prepareBindings() {
                     if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
                         world.bindVariable(
                             stampedDefinition.variable,
-                            expansion.ownerKey.arguments.bindingFor(
-                                definition.argument.name,
-                            ),
+                            expansion.ownerKey.arguments.bindingFor(definition),
                         )
                     } else {
                         world.declareBinding(stampedDefinition.variable)
@@ -494,7 +492,7 @@ private fun ResolverExpansion.completeFromArgumentBindings(groundKey: ObjectEngi
         val definition = stampedDefinition.definition as VariableDefinition.FromArgument
         world.completeBinding(
             stampedDefinition.variable,
-            groundKey.arguments.bindingFor(definition.argument.name),
+            groundKey.arguments.bindingFor(definition),
         )
     }
 }
@@ -575,10 +573,12 @@ private suspend fun resolveField(
     cell.setAccessResult(true)
 }
 
-private fun Arguments.Ground.bindingFor(argumentName: String): VariableBinding =
+private fun Arguments.Ground.bindingFor(
+    definition: VariableDefinition.FromArgument,
+): VariableBinding =
     when (this) {
         Arguments.Error -> VariableBinding.Error
-        is Arguments.Resolved -> VariableBinding.of(fieldValues.getValue(argumentName))
+        is Arguments.Resolved -> VariableBinding.of(definition.read(this))
     }
 
 // Returns whether this occurrence is a top-level object or list element in one resolver output.

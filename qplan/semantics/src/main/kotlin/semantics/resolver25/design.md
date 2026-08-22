@@ -45,7 +45,7 @@ If later demand arrives before launch, it contributes to the key's open demand. 
 
 Preparing one resolver-backed key:
 
-1. completes `FromArgument` bindings from the exact key;
+1. completes `FromArgument` bindings by reading each canonical input path from the exact key;
 2. declares its stamped `FromObjectField` bindings;
 3. contributes the resolver's stamped object fragment as actual demand; and
 4. launches provider readers that complete object-field bindings from published OER values.

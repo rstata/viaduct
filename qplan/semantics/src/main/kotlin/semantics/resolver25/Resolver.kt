@@ -515,7 +515,8 @@ private class ObjectResultOrchestrator(
                     variable = variable,
                     source =
                         Resolver25BindingSource.FromArgument(
-                            definition.argument.name,
+                            listOf(definition.argument.name) +
+                                definition.inputPath.map { field -> field.name },
                         ),
                 )
             },

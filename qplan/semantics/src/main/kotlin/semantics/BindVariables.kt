@@ -40,10 +40,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
             .forEach { (variable, definition) ->
                 if (definition is VariableDefinition.FromArgument) {
                     val stamped = variable.stamp(path + key)
-                    val value =
-                        arguments.fieldValues.getValue(
-                            definition.argument.name,
-                        )
+                    val value = definition.read(arguments)
                     onDeclared(stamped, definition)
                     world.declareBinding(stamped)
                     onCompleted(stamped, definition, value)

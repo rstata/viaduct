@@ -141,7 +141,7 @@ private fun EngineOutputData?.unwrapNodeBridge(
     require(this is EngineObjectData.Sync) {
         "Node bridge value for $type is not an object"
     }
-    return get(NODE_BRIDGE_PAYLOAD_FIELD)
+    return outputValue(NODE_BRIDGE_PAYLOAD_FIELD)
 }
 
 internal val qplanEngineObjectDataTypeKey =
@@ -172,7 +172,23 @@ val EngineObjectData.Sync.schemaType: ViaductSchema.Object
         }
 
 internal val EngineObjectData.Sync.qplanSchemaTypeOrNull: ViaductSchema.Object?
-    get() = (this as? QPlanEngineObjectDataImpl)?.schemaType
+    get() = (this as? QPlanEngineObjectData)?.schemaType
+
+/**
+ * Returns a qplan-owned selection in the engine output domain without applying resolver-read
+ * error behavior.
+ *
+ * This is a temporary workaround for [EngineObjectData.Sync.get] and [EngineObjectData.fetch]
+ * exposing a present error as an exception. Those operations should instead return the stored
+ * [EngineErrorData], leaving the Tenant API implementation responsible for converting an erroneous
+ * field read into a tenant-visible exception.
+ */
+fun EngineObjectData.Sync.outputValue(selection: String): EngineOutputData? {
+    require(this is QPlanEngineObjectData) {
+        "Engine object data for ${type.name} is not owned by qplan"
+    }
+    return outputValue(selection)
+}
 
 private data class EngineObjectDataEntryImpl(
     override val selection: String,
@@ -180,12 +196,22 @@ private data class EngineObjectDataEntryImpl(
     override val value: EngineOutputData?,
 ) : EngineObjectDataEntry
 
+internal interface QPlanEngineObjectData : EngineObjectData.Sync {
+    val schemaType: ViaductSchema.Object
+
+    fun outputValue(selection: String): EngineOutputData?
+}
+
+internal class EngineErrorDataReadException(
+    val errorData: EngineErrorData,
+) : RuntimeException()
+
 @OptIn(InternalApi::class)
 private class QPlanEngineObjectDataImpl(
     override val type: GraphQLObjectType,
-    val schemaType: ViaductSchema.Object,
+    override val schemaType: ViaductSchema.Object,
     values: Map<String, EngineOutputData?>,
-) : EngineObjectData.Sync {
+) : QPlanEngineObjectData {
     private val values = values.toMap()
 
     override suspend fun fetch(selection: String): Any? = get(selection)
@@ -195,6 +221,14 @@ private class QPlanEngineObjectDataImpl(
     override suspend fun fetchSelections(): Iterable<String> = getSelections()
 
     override fun get(selection: String): Any? {
+        val value = outputValue(selection)
+        value.firstErrorDataOrNull()?.let { errorData ->
+            throw EngineErrorDataReadException(errorData)
+        }
+        return value
+    }
+
+    override fun outputValue(selection: String): EngineOutputData? {
         if (!isPresent(selection)) {
             throw UnsetFieldException(
                 selection,
@@ -206,7 +240,7 @@ private class QPlanEngineObjectDataImpl(
     }
 
     override fun getOrNull(selection: String): Any? =
-        if (isPresent(selection)) values[selection] else null
+        if (isPresent(selection)) get(selection) else null
 
     override fun isPresent(selection: String): Boolean = selection in values
 
@@ -214,3 +248,10 @@ private class QPlanEngineObjectDataImpl(
 
     override fun toString(): String = "type=${type.name} values=$values"
 }
+
+private fun EngineOutputData?.firstErrorDataOrNull(): EngineErrorData? =
+    when (this) {
+        is EngineErrorData -> this
+        is List<*> -> firstNotNullOfOrNull { value -> value.firstErrorDataOrNull() }
+        else -> null
+    }

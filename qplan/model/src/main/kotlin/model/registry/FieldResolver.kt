@@ -6,6 +6,7 @@ import model.ObjectEngineResult
 
 import java.util.IdentityHashMap
 import model.Assumptions
+import model.EngineErrorDataReadException
 import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
@@ -267,8 +268,13 @@ class FieldResolver private constructor(
         selections: SelectionForest,
     ): EngineOutputData? {
         applicationObserver(input, arguments, selections)
-        return function(input, arguments)
-            .snipToDemand(projectionDemand(selections))
+        val output =
+            try {
+                function(input, arguments)
+            } catch (exception: EngineErrorDataReadException) {
+                exception.errorData
+            }
+        return output.snipToDemand(projectionDemand(selections))
     }
 
     /**
@@ -279,7 +285,11 @@ class FieldResolver private constructor(
         arguments: Arguments.Resolved,
     ): EngineOutputData? {
         applicationObserver(input, arguments, null)
-        return function(input, arguments)
+        return try {
+            function(input, arguments)
+        } catch (exception: EngineErrorDataReadException) {
+            exception.errorData
+        }
     }
 
     companion object {

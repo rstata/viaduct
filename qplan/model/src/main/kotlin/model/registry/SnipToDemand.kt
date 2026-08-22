@@ -13,6 +13,7 @@ import model.engineObjectDataOf
 import model.instantiateBindings
 import model.merge
 import model.objectKey
+import model.outputValue
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 
@@ -89,7 +90,7 @@ private fun EngineObjectData.Sync.snipObjectToDemand(
                     "Passive object field ${schemaType.name}/${concreteField.name} " +
                         "must be argumentless"
                 }
-                val value = get(concreteField.name)
+                val value = outputValue(concreteField.name)
                 val selectedValue =
                     if (concreteField.type.baseTypeDef is ViaductSchema.SimpleTypeDef) {
                         value

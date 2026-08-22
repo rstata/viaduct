@@ -16,6 +16,7 @@ import model.PathComponent
 import model.Selection
 import model.SelectionForest
 import model.inputType
+import model.outputValue
 import model.requireArg
 import model.requireField
 import viaduct.engine.api.EngineObjectData
@@ -573,7 +574,7 @@ private class FingerprintBudget(
                     "object:${atom(value.type.name)}{" +
                         value.getSelections()
                             .map { selection ->
-                                atom(selection) + "=" + output(value.get(selection))
+                                atom(selection) + "=" + output(value.outputValue(selection))
                             }.sorted()
                             .joinToString(",") +
                         "}",

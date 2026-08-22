@@ -43,12 +43,21 @@ class QPlanEngineObjectDataTest {
         assertNull(data.get("nickname"))
         assertNull(data.getOrNull("nickname"))
         assertTrue(data.isPresent("age"))
-        assertSame(error, data.get("age"))
+        assertSame(error, data.outputValue("age"))
+        assertSame(
+            error,
+            assertFailsWith<EngineErrorDataReadException> { data.get("age") }.errorData,
+        )
+        assertSame(
+            error,
+            assertFailsWith<EngineErrorDataReadException> { data.getOrNull("age") }.errorData,
+        )
 
         assertFalse(data.isPresent("missing"))
         assertNull(data.getOrNull("missing"))
         val exception = assertFailsWith<UnsetFieldException> { data.get("missing") }
         assertEquals("User", exception.typeName)
+        assertFailsWith<UnsetFieldException> { data.outputValue("missing") }
     }
 
     @Test
@@ -68,7 +77,16 @@ class QPlanEngineObjectDataTest {
 
             assertEquals("Ada", data.fetch("name"))
             assertNull(data.fetch("nickname"))
-            assertSame(error, data.fetch("age"))
+            assertSame(
+                error,
+                assertFailsWith<EngineErrorDataReadException> { data.fetch("age") }.errorData,
+            )
+            assertSame(
+                error,
+                assertFailsWith<EngineErrorDataReadException> {
+                    data.fetchOrNull("age")
+                }.errorData,
+            )
             assertNull(data.fetchOrNull("missing"))
             assertEquals(
                 listOf("name", "nickname", "age"),
@@ -76,6 +94,19 @@ class QPlanEngineObjectDataTest {
             )
             assertFailsWith<UnsetFieldException> { data.fetch("missing") }
         }
+
+    @Test
+    fun `resolver reads surface errors nested in lists while outputValue preserves the list`() {
+        val error = EngineErrorData.of()
+        val scores: EngineOutputListData = listOf(1, error, 3)
+        val data = engineObjectDataOf(userType, mapOf("scores" to scores))
+
+        assertSame(scores, data.outputValue("scores"))
+        assertSame(
+            error,
+            assertFailsWith<EngineErrorDataReadException> { data.get("scores") }.errorData,
+        )
+    }
 
     @Test
     fun `supports response aliases without exposing schema field metadata`() {
@@ -228,6 +259,7 @@ class QPlanEngineObjectDataTest {
               name: String!
               nickname: String
               age: Int
+              scores: [Int]
               friend(limit: Int): User
             }
 

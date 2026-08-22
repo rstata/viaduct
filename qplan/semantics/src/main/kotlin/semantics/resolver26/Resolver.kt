@@ -17,6 +17,7 @@ import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.outputType
+import model.outputValue
 import model.Arguments
 import model.ObjectSelection
 import model.ObjectSelectionForest
@@ -280,7 +281,7 @@ private suspend fun orchestrateObject(
                     "${groundKey.field.name} must be argumentless"
             }
             val sourceValue: EngineOutputData? =
-                source.get(groundKey.field.name)
+                source.outputValue(groundKey.field.name)
             if (!target.isCellSet(groundKey)) {
                 val resolvedValue: ResolvedValue =
                     sourceValue.resolveValue(

@@ -597,7 +597,7 @@ private class ObjectResultOrchestrator(
             diagnosticInstrumentation.cycleCheck(reader, cell)
             val value = cell.getValue().await()
             if (value == null) return VariableBinding.of(null)
-            if (value == ErrorEngineResult) return VariableBinding.Error
+            if (value is ErrorEngineResult) return VariableBinding.Error
             if (index == definition.path.lastIndex) {
                 return value.toProviderBinding(groundedKey.field.outputType)
             }
@@ -619,7 +619,7 @@ private class ObjectResultOrchestrator(
     ): List<Deferred<Unit>> =
         when (this) {
             null,
-            EngineErrorData,
+            is EngineErrorData,
             is Int,
             is Double,
             is String,
@@ -729,13 +729,15 @@ private class ObjectResultOrchestrator(
         runtime.instrumentation.demandSealed(coordinate, selection)
         when {
             groundedKey.arguments.argumentsContainErrorValue() -> {
+                val errorData = EngineErrorData.of()
+                val errorResult = ErrorEngineResult.of(errorData)
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
-                    AvailableKeyOutput(EngineErrorData, ErrorEngineResult),
+                    AvailableKeyOutput(errorData, errorResult),
                 )
                 runtime.instrumentation.valuePublished(coordinate)
-                cell.getValue().complete(ErrorEngineResult)
-                cell.setAccessResult(ErrorEngineResult)
+                cell.getValue().complete(errorResult)
+                cell.setAccessResult(errorResult)
             }
             else -> {
                 val resolutionSelections: SelectionForest =
@@ -984,7 +986,7 @@ private suspend fun EngineOutputData?.resolveValue(
     }
     return when (this) {
         null -> ResolvedValue(null, emptyList())
-        EngineErrorData -> ResolvedValue(ErrorEngineResult, emptyList())
+        is EngineErrorData -> ResolvedValue(ErrorEngineResult.of(this), emptyList())
         is EngineObjectData.Sync ->
             resolveObjectValue(
                 path = path,
@@ -1137,7 +1139,7 @@ private fun EngineResult.toProviderBinding(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
-        ErrorEngineResult -> VariableBinding.Error
+        is ErrorEngineResult -> VariableBinding.Error
         is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")

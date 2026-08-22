@@ -207,7 +207,7 @@ object ResolverBenchmarkCorpusSearch {
         beneathList: Boolean = false,
     ): ResultShape =
         when (this) {
-            null, ErrorEngineResult -> ResultShape()
+            null, is ErrorEngineResult -> ResultShape()
             is ListEngineResult ->
                 indices
                     .map { index ->

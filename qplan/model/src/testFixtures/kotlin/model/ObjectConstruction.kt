@@ -119,7 +119,7 @@ private fun coerceOutputValue(
     typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     value: Any?,
 ): EngineOutputData? {
-    if (value == null || value == EngineErrorData) return value
+    if (value == null || value is EngineErrorData) return value
 
     val elementType = typeExpr.unwrapList()
     if (elementType != null) {

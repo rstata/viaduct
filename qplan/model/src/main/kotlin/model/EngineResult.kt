@@ -10,7 +10,8 @@ import model.invariants.conformsToResultSchemaType
  * The semantic union contains Int, finite Double, Boolean, String, [EngineIDResult],
  * [ViaductSchema.EnumValue], [ObjectEngineResult], [ListEngineResult], or [ErrorEngineResult]. Nullable
  * uses additionally represent GraphQL null. Membership and schema compatibility are enforced by
- * result constructors and cell completion boundaries.
+ * result constructors and cell completion boundaries. This union is equality-heterogeneous;
+ * equality is defined only after narrowing to a member or homogeneous subset.
  */
 typealias EngineResult = Any
 
@@ -75,12 +76,25 @@ sealed interface EngineResultCell {
 }
 
 /**
- * The collapsed error result. Error metadata, paths, and multiplicity are intentionally omitted.
+ * The field-resolution error variant.
  *
- * ViaductSchema conformance admits this sibling result variant at every output type expression. It is not
- * a Kotlin bottom subtype and exposes no simple, object, or list result properties.
+ * ViaductSchema conformance admits this sibling result variant at every output type expression. It is
+ * not a Kotlin bottom subtype and exposes no simple, object, or list result properties. Instances
+ * use reference equality and preserve the complete metadata-bearing [errorData] represented at this
+ * result location.
  */
-data object ErrorEngineResult
+sealed interface ErrorEngineResult {
+    val errorData: EngineErrorData
+
+    companion object {
+        /** Creates the result-domain representation of [errorData]. */
+        fun of(errorData: EngineErrorData): ErrorEngineResult = ErrorEngineResultImpl(errorData)
+    }
+}
+
+private class ErrorEngineResultImpl(
+    override val errorData: EngineErrorData,
+) : ErrorEngineResult
 
 /**
  * A finite object result whose exact cells are installed once.
@@ -483,7 +497,7 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
     if (this == null || other == null) return this == other
 
     return when (this) {
-        ErrorEngineResult -> other == ErrorEngineResult
+        is ErrorEngineResult -> other is ErrorEngineResult
         is ListEngineResult ->
             other is ListEngineResult &&
                 typeExpr == other.typeExpr &&
@@ -499,14 +513,22 @@ private fun EngineResultCell.hasSameCompletedCellAs(other: EngineResultCell): Bo
     val leftValue = completedValue
     val rightValue = other.completedValue
     return leftValue.hasSameCompletedResultAs(rightValue) &&
-        completedAccessResult == other.completedAccessResult
+        completedAccessResult.hasSameCompletedAccessResultAs(other.completedAccessResult)
 }
+
+private fun EngineResult?.hasSameCompletedAccessResultAs(other: EngineResult?): Boolean =
+    when (this) {
+        is ErrorEngineResult -> other is ErrorEngineResult
+        else -> this == other
+    }
 
 /**
  * Returns the structural union of this nullable result and [other].
  *
  * Two null values have a null union. A null and non-null value have no union. For two non-null
- * values, this partial mathematical function is defined only for results of the same variant.
+ * values, this partial mathematical function is defined only for results of the same variant. Two
+ * error results additionally require the same [EngineErrorData] carrier so union cannot discard
+ * error metadata.
  *
  * @throws IllegalArgumentException when the union is undefined
  */
@@ -518,11 +540,14 @@ internal fun EngineResult?.union(other: EngineResult?): EngineResult? {
     require(other != null) { "Cannot union null and non-null engine results" }
 
     return when (this) {
-        ErrorEngineResult -> {
-            require(other == ErrorEngineResult) {
+        is ErrorEngineResult -> {
+            require(other is ErrorEngineResult) {
                 "Cannot union error and non-error engine results"
             }
-            ErrorEngineResult
+            require(errorData === other.errorData) {
+                "Cannot union engine results containing distinct errors"
+            }
+            this
         }
 
         is ListEngineResult -> {
@@ -962,7 +987,7 @@ private fun ObjectEngineResult.sameCompletedObjectResultAs(other: ObjectEngineRe
 private fun EngineResult?.requireCompleted() {
     when (this) {
         null,
-        ErrorEngineResult,
+        is ErrorEngineResult,
         -> Unit
         is ListEngineResult ->
             indices.forEach { index -> get(index).implementation.requireCompleted() }
@@ -1031,7 +1056,7 @@ private fun validateObjectValue(
     value: EngineResult?,
 ) {
     if (field.arguments == Arguments.Error) {
-        require(value == ErrorEngineResult) {
+        require(value is ErrorEngineResult) {
             "A key with erroneous arguments must contain an error value"
         }
     }
@@ -1050,7 +1075,7 @@ private fun EngineResult.isScalarResultMember(): Boolean =
         this is ViaductSchema.EnumValue
 
 private fun validateAccessResult(result: EngineResult) {
-    require(result is Boolean || result == ErrorEngineResult) {
+    require(result is Boolean || result is ErrorEngineResult) {
         "Cell access result must be Boolean or ErrorEngineResult"
     }
 }

@@ -2,6 +2,7 @@ package semantics
 
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.EngineErrorData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ObjectEngineResult
@@ -109,8 +110,9 @@ internal fun EngineObjectData.Sync.resolveKey(
     val cell = resolved.reserveCell(key)
     return when (val arguments = key.arguments) {
         Arguments.Error -> {
-            cell.setValue(ErrorEngineResult)
-            cell.setAccessResult(ErrorEngineResult)
+            val errorResult = ErrorEngineResult.of(EngineErrorData.of())
+            cell.setValue(errorResult)
+            cell.setAccessResult(errorResult)
             null
         }
 

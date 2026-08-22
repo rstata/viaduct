@@ -56,7 +56,7 @@ class SuccessorDemandTest {
                             fieldResolverOf(
                                 schema.emptyFragmentOf("Query"),
                             ) { _, _ ->
-                                EngineErrorData
+                                EngineErrorData.of()
                             },
                         schema.requireField("Root", "consumer") to
                             fieldResolverOf(
@@ -167,7 +167,7 @@ class SuccessorDemandTest {
                     mapOf(
                         schema.requireObjectField("Query", "item") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                EngineErrorData
+                                EngineErrorData.of()
                             },
                         schema.requireObjectField("Item", "consume") to
                             fieldResolverOf(
@@ -175,11 +175,11 @@ class SuccessorDemandTest {
                                     "fragment Consume on Item { fixed }",
                                 ),
                             ) { _, _ ->
-                                EngineErrorData
+                                EngineErrorData.of()
                             },
                         schema.requireObjectField("Item", "result") to
                             fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
-                                EngineErrorData
+                                EngineErrorData.of()
                             },
                     )
                 },
@@ -349,7 +349,7 @@ class SuccessorDemandTest {
                         put(
                             schema.requireObjectField("Query", "item"),
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                EngineErrorData
+                                EngineErrorData.of()
                             },
                         )
                         layerFields.forEach { field ->

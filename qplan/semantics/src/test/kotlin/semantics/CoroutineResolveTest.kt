@@ -295,7 +295,7 @@ class CoroutineResolveTest {
 private fun assertCompletedAndWriteOnce(result: EngineResult?) {
     when (result) {
         null,
-        ErrorEngineResult,
+        is ErrorEngineResult,
         -> Unit
         is ListEngineResult ->
             result.indices.forEach { index ->

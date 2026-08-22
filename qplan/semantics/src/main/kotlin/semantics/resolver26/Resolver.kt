@@ -513,8 +513,9 @@ private suspend fun resolveField(
         "Resolver26 resolveField received passive key $groundKey"
     }
     if (groundKey.arguments.argumentsContainErrorValue()) {
-        cell.getValue().complete(ErrorEngineResult)
-        cell.setAccessResult(ErrorEngineResult)
+        val errorResult = ErrorEngineResult.of(EngineErrorData.of())
+        cell.getValue().complete(errorResult)
+        cell.setAccessResult(errorResult)
         return
     }
     val resolverArguments = groundKey.arguments as Arguments.Resolved
@@ -602,8 +603,8 @@ private fun launchPassiveChildOrchestrations(
             }
         }
 
-        EngineErrorData -> {
-            check(target == ErrorEngineResult) {
+        is EngineErrorData -> {
+            check(target is ErrorEngineResult && target.errorData === source) {
                 "Resolver26 passive error source has different result at $path"
             }
         }

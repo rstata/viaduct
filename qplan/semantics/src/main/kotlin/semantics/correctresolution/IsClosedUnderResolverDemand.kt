@@ -78,7 +78,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
 ): Boolean =
     when (this) {
         null,
-        ErrorEngineResult,
+        is ErrorEngineResult,
         -> true
 
         is ObjectEngineResult -> objectIsClosedUnderResolverDemand(path)

@@ -112,7 +112,7 @@ class ResolverTestDslTest {
         val failed = world.schema.requireObjectField("Query", "failed")
 
         assertNull(world.apply(nullable, root))
-        assertEquals(EngineErrorData, world.apply(failed, root))
+        assertIs<EngineErrorData>(world.apply(failed, root))
     }
 
     @Test
@@ -160,16 +160,11 @@ class ResolverTestDslTest {
         val root = world.resolverRegistry.resolveRootQuery()
         val echo = world.schema.requireObjectField("Query", "echo")
 
-        listOf(
-            4 to 4,
-            null to null,
-            ArgumentResolutionError to EngineErrorData,
-        ).forEach { (value, expected) ->
-            assertEquals(
-                expected,
-                world.apply(echo, root, mapOf("input" to value)),
-            )
-        }
+        assertEquals(4, world.apply(echo, root, mapOf("input" to 4)))
+        assertNull(world.apply(echo, root, mapOf("input" to null)))
+        assertIs<EngineErrorData>(
+            world.apply(echo, root, mapOf("input" to ArgumentResolutionError)),
+        )
 
         val echoPath = world.schema.requireObjectField("Query", "echoPath")
         assertNull(
@@ -326,7 +321,7 @@ private fun TestWorld.apply(
     arguments: Map<String, Any?> = emptyMap(),
 ): EngineOutputData? =
     when (val grounded = Arguments.of(field, arguments)) {
-        Arguments.Error -> EngineErrorData
+        Arguments.Error -> EngineErrorData.of()
         is Arguments.Resolved ->
             context(assumptions) {
                 resolverRegistry.resolver(field)(input, grounded)

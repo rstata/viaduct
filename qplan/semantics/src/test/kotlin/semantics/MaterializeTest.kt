@@ -224,6 +224,7 @@ class MaterializeTest {
                     type = bridge,
                     values = mapOf(payload to userResult),
                 )
+            val errorData = EngineErrorData.of()
             val parentResult =
                 ObjectEngineResult.of(
                     type = parent,
@@ -237,7 +238,7 @@ class MaterializeTest {
                                         listOf(
                                             bridgeResult,
                                             null,
-                                            ErrorEngineResult,
+                                            ErrorEngineResult.of(errorData),
                                         ),
                                 ),
                         ),
@@ -274,7 +275,7 @@ class MaterializeTest {
             assertSame(user.gjDef, listedUser.type)
             assertEquals("user-1", listedUser.get("id"))
             assertNull(users[1])
-            assertSame(EngineErrorData, users[2])
+            assertSame(errorData, users[2])
         }
 
     @Test

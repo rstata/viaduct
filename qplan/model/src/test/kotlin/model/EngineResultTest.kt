@@ -15,11 +15,26 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class EngineResultTest {
+    @Test
+    fun `error carriers use reference equality and preserve output error identity`() {
+        val firstErrorData = EngineErrorData.of()
+        val secondErrorData = EngineErrorData.of()
+        val firstResult = ErrorEngineResult.of(firstErrorData)
+        val secondResultForSameData = ErrorEngineResult.of(firstErrorData)
+
+        assertNotSame(firstErrorData, secondErrorData)
+        assertNotEquals(firstErrorData, secondErrorData)
+        assertSame(firstErrorData, firstResult.errorData)
+        assertNotSame(firstResult, secondResultForSameData)
+        assertNotEquals(firstResult, secondResultForSameData)
+    }
+
     @Test
     fun `fixture DSL constructs nested argument-bearing results`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
@@ -228,19 +243,20 @@ class EngineResultTest {
     }
 
     @Test
-    fun `access results accept only booleans or the error sentinel`() {
+    fun `access results accept only booleans or an error result`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val firstKey = schema.key("Query", "first")
         val secondKey = schema.key("Query", "second")
         val elementType = schema.requireField("Query", "value").outputType
+        val completedError = ErrorEngineResult.of(EngineErrorData.of())
         val completed =
             ObjectEngineResult.of(
                 type = schema.requireQueryTypeDef(),
                 values = mapOf(firstKey to "ready"),
-                accessResults = mapOf(firstKey to ErrorEngineResult),
+                accessResults = mapOf(firstKey to completedError),
             )
 
-        assertSame(ErrorEngineResult, completed.getCell(firstKey).getAccessResult().get())
+        assertSame(completedError, completed.getCell(firstKey).getAccessResult().get())
         assertFailsWith<IllegalArgumentException> {
             ObjectEngineResult.of(
                 type = schema.requireQueryTypeDef(),
@@ -260,8 +276,9 @@ class EngineResultTest {
         assertFailsWith<IllegalArgumentException> {
             direct.setAccessResult("not an access result")
         }
-        direct.setAccessResult(ErrorEngineResult)
-        assertSame(ErrorEngineResult, direct.getAccessResult().get())
+        val directError = ErrorEngineResult.of(EngineErrorData.of())
+        direct.setAccessResult(directError)
+        assertSame(directError, direct.getAccessResult().get())
 
         val deferred = mutable.reserveCell(secondKey).createAccessResultPromise()
         assertFailsWith<IllegalArgumentException> {
@@ -378,8 +395,9 @@ class EngineResultTest {
         }
         assertTrue(user.isCellSet(lookupWithError))
 
-        user.getCell(lookupWithError).setValue(ErrorEngineResult)
-        assertSame(ErrorEngineResult, user.getCell(lookupWithError).getValue().get())
+        val errorResult = ErrorEngineResult.of(EngineErrorData.of())
+        user.getCell(lookupWithError).setValue(errorResult)
+        assertSame(errorResult, user.getCell(lookupWithError).getValue().get())
     }
 
     @Test
@@ -555,9 +573,25 @@ class EngineResultTest {
                         "first".resolvesTo("same", false)
                     }
             }
+        val firstKey = schema.key("Query", "first")
+        val leftError = ErrorEngineResult.of(EngineErrorData.of())
+        val rightError = ErrorEngineResult.of(EngineErrorData.of())
+        val leftErrorResult =
+            ObjectEngineResult.of(
+                type = schema.requireQueryTypeDef(),
+                values = mapOf(firstKey to leftError),
+                accessResults = mapOf(firstKey to leftError),
+            )
+        val rightErrorResult =
+            ObjectEngineResult.of(
+                type = schema.requireQueryTypeDef(),
+                values = mapOf(firstKey to rightError),
+                accessResults = mapOf(firstKey to rightError),
+            )
 
         assertTrue(left.sameCompletedResultAs(right))
         assertFalse(left.sameCompletedResultAs(differentCheck))
+        assertTrue(leftErrorResult.sameCompletedResultAs(rightErrorResult))
     }
 
     @Test

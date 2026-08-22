@@ -130,7 +130,7 @@ private fun EngineObjectDataEntry.sourceFacingValue(): EngineOutputData? =
 private fun EngineOutputData?.unwrapNodeBridge(
     type: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): EngineOutputData? {
-    if (this == null || this == EngineErrorData) return this
+    if (this == null || this is EngineErrorData) return this
     val elementType = type.unwrapList()
     if (elementType != null) {
         require(this is List<*>) {
@@ -211,13 +211,6 @@ private class QPlanEngineObjectDataImpl(
     override fun isPresent(selection: String): Boolean = selection in values
 
     override fun getSelections(): Iterable<String> = values.keys
-
-    override fun equals(other: Any?): Boolean =
-        other is QPlanEngineObjectDataImpl &&
-            schemaType == other.schemaType &&
-            values == other.values
-
-    override fun hashCode(): Int = 31 * schemaType.hashCode() + values.hashCode()
 
     override fun toString(): String = "type=${type.name} values=$values"
 }

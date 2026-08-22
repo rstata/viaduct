@@ -99,7 +99,7 @@ private fun ObjectEngineResult.readCompletedProvider(
                 .single()
         val value = current.getCell(key).get()
         if (value == null) return VariableBinding.of(null)
-        if (value == ErrorEngineResult) return VariableBinding.Error
+        if (value is ErrorEngineResult) return VariableBinding.Error
         if (index == path.lastIndex) {
             return value.toVariableBinding(key.field.outputType)
         }
@@ -114,7 +114,7 @@ private fun EngineResult.toVariableBinding(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
-        ErrorEngineResult -> VariableBinding.Error
+        is ErrorEngineResult -> VariableBinding.Error
         is ListEngineResult -> toInputListBinding()
         is ObjectEngineResult ->
             error("An object-path provider cannot terminate at an object")

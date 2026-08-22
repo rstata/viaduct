@@ -25,6 +25,7 @@ class QPlanEngineObjectDataTest {
 
     @Test
     fun `distinguishes absent null value and error selections`() {
+        val error = EngineErrorData.of()
         val data =
             engineObjectDataOf(
                 schemaType = userType,
@@ -32,7 +33,7 @@ class QPlanEngineObjectDataTest {
                     linkedMapOf(
                         "name" to "Ada",
                         "nickname" to null,
-                        "age" to EngineErrorData,
+                        "age" to error,
                     ),
             )
 
@@ -42,7 +43,7 @@ class QPlanEngineObjectDataTest {
         assertNull(data.get("nickname"))
         assertNull(data.getOrNull("nickname"))
         assertTrue(data.isPresent("age"))
-        assertSame(EngineErrorData, data.get("age"))
+        assertSame(error, data.get("age"))
 
         assertFalse(data.isPresent("missing"))
         assertNull(data.getOrNull("missing"))
@@ -53,6 +54,7 @@ class QPlanEngineObjectDataTest {
     @Test
     fun `suspending operations preserve synchronous read behavior`() =
         runBlocking {
+            val error = EngineErrorData.of()
             val data =
                 engineObjectDataOf(
                     schemaType = userType,
@@ -60,13 +62,13 @@ class QPlanEngineObjectDataTest {
                         linkedMapOf(
                             "name" to "Ada",
                             "nickname" to null,
-                            "age" to EngineErrorData,
+                            "age" to error,
                         ),
                 )
 
             assertEquals("Ada", data.fetch("name"))
             assertNull(data.fetch("nickname"))
-            assertSame(EngineErrorData, data.fetch("age"))
+            assertSame(error, data.fetch("age"))
             assertNull(data.fetchOrNull("missing"))
             assertEquals(
                 listOf("name", "nickname", "age"),
@@ -173,26 +175,20 @@ class QPlanEngineObjectDataTest {
     }
 
     @Test
-    fun `qplan objects retain structural equality`() {
+    fun `qplan objects use reference equality`() {
         val first =
             engineObjectDataOf(
                 userType,
                 linkedMapOf("name" to "Ada", "nickname" to null),
             )
-        val equal =
+        val sameValue =
             engineObjectDataOf(
                 userType,
                 linkedMapOf("name" to "Ada", "nickname" to null),
             )
-        val different =
-            engineObjectDataOf(
-                userType,
-                linkedMapOf("name" to "Grace", "nickname" to null),
-            )
 
-        assertEquals(first, equal)
-        assertEquals(first.hashCode(), equal.hashCode())
-        assertNotEquals(first, different)
+        assertSame(first, first)
+        assertNotEquals(first, sameValue)
         assertNotEquals(first, OtherEngineObjectData(graphQLUserType))
     }
 

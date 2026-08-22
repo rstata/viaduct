@@ -78,7 +78,7 @@ internal fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
 context(world: Assumptions)
 internal fun EngineResult.conformsToSchema(): Boolean =
     when (this) {
-        ErrorEngineResult -> true
+        is ErrorEngineResult -> true
         is ObjectEngineResult ->
             keys.all { key ->
                 val cell = getCell(key)
@@ -175,7 +175,7 @@ fun EngineOutputData?.conformsToOutputSchemaType(
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
-        EngineErrorData -> true
+        is EngineErrorData -> true
         is List<*> ->
             typeExpr.unwrapList()
                 ?.let { elementType ->
@@ -218,7 +218,7 @@ fun EngineOutputData?.conformsToOutputSchemaType(
 private fun EngineOutputData?.conformsToOutputData(): Boolean =
     when (this) {
         null,
-        EngineErrorData,
+        is EngineErrorData,
         is Int,
         is Boolean,
         is String,
@@ -235,7 +235,7 @@ internal fun EngineResult?.conformsToResultSchemaType(
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
-        ErrorEngineResult -> true
+        is ErrorEngineResult -> true
         is ObjectEngineResult ->
             if (!typeExpr.isList) {
                 val declaredType = typeExpr.baseTypeDef
@@ -264,4 +264,4 @@ private fun ViaductSchema.TypeExpr<*>.hasScalarType(expectedName: String): Boole
         (baseTypeDef as? ViaductSchema.Scalar)?.name == expectedName
 
 internal fun EngineResult.conformsToAccessResult(): Boolean =
-    this is Boolean || this == ErrorEngineResult
+    this is Boolean || this is ErrorEngineResult

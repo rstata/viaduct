@@ -507,7 +507,7 @@ private class ResultEvaluator(
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult? = null,
     ): EngineOutputData? {
-        if (source is StringValue && source.value == ERROR_SENTINEL) return EngineErrorData
+        if (source is StringValue && source.value == ERROR_SENTINEL) return EngineErrorData.of()
         if (source is NullValue) {
             require(typeExpr.isNullable) { "null does not conform to $typeExpr" }
             return null
@@ -681,7 +681,7 @@ private class ResultEvaluator(
                 "value(...) requires exactly one reachable value, found ${values.size}"
             }
             return values.single().also { value ->
-                require(value == null || value == EngineErrorData || value is Int) {
+                require(value == null || value is EngineErrorData || value is Int) {
                     "value(...) result is not an Int"
                 }
             }
@@ -693,7 +693,7 @@ private class ResultEvaluator(
             values.forEach { value ->
                 when (value) {
                     null -> Unit
-                    EngineErrorData -> return EngineErrorData
+                    is EngineErrorData -> return value
                     is Int -> sum = addExact(sum, value)
                     else ->
                         throw IllegalArgumentException(
@@ -750,7 +750,7 @@ private class ResultEvaluator(
         ): List<EngineOutputData?> =
             when {
                 value == null -> if (preserveNulls) listOf(null) else emptyList()
-                value == EngineErrorData -> listOf(EngineErrorData)
+                value is EngineErrorData -> listOf(value)
                 value is List<*> -> value.flatMap { visit(it, index) }
                 index == path.size -> listOf(value)
                 value is EngineObjectData.Sync -> {
@@ -777,7 +777,7 @@ private class ResultEvaluator(
 
     private fun EngineOutputData?.containsNodeBridge(): Boolean =
         when (this) {
-            EngineErrorData -> false
+            is EngineErrorData -> false
             is EngineObjectData.Sync -> type.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
             is List<*> -> any { value -> value.containsNodeBridge() }
             else -> false
@@ -786,7 +786,7 @@ private class ResultEvaluator(
     private fun unwrapNodeBridge(value: EngineOutputData?): List<EngineOutputData?> =
         when (value) {
             null -> emptyList()
-            EngineErrorData -> listOf(EngineErrorData)
+            is EngineErrorData -> listOf(value)
             is List<*> -> value.flatMap(::unwrapNodeBridge)
             is EngineObjectData.Sync -> {
                 val schemaType = value.schemaType

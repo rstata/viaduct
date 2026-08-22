@@ -104,7 +104,7 @@ internal class GJSchema private constructor(
         bridgeTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
-            output == null || output == EngineErrorData -> output
+            output == null || output is EngineErrorData -> output
             sourceTypeExpr.isList && bridgeTypeExpr.isList -> {
                 require(output is List<*>) {
                     "Node-list field resolver did not return a list"
@@ -130,7 +130,7 @@ internal class GJSchema private constructor(
                         )
                 val idField = requireObjectField(outputType.name, "id")
                 val id = output.get(idField.name)
-                require(id != EngineErrorData && id is String) {
+                require(id !is EngineErrorData && id is String) {
                     "Node reference ${outputType.name}/id must contain a non-error ID"
                 }
                 val declaredBridgeType =
@@ -161,7 +161,7 @@ internal class GJSchema private constructor(
         loweredTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
-            output == null || output == EngineErrorData -> output
+            output == null || output is EngineErrorData -> output
             sourceTypeExpr.isList && loweredTypeExpr.isList -> {
                 require(output is List<*>) {
                     "Source output for $sourceTypeExpr is not a list"

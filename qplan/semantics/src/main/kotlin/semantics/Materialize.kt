@@ -118,7 +118,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
 ): EngineOutputData? =
     when (this) {
         null -> null
-        ErrorEngineResult -> EngineErrorData
+        is ErrorEngineResult -> errorData
         is ObjectEngineResult ->
             materializeSelectedObjectValue(
                 selections = selections,

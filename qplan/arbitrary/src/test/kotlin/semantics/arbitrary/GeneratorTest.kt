@@ -342,8 +342,8 @@ class GeneratorTest {
                 val resolver = world.resolverRegistry.resolver(field)
 
                 assertEquals(
-                    resolver(input, arguments),
-                    resolver(input, arguments),
+                    resolver(input, arguments).outputResolutionFingerprint(),
+                    resolver(input, arguments).outputResolutionFingerprint(),
                 )
                 checkedResolvers += 1
             }
@@ -384,9 +384,18 @@ class GeneratorTest {
                 generatedHashSeed = 23,
             )
 
-        assertEquals(first, repeated)
-        assertNotEquals(first, different)
-        assertNotEquals(first, differentSalt)
+        assertEquals(
+            first.outputResolutionFingerprint(),
+            repeated.outputResolutionFingerprint(),
+        )
+        assertNotEquals(
+            first.outputResolutionFingerprint(),
+            different.outputResolutionFingerprint(),
+        )
+        assertNotEquals(
+            first.outputResolutionFingerprint(),
+            differentSalt.outputResolutionFingerprint(),
+        )
     }
 
     @Test

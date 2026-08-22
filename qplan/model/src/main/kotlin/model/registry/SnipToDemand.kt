@@ -46,7 +46,7 @@ context(world: Assumptions)
 internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutputData? =
     when (this) {
         null,
-        EngineErrorData,
+        is EngineErrorData,
         -> this
 
         is EngineObjectData.Sync -> snipObjectToDemand(demand)

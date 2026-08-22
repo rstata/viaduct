@@ -611,22 +611,22 @@ class ResolutionWitnessTest {
                     )
                 mapOf(
                     schema.requireField("Query", "item") to
-                        fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData },
+                        fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData.of() },
                     schema.requireField("Query", "items") to
-                        fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData },
+                        fieldResolverOf(queryNeedsHelper) { _, _ -> EngineErrorData.of() },
                     schema.requireField("Query", "helper") to
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                            EngineErrorData
+                            EngineErrorData.of()
                         },
                     schema.requireField("Query", "dead") to
                         fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                            EngineErrorData
+                            EngineErrorData.of()
                         },
                     schema.requireField("Payload", "computed") to
-                        fieldResolverOf(payloadNeedsBase) { _, _ -> EngineErrorData },
+                        fieldResolverOf(payloadNeedsBase) { _, _ -> EngineErrorData.of() },
                     schema.requireField("Payload", "base") to
                         fieldResolverOf(schema.emptyFragmentOf("Payload")) { _, _ ->
-                            EngineErrorData
+                            EngineErrorData.of()
                         },
                 )
             },

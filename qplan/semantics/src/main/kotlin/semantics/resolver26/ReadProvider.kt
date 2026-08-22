@@ -50,7 +50,7 @@ internal suspend fun ObjectEngineResult.readProvider(
         }
         when (value) {
             null -> return VariableBinding.of(null)
-            ErrorEngineResult -> return VariableBinding.Error
+            is ErrorEngineResult -> return VariableBinding.Error
             is ObjectEngineResult -> current = value
             else -> error("Resolver26 provider path crossed a non-object at $groundKey")
         }
@@ -64,7 +64,7 @@ private fun EngineResult?.toProviderBinding(
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
-        ErrorEngineResult -> VariableBinding.Error
+        is ErrorEngineResult -> VariableBinding.Error
         is ListEngineResult -> toProviderInputListBinding()
         is ObjectEngineResult ->
             error("A path-variable provider cannot terminate at an object")

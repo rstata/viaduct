@@ -47,7 +47,9 @@ private data class PresentCoercedDefaultValueImpl(
  * Int, finite Double, Boolean, String, [EngineObjectData.Sync], or [EngineOutputListData].
  *
  * String represents GraphQL String, ID, and enum values; the expected schema type disambiguates
- * them. [EngineErrorData] is additionally admitted to the broad output domain.
+ * them. [EngineErrorData] is additionally admitted to the broad output domain. This union is
+ * equality-heterogeneous: equality is undefined until an operation narrows values to a homogeneous
+ * subset such as [EngineSimpleData].
  */
 typealias EngineOutputData = Any
 
@@ -55,12 +57,20 @@ typealias EngineOutputData = Any
 typealias EngineOutputListData = List<EngineOutputData?>
 
 /**
- * The collapsed resolver-output error sentinel.
+ * The resolver-output error variant.
  *
  * This belongs only to the broad [EngineOutputData] domain. It is distinct from
- * [ErrorEngineResult] and argument-resolution failure.
+ * [ErrorEngineResult] and argument-resolution failure. Instances use reference equality and will
+ * carry complete causal and attributional metadata.
  */
-data object EngineErrorData
+sealed interface EngineErrorData {
+    companion object {
+        /** Creates an output error with no metadata. */
+        fun of(): EngineErrorData = EngineErrorDataImpl()
+    }
+}
+
+private class EngineErrorDataImpl : EngineErrorData
 
 /** Converts a simple engine result to production-compatible engine input data. */
 fun EngineResult.toEngineSimpleData(expectedType: ViaductSchema.SimpleTypeDef): EngineSimpleData =

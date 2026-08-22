@@ -302,7 +302,7 @@ internal class CurrentProfileBenchmarkSupport(
     context(world: Assumptions)
     private fun EngineResult?.shape(depth: Int = 0): ResultShape =
         when (this) {
-            null, ErrorEngineResult ->
+            null, is ErrorEngineResult ->
                 ResultShape(
                     fields = 0,
                     activeFields = 0,

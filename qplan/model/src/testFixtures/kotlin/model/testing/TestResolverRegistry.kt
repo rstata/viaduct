@@ -295,7 +295,7 @@ private class NodeResolverLowering(
         typedId: EngineOutputData?,
         nodeOutputType: ViaductSchema.Object,
     ): EngineOutputData? {
-        if (typedId == null || typedId == EngineErrorData) return typedId
+        if (typedId == null || typedId is EngineErrorData) return typedId
         require(typedId is String) {
             "Node bridge ${nodeBridgeTypeName(nodeOutputType.name)} did not contain an ID"
         }
@@ -307,7 +307,7 @@ private class NodeResolverLowering(
             nodeResolvers[type]
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.name}")
         val sourceResult = resolver(id)
-        if (sourceResult == null || sourceResult == EngineErrorData) return sourceResult
+        if (sourceResult == null || sourceResult is EngineErrorData) return sourceResult
         require(sourceResult is EngineObjectData.Sync) {
             "Node resolver for ${type.name} returned a non-object value"
         }

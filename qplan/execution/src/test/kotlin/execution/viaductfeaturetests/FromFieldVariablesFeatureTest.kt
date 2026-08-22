@@ -110,7 +110,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("mutation { x }").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- selection is field with omitted arg and default value`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z(c:Int = 2):Int }") {
@@ -135,7 +134,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{ x }").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- selection is field with arg`() =
         EngineTestModule("extend type Query { x:Int!, y(b:Int!):Int!, z(c:Int!):Int! }") {
@@ -160,7 +158,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- selection is field with omitted argument value`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z(c:Int):Int }") {
@@ -253,7 +250,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("TODO: PathArgs")
     @Test
     fun `from object field -- single-field-multiple-variable -- multiple required selections with variables`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z(c:Int):Int, w:Int }") {

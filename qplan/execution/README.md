@@ -80,7 +80,7 @@ The feature-test adapter currently supports:
 - Field arguments, including values supplied by GraphQL operation variables.
 - Object required selections, including aliases, arguments, transitive requirements, repeated argumented fields, shared requirements, and multiple requirements.
 - Top-level from-argument variables in object required selections, including variable names that differ from their source argument names.
-- From-object-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, and non-root resolver owners.
+- From-object-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, non-root resolver owners, and argument-bearing provider keys grounded from literals, defaults, owner arguments, or other acyclic object-path bindings.
 - Synchronous scalar, enum, list, object, and `NodeReference` outputs, including raw map sources for concrete object fields.
 - Partially populated Query executor maps, with missing nullable fields resolving to null and missing non-null fields resolving to an error.
 - Node-valued fields and built-in `Query.node` and `Query.nodes`.
@@ -89,7 +89,6 @@ The feature-test adapter currently supports:
 The adapter rejects or does not yet model:
 
 - Nested input-object paths for from-argument variables.
-- From-object-field provider paths containing a field that declares arguments, an explicit Resolver26 restriction even when those arguments are ground.
 - From-Query-field and arbitrary callback variable providers.
 - Batched or selective field and node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
@@ -135,8 +134,6 @@ Run the adapter and ported tests with:
 Run the complete execution suite with `./gradlew :execution:test`, and run every qplan validation gate with `./gradlew check`.
 
 ## Next Steps
-
-The next path-provider question is whether to lift Resolver26's argument-free provider-path restriction. Recovery already reconstructs provider dependencies recursively, including a path field whose argument comes from a top-level `FromArgument`, but Resolver26 deliberately rejects every provider path containing a field definition with arguments.
 
 Nested input-object argument paths need a deliberate qplan representation before they can be recovered from multi-segment `FromArgument.path` values. From-Query paths and custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
 

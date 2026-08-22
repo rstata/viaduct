@@ -4,6 +4,8 @@
 
 Qplan uses `viaduct.graphql.schema.ViaductSchema` and `ViaductSchema.TypeExpr` directly throughout model, fixtures, arbitrary generation, semantics, and execution. The former qplan-owned `Schema`, recursive `TypeExpr`, GraphQL-Java attachment adapter, and `GJSchemaDecoder` have been deleted.
 
+Property-test campaigns now use versioned serialized campaign and generator configurations shared by JUnit and a standalone launcher. Each resolver's 100 rounds are represented by one compact campaign resource with reusable profiles, phases, and consecutive seed ranges. The generic `run-property-test-campaign.sh` builds the launcher once and then executes each round in a fresh JVM after Gradle exits, eliminating per-round Gradle and JUnit startup. See [`semantics/property-test-rounds.md`](./semantics/property-test-rounds.md).
+
 Every reasoning world uses one canonical lowered `ViaductSchema`. Fields, arguments, enum values, object types, type conditions, possible-object-type sets, type expressions, resolver keys, selections, and EOD schema types all come from that schema instance.
 
 The execution module now has an executor-backed feature-test path. `EngineTestModule.runQPlanFeatureTest` translates an in-memory engine module's pre-dispatcher field and node executor maps into the ordinary `TestWorld` fixture inputs, then runs GraphQL operations through `QPlanExecutionStrategy`. It does not construct runtime dispatchers or data loaders.
@@ -58,6 +60,10 @@ Schema defaults remain syntactic `ViaductSchema.Literal` values. `coercedDefault
 The following gates pass from `qplan`:
 
 ```shell
+./gradlew :arbitrary:test :semantics:test
+./gradlew :semantics:resolver25BroadStressCampaign -Presolver25BroadStressCampaignRound=1 -Presolver25BroadStressCampaignProfile=balanced -PresolverPropertyCase=1:1:1
+./gradlew :semantics:resolver26BroadStressCampaign -Presolver26BroadStressCampaignRound=1 -Presolver26BroadStressCampaignProfile=balanced -PresolverPropertyCase=1:1:1
+./gradlew :semantics:installPropertyTestRoundLauncher
 ./gradlew :model:test --tests 'model.lowering.*'
 ./gradlew :model:test
 ./gradlew :arbitrary:test

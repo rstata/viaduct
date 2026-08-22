@@ -17,6 +17,7 @@ dependencies {
 
     testImplementation(project(":arbitrary"))
     testImplementation(testFixtures(project(":model")))
+    testImplementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.3")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -411,6 +412,76 @@ tasks.test {
         excludeTestsMatching("semantics.resolver26.ResolverBroadStressTest")
         excludeTestsMatching("semantics.resolver26.ResolverBroadStressCampaignTest")
         excludeTestsMatching("semantics.resolver26.ResolverMultithreadedStressTest")
+    }
+}
+
+tasks.register<JavaExec>("materializeGeneratorConfigs") {
+    group = "verification"
+    description = "Materializes layered generator-profile JSON files."
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("semantics.propertytest.GeneratorConfigMaterializer")
+    val outputDirectory =
+        providers
+            .gradleProperty("generatorConfigOutput")
+            .map(::file)
+            .orElse(layout.projectDirectory.dir("src/test/resources").asFile)
+    doFirst {
+        args(outputDirectory.get().absolutePath)
+    }
+    outputs.dir(
+        layout.projectDirectory.dir(
+            "src/test/resources/semantics/property-tests/generator-configs",
+        ),
+    )
+    outputs.upToDateWhen { false }
+}
+
+val propertyTestLauncherJar =
+    tasks.register<Jar>("propertyTestLauncherJar") {
+        dependsOn("testClasses")
+        archiveClassifier.set("property-test-launcher")
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(sourceSets["main"].output)
+        from(sourceSets["testFixtures"].output)
+        from(sourceSets["test"].output)
+        manifest {
+            attributes["Main-Class"] =
+                "semantics.propertytest.PropertyTestRoundLauncher"
+        }
+    }
+
+val propertyTestLauncherScripts =
+    tasks.register<CreateStartScripts>("propertyTestLauncherScripts") {
+        dependsOn(propertyTestLauncherJar)
+        applicationName = "property-test-round"
+        mainClass.set("semantics.propertytest.PropertyTestRoundLauncher")
+        outputDir = layout.buildDirectory.dir("property-test-launcher/scripts").get().asFile
+        classpath =
+            files(
+                propertyTestLauncherJar,
+                configurations["testRuntimeClasspath"].filter(File::isFile),
+            )
+        defaultJvmOpts = listOf("-Xmx2g")
+    }
+
+tasks.register<Sync>("installPropertyTestRoundLauncher") {
+    group = "verification"
+    description = "Installs the direct-JVM property-test round launcher."
+    dependsOn(propertyTestLauncherScripts)
+    into(layout.buildDirectory.dir("install/property-test-round"))
+    from(propertyTestLauncherScripts) {
+        into("bin")
+        filePermissions {
+            unix("rwxr-xr-x")
+        }
+    }
+    from(propertyTestLauncherJar)
+    from(configurations["testRuntimeClasspath"].filter(File::isFile))
+    eachFile {
+        if (relativePath.segments.firstOrNull() != "bin") {
+            relativePath = RelativePath(true, "lib", name)
+        }
     }
 }
 

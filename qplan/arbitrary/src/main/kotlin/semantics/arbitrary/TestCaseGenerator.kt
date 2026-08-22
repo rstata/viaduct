@@ -175,11 +175,41 @@ suspend fun checkResolverTestCases(
     require(profile.isNotBlank())
     val runSeed = seed ?: configuredResolverTestSeed()
     val execution = configuredResolverTestExecution(counts, profile)
+    return executeResolverTestCases(
+        execution = execution,
+        config = config,
+        profile = profile,
+        seed = runSeed,
+        captureSuppliedDemand = captureSuppliedDemand,
+        captureResolutionWitness = captureResolutionWitness,
+        captureResolutionApplicationCounts = captureResolutionApplicationCounts,
+        property = property,
+    )
+}
+
+/**
+ * Executes an explicitly configured generated product without consulting process properties.
+ *
+ * Standalone launchers use this entry point. JUnit adapters may construct [execution] from their
+ * own annotations, Gradle properties, or [configuredResolverTestExecution].
+ */
+@OptIn(ExperimentalKotest::class)
+suspend fun executeResolverTestCases(
+    execution: ResolverTestExecution,
+    config: Config = Config.default,
+    profile: String = "resolver-generated",
+    seed: Long,
+    captureSuppliedDemand: Boolean = false,
+    captureResolutionWitness: Boolean = true,
+    captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
+    property: suspend (TestWorld, ResolverTestCase) -> Unit,
+): ResolverTestRun {
+    require(profile.isNotBlank())
     var attemptedCases = 0
     var failingSchemaIndex: Int? = null
     checkAll(
         PropTestConfig(
-            seed = runSeed,
+            seed = seed,
             iterations = execution.schemaIterations,
         ),
         Arb.resolverTestBatch(execution.counts, config),
@@ -224,7 +254,7 @@ suspend fun checkResolverTestCases(
                         coordinates =
                             ResolverTestCoordinates(
                                 profile = profile,
-                                seed = runSeed,
+                                seed = seed,
                                 schemaIndex = schemaIndex,
                                 registryIndex = registryIndex,
                                 queryIndex = queryIndex,
@@ -241,7 +271,7 @@ suspend fun checkResolverTestCases(
     }
     return ResolverTestRun(
         profile = profile,
-        seed = runSeed,
+        seed = seed,
         attemptedCases = attemptedCases,
         counts = execution.counts,
         selectedCase = execution.selectedCase,
@@ -249,7 +279,7 @@ suspend fun checkResolverTestCases(
     )
 }
 
-internal fun parseResolverTestCase(value: String): ResolverTestCaseCoordinate =
+fun parseResolverTestCase(value: String): ResolverTestCaseCoordinate =
     parseResolverTestDimensions(value, RESOLVER_TEST_CASE_PROPERTY).let { dimensions ->
         ResolverTestCaseCoordinate(
             schemaIndex = dimensions.first,
@@ -267,16 +297,30 @@ internal fun parseResolverTestSize(value: String): TestCaseCount =
         )
     }
 
-private data class ResolverTestExecution(
+data class ResolverTestExecution(
     val counts: TestCaseCount,
-    val selectedCase: ResolverTestCaseCoordinate?,
-    val sizeOverridden: Boolean,
+    val selectedCase: ResolverTestCaseCoordinate? = null,
+    val sizeOverridden: Boolean = false,
 ) {
+    init {
+        selectedCase?.let { selected ->
+            require(selected.schemaIndex <= counts.schemas) {
+                "Selected schema ${selected.schemaIndex} exceeds profile size ${counts.summary()}"
+            }
+            require(selected.registryIndex <= counts.registriesPerSchema) {
+                "Selected registry ${selected.registryIndex} exceeds profile size ${counts.summary()}"
+            }
+            require(selected.queryIndex <= counts.queriesPerSchema) {
+                "Selected query ${selected.queryIndex} exceeds profile size ${counts.summary()}"
+            }
+        }
+    }
+
     val schemaIterations: Int
         get() = selectedCase?.schemaIndex ?: counts.schemas
 }
 
-private fun configuredResolverTestExecution(
+fun configuredResolverTestExecution(
     defaultCounts: TestCaseCount,
     profile: String,
 ): ResolverTestExecution {
@@ -293,18 +337,6 @@ private fun configuredResolverTestExecution(
             ?.let(::parseResolverTestCase)
     require(selectedCase == null || configuredSize == null) {
         "$RESOLVER_TEST_SIZE_PROPERTY is allowed only when $RESOLVER_TEST_CASE_PROPERTY=all"
-    }
-    selectedCase?.let { selected ->
-        require(selected.schemaIndex <= defaultCounts.schemas) {
-            "Selected schema ${selected.schemaIndex} exceeds profile size ${defaultCounts.summary()}"
-        }
-        require(selected.registryIndex <= defaultCounts.registriesPerSchema) {
-            "Selected registry ${selected.registryIndex} exceeds profile size " +
-                defaultCounts.summary()
-        }
-        require(selected.queryIndex <= defaultCounts.queriesPerSchema) {
-            "Selected query ${selected.queryIndex} exceeds profile size ${defaultCounts.summary()}"
-        }
     }
     return ResolverTestExecution(
         counts = configuredSize?.let(::parseResolverTestSize) ?: defaultCounts,

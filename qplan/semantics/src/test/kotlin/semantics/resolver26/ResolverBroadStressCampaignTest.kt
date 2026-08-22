@@ -3,15 +3,24 @@ package semantics.resolver26
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.RESOLVER_TEST_CASE_PROPERTY
-import kotlin.test.assertEquals
+import semantics.arbitrary.parseResolverTestCase
+import semantics.propertytest.PropertyTestJson
+import semantics.propertytest.PropertyTestCampaignConfigFile
+import semantics.propertytest.PropertyTestRoundExecution
+import semantics.propertytest.PropertyTestRoundRunner
+import semantics.propertytest.roundConfig
 
 class ResolverBroadStressCampaignTest {
     @Test
     fun `campaign round resolves every case in five broad profiles`(): Unit =
         runBlocking {
-            val campaignRound: Resolver26BroadStressCampaignRound =
-                Resolver26BroadStressCampaign.round(configuredRound())
+            val roundNumber = configuredRound()
             val selectedProfile: Resolver26BroadStressProfile? = configuredProfile()
+            val campaign =
+                PropertyTestJson.readResource<PropertyTestCampaignConfigFile>(
+                    "/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json",
+                )
+            val round = campaign.roundConfig(roundNumber, selectedProfile?.id)
             val configuredCase: String? = System.getProperty(RESOLVER_TEST_CASE_PROPERTY)
             require(
                 configuredCase == null ||
@@ -20,35 +29,17 @@ class ResolverBroadStressCampaignTest {
             ) {
                 "A campaign coordinate replay must select $PROFILE_PROPERTY"
             }
-            val runs: List<Resolver26BroadStressCampaignRun> =
-                campaignRound.runs.filter { run ->
-                    selectedProfile == null || run.profile == selectedProfile
-                }
-            var completedCases = 0
-            runs.forEach { run ->
-                completedCases +=
-                    runResolver26BroadStress(
-                        broadProfile = run.profile,
-                        propertyProfile = run.propertyProfile,
-                        counts = run.counts,
-                        config = run.config,
-                        seed = run.seed,
-                    )
-            }
-            val expectedCases: Int =
-                if (
-                    configuredCase != null &&
-                    !configuredCase.equals("all", ignoreCase = true)
-                ) {
-                    runs.size
-                } else {
-                    runs.sumOf(Resolver26BroadStressCampaignRun::expectedCases)
-                }
-            assertEquals(expectedCases, completedCases)
-            println(
-                "Resolver26 broad campaign round ${campaignRound.number}: " +
-                    "phase=${campaignRound.phase.id}, profiles=${runs.size}, " +
-                    "completedCases=$completedCases",
+            PropertyTestRoundRunner.run(
+                round = round,
+                execution =
+                    PropertyTestRoundExecution(
+                        selectedTestInputProfileId =
+                            selectedProfile?.let { round.runs.single().testInputProfileId },
+                        selectedCase =
+                            configuredCase
+                                ?.takeUnless { value -> value.equals("all", ignoreCase = true) }
+                                ?.let(::parseResolverTestCase),
+                    ),
             )
         }
 

@@ -152,6 +152,8 @@ private data class ResolvedArgumentsImpl(
     override val fieldValues: EngineInputObjectData,
 ) : Arguments.Resolved
 
+private val emptyResolvedArguments = ResolvedArgumentsImpl(emptyMap())
+
 private data class TemplateVariableImpl(
     override val variableName: String,
     override val field: ViaductSchema.ObjectField,
@@ -205,4 +207,9 @@ private fun List<PathComponent>.renderVariablePath(): String =
 
 internal fun argumentsOfGround(
     fields: EngineInputObjectData,
-): Arguments.Resolved = ResolvedArgumentsImpl(fields)
+): Arguments.Resolved =
+    if (fields.isEmpty()) {
+        emptyResolvedArguments
+    } else {
+        ResolvedArgumentsImpl(fields)
+    }

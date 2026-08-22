@@ -4,7 +4,7 @@ This inventory covers files under `core/engine/runtime/src/test/kotlin` that inv
 
 Migration is atomic by source file. Once any file is migrated, every source test must be copied in source order; tests outside qplan's current supported surface remain present and are marked `@Disabled` with a specific reason. The counts below report migration state: a copied count smaller than the source count identifies an unfinished legacy migration, not a supported selective port.
 
-The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port production-test names and order now agree exactly. Together they contain 124 production tests: 36 currently pass through qplan and 88 remain disabled. Two enabled `ALTERNATIVE` tests separately state qplan-compatible behavior for confirmed incompatibilities.
+The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port production-test names and order now agree exactly. Together they contain 124 production tests: 40 currently pass through qplan and 84 remain disabled. Two enabled `ALTERNATIVE` tests separately state qplan-compatible behavior for confirmed incompatibilities.
 
 ## Observed Port Boundaries
 
@@ -31,7 +31,6 @@ intentional incompatibilities whose specific prose reasons are retained.
 | Likely mechanical adapter enablement | 5 | `MechAdapt` |
 | Abstract-type/runtime applicability | 6 | `Abstract` |
 | Directives | 6 | `Directive` |
-| Argument-bearing object-provider paths | 4 | `PathArgs` |
 | Mutations | 3 | `Mutation` |
 | Rich executor error preservation | 1 | `ErrorData` |
 | Nested `FromArgument` paths | 2 | `NestedArg` |

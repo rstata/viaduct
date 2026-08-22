@@ -808,10 +808,11 @@ private class ObjectCellStore(
 ) {
     private val lock = Any()
     private val cells = cells.toMutableMap()
+    private var keySnapshot = this.cells.keys.toSet()
     private var frozen = !mutable
 
     val keys: Set<ObjectEngineResult.GroundKey>
-        get() = synchronized(lock) { cells.keys.toSet() }
+        get() = synchronized(lock) { keySnapshot }
 
     val cellValues: List<EngineResultCell>
         get() = synchronized(lock) { cells.values.toList() }
@@ -829,6 +830,7 @@ private class ObjectCellStore(
                 } else {
                     mutableCell(field).also { cell ->
                         cells[field] = cell
+                        keySnapshot = cells.keys.toSet()
                     }
                 }
         }

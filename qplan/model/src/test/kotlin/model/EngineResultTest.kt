@@ -153,6 +153,27 @@ class EngineResultTest {
     }
 
     @Test
+    fun `object keys reuse stable snapshots between reservations`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val firstKey = schema.key("Query", "first")
+        val secondKey = schema.key("Query", "second")
+        val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+
+        val emptyKeys = result.keys
+        assertSame(emptyKeys, result.keys)
+
+        result.reserveCell(firstKey)
+        val firstKeys = result.keys
+        assertTrue(emptyKeys.isEmpty())
+        assertEquals(setOf(firstKey), firstKeys)
+        assertSame(firstKeys, result.keys)
+
+        result.reserveCell(secondKey)
+        assertEquals(setOf(firstKey), firstKeys)
+        assertEquals(setOf(firstKey, secondKey), result.keys)
+    }
+
+    @Test
     fun `freeze fails unclaimed reader placeholders and rejects new values`() =
         runBlocking {
             val schema = TestWorld.fromSDL(SCHEMA_SDL).schema

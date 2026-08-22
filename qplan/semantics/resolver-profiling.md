@@ -95,11 +95,70 @@ Replace the path with the Resolver26-overhead or `correctResolution` recording a
 
 Each profiling task deletes its configured output before recording. Set the corresponding output property to a unique path before a comparison run when the previous recording must be retained. Profile timings include JFR overhead and use only one measured iteration, so use the matching JMH benchmark rather than the profile duration to report an improvement.
 
+## Preserving A Profiling Round
+
+Run performance benchmarks and profiles from a clean committed runtime tree. Record the exact commit SHA and confirm that `git status --short` is empty before the first run. Documentation and generated profile reports may be added after measurement, but runtime, benchmark, and corpus changes must be committed first. If exceptional circumstances require profiling a dirty tree, preserve its complete patch and state explicitly that the recorded commit is not sufficient to reproduce the run.
+
+Create one checked-in directory under [`profiles`](./profiles) for each profiling round and link it from the performance-log entry. Its README must record the commands, tested revision, host and JVM, benchmark parameters, corpus hashes, and raw benchmark iterations or point to the log entry containing them. Export each JFR with [`../export-resolver-profile.sh`](../export-resolver-profile.sh) so the bundle retains phase events, hot methods, allocation sites, GC pauses, aggregated execution and allocation stacks, and the raw recording checksum. Raw JFR files are optional; retain them outside Git until the investigation closes in case additional views are needed.
+
+Workload changes caused by legitimate semantic corrections are valid performance changes. Preserve all emitted workload statistics and identify the responsible semantic commit when known so timing discontinuities can be interpreted without requiring an old recording.
+
 ## Performance Log
 
 Update this log whenever a resolver performance investigation concludes. Add the newest entry immediately below these instructions so entries remain in reverse chronological order.
 
 Each entry must record the UTC date and time, host name and relevant hardware or instance configuration, Codex session ID, tested revision, profiling targets added or used, findings, changes made, and any controlled before/after result. At closeout, run the profiling-related benchmarks serially on an otherwise idle host with default parameters unless the entry explicitly records its overrides: Resolver25 overhead, Resolver26 overhead, `correctResolution`, and the frozen property test. The full generated-workflow benchmarks are deliberately excluded because they exercise a different workload and are not controls for the profiling targets. Report every measured iteration, JMH score and error, units, work per operation, and mean time per resolution, property case, or correctness judgment. Include all emitted fixed-corpus statistics with their actual percentile labels. Do not compare results across different hosts, JVMs, benchmark parameters, or corpus revisions without calling out that difference.
+
+### 2026-08-22 17:12:04 UTC
+
+Host: `raymie-stata-codex`; KVM guest with one Intel Xeon 6975P-C socket, 48 physical cores / 96 vCPUs, 371 GiB RAM, no swap, two NUMA nodes. The cloud instance type was not available from the guest.
+
+Session: `01a02a6b-c8a2-75c3-a427-76c799e8d325`
+
+Tested revision: `91303870b87fe08cbb030ac4f28f4f7b0edbbe24`
+
+Profile evidence: [`profiles/2026-08-22-91303870`](./profiles/2026-08-22-91303870)
+
+This investigation used the existing frozen property-test and Resolver26-overhead JMH benchmarks and the `propertyTestProfile`, `resolver26OverheadProfile`, and diagnostic `correctResolutionProfile` JFR targets. Profiles repeated their prepared workload three times with `propertyTestBenchmarkLoopCount=3`, `resolverBenchmarkLoopCount=3`, or `correctResolutionBenchmarkLoopCount=3` and were written to `/tmp/1rv-property-test-20260822.jfr`, `/tmp/1rv-resolver26-overhead-20260822.jfr`, and `/tmp/1rv-correct-resolution-20260822.jfr`. The requested JMH benchmarks ran serially on an otherwise idle host with their default parameters on Corretto 21.0.4 and JMH 1.36. The property benchmark was repeated because its first result had wider iteration variance. The full four-benchmark closeout suite was not run because this investigation was scoped to the requested frozen property and Resolver26 benchmarks; `correctResolution` was added only as a diagnostic target.
+
+| Benchmark | Measured iterations | JMH score | Work per operation | Mean per unit |
+| --- | --- | --- | --- | --- |
+| Resolver26 overhead | 2.305, 2.296, 2.375 s/op | 2.325 +/- 0.786 s/op | 100 resolutions | 23.250 ms/resolution |
+| Frozen property test, run 1 | 0.610, 0.576, 0.750, 0.660, 0.574 s/op | 0.634 +/- 0.284 s/op | 1 property case / 12,763 expected resolver applications | 0.634 s/case |
+| Frozen property test, run 2 | 0.593, 0.721, 0.631, 0.646, 0.592 s/op | 0.636 +/- 0.202 s/op | 1 property case / 12,763 expected resolver applications | 0.636 s/case |
+| `correctResolution`, diagnostic | 0.976, 0.969, 1.047 s/op | 0.997 +/- 0.788 s/op | 50 judgments | 19.940 ms/judgment |
+
+The two frozen-property runs average 0.635 s/case across their ten measured iterations, 7.8% slower than the last reported 0.589 s/case. The slowdown is reproducible, but the nominal Resolver26 improvement from 3.637 to 2.325 s/op is not comparable: error-propagation semantics shortened the fixed query workload from an average of 219.61 to 68.73 executed resolvers per query, a 68.7% reduction, while fields returned fell from 811.35 to 301.52. The diagnostic `correctResolution` result is likewise not comparable with its prior 1.530 s/op baseline because its prepared results are shortened by the same behavior.
+
+Current Resolver26 overhead corpus statistics for 100 queries:
+
+```text
+fields returned: average=301.52, p90=448, max=732
+active fields returned: average=100.24, p90=169, max=295
+passive fields returned: average=201.28, p90=297, max=437
+passive fields per active field: average=2.25, p90=3.00, max=4.84
+resolvers executed: average=68.73, p90=107, max=165
+resolver executions with variable-bearing arguments: average=5.72, p50=9, max=20
+variable-bearing arguments per such resolver execution: average=1.00, p90=1, max=1
+maximum variable stack depth: average=0.59, p50=1, max=1
+result depth: average=8.58, p90=9, max=9
+active fields per non-Query object: average=1.88, p90=4, max=5
+passive fields per non-Query object: average=14.31, p90=18, max=18
+selections per object fragment: average=4.48, p90=18, max=39
+object fragment depth: average=1.63, p90=5, max=9
+```
+
+A controlled commit comparison on the same host and JVM located both changes at `86b9683a7287aabf73c10c1c98a8b57641d8955b` (`Propagate errors read from resolver inputs`). At `ba3901a08fc5a3845fed3d80509dd7898996401e`, the original Resolver26 workload scored 3.672 +/- 1.208 s/op from iterations 3.627, 3.748, and 3.642, matching the logged baseline. At `9bd8cf4af689516e974075ab369a7480c5e2185e`, the original workload scored 4.050 +/- 0.991 s/op from 4.008, 4.111, and 4.029, approximately 10.3% slower than `ba3901a08`; its frozen property case scored 0.595 +/- 0.095 s/op from 0.583, 0.568, 0.589, 0.601, and 0.633. At `86b9683a7`, Resolver26's workload changed to its current dimensions and scored 2.291 +/- 0.802 s/op from 2.274, 2.257, and 2.340, while the frozen property case regressed to 0.635 +/- 0.259 s/op from 0.613, 0.754, 0.593, 0.612, and 0.603. Propagated errors now terminate dependent resolver branches, which may be semantically correct, but the existing Resolver26 and `correctResolution` corpus timings no longer measure the workload represented by their logged baselines.
+
+The archived and current property profiles agree with the JMH regression. Average steady-state Resolver26 time was effectively flat at 302.658 ms before and 300.035 ms now, while application-identity reconstruction rose from 110.699 to 129.268 ms, `correctResolution` rose from 190.856 to 218.183 ms, object-path validation rose from 10.566 to 15.738 ms, and request preparation rose from 6.844 to 8.351 ms. These phases together rose approximately 8.0%. Garbage collection does not explain the change: recorded property-profile pause time fell from 20.9 to 18.9 ms.
+
+The clearest low-hanging allocation target is `ObjectCellStore.keys`: it returns `cells.keys.toSet()` on every access and accounts for 31.47% of current property-profile allocation pressure. The earlier profile attributed 31.68% to the underlying `LinkedHashMap.sequencedEntrySet` path, so this is longstanding overhead rather than the new regression. Correctness and witness traversals repeatedly request this complete copy. Caching a stable key set after `freeze()`, or replacing caller-side `key in keys` checks with direct membership and iteration APIs, should remove substantial allocation without changing semantics.
+
+The current shortened Resolver26 profile attributes approximately 40% of CPU samples to generated-output coercion and validation: `conformsToOutputSchemaType` 14.85%, `coerceOutputValue` 13.48%, and `GJSchema.lowerOrdinaryOutput` 11.43%, with overlapping structural `HashMap.getNode` work at 11.09%. Generated canonical outputs currently pass through coercion, source-to-lowered traversal, and conformance, each recursively processing lists. An internal canonical-output construction path that proves these invariants once is the next strongest optimization candidate for the current workload.
+
+The regression-introducing commit also added `firstErrorDataOrNull()` to every `QPlanEngineObjectDataImpl.get()`. It recursively scans list values whenever resolver input is read. Caching each immutable selection's first error would avoid repeated list scans and is a tightly scoped hypothesis for clawing back some of the commit-local cost, but this helper did not rank among the top CPU frames in the narrow profile and therefore needs a controlled benchmark before being treated as a demonstrated hotspot. Structural map hashing and lookup remain visible but are lower priority than eliminating complete key-set copies and duplicate output traversals.
+
+No runtime code changed during this investigation. The reduced Resolver26 work is a legitimate consequence of corrected error-propagation semantics, not a benchmark defect, but it prevents a direct timing comparison with earlier runs. Future log entries should preserve the emitted workload statistics and identify semantic commits that materially change them so apparent discontinuities have an explicit explanation.
 
 ### 2026-08-21 14:33:31 UTC
 
@@ -108,6 +167,8 @@ Host: `raymie-stata-codex`; KVM guest with one Intel Xeon 6975P-C socket, 48 phy
 Session: `01a0221d-5b61-76d2-9afc-13a06668c652`
 
 Base revision: `568dbc95d6b93342ed94b770814c95624d5fd291`; the profiling documentation and query-corpus changes described here were in the worktree.
+
+Profile evidence: [`profiles/2026-08-21-568dbc95`](./profiles/2026-08-21-568dbc95)
 
 This session added the three narrow JFR targets documented above and the isolated `correctResolution` and frozen property-test JMH benchmarks. The frozen property workload serializes Resolver26 broad-campaign round 46's `stamp-collisions` case at historical coordinate `S=10 R=4 Q=3`, so its 12,763 expected resolver applications remain stable as generators evolve. The property profile's phase events made Resolver26, application-identity reconstruction, `correctResolution`, and object-path binding validation independently visible.
 

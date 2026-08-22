@@ -99,8 +99,16 @@ private data class FromArgumentImpl(
     override val argument: ViaductSchema.FieldArg,
     override val inputPath: List<ViaductSchema.Field>,
 ) : VariableDefinition.FromArgument {
-    override fun read(arguments: Arguments.Resolved): EngineInputData? =
-        arguments.fieldValues.getValue(argument.name)
+    override fun read(arguments: Arguments.Resolved): EngineInputData? {
+        var value = arguments.fieldValues.getValue(argument.name)
+        inputPath.forEach { field ->
+            if (value == null) return null
+            val fields = value as? Map<*, *>
+                ?: error("From-argument variable path encountered non-object value $value")
+            value = fields[field.name]
+        }
+        return value
+    }
 }
 
 private data class FromObjectFieldImpl(

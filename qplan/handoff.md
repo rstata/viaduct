@@ -35,7 +35,9 @@ The current executor slice supports unbatched, non-selective field and node exec
 
 `RequiredSelectionSetVariableRecovery` reverse engineers the production RSS compilation recipes into `TestWorld.fromSDL(variableProviders = ...)`. It recursively unwraps `Validated`, accepts concrete Engine API `FromArgument` values with one path segment, and accepts `FromFieldVariablesResolver` only when its nested RSS proves a path in the root object RSS. It recursively validates provider dependencies, requires repeated nested recipes to agree, associates each provider with the exact variable occurrence owned by the decoded resolver fragment, and preserves renamed bindings and response-key aliases. It rejects missing, unused, duplicate, or inconsistent providers and every unsupported resolver shape rather than invoking callbacks or approximating semantics. See [`execution/README.md`](./execution/README.md) for production-code pointers, architecture, and testing details.
 
-Resolver26 now retains occurrence-stamped provider paths, including provider arguments sourced by another object-path binding. Nested input paths still need a deliberate registry representation; from-Query paths and arbitrary providers remain later work.
+Resolver26 now retains occurrence-stamped provider paths, including provider arguments sourced by another object-path binding. From-Query paths and arbitrary providers remain later work.
+
+The semantic registry now represents `FromArgument` as a canonical path rooted at a resolver argument. Every maintained resolver traverses input objects and returns null when an intermediate object is null; list traversal remains invalid. The executor feature-test adapter still recovers only one-segment Engine API `FromArgument` paths, so production-derived nested-input cases remain blocked at that pre-reasoning boundary until its owner lifts the restriction.
 
 ## Lowered Representation
 

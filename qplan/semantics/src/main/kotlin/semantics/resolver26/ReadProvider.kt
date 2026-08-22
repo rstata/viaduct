@@ -34,23 +34,9 @@ internal suspend fun ObjectEngineResult.readProvider(
     var currentPath = containingObjectPath
     definition.path.forEachIndexed { index, openKey ->
         runtime.awaitBindingsPrepared(current)
-        val localizedKey =
-            if (index == 0) {
-                openKey
-            } else {
-                selectionForestOf(
-                    Selection.of(
-                        key = openKey,
-                        possibleTypes = setOf(current.type),
-                        subselections = selectionForestOf(),
-                    ),
-                ).localizeTopLevelSelectionStamps(currentPath)
-                    .single()
-                    .key
-            }
-        val specializedKey: ObjectEngineResult.ObjectKey =
+        val specializedKey =
             Selection.of(
-                key = localizedKey,
+                key = openKey,
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
@@ -59,7 +45,7 @@ internal suspend fun ObjectEngineResult.readProvider(
                 specializedKey.field,
             )
         val occurrenceStamp = specializedKey.stamp as? Stamp.Occurrence
-        val groundKey: ObjectEngineResult.GroundKey =
+        val ownerGroundKey: ObjectEngineResult.GroundKey =
             if (occurrenceStamp == null) {
                 ObjectEngineResult.GroundKey.of(
                     field = specializedKey.field,
@@ -71,6 +57,20 @@ internal suspend fun ObjectEngineResult.readProvider(
                     field = specializedKey.field,
                     arguments = groundedArguments,
                 )
+            }
+        val groundKey =
+            if (index == 0) {
+                ownerGroundKey
+            } else {
+                selectionForestOf(
+                    Selection.of(
+                        key = ownerGroundKey,
+                        possibleTypes = setOf(current.type),
+                        subselections = selectionForestOf(),
+                    ),
+                ).localizeTopLevelSelectionStamps(currentPath)
+                    .single()
+                    .key as ObjectEngineResult.GroundKey
             }
         val cell = current.reserveCell(groundKey)
         diagnosticInstrumentation.cycleCheck(reader, cell)

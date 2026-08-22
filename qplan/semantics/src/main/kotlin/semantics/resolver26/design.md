@@ -36,11 +36,13 @@ An open resolver key contributes its object-fragment dependencies before its arg
 
 After closure, the orchestrator declares every open binding before launching local field work.
 
-`FromArgument` definitions owned by an already-ground key complete immediately. Definitions owned by open keys complete after that key grounds. Localized child stamps use explicit binding aliases whose values are copied from the source occurrence.
+`FromArgument` definitions owned by an already-ground key read their canonical input paths and complete immediately. A null input-object intermediate produces a null binding. Definitions owned by open keys complete after that key grounds. Localized child stamps use explicit binding aliases whose values are copied from the source occurrence.
 
 Each `FromObjectField` definition launches a provider reader that follows its occurrence-stamped compiled path through OER promises and completes the declared binding. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
 
 Before grounding a provider component inside an OER, its reader awaits that OER's binding-preparation promise. The orchestrator completes this promise immediately after synchronous demand closure declares the OER's bindings, before launching local field work. This is necessary when a passive object publishes a nested OER before that nested orchestration task runs.
+
+Nested provider keys ground their arguments against the owning resolver occurrence before the resulting ground key is localized to the concrete provider object path. Grounding and localization commute when the localized binding is an alias of the owner binding; grounding first avoids making provider progress depend on a descendant orchestrator declaring that alias.
 
 Readers never insert undeclared binding promises.
 

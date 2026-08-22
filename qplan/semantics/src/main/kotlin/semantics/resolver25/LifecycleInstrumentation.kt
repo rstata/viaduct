@@ -13,7 +13,7 @@ import model.VariableBinding
 
 internal sealed interface Resolver25BindingSource {
     data class FromArgument(
-        val argumentName: String,
+        val argumentPath: List<String>,
     ) : Resolver25BindingSource
 
     data class FromObjectField(

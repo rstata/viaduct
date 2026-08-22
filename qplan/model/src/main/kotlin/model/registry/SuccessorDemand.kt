@@ -286,9 +286,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
         variables.mapNotNull { (variable, definition) ->
             (definition as? VariableDefinition.FromArgument)?.let {
                 variable to
-                    arguments.fieldValues.getValue(
-                        definition.argument.name,
-                    )
+                    definition.read(arguments)
             }
         }.toMap()
     return objectFragment.substitute(bindings)

@@ -2,7 +2,9 @@ package semantics.contract
 
 import model.Arguments
 
+import model.ObjectEngineResult
 import model.PathComponent
+import model.VariableBinding
 import model.usedVariables
 import semantics.resolver25.DemandContributionId
 import semantics.resolver25.Resolver25KeyKind
@@ -44,7 +46,8 @@ internal object Resolver25LifecycleTraceValidators {
             val sealed = mutableSetOf<List<PathComponent>>()
             val declaredBindings =
                 mutableSetOf<Pair<List<PathComponent>, Arguments.Variable>>()
-            val completedBindingVariables = mutableSetOf<Arguments.Variable>()
+            val completedBindings =
+                mutableMapOf<Arguments.Variable, VariableBinding>()
             val contributionsByConsumer =
                 mutableMapOf<List<PathComponent>, MutableSet<DemandContributionId>>()
             val installedContributionIds = mutableSetOf<DemandContributionId>()
@@ -112,11 +115,33 @@ internal object Resolver25LifecycleTraceValidators {
                                             event.coordinate,
                                     )
                             }
-                            val unboundVariables =
+                            val stampedVariables =
                                 submission.selection.key.arguments
                                     .usedVariables()
                                     .filter(Arguments.Variable::isStamped)
-                                    .filterNot(completedBindingVariables::contains)
+                                    .toList()
+                            val groundedArguments =
+                                (
+                                    event.coordinate.lastOrNull()
+                                        as? ObjectEngineResult.GroundKey
+                                )?.arguments
+                            val requiredVariables =
+                                if (groundedArguments == Arguments.Error) {
+                                    val causalErrorIndex =
+                                        stampedVariables.indexOfFirst { variable ->
+                                            completedBindings[variable] ==
+                                                VariableBinding.Error
+                                        }
+                                    if (causalErrorIndex >= 0) {
+                                        stampedVariables.take(causalErrorIndex + 1)
+                                    } else {
+                                        stampedVariables
+                                    }
+                                } else {
+                                    stampedVariables
+                                }
+                            val unboundVariables =
+                                requiredVariables.filterNot(completedBindings::containsKey)
                             if (unboundVariables.isNotEmpty()) {
                                 violations +=
                                     violation(
@@ -220,7 +245,7 @@ internal object Resolver25LifecycleTraceValidators {
                                     "Binding completed before declaration: ${event.variable}",
                                 )
                         }
-                        completedBindingVariables += event.variable
+                        completedBindings[event.variable] = event.binding
                     }
                     is Resolver25LifecycleEvent.ResolverStarted -> {
                         if (event.coordinate !in sealed) {

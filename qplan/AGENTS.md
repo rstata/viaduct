@@ -10,6 +10,7 @@
 - [`model/guidelines.md`](./model/guidelines.md) - Read before changing semantic carriers, equality, factories, promises, keys, or result structures.
 - [`semantics/README.md`](./semantics/README.md) - Read before changing semantic transformations, resolver implementations, or correctness judgments.
 - [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) - Read before changing or interpreting resolver tests and generated profiles.
+- [`semantics/property-test-rounds.md`](./semantics/property-test-rounds.md) - Read before changing serialized generator profiles, campaign resources, or standalone property-test campaign execution.
 - [`resolver-test-dsl.md`](./resolver-test-dsl.md) - Read before adding schema-embedded deterministic resolver worlds or counterexamples.
 - [`arbitrary/README.md`](./arbitrary/README.md) - Read before changing schema, registry, query, or witness generation.
 - [`execution/README.md`](./execution/README.md) - Read before changing GraphQL execution, executor-backed feature tests, registry adaptation, or execution integration scope.

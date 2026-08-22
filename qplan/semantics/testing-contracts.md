@@ -130,12 +130,18 @@ Resolver25 also has independent unfiltered broad profiles. Every generated `S x 
   -Presolver25BroadStressSize=10:20:50
 ```
 
-The checked-in campaign script distributes persisted seeds across schema breadth, registry diversity, query interactions, and large/deep worlds. Use it for reproducible broad evidence rather than treating one large random product as sufficient coverage.
+The checked-in campaign distributes persisted seeds across schema breadth, registry diversity, query interactions, and large/deep worlds. Use it for reproducible broad evidence rather than treating one large random product as sufficient coverage.
 
 ```shell
-./run-resolver25-broad-campaign.sh
-./run-resolver25-broad-campaign.sh 1 21 46 81
+./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver25-broad-campaign-v1.json
+
+./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver25-broad-campaign-v1.json \
+  1 21 46 81
 ```
+
+The generic script builds the standalone property-test launcher once and then executes each campaign round in a fresh JVM after Gradle exits. Kotlin expands the serialized campaign and generator resources for both the launcher and the corresponding JUnit exact-coordinate replay.
 
 Replay one failed campaign coordinate through its recorded round and profile:
 
@@ -155,8 +161,12 @@ Every generated case checks exact attempted/resolved/completed accounting, exact
 The checked-in campaign uses fresh JVM rounds and persisted seeds distributed across schema breadth, registry diversity, query interactions, and large/deep worlds. Large/deep worlds bound generated list fanout so the budget explores depth instead of combinatorial list multiplication. Run persisted rounds with:
 
 ```shell
-./run-resolver26-broad-campaign.sh 21
+./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json \
+  21
 ```
+
+The campaign script builds the standalone property-test launcher once and invokes the serialized campaign directly; it does not run one Gradle or JUnit invocation per round.
 
 Replay one profile or exact coordinate from that round with:
 

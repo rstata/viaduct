@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "id": "resolver25-launcher-smoke",
+  "runs": [
+    {
+      "subjectProfileId": "resolver25-broad-correctness",
+      "testInputProfileId": "resolver25-balanced-standard",
+      "seed": 20260822001,
+      "counts": {
+        "schemas": 1,
+        "registriesPerSchema": 1,
+        "queriesPerSchema": 1
+      },
+      "requiredCoverage": []
+    }
+  ]
+}

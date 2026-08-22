@@ -40,6 +40,12 @@ Queries and registries are independently generated from one schema. Query source
 
 Configuration controls arguments, resolver fragments, variables by source, interfaces, unions, lists, node lowering, selection depth, resolver density, and other size or weighting decisions. Feature generation does not imply runtime activation; profiles that claim an interaction must record or require evidence that the relevant resolver application occurred.
 
+## Generator Configuration Data
+
+`GeneratorConfigData` is a versioned data-class representation of a fully resolved `Config`, built only from primitive maps and range data. It records every supported key, including defaults, so a later default change cannot reinterpret existing data. Conversion back to `Config` rejects unsupported versions, missing or unknown keys, keys in the wrong type group, and values rejected by their `ConfigKey`.
+
+`arbitrary` does not serialize this data or load resources. The property-test launcher layer owns JSON, resource indexes, and round files.
+
 Generated witnesses identify applications by canonical post-lowering field, exact arguments, materialized-input fingerprint, and, where required, result occurrence. Focused selective-demand profiles may capture supplied-demand detail; ordinary stress profiles avoid unnecessary witness cost.
 
 ## Failure Replay

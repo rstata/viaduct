@@ -12,8 +12,10 @@ import semantics.arbitrary.Config
 import semantics.arbitrary.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverTestRun
+import semantics.arbitrary.ResolverTestExecution
 import semantics.arbitrary.TestCaseCount
-import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.configuredResolverTestExecution
+import semantics.arbitrary.executeResolverTestCases
 import semantics.arbitrary.registeredResolverOccurrences
 import semantics.contract.registeredResolverApplicationIdentityCounts
 import semantics.contract.validateObjectPathBindings
@@ -30,7 +32,7 @@ class ResolverBroadStressTest {
         runBlocking {
             val broadProfile: Resolver26BroadStressProfile = configuredProfile()
             runResolver26BroadStress(
-                broadProfile = broadProfile,
+                requiredSignatures = broadProfile.requiredSignatures,
                 propertyProfile = broadProfile.propertyProfile,
                 counts = configuredCounts(broadProfile),
                 config = broadProfile.config,
@@ -103,11 +105,12 @@ class ResolverBroadStressTest {
 
 // Resolves and independently validates every case in one Resolver26 generated product.
 internal suspend fun runResolver26BroadStress(
-    broadProfile: Resolver26BroadStressProfile,
+    requiredSignatures: Set<Resolver26StructuralSignature>,
     propertyProfile: String,
     counts: TestCaseCount,
     config: Config,
     seed: Long,
+    execution: ResolverTestExecution = configuredResolverTestExecution(counts, propertyProfile),
 ): Int {
     val startedAt: Long = System.nanoTime()
     var attemptedCases = 0
@@ -124,8 +127,8 @@ internal suspend fun runResolver26BroadStress(
 
     try {
         val run: ResolverTestRun =
-            checkResolverTestCases(
-                counts = counts,
+            executeResolverTestCases(
+                execution = execution,
                 config = config,
                 profile = propertyProfile,
                 seed = seed,
@@ -200,9 +203,9 @@ internal suspend fun runResolver26BroadStress(
         assertEquals(run.expectedCases, resolutionCalls)
         assertEquals(run.expectedCases, completedCases)
         run.assertAggregate(
-            observedSignatures.containsAll(broadProfile.requiredSignatures),
-            "Resolver26 ${broadProfile.id} profile missed required signatures: " +
-                "${broadProfile.requiredSignatures - observedSignatures}; " +
+            observedSignatures.containsAll(requiredSignatures),
+            "Resolver26 profile $propertyProfile missed required signatures: " +
+                "${requiredSignatures - observedSignatures}; " +
                 "observed=$observedSignatures",
         )
         return completedCases

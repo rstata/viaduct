@@ -5,8 +5,10 @@ import model.fragmentFrom
 import model.objectOf
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
+import semantics.arbitrary.ResolverTestExecution
 import semantics.arbitrary.TestCaseCount
-import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.configuredResolverTestExecution
+import semantics.arbitrary.executeResolverTestCases
 import semantics.contract.registeredResolverApplicationIdentityCounts
 import semantics.contract.validateObjectPathBindings
 import semantics.correctresolution.correctResolution
@@ -97,6 +99,7 @@ internal suspend fun runResolver25BroadStress(
     counts: TestCaseCount,
     config: Config,
     seed: Long,
+    execution: ResolverTestExecution = configuredResolverTestExecution(counts, profile),
 ): Int {
     val startedAt = System.nanoTime()
     var attemptedCases = 0
@@ -112,8 +115,8 @@ internal suspend fun runResolver25BroadStress(
 
     try {
         val run =
-            checkResolverTestCases(
-                counts = counts,
+            executeResolverTestCases(
+                execution = execution,
                 config = config,
                 profile = profile,
                 seed = seed,

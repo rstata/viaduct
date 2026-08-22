@@ -38,7 +38,7 @@ After closure, the orchestrator declares every open binding before launching loc
 
 `FromArgument` definitions owned by an already-ground key complete immediately. Definitions owned by open keys complete after that key grounds. Localized child stamps use explicit binding aliases whose values are copied from the source occurrence.
 
-Each `FromObjectField` definition launches a provider reader that follows its compiled path through OER promises and completes the declared binding. Resolver26 currently requires argument-free provider path components.
+Each `FromObjectField` definition launches a provider reader that follows its occurrence-stamped compiled path through OER promises and completes the declared binding. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
 
 Readers never insert undeclared binding promises.
 

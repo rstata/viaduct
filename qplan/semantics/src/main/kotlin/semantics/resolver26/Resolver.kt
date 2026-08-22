@@ -240,25 +240,7 @@ private suspend fun orchestrateObject(
                     "Resolver26 expanded object key twice: $objectKey"
                 }
 
-                definitions.forEach { stampedDefinition ->
-                    when (val definition = stampedDefinition.definition) {
-                        is VariableDefinition.FromArgument -> Unit
-                        is VariableDefinition.FromObjectField -> {
-                            require(
-                                definition.path.all { providerKey ->
-                                    providerKey.field.args.isEmpty()
-                                },
-                            ) {
-                                "Resolver26 requires argument-free FromObjectField provider paths"
-                            }
-                            pathVariableDefinitions +=
-                                StampedObjectPathDefinition.of(
-                                    variable = stampedDefinition.variable,
-                                    path = definition.path,
-                                )
-                        }
-                    }
-                }
+                pathVariableDefinitions += objectFragment.pathVariableDefinitions
                 accumulatedDemand += objectFragment.constructionSelections
             }
         }
@@ -323,6 +305,7 @@ private suspend fun orchestrateObject(
                     target.readProvider(
                         definition = definition,
                         reader = reader,
+                        containingObjectPath = path,
                     )
                 world.completeBinding(definition.variable, binding)
             }

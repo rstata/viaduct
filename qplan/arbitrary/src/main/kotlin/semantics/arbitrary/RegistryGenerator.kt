@@ -62,6 +62,7 @@ data class RegistryFeatures(
     val fromObjectFieldVariableCount: Int,
     val literalVariableConvergenceCount: Int,
     val passiveTopLevelFromObjectFieldVariableUseCount: Int,
+    val fromObjectFieldProviderArgumentVariableCount: Int,
     val maximumFromObjectFieldPathLength: Int,
     val maximumFromObjectFieldVariableUseDepth: Int,
     val maximumVariablesPerOwner: Int,
@@ -103,6 +104,13 @@ class ArbitraryRegistry internal constructor(
     val fromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    /** Source resolvers whose provider key arguments depend on another object-path variable. */
+    val fromObjectFieldProviderArgumentVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .filter { provider -> provider.providerArgumentVariableNames().isNotEmpty() }
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose path variable is used below a passive top-level branch. */
@@ -653,6 +661,12 @@ private class RegistryGenerator(
                         variableProviders
                             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
                             .count { provider -> provider.topLevelUseField !in fieldSites },
+                    fromObjectFieldProviderArgumentVariableCount =
+                        variableProviders
+                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                            .count { provider ->
+                                provider.providerArgumentVariableNames().isNotEmpty()
+                            },
                     maximumFromObjectFieldPathLength =
                         variableProviders
                             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
@@ -1071,6 +1085,16 @@ private class RegistryGenerator(
                 occurrences.filter { occurrence ->
                     fragment.topLevelField(occurrence) in existingOwners
                 }
+            val providerArgumentOccurrences =
+                occurrences.filter { occurrence ->
+                    val useBranch =
+                        fragment.selections[occurrence.selectionPath.first()]
+                    variableProviders
+                        .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                        .any { provider ->
+                            provider.owner == consumer && provider.selection == useBranch
+                        }
+                }
             var orderedOccurrences = occurrences
             if (
                 passiveUseOccurrences.isNotEmpty() &&
@@ -1089,6 +1113,14 @@ private class RegistryGenerator(
                 orderedOccurrences =
                     ownerUseOccurrences +
                         orderedOccurrences.filterNot(ownerUseOccurrences::contains)
+            }
+            if (
+                providerArgumentOccurrences.isNotEmpty() &&
+                chance(config[ResolverFromObjectFieldProviderArgumentVariableWeight])
+            ) {
+                orderedOccurrences =
+                    providerArgumentOccurrences +
+                        orderedOccurrences.filterNot(providerArgumentOccurrences::contains)
             }
             val candidate =
                 orderedOccurrences.firstNotNullOfOrNull { occurrence ->
@@ -1133,6 +1165,15 @@ private class RegistryGenerator(
             val variableName = "resolverVar${ranks.getValue(consumer)}_$variableIndex"
             val providerSelection =
                 candidate.second.withResponseAliases(variableName)
+            val providerArgumentDependents =
+                variableProviders.withIndex().mapNotNull { indexed ->
+                    (indexed.value as? FromObjectFieldVariableProviderPlan)
+                        ?.takeIf { provider ->
+                            provider.owner == consumer &&
+                                provider.selection ==
+                                fragment.selections[candidate.first.selectionPath.first()]
+                        }?.let { provider -> indexed.index to provider }
+                }
             variableProviders +=
                 FromObjectFieldVariableProviderPlan(
                     owner = consumer,
@@ -1146,14 +1187,21 @@ private class RegistryGenerator(
                     topLevelUseField = fragment.topLevelField(candidate.first),
                     literalConvergence = false,
                 )
+            val updatedSelections =
+                (fragment.selections + providerSelection).replaceArgument(
+                    selectionPath = candidate.first.selectionPath,
+                    argumentName = candidate.first.argument.name,
+                    valuePath = candidate.first.valuePath,
+                    value = VariableInputPlan(variableName),
+                )
+            providerArgumentDependents.forEach { (index, provider) ->
+                variableProviders[index] =
+                    provider.copy(
+                        selection = updatedSelections[candidate.first.selectionPath.first()],
+                    )
+            }
             fragment.copy(
-                selections =
-                    (fragment.selections + providerSelection).replaceArgument(
-                        selectionPath = candidate.first.selectionPath,
-                        argumentName = candidate.first.argument.name,
-                        valuePath = candidate.first.valuePath,
-                        value = VariableInputPlan(variableName),
-                    ),
+                selections = updatedSelections,
             )
         }
     }
@@ -1184,10 +1232,21 @@ private class RegistryGenerator(
             fieldName = fieldName,
         )
 
-    /** Splits direct and nested providers so configured profiles can exercise nested paths deliberately instead of relying on their share of one shuffled candidate pool. */
+    /** Prefers argument-bearing providers when a profile requests provider-argument dependencies. */
     private fun List<FragmentSelectionPlan>.chooseProviderPath(): FragmentSelectionPlan? {
         if (isEmpty()) return null
-        val (nested, direct) = shuffled(random).partition { selection -> selection.pathLength() > 1 }
+        val argumentBearing = filter(FragmentSelectionPlan::hasPathArguments)
+        val candidates =
+            if (
+                argumentBearing.isNotEmpty() &&
+                chance(config[ResolverFromObjectFieldProviderArgumentVariableWeight])
+            ) {
+                argumentBearing
+            } else {
+                this
+            }
+        val (nested, direct) =
+            candidates.shuffled(random).partition { selection -> selection.pathLength() > 1 }
         return if (chance(config[ResolverNestedProviderPathWeight])) {
             nested.firstOrNull() ?: direct.firstOrNull()
         } else {
@@ -1278,7 +1337,6 @@ private class RegistryGenerator(
             .fieldsOn(ownerName)
             .filter { field ->
                 !field.isGeneratedHashField() &&
-                    field.arguments.isEmpty() &&
                     (
                         field.coordinate !in fieldSites ||
                             ranks.getValue(field.coordinate) < consumerRank
@@ -1290,7 +1348,7 @@ private class RegistryGenerator(
                         listOf(
                             FragmentSelectionPlan(
                                 fieldName = field.name,
-                                arguments = emptyMap(),
+                                arguments = providerArguments(field),
                                 subselections = emptyList(),
                             ),
                         )
@@ -1309,7 +1367,7 @@ private class RegistryGenerator(
                         ).map { nested ->
                             FragmentSelectionPlan(
                                 fieldName = field.name,
-                                arguments = emptyMap(),
+                                arguments = providerArguments(field),
                                 subselections = listOf(nested),
                             )
                         }
@@ -1317,6 +1375,13 @@ private class RegistryGenerator(
                     else -> emptyList()
                 }
             }
+        }
+
+    private fun providerArguments(
+        field: FieldDefinitionSpec,
+    ): Map<String, InputValuePlan> =
+        field.arguments.associate { argument ->
+            argument.name to inputLiteral(argument.type)
         }
 
     private fun FragmentSelectionPlan.hasAbstractPath(ownerName: String): Boolean {
@@ -1923,6 +1988,10 @@ private fun FragmentSelectionPlan.withResponseAliases(
 private fun FragmentSelectionPlan.pathLength(): Int =
     1 + (subselections.singleOrNull()?.pathLength() ?: 0)
 
+private fun FragmentSelectionPlan.hasPathArguments(): Boolean =
+    arguments.isNotEmpty() ||
+        subselections.singleOrNull()?.hasPathArguments() == true
+
 private fun sensitiveScalar(
     scalar: ScalarKind,
     input: EngineObjectData.Sync,
@@ -2079,6 +2148,29 @@ private fun InputValuePlan.containsVariable(): Boolean =
         is ErrorInputPlan,
         is NullInputPlan,
         -> false
+    }
+
+private fun FragmentSelectionPlan.argumentVariableNames(): Set<String> =
+    arguments.values.flatMapTo(linkedSetOf(), InputValuePlan::variableNames)
+
+private fun InputValuePlan.variableNames(): Set<String> =
+    when (this) {
+        is VariableInputPlan -> setOf(variableName)
+        is ListInputPlan -> elements.flatMapTo(linkedSetOf(), InputValuePlan::variableNames)
+        is ObjectInputPlan -> fields.values.flatMapTo(linkedSetOf(), InputValuePlan::variableNames)
+        is InputLiteralPlan,
+        is ErrorInputPlan,
+        is NullInputPlan,
+        -> emptySet()
+    }
+
+private fun FromObjectFieldVariableProviderPlan.providerArgumentVariableNames(): Set<String> =
+    buildSet {
+        var current = selection
+        while (true) {
+            addAll(current.argumentVariableNames())
+            current = current.subselections.singleOrNull() ?: break
+        }
     }
 
 private fun InputValuePlan.replace(

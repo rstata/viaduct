@@ -63,6 +63,111 @@ interface ObjectFragmentFromObjectPathResolverContract :
     }
 
     @Test
+    fun `grounds an object-path provider argument from the owner argument`() {
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      result(seed: Int!): Int!
+                        @resolver(
+                          of: "source(value: ${'$'}seed) consume(value: ${'$'}provided)"
+                          pathVars: [{name: "provided", path: ["source"]}]
+                          result: "sum(consume)"
+                        )
+                      source(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                      consume(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                    }
+                    """.trimIndent(),
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                mapOf("seed" to 7),
+            )
+
+        val resolved = resolveAndValidate(world, "query { result(seed: 7) }")
+
+        assertEquals(7, resolved.getCell(resultKey).get())
+    }
+
+    @Test
+    fun `grounds an object-path provider argument from another object path`() {
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "consume(value: ${'$'}provided) source(value: ${'$'}sourceArg) seed"
+                          pathVars: [
+                            {name: "provided", path: ["source"]}
+                            {name: "sourceArg", path: ["seed"]}
+                          ]
+                          result: "sum(consume)"
+                        )
+                      consume(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                      source(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                      seed: Int! @resolver(result: 11)
+                    }
+                    """.trimIndent(),
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                emptyMap(),
+            )
+
+        val resolved = resolveAndValidate(world, "query { result }")
+
+        assertEquals(11, resolved.getCell(resultKey).get())
+    }
+
+    @Test
+    fun `grounds a nested provider argument from another object path`() {
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "box { source(value: ${'$'}sourceArg) } consume(value: ${'$'}provided) seed"
+                          pathVars: [
+                            {name: "provided", path: ["box", "source"]}
+                            {name: "sourceArg", path: ["seed"]}
+                          ]
+                          result: "sum(consume)"
+                        )
+                      box: Box! @resolver(result: {})
+                      consume(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                      seed: Int! @resolver(result: 13)
+                    }
+
+                    type Box {
+                      source(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                    }
+                    """.trimIndent(),
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                emptyMap(),
+            )
+
+        val resolved = resolveAndValidate(world, "query { result }")
+
+        assertEquals(13, resolved.getCell(resultKey).get())
+    }
+
+    @Test
     fun `binds null and error from nullable provider paths`() {
         listOf(false, true).forEach { isError ->
             val provided = null

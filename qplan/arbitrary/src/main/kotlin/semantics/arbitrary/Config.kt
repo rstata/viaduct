@@ -101,6 +101,7 @@ object ResolverFromObjectFieldVariableUseDepth :
     ConfigKey<IntRange>(1..Int.MAX_VALUE, ::range)
 object ResolverFromObjectFieldPassiveUseWeight : ConfigKey<Double>(0.0, ::weight)
 object ResolverFromObjectFieldVariableOwnerUseWeight : ConfigKey<Double>(0.0, ::weight)
+object ResolverFromObjectFieldProviderArgumentVariableWeight : ConfigKey<Double>(0.0, ::weight)
 object ResolverVariablesOnQueryFieldsOnly : ConfigKey<Boolean>(false, { null })
 object ResolverVariablesOnNonQueryFieldsOnly : ConfigKey<Boolean>(false, { null })
 object ResolverFromObjectFieldVariableOwnerLimit :

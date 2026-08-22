@@ -22,6 +22,7 @@ import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverFromObjectFieldPassiveUseWeight
+import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverFromObjectFieldProviderPathLength
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
@@ -82,6 +83,7 @@ internal enum class Resolver25BroadStressProfile(
                 (ResolverVariableCount to 2..4) +
                 (ResolverLiteralVariableConvergenceWeight to 0.45) +
                 (ResolverFromObjectFieldPassiveUseWeight to 0.5) +
+                (ResolverFromObjectFieldProviderArgumentVariableWeight to 1.0) +
                 (ResolverFromObjectFieldVariableOwnerUseWeight to 0.5),
     ),
     MULTIPLE_OWNERS(

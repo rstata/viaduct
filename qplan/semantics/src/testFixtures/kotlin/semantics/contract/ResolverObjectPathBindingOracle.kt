@@ -14,11 +14,11 @@ import model.Selection
 import model.Stamp
 import model.VariableBinding
 import model.instantiateBindings
+import model.localizeTopLevelSelectionStamps
 import model.objectKey
 import model.outputType
 import model.registry.FieldResolver
 import model.registry.StampedObjectPathDefinition
-import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
@@ -37,7 +37,10 @@ fun ObjectEngineResult.validateObjectPathBindings() {
             .boundObjectPathDefinitions(cell.occurrencePath)
             .forEach { definition ->
                 val expected =
-                    cell.containingObject.readCompletedProvider(definition.path)
+                    cell.containingObject.readCompletedProvider(
+                        path = definition.path,
+                        reader = cell.occurrencePath,
+                    )
                 assertEquals(expected, world.getBinding(definition.variable))
             }
     }
@@ -48,24 +51,12 @@ internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
 ): List<StampedObjectPathDefinition> {
     val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
-    val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
-    val selectionStampedDefinitions =
-        if (selectionStamp != null) {
-            selectionStampedVariableDefinitionsFrom(selectionStamp)
-        } else {
-            selectionStampedVariableDefinitions(path)
-        }
-    val boundDefinitions =
-        selectionStampedDefinitions
-            .mapNotNull { stampedDefinition ->
-                (stampedDefinition.definition as? VariableDefinition.FromObjectField)?.let {
-                    StampedObjectPathDefinition.of(
-                        variable = stampedDefinition.variable,
-                        path = it.path,
-                    )
-                }
-            }
-    return boundDefinitions
+    val resolverStamp =
+        (groundKey?.stamp as? Stamp.Occurrence)
+            ?: Stamp.Occurrence.of(path)
+    val occurrenceDefinitions =
+        instantiateObjectFragment(resolverStamp).pathVariableDefinitions
+    return occurrenceDefinitions
         .takeIf { definitions ->
             definitions.isNotEmpty() &&
                 definitions.all { definition -> world.isBound(definition.variable) }
@@ -75,12 +66,28 @@ internal fun FieldResolver.boundObjectPathDefinitions(
 context(world: Assumptions)
 private fun ObjectEngineResult.readCompletedProvider(
     path: List<ObjectEngineResult.Key>,
+    reader: List<PathComponent>,
 ): VariableBinding {
     var current = this
+    var currentPath = reader.dropLast(1)
     path.forEachIndexed { index, openKey ->
+        val localizedKey =
+            if (index == 0) {
+                openKey
+            } else {
+                selectionForestOf(
+                    Selection.of(
+                        key = openKey,
+                        possibleTypes = setOf(current.type),
+                        subselections = selectionForestOf(),
+                    ),
+                ).localizeTopLevelSelectionStamps(currentPath)
+                    .single()
+                    .key
+            }
         val specialized =
             Selection.of(
-                key = openKey,
+                key = localizedKey,
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
@@ -106,6 +113,7 @@ private fun ObjectEngineResult.readCompletedProvider(
         current =
             value as? ObjectEngineResult
                 ?: error("Completed provider path crossed a non-object at $key")
+        currentPath += key
     }
     error("Provider path must be nonempty")
 }

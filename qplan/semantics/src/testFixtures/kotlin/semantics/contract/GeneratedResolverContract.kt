@@ -16,9 +16,11 @@ import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverTestRun
+import semantics.arbitrary.ResolverVariableCount
 import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.RootQueryFieldCount
@@ -276,8 +278,10 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
         runBlocking {
             var generatedVariables = 0
             var generatedNestedProviderPaths = 0
+            var generatedProviderArgumentVariables = 0
             var activatedApplications = 0
             var activatedNestedProviderApplications = 0
+            var activatedProviderArgumentApplications = 0
             val config =
                 Config.default +
                     (SchemaObjectCount to 4..6) +
@@ -291,6 +295,8 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
                     (ResolverFragmentWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to false) +
                     (ResolverNestedProviderPathWeight to 1.0) +
+                    (ResolverFromObjectFieldProviderArgumentVariableWeight to 1.0) +
+                    (ResolverVariableCount to 2..4) +
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to true) +
                     objectPathGeneratorConfigOverrides
@@ -309,6 +315,8 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
                     if (features.maximumFromObjectFieldPathLength > 1) {
                         generatedNestedProviderPaths += 1
                     }
+                    generatedProviderArgumentVariables +=
+                        features.fromObjectFieldProviderArgumentVariableCount
                     val observation =
                         observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
                     activatedApplications +=
@@ -323,6 +331,12 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
                                 application.key.field,
                             )
                         }
+                    activatedProviderArgumentApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.sourceResolverCoordinate(application.key.field) in
+                                testCase.registry
+                                    .fromObjectFieldProviderArgumentVariableOwnerFields
+                        }
                 }
 
             run.assertAggregate(
@@ -334,12 +348,20 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
                 "Generated FromObjectField profile produced no nested provider paths",
             )
             run.assertAggregate(
+                generatedProviderArgumentVariables > 0,
+                "Generated FromObjectField profile produced no provider-argument dependencies",
+            )
+            run.assertAggregate(
                 activatedApplications > 0,
                 "Generated FromObjectField profile activated no variable-bearing resolvers",
             )
             run.assertAggregate(
                 activatedNestedProviderApplications > 0,
                 "Generated FromObjectField profile activated no resolver with a nested provider path",
+            )
+            run.assertAggregate(
+                activatedProviderArgumentApplications > 0,
+                "Generated FromObjectField profile activated no provider-argument dependency",
             )
         }
 }

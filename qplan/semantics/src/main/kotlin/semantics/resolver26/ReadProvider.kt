@@ -12,8 +12,10 @@ import model.ObjectEngineResult
 import model.outputType
 import model.PathComponent
 import model.Selection
+import model.Stamp
 import model.VariableBinding
 import model.fetchBindings
+import model.localizeTopLevelSelectionStamps
 import model.objectKey
 import model.selectionForestOf
 import model.toEngineSimpleData
@@ -25,23 +27,49 @@ context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
 internal suspend fun ObjectEngineResult.readProvider(
     definition: StampedObjectPathDefinition,
     reader: List<PathComponent>,
+    containingObjectPath: List<PathComponent>,
 ): VariableBinding {
     var current = this
+    var currentPath = containingObjectPath
     definition.path.forEachIndexed { index, openKey ->
+        val localizedKey =
+            if (index == 0) {
+                openKey
+            } else {
+                selectionForestOf(
+                    Selection.of(
+                        key = openKey,
+                        possibleTypes = setOf(current.type),
+                        subselections = selectionForestOf(),
+                    ),
+                ).localizeTopLevelSelectionStamps(currentPath)
+                    .single()
+                    .key
+            }
         val specializedKey: ObjectEngineResult.ObjectKey =
             Selection.of(
-                key = openKey,
+                key = localizedKey,
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
-        val groundKey: ObjectEngineResult.GroundKey =
-            ObjectEngineResult.GroundKey.of(
-                field = specializedKey.field,
-                arguments =
-                    specializedKey.arguments.fetchBindings(
-                        specializedKey.field,
-                    ),
+        val groundedArguments =
+            specializedKey.arguments.fetchBindings(
+                specializedKey.field,
             )
+        val occurrenceStamp = specializedKey.stamp as? Stamp.Occurrence
+        val groundKey: ObjectEngineResult.GroundKey =
+            if (occurrenceStamp == null) {
+                ObjectEngineResult.GroundKey.of(
+                    field = specializedKey.field,
+                    arguments = groundedArguments,
+                )
+            } else {
+                ObjectEngineResult.GroundKey.of(
+                    stamp = occurrenceStamp,
+                    field = specializedKey.field,
+                    arguments = groundedArguments,
+                )
+            }
         val cell = current.reserveCell(groundKey)
         diagnosticInstrumentation.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
@@ -54,6 +82,7 @@ internal suspend fun ObjectEngineResult.readProvider(
             is ObjectEngineResult -> current = value
             else -> error("Resolver26 provider path crossed a non-object at $groundKey")
         }
+        currentPath += groundKey
     }
     error("Resolver26 provider path must be nonempty")
 }

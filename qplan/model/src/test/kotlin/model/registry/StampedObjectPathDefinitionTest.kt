@@ -231,12 +231,20 @@ class StampedObjectPathDefinitionTest {
             assertIs<ObjectEngineResult.VariableKey>(fullyStampedMarker.key)
         val fullyStampedMarkerStamp =
             assertIs<Stamp.Occurrence>(fullyStampedMarkerKey.stamp)
+        val occurrenceDefinition = objectFragment.pathVariableDefinitions.single()
+        val occurrenceProviderKey =
+            objectFragment.materializeSelections
+                .filter { selection -> selection.responseKey == "source" }
+                .single()
+                .key
         assertEquals(
             selectionStampedValue,
             assertIs<ObjectEngineResult.VariableKey>(
                 fullyStampedMarker.key,
             ).variableDefinedByThisKey,
         )
+        assertEquals(selectionStampedValue, occurrenceDefinition.variable)
+        assertEquals(listOf(occurrenceProviderKey), occurrenceDefinition.path)
 
         val localizationPath = listOf(ListEngineResult.Index.of(2))
         val localizedMarker =

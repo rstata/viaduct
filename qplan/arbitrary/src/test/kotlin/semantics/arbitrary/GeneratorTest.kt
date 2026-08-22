@@ -659,6 +659,42 @@ class GeneratorTest {
     }
 
     @Test
+    fun `object path variables regularly supply provider arguments`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 0.5) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (NodeResolversEnabled to false) +
+                (QueryFieldCount to 6..6) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to false) +
+                (ResolverFromObjectFieldProviderArgumentVariableWeight to 1.0) +
+                (ResolverVariableCount to 2..4) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariablesEnabled to true)
+        val random = RandomSource.seeded(97534L)
+        var registriesWithProviderArgumentVariables = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            if (registry.features.fromObjectFieldProviderArgumentVariableCount > 0) {
+                registriesWithProviderArgumentVariables += 1
+            }
+        }
+
+        assertTrue(
+            registriesWithProviderArgumentVariables >= 10,
+            "Only $registriesWithProviderArgumentVariables of 100 registries " +
+                "contained a provider-argument variable dependency",
+        )
+    }
+
+    @Test
     fun `list variable providers preserve required element nullability`() {
         val target =
             ListVariableTarget(

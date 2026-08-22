@@ -39,6 +39,9 @@ typealias FieldResolverApplicationObserver =
 sealed interface ResolverObjectFragment {
     val materializeSelections: MaterializeSelectionForest
     val constructionSelections: SelectionForest
+
+    /** Object-path definitions whose keys retain this fragment's occurrence stamps. */
+    val pathVariableDefinitions: List<StampedObjectPathDefinition>
 }
 
 /**
@@ -98,29 +101,19 @@ class FieldResolver private constructor(
         val materializeSelections = objectFragmentTemplate.stampVariables(path)
         val stampedFragment: SelectionForest =
             materializeSelections.constructionSelections()
+        val pathVariableDefinitions = stampedPathVarDefinitions(path)
         val pathVarSelections: SelectionForest =
-            variables.entries
-                .mapNotNull { (variable, definition) ->
-                    (definition as? VariableDefinition.FromObjectField)?.let {
-                        stampedFragment.markProviderPath(
-                            path =
-                                it.path.map { key ->
-                                    ObjectEngineResult.Key.of(
-                                        field = key.field,
-                                        arguments =
-                                            key.arguments.stampVars(
-                                                key.field,
-                                                path,
-                                            ),
-                                    )
-                                },
-                            variable = variable.stamp(path),
-                        )
-                    }
+            pathVariableDefinitions
+                .map { definition ->
+                    stampedFragment.markProviderPath(
+                        path = definition.path,
+                        variable = definition.variable,
+                    )
                 }.concatenateSelectionForests()
         return ResolverObjectFragmentImpl(
             materializeSelections = materializeSelections,
             constructionSelections = stampedFragment + pathVarSelections,
+            pathVariableDefinitions = pathVariableDefinitions,
         )
     }
 
@@ -165,19 +158,35 @@ class FieldResolver private constructor(
                 occurrenceIds = selectionOccurrenceIds,
             )
         val constructionBase = materializeSelections.constructionSelections()
+        val stampedDefinitions = selectionStampedVariableDefinitions(resolverStamp)
+        val providerPaths =
+            stampedDefinitions.mapNotNull { stampedDefinition ->
+                (stampedDefinition.definition as? VariableDefinition.FromObjectField)?.let {
+                    OccurrenceProviderPath(
+                        definition =
+                            StampedObjectPathDefinition.of(
+                                variable = stampedDefinition.variable,
+                                path =
+                                    constructionBase.occurrencePathFor(
+                                        sourcePath = it.path,
+                                    ),
+                            ),
+                        sourcePath = it.path,
+                    )
+                }
+            }
         val pathVarSelections: SelectionForest =
-            selectionStampedVariableDefinitions(resolverStamp)
-                .mapNotNull { stampedDefinition ->
-                    (stampedDefinition.definition as? VariableDefinition.FromObjectField)?.let {
-                        constructionBase.markProviderSourcePath(
-                            sourcePath = it.path,
-                            variable = stampedDefinition.variable,
-                        )
-                    }
+            providerPaths
+                .map { providerPath ->
+                    constructionBase.markProviderSourcePath(
+                        sourcePath = providerPath.sourcePath,
+                        variable = providerPath.definition.variable,
+                    )
                 }.concatenateSelectionForests()
         return ResolverObjectFragmentImpl(
             materializeSelections = materializeSelections,
             constructionSelections = constructionBase + pathVarSelections,
+            pathVariableDefinitions = providerPaths.map(OccurrenceProviderPath::definition),
         )
     }
 
@@ -377,7 +386,13 @@ class FieldResolver private constructor(
 private class ResolverObjectFragmentImpl(
     override val materializeSelections: MaterializeSelectionForest,
     override val constructionSelections: SelectionForest,
+    override val pathVariableDefinitions: List<StampedObjectPathDefinition>,
 ) : ResolverObjectFragment
+
+private data class OccurrenceProviderPath(
+    val definition: StampedObjectPathDefinition,
+    val sourcePath: List<ObjectEngineResult.Key>,
+)
 
 private fun MaterializeSelectionForest.stampVariables(
     path: List<PathComponent>,
@@ -586,6 +601,35 @@ private fun Selection.hasSourceKey(sourceKey: ObjectEngineResult.Key): Boolean {
             ?.occurrenceLineage
             ?.last()
     return occurrenceId?.represents(sourceKey) ?: (key == sourceKey)
+}
+
+private fun SelectionForest.occurrencePathFor(
+    sourcePath: List<ObjectEngineResult.Key>,
+): List<ObjectEngineResult.Key> {
+    val matches = occurrencePathsFor(sourcePath).distinct()
+    check(matches.size == 1) {
+        "Provider source path must identify one occurrence-specific path: $sourcePath"
+    }
+    return matches.single()
+}
+
+private fun SelectionForest.occurrencePathsFor(
+    sourcePath: List<ObjectEngineResult.Key>,
+): List<List<ObjectEngineResult.Key>> {
+    val sourceKey = sourcePath.first()
+    val remaining = sourcePath.drop(1)
+    return buildList {
+        this@occurrencePathsFor.forEach { selection ->
+            if (!selection.hasSourceKey(sourceKey)) return@forEach
+            if (remaining.isEmpty()) {
+                add(listOf(selection.key))
+            } else {
+                selection.subselections
+                    .occurrencePathsFor(remaining)
+                    .forEach { suffix -> add(listOf(selection.key) + suffix) }
+            }
+        }
+    }
 }
 
 private fun SelectionForest.containsPath(path: List<ObjectEngineResult.Key>): Boolean {

@@ -17,6 +17,7 @@ import model.ListEngineResult
 import model.MaterializeSelection
 import model.ObjectEngineResult
 import model.outputType
+import model.outputValue
 import model.PathComponent
 import viaduct.graphql.schema.ViaductSchema
 import model.fragmentFrom
@@ -269,7 +270,7 @@ class MaterializeTest {
                     .name,
             )
 
-            val users = assertIs<List<*>>(materialized.get("users"))
+            val users = assertIs<List<*>>(materialized.outputValue("users"))
             assertEquals(3, users.size)
             val listedUser = assertIs<EngineObjectData.Sync>(users[0])
             assertSame(user.gjDef, listedUser.type)

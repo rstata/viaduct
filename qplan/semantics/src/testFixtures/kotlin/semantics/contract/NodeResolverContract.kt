@@ -2,13 +2,16 @@ package semantics.contract
 
 import model.requireField
 import model.requireObjectField
+import model.EngineErrorData
 import model.EngineResult
 import model.EngineIDResult
 import model.EngineOutputListData
+import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
+import model.fragmentFrom
 import model.objectOf
 import model.requireOutputType
 import model.requireType
@@ -18,13 +21,99 @@ import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import org.junit.jupiter.api.Test
 import viaduct.graphql.schema.toTypeExpr
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * Contract for source fields whose node outputs are resolved through fixture-lowered loaders.
  */
 interface NodeResolverContract : ResolverContract {
+    @Test
+    fun `awaits completion for node in required selection set`() {
+        val failedNodeCompleted = AtomicBoolean()
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    interface Node { id: ID! }
+
+                    type Query { baz: Baz! }
+
+                    type Baz implements Node {
+                      id: ID!
+                      anotherBaz: Baz!
+                      z: Int!
+                    }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    mapOf(
+                        schema.contractObjectType("Baz") to
+                            nodeResolverOf { id ->
+                                when (id) {
+                                    "1" ->
+                                        schema.objectOf("Baz") {
+                                            "id" setTo id
+                                        }
+                                    "2" -> {
+                                        failedNodeCompleted.set(true)
+                                        EngineErrorData.of()
+                                    }
+                                    else -> error("Unexpected Baz ID: $id")
+                                }
+                            },
+                    )
+                },
+                fieldResolvers = { schema ->
+                    val baz = schema.requireObjectField("Query", "baz_V_A_node")
+                    val anotherBaz =
+                        schema.requireObjectField("Baz", "anotherBaz_V_A_node")
+                    val z = schema.requireObjectField("Baz", "z")
+                    mapOf(
+                        baz to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Baz") {
+                                    "id" setTo "1"
+                                }
+                            },
+                        anotherBaz to
+                            fieldResolverOf(schema.emptyFragmentOf("Baz")) { _, _ ->
+                                schema.objectOf("Baz") {
+                                    "id" setTo "2"
+                                }
+                            },
+                        z to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Z on Baz { anotherBaz { id } }",
+                                ),
+                            ) { input, _ ->
+                                input.get("anotherBaz")
+                                5
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val result = resolveAndValidate(world, "query { baz { z } }")
+        val bridge =
+            assertIs<ObjectEngineResult>(
+                result.getCell(schema.contractKey("Query", "baz_V_A_node")).get(),
+            )
+        val baz =
+            assertIs<ObjectEngineResult>(
+                bridge.getCell(schema.contractKey("Baz_V_A_Bridge", "node")).get(),
+            )
+
+        assertIs<ErrorEngineResult>(
+            baz.getCell(schema.contractKey("Baz", "z")).get(),
+        )
+        assertTrue(failedNodeCompleted.get())
+    }
+
     @Test
     fun `resolves an empty query through field and node resolvers`() {
         val testWorld =

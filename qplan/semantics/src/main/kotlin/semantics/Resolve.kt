@@ -13,6 +13,7 @@ import model.PathComponent
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
 import model.groundKey
+import model.outputValue
 import model.registry.demandsFromSibling
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
@@ -143,7 +144,7 @@ internal fun EngineObjectData.Sync.resolveKey(
                         )
                     }
                 } else {
-                    get(key.field.name)
+                    outputValue(key.field.name)
                 }
             val resolvedValue =
                 fieldValue.resolveValue(

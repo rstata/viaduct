@@ -13,6 +13,7 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.outputType
+import model.outputValue
 import model.PathComponent
 import model.Stamp
 import model.schemaType
@@ -187,7 +188,7 @@ private fun ObjectEngineResult.objectFieldsConformToResolverValue(
             false
         } else {
             getCell(groundKey).getValue().get().engineResultConformsToResolverValue(
-                resolverValue.get(fieldName),
+                resolverValue.outputValue(fieldName),
                 groundKey.field.outputType,
             )
         }

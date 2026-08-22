@@ -17,6 +17,7 @@ import model.PathComponent
 import model.Promise
 import model.SelectionForest
 import model.groundKey
+import model.outputValue
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
@@ -127,7 +128,7 @@ private suspend fun resolveSlot(
                             )
                         }
                     } else {
-                        source.get(key.field.name)
+                        source.outputValue(key.field.name)
                     }
                 val resolvedValue =
                     fieldValue.resolveValue(

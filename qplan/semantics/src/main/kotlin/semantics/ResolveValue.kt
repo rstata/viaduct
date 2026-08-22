@@ -11,6 +11,7 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.outputType
+import model.outputValue
 import model.PathComponent
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
@@ -152,7 +153,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
                 "Passive object field ${schemaType.name}/${key.field.name} must be argumentless"
             }
             val fieldValue =
-                get(key.field.name)
+                outputValue(key.field.name)
                     .resolveValue(
                         expectedType = key.field.outputType,
                         path = path + key,

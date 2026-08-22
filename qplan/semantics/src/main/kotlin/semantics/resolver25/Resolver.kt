@@ -43,6 +43,7 @@ import model.materializeSelectionForestOf
 import model.merge
 import model.mergeWithVariables
 import model.objectKey
+import model.outputValue
 import model.requireField
 import model.selectionForestOf
 import model.toEngineResult
@@ -390,7 +391,7 @@ private class ObjectResultOrchestrator(
             existing -> {
                 val nestedFringe: List<Deferred<Unit>> =
                     source
-                        .get(groundedKey.field.name)
+                        .outputValue(groundedKey.field.name)
                         .launchNestedFringe(
                             result = target.getCell(groundedKey).getValue().get(),
                             path = coordinate,
@@ -450,7 +451,7 @@ private class ObjectResultOrchestrator(
         runtime.scope.launch {
             keyState.promiseInstalled.await()
             source
-                .get(groundedKey.field.name)
+                .outputValue(groundedKey.field.name)
                 .launchNestedFringe(
                     result = target.getCell(groundedKey).getValue().await(),
                     path = path + groundedKey,
@@ -684,7 +685,7 @@ private class ObjectResultOrchestrator(
                                 "${groundedKey.field.containingDef.name}/" +
                                 groundedKey.field.name
                         }
-                        get(groundedKey.field.name)
+                        outputValue(groundedKey.field.name)
                             .launchNestedFringe(
                                 result = resultObject.getCell(groundedKey).getValue().get(),
                                 path = path + groundedKey,
@@ -764,7 +765,7 @@ private class ObjectResultOrchestrator(
                             runtime.instrumentation.resolverFinished(coordinate)
                         }
                     } else {
-                        source.get(groundedKey.field.name)
+                        source.outputValue(groundedKey.field.name)
                     }
                 val resolvedValue: ResolvedValue =
                     fieldValue.resolveValue(
@@ -1070,7 +1071,7 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
                     "must be argumentless"
             }
             val resolvedValue: ResolvedValue =
-                get(groundedKey.field.name)
+                outputValue(groundedKey.field.name)
                     .resolveValue(
                         expectedType = groundedKey.field.outputType,
                         path = path + groundedKey,

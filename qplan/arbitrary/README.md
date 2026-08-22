@@ -32,7 +32,7 @@ Generated node implementations are fixture inputs. Composition retains the gener
 
 Resolver dependencies and variable provider/use branches are generated in one acyclic rank order and then validated by canonical registry assembly. Provider paths are inserted into the defining resolver's fixed object fragment before compilation.
 
-Resolver02/03, Resolver07/08, and Resolver22/23 generated profiles exercise `FromArgument`. Resolver25 and Resolver26 profiles additionally execute `FromObjectField`, including mixed-variable, nested-provider, and late-demand interactions described in [`../semantics/testing-contracts.md`](../semantics/testing-contracts.md).
+Resolver02/03, Resolver07/08, and Resolver22/23 generated profiles exercise `FromArgument`, including paths through nullable input objects. Resolver25 and Resolver26 profiles additionally execute `FromObjectField`, including mixed-variable, nested-provider, and late-demand interactions described in [`../semantics/testing-contracts.md`](../semantics/testing-contracts.md).
 
 Queries and registries are independently generated from one schema. Query sources are bounded below GraphQL Java's parser limit, and oversized candidates are discarded before becoming test cases.
 

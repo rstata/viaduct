@@ -61,10 +61,10 @@ sealed interface ResolverObjectFragment {
  * ### Invariant: field-resolver-variable-definitions
  *
  * Every variable is defined by this resolver's field. A [VariableDefinition.FromArgument]
- * references one argument belonging to that field. A [VariableDefinition.FromObjectField] is a
- * valid selection path relative to that field's containing type and is structurally contained by
- * [objectFragment]; its factory additionally ensures that the path does not cross a list and ends
- * at a simple value.
+ * references one schema-valid input path rooted at an argument belonging to that field. A
+ * [VariableDefinition.FromObjectField] is a valid selection path relative to that field's
+ * containing type and is structurally contained by [objectFragment]; its factory additionally
+ * ensures that the path does not cross a list and ends at a simple value.
  */
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,

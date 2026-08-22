@@ -589,6 +589,46 @@ class GeneratorTest {
     }
 
     @Test
+    fun `fromArgument variables regularly traverse nested input objects`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 1.0) +
+                (InputListTypeWeight to 0.0) +
+                (InputObjectCount to 2..3) +
+                (InputObjectTypeWeight to 0.6) +
+                (MaxInputTypeDepth to 2) +
+                (NullableTypeWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFromArgumentNestedPathWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(97535L)
+        var variables = 0
+        var nestedPaths = 0
+        var nullableTraversals = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            variables += registry.features.fromArgumentVariableCount
+            nestedPaths += registry.features.fromArgumentNestedPathVariableCount
+            nullableTraversals +=
+                registry.features.fromArgumentNullableTraversalVariableCount
+        }
+
+        assertTrue(nestedPaths > 0, "variables=$variables nestedPaths=$nestedPaths")
+        assertTrue(
+            nullableTraversals > 0,
+            "variables=$variables nullableTraversals=$nullableTraversals",
+        )
+    }
+
+    @Test
     fun `resolver fragments generate literal and variable convergence`() {
         val config =
             Config.default +

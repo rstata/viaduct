@@ -3,15 +3,20 @@ package model.testing
 import viaduct.graphql.schema.ViaductSchema
 
 import model.arg
+import model.inputType
 import model.requireObjectField
 
 /** One external `fromArgument` declaration accepted by test-fixture composition. */
 class FromArgument private constructor(
     internal val argument: ViaductSchema.FieldArg,
+    internal val inputPath: List<ViaductSchema.Field>,
 ) : VariableDeclaration {
     companion object {
-        internal fun of(argument: ViaductSchema.FieldArg): FromArgument =
-            FromArgument(argument)
+        internal fun of(
+            argument: ViaductSchema.FieldArg,
+            inputPath: List<ViaductSchema.Field>,
+        ): FromArgument =
+            FromArgument(argument, inputPath)
     }
 }
 
@@ -19,14 +24,42 @@ class FromArgument private constructor(
 fun ViaductSchema.fromArgument(
     field: ViaductSchema.ObjectField,
     argumentName: String,
+): FromArgument =
+    fromArgument(field, listOf(argumentName))
+
+/** Defines a variable from a nonempty input-object [path] rooted at an argument of [field]. */
+fun ViaductSchema.fromArgument(
+    field: ViaductSchema.ObjectField,
+    path: List<String>,
 ): FromArgument {
     require(requireObjectField(field.containingDef.name, field.name) == field) {
         "${field.containingDef.name}/${field.name} is not canonical in this schema"
     }
+    require(path.isNotEmpty()) {
+        "From-argument variable path must not be empty"
+    }
     val argument =
-        field.arg(argumentName)
+        field.arg(path.first())
             ?: throw IllegalArgumentException(
-                "${field.containingDef.name}/${field.name} has no argument $argumentName",
+                "${field.containingDef.name}/${field.name} has no argument ${path.first()}",
             )
-    return FromArgument.of(argument)
+    var currentType = argument.inputType
+    val inputPath =
+        path.drop(1).map { fieldName ->
+            require(!currentType.isList) {
+                "From-argument variable path cannot traverse list type $currentType"
+            }
+            val inputObject = currentType.baseTypeDef as? ViaductSchema.Input
+                ?: throw IllegalArgumentException(
+                    "From-argument variable path cannot traverse non-object type $currentType",
+                )
+            val inputField =
+                inputObject.field(fieldName)
+                    ?: throw IllegalArgumentException(
+                        "Input object ${inputObject.name} has no field $fieldName",
+                    )
+            currentType = inputField.inputType
+            inputField
+        }
+    return FromArgument.of(argument, inputPath)
 }

@@ -59,6 +59,8 @@ data class RegistryFeatures(
     val resolverErrorArgumentCount: Int,
     val variableCount: Int,
     val fromArgumentVariableCount: Int,
+    val fromArgumentNestedPathVariableCount: Int,
+    val fromArgumentNullableTraversalVariableCount: Int,
     val fromObjectFieldVariableCount: Int,
     val literalVariableConvergenceCount: Int,
     val passiveTopLevelFromObjectFieldVariableUseCount: Int,
@@ -98,6 +100,20 @@ class ArbitraryRegistry internal constructor(
     val fromArgumentVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
             .filterIsInstance<FromArgumentVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    /** Source resolver fields with a variable read through an input-object argument path. */
+    val nestedFromArgumentVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromArgumentVariableProviderPlan>()
+            .filter { provider -> provider.inputPath.isNotEmpty() }
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    /** Source resolver fields whose argument path may encounter a null input object. */
+    val nullableTraversalFromArgumentVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromArgumentVariableProviderPlan>()
+            .filter(FromArgumentVariableProviderPlan::nullableTraversal)
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated fragments consume a FromObjectField variable. */
@@ -470,7 +486,7 @@ class ArbitraryRegistry internal constructor(
                             is FromArgumentVariableProviderPlan ->
                                 canonicalSchema.fromArgument(
                                     field = field,
-                                    argumentName = provider.argumentName,
+                                    path = provider.argumentPath,
                                 )
                             is FromObjectFieldVariableProviderPlan ->
                                 canonicalSchema.fromObjectField(
@@ -504,7 +520,7 @@ class ArbitraryRegistry internal constructor(
                     is FromArgumentVariableProviderPlan ->
                         appendLine(
                             "  \$${provider.variableName} owner=${provider.owner} " +
-                                "fromArgument=${provider.argumentName}",
+                                "fromArgument=${provider.argumentPath.joinToString(".")}",
                         )
                     is FromObjectFieldVariableProviderPlan -> {
                         appendLine(
@@ -651,6 +667,14 @@ private class RegistryGenerator(
                         variableProviders.count {
                             it is FromArgumentVariableProviderPlan
                         },
+                    fromArgumentNestedPathVariableCount =
+                        variableProviders
+                            .filterIsInstance<FromArgumentVariableProviderPlan>()
+                            .count { provider -> provider.inputPath.isNotEmpty() },
+                    fromArgumentNullableTraversalVariableCount =
+                        variableProviders
+                            .filterIsInstance<FromArgumentVariableProviderPlan>()
+                            .count(FromArgumentVariableProviderPlan::nullableTraversal),
                     fromObjectFieldVariableCount =
                         variableProviders.count {
                             it is FromObjectFieldVariableProviderPlan
@@ -996,10 +1020,25 @@ private class RegistryGenerator(
                     .shuffled(random)
                     .mapNotNull { occurrence ->
                         occurrence.target?.let { target ->
-                            resolverArguments
+                            val sources =
+                                resolverArguments
+                                    .flatMap(::fromArgumentSources)
+                                    .filter { source -> target.accepts(source.type) }
+                            val nestedSources =
+                                sources.filter { source -> source.inputPath.isNotEmpty() }
+                            val preferredSources =
+                                if (
+                                    nestedSources.isNotEmpty() &&
+                                    chance(config[ResolverFromArgumentNestedPathWeight])
+                                ) {
+                                    nestedSources
+                                } else {
+                                    sources
+                                }
+                            preferredSources
                                 .shuffled(random)
-                                .firstOrNull { argument -> target.accepts(argument.type) }
-                                ?.let { argument -> occurrence to argument }
+                                .firstOrNull()
+                                ?.let { source -> occurrence to source }
                         }
                     }
             val convergenceCandidate =
@@ -1020,7 +1059,9 @@ private class RegistryGenerator(
                 FromArgumentVariableProviderPlan(
                     owner = consumer,
                     variableName = variableName,
-                    argumentName = candidate.second.name,
+                    argumentName = candidate.second.argument.name,
+                    inputPath = candidate.second.inputPath,
+                    nullableTraversal = candidate.second.nullableTraversal,
                     nestedInput = candidate.first.valuePath.isNotEmpty(),
                     listValue = candidate.second.type is ListInputTypeSpec,
                     nullable = candidate.second.type.nullable,
@@ -1043,6 +1084,59 @@ private class RegistryGenerator(
                             value = VariableInputPlan(variableName),
                         )
                     },
+            )
+        }
+    }
+
+    private fun fromArgumentSources(
+        argument: ArgumentDefinitionSpec,
+    ): List<FromArgumentSource> =
+        listOf(
+            FromArgumentSource(
+                argument = argument,
+                inputPath = emptyList(),
+                type = argument.type,
+                nullableTraversal = false,
+            ),
+        ) + nestedFromArgumentSources(
+            argument = argument,
+            type = argument.type,
+            inputPath = emptyList(),
+            nullableTraversal = false,
+            visitedInputObjects = emptySet(),
+        )
+
+    private fun nestedFromArgumentSources(
+        argument: ArgumentDefinitionSpec,
+        type: InputTypeSpec,
+        inputPath: List<String>,
+        nullableTraversal: Boolean,
+        visitedInputObjects: Set<String>,
+    ): List<FromArgumentSource> {
+        val inputObject = type as? InputObjectInputTypeSpec ?: return emptyList()
+        if (inputObject.name in visitedInputObjects) return emptyList()
+        val traversesNullable = nullableTraversal || inputObject.nullable
+        val definition =
+            schema.inputObjects.single { candidate -> candidate.name == inputObject.name }
+        return definition.fields.flatMap { field ->
+            val path = inputPath + field.name
+            val sourceType =
+                field.type.withOuterNullability(
+                    field.type.nullable || traversesNullable,
+                )
+            listOf(
+                FromArgumentSource(
+                    argument = argument,
+                    inputPath = path,
+                    type = sourceType,
+                    nullableTraversal = traversesNullable,
+                ),
+            ) + nestedFromArgumentSources(
+                argument = argument,
+                type = field.type,
+                inputPath = path,
+                nullableTraversal = traversesNullable,
+                visitedInputObjects = visitedInputObjects + inputObject.name,
             )
         }
     }
@@ -1891,6 +1985,13 @@ internal data class ListVariableTarget(
     }
 }
 
+private data class FromArgumentSource(
+    val argument: ArgumentDefinitionSpec,
+    val inputPath: List<String>,
+    val type: InputTypeSpec,
+    val nullableTraversal: Boolean,
+)
+
 internal sealed interface VariableProviderPlan {
     val owner: FieldCoordinate
     val variableName: String
@@ -1904,11 +2005,16 @@ internal data class FromArgumentVariableProviderPlan(
     override val owner: FieldCoordinate,
     override val variableName: String,
     val argumentName: String,
+    val inputPath: List<String> = emptyList(),
+    val nullableTraversal: Boolean = false,
     override val nestedInput: Boolean,
     override val listValue: Boolean,
     override val nullable: Boolean,
     override val literalConvergence: Boolean,
-) : VariableProviderPlan
+) : VariableProviderPlan {
+    val argumentPath: List<String>
+        get() = listOf(argumentName) + inputPath
+}
 
 internal data class FromObjectFieldVariableProviderPlan(
     override val owner: FieldCoordinate,
@@ -2171,6 +2277,13 @@ private fun FromObjectFieldVariableProviderPlan.providerArgumentVariableNames():
             addAll(current.argumentVariableNames())
             current = current.subselections.singleOrNull() ?: break
         }
+    }
+
+private fun InputTypeSpec.withOuterNullability(nullable: Boolean): InputTypeSpec =
+    when (this) {
+        is ScalarInputTypeSpec -> copy(nullable = nullable)
+        is ListInputTypeSpec -> copy(nullable = nullable)
+        is InputObjectInputTypeSpec -> copy(nullable = nullable)
     }
 
 private fun InputValuePlan.replace(

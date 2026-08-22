@@ -34,10 +34,14 @@ private data class ArgumentsTemplateImpl(
 internal fun argumentsOf(
     field: ViaductSchema.Field,
     fields: Map<String, Any?>,
-): Arguments =
-    argumentsOfExpressions(
+): Arguments {
+    if (fields.isEmpty() && field.args.all { arg -> !arg.hasDefault && arg.type.isNullable }) {
+        return argumentsOfGround(emptyMap())
+    }
+    return argumentsOfExpressions(
         coerceArgumentFields(field, fields),
     )
+}
 
 internal fun argumentTemplateOf(
     expectedField: ViaductSchema.Field,

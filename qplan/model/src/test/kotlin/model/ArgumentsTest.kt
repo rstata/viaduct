@@ -10,9 +10,41 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ArgumentsTest {
+    @Test
+    fun `empty resolved arguments reuse one value without skipping defaults or required checks`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  argumentless: Int
+                  optional(value: Int): Int
+                  defaulted(value: Int = 7): Int
+                  required(value: Int!): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val argumentless = schema.requireObjectField("Query", "argumentless")
+        val optional = schema.requireObjectField("Query", "optional")
+        val defaulted = schema.requireObjectField("Query", "defaulted")
+        val required = schema.requireObjectField("Query", "required")
+
+        val empty = Arguments.Resolved.of(argumentless, emptyMap())
+        val optionalEmpty = Arguments.Resolved.of(optional, emptyMap())
+        val defaultedArguments = Arguments.Resolved.of(defaulted, emptyMap())
+
+        assertSame(empty, Arguments.Resolved.of(argumentless, emptyMap()))
+        assertSame(empty, optionalEmpty)
+        assertTrue(empty.fieldValues.isEmpty())
+        assertEquals(7, defaultedArguments.fieldValues.getValue("value"))
+        assertFailsWith<ClassCastException> {
+            Arguments.Resolved.of(required, emptyMap())
+        }
+    }
+
     @Test
     fun `resolved arguments retain natural input data`() {
         val schema =

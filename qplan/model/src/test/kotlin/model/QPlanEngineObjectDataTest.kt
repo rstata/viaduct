@@ -109,23 +109,6 @@ class QPlanEngineObjectDataTest {
     }
 
     @Test
-    fun `resolver reads reuse cached errors nested in lists`() {
-        val error = EngineErrorData.of()
-        val scores = CountingOutputList(listOf(1, error, 3))
-        val data = engineObjectDataOf(userType, mapOf("scores" to scores))
-        scores.readCount = 0
-
-        repeat(2) {
-            assertSame(
-                error,
-                assertFailsWith<EngineErrorDataReadException> { data.get("scores") }.errorData,
-            )
-        }
-
-        assertEquals(0, scores.readCount)
-    }
-
-    @Test
     fun `supports response aliases without exposing schema field metadata`() {
         val data =
             engineObjectDataOf(
@@ -267,20 +250,6 @@ class QPlanEngineObjectDataTest {
         override fun isPresent(selection: String): Boolean = false
 
         override fun getSelections(): Iterable<String> = emptyList()
-    }
-
-    private class CountingOutputList(
-        private val values: List<EngineOutputData?>,
-    ) : AbstractList<EngineOutputData?>() {
-        var readCount = 0
-
-        override val size: Int
-            get() = values.size
-
-        override fun get(index: Int): EngineOutputData? {
-            readCount += 1
-            return values[index]
-        }
     }
 
     private companion object {

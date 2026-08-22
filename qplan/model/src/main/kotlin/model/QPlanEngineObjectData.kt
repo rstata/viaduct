@@ -212,13 +212,7 @@ private class QPlanEngineObjectDataImpl(
     override val schemaType: ViaductSchema.Object,
     values: Map<String, EngineOutputData?>,
 ) : QPlanEngineObjectData {
-    private val values =
-        values.mapValues { (_, value) ->
-            StoredSelectionValue(
-                value = value,
-                firstError = value.firstErrorDataOrNull(),
-            )
-        }
+    private val values = values.toMap()
 
     override suspend fun fetch(selection: String): Any? = get(selection)
 
@@ -227,14 +221,23 @@ private class QPlanEngineObjectDataImpl(
     override suspend fun fetchSelections(): Iterable<String> = getSelections()
 
     override fun get(selection: String): Any? {
-        val storedValue = storedValue(selection)
-        storedValue.firstError?.let { errorData ->
+        val value = outputValue(selection)
+        value.firstErrorDataOrNull()?.let { errorData ->
             throw EngineErrorDataReadException(errorData)
         }
-        return storedValue.value
+        return value
     }
 
-    override fun outputValue(selection: String): EngineOutputData? = storedValue(selection).value
+    override fun outputValue(selection: String): EngineOutputData? {
+        if (!isPresent(selection)) {
+            throw UnsetFieldException(
+                selection,
+                type,
+                "The selection is absent from qplan's partial object data",
+            )
+        }
+        return values[selection]
+    }
 
     override fun getOrNull(selection: String): Any? =
         if (isPresent(selection)) get(selection) else null
@@ -243,22 +246,8 @@ private class QPlanEngineObjectDataImpl(
 
     override fun getSelections(): Iterable<String> = values.keys
 
-    override fun toString(): String =
-        "type=${type.name} values=${values.mapValues { (_, stored) -> stored.value }}"
-
-    private fun storedValue(selection: String): StoredSelectionValue =
-        values[selection]
-            ?: throw UnsetFieldException(
-                selection,
-                type,
-                "The selection is absent from qplan's partial object data",
-            )
+    override fun toString(): String = "type=${type.name} values=$values"
 }
-
-private class StoredSelectionValue(
-    val value: EngineOutputData?,
-    val firstError: EngineErrorData?,
-)
 
 private fun EngineOutputData?.firstErrorDataOrNull(): EngineErrorData? =
     when (this) {

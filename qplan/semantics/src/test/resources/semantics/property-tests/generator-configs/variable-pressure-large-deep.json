@@ -37,6 +37,7 @@
       "resolverFragmentArgumentFieldWeight" : 0.0,
       "resolverFragmentLongTailWeight" : 0.0,
       "resolverFragmentWeight" : 0.8,
+      "resolverFromArgumentNestedPathWeight" : 0.5,
       "resolverNestedProviderPathWeight" : 0.5
     },
     "integers" : {

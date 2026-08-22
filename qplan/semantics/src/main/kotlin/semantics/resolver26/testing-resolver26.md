@@ -6,6 +6,8 @@ Every Resolver26 test uses one externally configurable resolution thread count, 
 
 Set it with the Gradle property `-Presolver26ThreadCount=N`, the JVM property `-Dresolver26.thread.count=N`, or the environment variable `RESOLVER26_THREAD_COUNT=N`; the Gradle property is preferred in commands in this guide. The value must be a positive integer.
 
+Direct-launcher campaign commands do not run their rounds under Gradle, so set `RESOLVER26_THREAD_COUNT` for those commands.
+
 The setting controls the fixed dispatcher inherited by all Resolver26 coroutines within a request. It does not make separate generated cases concurrent: cases are generated, resolved, and validated one at a time so a failure retains an exact seed and `S:R:Q` coordinate.
 
 Resolver26 caches one process-scoped daemon pool per configured count. Workers are named `resolver26-N-M`, where `N` is the configured pool size and `M` identifies a worker in that pool.
@@ -67,7 +69,9 @@ Run one unfiltered broad product by choosing a directed profile, seed, and `S:R:
 Run one persisted five-profile campaign round:
 
 ```shell
-./gradlew :semantics:resolver26BroadStressCampaign -Presolver26BroadStressCampaignRound=81 -Presolver26ThreadCount=5
+RESOLVER26_THREAD_COUNT=5 ./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json \
+  81
 ```
 
 Run the dispatcher-instrumented campaign with selected rounds and either each round's recorded dimensions or one overriding size:
@@ -97,7 +101,40 @@ If `pidstat` is unavailable, use `top -H -p "$worker_pid"` for live per-thread C
 
 Avoid selecting an unrelated Gradle worker when other builds are active. Stop other builds, inspect `jps -lv`, or correlate the worker's start time and command with the run being probed.
 
-## Large Campaigns
+## Canonical Million-Case Campaign
+
+When a request says to run the Resolver26 one-million-query test, it means the complete checked-in `resolver26-broad-campaign-v1` campaign at one Resolver26 worker. From the `qplan` directory, run exactly:
+
+```shell
+RESOLVER26_THREAD_COUNT=1 ./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json
+```
+
+The versioned campaign fixes all corpus inputs: rounds 1 through 100, five directed profiles per round, 2,000 cases per profile, each run's `S:R:Q` dimensions, and every seed. The result is exactly 10,000 cases per round and 1,000,000 cases total. The driver performs one incremental Gradle launcher install, lets Gradle exit, and then starts one fresh launcher JVM for each round. Do not add `clean`, regenerate resources, choose rounds, change the thread count, or otherwise alter this recipe unless the request explicitly asks for a different experiment.
+
+Success means that the command exits zero after printing `Completed 100 round(s)`, every round reports `runs=5, completedCases=10000`, and `build/reports/resolver26-broad-campaign-v1` contains logs for all 100 rounds. Each run checks attempted, resolved, and completed accounting, resolution correctness, exact resolver-application identities, object-path bindings, and its required structural coverage. The driver stops at the first failed run or round and prints its replay command.
+
+The driver's final wall-clock total covers the 100 launcher JVMs but excludes the initial Gradle install. To measure the complete command, including that one incremental install, use:
+
+```shell
+/usr/bin/time -p env RESOLVER26_THREAD_COUNT=1 \
+  ./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json
+```
+
+## Canonical Performance Sample
+
+When a request says to run the Resolver26 100,000-case or ten-round performance sample, use this fixed phase-weighted subset:
+
+```shell
+RESOLVER26_THREAD_COUNT=1 ./run-property-test-campaign.sh \
+  classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json \
+  1 20 21 33 45 46 63 80 90 98
+```
+
+These ten persisted rounds contain exactly 100,000 cases and sample schema breadth, registry diversity, query interactions, and both large/deep variants in approximately their full-campaign proportions. This is a performance proxy, not a substitute for the canonical million-case correctness campaign. As above, the driver's total excludes the one incremental Gradle install; wrap the command with `/usr/bin/time -p env` when the measurement should include it.
+
+## Designing Large Campaigns
 
 A 100,000- to 1,000,000-case run should explore a broad state space rather than repeat one distribution. Split the budget across fresh JVM rounds, independent seeds, directed profiles, and different `S:R:Q` shapes; persist each round's command, seed, profile, dimensions, thread count, and log.
 

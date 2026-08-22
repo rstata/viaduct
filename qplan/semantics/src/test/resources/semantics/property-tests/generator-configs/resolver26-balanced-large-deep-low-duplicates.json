@@ -39,6 +39,7 @@
       "resolverFragmentArgumentFieldWeight" : 0.0,
       "resolverFragmentLongTailWeight" : 0.0,
       "resolverFragmentWeight" : 0.8,
+      "resolverFromArgumentNestedPathWeight" : 0.5,
       "resolverFromObjectFieldPassiveUseWeight" : 0.25,
       "resolverFromObjectFieldProviderArgumentVariableWeight" : 0.0,
       "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,

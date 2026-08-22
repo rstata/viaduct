@@ -680,7 +680,7 @@ private class CellImpl(
         return accessResultStore.create(Unit, ::validateAccessResult)
     }
 
-    fun freezeValue(cause: Throwable) {
+    inline fun freezeValue(cause: () -> Throwable) {
         if (mutable) valueStore.freeze(cause)
     }
 
@@ -749,7 +749,7 @@ private class CellValueStore(
         claim().complete(value)
     }
 
-    fun freeze(cause: Throwable) {
+    inline fun freeze(cause: () -> Throwable) {
         val unclaimed =
             synchronized(lock) {
                 check(mutable) { "Cell is immutable" }
@@ -757,7 +757,7 @@ private class CellValueStore(
                 frozen = true
                 promise?.takeUnless { claimed }
             }
-        unclaimed?.fail(cause)
+        unclaimed?.fail(cause())
     }
 }
 
@@ -844,9 +844,9 @@ private class ObjectCellStore(
                 cells.toMap()
             }
         presentCells.forEach { (field, cell) ->
-            cell.implementation.freezeValue(
-                missingResultCell(type, field),
-            )
+            cell.implementation.freezeValue {
+                missingResultCell(type, field)
+            }
         }
     }
 

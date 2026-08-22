@@ -22,6 +22,13 @@ class PropertyTestSerializationTest {
     }
 
     @Test
+    fun `checked-in generator configs match the supported key set`() {
+        val registry = GeneratorConfigRegistry.load(GENERATOR_CONFIG_INDEX_RESOURCE)
+
+        assertTrue(registry.ids.isNotEmpty())
+    }
+
+    @Test
     fun `layered generator document upserts resolver values before binding data class`() {
         val defaults = GeneratorConfigData.from("unused", Config.default)
         val document =

@@ -54,10 +54,10 @@ The driver asks the Kotlin launcher for the configured round numbers, performs t
 
 ## Resource Maintenance
 
-Campaign JSON is authored directly. Generator profiles originate as typed Kotlin `Config` values in the Resolver25 and Resolver26 broad-stress profile definitions. After changing those profiles, regenerate their fully resolved layered resources with:
+Campaign JSON is authored directly. Generator profiles originate as typed Kotlin `Config` values in the Resolver25 and Resolver26 broad-stress profile definitions. After adding, removing, or renaming a `ConfigKey`, or after changing a typed generator profile, regenerate the fully resolved layered resources with:
 
 ```shell
 ./gradlew :semantics:materializeGeneratorConfigs
 ```
 
-Review the resulting generator JSON changes, then run the affected campaign and inspect its exercised coverage. Adjust the typed profile and repeat as needed. Format versions must be incremented deliberately when wire semantics change.
+Review and check in the resulting generator JSON changes with the schema or profile change, then run the affected campaign and inspect its exercised coverage. Adjust the typed profile and repeat as needed. Format versions must be incremented deliberately when wire semantics change.

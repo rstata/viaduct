@@ -20,7 +20,7 @@ Resolver input materialization filters source occurrences to the concrete object
 
 One root `coroutineScope` owns the request. Every orchestration task and field-resolution task is a direct child of that request scope. Successful synchronous return therefore means all request work has reached quiescence.
 
-Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises or binding promises. The dispatcher changes scheduling only; it does not change resolver, selection, stamp, path, or task identity.
+Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's binding-preparation promise. The dispatcher changes scheduling only; it does not change resolver, selection, stamp, path, or task identity.
 
 ## Synchronous Demand Closure
 
@@ -39,6 +39,8 @@ After closure, the orchestrator declares every open binding before launching loc
 `FromArgument` definitions owned by an already-ground key complete immediately. Definitions owned by open keys complete after that key grounds. Localized child stamps use explicit binding aliases whose values are copied from the source occurrence.
 
 Each `FromObjectField` definition launches a provider reader that follows its occurrence-stamped compiled path through OER promises and completes the declared binding. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
+
+Before grounding a provider component inside an OER, its reader awaits that OER's binding-preparation promise. The orchestrator completes this promise immediately after synchronous demand closure declares the OER's bindings, before launching local field work. This is necessary when a passive object publishes a nested OER before that nested orchestration task runs.
 
 Readers never insert undeclared binding promises.
 

@@ -28,10 +28,12 @@ internal suspend fun ObjectEngineResult.readProvider(
     definition: StampedObjectPathDefinition,
     reader: List<PathComponent>,
     containingObjectPath: List<PathComponent>,
+    runtime: ResolverRuntime,
 ): VariableBinding {
     var current = this
     var currentPath = containingObjectPath
     definition.path.forEachIndexed { index, openKey ->
+        runtime.awaitBindingsPrepared(current)
         val localizedKey =
             if (index == 0) {
                 openKey

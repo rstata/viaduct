@@ -2,6 +2,7 @@ package semantics.resolver26
 
 import viaduct.graphql.schema.ViaductSchema
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -115,10 +116,13 @@ internal fun resolveObserved(
     )
 
 /** Owns request lifetime without using task completion as cross-task readiness. */
-private class ResolverRuntime(
+internal class ResolverRuntime(
     private val requestScope: CoroutineScope,
     private val applicationObserver: Resolver26ApplicationObserver,
 ) {
+    private val bindingPreparationByObject =
+        ConcurrentHashMap<ObjectEngineResult, Promise<Unit>>()
+
     // Launches an orchestration task as a direct child of the request.
     fun launchOrchestrationTask(block: suspend () -> Unit) {
         requestScope.launch {
@@ -136,6 +140,19 @@ private class ResolverRuntime(
     fun observeApplication(observation: Resolver26ApplicationObservation) {
         applicationObserver(observation)
     }
+
+    suspend fun awaitBindingsPrepared(target: ObjectEngineResult) {
+        bindingPreparation(target).await()
+    }
+
+    fun completeBindingsPrepared(target: ObjectEngineResult) {
+        bindingPreparation(target).complete(Unit)
+    }
+
+    private fun bindingPreparation(target: ObjectEngineResult): Promise<Unit> =
+        bindingPreparationByObject.computeIfAbsent(target) {
+            Promise.ofDeferred()
+        }
 }
 
 // Closes one OER's demand, installs every active field promise, and then freezes its key set.
@@ -252,6 +269,7 @@ private suspend fun orchestrateObject(
 
     val closed: CloseInputDemandResult = closeInputDemand()
     closed.prepareBindings()
+    runtime.completeBindingsPrepared(target)
     closed.demand.byKey().forEach { (objectKey, selection) ->
         if (objectKey.field !in world.resolverRegistry) {
             val groundKey: ObjectEngineResult.GroundKey =
@@ -306,6 +324,7 @@ private suspend fun orchestrateObject(
                         definition = definition,
                         reader = reader,
                         containingObjectPath = path,
+                        runtime = runtime,
                     )
                 world.completeBinding(definition.variable, binding)
             }

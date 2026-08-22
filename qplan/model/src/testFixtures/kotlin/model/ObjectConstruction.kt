@@ -56,7 +56,6 @@ class ObjectValueScope internal constructor(
                     field = field,
                     arguments = arguments.toMap(),
                 ),
-            sourceTypeExpr = sourceSchema.typeExpr(field),
         )
     }
 
@@ -85,11 +84,7 @@ class ObjectValueScope internal constructor(
             EngineObjectDataEntry.of(
                 selection = fieldName,
                 field = key.field,
-                value =
-                    sourceSchema.lowerOutput(
-                        key.field,
-                        coerceOutputValue(sourceTypeExpr, value),
-                    ),
+                value = sourceSchema.lowerOutput(key.field, value),
             )
     }
 
@@ -112,35 +107,4 @@ class ObjectValueScope internal constructor(
 class ObjectFieldReference internal constructor(
     internal val scope: ObjectValueScope,
     internal val key: ObjectEngineResult.GroundKey,
-    internal val sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 )
-
-private fun coerceOutputValue(
-    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-    value: Any?,
-): EngineOutputData? {
-    if (value == null || value is EngineErrorData) return value
-
-    val elementType = typeExpr.unwrapList()
-    if (elementType != null) {
-        require(value is List<*>) {
-            "Expected a list value for $typeExpr"
-        }
-        return value.map { coerceOutputValue(elementType, it) }
-    }
-    return when (val type = typeExpr.baseTypeDef) {
-        is ViaductSchema.SimpleTypeDef -> coerceSimpleValue(type, value)
-        is ViaductSchema.CompositeTypeDef -> {
-            require(
-                value is EngineObjectData.Sync &&
-                    type.possibleObjectTypes.any { possibleType ->
-                        possibleType.name == value.type.name
-                    },
-            ) {
-                "Expected an object value for ${type.name}"
-                    }
-            value
-        }
-        else -> error("Output field has a non-output type")
-    }
-}

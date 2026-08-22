@@ -168,6 +168,53 @@ interface ObjectFragmentFromObjectPathResolverContract :
     }
 
     @Test
+    fun `grounds a nested provider argument from another nested provider`() {
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "box { inner { source(value: ${'$'}sourceArg) } } consume(value: ${'$'}provided) seedBox { seed }"
+                          pathVars: [
+                            {name: "provided", path: ["box", "inner", "source"]}
+                            {name: "sourceArg", path: ["seedBox", "seed"]}
+                          ]
+                          result: "sum(consume)"
+                        )
+                      box: Box! @resolver(result: {inner: {}})
+                      consume(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                      seedBox: SeedBox! @resolver(result: {})
+                    }
+
+                    type Box {
+                      inner: Inner!
+                    }
+
+                    type Inner {
+                      source(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                    }
+
+                    type SeedBox {
+                      seed: Int! @resolver(result: 17)
+                    }
+                    """.trimIndent(),
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                emptyMap(),
+            )
+
+        val resolved = resolveAndValidate(world, "query { result }")
+
+        assertEquals(17, resolved.getCell(resultKey).get())
+    }
+
+    @Test
     fun `binds null and error from nullable provider paths`() {
         listOf(false, true).forEach { isError ->
             val provided = null

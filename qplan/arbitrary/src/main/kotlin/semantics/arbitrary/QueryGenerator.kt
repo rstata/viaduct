@@ -85,7 +85,13 @@ private class QueryGenerator(
         require(attempt < MAX_GENERATION_ATTEMPTS) {
             "Could not generate a bounded GraphQL query in $MAX_GENERATION_ATTEMPTS attempts"
         }
-        return QueryGenerator(schema, config, random).generate(attempt + 1)
+        val retryConfig =
+            if (attempt == MAX_GENERATION_ATTEMPTS - 1) {
+                config.withBoundedQueryFallback()
+            } else {
+                config
+            }
+        return QueryGenerator(schema, retryConfig, random).generate(attempt + 1)
     }
 
     private fun fragment(selectionSet: SelectionSet): FragmentDefinition =
@@ -704,3 +710,11 @@ private class QueryGenerator(
         const val MAX_GENERATION_ATTEMPTS = 100
     }
 }
+
+// Retains the required deep path while guaranteeing low branching on the final attempt.
+private fun Config.withBoundedQueryFallback(): Config =
+    this +
+        (RootQueryFieldCount to 1..1) +
+        (NestedQueryFieldCount to 1..1) +
+        (DuplicateSelectionWeight to 0.0) +
+        (QueryFragmentsEnabled to false)

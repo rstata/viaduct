@@ -108,6 +108,8 @@ object ResolverFragmentArgumentFieldWeight : ConfigKey<Double>("resolverFragment
 object ResolverArgumentErrorWeight : ConfigKey<Double>("resolverArgumentErrorWeight", ConfigValueType.DOUBLE, 0.05, ::weight)
 object ResolverVariablesEnabled : ConfigKey<Boolean>("resolverVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromArgumentVariablesEnabled : ConfigKey<Boolean>("resolverFromArgumentVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
+object ResolverFromArgumentNestedPathWeight :
+    ConfigKey<Double>("resolverFromArgumentNestedPathWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverVariableWeight : ConfigKey<Double>("resolverVariableWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
 object ResolverVariableCount : ConfigKey<IntRange>("resolverVariableCount", ConfigValueType.INTEGER_RANGE, 1..3, ::range)
 object ResolverLiteralVariableConvergenceWeight : ConfigKey<Double>("resolverLiteralVariableConvergenceWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
@@ -176,6 +178,7 @@ internal object ConfigKeys {
             ResolverArgumentErrorWeight,
             ResolverVariablesEnabled,
             ResolverFromArgumentVariablesEnabled,
+            ResolverFromArgumentNestedPathWeight,
             ResolverVariableWeight,
             ResolverVariableCount,
             ResolverLiteralVariableConvergenceWeight,

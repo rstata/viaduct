@@ -25,7 +25,7 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `EmptyObjectFragmentResolverContract` covers empty object fragments, arguments, `__typename`, list occurrences, interfaces, and concrete implementation defaults.
 - `NodeResolverContract` covers source-level node resolution through fixture-lowered `foo_V_A_node` producers and `T_V_A_Bridge.node` loaders.
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including response aliases on argumentless and argument-bearing fields, argument-distinct aliases, non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
-- `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including a transitive chain.
+- `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including nested input-object paths, null intermediate traversal, and a transitive chain.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
 - `LateObjectPathDemandResolverContract` covers late symbolic demand across already-published active and passive objects.
@@ -71,7 +71,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
 | `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
 | `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
-| `object-fragment-from-argument` | `FromArgument` variables | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
+| `object-fragment-from-argument` | `FromArgument` variables, including nested and nullable input paths | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
 | `object-fragment-from-object-field` | `FromObjectField` variables | Resolver25-26 | `10:3:5` |
 | `mixed-variables` | Both variable sources | Resolver25-26 | fixed aggregate corpus |
 | `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `20:3:5` |

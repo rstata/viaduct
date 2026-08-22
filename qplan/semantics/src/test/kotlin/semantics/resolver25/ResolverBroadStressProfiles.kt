@@ -20,6 +20,7 @@ import semantics.arbitrary.ResolverArgumentErrorWeight
 import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverFromObjectFieldPassiveUseWeight
 import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
@@ -145,6 +146,7 @@ private fun balancedBroadConfig(): Config =
         (ResolverFragmentWeight to 0.8) +
         (ResolverFragmentDepth to 3) +
         (ResolverArgumentErrorWeight to 0.05) +
+        (ResolverFromArgumentNestedPathWeight to 0.5) +
         (ResolverFromArgumentVariablesEnabled to true) +
         (ResolverVariablesEnabled to true) +
         (ResolverVariableWeight to 0.65) +

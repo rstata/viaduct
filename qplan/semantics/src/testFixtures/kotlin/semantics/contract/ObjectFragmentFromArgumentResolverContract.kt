@@ -142,6 +142,118 @@ interface ObjectFragmentFromArgumentResolverContract :
     }
 
     @Test
+    fun `resolves a fromArgument variable through a nested input object`() {
+        val resultFragment =
+            """
+            fragment Result on Query {
+              consume(value: ${'$'}nestedValue)
+            }
+            """.trimIndent()
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    input Input {
+                      value: Int!
+                    }
+
+                    type Query {
+                      result(input: Input!): Int!
+                      consume(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    val consume = schema.requireObjectField("Query", "consume")
+                    mapOf(
+                        result to
+                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
+                                input.selectionValues().getValue("consume")
+                            },
+                        consume to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value") as Int
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    mapOf(
+                        Arguments.Variable.of(result, "nestedValue") to
+                            schema.fromArgument(result, listOf("input", "value")),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                mapOf("input" to mapOf("value" to 2)),
+            )
+
+        val resolved = resolveAndValidate(world, "query { result(input: {value: 2}) }")
+
+        assertEquals(2, resolved.getCell(resultKey).get())
+    }
+
+    @Test
+    fun `binds null when a fromArgument path traverses a null input object`() {
+        val resultFragment =
+            """
+            fragment Result on Query {
+              consume(value: ${'$'}nestedValue)
+            }
+            """.trimIndent()
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    input Input {
+                      value: Int! = 2
+                    }
+
+                    type Query {
+                      result(input: Input): Int!
+                      consume(value: Int): Int
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    val consume = schema.requireObjectField("Query", "consume")
+                    mapOf(
+                        result to
+                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { input, _ ->
+                                input.selectionValues().getValue("consume") ?: 7
+                            },
+                        consume to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value")
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    mapOf(
+                        Arguments.Variable.of(result, "nestedValue") to
+                            schema.fromArgument(result, listOf("input", "value")),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                mapOf("input" to null),
+            )
+
+        val resolved = resolveAndValidate(world, "query { result(input: null) }")
+
+        assertEquals(7, resolved.getCell(resultKey).get())
+    }
+
+    @Test
     fun `resolves a transitive chain of fromArgument variables`() {
         val testWorld =
             TestWorld.fromDSL(

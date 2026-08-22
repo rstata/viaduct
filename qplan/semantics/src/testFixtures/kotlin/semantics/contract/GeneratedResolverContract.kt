@@ -8,13 +8,19 @@ import semantics.arbitrary.Config
 import semantics.arbitrary.ExplicitFieldResolverWeight
 import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.ImplementationArgumentDefaultWeight
+import semantics.arbitrary.InputListTypeWeight
+import semantics.arbitrary.InputObjectCount
+import semantics.arbitrary.InputObjectTypeWeight
+import semantics.arbitrary.MaxInputTypeDepth
 import semantics.arbitrary.NodeObjectWeight
 import semantics.arbitrary.NodeResolversEnabled
+import semantics.arbitrary.NullableTypeWeight
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverNestedProviderPathWeight
@@ -160,6 +166,11 @@ interface ObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy
             val config =
                 Config.default +
                     (FieldArgumentWeight to 1.0) +
+                    (InputListTypeWeight to 0.0) +
+                    (InputObjectCount to 2..3) +
+                    (InputObjectTypeWeight to 0.6) +
+                    (MaxInputTypeDepth to 2) +
+                    (NullableTypeWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 1.0) +
                     (NodeResolversEnabled to false) +
                     (ResolverFragmentsEnabled to true) +
@@ -206,6 +217,7 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                     (NodeResolversEnabled to false) +
                     (ResolverFragmentsEnabled to true) +
                     (ResolverFragmentWeight to 1.0) +
+                    (ResolverFromArgumentNestedPathWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to false)
@@ -221,6 +233,10 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                     )
                     coverage.generatedVariables +=
                         testCase.registry.features.fromArgumentVariableCount
+                    coverage.generatedNestedPaths +=
+                        testCase.registry.features.fromArgumentNestedPathVariableCount
+                    coverage.generatedNullableTraversals +=
+                        testCase.registry.features.fromArgumentNullableTraversalVariableCount
 
                     val observation =
                         observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
@@ -229,6 +245,17 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                             testCase.registry.sourceResolverHasFromArgumentVariables(
                                 application.key.field,
                             )
+                        }
+                    coverage.activatedNestedPathApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.sourceResolverCoordinate(application.key.field) in
+                                testCase.registry.nestedFromArgumentVariableOwnerFields
+                        }
+                    coverage.activatedNullableTraversalApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.sourceResolverCoordinate(application.key.field) in
+                                testCase.registry
+                                    .nullableTraversalFromArgumentVariableOwnerFields
                         }
                 }
 
@@ -263,6 +290,22 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                 activationRun.assertAggregate(
                     activationCoverage.activatedApplications > 0,
                     "FromArgument activation corpus activated no variable-bearing resolvers",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.generatedNestedPaths > 0,
+                    "FromArgument activation corpus produced no nested argument paths",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.activatedNestedPathApplications > 0,
+                    "FromArgument activation corpus activated no nested argument paths",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.generatedNullableTraversals > 0,
+                    "FromArgument activation corpus produced no nullable input traversal",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.activatedNullableTraversalApplications > 0,
+                    "FromArgument activation corpus activated no nullable input traversal",
                 )
             }
         }
@@ -576,6 +619,10 @@ private data class NodeCoverage(
 private data class FromArgumentCoverage(
     var generatedVariables: Int = 0,
     var activatedApplications: Int = 0,
+    var generatedNestedPaths: Int = 0,
+    var activatedNestedPathApplications: Int = 0,
+    var generatedNullableTraversals: Int = 0,
+    var activatedNullableTraversalApplications: Int = 0,
 )
 
 private data class MixedVariableCoverage(

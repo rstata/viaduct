@@ -328,6 +328,8 @@ private data class VariableProviderDocument(
     val useDepth: Int?,
     val topLevelUseField: CoordinateDocument?,
     val literalConvergence: Boolean,
+    val argumentPath: List<String> = emptyList(),
+    val nullableTraversal: Boolean = false,
 )
 
 private fun ArbitrarySchema.toDocument(): SchemaDocument =
@@ -826,6 +828,8 @@ private fun VariableProviderPlan.toDocument(): VariableProviderDocument =
                 useDepth = null,
                 topLevelUseField = null,
                 literalConvergence = literalConvergence,
+                argumentPath = argumentPath,
+                nullableTraversal = nullableTraversal,
             )
         is FromObjectFieldVariableProviderPlan ->
             VariableProviderDocument(
@@ -851,6 +855,8 @@ private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderP
                 owner = owner.toCoordinate(),
                 variableName = variableName,
                 argumentName = requireNotNull(argumentName),
+                inputPath = argumentPath.drop(1),
+                nullableTraversal = nullableTraversal,
                 nestedInput = nestedInput,
                 listValue = listValue,
                 nullable = nullable,

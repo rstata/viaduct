@@ -413,7 +413,10 @@ private class TestResolverRegistry(
         variableDeclarations.mapValues { (_, declaration) ->
             when (declaration) {
                 is FromArgument ->
-                    VariableDefinition.FromArgument.of(declaration.argument)
+                    VariableDefinition.FromArgument.of(
+                        argument = declaration.argument,
+                        inputPath = declaration.inputPath,
+                    )
                 is FromObjectField ->
                     VariableDefinition.FromObjectField.of(declaration.keyPath)
             }

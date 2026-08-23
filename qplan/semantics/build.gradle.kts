@@ -381,14 +381,17 @@ val stressResolverNames =
         "resolver26",
     )
 
-val resolver26ThreadCount =
+val configuredResolver26ThreadCount =
     providers
         .gradleProperty("resolver26ThreadCount")
         .orElse(providers.systemProperty("resolver26.thread.count"))
         .orElse(providers.environmentVariable("RESOLVER26_THREAD_COUNT"))
-        .orElse("1")
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    val resolver26ThreadCount =
+        configuredResolver26ThreadCount.orElse(
+            if (name == "resolver26MultithreadedStress") "100" else "1",
+        )
     inputs.property("resolver26ThreadCount", resolver26ThreadCount)
 
     doFirst {
@@ -940,7 +943,7 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolver26BroadStressCampaign
 val resolver26MultithreadedStressSize =
     providers
         .gradleProperty("resolver26MultithreadedStressSize")
-        .orElse("2:2:5")
+        .orElse("campaign")
 val resolver26MultithreadedStressRounds =
     providers
         .gradleProperty("resolver26MultithreadedStressRounds")

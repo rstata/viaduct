@@ -130,7 +130,7 @@ class ResolverMultithreadedStressTest {
         const val SIZE_PROPERTY = "resolver26.multithreaded.size"
         const val ROUNDS_PROPERTY = "resolver26.multithreaded.rounds"
         const val CAMPAIGN_SIZE = "campaign"
-        const val DEFAULT_SIZE = "2:2:5"
+        const val DEFAULT_SIZE = CAMPAIGN_SIZE
         const val DEFAULT_ROUNDS = "1"
     }
 }

@@ -20,20 +20,19 @@ import model.objectKey
 import model.selectionForestOf
 import model.toEngineSimpleData
 import model.registry.StampedObjectPathDefinition
-import semantics.RuntimeSupport
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+context(world: Assumptions)
 internal suspend fun ObjectEngineResult.readProvider(
     definition: StampedObjectPathDefinition,
     reader: List<PathComponent>,
     containingObjectPath: List<PathComponent>,
-    runtime: ResolverRuntime,
+    support: Resolver26Support,
 ): VariableBinding {
     var current = this
     var currentPath = containingObjectPath
     definition.path.forEachIndexed { index, openKey ->
-        runtime.awaitBindingsPrepared(current)
+        support.awaitBindingsDeclared(current)
         val specializedKey =
             Selection.of(
                 key = openKey,
@@ -73,7 +72,7 @@ internal suspend fun ObjectEngineResult.readProvider(
                     .key as ObjectEngineResult.GroundKey
             }
         val cell = current.reserveCell(groundKey)
-        diagnosticInstrumentation.cycleCheck(reader, cell)
+        support.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == definition.path.lastIndex) {
             return value.toProviderBinding(groundKey.field.outputType)

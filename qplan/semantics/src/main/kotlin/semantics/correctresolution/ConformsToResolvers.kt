@@ -23,7 +23,7 @@ import model.toEngineOutputData
 import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 import semantics.materialize
 
 /**
@@ -40,11 +40,11 @@ import semantics.materialize
  */
 context(world: Assumptions)
 fun ObjectEngineResult.conformsToResolvers(): Boolean =
-    context(RuntimeSupport.noCycleChecking()) {
+    context(ResolverSupport.noCycleChecking { selections -> selections }) {
         objectConformsToResolvers(emptyList())
     }
 
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private fun ObjectEngineResult.objectConformsToResolvers(
     path: List<PathComponent>,
 ): Boolean {
@@ -118,7 +118,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     }
 }
 
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private fun EngineResult?.engineResultConformsToResolvers(
     path: List<PathComponent>,
 ): Boolean =

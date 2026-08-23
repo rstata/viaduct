@@ -19,7 +19,7 @@ import viaduct.engine.api.EngineObjectData
  * Each instance constructs one result and [resolve] may be called exactly once.
  */
 internal interface DepthFirstReactor {
-    context(world: Assumptions, runtimeSupport: RuntimeSupport)
+    context(world: Assumptions, resolverSupport: ResolverSupport)
     fun resolve(): ObjectEngineResult
 
     sealed interface Task {
@@ -41,7 +41,7 @@ internal interface DepthFirstReactor {
     ) : Task
 
     companion object {
-        context(world: Assumptions, runtimeSupport: RuntimeSupport)
+        context(world: Assumptions, resolverSupport: ResolverSupport)
         operator fun invoke(
             source: EngineObjectData.Sync,
             selections: SelectionForest,
@@ -86,7 +86,7 @@ private class PriorityQueueDepthFirstReactor(
         )
     }
 
-    context(world: Assumptions, runtimeSupport: RuntimeSupport)
+    context(world: Assumptions, resolverSupport: ResolverSupport)
     override fun resolve(): ObjectEngineResult {
         check(!started) { "DepthFirstReactor.resolve() may only be called once" }
         started = true
@@ -109,7 +109,7 @@ private class PriorityQueueDepthFirstReactor(
         return result
     }
 
-    context(world: Assumptions, runtimeSupport: RuntimeSupport)
+    context(world: Assumptions, resolverSupport: ResolverSupport)
     private fun DepthFirstReactor.SlotOrchestrator.execute() {
         require(target.type == source.schemaType) {
             "Initial result type ${target.type.name} does not match ${source.schemaType}"
@@ -130,17 +130,17 @@ private class PriorityQueueDepthFirstReactor(
         instrumentation.orchestratorFinished(path, target, closedDemand)
     }
 
-    context(world: Assumptions, runtimeSupport: RuntimeSupport)
+    context(world: Assumptions, resolverSupport: ResolverSupport)
     private fun DepthFirstReactor.SlotResolver.execute() {
         source
             .resolveKey(path, selection, target)
-            ?.resolveObjects { objectResolution ->
+            ?.resolveRetainedObjects { passiveObjectOccurrence ->
                 enqueue(
                     DepthFirstReactor.SlotOrchestrator(
-                        path = objectResolution.path,
-                        source = objectResolution.source,
-                        selections = objectResolution.selections,
-                        target = objectResolution.target,
+                        path = passiveObjectOccurrence.path,
+                        source = passiveObjectOccurrence.source,
+                        selections = passiveObjectOccurrence.selections,
+                        target = passiveObjectOccurrence.target,
                     ),
                 )
             }

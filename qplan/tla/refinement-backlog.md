@@ -22,7 +22,7 @@ The main issue is that several relations the implementation should derive are ca
 
 ### Returned Cells
 
-`OccurrenceFolds.tla` removes abstract work and maps it to stipulated `WorkCell` values. It does not construct returned cells through counterparts of `resolveKey`, recursive `resolveValue`, and write-once `ObjectEngineResult.write`.
+`OccurrenceFolds.tla` removes abstract work and maps it to stipulated `WorkCell` values. It does not construct returned cells through counterparts of `resolveKey`, recursive `resolvePassiveValues`, and write-once `ObjectEngineResult.write`.
 
 Terminal built keys therefore align with returned OER cells only by assumption. The refinement must derive both cell presence and cell values from the fold transitions.
 
@@ -86,7 +86,7 @@ Derive registry classifications and operation/resolver demand from those structu
 
 Model the returned OER as transition state. Each cell moves from absent to one value and never changes; published child OER occurrences retain identity while their own cells are added.
 
-Model equivalents of `resolveKey`, recursive `resolveValue`, materialization, and cell write. Terminal cells and values should then be the state produced by the fold, not alignment inputs.
+Model equivalents of `resolveKey`, recursive `resolvePassiveValues`, materialization, and cell write. Terminal cells and values should then be the state produced by the fold, not alignment inputs.
 
 This is also the right basis for refining the aligned qplan constructors: the refinement should model monotonic writes rather than immutable subtree union.
 

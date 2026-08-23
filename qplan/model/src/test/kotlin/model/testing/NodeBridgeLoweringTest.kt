@@ -364,7 +364,7 @@ class NodeBridgeLoweringTest {
 
         val lowered =
             world.resolverRegistry.resolver(field)(
-                world.resolverRegistry.resolveRootQuery(),
+                world.resolverRegistry.createRootQueryInput(),
                 model.Arguments.Resolved.of(field, emptyMap()),
             )
 

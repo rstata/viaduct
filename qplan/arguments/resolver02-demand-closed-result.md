@@ -4,7 +4,7 @@
 
 Fix a finite reasoning world whose schema, values, selections, and resolver registry satisfy their documented invariants, including an acyclic resolver-demand relation. Every runtime variable in this argument is defined `FromArgument`; runtime `FromObjectField` binding is outside the domain.
 
-The claim concerns the non-selective Resolver02 policy supplied by `semantics/resolver02/Resolver.kt` to the shared constructor in `semantics/Resolve.kt`. The public `resolve` entry obtains the canonical Query source through `ResolverRegistry.resolveRootQuery()`, starts with an empty mutable Query OER, and applies complete resolver outputs. The claim does not establish selective one-shot producer completeness, JVM invocation count, scheduling, complexity, or runtime `FromObjectField` behavior.
+The claim concerns the non-selective Resolver02 policy supplied by `semantics/resolver02/Resolver.kt` to the shared constructor in `semantics/Resolve.kt`. The public `resolve` entry obtains the canonical Query source through `ResolverRegistry.createRootQueryInput()`, starts with an empty mutable Query OER, and applies complete resolver outputs. The claim does not establish selective one-shot producer completeness, JVM invocation count, scheduling, complexity, or runtime `FromObjectField` behavior.
 
 ## Proof Structure
 
@@ -44,9 +44,9 @@ Fixture-generated node loading needs no separate semantic case. A `T_V_A_Bridge.
 
 After a key is resolved, its cell value satisfies every subselection accumulated for that key, and every object or list nested within that value satisfies `isClosedUnderResolverDemand`.
 
-The argument is a well-founded mutual induction over passive `resolveValue` construction, retained object continuations, the finite dependency-order prefix, and nested result structure. Null, error, and simple values create no descendant demand. A list applies the induction hypothesis independently at every exact `ListEngineResult.Index` path.
+The argument is a well-founded mutual induction over passive `resolvePassiveValues` construction, retained object continuations, the finite dependency-order prefix, and nested result structure. Null, error, and simple values create no descendant demand. A list applies the induction hypothesis independently at every exact `ListEngineResult.Index` path.
 
-For an object output, `resolveValue` allocates one stable mutable target OER, copies the selected passive cells, stops at registered resolver boundaries, and records the source object, target OER, exact path, and collapsed selections for every occurrence requiring active work. `resolveObjects` completes those retained targets deepest first. Parent cells and immutable list positions retain the same target OER identities while their absent child cells become present; no ancestor or passive subtree is rebuilt or replaced.
+For an object output, `resolvePassiveValues` allocates one stable mutable target OER, copies the selected passive cells, stops at registered resolver boundaries, and records the source object, target OER, exact path, and collapsed selections for every occurrence requiring active work. `resolveRetainedObjects` completes those retained targets deepest first. Parent cells and immutable list positions retain the same target OER identities while their absent child cells become present; no ancestor or passive subtree is rebuilt or replaced.
 
 At one object occurrence, Lemma 1 establishes the complete local resolver obligations and Lemma 2 supplies materializable inputs in dependency order. The induction hypotheses establish selection satisfaction and closure below every resulting cell. A generated `T_V_A_Bridge.node` output is completed through the same retained-target induction as any other object output.
 

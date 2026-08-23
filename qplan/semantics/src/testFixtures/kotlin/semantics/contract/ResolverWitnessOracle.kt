@@ -10,7 +10,7 @@ import model.applicableGroundSelections
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
 import model.usedVariables
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
 import semantics.arbitrary.RegisteredResolverOccurrence
@@ -30,7 +30,7 @@ context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
-    context(RuntimeSupport.noCycleChecking()) {
+    context(ResolverSupport.noCycleChecking { selections -> selections }) {
         forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
             val resolver = world.resolverRegistry.resolver(cell.field)
             val fragment =
@@ -61,7 +61,7 @@ context(world: Assumptions)
 fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
     Map<ResolverOccurrenceApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
-    context(RuntimeSupport.noCycleChecking()) {
+    context(ResolverSupport.noCycleChecking { selections -> selections }) {
         forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
             val resolver = world.resolverRegistry.resolver(cell.field)
             val fragment =

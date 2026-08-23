@@ -142,9 +142,9 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `root resolver supplies an empty query object`() {
+    fun `root query input is an empty query object`() {
         val fixture = Fixture()
-        val root = fixture.assumptions.resolverRegistry.resolveRootQuery()
+        val root = fixture.assumptions.resolverRegistry.createRootQueryInput()
 
         assertEquals(fixture.schema.requireQueryTypeDef(), root.schemaType)
         assertEquals(emptySet(), root.getSelections().toSet())

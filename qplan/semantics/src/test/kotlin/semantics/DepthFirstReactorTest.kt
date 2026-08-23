@@ -24,7 +24,7 @@ class DepthFirstReactorTest {
                 schemaSDL = "type Query { value: Int }",
                 selectiveResolvers = false,
             ).assumptions
-        val source = world.resolverRegistry.resolveRootQuery()
+        val source = world.resolverRegistry.createRootQueryInput()
         val selections =
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
@@ -33,10 +33,10 @@ class DepthFirstReactorTest {
         val selection = selections.merge(sourceType).byGroundKey().values.single()
         val coordinate = listOf<PathComponent>(selection.groundKey())
         val events = mutableListOf<ReactorEvent>()
-        val runtimeSupport =
-            RuntimeSupport { demand -> demand }
+        val resolverSupport =
+            ResolverSupport.noCycleChecking { demand -> demand }
 
-        context(world, runtimeSupport) {
+        context(world, resolverSupport) {
             DepthFirstReactor(
                 source = source,
                 selections = selections,
@@ -73,7 +73,7 @@ class DepthFirstReactorTest {
                 schemaSDL = "type Query { value: Int }",
                 selectiveResolvers = false,
             ).assumptions
-        val source = world.resolverRegistry.resolveRootQuery()
+        val source = world.resolverRegistry.createRootQueryInput()
         val selections =
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
@@ -110,17 +110,17 @@ class DepthFirstReactorTest {
             world
                 .fragmentFrom("fragment ignored on Query { __typename }")
                 .subselections
-        val runtimeSupport =
-            RuntimeSupport { demand -> demand }
+        val resolverSupport =
+            ResolverSupport.noCycleChecking { demand -> demand }
         val reactor =
-            context(world, runtimeSupport) {
+            context(world, resolverSupport) {
                 DepthFirstReactor(
-                    source = world.resolverRegistry.resolveRootQuery(),
+                    source = world.resolverRegistry.createRootQueryInput(),
                     selections = selections,
                 )
             }
 
-        context(world, runtimeSupport) {
+        context(world, resolverSupport) {
             reactor.resolve()
 
             assertFailsWith<IllegalStateException> {

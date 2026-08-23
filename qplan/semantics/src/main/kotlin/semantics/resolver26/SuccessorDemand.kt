@@ -15,11 +15,11 @@ import model.selectionForestOf
 // Returns ground output demand, crossing open resolver boundaries without binding their arguments.
 context(world: Assumptions)
 internal fun SelectionForest.successorDemand(): SelectionForest =
-    successorDemand(mutableMapOf())
+    successorDemandWithMemo(mutableMapOf())
 
 // Retains requested ground boundaries and adds each active boundary's fixed passive OF demand.
 context(world: Assumptions)
-private fun SelectionForest.successorDemand(
+private fun SelectionForest.successorDemandWithMemo(
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     flatMap { selection ->
@@ -43,7 +43,7 @@ private fun SelectionForest.successorDemand(
                             key = objectKey,
                             possibleTypes = setOf(possibleType),
                             subselections =
-                                selection.subselections.successorDemand(
+                                selection.subselections.successorDemandWithMemo(
                                     passiveDemandByResolverField,
                                 ),
                         ),

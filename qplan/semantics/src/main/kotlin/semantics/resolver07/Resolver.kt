@@ -7,7 +7,7 @@ import model.SelectionForest
 import model.registry.successorBoundaryDemand
 import semantics.DepthFirstReactor
 import semantics.ReactorEventObserver
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 
 /**
  * Resolves [selections] through a depth-first work queue with non-selective resolver applications.
@@ -25,12 +25,12 @@ internal fun resolve(
     require(!world.selectiveResolvers) {
         "Resolver07 requires non-selective resolvers"
     }
-    val source = world.resolverRegistry.resolveRootQuery()
-    val runtimeSupport =
-        RuntimeSupport { selections ->
+    val source = world.resolverRegistry.createRootQueryInput()
+    val resolverSupport =
+        ResolverSupport.noCycleChecking { selections ->
             selections.successorBoundaryDemand()
         }
-    return context(runtimeSupport) {
+    return context(resolverSupport) {
         DepthFirstReactor(
             source = source,
             selections = selections,

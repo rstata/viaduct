@@ -28,7 +28,7 @@ import viaduct.engine.api.EngineObjectData
  * Each demanded value promise is installed before its producer launches. A producer publishes an
  * active child OER only after installing every demanded promise on that child.
  */
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 internal suspend fun EngineObjectData.Sync.coroutineResolve(
     selections: SelectionForest,
 ): ObjectEngineResult {
@@ -50,7 +50,7 @@ internal suspend fun EngineObjectData.Sync.coroutineResolve(
     return result
 }
 
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private fun CoroutineScope.orchestrateSlot(
     path: List<PathComponent>,
     source: EngineObjectData.Sync,
@@ -67,7 +67,7 @@ private fun CoroutineScope.orchestrateSlot(
     unresolvedKeys.forEach { key ->
         val cell = target.reserveCell(key)
         cell.createValuePromise()
-        runtimeSupport.registerWriter(
+        resolverSupport.registerWriter(
             cell = cell,
             writer = path + key,
         )
@@ -86,7 +86,7 @@ private fun CoroutineScope.orchestrateSlot(
     }
 }
 
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun resolveSlot(
     path: List<PathComponent>,
     source: EngineObjectData.Sync,
@@ -104,7 +104,7 @@ private suspend fun resolveSlot(
         }
         is Arguments.Resolved ->
             coroutineScope {
-                val resolutionSelections = runtimeSupport.complete(selection.subselections)
+                val resolutionSelections = resolverSupport.complete(selection.subselections)
                 val fieldValue =
                     if (key.field in world.resolverRegistry) {
                         val resolver = world.resolverRegistry.resolver(key.field)
@@ -130,14 +130,14 @@ private suspend fun resolveSlot(
                     } else {
                         source.outputValue(key.field.name)
                     }
-                val resolvedValue =
-                    fieldValue.resolveValue(
+                val passiveValuesResult =
+                    fieldValue.resolvePassiveValues(
                         expectedType = key.field.outputType,
                         path = path + key,
                         resolverDemand = resolutionSelections,
                     )
 
-                resolvedValue.objectsNeedingResolution.forEach { child ->
+                passiveValuesResult.objectsNeedingResolution.forEach { child ->
                     orchestrateSlot(
                         path = child.path,
                         source = child.source,
@@ -145,7 +145,7 @@ private suspend fun resolveSlot(
                         target = child.target,
                     )
                 }
-                valuePromise.complete(resolvedValue.engineResult)
+                valuePromise.complete(passiveValuesResult.engineResult)
                 cell.setAccessResult(true)
             }
     }

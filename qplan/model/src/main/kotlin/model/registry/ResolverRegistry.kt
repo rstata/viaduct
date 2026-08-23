@@ -40,8 +40,8 @@ import viaduct.engine.api.EngineObjectData
  * enters that branch.
  */
 interface ResolverRegistry {
-    /** Creates the root resolver input. Every Query field is supplied by a registered resolver. */
-    fun resolveRootQuery(): EngineObjectData.Sync
+    /** Creates the root Query input. Every Query field is supplied by a registered resolver. */
+    fun createRootQueryInput(): EngineObjectData.Sync
 
     operator fun contains(field: ViaductSchema.ObjectField): Boolean
 

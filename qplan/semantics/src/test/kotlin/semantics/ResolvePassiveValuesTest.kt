@@ -24,7 +24,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-class ResolveValueTest {
+class ResolvePassiveValuesTest {
     @Test
     fun `leaves demanded active typename unresolved and retains exact resolver objects`() {
         val testWorld =
@@ -100,7 +100,7 @@ class ResolveValueTest {
 
         val resolved =
             context(world) {
-                value.resolveValue(
+                value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
@@ -116,8 +116,8 @@ class ResolveValueTest {
         assertEquals(profileType, profile.type)
         assertEquals(setOf(rawKey), profile.keys)
         val resolutionsByPath =
-            resolved.objectsNeedingResolution.associateBy { objectResolution ->
-                objectResolution.path
+            resolved.objectsNeedingResolution.associateBy { passiveObjectOccurrence ->
+                passiveObjectOccurrence.path
             }
         assertEquals(
             setOf(emptyList(), listOf(profileKey)),
@@ -188,7 +188,7 @@ class ResolveValueTest {
 
         val resolved =
             context(world) {
-                value.resolveValue(
+                value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = resolverDemand,
@@ -234,7 +234,7 @@ class ResolveValueTest {
 
         assertFailsWith<IllegalArgumentException> {
             context(world) {
-                value.resolveValue(
+                value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
@@ -275,7 +275,7 @@ class ResolveValueTest {
 
         val resolved =
             context(world) {
-                value.resolveValue(
+                value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
@@ -322,7 +322,7 @@ class ResolveValueTest {
 
         assertFailsWith<IllegalArgumentException> {
             context(world) {
-                value.resolveValue(
+                value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "item").outputType,
                     path = emptyList(),
                     resolverDemand = selections,
@@ -406,9 +406,9 @@ class ResolveValueTest {
                 rootPath + ListEngineResult.Index.of(1) + nestedKey,
             )
 
-        val resolvedValue =
+        val passiveValuesResult =
             context(world) {
-                output.resolveValue(
+                output.resolvePassiveValues(
                     expectedType = itemsField.outputType,
                     path = rootPath,
                     resolverDemand = selections,
@@ -416,17 +416,17 @@ class ResolveValueTest {
             }
         val callbackPaths = mutableListOf<List<PathComponent>>()
         val replayed =
-            resolvedValue.resolveObjects { objectResolution ->
-                callbackPaths += objectResolution.path
-                when (objectResolution.target.type.name) {
+            passiveValuesResult.resolveRetainedObjects { passiveObjectOccurrence ->
+                callbackPaths += passiveObjectOccurrence.path
+                when (passiveObjectOccurrence.target.type.name) {
                     "Item" ->
-                        objectResolution.target.reserveCell(computedKey).also { cell ->
+                        passiveObjectOccurrence.target.reserveCell(computedKey).also { cell ->
                             cell.setValue(1)
                             cell.setAccessResult(true)
                         }
 
                     "Nested" ->
-                        objectResolution.target.reserveCell(renderedKey).also { cell ->
+                        passiveObjectOccurrence.target.reserveCell(renderedKey).also { cell ->
                             cell.setValue(2)
                             cell.setAccessResult(true)
                         }
@@ -436,8 +436,8 @@ class ResolveValueTest {
             }
 
         val resolutionsByPath =
-            resolvedValue.objectsNeedingResolution.associateBy { objectResolution ->
-                objectResolution.path
+            passiveValuesResult.objectsNeedingResolution.associateBy { passiveObjectOccurrence ->
+                passiveObjectOccurrence.path
             }
         assertEquals(expectedPaths, resolutionsByPath.keys)
         assertEquals(expectedPaths, callbackPaths.toSet())
@@ -445,7 +445,7 @@ class ResolveValueTest {
         assertTrue(
             callbackPaths.zipWithNext().all { (left, right) -> left.size >= right.size },
         )
-        assertSame(resolvedValue.engineResult, replayed)
+        assertSame(passiveValuesResult.engineResult, replayed)
 
         val result = assertIs<ListEngineResult>(replayed)
         result.forEachIndexed { index, cell ->

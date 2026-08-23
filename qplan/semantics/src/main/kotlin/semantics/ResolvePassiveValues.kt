@@ -28,13 +28,13 @@ import model.toEngineResult
  * Each member of [objectsNeedingResolution] retains the source object value, mutable result object,
  * exact root-relative OER path, and selection forest already collapsed to that occurrence.
  */
-internal class ResolvedValue(
+internal class ResolvePassiveValuesResult(
     val engineResult: EngineResult?,
-    val objectsNeedingResolution: List<ObjectResolution>,
-    val objectOccurrences: List<ObjectResolution>,
+    val objectsNeedingResolution: List<PassiveObjectOccurrence>,
+    val objectOccurrences: List<PassiveObjectOccurrence>,
 )
 
-internal class ObjectResolution(
+internal class PassiveObjectOccurrence(
     val path: List<PathComponent>,
     val source: EngineObjectData.Sync,
     val selections: SelectionForest,
@@ -50,37 +50,37 @@ internal class ObjectResolution(
  * boundaries. Null, error, and simple values terminate traversal.
  */
 context(world: Assumptions)
-internal fun EngineOutputData?.resolveValue(
+internal fun EngineOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
-): ResolvedValue {
+): ResolvePassiveValuesResult {
     require(conformsToOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
     }
     return when (this) {
-        null -> ResolvedValue(null, emptyList(), emptyList())
+        null -> ResolvePassiveValuesResult(null, emptyList(), emptyList())
         is EngineErrorData ->
-            ResolvedValue(ErrorEngineResult.of(this), emptyList(), emptyList())
-        is EngineObjectData.Sync -> resolveObjectValue(resolverDemand, path)
+            ResolvePassiveValuesResult(ErrorEngineResult.of(this), emptyList(), emptyList())
+        is EngineObjectData.Sync -> resolvePassiveObjectValues(resolverDemand, path)
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
             this
                 .withIndex()
                 .fold(
-                    ResolvedList(
+                    ResolvePassiveListValuesResult(
                         values = emptyList(),
                         objectsNeedingResolution = emptyList(),
                         objectOccurrences = emptyList(),
                     ),
                 ) { resolved, (index, value) ->
                     val element =
-                        value.resolveValue(
+                        value.resolvePassiveValues(
                             expectedType = elementType,
                             path = path + ListEngineResult.Index.of(index),
                             resolverDemand = resolverDemand,
                         )
-                    ResolvedList(
+                    ResolvePassiveListValuesResult(
                         values = resolved.values + element.engineResult,
                         objectsNeedingResolution =
                             resolved.objectsNeedingResolution +
@@ -90,7 +90,7 @@ internal fun EngineOutputData?.resolveValue(
                                 element.objectOccurrences,
                     )
                 }.let { resolved ->
-                    ResolvedValue(
+                    ResolvePassiveValuesResult(
                         engineResult =
                             ListEngineResult.of(elementType, resolved.values),
                         objectsNeedingResolution = resolved.objectsNeedingResolution,
@@ -99,7 +99,7 @@ internal fun EngineOutputData?.resolveValue(
                 }
         }
         else ->
-            ResolvedValue(
+            ResolvePassiveValuesResult(
                 toEngineResult(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
                 emptyList(),
                 emptyList(),
@@ -108,10 +108,10 @@ internal fun EngineOutputData?.resolveValue(
 }
 
 context(world: Assumptions)
-private fun EngineObjectData.Sync.resolveObjectValue(
+private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     resolverDemand: SelectionForest,
     path: List<PathComponent>,
-): ResolvedValue {
+): ResolvePassiveValuesResult {
     val mergedResolverDemand = resolverDemand.applicableGroundSelections(schemaType)
     val resolverDemandByKey = mergedResolverDemand.byGroundKey()
     if (world.selectiveResolvers) {
@@ -142,7 +142,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
         }
     val resolved =
         selectedKeys.fold(
-            ResolvedObject(
+            ResolvePassiveObjectValuesResult(
                 values = emptyMap(),
                 objectsNeedingResolution = emptyList(),
                 objectOccurrences = emptyList(),
@@ -154,7 +154,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
             }
             val fieldValue =
                 outputValue(key.field.name)
-                    .resolveValue(
+                    .resolvePassiveValues(
                         expectedType = key.field.outputType,
                         path = path + key,
                         resolverDemand =
@@ -162,7 +162,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
                                 ?.subselections
                                 ?: selectionForestOf(),
                     )
-            ResolvedObject(
+            ResolvePassiveObjectValuesResult(
                 values = result.values + (key to fieldValue.engineResult),
                 objectsNeedingResolution =
                     result.objectsNeedingResolution +
@@ -174,7 +174,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
         }
     val engineResult = ObjectEngineResult.of(schemaType, resolved.values, mutable = true)
     val localOccurrence =
-        ObjectResolution(
+        PassiveObjectOccurrence(
             path = path,
             source = this,
             selections = resolverDemand,
@@ -186,7 +186,7 @@ private fun EngineObjectData.Sync.resolveObjectValue(
         } else {
             emptyList()
         }
-    return ResolvedValue(
+    return ResolvePassiveValuesResult(
         engineResult = engineResult,
         objectsNeedingResolution = localResolution + resolved.objectsNeedingResolution,
         objectOccurrences = listOf(localOccurrence) + resolved.objectOccurrences,
@@ -194,21 +194,23 @@ private fun EngineObjectData.Sync.resolveObjectValue(
 }
 
 /** Resolves the retained object occurrences deepest first without replacing any result value. */
-internal fun ResolvedValue.resolveObjects(resolveObject: (ObjectResolution) -> Unit): EngineResult? {
+internal fun ResolvePassiveValuesResult.resolveRetainedObjects(
+    resolveObject: (PassiveObjectOccurrence) -> Unit,
+): EngineResult? {
     objectsNeedingResolution
-        .sortedByDescending { objectResolution -> objectResolution.path.size }
+        .sortedByDescending { passiveObjectOccurrence -> passiveObjectOccurrence.path.size }
         .forEach(resolveObject)
     return engineResult
 }
 
-private class ResolvedList(
+private class ResolvePassiveListValuesResult(
     val values: List<EngineResult?>,
-    val objectsNeedingResolution: List<ObjectResolution>,
-    val objectOccurrences: List<ObjectResolution>,
+    val objectsNeedingResolution: List<PassiveObjectOccurrence>,
+    val objectOccurrences: List<PassiveObjectOccurrence>,
 )
 
-private class ResolvedObject(
+private class ResolvePassiveObjectValuesResult(
     val values: Map<ObjectEngineResult.GroundKey, EngineResult?>,
-    val objectsNeedingResolution: List<ObjectResolution>,
-    val objectOccurrences: List<ObjectResolution>,
+    val objectsNeedingResolution: List<PassiveObjectOccurrence>,
+    val objectOccurrences: List<PassiveObjectOccurrence>,
 )

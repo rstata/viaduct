@@ -16,12 +16,12 @@ import model.outputType
 import model.PathComponent
 import model.materializedEngineObjectDataOf
 import model.toEngineOutputData
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 import semantics.materializedGroundKey
 import viaduct.engine.api.EngineObjectData
 
 // Returns a resolver-visible input object collected by GraphQL response key.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 internal suspend fun ObjectEngineResult.materializeResolverInput(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -35,7 +35,7 @@ internal suspend fun ObjectEngineResult.materializeResolverInput(
     )
 
 // Materializes selected OER values at their exact stored paths.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -47,7 +47,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedGroundKey = selection.materializedGroundKey(selectionPath)
         val cell = reserveCell(storedGroundKey)
-        diagnosticInstrumentation.cycleCheck(reader, cell)
+        resolverSupport.cycleCheck(reader, cell)
         val selectedValue: EngineOutputData? =
             cell
                 .reserveValue()
@@ -70,7 +70,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
 }
 
 // Recursively materializes one selected engine result while preserving null, error, and list shape.
-context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun EngineResult?.materializeSelectedValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,

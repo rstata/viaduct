@@ -22,9 +22,9 @@ import semantics.correctresolution.argumentsContainErrorValue
  * Resolves [selections] at this exact object occurrence, extending [resolved].
  *
  * The fixed local-demand closure and dependency-first fold are shared by Resolver01-03.
- * [runtimeSupport] supplies their differing output-boundary semantics.
+ * [resolverSupport] supplies their differing output-boundary semantics.
  */
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 internal fun EngineObjectData.Sync.orchestrateKeys(
     path: List<PathComponent>,
     selections: SelectionForest,
@@ -40,11 +40,11 @@ internal fun EngineObjectData.Sync.orchestrateKeys(
     orderedKeys.forEach { key ->
         val selection = closedDemand[key]
         resolveKey(path, selection, resolved)
-            ?.resolveObjects { objectResolution ->
-                objectResolution.source.orchestrateKeys(
-                    path = objectResolution.path,
-                    selections = objectResolution.selections,
-                    resolved = objectResolution.target,
+            ?.resolveRetainedObjects { passiveObjectOccurrence ->
+                passiveObjectOccurrence.source.orchestrateKeys(
+                    path = passiveObjectOccurrence.path,
+                    selections = passiveObjectOccurrence.selections,
+                    resolved = passiveObjectOccurrence.target,
                 )
             }
     }
@@ -101,12 +101,12 @@ private fun EngineObjectData.Sync.dependenciesOf(
  * Resolves and sets the cell value and access result for [fieldSelection], yielding its passive
  * result-tree fringe.
  */
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 internal fun EngineObjectData.Sync.resolveKey(
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
     resolved: ObjectEngineResult,
-): ResolvedValue? {
+): ResolvePassiveValuesResult? {
     val key = fieldSelection.groundKey()
     val cell = resolved.reserveCell(key)
     return when (val arguments = key.arguments) {
@@ -118,7 +118,7 @@ internal fun EngineObjectData.Sync.resolveKey(
         }
 
         is Arguments.Resolved -> {
-            val resolutionSelections = runtimeSupport.complete(fieldSelection.subselections)
+            val resolutionSelections = resolverSupport.complete(fieldSelection.subselections)
             val fieldValue =
                 if (key.field in world.resolverRegistry) {
                     val resolver = world.resolverRegistry.resolver(key.field)
@@ -146,15 +146,15 @@ internal fun EngineObjectData.Sync.resolveKey(
                 } else {
                     outputValue(key.field.name)
                 }
-            val resolvedValue =
-                fieldValue.resolveValue(
+            val passiveValuesResult =
+                fieldValue.resolvePassiveValues(
                     expectedType = key.field.outputType,
                     path = path + key,
                     resolverDemand = resolutionSelections,
                 )
-            cell.setValue(resolvedValue.engineResult)
+            cell.setValue(passiveValuesResult.engineResult)
             cell.setAccessResult(true)
-            resolvedValue
+            passiveValuesResult
         }
     }
 }

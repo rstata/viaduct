@@ -59,8 +59,8 @@ class CoroutineResolveTest {
             )
         val registeredKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
         var producerStarts = 0
-        val runtimeSupport =
-            object : RuntimeSupport {
+        val resolverSupport =
+            object : ResolverSupport {
                 context(world: Assumptions)
                 override fun complete(selections: SelectionForest): SelectionForest {
                     producerStarts += 1
@@ -79,7 +79,7 @@ class CoroutineResolveTest {
             world.fragmentFrom("fragment ignored on Query { first second }").subselections
 
         runBlocking {
-            context(world, runtimeSupport) {
+            context(world, resolverSupport) {
                 world.objectOf("Query").coroutineResolve(selections)
             }
         }
@@ -124,8 +124,8 @@ class CoroutineResolveTest {
         val expectedChildResultKeys = expectedChildKeys
         var rootCell: EngineResultCell? = null
         val childRegistrations = linkedSetOf<ObjectEngineResult.GroundKey>()
-        val runtimeSupport =
-            object : RuntimeSupport {
+        val resolverSupport =
+            object : ResolverSupport {
                 context(world: Assumptions)
                 override fun complete(selections: SelectionForest): SelectionForest = selections
 
@@ -150,7 +150,7 @@ class CoroutineResolveTest {
 
         val result =
             runBlocking {
-                context(world, runtimeSupport) {
+                context(world, resolverSupport) {
                     world.objectOf("Query").coroutineResolve(selections)
                 }
             }
@@ -319,7 +319,7 @@ private fun registryOverride(
     resolver: (ViaductSchema.ObjectField, ResolverRegistry) -> FieldResolver?,
 ): ResolverRegistry =
     object : ResolverRegistry {
-        override fun resolveRootQuery(): EngineObjectData.Sync = delegate.resolveRootQuery()
+        override fun createRootQueryInput(): EngineObjectData.Sync = delegate.createRootQueryInput()
 
         override fun contains(field: ViaductSchema.ObjectField): Boolean =
             resolver(field, delegate) != null

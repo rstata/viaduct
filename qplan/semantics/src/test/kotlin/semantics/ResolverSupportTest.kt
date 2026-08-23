@@ -17,7 +17,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class RuntimeSupportTest {
+class ResolverSupportTest {
     @Test
     fun `cycle-checking support delegates selection completion`() {
         val fixture = Fixture()
@@ -29,6 +29,18 @@ class RuntimeSupportTest {
             }
 
         assertEquals(selections, completion)
+    }
+
+    @Test
+    fun `cycle-checking support rejects unconfigured selection completion`() {
+        val fixture = Fixture()
+        val support = ResolverSupport.cycleChecking()
+
+        assertFailsWith<UnsupportedOperationException> {
+            context(fixture.world) {
+                support.complete(selectionForestOf())
+            }
+        }
     }
 
     @Test
@@ -183,10 +195,10 @@ class RuntimeSupportTest {
     }
 
     @Test
-    fun `default support ignores writer registration and cycle checks`() {
+    fun `no-cycle-checking support ignores writer registration and cycle checks`() {
         val fixture = Fixture()
         val support =
-            RuntimeSupport { selections -> selections }
+            ResolverSupport.noCycleChecking { selections -> selections }
 
         support.registerWriter(
             cell = fixture.cell("first"),
@@ -212,7 +224,7 @@ class RuntimeSupportTest {
                 ).assumptions
         val target = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), mutable = true)
         val support =
-            RuntimeSupport.cycleChecking { selections -> selections }
+            ResolverSupport.cycleChecking { selections -> selections }
 
         fun key(name: String): ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(

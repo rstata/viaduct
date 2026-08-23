@@ -5,7 +5,7 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.registry.successorBoundaryDemand
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 import semantics.orchestrateKeys
 import model.schemaType
 
@@ -18,12 +18,12 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(!world.selectiveResolvers) {
         "Resolver02 requires non-selective resolvers"
     }
-    val source = world.resolverRegistry.resolveRootQuery()
-    val runtimeSupport =
-        RuntimeSupport { selections ->
+    val source = world.resolverRegistry.createRootQueryInput()
+    val resolverSupport =
+        ResolverSupport.noCycleChecking { selections ->
             selections.successorBoundaryDemand()
         }
-    return context(runtimeSupport) {
+    return context(resolverSupport) {
         source.orchestrateKeys(
             path = emptyList(),
             selections = selections,

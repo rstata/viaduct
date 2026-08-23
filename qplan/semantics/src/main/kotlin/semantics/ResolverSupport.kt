@@ -5,7 +5,6 @@ import model.EngineResult
 import model.EngineResultCell
 import model.PathComponent
 import model.SelectionForest
-import model.registry.successorDemand
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -15,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
  * passed as context arguments to control how resolution works. The default writer registration and
  * cycle checking are no-ops for synchronous resolution and post-resolution operations.
  */
-internal fun interface RuntimeSupport {
+internal fun interface ResolverSupport {
     context(world: Assumptions)
     fun complete(selections: SelectionForest): SelectionForest
 
@@ -30,16 +29,35 @@ internal fun interface RuntimeSupport {
     ) {}
 
     companion object {
-        fun noCycleChecking(): RuntimeSupport =
-            RuntimeSupport { selections -> selections }
+        fun noCycleChecking(completer: (SelectionForest) -> SelectionForest): ResolverSupport =
+            ResolverSupport { selections -> completer(selections) }
 
         fun cycleChecking(
-            complete: RuntimeSupport =
-                RuntimeSupport { selections ->
-                    selections.successorDemand()
-                },
-        ): RuntimeSupport =
-            CycleCheckingRuntimeSupport(complete)
+            completer: (SelectionForest) -> SelectionForest = {
+                throw UnsupportedOperationException("ResolverSupport completion is not configured")
+            },
+        ): ResolverSupport =
+            object : ResolverSupport {
+                private val checker = CycleChecker()
+
+                context(world: Assumptions)
+                override fun complete(selections: SelectionForest): SelectionForest =
+                    completer(selections)
+
+                override fun registerWriter(
+                    cell: EngineResultCell,
+                    writer: List<PathComponent>,
+                ) {
+                    checker.registerWriter(cell, writer)
+                }
+
+                override fun cycleCheck(
+                    reader: List<PathComponent>,
+                    cell: EngineResultCell,
+                ) {
+                    checker.cycleCheck(reader, cell)
+                }
+            }
     }
 }
 
@@ -49,19 +67,13 @@ internal class ResolverReadCycleException(
         "Resolver-read cycle: ${cycle.joinToString(separator = " -> ")}",
     )
 
-private class CycleCheckingRuntimeSupport(
-    private val completionSupport: RuntimeSupport,
-) : RuntimeSupport {
+private class CycleChecker {
     private val writersByCell =
         ConcurrentHashMap<EngineResultCell, List<PathComponent>>()
     private val readsByReader =
         ConcurrentHashMap<List<PathComponent>, MutableSet<List<PathComponent>>>()
 
-    context(world: Assumptions)
-    override fun complete(selections: SelectionForest): SelectionForest =
-        completionSupport.complete(selections)
-
-    override fun registerWriter(
+    fun registerWriter(
         cell: EngineResultCell,
         writer: List<PathComponent>,
     ) {
@@ -71,7 +83,7 @@ private class CycleCheckingRuntimeSupport(
         }
     }
 
-    override fun cycleCheck(
+    fun cycleCheck(
         reader: List<PathComponent>,
         cell: EngineResultCell,
     ) {

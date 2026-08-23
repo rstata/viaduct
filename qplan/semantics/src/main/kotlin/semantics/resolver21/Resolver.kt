@@ -6,7 +6,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 import semantics.coroutineResolve
 
 /**
@@ -18,12 +18,12 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(!world.selectiveResolvers) {
         "Resolver21 requires non-selective resolvers"
     }
-    val source = world.resolverRegistry.resolveRootQuery()
-    val runtimeSupport =
-        RuntimeSupport.cycleChecking { completedSelections -> completedSelections }
+    val source = world.resolverRegistry.createRootQueryInput()
+    val resolverSupport =
+        ResolverSupport.cycleChecking { completedSelections -> completedSelections }
     return runBlocking {
         withTimeout(90_000) {
-            context(runtimeSupport) {
+            context(resolverSupport) {
                 source.coroutineResolve(selections)
             }
         }

@@ -107,7 +107,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val root = world.resolverRegistry.resolveRootQuery()
+        val root = world.resolverRegistry.createRootQueryInput()
         val nullable = world.schema.requireObjectField("Query", "nullable")
         val failed = world.schema.requireObjectField("Query", "failed")
 
@@ -157,7 +157,7 @@ class ResolverTestDslTest {
                 }
                 """.trimIndent(),
             )
-        val root = world.resolverRegistry.resolveRootQuery()
+        val root = world.resolverRegistry.createRootQueryInput()
         val echo = world.schema.requireObjectField("Query", "echo")
 
         assertEquals(4, world.apply(echo, root, mapOf("input" to 4)))
@@ -317,7 +317,7 @@ class ResolverTestDslTest {
 
 private fun TestWorld.apply(
     field: ViaductSchema.ObjectField,
-    input: EngineObjectData.Sync = resolverRegistry.resolveRootQuery(),
+    input: EngineObjectData.Sync = resolverRegistry.createRootQueryInput(),
     arguments: Map<String, Any?> = emptyMap(),
 ): EngineOutputData? =
     when (val grounded = Arguments.of(field, arguments)) {

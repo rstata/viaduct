@@ -33,7 +33,7 @@ import viaduct.engine.api.EngineObjectData
  *
  * This operation is defined when this result contains every value promise selected by [selections] and every selection applicable at an object visited by this operation contains no [Arguments.Variable] in its key arguments.
  */
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 internal suspend fun ObjectEngineResult.materialize(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -47,7 +47,7 @@ internal suspend fun ObjectEngineResult.materialize(
 }
 
 // Materializes a selection forest rooted at one exact OER path.
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -60,7 +60,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
         val storedKey = selection.materializedGroundKey(selectionPath)
         val cell = getCell(storedKey)
         val promise = cell.getValue()
-        runtimeSupport.cycleCheck(reader, cell)
+        resolverSupport.cycleCheck(reader, cell)
         val selectedValue =
             promise
                 .await()
@@ -109,7 +109,7 @@ internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
 }
 
 // Recursively materializes one selected result while retaining its exact stored path.
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun EngineResult?.materializeEngineResultValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,
@@ -138,7 +138,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
     }
 
 // Materializes each list element at a path containing its concrete list index.
-context(world: Assumptions, runtimeSupport: RuntimeSupport)
+context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun ListEngineResult.materializeValues(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,

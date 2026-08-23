@@ -431,7 +431,7 @@ private class CountingResolverRegistry(
     var resolverLookups: Int = 0
         private set
 
-    override fun resolveRootQuery(): EngineObjectData.Sync = delegate.resolveRootQuery()
+    override fun createRootQueryInput(): EngineObjectData.Sync = delegate.createRootQueryInput()
 
     override fun contains(field: ViaductSchema.ObjectField): Boolean = field in delegate
 

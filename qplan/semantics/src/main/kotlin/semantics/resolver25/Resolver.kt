@@ -51,7 +51,7 @@ import model.toEngineSimpleData
 import model.invariants.conformsToOutputSchemaType
 import model.registry.StampedObjectPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
-import semantics.RuntimeSupport
+import semantics.ResolverSupport
 import semantics.bindFromArguments
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.materialize
@@ -78,10 +78,10 @@ private fun resolveWithLifecycleInstrumentation(
     require(world.selectiveResolvers) {
         "Resolver25 requires selective resolvers"
     }
-    val source = world.resolverRegistry.resolveRootQuery()
+    val source = world.resolverRegistry.createRootQueryInput()
     return runBlocking {
         withTimeout(90_000) {
-            context(RuntimeSupport.cycleChecking()) {
+            context(ResolverSupport.cycleChecking()) {
                 val result: ObjectEngineResult =
                     source.schemaType.newObjectResult()
                 coroutineScope {
@@ -114,7 +114,7 @@ private class ResolverRuntime(
 
     // Creates the sole orchestrator for one object-result instance or contributes late actual
     // demand to the existing orchestrator. The returned latch covers this contribution.
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     fun createOrchestrator(
         path: List<PathComponent>,
         source: EngineObjectData.Sync,
@@ -229,7 +229,7 @@ private class ObjectResultOrchestrator(
     }
 
     // Starts completion coordination after all initial activation work has been submitted.
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     fun start() {
         val completeImmediately =
             synchronized(activationLock) {
@@ -248,7 +248,7 @@ private class ObjectResultOrchestrator(
     }
 
     // Submits applicable selections as independently groundable activation work.
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     fun addDemand(
         demand: SelectionForest,
         consumerCoordinate: List<PathComponent>? = null,
@@ -262,7 +262,7 @@ private class ObjectResultOrchestrator(
         return activations
     }
 
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private fun submitActivation(
         selection: Selection,
         consumerCoordinate: List<PathComponent>?,
@@ -308,7 +308,7 @@ private class ObjectResultOrchestrator(
     }
 
     // Grounds one occurrence, interns it by grounded key, and waits for its promise/fringe to exist.
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private suspend fun activateSelection(
         selection: Selection,
         contributionId: DemandContributionId,
@@ -325,7 +325,7 @@ private class ObjectResultOrchestrator(
         }
     }
 
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private fun activateGroundedSelection(
         groundedSelection: ObjectSelection,
         contributionId: DemandContributionId,
@@ -441,7 +441,7 @@ private class ObjectResultOrchestrator(
         return keyState.fringeInstalled
     }
 
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private fun launchMergedPassiveDemand(
         keyState: KeyState,
         demand: SelectionForest,
@@ -463,7 +463,7 @@ private class ObjectResultOrchestrator(
         return installed
     }
 
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private fun launchLateOutputDemand(
         keyState: KeyState,
         demand: SelectionForest,
@@ -493,7 +493,7 @@ private class ObjectResultOrchestrator(
      * - contributes the complete stamped object fragment;
      * - launches path-variable readers.
      */
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private fun prepareResolverInstance(
         groundedKey: ObjectEngineResult.GroundKey,
     ): PreparedResolverInstance {
@@ -565,7 +565,7 @@ private class ObjectResultOrchestrator(
         )
     }
 
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private suspend fun readProvider(
         definition: StampedObjectPathDefinition,
         reader: List<PathComponent>,
@@ -612,7 +612,7 @@ private class ObjectResultOrchestrator(
 
     // Traverses already-built passive output until reaching the next object occurrence whose
     // current demand crosses a resolver boundary. Lists preserve one occurrence per position.
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private fun EngineOutputData?.launchNestedFringe(
         result: EngineResult?,
         path: List<PathComponent>,
@@ -719,7 +719,7 @@ private class ObjectResultOrchestrator(
 
     // Produces one grounded field value from its materialized object fragment and sealed output
     // demand. Child object results become orchestration-ready before this value is published.
-    context(world: Assumptions, diagnosticInstrumentation: RuntimeSupport)
+    context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private suspend fun resolveKey(
         keyState: KeyState,
         cell: EngineResultCell,
@@ -768,8 +768,8 @@ private class ObjectResultOrchestrator(
                     } else {
                         source.outputValue(groundedKey.field.name)
                     }
-                val resolvedValue: ResolvedValue =
-                    fieldValue.resolveValue(
+                val passiveValuesResult: ResolvePassiveValuesResult =
+                    fieldValue.resolvePassiveValues(
                         expectedType = groundedKey.field.outputType,
                         path = path + groundedKey,
                         resolverDemand = resolutionSelections,
@@ -778,11 +778,11 @@ private class ObjectResultOrchestrator(
                     )
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
-                    AvailableKeyOutput(fieldValue, resolvedValue.engineResult),
+                    AvailableKeyOutput(fieldValue, passiveValuesResult.engineResult),
                 )
 
                 val descendantsNeedingResolution: List<Deferred<Unit>> =
-                    resolvedValue.objectsNeedingResolution.map { child ->
+                    passiveValuesResult.objectsNeedingResolution.map { child ->
                         runtime.instrumentation.childOrchestratorRequired(
                             parentCoordinate = coordinate,
                             childPath = child.path,
@@ -797,7 +797,7 @@ private class ObjectResultOrchestrator(
                     }
                 descendantsNeedingResolution.awaitAll()
                 runtime.instrumentation.valuePublished(coordinate)
-                cell.getValue().complete(resolvedValue.engineResult)
+                cell.getValue().complete(passiveValuesResult.engineResult)
                 cell.setAccessResult(true)
             }
         }
@@ -977,47 +977,50 @@ private class ObjectResultOrchestrator(
  * that still contain active resolver demand.
  */
 context(world: Assumptions)
-private suspend fun EngineOutputData?.resolveValue(
+private suspend fun EngineOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
-): ResolvedValue {
+): ResolvePassiveValuesResult {
     require(conformsToOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
     }
     return when (this) {
-        null -> ResolvedValue(null, emptyList())
-        is EngineErrorData -> ResolvedValue(ErrorEngineResult.of(this), emptyList())
+        null -> ResolvePassiveValuesResult(null, emptyList())
+        is EngineErrorData -> ResolvePassiveValuesResult(ErrorEngineResult.of(this), emptyList())
         is EngineObjectData.Sync ->
-            resolveObjectValue(
+            resolvePassiveObjectValues(
                 path = path,
                 resolverDemand = resolverDemand,
                 potentialDemand = potentialDemand,
             )
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
-            val resolvedElements: List<ResolvedValue> =
+            val passiveElementResults: List<ResolvePassiveValuesResult> =
                 mapIndexed { index, value ->
-                    value.resolveValue(
+                    value.resolvePassiveValues(
                         expectedType = elementType,
                         path = path + ListEngineResult.Index.of(index),
                         resolverDemand = resolverDemand,
                         potentialDemand = potentialDemand,
                     )
                 }
-            ResolvedValue(
+            ResolvePassiveValuesResult(
                 engineResult =
                     ListEngineResult.of(
                         typeExpr = elementType,
-                        values = resolvedElements.map(ResolvedValue::engineResult),
+                        values =
+                            passiveElementResults.map(ResolvePassiveValuesResult::engineResult),
                     ),
                 objectsNeedingResolution =
-                    resolvedElements.flatMap(ResolvedValue::objectsNeedingResolution),
+                    passiveElementResults.flatMap(
+                        ResolvePassiveValuesResult::objectsNeedingResolution,
+                    ),
             )
         }
         else ->
-            ResolvedValue(
+            ResolvePassiveValuesResult(
                 engineResult =
                     toEngineResult(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
                 objectsNeedingResolution = emptyList(),
@@ -1028,11 +1031,11 @@ private suspend fun EngineOutputData?.resolveValue(
 // Selects passive output fields and retains this object instance when any selected key crosses a
 // resolver boundary.
 context(world: Assumptions)
-private suspend fun EngineObjectData.Sync.resolveObjectValue(
+private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     path: List<PathComponent>,
     resolverDemand: SelectionForest,
     potentialDemand: SelectionForest,
-): ResolvedValue {
+): ResolvePassiveValuesResult {
     val engineResult: ObjectEngineResult =
         schemaType.newObjectResult()
     val mergedDemand: ObjectSelectionForest =
@@ -1064,16 +1067,16 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
             .filterTo(linkedSetOf()) { groundedKey ->
                 groundedKey.field !in world.resolverRegistry
             }
-    val resolvedFields: List<ResolvedField> =
+    val resolvedPassiveFields: List<ResolvedPassiveField> =
         selectedGroundedKeys.map { groundedKey ->
             val arguments = groundedKey.arguments
             require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
                 "Passive object field ${schemaType.name}/${groundedKey.field.name} " +
                     "must be argumentless"
             }
-            val resolvedValue: ResolvedValue =
+            val passiveValuesResult: ResolvePassiveValuesResult =
                 outputValue(groundedKey.field.name)
-                    .resolveValue(
+                    .resolvePassiveValues(
                         expectedType = groundedKey.field.outputType,
                         path = path + groundedKey,
                         resolverDemand =
@@ -1084,21 +1087,21 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
                             potentialSubselectionsByField[groundedKey.field]
                                 ?: selectionForestOf(),
                     )
-            ResolvedField(groundedKey, resolvedValue)
+            ResolvedPassiveField(groundedKey, passiveValuesResult)
         }
-    resolvedFields.forEach { resolvedField ->
-        engineResult.reserveCell(resolvedField.groundedKey).also { cell ->
-            cell.setValue(resolvedField.value.engineResult)
+    resolvedPassiveFields.forEach { resolvedPassiveField ->
+        engineResult.reserveCell(resolvedPassiveField.groundedKey).also { cell ->
+            cell.setValue(resolvedPassiveField.value.engineResult)
             cell.setAccessResult(true)
         }
     }
-    val localResolution: ObjectResolution? =
+    val localResolution: PassiveObjectOccurrence? =
         if (
             resolverDemandByGroundedKey.keys.any { groundedKey ->
                 groundedKey.field in world.resolverRegistry
             }
         ) {
-            ObjectResolution(
+            PassiveObjectOccurrence(
                 path = path,
                 source = this,
                 selections = resolverDemand,
@@ -1108,23 +1111,23 @@ private suspend fun EngineObjectData.Sync.resolveObjectValue(
         } else {
             null
         }
-    val descendantResolutions: List<ObjectResolution> =
-        resolvedFields.flatMap { resolvedField ->
-            resolvedField.value.objectsNeedingResolution
+    val descendantResolutions: List<PassiveObjectOccurrence> =
+        resolvedPassiveFields.flatMap { resolvedPassiveField ->
+            resolvedPassiveField.value.objectsNeedingResolution
         }
-    return ResolvedValue(
+    return ResolvePassiveValuesResult(
         engineResult = engineResult,
         objectsNeedingResolution =
             localResolution?.let(::listOf) ?: descendantResolutions,
     )
 }
 
-private class ResolvedValue(
+private class ResolvePassiveValuesResult(
     val engineResult: EngineResult?,
-    val objectsNeedingResolution: List<ObjectResolution>,
+    val objectsNeedingResolution: List<PassiveObjectOccurrence>,
 )
 
-private class ObjectResolution(
+private class PassiveObjectOccurrence(
     val path: List<PathComponent>,
     val source: EngineObjectData.Sync,
     val selections: SelectionForest,
@@ -1132,9 +1135,9 @@ private class ObjectResolution(
     val target: ObjectEngineResult,
 )
 
-private class ResolvedField(
+private class ResolvedPassiveField(
     val groundedKey: ObjectEngineResult.GroundKey,
-    val value: ResolvedValue,
+    val value: ResolvePassiveValuesResult,
 )
 
 private fun EngineResult.toProviderBinding(

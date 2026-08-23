@@ -540,7 +540,7 @@ private class TestResolverRegistry(
         return field in fieldResolvers
     }
 
-    override fun resolveRootQuery(): EngineObjectData.Sync {
+    override fun createRootQueryInput(): EngineObjectData.Sync {
         val query = schema.requireQueryTypeDef()
         return engineObjectDataOf(schemaType = query)
     }

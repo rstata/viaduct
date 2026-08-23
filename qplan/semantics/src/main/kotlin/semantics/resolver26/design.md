@@ -20,7 +20,7 @@ Resolver input materialization filters source occurrences to the concrete object
 
 One root `coroutineScope` owns the request. Every orchestration task and field-resolution task is a direct child of that request scope. Successful synchronous return therefore means all request work has reached quiescence.
 
-Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's binding-preparation promise. The dispatcher changes scheduling only; it does not change resolver, selection, stamp, path, or task identity.
+Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's bindings-declared signal. The dispatcher changes scheduling only; it does not change resolver, selection, stamp, path, or task identity.
 
 ## Synchronous Demand Closure
 
@@ -32,7 +32,7 @@ The closed forest must contain exactly the resolver keys represented by the expa
 
 An open resolver key contributes its object-fragment dependencies before its arguments ground. If those arguments later become an error, those dependencies may have executed speculatively. That imprecision is accepted by the current model.
 
-## Binding Preparation
+## Binding Declaration
 
 After closure, the orchestrator declares every open binding before launching local field work.
 
@@ -40,7 +40,7 @@ After closure, the orchestrator declares every open binding before launching loc
 
 Each `FromObjectField` definition launches a provider reader that follows its occurrence-stamped compiled path through OER promises and completes the declared binding. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
 
-Before grounding a provider component inside an OER, its reader awaits that OER's binding-preparation promise. The orchestrator completes this promise immediately after synchronous demand closure declares the OER's bindings, before launching local field work. This is necessary when a passive object publishes a nested OER before that nested orchestration task runs.
+Before grounding a provider component inside an OER, its reader awaits that OER's bindings-declared signal. The orchestrator marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before launching local field work. This is necessary when a passive object publishes a nested OER before that nested orchestration task runs.
 
 Nested provider keys ground their arguments against the owning resolver occurrence before the resulting ground key is localized to the concrete provider object path. Grounding and localization commute when the localized binding is an alias of the owner binding; grounding first avoids making provider progress depend on a descendant orchestrator declaring that alias.
 
@@ -48,7 +48,7 @@ Readers never insert undeclared binding promises.
 
 ## Passive Values
 
-Passive ground keys are read by canonical field name from the source EOD through the shared `resolveValue` path. Missing passive source selections are errors; open passive keys are outside the algorithm's domain.
+Passive ground keys are read by canonical field name from the source EOD through the shared `resolvePassiveValues` path. Missing passive source selections are errors; open passive keys are outside the algorithm's domain.
 
 When a passive value contains object or list occurrences, the runtime launches orchestration for those occurrences with the corresponding downstream selections. Existing cells are reused rather than replaced.
 

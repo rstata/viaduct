@@ -36,7 +36,8 @@ import kotlin.test.assertSame
 import viaduct.engine.api.EngineObjectData
 
 class MaterializeTest {
-    private val runtimeSupport = RuntimeSupport.noCycleChecking()
+    private val resolverSupport =
+        ResolverSupport.noCycleChecking { selections -> selections }
 
     @Test
     fun `materialization awaits a present deferred value`() =
@@ -65,7 +66,7 @@ class MaterializeTest {
             val promise = result.reserveCell(field).createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    context(world, runtimeSupport) {
+                    context(world, resolverSupport) {
                         result.materialize(
                             selections = selections,
                             reader = emptyList(),
@@ -99,7 +100,7 @@ class MaterializeTest {
 
         assertFailsWith<NoSuchElementException> {
             runBlocking {
-                context(world, runtimeSupport) {
+                context(world, resolverSupport) {
                     result.materialize(
                         selections = selections,
                         reader = emptyList(),
@@ -144,7 +145,7 @@ class MaterializeTest {
                 .fragmentFrom("fragment ignored on Query { child { value } }")
                 .materializeSelections
         val cycleCheckingSupport =
-            RuntimeSupport.cycleChecking { completedSelections ->
+            ResolverSupport.cycleChecking { completedSelections ->
                 completedSelections
             }
         cycleCheckingSupport.registerWriter(
@@ -252,7 +253,7 @@ class MaterializeTest {
                     .materializeSelections
 
             val materialized =
-                context(world, runtimeSupport) {
+                context(world, resolverSupport) {
                     parentResult.materialize(selections, emptyList())
                 }
 
@@ -313,7 +314,7 @@ class MaterializeTest {
                 )
 
             val materialized =
-                context(world, runtimeSupport) {
+                context(world, resolverSupport) {
                     result.materialize(selections, emptyList())
                 }
 
@@ -372,7 +373,7 @@ class MaterializeTest {
                 )
 
             val materialized =
-                context(world, runtimeSupport) {
+                context(world, resolverSupport) {
                     result.materialize(selections, emptyList())
                 }
 

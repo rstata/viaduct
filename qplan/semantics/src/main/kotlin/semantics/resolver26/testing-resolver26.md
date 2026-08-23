@@ -2,7 +2,7 @@
 
 ## Thread Count
 
-Every Resolver26 test uses one externally configurable resolution thread count, including static contracts, generated properties, coordinate replays, deep stress, broad stress, and multithreaded campaigns. The default is one.
+Every Resolver26 test uses one externally configurable resolution thread count, including static contracts, generated properties, coordinate replays, deep stress, broad stress, and multithreaded campaigns. Ordinary tests default to one; the dedicated `resolver26MultithreadedStress` task defaults to 100.
 
 Set it with the Gradle property `-Presolver26ThreadCount=N`, the JVM property `-Dresolver26.thread.count=N`, or the environment variable `RESOLVER26_THREAD_COUNT=N`; the Gradle property is preferred in commands in this guide. The value must be a positive integer.
 
@@ -78,6 +78,12 @@ Run the dispatcher-instrumented campaign with selected rounds and either each ro
 
 ```shell
 ./gradlew :semantics:resolver26MultithreadedStress -Presolver26MultithreadedStressRounds=1,46,81,95 -Presolver26MultithreadedStressSize=campaign -Presolver26ThreadCount=10
+```
+
+With no overrides, the dedicated task runs round 1 at its recorded campaign dimensions: five profiles of 2,000 cases, for 10,000 cases total, on 100 workers:
+
+```shell
+./gradlew :semantics:resolver26MultithreadedStress
 ```
 
 The dedicated multithreaded task records continuation overlap and worker names. Its assertions are useful scheduling evidence, but external OS observation is the stronger check that those workers actually execute on multiple CPUs.

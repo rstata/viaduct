@@ -3,6 +3,7 @@ package semantics.resolver26
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
+import model.Assumptions
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
@@ -22,118 +23,124 @@ import model.schemaType
 import model.selectionForestOf
 import model.usedVariables
 import semantics.correctresolution.argumentsContainErrorValue
+import viaduct.engine.api.EngineObjectData
 
 // Expands resolver object fragments until no new resolver keys enter the object's demand.
 // Returns the merged demand together with the resolver and binding metadata used by later phases.
-internal fun ObjectOrchestrationTask.closeInputDemand(
+context(world: Assumptions)
+internal fun EngineObjectData.Sync.closeInputDemand(
+    path: List<PathComponent>,
     initialDemand: SelectionForest,
-): CloseInputDemandResult =
-    context(world) {
-        val localizedDemand: LocalizeTopLevelStampsResult =
-            localizeTopLevelStamps(initialDemand)
-        var accumulatedDemand: SelectionForest = localizedDemand.demand
-        val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
-            linkedMapOf()
-        val pathVariableDefinitions: MutableList<StampedObjectPathDefinition> =
-            mutableListOf()
+): CloseInputDemandResult {
+    val localizedDemand: LocalizeTopLevelStampsResult =
+        localizeTopLevelStamps(
+            path = path,
+            demand = initialDemand,
+        )
+    var accumulatedDemand: SelectionForest = localizedDemand.demand
+    val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
+        linkedMapOf()
+    val pathVariableDefinitions: MutableList<StampedObjectPathDefinition> =
+        mutableListOf()
 
-        while (true) {
-            val mergedDemand: ObjectSelectionForest =
-                accumulatedDemand.merge(source.schemaType)
-            val newResolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
+    while (true) {
+        val mergedDemand: ObjectSelectionForest =
+            accumulatedDemand.merge(schemaType)
+        val newResolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
+            mergedDemand
+                .byKey()
+                .filter { (objectKey, _) ->
+                    objectKey.field in world.resolverRegistry &&
+                        objectKey !in expansions
+                }
+        if (newResolverSelections.isEmpty()) {
+            check(
                 mergedDemand
                     .byKey()
-                    .filter { (objectKey, _) ->
-                        objectKey.field in world.resolverRegistry &&
-                            objectKey !in expansions
-                    }
-            if (newResolverSelections.isEmpty()) {
-                check(
-                    mergedDemand
-                        .byKey()
-                        .filterKeys { objectKey ->
-                            objectKey.field in world.resolverRegistry
-                        }.keys == expansions.keys,
-                ) {
-                    "Resolver26 closed demand and resolver expansions are misaligned"
-                }
-                val selectionStamps: List<Stamp.Occurrence> =
-                    mergedDemand.keys().mapNotNull { key -> key.stamp as? Stamp.Occurrence }
-                check(selectionStamps.size == selectionStamps.toSet().size) {
-                    "Resolver26 closed demand contains duplicate selection stamps"
-                }
-                return@context CloseInputDemandResult(
-                    demand = mergedDemand,
-                    expansions = expansions,
-                    bindingAliases = localizedDemand.bindingAliases,
-                    pathVariableDefinitions = pathVariableDefinitions,
-                )
+                    .filterKeys { objectKey ->
+                        objectKey.field in world.resolverRegistry
+                    }.keys == expansions.keys,
+            ) {
+                "Resolver26 closed demand and resolver expansions are misaligned"
             }
-
-            newResolverSelections.forEach { (objectKey, _) ->
-                val resolver: FieldResolver =
-                    world.resolverRegistry.resolver(objectKey.field)
-                if (
-                    objectKey is ObjectEngineResult.GroundKey &&
-                    objectKey.arguments.argumentsContainErrorValue()
-                ) {
-                    check(
-                        expansions.put(
-                            objectKey,
-                            ResolverExpansion(
-                                ownerKey = objectKey,
-                                resolver = resolver,
-                                inputDemand = selectionForestOf(),
-                                inputMaterializeSelections = materializeSelectionForestOf(),
-                                variableDefinitions = emptyList(),
-                            ),
-                        ) == null,
-                    ) {
-                        "Resolver26 expanded error-valued object key twice: $objectKey"
-                    }
-                    return@forEach
-                }
-                val ownerStamp: Stamp.Occurrence? =
-                    objectKey.stamp as? Stamp.Occurrence
-                val resolverPath: List<PathComponent> =
-                    if (ownerStamp == null) {
-                        path + (objectKey as ObjectEngineResult.GroundKey)
-                    } else {
-                        ownerStamp.resolverPath
-                    }
-                val resolverStamp: Stamp.Occurrence =
-                    ownerStamp
-                        ?: Stamp.Occurrence.of(resolverPath = resolverPath)
-                val objectFragment: ResolverObjectFragment =
-                    resolver.instantiateObjectFragment(resolverStamp)
-                val definitions: List<SelectionStampedVariableDefinition> =
-                    if (ownerStamp == null) {
-                        resolver.selectionStampedVariableDefinitions(resolverPath)
-                    } else {
-                        resolver.selectionStampedVariableDefinitionsFrom(ownerStamp)
-                    }
-                val expansion =
-                    ResolverExpansion(
-                        ownerKey = objectKey,
-                        resolver = resolver,
-                        inputDemand = objectFragment.constructionSelections,
-                        inputMaterializeSelections = objectFragment.materializeSelections,
-                        variableDefinitions = definitions,
-                    )
-                check(expansions.put(objectKey, expansion) == null) {
-                    "Resolver26 expanded object key twice: $objectKey"
-                }
-
-                pathVariableDefinitions += objectFragment.pathVariableDefinitions
-                accumulatedDemand += objectFragment.constructionSelections
+            val selectionStamps: List<Stamp.Occurrence> =
+                mergedDemand.keys().mapNotNull { key -> key.stamp as? Stamp.Occurrence }
+            check(selectionStamps.size == selectionStamps.toSet().size) {
+                "Resolver26 closed demand contains duplicate selection stamps"
             }
+            return CloseInputDemandResult(
+                demand = mergedDemand,
+                expansions = expansions,
+                bindingAliases = localizedDemand.bindingAliases,
+                pathVariableDefinitions = pathVariableDefinitions,
+            )
         }
-        error("Resolver26 demand closure terminated unexpectedly")
+
+        newResolverSelections.forEach { (objectKey, _) ->
+            val resolver: FieldResolver =
+                world.resolverRegistry.resolver(objectKey.field)
+            if (
+                objectKey is ObjectEngineResult.GroundKey &&
+                objectKey.arguments.argumentsContainErrorValue()
+            ) {
+                check(
+                    expansions.put(
+                        objectKey,
+                        ResolverExpansion(
+                            ownerKey = objectKey,
+                            resolver = resolver,
+                            inputDemand = selectionForestOf(),
+                            inputMaterializeSelections = materializeSelectionForestOf(),
+                            variableDefinitions = emptyList(),
+                        ),
+                    ) == null,
+                ) {
+                    "Resolver26 expanded error-valued object key twice: $objectKey"
+                }
+                return@forEach
+            }
+            val ownerStamp: Stamp.Occurrence? =
+                objectKey.stamp as? Stamp.Occurrence
+            val resolverPath: List<PathComponent> =
+                if (ownerStamp == null) {
+                    path + (objectKey as ObjectEngineResult.GroundKey)
+                } else {
+                    ownerStamp.resolverPath
+                }
+            val resolverStamp: Stamp.Occurrence =
+                ownerStamp
+                    ?: Stamp.Occurrence.of(resolverPath = resolverPath)
+            val objectFragment: ResolverObjectFragment =
+                resolver.instantiateObjectFragment(resolverStamp)
+            val definitions: List<SelectionStampedVariableDefinition> =
+                if (ownerStamp == null) {
+                    resolver.selectionStampedVariableDefinitions(resolverPath)
+                } else {
+                    resolver.selectionStampedVariableDefinitionsFrom(ownerStamp)
+                }
+            val expansion =
+                ResolverExpansion(
+                    ownerKey = objectKey,
+                    resolver = resolver,
+                    inputDemand = objectFragment.constructionSelections,
+                    inputMaterializeSelections = objectFragment.materializeSelections,
+                    variableDefinitions = definitions,
+                )
+            check(expansions.put(objectKey, expansion) == null) {
+                "Resolver26 expanded object key twice: $objectKey"
+            }
+
+            pathVariableDefinitions += objectFragment.pathVariableDefinitions
+            accumulatedDemand += objectFragment.constructionSelections
+        }
     }
+    error("Resolver26 demand closure terminated unexpectedly")
+}
 
 // Rebases top-level occurrence stamps onto this object's concrete result path.
 // Records aliases that connect each localized variable to its source occurrence.
-private fun ObjectOrchestrationTask.localizeTopLevelStamps(
+private fun localizeTopLevelStamps(
+    path: List<PathComponent>,
     demand: SelectionForest,
 ): LocalizeTopLevelStampsResult {
     if (path.isEmpty()) {

@@ -60,14 +60,17 @@ internal fun resolve(
                         applicationObserver = applicationObserver,
                         resolverSupport = ResolverSupport.cycleChecking(),
                 )
-                ObjectOrchestrationTask(
-                    world = world,
-                    support = support,
-                    path = emptyList(),
-                    source = source,
-                    target = result,
-                    initialDemand = selections,
-                ).run()
+                val orchestration =
+                    ObjectOrchestrationTask(
+                        world = world,
+                        support = support,
+                        path = emptyList(),
+                        source = source,
+                        target = result,
+                        initialDemand = selections,
+                    )
+                orchestration.prepare()
+                orchestration.launch()
             }
             result
         }

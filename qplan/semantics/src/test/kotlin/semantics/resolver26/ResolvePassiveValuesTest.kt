@@ -1,0 +1,307 @@
+package semantics.resolver26
+
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import model.Assumptions
+import model.EngineObjectDataEntry
+import model.EngineOutputData
+import model.EngineResult
+import model.ListEngineResult
+import model.ObjectEngineResult
+import model.PathComponent
+import model.SelectionForest
+import model.emptyFragmentOf
+import model.engineObjectDataOf
+import model.fragmentFrom
+import model.objectOf
+import model.outputType
+import model.requireObjectField
+import model.requireType
+import model.selectionForestOf
+import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import semantics.ResolverSupport
+import viaduct.graphql.schema.ViaductSchema
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+
+class ResolvePassiveValuesTest {
+    @Test
+    fun `passive-only object trees freeze synchronously as they are created`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query {
+                      container: Container!
+                    }
+
+                    type Container {
+                      items: [Item!]!
+                      omitted: String
+                    }
+
+                    type Item {
+                      value: String!
+                      omitted: String
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val schema = world.schema
+        val containerField = schema.requireObjectField("Query", "container")
+        val itemsKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Container", "items"),
+                emptyMap(),
+            )
+        val containerOmittedKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Container", "omitted"),
+                emptyMap(),
+            )
+        val valueKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Item", "value"),
+                emptyMap(),
+            )
+        val itemOmittedKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Item", "omitted"),
+                emptyMap(),
+            )
+        val output =
+            schema.objectOf("Container") {
+                "items" setTo
+                    listOf(
+                        objectOf("Item") { "value" setTo "one" },
+                        objectOf("Item") { "value" setTo "two" },
+                    )
+            }
+        val resolverDemand =
+            world.fragmentFrom(
+                "fragment ignored on Container { items { value } }",
+            ).subselections
+
+        val result =
+            assertIs<ObjectEngineResult>(
+                resolvePassiveValues(
+                    world = world,
+                    value = output,
+                    expectedType = containerField.outputType,
+                    path = listOf(containerField.key()),
+                    resolverDemand = resolverDemand,
+                    constructionDemand = selectionForestOf(),
+                ),
+            )
+
+        assertFailsWith<NoSuchElementException> {
+            result.reserveCell(containerOmittedKey)
+        }
+        val items =
+            assertIs<ListEngineResult>(
+                result.getCell(itemsKey).getValue().get(),
+            )
+        assertEquals(listOf("one", "two"), items.map { cell ->
+            val item = assertIs<ObjectEngineResult>(cell.getValue().get())
+            assertFailsWith<NoSuchElementException> {
+                item.reserveCell(itemOmittedKey)
+            }
+            item.getCell(valueKey).getValue().get()
+        })
+    }
+
+    @Test
+    fun `projection materializes passive values while construction launches active values`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      item: Item!
+                    }
+
+                    type Item {
+                      raw: String!
+                      computed: String!
+                      omitted: String
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Item", "computed") to
+                            fieldResolverOf(
+                                schema.emptyFragmentOf("Item"),
+                            ) { _, _ -> "computed" },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val itemField = schema.requireObjectField("Query", "item")
+        val rawKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Item", "raw"),
+                emptyMap(),
+            )
+        val computedKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Item", "computed"),
+                emptyMap(),
+            )
+        val omittedKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Item", "omitted"),
+                emptyMap(),
+            )
+        val output =
+            schema.objectOf("Item") {
+                "raw" setTo "raw"
+            }
+        val resolverDemand =
+            world.fragmentFrom(
+                "fragment ignored on Item { raw }",
+            ).subselections
+        val constructionDemand =
+            world.fragmentFrom(
+                "fragment ignored on Item { computed }",
+            ).subselections
+
+        val result =
+            assertIs<ObjectEngineResult>(
+                resolvePassiveValues(
+                    world = world,
+                    value = output,
+                    expectedType = itemField.outputType,
+                    path = listOf(itemField.key()),
+                    resolverDemand = resolverDemand,
+                    constructionDemand = constructionDemand,
+                ),
+            )
+
+        assertEquals("raw", result.getCell(rawKey).getValue().get())
+        assertEquals("computed", result.getCell(computedKey).getValue().get())
+        assertFailsWith<NoSuchElementException> {
+            result.reserveCell(omittedKey)
+        }
+    }
+
+    @Test
+    fun `selective output rejects passive fields outside projection demand`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query {
+                      item: Item!
+                    }
+
+                    type Item {
+                      selected: String!
+                      extra: String!
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val schema = world.schema
+        val itemField = schema.requireObjectField("Query", "item")
+        val output =
+            schema.objectOf("Item") {
+                "selected" setTo "selected"
+                "extra" setTo "extra"
+            }
+        val resolverDemand =
+            world.fragmentFrom(
+                "fragment ignored on Item { selected }",
+            ).subselections
+
+        assertFailsWith<IllegalArgumentException> {
+            resolvePassiveValues(
+                world = world,
+                value = output,
+                expectedType = itemField.outputType,
+                path = listOf(itemField.key()),
+                resolverDemand = resolverDemand,
+                constructionDemand = selectionForestOf(),
+            )
+        }
+    }
+
+    @Test
+    fun `passive object fields reject arguments`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query {
+                      item: Item!
+                    }
+
+                    type Item {
+                      value(index: Int): String
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val schema = world.schema
+        val itemField = schema.requireObjectField("Query", "item")
+        val itemType = schema.requireType("Item") as ViaductSchema.Object
+        val valueField = schema.requireObjectField("Item", "value")
+        val output =
+            engineObjectDataOf(
+                schemaType = itemType,
+                fields =
+                    listOf(
+                        EngineObjectDataEntry.of(
+                            selection = valueField.name,
+                            field = valueField,
+                            value = "one",
+                        ),
+                    ),
+            )
+        val resolverDemand =
+            world.fragmentFrom(
+                "fragment ignored on Item { value(index: 1) }",
+            ).subselections
+
+        assertFailsWith<IllegalArgumentException> {
+            resolvePassiveValues(
+                world = world,
+                value = output,
+                expectedType = itemField.outputType,
+                path = listOf(itemField.key()),
+                resolverDemand = resolverDemand,
+                constructionDemand = selectionForestOf(),
+            )
+        }
+    }
+
+    private fun ViaductSchema.ObjectField.key(): ObjectEngineResult.GroundKey =
+        ObjectEngineResult.GroundKey.of(this, emptyMap())
+
+    private fun resolvePassiveValues(
+        world: Assumptions,
+        value: EngineOutputData?,
+        expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        path: List<PathComponent>,
+        resolverDemand: SelectionForest,
+        constructionDemand: SelectionForest,
+    ): EngineResult? =
+        runBlocking(resolver26CoroutineContext()) {
+            coroutineScope {
+                val support =
+                    Resolver26Support(
+                        requestScope = this,
+                        applicationObserver = {},
+                        resolverSupport = ResolverSupport.cycleChecking(),
+                    )
+                context(world, support) {
+                    value.resolvePassiveValues(
+                        expectedType = expectedType,
+                        path = path,
+                        resolverDemand = resolverDemand,
+                        constructionDemand = constructionDemand,
+                    )
+                }
+            }
+        }
+}

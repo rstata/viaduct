@@ -40,7 +40,7 @@ After closure, the orchestrator declares every open binding before launching loc
 
 Each `FromObjectField` definition launches a provider reader that follows its occurrence-stamped compiled path through OER promises and completes the declared binding. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
 
-Before grounding a provider component inside an OER, its reader awaits that OER's bindings-declared signal. The orchestrator marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before launching local field work. This is necessary when a passive object publishes a nested OER before that nested orchestration task runs.
+Before grounding a provider component inside an OER, its reader awaits that OER's bindings-declared signal. `ObjectOrchestrationTask.prepare` marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before recursively materializing passive children or launching local field work.
 
 Nested provider keys ground their arguments against the owning resolver occurrence before the resulting ground key is localized to the concrete provider object path. Grounding and localization commute when the localized binding is an alias of the owner binding; grounding first avoids making provider progress depend on a descendant orchestrator declaring that alias.
 
@@ -48,9 +48,11 @@ Readers never insert undeclared binding promises.
 
 ## Passive Values
 
-Passive ground keys are read by canonical field name from the source EOD through the shared `resolvePassiveValues` path. Missing passive source selections are errors; open passive keys are outside the algorithm's domain.
+Passive ground keys are read by canonical field name from the source EOD through resolver26's local `resolvePassiveValues` path. Missing passive source selections are errors; open passive keys are outside the algorithm's domain.
 
-When a passive value contains object or list occurrences, the runtime launches orchestration for those occurrences with the corresponding downstream selections. Existing cells are reused rather than replaced.
+The field-resolution task builds the passive result tree before publishing the containing value. Resolver26 creates one `ObjectOrchestrationTask` with each OER and calls its non-suspending `prepare` function immediately. Prepare combines construction demand propagated through the parent with the projection demand that caused the resolver to return the object, closes that demand, and declares and marks bindings. Resolver26 then materializes passive fields recursively from the returned closed demand before calling the task's non-suspending `launch` function. This parent-first recursion establishes each binding domain before any descendant can copy an alias from it without retaining a separate object-occurrence collection.
+
+After passive children have launched, the parent launch validates its materialized passive cells. An object with neither active expansions nor binding aliases freezes synchronously without creating a coroutine. Otherwise, launch schedules the task's suspending `run` function to copy aliases, read providers associated with its active expansions, install active fields, and freeze the OER.
 
 ## Active Installation And Freeze
 
@@ -68,12 +70,12 @@ The field-resolution task:
 2. materializes the resolver's fixed input demand from exact OER cells;
 3. records the occurrence-aware application observation;
 4. invokes the selective resolver once;
-5. builds the passive result shape; and
-6. launches orchestration for returned root object or list-element occurrences before publishing the containing value.
+5. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
+6. publishes the containing value.
 
 Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same localized child keys; strict occurrence stamps, binding aliases, and reservation rules make disagreement fail rather than silently create another identity.
 
-Argument errors complete both cell slots with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once and set the access result to the Boolean result `true`.
+Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once.
 
 ## Successor Demand
 

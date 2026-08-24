@@ -52,23 +52,13 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                 }
             }
             closed.demand.byKey().forEach { (objectKey, selection) ->
-                when {
-                    objectKey.field in world.resolverRegistry ->
-                        launch {
-                            installAndLaunchFieldResolver(
-                                selection = selection,
-                                expansion = closed.expansions.getValue(objectKey),
-                            )
-                        }
-
-                    else ->
-                        check(
-                            objectKey is ObjectEngineResult.GroundKey &&
-                                target.isCellSet(objectKey),
-                        ) {
-                            "Resolver26 passive key $objectKey was not materialized by " +
-                                "resolvePassiveValues"
-                        }
+                if (objectKey.field in world.resolverRegistry) {
+                    launch {
+                        installAndLaunchFieldResolver(
+                            selection = selection,
+                            expansion = closed.expansions.getValue(objectKey),
+                        )
+                    }
                 }
             }
         }
@@ -104,7 +94,7 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
             cell = cell,
             writer = path + groundKey,
         )
-        support.launchFieldResolverTask(
+        val fieldResolverTask =
             FieldResolverTask(
                 world = world,
                 support = support,
@@ -116,8 +106,10 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
                 cell = cell,
                 variableArgumentCount = variableArgumentCount,
                 variableSourceSelectionStamps = variableSourceSelectionStamps,
-            ),
-        )
+            )
+        support.requestScope.launch {
+            fieldResolverTask.run()
+        }
     }
 }
 

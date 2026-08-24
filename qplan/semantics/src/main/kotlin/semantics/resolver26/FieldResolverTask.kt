@@ -4,9 +4,9 @@ import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
+import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
-import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
@@ -16,10 +16,7 @@ import model.Stamp
 import model.groundKey
 import model.outputType
 import model.registry.FieldResolver
-import semantics.PassiveObjectOccurrence
-import semantics.ResolvePassiveValuesResult
 import semantics.correctresolution.argumentsContainErrorValue
-import semantics.resolvePassiveValues
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
@@ -78,47 +75,15 @@ internal class FieldResolverTask(
                     selections = invocationDemand,
                 )
 
-            val passiveValuesResult: ResolvePassiveValuesResult =
+            val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
                     expectedType = groundKey.field.outputType,
                     path = coordinate,
                     resolverDemand = invocationDemand,
+                    constructionDemand = constructionDemand,
                 )
 
-            launchOutputObjectOrchestrations(
-                passiveValuesResult = passiveValuesResult,
-                coordinate = coordinate,
-                constructionDemand = constructionDemand,
-            )
-            cell.getValue().complete(passiveValuesResult.engineResult)
+            cell.getValue().complete(passiveValue)
         }
     }
-
-    private fun launchOutputObjectOrchestrations(
-        passiveValuesResult: ResolvePassiveValuesResult,
-        coordinate: List<PathComponent>,
-        constructionDemand: SelectionForest,
-    ) {
-        passiveValuesResult.objectOccurrences
-            .filter { occurrence -> occurrence.isRootOfResolverOutput(coordinate) }
-            .forEach { child ->
-                support.launchObjectOrchestrationTask(
-                    ObjectOrchestrationTask(
-                        world = world,
-                        support = support,
-                        path = child.path,
-                        source = child.source,
-                        target = child.target,
-                        initialDemand = constructionDemand,
-                    ),
-                )
-            }
-    }
-
-    private fun PassiveObjectOccurrence.isRootOfResolverOutput(
-        coordinate: List<PathComponent>,
-    ): Boolean =
-        path.size >= coordinate.size &&
-            path.take(coordinate.size) == coordinate &&
-            path.drop(coordinate.size).all { component -> component is ListEngineResult.Index }
 }

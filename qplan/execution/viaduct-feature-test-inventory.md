@@ -1,10 +1,38 @@
 # Viaduct Feature-Test Inventory
 
-This inventory covers files under `core/engine/runtime/src/test/kotlin` that invoke `runFeatureTest` as of 2026-08-20. Counts are source-level `@Test`, `@ParameterizedTest`, and `@TestFactory` annotations; nested parameterized cases may execute more than once. The inventory is a portability map, not a claim that every source file should be migrated into qplan.
+This inventory records only the `core/engine/runtime` feature-test files intentionally omitted from qplan because every test in the file is currently N/A. The source catalog contains 32 files; 13 have been migrated, leaving the 19 file-level exclusions below.
 
-Migration is atomic by source file. Once any file is migrated, every source test must be copied in source order; tests outside qplan's current supported surface remain present and are marked `@Disabled` with a specific reason. The counts below report migration state: a copied count smaller than the source count identifies an unfinished legacy migration, not a supported selective port.
+Migration is atomic by source file. Migrated files are authoritative through their copied source tests and coded `@Disabled` reasons; this document intentionally does not duplicate that per-test status.
 
-The 2026-08-21 whole-file audit found 93 omitted test declarations across four selective legacy ports and one copied test whose behavior had been rewritten. All four files have since been completed from their production sources, the rewritten test has been restored, and the source and port production-test names and order now agree exactly. Together they contain 124 production tests: 40 currently pass through qplan and 84 remain disabled. Two enabled `ALTERNATIVE` tests separately state qplan-compatible behavior for confirmed incompatibilities.
+The 19 exclusions below are the complete file-level N/A list as of 2026-08-24.
+
+Migrated tests are source-faithful: aside from package/import plumbing, `runFeatureTest` to `runQPlanFeatureTest`, source metadata, and coded `@Disabled` annotations, their fixture code, helpers, behavior, and assertions must remain unchanged. Tests requiring production `KeyTree` or `KeyTreeBuilder` utilities are out of scope and belong in the N/A worklist until that infrastructure is deliberately added.
+
+## Omitted Whole Files
+
+The following source files are intentionally not copied because every test in each file is outside qplan's resolver-correctness boundary. These are file-level exclusions; migrated files remain authoritative through their individual enabled or coded `@Disabled` tests.
+
+| Source file | Tests | Reason |
+| --- | ---: | --- |
+| `BatchFieldResolverTest.kt` | 5 | Batched field-executor behavior |
+| `BatchNodeResolverTest.kt` | 8 | Batched node-executor behavior |
+| `CompleteSelectionSetTest.kt` | 9 | Production `completeSelectionSet` API |
+| `CycleDetectorFeatureTest.kt` | 1 | Tenant-loading bootstrap cycle detector |
+| `ExecutionSelectionSetTest.kt` | 146 | Production `ExecutionSelectionSet` implementation and dispatcher projection |
+| `FetchObjectInstrumentationFeatureTest.kt` | 3 | Fetch-object instrumentation ordering |
+| `FieldDataLoaderTest.kt` | 1 | Field data-loader scope and batching |
+| `FieldExecutionObservabilityFeatureTest.kt` | 6 | Production execution observability instrumentation |
+| `FieldResolverExecutionConditionTest.kt` | 2 | Production query-plan execution conditions |
+| `NodeDataLoaderTest.kt` | 15 | Node data-loader caching and selection coverage |
+| `OperationValidationTest.kt` | 3 | Operation/schema-scope validation before resolution |
+| `ParentManagedValueTest.kt` | 5 | Production parent-managed resolution policy; qplan owns descendant output through resolver output selections |
+| `ResolveSelectionSetTest.kt` | 5 | Production `resolveSelectionSet` API |
+| `ResolverInstrumentationFeatureTest.kt` | 5 | Resolver instrumentation callbacks |
+| `ShadowFieldExecutionTest.kt` | 10 | Shadow execution and comparison |
+| `StandardResolutionValueTest.kt` | 2 | Production `StandardResolutionValue` wrapper |
+| `SubqueryExecutionTest.kt` | 27 | `ctx.query()` and `ctx.mutation()` subquery execution |
+| `SubquerySchemaTest.kt` | 3 | Subquery schema selection |
+| `ViaductFieldResolutionFatalExceptionTest.kt` | 8 | Production instrumentation failure boundaries |
 
 ## Observed Port Boundaries
 

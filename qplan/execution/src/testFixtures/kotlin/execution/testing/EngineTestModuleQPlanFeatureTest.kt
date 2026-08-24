@@ -24,12 +24,14 @@ import model.testing.VariableDeclaration
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import semantics.fragmentFromDocument
+import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineExecutionContext
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.NodeReference
 import viaduct.engine.api.ResolvedEngineObjectData
 import viaduct.engine.api.ViaductSchema as EngineSchema
 import viaduct.engine.api.mocks.EngineTestModule
+import viaduct.engine.api.mocks.MockTenantModuleBootstrapper
 import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.spi.FieldResolverExecutor
 import viaduct.engine.api.spi.NodeResolverExecutor
@@ -74,17 +76,17 @@ class QPlanFeatureTest internal constructor(
 fun EngineTestModule.runQPlanFeatureTest(
     withoutDefaultQueryNodeResolvers: Boolean = false,
     schema: EngineSchema? = null,
-    engineConfig: Any? = null,
+    engineConfig: EngineConfiguration? = null,
     block: QPlanFeatureTest.() -> Unit,
 ) {
-    require(!withoutDefaultQueryNodeResolvers) {
-        "Qplan feature tests do not support disabling default Query node resolvers yet"
+    if (withoutDefaultQueryNodeResolvers) {
+        TODO("Qplan feature tests do not support disabling default Query node resolvers yet")
     }
-    require(schema == null) {
-        "Qplan feature tests do not support a distinct executable schema yet"
+    if (schema != null) {
+        TODO("Qplan feature tests do not support a distinct executable schema yet")
     }
-    require(engineConfig == null) {
-        "Qplan feature tests do not support custom engine configuration yet"
+    if (engineConfig != null) {
+        TODO("Qplan feature tests do not support custom engine configuration yet")
     }
     val schemaSDL = qplanSchemaSDL(fullSchema)
     val context = ContextMocks(myFullSchema = fullSchema).engineExecutionContext
@@ -111,27 +113,48 @@ fun EngineTestModule.runQPlanFeatureTest(
     QPlanFeatureTest(ExecutionTestFixture.fromWorld(schemaSDL, world)).block()
 }
 
+fun MockTenantModuleBootstrapper.runQPlanFeatureTest(
+    withoutDefaultQueryNodeResolvers: Boolean = false,
+    schema: EngineSchema? = null,
+    engineConfig: EngineConfiguration? = null,
+    block: QPlanFeatureTest.() -> Unit,
+) {
+    EngineTestModule(
+        fullSchema = fullSchema,
+        fieldResolverExecutors = fieldResolverExecutors,
+        nodeResolverExecutors = nodeResolverExecutors,
+        checkerExecutors = checkerExecutors,
+        typeCheckerExecutors = typeCheckerExecutors,
+    ).runQPlanFeatureTest(
+        withoutDefaultQueryNodeResolvers = withoutDefaultQueryNodeResolvers,
+        schema = schema,
+        engineConfig = engineConfig,
+        block = block,
+    )
+}
+
+
 private fun EngineTestModule.validateSupportedExecutors() {
-    require(checkerExecutors.isEmpty() && typeCheckerExecutors.isEmpty()) {
-        "Qplan feature tests do not support checker executors yet"
+    if (checkerExecutors.isNotEmpty() || typeCheckerExecutors.isNotEmpty()) {
+        TODO("Qplan feature tests do not support checker executors yet")
     }
     fieldResolverExecutors.forEach { (coordinate, executor) ->
-        require(!executor.isBatching) {
-            "Qplan feature tests do not support batching field executor ${coordinate.render()}"
+        if (executor.isBatching) {
+            TODO("Qplan feature tests do not support batching field executor ${coordinate.render()}")
         }
-        require(!executor.isSelective) {
-            "Qplan feature tests do not support selective field executor ${coordinate.render()}"
+        if (executor.isSelective) {
+            TODO("Qplan feature tests do not support selective field executor ${coordinate.render()}")
         }
-        require(executor.querySelectionSet == null) {
-            "Qplan feature tests do not support query required selections for ${coordinate.render()}"
+        if (executor.querySelectionSet != null) {
+            TODO("Qplan feature tests do not support query required selections for ${coordinate.render()}")
         }
     }
     nodeResolverExecutors.forEach { (typeName, executor) ->
-        require(!executor.isBatching) {
-            "Qplan feature tests do not support batching node executor $typeName"
+        if (executor.isBatching) {
+            TODO("Qplan feature tests do not support batching node executor $typeName")
         }
-        require(!executor.isSelective) {
-            "Qplan feature tests do not support selective node executor $typeName"
+        if (executor.isSelective) {
+            TODO("Qplan feature tests do not support selective node executor $typeName")
         }
     }
 }

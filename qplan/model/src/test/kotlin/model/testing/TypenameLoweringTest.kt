@@ -162,10 +162,12 @@ class TypenameLoweringTest {
             assertTrue(registry.mayDemandFrom(field).isEmpty())
             assertEquals(
                 type.name,
-                resolver(
-                    input = schema.objectOf(type.name),
-                    arguments = Arguments.Resolved.of(field, emptyMap()),
-                ),
+                context(world.assumptions) {
+                    resolver(
+                        input = schema.objectOf(type.name),
+                        arguments = Arguments.Resolved.of(field, emptyMap()),
+                    )
+                },
             )
         }
     }

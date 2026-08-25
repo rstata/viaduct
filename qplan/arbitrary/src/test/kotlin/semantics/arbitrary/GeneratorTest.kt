@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.Arguments
+import model.Assumptions
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
@@ -72,7 +73,9 @@ class GeneratorTest {
         val arguments = Arguments.Resolved.of(field, emptyMap())
 
         registry.clearResolutionApplicationCounts()
-        countWorld.resolverRegistry.resolver(field)(input, arguments)
+        context(Assumptions.of(countWorld.schema, countWorld.resolverRegistry, false)) {
+            countWorld.resolverRegistry.resolver(field)(input, arguments)
+        }
 
         assertEquals(mapOf(coordinate to 1L), registry.resolutionApplicationCounts())
         assertTrue(registry.resolutionWitness().applications.isEmpty())
@@ -341,10 +344,12 @@ class GeneratorTest {
                 val arguments = Arguments.Resolved.of(field, emptyMap())
                 val resolver = world.resolverRegistry.resolver(field)
 
-                assertEquals(
-                    resolver(input, arguments).outputResolutionFingerprint(),
-                    resolver(input, arguments).outputResolutionFingerprint(),
-                )
+                context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
+                    assertEquals(
+                        resolver(input, arguments).outputResolutionFingerprint(),
+                        resolver(input, arguments).outputResolutionFingerprint(),
+                    )
+                }
                 checkedResolvers += 1
             }
         }

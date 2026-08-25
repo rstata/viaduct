@@ -1,6 +1,7 @@
 package semantics.arbitrary
 
 import model.Arguments
+import model.Assumptions
 import viaduct.engine.api.EngineObjectData
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
@@ -43,10 +44,12 @@ class ResolverCoverageAdversarialTest {
         val world = registry.world(schema).assumptions
         val canonicalField = world.schema.requireObjectField("Query", field.name)
         val value =
-            world.resolverRegistry.resolver(canonicalField)(
-                world.schema.objectOf("Query"),
-                Arguments.Resolved.of(canonicalField, emptyMap()),
-            )
+            context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
+                world.resolverRegistry.resolver(canonicalField)(
+                    world.schema.objectOf("Query"),
+                            Arguments.Resolved.of(canonicalField, emptyMap()),
+                )
+            }
         val outer = assertIs<List<*>>(value)
         val inner = assertIs<List<*>>(outer.single())
         assertIs<EngineObjectData.Sync>(inner.single())
@@ -96,8 +99,13 @@ class ResolverCoverageAdversarialTest {
                 world.schema.requireObjectField(sourceField.typeName, sourceField.fieldName + "_V_A_node")
             val emptyInput = world.schema.objectOf(sourceField.typeName)
             val bridgeValue =
-                world.resolverRegistry
-                    .resolver(bridgeField)(emptyInput, Arguments.Resolved.of(bridgeField, emptyMap()))
+                context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
+                    world.resolverRegistry
+                        .resolver(bridgeField)(
+                            emptyInput,
+                            Arguments.Resolved.of(bridgeField, emptyMap()),
+                        )
+                }
             val payloadInput =
                 if (listOutput) {
                     assertIs<EngineObjectData.Sync>(
@@ -113,13 +121,18 @@ class ResolverCoverageAdversarialTest {
                 )
 
             registry.clearResolutionWitness()
-            world.resolverRegistry
-                .resolver(bridgeField)(emptyInput, Arguments.Resolved.of(bridgeField, emptyMap()))
-            world.resolverRegistry
-                .resolver(payloadField)(
-                    payloadInput,
-                    Arguments.Resolved.of(payloadField, emptyMap()),
-                )
+            context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
+                world.resolverRegistry
+                    .resolver(bridgeField)(
+                        emptyInput,
+                        Arguments.Resolved.of(bridgeField, emptyMap()),
+                    )
+                world.resolverRegistry
+                    .resolver(payloadField)(
+                        payloadInput,
+                        Arguments.Resolved.of(payloadField, emptyMap()),
+                    )
+            }
 
             assertEquals(
                 listOf(

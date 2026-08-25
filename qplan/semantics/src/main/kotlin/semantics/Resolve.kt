@@ -131,18 +131,11 @@ internal fun EngineObjectData.Sync.resolveKey(
                                 reader = coordinate,
                             )
                         }
-                    if (world.selectiveResolvers) {
-                        resolver(
-                            input = input,
-                            arguments = arguments,
-                            selections = resolutionSelections,
-                        )
-                    } else {
-                        resolver(
-                            input = input,
-                            arguments = arguments,
-                        )
-                    }
+                    resolver(
+                        input = input,
+                        arguments = arguments,
+                        selections = resolutionSelections,
+                    )
                 } else {
                     outputValue(key.field.name)
                 }

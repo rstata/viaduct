@@ -363,10 +363,12 @@ class NodeBridgeLoweringTest {
         val field = world.schema.requireObjectField("Query", "payload")
 
         val lowered =
-            world.resolverRegistry.resolver(field)(
-                world.resolverRegistry.createRootQueryInput(),
-                model.Arguments.Resolved.of(field, emptyMap()),
-            )
+            context(world.newAssumptions(selectiveResolvers = false)) {
+                world.resolverRegistry.resolver(field)(
+                    world.resolverRegistry.createRootQueryInput(),
+                    model.Arguments.Resolved.of(field, emptyMap()),
+                )
+            }
 
         assertTrue(lowered !== tenantValue)
         val payload = assertIs<EngineObjectData.Sync>(lowered)

@@ -266,38 +266,28 @@ class FieldResolver private constructor(
         stampVars(path)
             .applicableGroundSelections(field.containingDef)
 
-    /**
-     * Applies this field resolver and projects its selection-independent result to
-     * [selections].
-     */
+    /** Applies this field resolver, projecting its result only for selective resolver worlds. */
     context(world: Assumptions)
     operator fun invoke(
         input: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
-        selections: SelectionForest,
+        selections: SelectionForest = selectionForestOf(),
     ): EngineOutputData? {
-        applicationObserver(input, arguments, selections)
+        applicationObserver(
+            input,
+            arguments,
+            selections.takeIf { world.selectiveResolvers },
+        )
         val output =
             try {
                 function(input, arguments)
             } catch (exception: EngineErrorDataReadException) {
                 exception.errorData
             }
-        return output.snipToDemand(projectionDemand(selections))
-    }
-
-    /**
-     * Applies this field resolver and returns its complete finite selection-independent output.
-     */
-    operator fun invoke(
-        input: EngineObjectData.Sync,
-        arguments: Arguments.Resolved,
-    ): EngineOutputData? {
-        applicationObserver(input, arguments, null)
-        return try {
-            function(input, arguments)
-        } catch (exception: EngineErrorDataReadException) {
-            exception.errorData
+        return if (world.selectiveResolvers) {
+            output.snipToDemand(projectionDemand(selections))
+        } else {
+            output
         }
     }
 

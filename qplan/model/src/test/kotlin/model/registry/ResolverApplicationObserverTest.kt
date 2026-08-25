@@ -14,6 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class ResolverApplicationObserverTest {
     @Test
@@ -51,9 +52,13 @@ class ResolverApplicationObserverTest {
             resolver(input, arguments)
             resolver(input, arguments, suppliedDemand)
         }
+        context(testWorld.newAssumptions(selectiveResolvers = false)) {
+            resolver(input, arguments)
+        }
 
-        assertEquals(2, observed.size)
-        assertNull(observed[0])
+        assertEquals(3, observed.size)
+        assertTrue(observed[0]?.isEmpty() == true)
         assertSame(suppliedDemand, observed[1])
+        assertNull(observed[2])
     }
 }

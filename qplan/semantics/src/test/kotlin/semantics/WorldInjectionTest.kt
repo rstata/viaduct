@@ -70,11 +70,13 @@ class WorldInjectionTest {
         val payloadField = schema.requireObjectField("User_V_A_Bridge", "node")
         val bridge =
             assertIs<EngineObjectData.Sync>(
-                registry
-                    .resolver(bridgeField)(
-                        input = world.objectOf("Query"),
-                        arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
-                    ),
+                context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
+                    registry
+                        .resolver(bridgeField)(
+                            input = world.objectOf("Query"),
+                            arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
+                        )
+                },
             )
 
         val selections =

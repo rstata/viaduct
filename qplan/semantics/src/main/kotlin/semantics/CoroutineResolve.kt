@@ -115,18 +115,11 @@ private suspend fun resolveSlot(
                                 selections = objectFragment.materializeSelections,
                                 reader = coordinate,
                             )
-                        if (world.selectiveResolvers) {
-                            resolver(
-                                input = input,
-                                arguments = arguments,
-                                selections = resolutionSelections,
-                            )
-                        } else {
-                            resolver(
-                                input = input,
-                                arguments = arguments,
-                            )
-                        }
+                        resolver(
+                            input = input,
+                            arguments = arguments,
+                            selections = resolutionSelections,
+                        )
                     } else {
                         source.outputValue(key.field.name)
                     }

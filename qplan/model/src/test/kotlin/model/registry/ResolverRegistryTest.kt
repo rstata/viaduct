@@ -7,6 +7,7 @@ import model.requireObjectField
 import model.requireField
 import model.requireType
 import model.Arguments
+import model.Assumptions
 import model.EngineErrorData
 import model.Fragment
 import model.ObjectEngineResult
@@ -97,7 +98,7 @@ class ResolverRegistryTest {
         assertTrue(registry.mayDemandFrom(bridgeField).isEmpty())
         assertTrue(registry.mayDemandFrom(payloadField).isEmpty())
         val bridgeValue =
-            context(assumptions) {
+            context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
                 registry
                     .resolver(bridgeField)(
                         input = query,
@@ -468,7 +469,7 @@ class ResolverRegistryTest {
 
         fun resolve(fieldName: String): Any? {
             val field = schema.requireObjectField("Query", fieldName)
-            return context(world.assumptions) {
+            return context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                 registry.resolver(field)(
                     input = query,
                     arguments = Arguments.Resolved.of(field, emptyMap()),

@@ -78,7 +78,19 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                         field = groundKey.field,
                         fields = arguments.fieldValues,
                     )
-                val resolverValue = resolver(input, resolverArguments)
+                val resolverValue =
+                    context(
+                        Assumptions.of(
+                            schema = world.schema,
+                            resolverRegistry = world.resolverRegistry,
+                            selectiveResolvers = false,
+                        ),
+                    ) {
+                        resolver(
+                            input = input,
+                            arguments = resolverArguments,
+                        )
+                    }
                 value.engineResultConformsToResolverValue(
                     resolverValue = resolverValue,
                     expectedType = groundKey.field.outputType,

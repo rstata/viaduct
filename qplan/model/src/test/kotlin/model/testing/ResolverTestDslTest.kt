@@ -3,6 +3,7 @@ package model.testing
 import viaduct.graphql.schema.ViaductSchema
 
 import model.requireObjectField
+import model.Assumptions
 import model.ArgumentResolutionError
 import model.EngineErrorData
 import model.EngineOutputData
@@ -323,7 +324,7 @@ private fun TestWorld.apply(
     when (val grounded = Arguments.of(field, arguments)) {
         Arguments.Error -> EngineErrorData.of()
         is Arguments.Resolved ->
-            context(assumptions) {
+            context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
                 resolverRegistry.resolver(field)(input, grounded)
             }
         else -> error("Direct resolver application requires ground arguments")

@@ -211,7 +211,7 @@ class EngineTestModuleQPlanFeatureTest {
             }
 
         val error =
-            assertFailsWith<IllegalArgumentException> {
+            assertFailsWith<NotImplementedError> {
                 module.runQPlanFeatureTest {}
             }
         assertTrue(error.message.orEmpty().contains("batching field executor Query.value"))

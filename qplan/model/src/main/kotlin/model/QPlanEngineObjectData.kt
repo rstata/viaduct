@@ -8,7 +8,7 @@ import viaduct.apiannotations.InternalApi
 import viaduct.engine.api.EngineObjectData
 import viaduct.errors.UnsetFieldException
 import viaduct.graphql.schema.graphqljava.gjDef
-import viaduct.utils.collections.Holder
+import viaduct.utils.collections.HMap
 
 /**
  * One construction-time EOD entry whose selection may be a field name or response alias.
@@ -145,7 +145,7 @@ private fun EngineOutputData?.unwrapNodeBridge(
 }
 
 internal val qplanEngineObjectDataTypeKey =
-    Holder.Key.of<GraphQLObjectType>("QPlanEngineObjectDataType")
+    HMap.Key.of<GraphQLObjectType>("QPlanEngineObjectDataType")
 
 private val ViaductSchema.Object.engineObjectDataType: GraphQLObjectType
     get() =

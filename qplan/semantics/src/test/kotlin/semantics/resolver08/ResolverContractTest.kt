@@ -17,6 +17,9 @@ import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.ResolverTaskObservation
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
 import semantics.contract.SelectiveResolverOutputPolicyContract
+import semantics.contract.SometimesPassiveObjectFragmentResolverContract
+import semantics.contract.SometimesPassiveResolverContract
+import semantics.contract.SometimesPassiveSelectiveResolverContract
 import semantics.toContractObservation
 
 class ResolverContractTest :
@@ -24,6 +27,9 @@ class ResolverContractTest :
     NodeResolverContract,
     ObjectFragmentResolverContract,
     ObjectFragmentFromArgumentResolverContract,
+    SometimesPassiveResolverContract,
+    SometimesPassiveObjectFragmentResolverContract,
+    SometimesPassiveSelectiveResolverContract,
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     DepthFirstTaskOrderingContract,

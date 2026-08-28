@@ -13,7 +13,6 @@ import model.PathComponent
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
 import model.groundKey
-import model.outputValue
 import model.registry.demandsFromSibling
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
@@ -34,7 +33,15 @@ internal fun EngineObjectData.Sync.orchestrateKeys(
         "Initial result type ${resolved.type.name} does not match $schemaType"
     }
 
-    val closedDemand = schemaType.closeResolverDemand(path, selections)
+    val closedDemand = closeResolverDemand(path, selections)
+    materializedChildOccurrences(path, closedDemand, resolved)
+        .forEach { passiveObjectOccurrence ->
+            passiveObjectOccurrence.source.orchestrateKeys(
+                path = passiveObjectOccurrence.path,
+                selections = passiveObjectOccurrence.selections,
+                resolved = passiveObjectOccurrence.target,
+            )
+        }
     val unresolvedKeys = closedDemand.groundKeys() - resolved.keys
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     orderedKeys.forEach { key ->
@@ -83,11 +90,12 @@ private fun EngineObjectData.Sync.dependenciesOf(
     consumer: ObjectEngineResult.GroundKey,
     unresolved: Set<ObjectEngineResult.GroundKey>,
 ): Set<ObjectEngineResult.GroundKey> {
-    if (
-        consumer.arguments.argumentsContainErrorValue() ||
-        consumer.field !in world.resolverRegistry
-    ) {
+    if (consumer.arguments.argumentsContainErrorValue()) {
         return emptySet()
+    }
+    require(consumer.field in world.resolverRegistry) {
+        "Demanded field ${schemaType.name}/${consumer.field.name} is absent from its source " +
+            "and has no registered resolver"
     }
 
     return unresolved
@@ -118,32 +126,37 @@ internal fun EngineObjectData.Sync.resolveKey(
         }
 
         is Arguments.Resolved -> {
-            val resolutionSelections = resolverSupport.complete(fieldSelection.subselections)
-            val fieldValue =
-                if (key.field in world.resolverRegistry) {
-                    val resolver = world.resolverRegistry.resolver(key.field)
-                    val coordinate = path + key
-                    val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
-                    val input =
-                        runBlocking {
-                            resolved.materialize(
-                                selections = objectFragment.materializeSelections,
-                                reader = coordinate,
-                            )
-                        }
-                    resolver(
-                        input = input,
-                        arguments = arguments,
-                        selections = resolutionSelections,
+            require(key.field in world.resolverRegistry) {
+                "Always passive field ${schemaType.name}/${key.field.name} can't be actively resolved."
+            }
+            require(!isPresent(key.field.name)) {
+                "Passively-resolved field ${schemaType.name}/${key.field.name} can't be actively resolved."
+            }
+            val invocationDemand = resolverSupport.complete(fieldSelection.subselections)
+            val resolver = world.resolverRegistry.resolver(key.field)
+            val coordinate = path + key
+            val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
+            val input =
+                runBlocking {
+                    // Because of the depth-first nature of resolvers01-03 && 06-08
+                    // resolved.materialize should not block so runBlocking is ok here
+                    resolved.materialize(
+                        selections = objectFragment.materializeSelections,
+                        reader = coordinate,
                     )
-                } else {
-                    outputValue(key.field.name)
                 }
+            val fieldValue =
+                resolver(
+                    input = input,
+                    arguments = arguments,
+                    selections = invocationDemand,
+                )
             val passiveValuesResult =
                 fieldValue.resolvePassiveValues(
                     expectedType = key.field.outputType,
                     path = path + key,
-                    resolverDemand = resolutionSelections,
+                    constructionDemand = fieldSelection.subselections,
+                    invocationDemand = invocationDemand,
                 )
             cell.setValue(passiveValuesResult.engineResult)
             cell.setAccessResult(true)

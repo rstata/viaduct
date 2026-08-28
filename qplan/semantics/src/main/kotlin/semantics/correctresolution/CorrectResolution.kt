@@ -28,8 +28,9 @@ fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boo
         "Correct-resolution selections must be rooted at Query"
     }
     selections.byGroundKey()
+    val resolverApplicationCache = ResolverApplicationCache()
     return rootedAndWellTyped() &&          // Is the result rooted on the `Query` type?
         conformsToSelections(selections) && // Does the result conform to the selections?
-        isClosedUnderResolverDemand() &&    // Have the RSSes of all necessary resolvers (transitively) been satisfied
-        conformsToResolvers()               // Do the actual values conform to what the resolvers produce?
+        isClosedUnderResolverDemand(resolverApplicationCache) && // Have the RSSes of all necessary resolvers (transitively) been satisfied
+        conformsToResolvers(resolverApplicationCache) // Do the actual values conform to what the resolvers produce?
 }

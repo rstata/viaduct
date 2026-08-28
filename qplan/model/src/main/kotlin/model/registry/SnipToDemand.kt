@@ -26,15 +26,14 @@ import viaduct.engine.api.EngineObjectData
  * coordinate selected by both.
  *
  * Simple, null, and error results are unchanged. List results are projected element-wise. Object
- * projection retains demanded passive fields and stops before every field with a registered
- * resolver. A type-conditioned selection that does not apply to a concrete object is omitted before
- * its key is reconstructed against that object's concrete field. There is no implicit
- * node-reference retention or node-specific root projection; fixture-generated bridge fields appear
- * only when included in [demand].
+ * projection retains only demanded fields supplied by the returned object. A type-conditioned
+ * selection that does not apply to a concrete object is omitted before its key is reconstructed
+ * against that object's concrete field. There is no implicit node-reference retention or
+ * node-specific root projection; fixture-generated bridge fields appear only when included in
+ * [demand].
  *
- * This operation's reasoning scope assumes that every argument-bearing output field has an explicit
- * field resolver. Such a field is therefore a resolver boundary, and every retained field is
- * argumentless.
+ * An output object that supplies an argument-bearing field is rejected: such fields are always
+ * active and can never be retained as passive output.
  *
  * Every applicable selection in [demand] must be declared on the concrete object type or one of
  * its nominal supertypes. A selection retained below a resolver boundary must contain no
@@ -79,7 +78,16 @@ private fun EngineObjectData.Sync.snipObjectToDemand(
         demand
             .merge(schemaType)
             .filter { selection ->
-                selection.objectKey(schemaType).field !in world.resolverRegistry
+                val field = selection.objectKey(schemaType).field
+                if (!isPresent(field.name)) {
+                    false
+                } else {
+                    require(field.args.isEmpty()) {
+                        "Resolver output must not supply argument-bearing field " +
+                            "${schemaType.name}/${field.name}"
+                    }
+                    true
+                }
             }
             .instantiateBindings()
             .byGroundKey()

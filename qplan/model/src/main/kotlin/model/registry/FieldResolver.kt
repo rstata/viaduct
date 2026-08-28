@@ -21,6 +21,8 @@ import model.applicableGroundSelections
 import model.arg
 import model.concatenateSelectionForests
 import model.materializeSelectionForestOf
+import model.outputValue
+import model.schemaType
 import model.selectionForestOf
 import model.stampVars
 import model.toCanonicalMaterializeSelectionForest
@@ -278,17 +280,31 @@ class FieldResolver private constructor(
             arguments,
             selections.takeIf { world.selectiveResolvers },
         )
+        val output = evaluateRelation(input, arguments)
+        return if (world.selectiveResolvers) {
+            output.snipToDemand(projectionDemand(selections))
+        } else {
+            output
+        }
+    }
+
+    /**
+     * Evaluates the deterministic function relation for a semantic judgment.
+     *
+     * This is not an observed resolver application and establishes no execution-count property.
+     */
+    fun evaluateRelation(
+        input: EngineObjectData.Sync,
+        arguments: Arguments.Resolved,
+    ): EngineOutputData? {
         val output =
             try {
                 function(input, arguments)
             } catch (exception: EngineErrorDataReadException) {
                 exception.errorData
             }
-        return if (world.selectiveResolvers) {
-            output.snipToDemand(projectionDemand(selections))
-        } else {
-            output
-        }
+        output.requireArgumentlessObjectFields()
+        return output
     }
 
     companion object {
@@ -370,6 +386,27 @@ class FieldResolver private constructor(
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,
             )
+    }
+}
+
+private fun EngineOutputData?.requireArgumentlessObjectFields() {
+    when (this) {
+        is EngineObjectData.Sync -> {
+            getSelections().forEach { selection ->
+                val outputField = schemaType.field(selection)
+                require(outputField is ViaductSchema.ObjectField) {
+                    "Resolver output selection ${schemaType.name}/$selection is not a canonical " +
+                        "object field"
+                }
+                require(outputField.args.isEmpty()) {
+                    "Resolver output must not supply argument-bearing field " +
+                        "${schemaType.name}/$selection"
+                }
+                outputValue(selection).requireArgumentlessObjectFields()
+            }
+        }
+
+        is List<*> -> forEach { value -> value.requireArgumentlessObjectFields() }
     }
 }
 

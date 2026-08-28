@@ -9,13 +9,16 @@ import model.requireType
 import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
+import model.EngineObjectDataEntry
 import model.Fragment
 import model.ObjectEngineResult
 import model.Selection
 import model.SelectionForest
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
+import model.outputValue
 import model.schemaType
 import model.selectionForestOf
 import model.testing.FieldResolverDefinition
@@ -676,6 +679,104 @@ class ResolverRegistryTest {
     }
 
     @Test
+    fun `snipToDemand rejects a present argument-bearing field`() {
+        val fixture = Fixture()
+        val search = fixture.schema.requireObjectField("User", "search_V_A_node")
+        val source =
+            engineObjectDataOf(
+                schemaType = fixture.user,
+                fields =
+                    listOf(
+                        EngineObjectDataEntry.of(
+                            selection = search.name,
+                            field = search,
+                            value = null,
+                        ),
+                    ),
+            )
+        val demand =
+            fixture.schema.fragmentFrom(
+                """
+                fragment ignored on User {
+                  search(limit: 1) {
+                    id
+                  }
+                }
+                """.trimIndent(),
+            ).subselections
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                context(fixture.assumptions) {
+                    source.snipToDemand(demand)
+                }
+            }
+
+        assertEquals(
+            "Resolver output must not supply argument-bearing field User/search_V_A_node",
+            failure.message,
+        )
+    }
+
+    @Test
+    fun `field resolver rejects output containing an argument-bearing field`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Item {
+                      value(index: Int): String
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val itemType = schema.requireType("Item") as ViaductSchema.Object
+                    val valueField = schema.requireObjectField("Item", "value")
+                    mapOf(
+                        schema.requireObjectField("Query", "item") to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ ->
+                                    engineObjectDataOf(
+                                        schemaType = itemType,
+                                        fields =
+                                            listOf(
+                                                EngineObjectDataEntry.of(
+                                                    selection = valueField.name,
+                                                    field = valueField,
+                                                    value = "one",
+                                                ),
+                                            ),
+                                    )
+                                },
+                            ),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val itemField = world.schema.requireObjectField("Query", "item")
+        val resolver = world.resolverRegistry.resolver(itemField)
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                context(world) {
+                    resolver(
+                        input = world.schema.objectOf("Query"),
+                        arguments = Arguments.Resolved.of(itemField, emptyMap()),
+                    )
+                }
+            }
+
+        assertEquals(
+            "Resolver output must not supply argument-bearing field Item/value",
+            failure.message,
+        )
+    }
+
+    @Test
     fun `snipToDemand does not expand resolver demand`() {
         val testWorld =
             TestWorld.fromSDL(
@@ -737,6 +838,65 @@ class ResolverRegistryTest {
             )
 
         assertEquals(emptySet(), result.getSelections().toSet())
+    }
+
+    @Test
+    fun `snipToDemand retains present resolver fields including null and error values`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Item {
+                      value: Int
+                      nullValue: Int
+                      errorValue: Int
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    listOf("value", "nullValue", "errorValue").associate { fieldName ->
+                        schema.requireField("Item", fieldName) to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Item"),
+                                function = { _, _ -> error("Not invoked") },
+                            )
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+        val error = EngineErrorData.of()
+        val source =
+            world.objectOf("Item") {
+                "value" setTo 7
+                "nullValue" setTo null
+                "errorValue" setTo error
+            }
+        val demand =
+            world.fragmentFrom(
+                """
+                fragment ignored on Item {
+                  value
+                  nullValue
+                  errorValue
+                }
+                """.trimIndent(),
+            ).subselections
+
+        val result =
+            assertIs<EngineObjectData.Sync>(
+                context(world) {
+                    source.snipToDemand(demand)
+                },
+            )
+
+        assertEquals(setOf("value", "nullValue", "errorValue"), result.getSelections().toSet())
+        assertEquals(7, result.get("value"))
+        assertTrue(result.isPresent("nullValue"))
+        assertEquals(null, result.get("nullValue"))
+        assertEquals(error, result.outputValue("errorValue"))
     }
 
     @Test

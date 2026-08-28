@@ -12,10 +12,12 @@ import semantics.contract.CompleteResolverOutputPolicyContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
+import semantics.contract.SometimesPassiveResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
+    SometimesPassiveResolverContract,
     CompleteResolverOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(

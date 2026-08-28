@@ -10,7 +10,9 @@ import model.PathComponent
 import model.SelectionForest
 import model.applicableGroundSelections
 import model.flatMapToSelectionForest
+import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Returns the applicable demand closed under the direct object fragments of its resolver fields.
@@ -29,18 +31,43 @@ fun ViaductSchema.Object.closeResolverDemand(
         expanded = emptySet(),
     )
 
+/** Closes demand only for standard resolvers whose fields are absent from this source object. */
+context(world: Assumptions)
+fun EngineObjectData.Sync.closeResolverDemand(
+    path: List<PathComponent>,
+    selections: SelectionForest,
+): ObjectSelectionForest =
+    schemaType.closeResolverDemand(
+        path = path,
+        selections = selections,
+        expanded = emptySet(),
+        expandResolver = { key ->
+            if (!isPresent(key.field.name)) {
+                true
+            } else {
+                require(key.field.args.isEmpty()) {
+                    "Resolver output must not supply argument-bearing field " +
+                        "${schemaType.name}/${key.field.name}"
+                }
+                false
+            }
+        },
+    )
+
 context(world: Assumptions)
 private fun ViaductSchema.Object.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
     expanded: Set<ObjectEngineResult.GroundKey>,
+    expandResolver: (ObjectEngineResult.GroundKey) -> Boolean = { true },
 ): ObjectSelectionForest {
     val applicableSelections = selections.applicableGroundSelections(this)
     val unexpandedResolverKeys =
         applicableSelections.groundKeys().filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.resolverRegistry
+                key.field in world.resolverRegistry &&
+                expandResolver(key)
         }.toSet()
 
     if (unexpandedResolverKeys.isEmpty()) return applicableSelections
@@ -56,5 +83,6 @@ private fun ViaductSchema.Object.closeResolverDemand(
         path = path,
         selections = applicableSelections + resolverDemand,
         expanded = expanded + unexpandedResolverKeys,
+        expandResolver = expandResolver,
     )
 }

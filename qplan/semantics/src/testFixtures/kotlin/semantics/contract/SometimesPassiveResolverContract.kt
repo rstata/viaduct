@@ -1,0 +1,257 @@
+package semantics.contract
+
+import model.ObjectEngineResult
+import model.emptyFragmentOf
+import model.fragmentFrom
+import model.objectOf
+import model.requireField
+import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+
+/** Contract for active fields exceptionally supplied by an ancestor resolver output. */
+interface SometimesPassiveResolverContract : ResolverContract {
+    @Test
+    fun `ancestor output supplies an active field instead of its standard resolver`() {
+        val standardApplications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      item: Item! @resolver(result: {computed: 7})
+                    }
+
+                    type Item {
+                      computed: Int! @resolver(result: 99)
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    if (field.containingDef.name == "Item") {
+                        standardApplications += field.name
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val result = resolveAndValidate(world, "query { item { computed } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+
+        assertEquals(7, item.getCell(world.schema.contractKey("Item", "computed")).get())
+        assertEquals(emptyList(), standardApplications)
+    }
+
+    @Test
+    fun `ancestor output supplies active fields at successive descendant fringes`() {
+        val standardApplications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      item: Item!
+                        @resolver(result: {computed: {leaf: 7}})
+                    }
+
+                    type Item {
+                      computed: Computed!
+                        @resolver(result: {leaf: 99})
+                    }
+
+                    type Computed {
+                      leaf: Int! @resolver(result: 101)
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    if (field.containingDef.name != "Query") {
+                        standardApplications +=
+                            "${field.containingDef.name}/${field.name}"
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val result = resolveAndValidate(world, "query { item { computed { leaf } } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+        val computed =
+            assertIs<ObjectEngineResult>(
+                item.getCell(world.schema.contractKey("Item", "computed")).get(),
+            )
+
+        assertEquals(7, computed.getCell(world.schema.contractKey("Computed", "leaf")).get())
+        assertEquals(emptyList(), standardApplications)
+    }
+}
+
+/** Sometimes-passive contract for resolvers that support nonempty standard object fragments. */
+interface SometimesPassiveObjectFragmentResolverContract : ResolverContract {
+    @Test
+    fun `ancestor-supplied active field does not activate its standard resolver demand`() {
+        val standardApplications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      item: Item! @resolver(result: {computed: 7})
+                    }
+
+                    type Item {
+                      seed: Int! @resolver(result: 1)
+                      computed: Int!
+                        @resolver(of: "seed", result: 99)
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    if (field.containingDef.name == "Item") {
+                        standardApplications += field.name
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val result = resolveAndValidate(world, "query { item { computed } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+
+        assertEquals(7, item.getCell(world.schema.contractKey("Item", "computed")).get())
+        assertEquals(emptyList(), standardApplications)
+    }
+
+    @Test
+    fun `omitted active field uses its standard resolver and ancestor-supplied demand`() {
+        val standardApplications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      item: Item! @resolver(result: {seed: 3})
+                    }
+
+                    type Item {
+                      seed: Int! @resolver(result: 1)
+                      computed: Int!
+                        @resolver(of: "seed", result: 99)
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    if (field.containingDef.name == "Item") {
+                        standardApplications += field.name
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val result = resolveAndValidate(world, "query { item { computed } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+
+        assertEquals(99, item.getCell(world.schema.contractKey("Item", "computed")).get())
+        assertEquals(listOf("computed"), standardApplications)
+    }
+}
+
+/** One-shot selective witness for conservative standard demand and dynamic output ownership. */
+interface SometimesPassiveSelectiveResolverContract : ResolverContract {
+    @Test
+    fun `ancestor is invoked once with standard demand before supplying the active field`() {
+        val events = mutableListOf<String>()
+        var itemDemand: Set<String>? = null
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = true,
+                schemaSDL =
+                    """
+                    type Item {
+                      seed: Int!
+                      computed: Int!
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireField("Query", "item") to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _ ->
+                                    events += "function Query/item"
+                                    schema.objectOf("Item") {
+                                        "seed" setTo 3
+                                        "computed" setTo 7
+                                    }
+                                },
+                            ),
+                        schema.requireField("Item", "seed") to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Item"),
+                                function = { _, _ ->
+                                    events += "function Item/seed"
+                                    1
+                                },
+                            ),
+                        schema.requireField("Item", "computed") to
+                            fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        "fragment ignored on Item { seed }",
+                                    ),
+                                function = { _, _ ->
+                                    events += "function Item/computed"
+                                    99
+                                },
+                            ),
+                    )
+                },
+                applicationObserver = { field, _, _, selections ->
+                    if (selections != null) {
+                        events += "observer ${field.containingDef.name}/${field.name}"
+                        if (field.containingDef.name == "Query" && field.name == "item") {
+                            itemDemand =
+                                linkedSetOf<String>().also { fields ->
+                                    selections.forEach { selection ->
+                                        fields += selection.key.field.name
+                                    }
+                                }
+                        }
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val result = resolveAndValidate(world, "query { item { computed } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+
+        assertEquals(7, item.getCell(world.schema.contractKey("Item", "computed")).get())
+        assertEquals(setOf("computed", "seed"), itemDemand)
+        assertEquals(
+            listOf(
+                "observer Query/item",
+                "function Query/item",
+            ),
+            events,
+        )
+    }
+}

@@ -14,11 +14,13 @@ import semantics.contract.DepthFirstTaskOrderingContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ResolverTaskObservation
+import semantics.contract.SometimesPassiveResolverContract
 import semantics.toContractObservation
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
+    SometimesPassiveResolverContract,
     CompleteResolverOutputPolicyContract,
     DepthFirstTaskOrderingContract,
     CorrectResolutionPostTestPolicy {

@@ -110,6 +110,10 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
                 ResolverTaskObservation.SlotOrchestrator("Query", emptyList()),
                 ResolverTaskObservation.SlotResolver("container", emptyList()),
                 ResolverTaskObservation.SlotOrchestrator(
+                    "Container",
+                    listOf("container"),
+                ),
+                ResolverTaskObservation.SlotOrchestrator(
                     "Child",
                     listOf("container", "left"),
                 ),

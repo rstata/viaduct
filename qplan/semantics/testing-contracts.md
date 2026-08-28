@@ -27,6 +27,7 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including response aliases on argumentless and argument-bearing fields, argument-distinct aliases, non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including nested input-object paths, null intermediate traversal, and a transitive chain.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
+- `SometimesPassiveResolverContract` covers argumentless active fields exceptionally supplied by ancestor resolver outputs. `SometimesPassiveObjectFragmentResolverContract` checks both ownership branches when the standard resolver has input demand, and `SometimesPassiveSelectiveResolverContract` witnesses Resolver03, Resolver08, and Resolver23's single selective ancestor application and conservative pre-execution demand.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
 - `LateObjectPathDemandResolverContract` covers late symbolic demand across already-published active and passive objects.
 - `GeneratedResolverContract.kt` applies those scopes to generated correctness and permutation properties and adds a full-feature interaction contract.
@@ -59,6 +60,8 @@ Policies describe implementation choices that cut across feature scopes:
 - `CorrectResolutionPostTestPolicy` records results produced through `resolveAndValidate` and validates them in `@AfterEach`.
 
 Resolver01/02/06/07/21/22 use complete-output policies; Resolver03/08/23/25/26 use selective-output policies. Every contract implementation uses post-test `correctResolution` validation.
+
+Sometimes-passive contracts are enabled for Resolver01-03, Resolver06-08, and Resolver21-23. Resolver02-03, Resolver07-08, and Resolver22-23 additionally run the nonempty-standard-object-fragment cases, and Resolver03, Resolver08, and Resolver23 run the selective one-shot witness.
 
 Deferred validation keeps replayed resolver functions from changing fixture application counters before explicit assertions run. Every policy mixin must contain an executable guard.
 

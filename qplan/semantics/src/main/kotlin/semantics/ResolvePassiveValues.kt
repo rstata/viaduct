@@ -10,6 +10,7 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.ObjectSelectionForest
 import model.outputType
 import model.outputValue
 import model.PathComponent
@@ -23,15 +24,13 @@ import model.selectionForestOf
 import model.toEngineResult
 
 /**
- * A passive result tree and the object occurrences requiring registered resolver work within it.
+ * An eagerly materialized result tree and its root object occurrences requiring resolver work.
  *
- * Each member of [objectsNeedingResolution] retains the source object value, mutable result object,
- * exact root-relative OER path, and selection forest already collapsed to that occurrence.
+ * Descendant objects remain reachable through each root's paired source and result trees.
  */
 internal class ResolvePassiveValuesResult(
     val engineResult: EngineResult?,
     val objectsNeedingResolution: List<PassiveObjectOccurrence>,
-    val objectOccurrences: List<PassiveObjectOccurrence>,
 )
 
 internal class PassiveObjectOccurrence(
@@ -42,66 +41,56 @@ internal class PassiveObjectOccurrence(
 )
 
 /**
- * Returns this output as a passive result tree together with every object path requiring registered
- * field resolution for [resolverDemand].
+ * Eagerly materializes every argumentless field present in this output.
  *
- * Selective worlds include only fields in [resolverDemand]. Non-selective worlds include every
- * passive field actually present in the output and recursively stop at registered resolver
- * boundaries. Null, error, and simple values terminate traversal.
+ * Selective worlds still require every present field to be included in [invocationDemand].
+ * [constructionDemand] determines whether each root object occurrence requires orchestration.
  */
 context(world: Assumptions)
 internal fun EngineOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
-    resolverDemand: SelectionForest,
+    constructionDemand: SelectionForest,
+    invocationDemand: SelectionForest = constructionDemand,
 ): ResolvePassiveValuesResult {
     require(conformsToOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
     }
     return when (this) {
-        null -> ResolvePassiveValuesResult(null, emptyList(), emptyList())
+        null -> ResolvePassiveValuesResult(null, emptyList())
         is EngineErrorData ->
-            ResolvePassiveValuesResult(ErrorEngineResult.of(this), emptyList(), emptyList())
-        is EngineObjectData.Sync -> resolvePassiveObjectValues(resolverDemand, path)
+            ResolvePassiveValuesResult(ErrorEngineResult.of(this), emptyList())
+        is EngineObjectData.Sync ->
+            resolvePassiveObjectValues(
+                constructionDemand = constructionDemand,
+                invocationDemand = invocationDemand,
+                path = path,
+            )
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
-            this
-                .withIndex()
-                .fold(
-                    ResolvePassiveListValuesResult(
-                        values = emptyList(),
-                        objectsNeedingResolution = emptyList(),
-                        objectOccurrences = emptyList(),
-                    ),
-                ) { resolved, (index, value) ->
-                    val element =
-                        value.resolvePassiveValues(
-                            expectedType = elementType,
-                            path = path + ListEngineResult.Index.of(index),
-                            resolverDemand = resolverDemand,
-                        )
-                    ResolvePassiveListValuesResult(
-                        values = resolved.values + element.engineResult,
-                        objectsNeedingResolution =
-                            resolved.objectsNeedingResolution +
-                                element.objectsNeedingResolution,
-                        objectOccurrences =
-                            resolved.objectOccurrences +
-                                element.objectOccurrences,
-                    )
-                }.let { resolved ->
-                    ResolvePassiveValuesResult(
-                        engineResult =
-                            ListEngineResult.of(elementType, resolved.values),
-                        objectsNeedingResolution = resolved.objectsNeedingResolution,
-                        objectOccurrences = resolved.objectOccurrences,
-                    )
+            val objectsNeedingResolution = mutableListOf<PassiveObjectOccurrence>()
+            val values =
+                buildList(this.size) {
+                    this@resolvePassiveValues.forEachIndexed { index, value ->
+                        val element =
+                            value.resolvePassiveValues(
+                                expectedType = elementType,
+                                path = path + ListEngineResult.Index.of(index),
+                                constructionDemand = constructionDemand,
+                                invocationDemand = invocationDemand,
+                            )
+                        add(element.engineResult)
+                        objectsNeedingResolution.addAll(element.objectsNeedingResolution)
+                    }
                 }
+            ResolvePassiveValuesResult(
+                engineResult = ListEngineResult.of(elementType, values),
+                objectsNeedingResolution = objectsNeedingResolution,
+            )
         }
         else ->
             ResolvePassiveValuesResult(
                 toEngineResult(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),
-                emptyList(),
                 emptyList(),
             )
     }
@@ -109,14 +98,17 @@ internal fun EngineOutputData?.resolvePassiveValues(
 
 context(world: Assumptions)
 private fun EngineObjectData.Sync.resolvePassiveObjectValues(
-    resolverDemand: SelectionForest,
+    constructionDemand: SelectionForest,
+    invocationDemand: SelectionForest,
     path: List<PathComponent>,
 ): ResolvePassiveValuesResult {
-    val mergedResolverDemand = resolverDemand.applicableGroundSelections(schemaType)
-    val resolverDemandByKey = mergedResolverDemand.byGroundKey()
+    val constructionDemandByKey =
+        constructionDemand.applicableGroundSelections(schemaType).byGroundKey()
+    val invocationDemandByKey =
+        invocationDemand.applicableGroundSelections(schemaType).byGroundKey()
     if (world.selectiveResolvers) {
         val selectedFieldNames =
-            resolverDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
+            invocationDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
         val unselectedKeys = getSelections().toSet() - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${schemaType.name} contains unselected fields: " +
@@ -125,73 +117,141 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     }
 
     val selectedKeys =
-        if (world.selectiveResolvers) {
-            resolverDemandByKey.keys
-                .filter { key -> key.field !in world.resolverRegistry }
-                .toSet()
-        } else {
-            getSelections()
-                .map { fieldName ->
-                    val field = schemaType.requireField(fieldName)
-                    require(field.args.isEmpty()) {
-                        "Passive object field ${schemaType.name}/$fieldName must be argumentless"
-                    }
-                    ObjectEngineResult.GroundKey.of(field, emptyMap())
-                }.filter { key -> key.field !in world.resolverRegistry }
-                .toSet()
-        }
-    val resolved =
-        selectedKeys.fold(
-            ResolvePassiveObjectValuesResult(
-                values = emptyMap(),
-                objectsNeedingResolution = emptyList(),
-                objectOccurrences = emptyList(),
-            ),
-        ) { result, key ->
-            val arguments = key.arguments
-            require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-                "Passive object field ${schemaType.name}/${key.field.name} must be argumentless"
+        getSelections()
+            .map { fieldName ->
+                val field = schemaType.requireField(fieldName)
+                require(field.args.isEmpty()) {
+                    "Passive object field ${schemaType.name}/$fieldName must be argumentless"
+                }
+                ObjectEngineResult.GroundKey.of(field, emptyMap())
+            }.toSet()
+    val values =
+        buildMap(selectedKeys.size) {
+            selectedKeys.forEach { key ->
+                val arguments = key.arguments
+                require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
+                    "Passive object field ${schemaType.name}/${key.field.name} must be argumentless"
+                }
+                val fieldValue =
+                    outputValue(key.field.name)
+                        .resolvePassiveValues(
+                            expectedType = key.field.outputType,
+                            path = path + key,
+                            constructionDemand =
+                                constructionDemandByKey[key]
+                                    ?.subselections
+                                    ?: selectionForestOf(),
+                            invocationDemand =
+                                invocationDemandByKey[key]
+                                    ?.subselections
+                                    ?: selectionForestOf(),
+                        )
+                put(key, fieldValue.engineResult)
             }
-            val fieldValue =
-                outputValue(key.field.name)
-                    .resolvePassiveValues(
-                        expectedType = key.field.outputType,
-                        path = path + key,
-                        resolverDemand =
-                            resolverDemandByKey[key]
-                                ?.subselections
-                                ?: selectionForestOf(),
-                    )
-            ResolvePassiveObjectValuesResult(
-                values = result.values + (key to fieldValue.engineResult),
-                objectsNeedingResolution =
-                    result.objectsNeedingResolution +
-                        fieldValue.objectsNeedingResolution,
-                objectOccurrences =
-                    result.objectOccurrences +
-                        fieldValue.objectOccurrences,
-            )
         }
-    val engineResult = ObjectEngineResult.of(schemaType, resolved.values, mutable = true)
-    val localOccurrence =
-        PassiveObjectOccurrence(
-            path = path,
-            source = this,
-            selections = resolverDemand,
-            target = engineResult,
-        )
+    val engineResult = ObjectEngineResult.of(schemaType, values, mutable = true)
     val localResolution =
-        if (resolverDemandByKey.keys.any { key -> key.field in world.resolverRegistry }) {
-            listOf(localOccurrence)
+        if (hasUnresolvedDemand(constructionDemand)) {
+            listOf(
+                PassiveObjectOccurrence(
+                    path = path,
+                    source = this,
+                    selections = constructionDemand,
+                    target = engineResult,
+                ),
+            )
         } else {
             emptyList()
         }
     return ResolvePassiveValuesResult(
         engineResult = engineResult,
-        objectsNeedingResolution = localResolution + resolved.objectsNeedingResolution,
-        objectOccurrences = listOf(localOccurrence) + resolved.objectOccurrences,
+        objectsNeedingResolution = localResolution,
     )
 }
+
+context(world: Assumptions)
+private fun EngineOutputData?.hasUnresolvedDemand(
+    selections: SelectionForest,
+): Boolean =
+    when (this) {
+        is EngineObjectData.Sync -> hasUnresolvedDemand(selections)
+        is List<*> -> any { value -> value.hasUnresolvedDemand(selections) }
+        else -> false
+    }
+
+context(world: Assumptions)
+private fun EngineObjectData.Sync.hasUnresolvedDemand(
+    selections: SelectionForest,
+): Boolean =
+    selections
+        .applicableGroundSelections(schemaType)
+        .byGroundKey()
+        .any { (key, selection) ->
+            if (!isPresent(key.field.name)) {
+                true
+            } else {
+                require(key.field.args.isEmpty()) {
+                    "Resolver output must not supply argument-bearing field " +
+                        "${schemaType.name}/${key.field.name}"
+                }
+                outputValue(key.field.name).hasUnresolvedDemand(selection.subselections)
+            }
+        }
+
+/**
+ * Returns demanded, already-materialized child object occurrences at this exact object.
+ */
+context(world: Assumptions)
+internal fun EngineObjectData.Sync.materializedChildOccurrences(
+    path: List<PathComponent>,
+    selections: ObjectSelectionForest,
+    resolved: ObjectEngineResult,
+): List<PassiveObjectOccurrence> =
+    selections.byGroundKey().flatMap { (key, selection) ->
+        if (!isPresent(key.field.name)) {
+            emptyList()
+        } else {
+            require(key.field.args.isEmpty()) {
+                "Resolver output must not supply argument-bearing field " +
+                    "${schemaType.name}/${key.field.name}"
+            }
+            outputValue(key.field.name).materializedObjectOccurrences(
+                path = path + key,
+                selections = selection.subselections,
+                resolved = resolved.getCell(key).getValue().get(),
+            )
+        }
+    }
+
+private fun EngineOutputData?.materializedObjectOccurrences(
+    path: List<PathComponent>,
+    selections: SelectionForest,
+    resolved: EngineResult?,
+): List<PassiveObjectOccurrence> =
+    when (this) {
+        is EngineObjectData.Sync ->
+            listOf(
+                PassiveObjectOccurrence(
+                    path = path,
+                    source = this,
+                    selections = selections,
+                    target = resolved as ObjectEngineResult,
+                ),
+            )
+
+        is List<*> -> {
+            val result = resolved as ListEngineResult
+            flatMapIndexed { index, value ->
+                value.materializedObjectOccurrences(
+                    path = path + ListEngineResult.Index.of(index),
+                    selections = selections,
+                    resolved = result.get(index).getValue().get(),
+                )
+            }
+        }
+
+        else -> emptyList()
+    }
 
 /** Resolves the retained object occurrences deepest first without replacing any result value. */
 internal fun ResolvePassiveValuesResult.resolveRetainedObjects(
@@ -202,15 +262,3 @@ internal fun ResolvePassiveValuesResult.resolveRetainedObjects(
         .forEach(resolveObject)
     return engineResult
 }
-
-private class ResolvePassiveListValuesResult(
-    val values: List<EngineResult?>,
-    val objectsNeedingResolution: List<PassiveObjectOccurrence>,
-    val objectOccurrences: List<PassiveObjectOccurrence>,
-)
-
-private class ResolvePassiveObjectValuesResult(
-    val values: Map<ObjectEngineResult.GroundKey, EngineResult?>,
-    val objectsNeedingResolution: List<PassiveObjectOccurrence>,
-    val objectOccurrences: List<PassiveObjectOccurrence>,
-)

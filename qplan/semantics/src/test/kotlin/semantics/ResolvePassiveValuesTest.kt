@@ -103,7 +103,7 @@ class ResolvePassiveValuesTest {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
-                    resolverDemand = selections,
+                    constructionDemand = selections,
                 )
             }
 
@@ -119,14 +119,9 @@ class ResolvePassiveValuesTest {
             resolved.objectsNeedingResolution.associateBy { passiveObjectOccurrence ->
                 passiveObjectOccurrence.path
             }
-        assertEquals(
-            setOf(emptyList(), listOf(profileKey)),
-            resolutionsByPath.keys,
-        )
+        assertEquals(setOf(emptyList()), resolutionsByPath.keys)
         assertSame(result, resolutionsByPath.getValue(emptyList()).target)
-        assertSame(profile, resolutionsByPath.getValue(listOf(profileKey)).target)
         assertEquals(4, resolutionsByPath.getValue(emptyList()).selections.size)
-        assertEquals(2, resolutionsByPath.getValue(listOf(profileKey)).selections.size)
     }
 
     @Test
@@ -181,7 +176,7 @@ class ResolvePassiveValuesTest {
                         "raw" setTo "engineer"
                     }
             }
-        val resolverDemand =
+        val constructionDemand =
             world.fragmentFrom(
                 "fragment ignored on User { computed }",
             ).subselections
@@ -191,7 +186,7 @@ class ResolvePassiveValuesTest {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
-                    resolverDemand = resolverDemand,
+                    constructionDemand = constructionDemand,
                 )
             }
 
@@ -237,10 +232,98 @@ class ResolvePassiveValuesTest {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
-                    resolverDemand = selections,
+                    constructionDemand = selections,
                 )
             }
         }
+    }
+
+    @Test
+    fun `selective output permits fields in invocation demand beyond construction demand`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Item {
+                      computed: Int!
+                      seed: Int!
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val computedKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Item", "computed"),
+                emptyMap(),
+            )
+        val seedKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Item", "seed"),
+                emptyMap(),
+            )
+        val value =
+            world.schema.objectOf("Item") {
+                "computed" setTo 7
+                "seed" setTo 3
+            }
+        val constructionDemand =
+            world.fragmentFrom("fragment ignored on Item { computed }").subselections
+        val invocationDemand =
+            world.fragmentFrom("fragment ignored on Item { computed seed }").subselections
+
+        val resolved =
+            context(world) {
+                value.resolvePassiveValues(
+                    expectedType = world.schema.requireObjectField("Query", "item").outputType,
+                    path = emptyList(),
+                    constructionDemand = constructionDemand,
+                    invocationDemand = invocationDemand,
+                )
+            }
+
+        val result = assertIs<ObjectEngineResult>(resolved.engineResult)
+        assertEquals(setOf(computedKey, seedKey), result.keys)
+    }
+
+    @Test
+    fun `missing invocation-only fields do not require downstream resolution`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Item {
+                      computed: Int!
+                      seed: Int!
+                    }
+
+                    type Query {
+                      item: Item!
+                    }
+                    """.trimIndent(),
+                ).assumptions
+        val value =
+            world.schema.objectOf("Item") {
+                "computed" setTo 7
+            }
+        val constructionDemand =
+            world.fragmentFrom("fragment ignored on Item { computed }").subselections
+        val invocationDemand =
+            world.fragmentFrom("fragment ignored on Item { computed seed }").subselections
+
+        val resolved =
+            context(world) {
+                value.resolvePassiveValues(
+                    expectedType = world.schema.requireObjectField("Query", "item").outputType,
+                    path = emptyList(),
+                    constructionDemand = constructionDemand,
+                    invocationDemand = invocationDemand,
+                )
+            }
+
+        assertEquals(emptyList(), resolved.objectsNeedingResolution)
     }
 
     @Test
@@ -278,7 +361,7 @@ class ResolvePassiveValuesTest {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
-                    resolverDemand = selections,
+                    constructionDemand = selections,
                 )
             }
 
@@ -325,14 +408,14 @@ class ResolvePassiveValuesTest {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "item").outputType,
                     path = emptyList(),
-                    resolverDemand = selections,
+                    constructionDemand = selections,
                 )
             }
         }
     }
 
     @Test
-    fun `list traversal populates exact object occurrences without rebuilding paths`() {
+    fun `list traversal retains exact roots requiring resolution without rebuilding paths`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -398,40 +481,26 @@ class ResolvePassiveValuesTest {
         val computedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Item", "computed"), emptyMap())
         val renderedKey = ObjectEngineResult.GroundKey.of(schema.requireObjectField("Nested", "rendered"), emptyMap())
         val rootPath = listOf<PathComponent>(itemsKey)
-        val expectedPaths =
+        val expectedRootPaths =
             setOf(
                 rootPath + ListEngineResult.Index.of(0),
-                rootPath + ListEngineResult.Index.of(0) + nestedKey,
                 rootPath + ListEngineResult.Index.of(1),
-                rootPath + ListEngineResult.Index.of(1) + nestedKey,
             )
-
         val passiveValuesResult =
             context(world) {
                 output.resolvePassiveValues(
                     expectedType = itemsField.outputType,
                     path = rootPath,
-                    resolverDemand = selections,
+                    constructionDemand = selections,
                 )
             }
         val callbackPaths = mutableListOf<List<PathComponent>>()
         val replayed =
             passiveValuesResult.resolveRetainedObjects { passiveObjectOccurrence ->
                 callbackPaths += passiveObjectOccurrence.path
-                when (passiveObjectOccurrence.target.type.name) {
-                    "Item" ->
-                        passiveObjectOccurrence.target.reserveCell(computedKey).also { cell ->
-                            cell.setValue(1)
-                            cell.setAccessResult(true)
-                        }
-
-                    "Nested" ->
-                        passiveObjectOccurrence.target.reserveCell(renderedKey).also { cell ->
-                            cell.setValue(2)
-                            cell.setAccessResult(true)
-                        }
-
-                    else -> error("Unexpected object type")
+                passiveObjectOccurrence.target.reserveCell(computedKey).also { cell ->
+                    cell.setValue(1)
+                    cell.setAccessResult(true)
                 }
             }
 
@@ -439,9 +508,9 @@ class ResolvePassiveValuesTest {
             passiveValuesResult.objectsNeedingResolution.associateBy { passiveObjectOccurrence ->
                 passiveObjectOccurrence.path
             }
-        assertEquals(expectedPaths, resolutionsByPath.keys)
-        assertEquals(expectedPaths, callbackPaths.toSet())
-        assertEquals(expectedPaths.size, callbackPaths.size)
+        assertEquals(expectedRootPaths, resolutionsByPath.keys)
+        assertEquals(expectedRootPaths, callbackPaths.toSet())
+        assertEquals(expectedRootPaths.size, callbackPaths.size)
         assertTrue(
             callbackPaths.zipWithNext().all { (left, right) -> left.size >= right.size },
         )
@@ -455,11 +524,7 @@ class ResolvePassiveValuesTest {
             assertEquals(1, item.getCell(computedKey).getValue().get())
 
             val nested = assertIs<ObjectEngineResult>(item.getCell(nestedKey).getValue().get())
-            assertSame(
-                nested,
-                resolutionsByPath.getValue(itemPath + nestedKey).target,
-            )
-            assertEquals(2, nested.getCell(renderedKey).getValue().get())
+            assertTrue(renderedKey !in nested.keys)
         }
     }
 }

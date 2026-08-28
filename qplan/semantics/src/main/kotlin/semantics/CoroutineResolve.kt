@@ -17,7 +17,6 @@ import model.PathComponent
 import model.Promise
 import model.SelectionForest
 import model.groundKey
-import model.outputValue
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
@@ -61,7 +60,16 @@ private fun CoroutineScope.orchestrateSlot(
         "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
     }
 
-    val closedDemand = source.schemaType.closeResolverDemand(path, selections)
+    val closedDemand = source.closeResolverDemand(path, selections)
+    source.materializedChildOccurrences(path, closedDemand, target)
+        .forEach { child ->
+            orchestrateSlot(
+                path = child.path,
+                source = child.source,
+                selections = child.selections,
+                target = child.target,
+            )
+        }
     val unresolvedKeys = closedDemand.groundKeys() - target.keys
 
     unresolvedKeys.forEach { key ->
@@ -104,30 +112,33 @@ private suspend fun resolveSlot(
         }
         is Arguments.Resolved ->
             coroutineScope {
-                val resolutionSelections = resolverSupport.complete(selection.subselections)
+                require(key.field in world.resolverRegistry) {
+                    "Always passive field ${source.schemaType.name}/${key.field.name} can't be actively resolved."
+                }
+                require(!source.isPresent(key.field.name)) {
+                    "Passively-resolved field ${source.schemaType.name}/${key.field.name} can't be actively resolved."
+                }
+                val invocationDemand = resolverSupport.complete(selection.subselections)
+                val resolver = world.resolverRegistry.resolver(key.field)
+                val coordinate = path + key
+                val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
+                val input =
+                    target.materialize(
+                        selections = objectFragment.materializeSelections,
+                        reader = coordinate,
+                    )
                 val fieldValue =
-                    if (key.field in world.resolverRegistry) {
-                        val resolver = world.resolverRegistry.resolver(key.field)
-                        val coordinate = path + key
-                        val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
-                        val input =
-                            target.materialize(
-                                selections = objectFragment.materializeSelections,
-                                reader = coordinate,
-                            )
-                        resolver(
-                            input = input,
-                            arguments = arguments,
-                            selections = resolutionSelections,
-                        )
-                    } else {
-                        source.outputValue(key.field.name)
-                    }
+                    resolver(
+                        input = input,
+                        arguments = arguments,
+                        selections = invocationDemand,
+                    )
                 val passiveValuesResult =
                     fieldValue.resolvePassiveValues(
                         expectedType = key.field.outputType,
                         path = path + key,
-                        resolverDemand = resolutionSelections,
+                        constructionDemand = selection.subselections,
+                        invocationDemand = invocationDemand,
                     )
 
                 passiveValuesResult.objectsNeedingResolution.forEach { child ->

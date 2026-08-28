@@ -17,7 +17,7 @@ An **OER** is an `ObjectEngineResult`, always associated with one concrete Graph
 
 When discussing relationships among OER occurrences, a list is treated as a one-to-many path edge. The object containing a list field is therefore the parent of each object element for resolver-ancestry purposes, while each `ListEngineResult.Index` remains part of the element's exact identity.
 
-An **active field** has a registered field resolver. A **passive field** is supplied by the resolver that owns an ancestor output region. A resolver's **fringe** is the set of produced object occurrences whose selected fields require further active resolution.
+An **active field** has a standard registered field resolver. At a particular output occurrence, an argumentless active field is dynamically passive when the resolver that owns an ancestor output region supplies it; otherwise its standard resolver owns it. Fields with arguments are always active and may never be supplied passively. A resolver's **fringe** is the set of produced object occurrences whose selected fields require further active resolution.
 
 A **resolver template** is the static registry definition for one concrete object field. A **resolver instance** is the dynamic application associated with one exact field key on one OER occurrence. Unqualified "resolver" usually means the instance when discussing execution and the template when discussing registry structure; use the full term where that distinction matters.
 

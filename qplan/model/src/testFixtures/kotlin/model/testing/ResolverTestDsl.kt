@@ -284,8 +284,6 @@ private class Compiler(
     private val nodeDefinitions: List<DslNodeResolver>,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
-    private val resolverCoordinates =
-        fieldDefinitions.mapTo(linkedSetOf()) { it.typeName to it.fieldName }
     private val nodeEntries: List<CompiledNodeResult> =
         nodeDefinitions.flatMap { definition ->
             val type = schema.requireType(definition.typeName) as? ViaductSchema.Object
@@ -308,7 +306,6 @@ private class Compiler(
     private val evaluator =
         ResultEvaluator(
             schema = schema,
-            resolverCoordinates = resolverCoordinates,
             nodesById = nodesById,
         )
 
@@ -475,7 +472,6 @@ private class Compiler(
 
 private class ResultEvaluator(
     private val schema: ViaductSchema,
-    private val resolverCoordinates: Set<Pair<String, String>>,
     private val nodesById: Map<String, CompiledNodeResult>,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
@@ -614,9 +610,6 @@ private class ResultEvaluator(
             }
             fields.forEach { (fieldName, fieldValue) ->
                 if (fieldName == TYPENAME_FIELD) return@forEach
-                require((type.name to fieldName) !in resolverCoordinates) {
-                    "Result for ${type.name} may not supply resolver field $fieldName"
-                }
                 val field = sourceSchema.field(type.name, fieldName)
                 require(field is ViaductSchema.ObjectField)
                 field(fieldName) setTo

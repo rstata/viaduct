@@ -45,7 +45,8 @@
       "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,
       "resolverLiteralVariableConvergenceWeight" : 0.2,
       "resolverNestedProviderPathWeight" : 1.0,
-      "resolverVariableWeight" : 0.65
+      "resolverVariableWeight" : 0.65,
+      "sometimesPassiveFieldWeight" : 0.0
     },
     "integers" : {
       "maxInputTypeDepth" : 2,

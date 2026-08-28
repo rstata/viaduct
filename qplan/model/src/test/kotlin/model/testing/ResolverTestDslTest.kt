@@ -12,6 +12,7 @@ import model.Arguments
 import model.SourceSchemaAdapter
 import model.fieldExpressions
 import model.objectOf
+import model.outputValue
 import model.registry.VariableDefinition
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -295,7 +296,7 @@ class ResolverTestDslTest {
     }
 
     @Test
-    fun `rejects resolver-owned fields in object results`() {
+    fun `preserves resolver-owned fields in object results`() {
         val world =
             TestWorld.fromDSL(
                 """
@@ -310,9 +311,9 @@ class ResolverTestDslTest {
             )
         val item = world.schema.requireObjectField("Query", "item")
 
-        assertThrows<IllegalArgumentException> {
-            world.apply(item)
-        }
+        val result = assertIs<EngineObjectData.Sync>(world.apply(item))
+
+        assertEquals(2, result.outputValue("computed"))
     }
 }
 

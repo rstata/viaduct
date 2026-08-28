@@ -35,6 +35,92 @@ class GeneratorTest {
     }
 
     @Test
+    fun `default registry generation inserts no sometimes-passive fields`() {
+        val schema = Arb.schema().next(RandomSource.seeded(10101L))
+        val defaultRegistry = schema.registry().next(RandomSource.seeded(20202L))
+        val explicitZeroRegistry =
+            schema
+                .registry(Config.default + (SometimesPassiveFieldWeight to 0.0))
+                .next(RandomSource.seeded(20202L))
+
+        assertEquals(0, defaultRegistry.features.sometimesPassiveFieldCount)
+        assertEquals(defaultRegistry.fieldValues, explicitZeroRegistry.fieldValues)
+        assertEquals(defaultRegistry.nodeValues, explicitZeroRegistry.nodeValues)
+        assertEquals(defaultRegistry.features, explicitZeroRegistry.features)
+    }
+
+    @Test
+    fun `sometimes-passive generation supplies registered argumentless fields`() {
+        val config =
+            Config.default +
+                (ArgumentsEnabled to false) +
+                (ErrorValueWeight to 0.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ListsEnabled to false) +
+                (NodeResolversEnabled to false) +
+                (NullValueWeight to 0.0) +
+                (ObjectFieldCount to 3..3) +
+                (ResolverFragmentsEnabled to false) +
+                (SchemaObjectCount to 2..2) +
+                (SometimesPassiveFieldWeight to 1.0)
+        val schema = Arb.schema(config).next(RandomSource.seeded(30303L))
+        val registry = schema.registry(config).next(RandomSource.seeded(40404L))
+        val suppliedFields =
+            registry.fieldValues.values
+                .flatMapTo(linkedSetOf()) { value ->
+                    value.registeredFields(registry.fieldResolverCoordinates)
+                }
+
+        assertTrue(registry.features.sometimesPassiveFieldCount > 0)
+        assertTrue(suppliedFields.isNotEmpty())
+        suppliedFields.forEach { supplied ->
+            val field =
+                schema.fieldsOn(supplied.typeName)
+                    .single { field -> field.name == supplied.fieldName }
+            assertTrue(field.arguments.isEmpty())
+            assertEquals(
+                ResolverProgramKind.CONSTANT,
+                registry.resolverProgram(supplied),
+            )
+        }
+    }
+
+    @Test
+    fun `sometimes-passive generation never supplies fields with arguments`() {
+        val config =
+            Config.default +
+                (ArgumentsEnabled to true) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (FieldArgumentWeight to 0.5) +
+                (ListsEnabled to false) +
+                (NodeResolversEnabled to false) +
+                (ObjectFieldCount to 5..5) +
+                (SchemaObjectCount to 3..3) +
+                (SometimesPassiveFieldWeight to 1.0)
+        val random = RandomSource.seeded(50505L)
+        var suppliedFieldCount = 0
+
+        repeat(20) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val suppliedFields =
+                registry.fieldValues.values
+                    .flatMapTo(linkedSetOf()) { value ->
+                        value.registeredFields(registry.fieldResolverCoordinates)
+                    }
+            suppliedFieldCount += suppliedFields.size
+            suppliedFields.forEach { supplied ->
+                val field =
+                    schema.fieldsOn(supplied.typeName)
+                        .single { field -> field.name == supplied.fieldName }
+                assertTrue(field.arguments.isEmpty())
+            }
+        }
+
+        assertTrue(suppliedFieldCount > 0)
+    }
+
+    @Test
     fun `batch dimensions produce the full registry query product`() {
         val counts = TestCaseCount(schemas = 7, registriesPerSchema = 4, queriesPerSchema = 6)
         val batch =
@@ -900,6 +986,17 @@ class GeneratorTest {
         val TEST_CONFIG = Config.default
     }
 }
+
+private fun ValuePlan.registeredFields(
+    registered: Set<FieldCoordinate>,
+): Set<FieldCoordinate> =
+    when (this) {
+        is ListPlan -> elements.flatMapTo(linkedSetOf()) { it.registeredFields(registered) }
+        is ObjectPlan ->
+            fields.keys.filterTo(linkedSetOf()) { it in registered } +
+                fields.values.flatMapTo(linkedSetOf()) { it.registeredFields(registered) }
+        else -> emptySet()
+    }
 
 private data class ArgumentInvocation(
     val alias: String?,

@@ -56,6 +56,7 @@ data class RegistryFeatures(
     val inputSensitiveResolvers: Int,
     val argumentSensitiveResolvers: Int,
     val inputAndArgumentSensitiveResolvers: Int,
+    val sometimesPassiveFieldCount: Int,
     val resolverErrorArgumentCount: Int,
     val variableCount: Int,
     val fromArgumentVariableCount: Int,
@@ -577,12 +578,12 @@ private class RegistryGenerator(
                 .shuffled(random)
                 .toCollection(linkedSetOf())
 
-        val fieldValues =
+        val baseFieldValues =
             fieldSites.associateWith { coordinate ->
                 val field = field(coordinate)
                 plan(field.type, "${coordinate.typeName}.${coordinate.fieldName}")
             }
-        val nodeValues =
+        val baseNodeValues =
             nodeSites.associateWith { typeName ->
                 objectPlan(
                     typeName = typeName,
@@ -599,7 +600,7 @@ private class RegistryGenerator(
         val resolverPrograms =
             fieldSites.associateWith { site ->
                 val field = field(site)
-                val valuePlan = fieldValues.getValue(site)
+                val valuePlan = baseFieldValues.getValue(site)
                 val scalarOutput =
                     !field.type.list &&
                         ScalarKind.entries.any { it.graphQLName == field.type.namedType }
@@ -617,6 +618,23 @@ private class RegistryGenerator(
                     argumentSensitive -> ResolverProgramKind.ARGUMENT_SENSITIVE
                     else -> ResolverProgramKind.CONSTANT
                 }
+            }
+        var sometimesPassiveFieldCount = 0
+        val fieldValues =
+            baseFieldValues.mapValues { (_, value) ->
+                value.withSometimesPassiveFields(
+                    baseFieldValues = baseFieldValues,
+                    resolverPrograms = resolverPrograms,
+                    onInsertion = { sometimesPassiveFieldCount += 1 },
+                )
+            }
+        val nodeValues =
+            baseNodeValues.mapValues { (_, value) ->
+                value.withSometimesPassiveFields(
+                    baseFieldValues = baseFieldValues,
+                    resolverPrograms = resolverPrograms,
+                    onInsertion = { sometimesPassiveFieldCount += 1 },
+                ) as ObjectPlan
             }
         val oss =
             buildMap {
@@ -660,6 +678,7 @@ private class RegistryGenerator(
                         resolverPrograms.count {
                             it.value == ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE
                         },
+                    sometimesPassiveFieldCount = sometimesPassiveFieldCount,
                     resolverErrorArgumentCount =
                         objectFragments.values.sumOf(FragmentPlan::errorArgumentCount),
                     variableCount = variableProviders.size,
@@ -724,6 +743,60 @@ private class RegistryGenerator(
                         },
                 ),
         )
+    }
+
+    private fun ValuePlan.withSometimesPassiveFields(
+        baseFieldValues: Map<FieldCoordinate, ValuePlan>,
+        resolverPrograms: Map<FieldCoordinate, ResolverProgramKind>,
+        onInsertion: () -> Unit,
+    ): ValuePlan {
+        val weight = config[SometimesPassiveFieldWeight]
+        if (weight == 0.0) return this
+        return when (this) {
+            is ListPlan ->
+                copy(
+                    elements =
+                        elements.map { element ->
+                            element.withSometimesPassiveFields(
+                                baseFieldValues,
+                                resolverPrograms,
+                                onInsertion,
+                            )
+                        },
+                )
+
+            is ObjectPlan -> {
+                val recursivelyDecoratedFields =
+                    fields.mapValues { (_, value) ->
+                        value.withSometimesPassiveFields(
+                            baseFieldValues,
+                            resolverPrograms,
+                            onInsertion,
+                        )
+                    }
+                val insertedFields =
+                    fieldSites
+                        .asSequence()
+                        .filter { coordinate -> coordinate.typeName == typeName }
+                        .filter { coordinate -> coordinate !in fields }
+                        .filter { coordinate -> field(coordinate).arguments.isEmpty() }
+                        .filter { coordinate ->
+                            resolverPrograms.getValue(coordinate) ==
+                                ResolverProgramKind.CONSTANT
+                        }
+                        .filter { coordinate ->
+                            !baseFieldValues.getValue(coordinate).containsGeneratedHash()
+                        }
+                        .filter { chance(weight) }
+                        .associateWith { coordinate ->
+                            onInsertion()
+                            baseFieldValues.getValue(coordinate)
+                        }
+                copy(fields = recursivelyDecoratedFields + insertedFields)
+            }
+
+            else -> this
+        }
     }
 
     private fun fragmentPlan(

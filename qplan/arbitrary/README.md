@@ -38,7 +38,7 @@ Queries and registries are independently generated from one schema. Query source
 
 ## Feature Controls
 
-Configuration controls arguments, resolver fragments, variables by source, interfaces, unions, lists, node lowering, selection depth, resolver density, and other size or weighting decisions. Feature generation does not imply runtime activation; profiles that claim an interaction must record or require evidence that the relevant resolver application occurred.
+Configuration controls arguments, resolver fragments, variables by source, interfaces, unions, lists, node lowering, selection depth, resolver density, and other size or weighting decisions. `SometimesPassiveFieldWeight` optionally lets generated resolver outputs supply argumentless fields that also have standard registered resolvers. It defaults to `0.0`, consumes no additional randomness at that value, and is therefore disabled in existing resolver profiles. Feature generation does not imply runtime activation; profiles that claim an interaction must record or require evidence that the relevant resolver application occurred.
 
 ## Generator Configuration Data
 

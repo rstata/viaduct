@@ -27,6 +27,53 @@ internal fun SelectionForest.projectionDemandDeferringTemplates(): SelectionFore
     )
 }
 
+// Retains open resolver boundaries only as conservative potential demand. Unlike projection
+// demand, this forest is never supplied to an ancestor resolver, so argument-bearing boundaries
+// can remain present while their fixed input demand is expanded.
+context(world: Assumptions)
+internal fun SelectionForest.potentialSuccessorDemand(): SelectionForest =
+    potentialSuccessorDemand(mutableMapOf())
+
+context(world: Assumptions)
+private fun SelectionForest.potentialSuccessorDemand(
+    demandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
+): SelectionForest =
+    coalesceEquivalentSelections()
+        .flatMap { selection ->
+            val requested =
+                selectionForestOf(
+                    Selection.of(
+                        key = selection.key,
+                        possibleTypes = selection.possibleTypes,
+                        subselections =
+                            selection.subselections.potentialSuccessorDemand(
+                                demandByResolverField,
+                            ),
+                    ),
+                )
+            val resolverInputDemand =
+                selection.possibleTypes.flatMapToSelectionForest { possibleType ->
+                    val field = selection.objectKey(possibleType).field
+                    if (field in world.resolverRegistry) {
+                        field.fixedPotentialSuccessorDemand(demandByResolverField)
+                    } else {
+                        selectionForestOf()
+                    }
+                }
+            requested + resolverInputDemand
+        }.coalesceEquivalentSelections()
+
+context(world: Assumptions)
+private fun ViaductSchema.ObjectField.fixedPotentialSuccessorDemand(
+    demandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
+): SelectionForest =
+    demandByResolverField[this]
+        ?: world.resolverRegistry
+            .resolver(this)
+            .objectFragment
+            .potentialSuccessorDemand(demandByResolverField)
+            .also { demand -> demandByResolverField[this] = demand }
+
 context(world: Assumptions)
 private fun SelectionForest.projectionDemandDeferringTemplates(
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
@@ -107,7 +154,25 @@ private fun SelectionForest.passivePredecessorDemand(
             selection.possibleTypes.flatMapToSelectionForest { possibleType ->
                 val key = selection.objectKey(possibleType)
                 if (key.field in world.resolverRegistry) {
-                    key.field.fixedPassivePredecessorDemand(passiveDemandByResolverField)
+                    val potentiallyPassiveSelection =
+                        if (key.field.args.isEmpty()) {
+                            selectionForestOf(
+                                Selection.of(
+                                    key = key,
+                                    possibleTypes = setOf(possibleType),
+                                    subselections =
+                                        selection.subselections.passivePredecessorDemand(
+                                            passiveDemandByResolverField,
+                                        ),
+                                ),
+                            )
+                        } else {
+                            selectionForestOf()
+                        }
+                    potentiallyPassiveSelection +
+                        key.field.fixedPassivePredecessorDemand(
+                            passiveDemandByResolverField,
+                        )
                 } else {
                     selectionForestOf(
                         Selection.of(

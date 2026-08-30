@@ -111,6 +111,9 @@ private class ResolverRuntime(
     private val orchestratorsByTarget:
         MutableMap<ObjectEngineResult, ObjectResultOrchestrator> =
         Collections.synchronizedMap(IdentityHashMap())
+    private val orchestratorAvailableByTarget:
+        MutableMap<ObjectEngineResult, CompletableDeferred<ObjectResultOrchestrator>> =
+        IdentityHashMap()
 
     // Creates the sole orchestrator for one object-result instance or contributes late actual
     // demand to the existing orchestrator. The returned latch covers this contribution.
@@ -136,6 +139,9 @@ private class ResolverRuntime(
             check(orchestratorsByTarget.put(target, orchestrator) == null) {
                 "Resolver25 concurrently created two orchestrators at $path"
             }
+            orchestratorAvailableByTarget
+                .getOrPut(target, ::CompletableDeferred)
+                .complete(orchestrator)
             instrumentation.orchestratorCreated(path, source.schemaType)
             orchestrator.addPotentialDemand(
                 source.schemaType.closeStructuralDemand(potentialDemand),
@@ -144,6 +150,21 @@ private class ResolverRuntime(
             orchestrator.start()
             return orchestrator.orchestrationReady
         }
+    }
+
+    suspend fun awaitGroundedKey(
+        target: ObjectEngineResult,
+        groundedKey: ObjectEngineResult.GroundKey,
+    ) {
+        val orchestratorAvailable =
+            synchronized(orchestratorsByTarget) {
+                orchestratorsByTarget[target]?.let(::CompletableDeferred)
+                    ?: orchestratorAvailableByTarget.getOrPut(
+                        target,
+                        ::CompletableDeferred,
+                    )
+            }
+        orchestratorAvailable.await().awaitGroundedKey(groundedKey)
     }
 
     private fun List<Deferred<Unit>>.asLatch(): Deferred<Unit> {
@@ -260,6 +281,12 @@ private class ObjectResultOrchestrator(
             }
         }
         return activations
+    }
+
+    suspend fun awaitGroundedKey(
+        groundedKey: ObjectEngineResult.GroundKey,
+    ) {
+        fields.getValue(groundedKey.field).awaitGroundedKey(groundedKey)
     }
 
     context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
@@ -582,10 +609,10 @@ private class ObjectResultOrchestrator(
                             specializedKey.field,
                         ),
                 )
-            if (index == 0) {
-                fields.getValue(groundedKey.field).awaitGroundedKey(
+            if (!current.isCellSet(groundedKey)) {
+                runtime.awaitGroundedKey(
+                    target = current,
                     groundedKey = groundedKey,
-                    requireNestedFringe = definition.path.size > 1,
                 )
             }
             check(current.isCellSet(groundedKey)) {
@@ -770,7 +797,10 @@ private class ObjectResultOrchestrator(
                         constructionDemand = sealedDemand.construction.subselections,
                         invocationDemand = resolutionSelections,
                         potentialDemand =
-                            keyState.potentialDemand + selection.subselections,
+                            (
+                                keyState.potentialDemand +
+                                    selection.subselections
+                            ).potentialSuccessorDemand(),
                     )
                 runtime.instrumentation.outputAvailable(coordinate)
                 keyState.outputAvailable.complete(
@@ -884,10 +914,7 @@ private class ObjectResultOrchestrator(
             )
         }
 
-        suspend fun awaitGroundedKey(
-            groundedKey: ObjectEngineResult.GroundKey,
-            requireNestedFringe: Boolean,
-        ) {
+        suspend fun awaitGroundedKey(groundedKey: ObjectEngineResult.GroundKey) {
             val available =
                 synchronized(this) {
                     groundedKeys[groundedKey]?.let { keyState ->
@@ -899,9 +926,6 @@ private class ObjectResultOrchestrator(
                 }
             val keyState = available.await()
             keyState.promiseInstalled.await()
-            if (requireNestedFringe) {
-                keyState.fringeInstalled.await()
-            }
         }
     }
 

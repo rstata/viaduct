@@ -19,6 +19,7 @@ import model.SelectionForest
 import model.engineObjectDataOf
 import model.groundKey
 import model.requireQueryTypeDef
+import model.registry.FieldResolver
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
@@ -129,10 +130,11 @@ private suspend fun resolveSlot(
                         selections = objectFragment.materializeSelections,
                         reader = coordinate,
                     )
+                val queryValue = resolveQueryFragment(resolver, coordinate)
                 val fieldValue =
                     resolver(
                         input = input,
-                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        queryValue = queryValue,
                         arguments = arguments,
                         selections = invocationDemand,
                     )
@@ -156,4 +158,33 @@ private suspend fun resolveSlot(
                 cell.setAccessResult(true)
             }
     }
+}
+
+context(world: Assumptions, resolverSupport: ResolverSupport)
+private suspend fun CoroutineScope.resolveQueryFragment(
+    resolver: FieldResolver,
+    coordinate: List<PathComponent>,
+): EngineObjectData.Sync {
+    val queryFragment = resolver.instantiateQueryFragmentAt(coordinate)
+    if (queryFragment.constructionSelections.isEmpty()) {
+        return engineObjectDataOf(world.schema.requireQueryTypeDef())
+    }
+
+    val source = world.resolverRegistry.createRootQueryInput()
+    val queryResult =
+        ObjectEngineResult.of(
+            type = source.schemaType,
+            mutable = true,
+        )
+    orchestrateSlot(
+        path = emptyList(),
+        source = source,
+        selections = queryFragment.constructionSelections,
+        target = queryResult,
+    )
+    world.queryValues[coordinate.toList()] = queryResult
+    return queryResult.materialize(
+        selections = queryFragment.materializeSelections,
+        reader = coordinate,
+    )
 }

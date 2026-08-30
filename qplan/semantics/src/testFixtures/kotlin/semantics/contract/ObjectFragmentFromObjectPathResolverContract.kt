@@ -168,6 +168,50 @@ interface ObjectFragmentFromObjectPathResolverContract :
     }
 
     @Test
+    fun `waits for late orchestration of an already published provider object`() {
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      box: Box! @resolver(result: {passive: 1})
+                      seed: Int! @resolver(result: 13)
+                      result: Int!
+                        @resolver(
+                          of: "box { source(value: ${'$'}sourceArg) } consume(value: ${'$'}provided) seed"
+                          pathVars: [
+                            {name: "provided", path: ["box", "source"]}
+                            {name: "sourceArg", path: ["seed"]}
+                          ]
+                          result: "sum(consume)"
+                        )
+                      consume(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                    }
+
+                    type Box {
+                      passive: Int!
+                      source(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+                    }
+                    """.trimIndent(),
+            )
+        val world = testWorld.assumptions
+        val resultKey =
+            ObjectEngineResult.GroundKey.of(
+                world.schema.requireObjectField("Query", "result"),
+                emptyMap(),
+            )
+
+        val resolved =
+            resolveAndValidate(
+                world,
+                "query { box { passive } result }",
+            )
+
+        assertEquals(13, resolved.getCell(resultKey).get())
+    }
+
+    @Test
     fun `grounds a nested provider argument from another nested provider`() {
         val testWorld =
             TestWorld.fromDSL(

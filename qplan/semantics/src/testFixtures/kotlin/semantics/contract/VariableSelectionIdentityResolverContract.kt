@@ -204,4 +204,95 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             },
         )
     }
+
+    @Test
+    fun `potential demand covers a fromArgument selection that grounds to an existing key`() {
+        val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      root: Root! @resolver(result: {nested: {}})
+                      result: Int!
+                        @resolver(
+                          of: "source root { driver(value: ${'$'}value) }"
+                          pathVars: [{name: "value", path: ["source"]}]
+                          result: "sum(root.driver)"
+                        )
+                      source: Int!
+                        @resolver(of: "delay", result: "sum(delay)")
+                      delay: Int! @resolver(result: 1)
+                    }
+
+                    type Root {
+                      nested: Nested!
+                      driver(value: Int!): Int!
+                        @resolver(
+                          of: "nested { child(value: ${'$'}value) { two } }"
+                          result: "sum(nested.child.two)"
+                        )
+                    }
+
+                    type Nested {
+                      child(value: Int!): Payload!
+                        @resolver(result: {one: 3, two: 5})
+                    }
+
+                    type Payload {
+                      one: Int!
+                      two: Int!
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingDef.name == "Nested" &&
+                        field.name == "child" &&
+                        demand != null
+                    ) {
+                        suppliedDemandFields +=
+                            demand
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                                .groundKeys()
+                                .mapTo(linkedSetOf()) { key ->
+                                    key.field.name
+                                }
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+        val resultKey = world.schema.contractKey("Query", "result")
+        val selections =
+            world.operationSelectionsFrom(
+                """
+                query {
+                  root {
+                    nested {
+                      child(value: 1) { one }
+                    }
+                  }
+                  result
+                }
+                """.trimIndent(),
+            )
+
+        val resolved = resolveAndValidate(world, selections)
+
+        assertEquals(5, resolved.getCell(resultKey).get())
+        when (variableSelectionIdentityPolicy) {
+            VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> {
+                assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
+            }
+            VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES -> {
+                assertEquals(
+                    mapOf(
+                        setOf("one") to 1,
+                        setOf("two") to 1,
+                    ),
+                    suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
+                )
+            }
+        }
+    }
 }

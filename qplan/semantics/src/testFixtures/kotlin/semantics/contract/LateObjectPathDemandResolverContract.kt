@@ -155,6 +155,84 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     }
 
     @Test
+    fun `open resolver template retains output demand through nested resolver inputs`() {
+        var nodeApplications = 0
+        var nodeDemandFields: Set<String>? = null
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      result: Int!
+                        @resolver(
+                          of: "root { middle { passive { node { shallow } } } } source root { late(value: ${'$'}value) }"
+                          pathVars: [{name: "value", path: ["source"]}]
+                          result: "sum(root.late)"
+                        )
+                      source: Int!
+                        @resolver(of: "delay", result: "sum(delay)")
+                      delay: Int! @resolver(result: 1)
+                      root: Root!
+                        @resolver(result: {middle: {passive: {}}})
+                    }
+
+                    type Root {
+                      middle: Middle!
+                      late(value: Int!): Int!
+                        @resolver(
+                          of: "middle { intermediate }"
+                          result: "sum(middle.intermediate)"
+                        )
+                    }
+
+                    type Middle {
+                      passive: Passive!
+                      intermediate: Int!
+                        @resolver(
+                          of: "passive { node { deep } }"
+                          result: "sum(passive.node.deep)"
+                        )
+                    }
+
+                    type Passive {
+                      node: Leaf!
+                        @resolver(result: {shallow: 1, deep: 2})
+                    }
+
+                    type Leaf {
+                      shallow: Int!
+                      deep: Int!
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, demand ->
+                    if (
+                        field.containingDef.name == "Passive" &&
+                        field.name == "node" &&
+                        demand != null
+                    ) {
+                        nodeApplications += 1
+                        nodeDemandFields =
+                            demand
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                                .groundKeys()
+                                .mapTo(linkedSetOf()) { groundKey ->
+                                    groundKey.field.name
+                                }
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+        val resultKey = world.schema.contractKey("Query", "result")
+
+        val resolved = resolveAndValidate(world, "query { result }")
+
+        assertEquals(2, resolved.getCell(resultKey).get())
+        assertEquals(1, nodeApplications)
+        assertEquals(setOf("shallow", "deep"), nodeDemandFields)
+    }
+
+    @Test
     fun `future variable boundary selects its passive predecessors`() {
         var parentApplications = 0
         var parentDemandFields: Set<String>? = null

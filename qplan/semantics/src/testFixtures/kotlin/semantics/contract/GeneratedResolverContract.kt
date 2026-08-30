@@ -24,6 +24,7 @@ import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverNestedProviderPathWeight
+import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverVariableCount
@@ -199,6 +200,54 @@ interface ObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy
             run.assertAggregate(
                 activatedNonemptyFragments > 0,
                 "Generated object-fragment profile activated no nonempty fragments",
+            )
+        }
+}
+
+/** Generated contract for independently resolved field-resolver query fragments. */
+interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    @Test
+    fun `generated query fragment worlds resolve correctly`(): Unit =
+        runBlocking {
+            var generatedQueryFragments = 0
+            var activatedQueryFragments = 0
+            var queryValueWitnesses = 0
+            val config =
+                Config.default +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (NodeResolversEnabled to false) +
+                    (ResolverFragmentsEnabled to false) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverQueryFragmentsEnabled to true) +
+                    (ResolverVariablesEnabled to false)
+
+            val run =
+                checkGeneratedProfile("query-fragment", config) { testWorld, testCase ->
+                    generatedQueryFragments += testCase.registry.features.queryFragmentCount
+
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+                    activatedQueryFragments +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.hasNonemptyQueryFragment(application)
+                        }
+                    queryValueWitnesses +=
+                        observation.executions.sumOf { execution ->
+                            execution.world.queryValues.size
+                        }
+                }
+
+            run.assertAggregate(
+                generatedQueryFragments > 0,
+                "Generated query-fragment profile produced no query fragments",
+            )
+            run.assertAggregate(
+                activatedQueryFragments > 0,
+                "Generated query-fragment profile activated no query fragments",
+            )
+            run.assertAggregate(
+                queryValueWitnesses > 0,
+                "Generated query-fragment profile produced no query-value witnesses",
             )
         }
 }
@@ -697,3 +746,8 @@ private fun ArbitraryRegistry.hasNonemptyObjectFragment(
     application: ResolverApplicationRecord,
 ): Boolean =
     objectFragmentSources[application.key.field]?.isNotEmpty() == true
+
+private fun ArbitraryRegistry.hasNonemptyQueryFragment(
+    application: ResolverApplicationRecord,
+): Boolean =
+    queryFragmentSources[application.key.field]?.isNotEmpty() == true

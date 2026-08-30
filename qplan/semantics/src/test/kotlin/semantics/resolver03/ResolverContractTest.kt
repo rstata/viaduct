@@ -13,6 +13,7 @@ import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentResolverContract
+import semantics.contract.QueryFragmentResolverContract
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
 import semantics.contract.SelectiveResolverOutputPolicyContract
 import semantics.contract.SometimesPassiveResolverContract
@@ -24,6 +25,7 @@ class ResolverContractTest :
     NodeResolverContract,
     ObjectFragmentResolverContract,
     ObjectFragmentFromArgumentResolverContract,
+    QueryFragmentResolverContract,
     SometimesPassiveResolverContract,
     SometimesPassiveObjectFragmentResolverContract,
     SometimesPassiveSelectiveResolverContract,

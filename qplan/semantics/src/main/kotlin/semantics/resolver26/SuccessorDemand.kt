@@ -17,7 +17,7 @@ context(world: Assumptions)
 internal fun SelectionForest.successorDemand(): SelectionForest =
     successorDemandWithMemo(mutableMapOf())
 
-// Retains requested ground boundaries and adds each active boundary's fixed passive OF demand.
+// Retains requested ground boundaries and adds each resolver-bearing boundary's fixed passive demand.
 context(world: Assumptions)
 private fun SelectionForest.successorDemandWithMemo(
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
@@ -77,7 +77,7 @@ private fun ViaductSchema.ObjectField.fixedPassivePredecessorDemand(
             .passivePredecessorDemand(passiveDemandByResolverField)
             .also { demand -> passiveDemandByResolverField[this] = demand }
 
-// Retains passive OF selections and replaces active selections with their own passive OF demand.
+// Retains fields that may be passive based on presence and expands their standard passive demand.
 context(world: Assumptions)
 private fun SelectionForest.passivePredecessorDemand(
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
@@ -86,9 +86,25 @@ private fun SelectionForest.passivePredecessorDemand(
         selection.possibleTypes.flatMapToSelectionForest { possibleType ->
             val objectKey: ObjectEngineResult.ObjectKey = selection.objectKey(possibleType)
             if (objectKey.field in world.resolverRegistry) {
-                objectKey.field.fixedPassivePredecessorDemand(
-                    passiveDemandByResolverField,
-                )
+                val potentiallyPassiveSelection =
+                    if (objectKey.field.args.isEmpty()) {
+                        selectionForestOf(
+                            Selection.of(
+                                key = objectKey,
+                                possibleTypes = setOf(possibleType),
+                                subselections =
+                                    selection.subselections.successorDemandWithMemo(
+                                        passiveDemandByResolverField,
+                                    ),
+                            ),
+                        )
+                    } else {
+                        selectionForestOf()
+                    }
+                potentiallyPassiveSelection +
+                    objectKey.field.fixedPassivePredecessorDemand(
+                        passiveDemandByResolverField,
+                    )
             } else {
                 check(objectKey is ObjectEngineResult.GroundKey) {
                     "Resolver26 found open arguments on passive key $objectKey"

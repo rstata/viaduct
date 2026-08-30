@@ -26,9 +26,9 @@ Task completion is not a cross-task readiness protocol. Cross-task reads use OER
 
 `orchestrateObject` first localizes incoming stamps to the concrete OER path and synchronously computes one final `ObjectSelectionForest`.
 
-Closure repeatedly expands each newly seen resolver `ObjectKey` with that resolver's complete stamped object fragment. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and its stamped variable definitions.
+Closure repeatedly expands each newly seen resolver `ObjectKey` whose field is absent from the source EOD with that resolver's complete stamped object fragment. A source-present argumentless field remains unexpanded and is materialized from the source even when the registry contains its standard resolver. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and its stamped variable definitions.
 
-The closed forest must contain exactly the resolver keys represented by the expansion map, and every selection stamp must be unique. There is no later demand contribution, re-orchestration loop, pending-demand registry, or outer fixpoint.
+Every resolver key in the closed forest is represented either by the expansion map or by an argumentless source-provided field, and every selection stamp must be unique. There is no later demand contribution, re-orchestration loop, pending-demand registry, or outer fixpoint.
 
 An open resolver key contributes its object-fragment dependencies before its arguments ground. If those arguments later become an error, those dependencies may have executed speculatively. That imprecision is accepted by the current model.
 
@@ -48,9 +48,9 @@ Readers never insert undeclared binding promises.
 
 ## Passive Values
 
-Passive ground keys are read by canonical field name from the source EOD through resolver26's local `resolvePassiveValues` path. Missing passive source selections are errors; open passive keys are outside the algorithm's domain.
+Every argumentless field present in a resolver's source EOD is read by canonical field name through resolver26's local `resolvePassiveValues` path, including fields that have standard resolvers in the registry. Source-provided argument-bearing fields are errors. A demanded registry field absent from the source uses its standard resolver; a demanded non-registry field absent from the source remains an error.
 
-The field-resolution task builds the passive result tree before publishing the containing value. Resolver26 creates one `ObjectOrchestrationTask` with each OER and calls its non-suspending `prepare` function immediately. Prepare combines construction demand propagated through the parent with the projection demand that caused the resolver to return the object, closes that demand, and declares and marks bindings. Resolver26 then materializes passive fields recursively from the returned closed demand before calling the task's non-suspending `launch` function. This parent-first recursion establishes each binding domain before any descendant can copy an alias from it without retaining a separate object-occurrence collection.
+The field-resolution task builds the passive result tree supplied by the resolver before publishing the containing value. Resolver26 creates one `ObjectOrchestrationTask` with each OER and calls its non-suspending `prepare` function immediately. Prepare closes only construction demand propagated through the parent, using source presence to decide which standard resolvers remain actual work, then declares and marks bindings. Invocation demand separately validates selective output and guides recursive materialization of every passive returned field before the task's non-suspending `launch` function runs. This parent-first recursion establishes each binding domain before any descendant can copy an alias from it without retaining a separate object-occurrence collection.
 
 After passive children have launched, the parent launch validates its materialized passive cells. An object with neither active expansions nor binding aliases freezes synchronously without creating a coroutine. Otherwise, launch schedules the task's suspending `run` function to copy aliases, read providers associated with its active expansions, install active fields, and freeze the OER.
 
@@ -79,9 +79,9 @@ Argument errors complete the value slot with `ErrorEngineResult` without invokin
 
 ## Successor Demand
 
-Successor demand is output projection, not input closure. It retains passive selections supplied by the current resolver and stops at each resolver-bearing boundary.
+Successor demand is output projection, not input closure. It retains passive selections and argumentless resolver-bearing selections that the current resolver may supply. Argument-bearing resolver fields remain necessarily active.
 
-The boundary resolver's fixed object fragment may contribute passive predecessor demand, but its arguments are unnecessary for choosing that template. The original downstream construction demand continues into each returned child OER, where synchronous closure assigns work to successor resolvers.
+Each boundary resolver's fixed object fragment contributes its passive predecessor demand transitively, conservatively including argumentless resolver-bearing fields that may be supplied by an ancestor. The original downstream construction demand continues separately into each returned child OER, where source-sensitive synchronous closure assigns only unresolved work to standard resolvers.
 
 ## Strictness
 

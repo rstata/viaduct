@@ -50,7 +50,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             mergedDemand
                 .byKey()
                 .filter { (objectKey, _) ->
-                    objectKey.field in world.resolverRegistry &&
+                    requiresStandardResolution(objectKey) &&
                         objectKey !in expansions
                 }
         if (newResolverSelections.isEmpty()) {
@@ -58,7 +58,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 mergedDemand
                     .byKey()
                     .filterKeys { objectKey ->
-                        objectKey.field in world.resolverRegistry
+                        requiresStandardResolution(objectKey)
                     }.keys == expansions.keys,
             ) {
                 "Resolver26 closed demand and resolver expansions are misaligned"
@@ -135,6 +135,21 @@ internal fun EngineObjectData.Sync.closeInputDemand(
         }
     }
     error("Resolver26 demand closure terminated unexpectedly")
+}
+
+context(world: Assumptions)
+// Returns true if the field is not present yet has a standard resolver, which means it needs standard resolution
+private fun EngineObjectData.Sync.requiresStandardResolution(
+    objectKey: ObjectEngineResult.ObjectKey,
+): Boolean {
+    if (objectKey.field !in world.resolverRegistry) return false
+    if (!isPresent(objectKey.field.name)) return true
+
+    require(objectKey.field.args.isEmpty()) {
+        "Resolver output must not supply argument-bearing field " +
+            "${schemaType.name}/${objectKey.field.name}"
+    }
+    return false
 }
 
 // Rebases top-level occurrence stamps onto this object's concrete result path.

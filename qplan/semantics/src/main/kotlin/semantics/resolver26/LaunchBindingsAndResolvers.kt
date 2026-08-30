@@ -51,14 +51,13 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                     world.completeBinding(definition.variable, binding)
                 }
             }
-            closed.demand.byKey().forEach { (objectKey, selection) ->
-                if (objectKey.field in world.resolverRegistry) {
-                    launch {
-                        installAndLaunchFieldResolver(
-                            selection = selection,
-                            expansion = closed.expansions.getValue(objectKey),
-                        )
-                    }
+            val demandByKey = closed.demand.byKey()
+            closed.expansions.forEach { (objectKey, expansion) ->
+                launch {
+                    installAndLaunchFieldResolver(
+                        selection = demandByKey.getValue(objectKey),
+                        expansion = expansion,
+                    )
                 }
             }
         }
@@ -85,6 +84,9 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
         val groundKey = groundedSelection.groundKey()
         check(groundKey.field in world.resolverRegistry) {
             "Resolver26 attempted to install passive key $groundKey"
+        }
+        check(!source.isPresent(groundKey.field.name)) {
+            "Resolver26 attempted to install source-provided key $groundKey"
         }
         completeFromArgumentBindings(expansion, groundKey)
 

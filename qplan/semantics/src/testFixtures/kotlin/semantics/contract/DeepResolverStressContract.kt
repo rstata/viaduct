@@ -29,6 +29,7 @@ import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,6 +48,8 @@ interface DeepResolverStressContract : ResolverContract {
         get() = false
     val minimumActivatedObjectPathResolverChainLength: Int
         get() = 0
+    val sometimesPassiveCoverageRequired: Boolean
+        get() = false
     val stressConfigOverrides: Config
         get() = Config.default
 
@@ -103,9 +106,11 @@ interface DeepResolverStressContract : ResolverContract {
             var polymorphicNodeLoaderApplications = 0
             var generatedFromArgumentVariables = 0
             var generatedObjectPathVariables = 0
+            var generatedSometimesPassiveFields = 0
             var activatedFromArgumentApplications = 0
             var activatedObjectPathApplications = 0
             var activatedNestedObjectPathApplications = 0
+            var activatedSometimesPassiveOccurrences = 0
             var maximumActivatedObjectPathResolverChainLength = 0
             var coactivatedMixedVariableCases = 0
             val previousSeed = PropertyTesting.defaultSeed
@@ -123,6 +128,8 @@ interface DeepResolverStressContract : ResolverContract {
                         testCase.registry.features.fromArgumentVariableCount
                     generatedObjectPathVariables +=
                         testCase.registry.features.fromObjectFieldVariableCount
+                    generatedSometimesPassiveFields +=
+                        testCase.registry.features.sometimesPassiveFieldCount
                     assertTrue(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions()
                     val fragment = world.fragmentFrom(testCase.query.source)
@@ -138,12 +145,29 @@ interface DeepResolverStressContract : ResolverContract {
                         witness.applications.mapTo(linkedSetOf()) { application ->
                             testCase.registry.sourceResolverCoordinate(application.key.field)
                         }
-                    assertEquals(
-                        context(world) {
-                            result.registeredResolverApplicationIdentityCounts()
-                        },
-                        witness.applicationIdentityCounts(),
-                    )
+                    if (sometimesPassiveCoverageRequired) {
+                        // Source-owned registry fields have result occurrences but no application.
+                        val resultOccurrenceCounts =
+                            result.registeredResolverOccurrenceCounts(
+                                world.resolverRegistry,
+                            )
+                        witness.applicationCounts().forEach { (key, count) ->
+                            assertTrue(
+                                count <= resultOccurrenceCounts.getOrDefault(key, 0),
+                                "Observed $count applications of $key but result contains only " +
+                                    "${resultOccurrenceCounts.getOrDefault(key, 0)} occurrences",
+                            )
+                        }
+                        activatedSometimesPassiveOccurrences +=
+                            resultOccurrenceCounts.values.sum() - witness.applications.size
+                    } else {
+                        assertEquals(
+                            context(world) {
+                                result.registeredResolverApplicationIdentityCounts()
+                            },
+                            witness.applicationIdentityCounts(),
+                        )
+                    }
                     assertTrue(context(world) { result.correctResolution(fragment) })
                     resolverApplications += witness.applications.size
                     var activatedFromArgument = false
@@ -226,10 +250,13 @@ interface DeepResolverStressContract : ResolverContract {
                         "$polymorphicNodeLoaderApplications, " +
                         "generatedFromArgumentVariables=$generatedFromArgumentVariables, " +
                         "generatedObjectPathVariables=$generatedObjectPathVariables, " +
+                        "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
                         "activatedFromArgumentApplications=$activatedFromArgumentApplications, " +
                         "activatedObjectPathApplications=$activatedObjectPathApplications, " +
                         "activatedNestedObjectPathApplications=" +
                         "$activatedNestedObjectPathApplications, " +
+                        "activatedSometimesPassiveOccurrences=" +
+                        "$activatedSometimesPassiveOccurrences, " +
                         "maximumActivatedObjectPathResolverChainLength=" +
                         "$maximumActivatedObjectPathResolverChainLength, " +
                         "coactivatedMixedVariableCases=$coactivatedMixedVariableCases, " +
@@ -273,6 +300,10 @@ interface DeepResolverStressContract : ResolverContract {
                 assertTrue(activatedFromArgumentApplications > 0)
                 assertTrue(activatedObjectPathApplications > 0)
                 assertTrue(coactivatedMixedVariableCases > 0)
+            }
+            if (sometimesPassiveCoverageRequired) {
+                assertTrue(generatedSometimesPassiveFields > 0)
+                assertTrue(activatedSometimesPassiveOccurrences > 0)
             }
         }
 

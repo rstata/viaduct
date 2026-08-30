@@ -79,7 +79,7 @@ internal class ObjectOrchestrationTask(
     // Checks that passive values selected by closed demand were installed before task dispatch.
     private fun validatePassiveFields(closed: CloseInputDemandResult) {
         closed.demand.byKey().forEach { (objectKey, _) ->
-            if (objectKey.field !in world.resolverRegistry) {
+            if (objectKey !in closed.expansions) {
                 check(
                     objectKey is ObjectEngineResult.GroundKey &&
                         target.isCellSet(objectKey),

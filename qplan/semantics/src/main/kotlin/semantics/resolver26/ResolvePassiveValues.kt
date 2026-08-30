@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import viaduct.graphql.schema.ViaductSchema
 
-import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
@@ -10,12 +9,10 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
 import model.invariants.conformsToOutputSchemaType
-import model.instantiateBindings
 import model.merge
 import model.outputType
 import model.outputValue
@@ -30,7 +27,7 @@ context(world: Assumptions, support: Resolver26Support)
 internal fun EngineOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
-    resolverDemand: SelectionForest,
+    invocationDemand: SelectionForest,
     constructionDemand: SelectionForest,
 ): EngineResult? {
     require(conformsToOutputSchemaType(expectedType)) {
@@ -42,7 +39,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
         is EngineObjectData.Sync ->
             resolvePassiveObjectValues(
                 path = path,
-                resolverDemand = resolverDemand,
+                invocationDemand = invocationDemand,
                 constructionDemand = constructionDemand,
             )
         is List<*> -> {
@@ -54,7 +51,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
                         value.resolvePassiveValues(
                             expectedType = elementType,
                             path = path + ListEngineResult.Index.of(index),
-                            resolverDemand = resolverDemand,
+                            invocationDemand = invocationDemand,
                             constructionDemand = constructionDemand,
                         )
                     },
@@ -69,7 +66,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
 context(world: Assumptions, support: Resolver26Support)
 private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     path: List<PathComponent>,
-    resolverDemand: SelectionForest,
+    invocationDemand: SelectionForest,
     constructionDemand: SelectionForest,
 ): ObjectEngineResult {
     val target =
@@ -84,40 +81,31 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
             path = path,
             source = this,
             target = target,
-            initialDemand = constructionDemand + resolverDemand,
+            initialDemand = constructionDemand,
         )
     val closedDemand = orchestration.prepare()
     materializePassiveFields(
         target = target,
         path = path,
-        resolverDemand = resolverDemand,
+        invocationDemand = invocationDemand,
         closedDemand = closedDemand,
     )
     orchestration.launch()
     return target
 }
 
-// Copies direct passive fields and recursively launches object orchestration in their values.
+// Copies every passive field returned by the resolver and orchestrates its value recursively.
 context(world: Assumptions, support: Resolver26Support)
 private fun EngineObjectData.Sync.materializePassiveFields(
     target: ObjectEngineResult,
     path: List<PathComponent>,
-    resolverDemand: SelectionForest,
+    invocationDemand: SelectionForest,
     closedDemand: ObjectSelectionForest,
 ) {
-    val mergedResolverDemand =
-        resolverDemand
-            .merge(schemaType)
-    val passiveDemandByKey =
-        mergedResolverDemand
-            .filter { selection ->
-                (selection as ObjectSelection).key.field !in world.resolverRegistry
-            }.instantiateBindings()
-            .byGroundKey()
+    val invocationDemandByKey = invocationDemand.merge(schemaType).byKey()
     if (world.selectiveResolvers) {
         val selectedFieldNames =
-            mergedResolverDemand
-                .keys()
+            invocationDemandByKey.keys
                 .mapTo(linkedSetOf()) { key -> key.field.name }
         val unselectedKeys = getSelections().toSet() - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
@@ -126,50 +114,46 @@ private fun EngineObjectData.Sync.materializePassiveFields(
         }
     }
 
-    selectedPassiveKeys(passiveDemandByKey).forEach { key ->
-        val arguments = key.arguments
-        require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-            "Passive object field ${schemaType.name}/${key.field.name} must be argumentless"
+    val closedDemandByKey = closedDemand.byKey()
+    getSelections().forEach { fieldName ->
+        val field = schemaType.requireField(fieldName)
+        require(field.args.isEmpty()) {
+            "Resolver output must not supply argument-bearing field " +
+                "${schemaType.name}/$fieldName"
         }
-        val projectionDemand =
-            passiveDemandByKey[key]
-                ?.subselections
-                ?: selectionForestOf()
-        val childConstructionDemand =
-            closedDemand
-                .byKey()[key]
-                ?.subselections
-                ?: selectionForestOf()
-        val value =
-            outputValue(key.field.name)
-                .resolvePassiveValues(
-                    expectedType = key.field.outputType,
-                    path = path + key,
-                    resolverDemand = projectionDemand,
-                    constructionDemand = childConstructionDemand,
-                )
-        target.reserveCell(key).also { cell ->
-            cell.setValue(value)
-            cell.setAccessResult(true)
+        val demandedKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
+        (invocationDemandByKey.keys + closedDemandByKey.keys).forEach { key ->
+            if (key.field == field) {
+                check(key is ObjectEngineResult.GroundKey) {
+                    "Passive returned field has an open key: $key"
+                }
+                demandedKeys += key
+            }
+        }
+        if (demandedKeys.isEmpty()) {
+            demandedKeys += ObjectEngineResult.GroundKey.of(field, emptyMap())
+        }
+        demandedKeys.forEach { key ->
+            val childInvocationDemand =
+                invocationDemandByKey[key]
+                    ?.subselections
+                    ?: selectionForestOf()
+            val childConstructionDemand =
+                closedDemandByKey[key]
+                    ?.subselections
+                    ?: selectionForestOf()
+            val value =
+                outputValue(key.field.name)
+                    .resolvePassiveValues(
+                        expectedType = key.field.outputType,
+                        path = path + key,
+                        invocationDemand = childInvocationDemand,
+                        constructionDemand = childConstructionDemand,
+                    )
+            target.reserveCell(key).also { cell ->
+                cell.setValue(value)
+                cell.setAccessResult(true)
+            }
         }
     }
 }
-
-// Selects projected passive keys in selective worlds and every returned passive key otherwise.
-context(world: Assumptions)
-private fun EngineObjectData.Sync.selectedPassiveKeys(
-    passiveDemandByKey: Map<ObjectEngineResult.GroundKey, ObjectSelection>,
-): Set<ObjectEngineResult.GroundKey> =
-    if (world.selectiveResolvers) {
-        passiveDemandByKey.keys
-    } else {
-        getSelections()
-            .map { fieldName ->
-                val field = schemaType.requireField(fieldName)
-                require(field.args.isEmpty()) {
-                    "Passive object field ${schemaType.name}/$fieldName must be argumentless"
-                }
-                ObjectEngineResult.GroundKey.of(field, emptyMap())
-            }.filter { key -> key.field !in world.resolverRegistry }
-            .toSet()
-    }

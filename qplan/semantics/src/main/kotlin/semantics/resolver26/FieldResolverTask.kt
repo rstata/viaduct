@@ -79,7 +79,7 @@ internal class FieldResolverTask(
                 fieldValue.resolvePassiveValues(
                     expectedType = groundKey.field.outputType,
                     path = coordinate,
-                    resolverDemand = invocationDemand,
+                    invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
                 )
 

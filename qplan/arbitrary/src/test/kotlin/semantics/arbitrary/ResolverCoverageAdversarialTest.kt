@@ -6,8 +6,10 @@ import viaduct.engine.api.EngineObjectData
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
+import model.engineObjectDataOf
 import model.objectOf
 import model.requireObjectField
+import model.requireQueryTypeDef
 import model.schemaType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -46,8 +48,9 @@ class ResolverCoverageAdversarialTest {
         val value =
             context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                 world.resolverRegistry.resolver(canonicalField)(
-                    world.schema.objectOf("Query"),
-                            Arguments.Resolved.of(canonicalField, emptyMap()),
+                    input = world.schema.objectOf("Query"),
+                    queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                    arguments = Arguments.Resolved.of(canonicalField, emptyMap()),
                 )
             }
         val outer = assertIs<List<*>>(value)
@@ -102,8 +105,9 @@ class ResolverCoverageAdversarialTest {
                 context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                     world.resolverRegistry
                         .resolver(bridgeField)(
-                            emptyInput,
-                            Arguments.Resolved.of(bridgeField, emptyMap()),
+                            input = emptyInput,
+                            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                            arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
                         )
                 }
             val payloadInput =
@@ -124,13 +128,15 @@ class ResolverCoverageAdversarialTest {
             context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                 world.resolverRegistry
                     .resolver(bridgeField)(
-                        emptyInput,
-                        Arguments.Resolved.of(bridgeField, emptyMap()),
+                        input = emptyInput,
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
                     )
                 world.resolverRegistry
                     .resolver(payloadField)(
-                        payloadInput,
-                        Arguments.Resolved.of(payloadField, emptyMap()),
+                        input = payloadInput,
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        arguments = Arguments.Resolved.of(payloadField, emptyMap()),
                     )
             }
 

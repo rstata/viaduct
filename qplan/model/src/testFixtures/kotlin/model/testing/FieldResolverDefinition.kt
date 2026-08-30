@@ -18,6 +18,7 @@ import model.registry.VariableDefinition
 import model.merge
 import model.selectionForestOf
 import model.variableTemplates
+import viaduct.engine.api.EngineObjectData
 
 /**
  * A raw field-resolver definition accepted only by test-fixture composition.
@@ -27,6 +28,7 @@ import model.variableTemplates
  */
 class FieldResolverDefinition private constructor(
     val objectFragment: Fragment,
+    val queryFragment: Fragment?,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
@@ -36,7 +38,10 @@ class FieldResolverDefinition private constructor(
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
-            function = { input, arguments -> transform(function(input, arguments)) },
+            queryFragment = queryFragment,
+            function = { input, queryValue, arguments ->
+                transform(function(input, queryValue, arguments))
+            },
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
         )
@@ -46,6 +51,7 @@ class FieldResolverDefinition private constructor(
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
+            queryFragment = queryFragment,
             function = function,
             projectionDemand = { demand -> transform(projectionDemand(demand)) },
             applicationObserver = applicationObserver,
@@ -54,6 +60,16 @@ class FieldResolverDefinition private constructor(
     fun mapObjectFragment(transform: (Fragment) -> Fragment): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = transform(objectFragment),
+            queryFragment = queryFragment,
+            function = function,
+            projectionDemand = projectionDemand,
+            applicationObserver = applicationObserver,
+        )
+
+    fun mapQueryFragment(transform: (Fragment) -> Fragment): FieldResolverDefinition =
+        FieldResolverDefinition(
+            objectFragment = objectFragment,
+            queryFragment = queryFragment?.let(transform),
             function = function,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
@@ -64,6 +80,7 @@ class FieldResolverDefinition private constructor(
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
+            queryFragment = queryFragment,
             function = function,
             projectionDemand = projectionDemand,
             applicationObserver = { input, arguments, selections ->
@@ -74,6 +91,7 @@ class FieldResolverDefinition private constructor(
 
     internal fun assemble(
         field: ViaductSchema.ObjectField,
+        queryType: ViaductSchema.Object,
         variables: Map<Arguments.Variable, VariableDefinition>,
         validateObjectFragment: (Fragment) -> Unit,
     ): FieldResolver {
@@ -81,20 +99,21 @@ class FieldResolverDefinition private constructor(
 
         fun normalize(
             fragment: Fragment,
+            expectedType: ViaductSchema.Object,
             role: String,
         ): MaterializeSelectionForest {
-            require(fragment.nominalType == objectType) {
-                "$role type ${fragment.nominalType.name} does not match ${objectType.name}"
+            require(fragment.nominalType == expectedType) {
+                "$role type ${fragment.nominalType.name} does not match ${expectedType.name}"
             }
             return fragment.materializeSelections.flatMap { selection ->
-                if (objectType !in selection.possibleTypes) {
+                if (expectedType !in selection.possibleTypes) {
                     materializeSelectionForestOf()
                 } else {
                     materializeSelectionForestOf(
                         MaterializeSelection.of(
                             responseKey = selection.responseKey,
-                            key = selection.key.objectKey(objectType),
-                            possibleTypes = setOf(objectType),
+                            key = selection.key.objectKey(expectedType),
+                            possibleTypes = setOf(expectedType),
                             subselections = selection.subselections,
                         ),
                     )
@@ -103,10 +122,19 @@ class FieldResolverDefinition private constructor(
         }
 
         validateObjectFragment(objectFragment)
+        val normalizedQueryFragment =
+            queryFragment?.let { fragment ->
+                require(fragment.nominalType == queryType) {
+                    "Query fragment type ${fragment.nominalType.name} does not match ${queryType.name}"
+                }
+                normalize(fragment, queryType, "Query fragment")
+            } ?: materializeSelectionForestOf()
 
         return FieldResolver.of(
             field = field,
-            objectFragment = normalize(objectFragment, "Object fragment"),
+            objectFragment = normalize(objectFragment, objectType, "Object fragment"),
+            queryFragment = normalizedQueryFragment,
+            queryType = queryType,
             variables = variables,
             function = function,
             projectionDemand = projectionDemand,
@@ -117,18 +145,37 @@ class FieldResolverDefinition private constructor(
     companion object {
         fun of(
             objectFragment: Fragment,
+            queryFragment: Fragment?,
             function: FieldResolverFunction,
         ): FieldResolverDefinition =
             FieldResolverDefinition(
                 objectFragment = objectFragment,
+                queryFragment = queryFragment,
                 function = function,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
+            )
+
+        fun of(
+            objectFragment: Fragment,
+            function: (EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?,
+        ): FieldResolverDefinition =
+            of(
+                objectFragment = objectFragment,
+                queryFragment = null,
+                function = { input, _, arguments -> function(input, arguments) },
             )
     }
 }
 
 fun fieldResolverOf(
     objectFragment: Fragment,
+    queryFragment: Fragment,
     function: FieldResolverFunction,
+): FieldResolverDefinition =
+    FieldResolverDefinition.of(objectFragment, queryFragment, function)
+
+fun fieldResolverOf(
+    objectFragment: Fragment,
+    function: (EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?,
 ): FieldResolverDefinition = FieldResolverDefinition.of(objectFragment, function)

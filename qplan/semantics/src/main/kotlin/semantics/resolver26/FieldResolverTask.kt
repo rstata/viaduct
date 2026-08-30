@@ -13,8 +13,10 @@ import model.ObjectSelection
 import model.PathComponent
 import model.SelectionForest
 import model.Stamp
+import model.engineObjectDataOf
 import model.groundKey
 import model.outputType
+import model.requireQueryTypeDef
 import model.registry.FieldResolver
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
@@ -71,6 +73,7 @@ internal class FieldResolverTask(
             val fieldValue: EngineOutputData? =
                 resolver(
                     input = input,
+                    queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                     arguments = resolverArguments,
                     selections = invocationDemand,
                 )

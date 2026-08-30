@@ -247,6 +247,8 @@ private data class FieldResolverDocument(
     val value: ValuePlanDocument,
     val fragment: FragmentPlanDocument,
     val program: ResolverProgramKind,
+    val queryFragment: FragmentPlanDocument =
+        FragmentPlanDocument("Query", emptyList()),
 )
 
 private data class NodeResolverDocument(
@@ -477,6 +479,7 @@ private fun ArbitraryRegistry.toRegistryDocument(): RegistryDocument =
                         value = fieldValues.getValue(coordinate).toDocument(),
                         fragment = objectFragments.getValue(coordinate).toDocument(),
                         program = resolverPrograms.getValue(coordinate),
+                        queryFragment = queryFragments.getValue(coordinate).toDocument(),
                     )
                 },
         nodeResolvers =
@@ -509,6 +512,10 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
         fieldResolvers.associate { resolver ->
             resolver.coordinate.toCoordinate() to resolver.fragment.toFragmentPlan()
         }
+    val queryFragments: Map<FieldCoordinate, FragmentPlan> =
+        fieldResolvers.associate { resolver ->
+            resolver.coordinate.toCoordinate() to resolver.queryFragment.toFragmentPlan()
+        }
     val resolverPrograms: Map<FieldCoordinate, ResolverProgramKind> =
         fieldResolvers.associate { resolver ->
             resolver.coordinate.toCoordinate() to resolver.program
@@ -538,6 +545,8 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
         outputSelectionSets = outputSelectionSets,
         objectFragmentSources =
             objectFragments.mapValues { (_, fragment) -> fragment.source() },
+        queryFragmentSources =
+            queryFragments.mapValues { (_, fragment) -> fragment.source() },
         variableProviderSources =
             variableProviders
                 .filterIsInstance<FromObjectFieldVariableProviderPlan>()
@@ -545,6 +554,7 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
         fieldValues = fieldValues,
         nodeValues = nodeValues,
         objectFragments = objectFragments,
+        queryFragments = queryFragments,
         variableProviders = variableProviders,
         resolverPrograms = resolverPrograms,
         features = features,

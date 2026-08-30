@@ -11,6 +11,7 @@
       "recursiveInputTypesEnabled" : true,
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
+      "resolverQueryFragmentsEnabled" : false,
       "resolverFromArgumentVariablesEnabled" : true,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,

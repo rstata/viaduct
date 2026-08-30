@@ -74,12 +74,18 @@ internal fun resolverRegistryOf(
     val registryResolvers =
         lowering.fieldResolvers.mapValues { (field, resolver) ->
             val variablesByName = variablesByField[field].orEmpty()
-            resolver.mapObjectFragment { fragment ->
-                fragment.mapVariables { variable ->
-                    variablesByName[variable.variableName]
-                        ?: variable
+            resolver
+                .mapObjectFragment { fragment ->
+                    fragment.mapVariables { variable ->
+                        variablesByName[variable.variableName]
+                            ?: variable
+                    }
+                }.mapQueryFragment { fragment ->
+                    fragment.mapVariables { variable ->
+                        variablesByName[variable.variableName]
+                            ?: variable
+                    }
                 }
-            }
         }
     val registryVariableProviders =
         variableProviders.mapValues { (variable, declaration) ->
@@ -438,6 +444,11 @@ private class TestResolverRegistry(
                 "Object fragment type ${fragmentType.name} does not match " +
                     "$typeName/${field.name}"
             }
+            resolver.queryFragment?.let { queryFragment ->
+                require(queryFragment.nominalType == schema.requireQueryTypeDef()) {
+                    "Query fragment type ${queryFragment.nominalType.name} does not match Query"
+                }
+            }
         }
         val missingQueryFields =
             schema.requireQueryTypeDef().fields
@@ -485,7 +496,8 @@ private class TestResolverRegistry(
                 objectFieldResolvers.forEach { (field, resolver) ->
                     put(
                         DependencyVertex.Field(field),
-                        implicatedVertices(resolver.objectFragment, field),
+                        implicatedVertices(resolver.objectFragment, field) +
+                            implicatedVertices(resolver.queryFragment, field),
                     )
                 }
                 variableDefinitions.forEach { (variable, definition) ->
@@ -516,6 +528,7 @@ private class TestResolverRegistry(
                     val definition = fieldResolverDefinitions.getValue(site.field)
                     assembledResolvers[site.field] =
                         definition.assemble(
+                            queryType = schema.requireQueryTypeDef(),
                             variables =
                                 variableDefinitions.filterKeys { variable ->
                                     variable.field == site.field
@@ -671,9 +684,10 @@ private class TestResolverRegistry(
     }
 
     private fun implicatedVertices(
-        fragment: Fragment,
+        fragment: Fragment?,
         ownerField: ViaductSchema.ObjectField,
     ): Set<DependencyVertex> {
+        if (fragment == null) return emptySet()
         val result = mutableSetOf<DependencyVertex>()
         fragment.subselections.forEach { selection ->
             result.addImplicatedBy(selection, ownerField)

@@ -16,7 +16,9 @@ import model.Arguments
 import model.PathComponent
 import model.Promise
 import model.SelectionForest
+import model.engineObjectDataOf
 import model.groundKey
+import model.requireQueryTypeDef
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
@@ -130,6 +132,7 @@ private suspend fun resolveSlot(
                 val fieldValue =
                     resolver(
                         input = input,
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                         arguments = arguments,
                         selections = invocationDemand,
                     )

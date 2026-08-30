@@ -146,6 +146,73 @@ class ResolverRegistryTest {
     }
 
     @Test
+    fun `field resolver receives response-preserving query fragment value`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      source: Int!
+                      consumer: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val query = schema.requireQueryTypeDef()
+                    val source = schema.requireObjectField("Query", "source")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment =
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Query {
+                                          aliased: source
+                                        }
+                                        """.trimIndent(),
+                                    ),
+                            ) { _, queryValue, _ ->
+                                assertEquals(query, queryValue.schemaType)
+                                queryValue.get("aliased")
+                            },
+                    )
+                },
+            )
+        val schema = world.schema
+        val query = schema.requireQueryTypeDef()
+        val source = schema.requireObjectField("Query", "source")
+        val consumer = schema.requireObjectField("Query", "consumer")
+        val resolver = world.resolverRegistry.resolver(consumer)
+        val queryValue =
+            engineObjectDataOf(
+                schemaType = query,
+                fields =
+                    listOf(
+                        EngineObjectDataEntry.of(
+                            selection = "aliased",
+                            field = source,
+                            value = 7,
+                        ),
+                    ),
+            )
+
+        val result =
+            context(world.assumptions) {
+                resolver(
+                    input = engineObjectDataOf(query),
+                    queryValue = queryValue,
+                    arguments = Arguments.Resolved.of(consumer, emptyMap()),
+                )
+            }
+
+        assertEquals(7, result)
+        assertEquals("aliased", resolver.instantiateQueryFragmentAt(emptyList()).materializeSelections.single().responseKey)
+    }
+
+    @Test
     fun `root query input is an empty query object`() {
         val fixture = Fixture()
         val root = fixture.assumptions.resolverRegistry.createRootQueryInput()

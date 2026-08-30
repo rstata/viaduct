@@ -8,9 +8,11 @@ import model.Assumptions
 import model.ObjectEngineResult
 import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
 import model.registry.ResolverRegistry
+import model.requireQueryTypeDef
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -74,6 +76,7 @@ class WorldInjectionTest {
                     registry
                         .resolver(bridgeField)(
                             input = world.objectOf("Query"),
+                            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
                         )
                 },
@@ -95,6 +98,7 @@ class WorldInjectionTest {
                     registry
                         .resolver(payloadField)(
                             input = bridge,
+                            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments = Arguments.Resolved.of(payloadField, emptyMap()),
                             selections = selections.single().subselections.single().subselections,
                         )

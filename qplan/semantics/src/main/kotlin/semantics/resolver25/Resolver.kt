@@ -395,7 +395,7 @@ private class ObjectResultOrchestrator(
                         .launchNestedFringe(
                             result = target.getCell(groundedKey).getValue().get(),
                             path = coordinate,
-                            demand = keyState.demandSnapshot().subselections,
+                            demand = keyState.constructionDemandSnapshot().subselections,
                             potentialDemand = keyState.potentialDemand,
                         )
                 runtime.scope.launch {
@@ -404,6 +404,13 @@ private class ObjectResultOrchestrator(
                     keyState.fringeInstalled.complete(Unit)
                 }
             }
+
+            source.isPresent(groundedKey.field.name) ->
+                error(
+                    "Resolver25 did not materialize passive key " +
+                        "${groundedKey.field.containingDef.name}/" +
+                        groundedKey.field.name,
+                )
 
             groundedKey.field in world.resolverRegistry -> {
                 val preparedResolver = prepareResolverInstance(groundedKey)
@@ -416,17 +423,6 @@ private class ObjectResultOrchestrator(
                         cell = target.getCell(groundedKey),
                         inputMaterializeSelections =
                             preparedResolver.inputMaterializeSelections,
-                    )
-                }
-            }
-
-            source.isPresent(groundedKey.field.name) -> {
-                runtime.instrumentation.keyActivationReady(coordinate)
-                keyState.fringeInstalled.complete(Unit)
-                runtime.scope.launch {
-                    resolveKey(
-                        keyState = keyState,
-                        cell = target.getCell(groundedKey),
                     )
                 }
             }
@@ -651,7 +647,7 @@ private class ObjectResultOrchestrator(
                 val mergedDemand: ObjectSelectionForest = demand.merge(schemaType)
                 if (
                     mergedDemand.byKey().values.any { selection ->
-                        selection.key.field in world.resolverRegistry
+                        !isPresent(selection.key.field.name)
                     }
                 ) {
                     listOf(
@@ -723,9 +719,10 @@ private class ObjectResultOrchestrator(
     private suspend fun resolveKey(
         keyState: KeyState,
         cell: EngineResultCell,
-        inputMaterializeSelections: MaterializeSelectionForest? = null,
+        inputMaterializeSelections: MaterializeSelectionForest,
     ) {
-        val selection = keyState.sealDemandForLaunch()
+        val sealedDemand = keyState.sealDemandForLaunch()
+        val selection = sealedDemand.invocation
         val groundedKey = keyState.groundedKey
         val coordinate = path + groundedKey
         runtime.instrumentation.demandSealed(coordinate, selection)
@@ -745,34 +742,33 @@ private class ObjectResultOrchestrator(
                 val resolutionSelections: SelectionForest =
                     selection.subselections.fetchSuccessorDemandDeferringTemplates()
                 val arguments = groundedKey.arguments as Arguments.Resolved
+                require(groundedKey.field in world.resolverRegistry) {
+                    "Resolver25 cannot resolve absent passive key $groundedKey"
+                }
+                require(!source.isPresent(groundedKey.field.name)) {
+                    "Resolver25 cannot use standard resolution for passive key $groundedKey"
+                }
+                val resolver = world.resolverRegistry.resolver(groundedKey.field)
+                val input: EngineObjectData.Sync =
+                    target.materialize(
+                        selections = inputMaterializeSelections,
+                        reader = coordinate,
+                    )
+                runtime.instrumentation.resolverStarted(coordinate)
                 val fieldValue: EngineOutputData? =
-                    if (groundedKey.field in world.resolverRegistry) {
-                        val resolver = world.resolverRegistry.resolver(groundedKey.field)
-                        val input: EngineObjectData.Sync =
-                            target.materialize(
-                                selections =
-                                    checkNotNull(inputMaterializeSelections) {
-                                        "Resolver25 did not prepare materialize selections for " +
-                                            coordinate
-                                    },
-                                reader = coordinate,
-                            )
-                        runtime.instrumentation.resolverStarted(coordinate)
-                        resolver(
-                            input = input,
-                            arguments = arguments,
-                            selections = resolutionSelections,
-                        ).also {
-                            runtime.instrumentation.resolverFinished(coordinate)
-                        }
-                    } else {
-                        source.outputValue(groundedKey.field.name)
+                    resolver(
+                        input = input,
+                        arguments = arguments,
+                        selections = resolutionSelections,
+                    ).also {
+                        runtime.instrumentation.resolverFinished(coordinate)
                     }
                 val passiveValuesResult: ResolvePassiveValuesResult =
                     fieldValue.resolvePassiveValues(
                         expectedType = groundedKey.field.outputType,
                         path = path + groundedKey,
-                        resolverDemand = resolutionSelections,
+                        constructionDemand = sealedDemand.construction.subselections,
+                        invocationDemand = resolutionSelections,
                         potentialDemand =
                             keyState.potentialDemand + selection.subselections,
                     )
@@ -874,6 +870,7 @@ private class ObjectResultOrchestrator(
                 KeyState(
                     groundedKey = groundedKey,
                     initialDemand = initialDemand,
+                    initialConstructionDemand = groundedSelection,
                     potentialDemand = keyPotentialSubselections,
                 )
             groundedKeys[groundedKey] = keyState
@@ -911,6 +908,7 @@ private class ObjectResultOrchestrator(
     private class KeyState(
         val groundedKey: ObjectEngineResult.GroundKey,
         initialDemand: ObjectSelection,
+        initialConstructionDemand: ObjectSelection,
         val potentialDemand: SelectionForest,
     ) {
         // Opens as soon as this grounded key can be looked up in the containing OER.
@@ -922,7 +920,9 @@ private class ObjectResultOrchestrator(
         // Opens before public value publication so late demand can deepen the returned output.
         val outputAvailable: CompletableDeferred<AvailableKeyOutput> = CompletableDeferred()
         private var openDemand: ObjectSelection = initialDemand
+        private var openConstructionDemand: ObjectSelection = initialConstructionDemand
         private var sealedDemand: ObjectSelection? = null
+        private var sealedConstructionDemand: ObjectSelection? = null
         private var launched: Boolean = false
 
         context(world: Assumptions)
@@ -937,23 +937,35 @@ private class ObjectResultOrchestrator(
                     .merge(concreteType)
                     .byGroundKey()
                     .getValue(groundedKey)
+            openConstructionDemand =
+                (selectionForestOf(openConstructionDemand) +
+                    selectionForestOf(groundedSelection))
+                    .merge(concreteType)
+                    .byGroundKey()
+                    .getValue(groundedKey)
             return true
         }
 
         @Synchronized
-        fun demandSnapshot(): ObjectSelection = sealedDemand ?: openDemand
+        fun constructionDemandSnapshot(): ObjectSelection =
+            sealedConstructionDemand ?: openConstructionDemand
 
         @Synchronized
-        fun sealDemandForLaunch(): ObjectSelection {
+        fun sealDemandForLaunch(): SealedKeyDemand {
             check(!launched) {
                 "Resolver25 launched grounded key more than once: $groundedKey"
             }
             launched = true
-            return openDemand.also { demand ->
-                sealedDemand = demand
-            }
+            sealedDemand = openDemand
+            sealedConstructionDemand = openConstructionDemand
+            return SealedKeyDemand(openDemand, openConstructionDemand)
         }
     }
+
+    private class SealedKeyDemand(
+        val invocation: ObjectSelection,
+        val construction: ObjectSelection,
+    )
 
     private class KeyActivation(
         val keyState: KeyState,
@@ -980,7 +992,8 @@ context(world: Assumptions)
 private suspend fun EngineOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
-    resolverDemand: SelectionForest,
+    constructionDemand: SelectionForest,
+    invocationDemand: SelectionForest,
     potentialDemand: SelectionForest,
 ): ResolvePassiveValuesResult {
     require(conformsToOutputSchemaType(expectedType)) {
@@ -992,7 +1005,8 @@ private suspend fun EngineOutputData?.resolvePassiveValues(
         is EngineObjectData.Sync ->
             resolvePassiveObjectValues(
                 path = path,
-                resolverDemand = resolverDemand,
+                constructionDemand = constructionDemand,
+                invocationDemand = invocationDemand,
                 potentialDemand = potentialDemand,
             )
         is List<*> -> {
@@ -1002,7 +1016,8 @@ private suspend fun EngineOutputData?.resolvePassiveValues(
                     value.resolvePassiveValues(
                         expectedType = elementType,
                         path = path + ListEngineResult.Index.of(index),
-                        resolverDemand = resolverDemand,
+                        constructionDemand = constructionDemand,
+                        invocationDemand = invocationDemand,
                         potentialDemand = potentialDemand,
                     )
                 }
@@ -1033,61 +1048,80 @@ private suspend fun EngineOutputData?.resolvePassiveValues(
 context(world: Assumptions)
 private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     path: List<PathComponent>,
-    resolverDemand: SelectionForest,
+    constructionDemand: SelectionForest,
+    invocationDemand: SelectionForest,
     potentialDemand: SelectionForest,
 ): ResolvePassiveValuesResult {
     val engineResult: ObjectEngineResult =
         schemaType.newObjectResult()
     val mergedDemand: ObjectSelectionForest =
-        resolverDemand.mergeWithVariables(engineResult).first
-    val resolverDemandByGroundedKey: Map<ObjectEngineResult.GroundKey, ObjectSelection> =
+        invocationDemand.mergeWithVariables(engineResult).first
+    val invocationDemandByGroundedKey: Map<ObjectEngineResult.GroundKey, ObjectSelection> =
         mergedDemand.byGroundKey()
+    val constructionDemandByGroundedKey: Map<ObjectEngineResult.GroundKey, ObjectSelection> =
+        constructionDemand.mergeWithVariables(engineResult).first.byGroundKey()
     val closedPotentialDemand: ObjectSelectionForest =
         schemaType.closeStructuralDemand(potentialDemand)
-    val potentialSubselectionsByField: Map<ViaductSchema.ObjectField, SelectionForest> =
-        closedPotentialDemand
-            .byKey()
-            .values
-            .groupBy { selection -> selection.key.field }
-            .mapValues { (_, selections) ->
-                selections.flatMapToSelectionForest { selection ->
-                    selection.subselections
+    val potentialDemandByKey = closedPotentialDemand.byKey()
+    val returnedFields: List<ViaductSchema.ObjectField> =
+        getSelections().map { fieldName ->
+            schemaType.requireField(fieldName).also { field ->
+                require(field.args.isEmpty()) {
+                    "Resolver output must not supply argument-bearing field " +
+                        "${schemaType.name}/$fieldName"
                 }
             }
+        }
     val demandedFieldNames: Set<String> =
-        resolverDemandByGroundedKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
+        invocationDemandByGroundedKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
     val unselectedFieldNames: Set<String> = getSelections().toSet() - demandedFieldNames
     require(unselectedFieldNames.isEmpty()) {
         "Selective resolver output ${schemaType.name} contains unselected fields: " +
             unselectedFieldNames.joinToString()
     }
 
-    val selectedGroundedKeys: Set<ObjectEngineResult.GroundKey> =
-        resolverDemandByGroundedKey.keys
-            .filterTo(linkedSetOf()) { groundedKey ->
-                groundedKey.field !in world.resolverRegistry
-            }
     val resolvedPassiveFields: List<ResolvedPassiveField> =
-        selectedGroundedKeys.map { groundedKey ->
-            val arguments = groundedKey.arguments
-            require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
-                "Passive object field ${schemaType.name}/${groundedKey.field.name} " +
-                    "must be argumentless"
+        buildList {
+            returnedFields.forEach { field ->
+                val demandedKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
+                (
+                    invocationDemandByGroundedKey.keys +
+                        constructionDemandByGroundedKey.keys +
+                        potentialDemandByKey.keys
+                )
+                    .forEach { key ->
+                        if (key.field == field) {
+                            check(key is ObjectEngineResult.GroundKey) {
+                                "Passive returned field has an open key: $key"
+                            }
+                            demandedKeys += key
+                        }
+                    }
+                if (demandedKeys.isEmpty()) {
+                    demandedKeys += ObjectEngineResult.GroundKey.of(field, emptyMap())
+                }
+                demandedKeys.forEach { groundedKey ->
+                    val passiveValuesResult: ResolvePassiveValuesResult =
+                        outputValue(groundedKey.field.name)
+                            .resolvePassiveValues(
+                                expectedType = groundedKey.field.outputType,
+                                path = path + groundedKey,
+                                constructionDemand =
+                                    constructionDemandByGroundedKey[groundedKey]
+                                        ?.subselections
+                                        ?: selectionForestOf(),
+                                invocationDemand =
+                                    invocationDemandByGroundedKey[groundedKey]
+                                        ?.subselections
+                                        ?: selectionForestOf(),
+                                potentialDemand =
+                                    potentialDemandByKey[groundedKey]
+                                        ?.subselections
+                                        ?: selectionForestOf(),
+                            )
+                    add(ResolvedPassiveField(groundedKey, passiveValuesResult))
+                }
             }
-            val passiveValuesResult: ResolvePassiveValuesResult =
-                outputValue(groundedKey.field.name)
-                    .resolvePassiveValues(
-                        expectedType = groundedKey.field.outputType,
-                        path = path + groundedKey,
-                        resolverDemand =
-                            resolverDemandByGroundedKey
-                                .getValue(groundedKey)
-                                .subselections,
-                        potentialDemand =
-                            potentialSubselectionsByField[groundedKey.field]
-                                ?: selectionForestOf(),
-                    )
-            ResolvedPassiveField(groundedKey, passiveValuesResult)
         }
     resolvedPassiveFields.forEach { resolvedPassiveField ->
         engineResult.reserveCell(resolvedPassiveField.groundedKey).also { cell ->
@@ -1097,14 +1131,14 @@ private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     }
     val localResolution: PassiveObjectOccurrence? =
         if (
-            resolverDemandByGroundedKey.keys.any { groundedKey ->
-                groundedKey.field in world.resolverRegistry
+            constructionDemandByGroundedKey.keys.any { groundedKey ->
+                !isPresent(groundedKey.field.name)
             }
         ) {
             PassiveObjectOccurrence(
                 path = path,
                 source = this,
-                selections = resolverDemand,
+                selections = constructionDemand,
                 potentialSelections = closedPotentialDemand,
                 target = engineResult,
             )

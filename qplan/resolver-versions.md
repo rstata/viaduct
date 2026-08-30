@@ -32,7 +32,7 @@ Resolver21-23 express the same stages through request-owned structured coroutine
 
 ### Resolver25
 
-Resolver25 merges actual demand by grounded key. One orchestrator owns each OER occurrence, closes a conservative potential-demand envelope by activated field, grounds actual selections independently, and merges equal keys until a key seals for launch. Published output can accept descendant demand through its output and fringe state without reapplying the containing key.
+Resolver25 merges actual demand by grounded key. One orchestrator owns each OER occurrence, closes a conservative potential-demand envelope by activated field, grounds actual selections independently, and merges equal keys until a key seals for launch. Source presence lets ancestor outputs own argumentless fields that otherwise have standard resolvers; absent fields use standard resolution. Published output can accept descendant demand through its output and fringe state without reapplying the containing key.
 
 This current activation implementation is authoritative; the retired static preparation graph is not a target to restore. Resolver25 remains an alternate experiment, not the primary blueprint. It is useful when comparing late equality, potential versus actual demand, provider traversal, or merged-ground-key identity with Resolver26.
 

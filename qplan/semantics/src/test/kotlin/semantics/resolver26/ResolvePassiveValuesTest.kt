@@ -2,6 +2,7 @@ package semantics.resolver26
 
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import model.Arguments
 import model.Assumptions
 import model.EngineObjectDataEntry
 import model.EngineOutputData
@@ -9,7 +10,9 @@ import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.Selection
 import model.SelectionForest
+import model.Stamp
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fragmentFrom
@@ -79,7 +82,7 @@ class ResolvePassiveValuesTest {
                         objectOf("Item") { "value" setTo "two" },
                     )
             }
-        val resolverDemand =
+        val invocationDemand =
             world.fragmentFrom(
                 "fragment ignored on Container { items { value } }",
             ).subselections
@@ -91,7 +94,7 @@ class ResolvePassiveValuesTest {
                     value = output,
                     expectedType = containerField.outputType,
                     path = listOf(containerField.key()),
-                    resolverDemand = resolverDemand,
+                    invocationDemand = invocationDemand,
                     constructionDemand = selectionForestOf(),
                 ),
             )
@@ -159,7 +162,7 @@ class ResolvePassiveValuesTest {
             schema.objectOf("Item") {
                 "raw" setTo "raw"
             }
-        val resolverDemand =
+        val invocationDemand =
             world.fragmentFrom(
                 "fragment ignored on Item { raw }",
             ).subselections
@@ -175,7 +178,7 @@ class ResolvePassiveValuesTest {
                     value = output,
                     expectedType = itemField.outputType,
                     path = listOf(itemField.key()),
-                    resolverDemand = resolverDemand,
+                    invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
                 ),
             )
@@ -184,6 +187,72 @@ class ResolvePassiveValuesTest {
         assertEquals("computed", result.getCell(computedKey).getValue().get())
         assertFailsWith<NoSuchElementException> {
             result.reserveCell(omittedKey)
+        }
+    }
+
+    @Test
+    fun `source-provided active field retains invocation and construction occurrence keys`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      item: Item!
+                    }
+
+                    type Item {
+                      computed: String!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Item", "computed") to
+                            fieldResolverOf(
+                                schema.emptyFragmentOf("Item"),
+                            ) { _, _ -> error("standard resolver must not run") },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val itemField = schema.requireObjectField("Query", "item")
+        val itemKey = itemField.key()
+        val computedField = schema.requireObjectField("Item", "computed")
+        val computedKey =
+            ObjectEngineResult.GroundKey.of(
+                stamp = Stamp.Occurrence.of(listOf(itemKey)),
+                field = computedField,
+                arguments = Arguments.Resolved.of(computedField, emptyMap()),
+            )
+        val demand =
+            selectionForestOf(
+                Selection.of(
+                    key = computedKey,
+                    possibleTypes = setOf(schema.requireType("Item") as ViaductSchema.Object),
+                    subselections = selectionForestOf(),
+                ),
+            )
+        val output =
+            schema.objectOf("Item") {
+                "computed" setTo "ancestor"
+            }
+
+        val result =
+            assertIs<ObjectEngineResult>(
+                resolvePassiveValues(
+                    world = world,
+                    value = output,
+                    expectedType = itemField.outputType,
+                    path = listOf(itemKey),
+                    invocationDemand = demand,
+                    constructionDemand = demand,
+                ),
+            )
+
+        assertEquals(2, result.keys.size)
+        assertEquals(computedKey, result.keys.single { key -> key == computedKey })
+        result.keys.forEach { key ->
+            assertEquals("ancestor", result.getCell(key).getValue().get())
         }
     }
 
@@ -210,7 +279,7 @@ class ResolvePassiveValuesTest {
                 "selected" setTo "selected"
                 "extra" setTo "extra"
             }
-        val resolverDemand =
+        val invocationDemand =
             world.fragmentFrom(
                 "fragment ignored on Item { selected }",
             ).subselections
@@ -221,7 +290,7 @@ class ResolvePassiveValuesTest {
                 value = output,
                 expectedType = itemField.outputType,
                 path = listOf(itemField.key()),
-                resolverDemand = resolverDemand,
+                invocationDemand = invocationDemand,
                 constructionDemand = selectionForestOf(),
             )
         }
@@ -258,7 +327,7 @@ class ResolvePassiveValuesTest {
                         ),
                     ),
             )
-        val resolverDemand =
+        val invocationDemand =
             world.fragmentFrom(
                 "fragment ignored on Item { value(index: 1) }",
             ).subselections
@@ -269,7 +338,7 @@ class ResolvePassiveValuesTest {
                 value = output,
                 expectedType = itemField.outputType,
                 path = listOf(itemField.key()),
-                resolverDemand = resolverDemand,
+                invocationDemand = invocationDemand,
                 constructionDemand = selectionForestOf(),
             )
         }
@@ -283,7 +352,7 @@ class ResolvePassiveValuesTest {
         value: EngineOutputData?,
         expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         path: List<PathComponent>,
-        resolverDemand: SelectionForest,
+        invocationDemand: SelectionForest,
         constructionDemand: SelectionForest,
     ): EngineResult? =
         runBlocking(resolver26CoroutineContext()) {
@@ -298,7 +367,7 @@ class ResolvePassiveValuesTest {
                     value.resolvePassiveValues(
                         expectedType = expectedType,
                         path = path,
-                        resolverDemand = resolverDemand,
+                        invocationDemand = invocationDemand,
                         constructionDemand = constructionDemand,
                     )
                 }

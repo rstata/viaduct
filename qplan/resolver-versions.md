@@ -38,7 +38,7 @@ This current activation implementation is authoritative; the retired static prep
 
 ### Resolver26
 
-Resolver26 gives each variable-bearing resolver-fragment selection an occurrence lineage. It synchronously closes symbolic demand before local installation, prepares every binding, reserves active cells as their keys ground, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
+Resolver26 gives each variable-bearing resolver-fragment selection an occurrence lineage. It synchronously closes symbolic demand before local installation, uses source presence to let ancestor outputs own argumentless fields that otherwise have standard resolvers, prepares every binding required by the remaining work, reserves active cells as their keys ground, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
 
 Resolver26 is the primary algorithm and eventual implementation blueprint. Its aligned qplan shape remains close to what a future Viaduct query executor can use, but that future executor is not part of an ordinary qplan refactor.
 

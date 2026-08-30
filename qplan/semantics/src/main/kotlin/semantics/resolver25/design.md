@@ -31,13 +31,13 @@ Potential demand is a conservative field-level envelope. `closeStructuralDemand`
 
 Actual demand arrives as selection occurrences. Each occurrence becomes activation work, grounds through available variables, and is interned in its field's `FieldState` by `ObjectEngineResult.GroundKey`.
 
-Potential demand bounds the output and descendant work that may be needed. Actual demand determines which exact keys and subselections really activate. Keeping them separate avoids activating every resolver on a type while still permitting descendant demand to be prepared before all variable values are known.
+Potential demand bounds the output and descendant work that may be needed. Each key state separately retains construction demand and conservative invocation demand. Construction demand determines which descendant work actually remains after output ownership is known, while invocation demand includes successor input demand that a one-shot selective producer may choose to supply. Keeping these forms separate avoids activating a standard resolver's input demand after an ancestor has supplied that resolver's field.
 
 ## Grounded-Key Activation
 
 Immediately groundable activations start `UNDISPATCHED` so their demand can merge before an existing key seals. Activations that require bindings suspend until those bindings complete.
 
-The first activation for a ground key creates and classifies its `KeyState` as preexisting, argument-error, passive, or resolver-backed. For a non-preexisting key it then reserves the OER cell, claims its value promise, and registers the writer. A preexisting key reuses the installed cell and contributes nested fringe work without claiming another writer. Later activations merge into the same `KeyState`.
+Resolver output eagerly materializes every returned argumentless field, including a field with a standard resolver. The first activation for a ground key therefore reuses a preexisting cell when its source supplies the field; otherwise it classifies the key as argument-error or resolver-backed, reserves the OER cell, claims its value promise, and registers the writer. A source output that contains an argument-bearing field is invalid because fields with arguments are always active. Later activations merge into the same `KeyState`.
 
 If later demand arrives before launch, it contributes to the key's open demand. If it arrives after launch, Resolver25 does not reapply the containing key: passive values traverse their existing result, and resolver-backed values wait for `outputAvailable` before installing additional descendant fringe work.
 
@@ -54,9 +54,9 @@ Resolver inputs must install before the consumer launches. Provider reads use ex
 
 ## Launch And Publication
 
-`KeyState.sealDemandForLaunch` takes the final invocation snapshot for that key and rejects subsequent attempts to change the producer's launch demand. Resolver invocation materializes the fixed object fragment from the target OER and computes selective successor demand while deferring still-open template boundaries.
+`KeyState.sealDemandForLaunch` takes final construction and invocation snapshots for that key and rejects subsequent attempts to change the producer's launch demand. Resolver invocation materializes the fixed object fragment from the target OER and computes selective successor demand while deferring still-open template boundaries.
 
-Resolver output is converted to passive engine-result shape. `outputAvailable` publishes the raw output and its result tree so later descendant demand can traverse it. Child orchestrators become ready before the containing value promise is completed, preserving install-before-parent-publication.
+Resolver output is converted to passive engine-result shape. Returned fields are selected against invocation demand but unresolved child work is derived from construction demand and source presence. `outputAvailable` publishes the raw output and its result tree so later descendant demand can traverse it. Child orchestrators become ready before the containing value promise is completed, preserving install-before-parent-publication.
 
 Argument errors complete both the value and access-result slots with `ErrorEngineResult`. Successful values complete the exact cell once and set its access result to the Boolean result `true`.
 

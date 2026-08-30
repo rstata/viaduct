@@ -45,10 +45,12 @@ import semantics.arbitrary.ResolverVariablesOnNonQueryFieldsOnly
 import semantics.arbitrary.ResolverVariablesOnQueryFieldsOnly
 import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.UnionsEnabled
 import semantics.arbitrary.allowedResolverClosure
 import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.arbitrary.registeredResolverOccurrences
 import semantics.contract.registeredResolverApplicationIdentityCounts
 import semantics.contract.validateObjectPathBindings
@@ -135,7 +137,8 @@ class ResolverStressTest {
                     (ResolverFromObjectFieldProviderPathLength to 1..1) +
                     (ResolverFromObjectFieldVariableUseDepth to 2..3) +
                     (ResolverFromObjectFieldVariableOwnerLimit to 1) +
-                    (ResolverVariablesOnQueryFieldsOnly to true),
+                    (ResolverVariablesOnQueryFieldsOnly to true) +
+                    (SometimesPassiveFieldWeight to 0.25),
             targetFields = ArbitraryRegistry::nestedFromObjectFieldVariableUseOwnerFields,
         )
 
@@ -184,12 +187,14 @@ class ResolverStressTest {
             var generatedArgumentVariables = 0
             var generatedObjectPathVariables = 0
             var generatedMixedVariableOwnerCases = 0
+            var generatedSometimesPassiveFields = 0
             var maximumProviderPathLength = 0
             var maximumVariableUseDepth = 0
             var shapeQualifiedCases = 0
             var queryActivatedCases = 0
             var argumentVariableActivatedCases = 0
             var mixedVariableOwnerActivatedCases = 0
+            var activatedSometimesPassiveOccurrences = 0
             var runtimeActivatedCases = 0
             var completedCases = 0
 
@@ -205,6 +210,8 @@ class ResolverStressTest {
                             testCase.registry.features.fromArgumentVariableCount
                         generatedObjectPathVariables +=
                             testCase.registry.features.fromObjectFieldVariableCount
+                        generatedSometimesPassiveFields +=
+                            testCase.registry.features.sometimesPassiveFieldCount
                         val mixedVariableOwners =
                             testCase.registry.fromArgumentVariableOwnerFields.intersect(
                                 testCase.registry.fromObjectFieldVariableOwnerFields,
@@ -279,12 +286,28 @@ class ResolverStressTest {
                             mixedVariableOwnerActivatedCases += 1
                         }
 
-                        assertEquals(
-                            context(world) {
-                                result.registeredResolverApplicationIdentityCounts()
-                            },
-                            witness.applicationIdentityCounts(),
-                        )
+                        if (profile in SOMETIMES_PASSIVE_PROFILES) {
+                            val resultOccurrenceCounts =
+                                result.registeredResolverOccurrenceCounts(
+                                    world.resolverRegistry,
+                                )
+                            witness.applicationCounts().forEach { (key, count) ->
+                                assertTrue(
+                                    count <= resultOccurrenceCounts.getOrDefault(key, 0),
+                                    "Observed $count applications of $key but result contains only " +
+                                        "${resultOccurrenceCounts.getOrDefault(key, 0)} occurrences",
+                                )
+                            }
+                            activatedSometimesPassiveOccurrences +=
+                                resultOccurrenceCounts.values.sum() - witness.applications.size
+                        } else {
+                            assertEquals(
+                                context(world) {
+                                    result.registeredResolverApplicationIdentityCounts()
+                                },
+                                witness.applicationIdentityCounts(),
+                            )
+                        }
                         assertTrue(context(world) { result.correctResolution(fragment) })
                         context(world) {
                             result.validateObjectPathBindings()
@@ -322,18 +345,31 @@ class ResolverStressTest {
                     completedCases > 0,
                     "Resolver25 $profile stress completed no qualifying case",
                 )
+                if (profile in SOMETIMES_PASSIVE_PROFILES) {
+                    run.assertAggregate(
+                        generatedSometimesPassiveFields > 0,
+                        "Resolver25 $profile stress generated no sometimes-passive fields",
+                    )
+                    run.assertAggregate(
+                        activatedSometimesPassiveOccurrences > 0,
+                        "Resolver25 $profile stress activated no sometimes-passive fields",
+                    )
+                }
             } finally {
                 println(
                     "Resolver25 $profile stress: seed=$seed, requestedCases=$casesPerProfile, " +
                         "generatedArgumentVariables=$generatedArgumentVariables, " +
                         "generatedObjectPathVariables=$generatedObjectPathVariables, " +
                         "generatedMixedVariableOwnerCases=$generatedMixedVariableOwnerCases, " +
+                        "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
                         "maximumProviderPathLength=$maximumProviderPathLength, " +
                         "maximumVariableUseDepth=$maximumVariableUseDepth, " +
                         "shapeQualifiedCases=$shapeQualifiedCases, " +
                         "queryActivatedCases=$queryActivatedCases, " +
                         "argumentVariableActivatedCases=$argumentVariableActivatedCases, " +
                         "mixedVariableOwnerActivatedCases=$mixedVariableOwnerActivatedCases, " +
+                        "activatedSometimesPassiveOccurrences=" +
+                        "$activatedSometimesPassiveOccurrences, " +
                         "runtimeActivatedCases=$runtimeActivatedCases, " +
                         "completedCases=$completedCases",
                 )
@@ -367,6 +403,7 @@ class ResolverStressTest {
 
     private companion object {
         const val PROFILE_COUNT = 5
+        val SOMETIMES_PASSIVE_PROFILES = setOf("nested-variable-use")
         const val REGISTRIES_PER_SCHEMA = 2
         const val QUERIES_PER_SCHEMA = 5
         const val CASES_PER_SCHEMA = REGISTRIES_PER_SCHEMA * QUERIES_PER_SCHEMA

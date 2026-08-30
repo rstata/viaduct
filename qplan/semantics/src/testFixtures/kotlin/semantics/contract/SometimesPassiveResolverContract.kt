@@ -168,6 +168,61 @@ interface SometimesPassiveObjectFragmentResolverContract : ResolverContract {
     }
 }
 
+/** Sometimes-passive contract for resolvers that support FromObjectField variables. */
+interface SometimesPassiveObjectPathResolverContract : ResolverContract {
+    @Test
+    fun `reads a provider below an ancestor-supplied active field`() {
+        val standardApplications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      item: Item!
+                        @resolver(result: {provider: {value: 11}})
+                    }
+
+                    type Item {
+                      result: Int!
+                        @resolver(
+                          of: "provider { value } consume(value: ${'$'}value)"
+                          pathVars: [{name: "value", path: ["provider", "value"]}]
+                          result: "sum(consume)"
+                        )
+                      provider: Provider!
+                        @resolver(of: "seed", result: {value: 99})
+                      seed: Int! @resolver(result: 1)
+                      consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
+                    }
+
+                    type Provider {
+                      value: Int!
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    if (
+                        field.containingDef.name == "Item" &&
+                        field.name in setOf("provider", "seed")
+                    ) {
+                        standardApplications += field.name
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val resolved = resolveAndValidate(world, "query { item { result } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                resolved.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+
+        assertEquals(11, item.getCell(world.schema.contractKey("Item", "result")).get())
+        assertEquals(emptyList(), standardApplications)
+    }
+}
+
 /** One-shot selective witness for conservative standard demand and dynamic output ownership. */
 interface SometimesPassiveSelectiveResolverContract : ResolverContract {
     @Test

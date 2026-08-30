@@ -20,6 +20,7 @@ import semantics.contract.ProductionDeadlockResolverContract
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
 import semantics.contract.SelectiveResolverOutputPolicyContract
 import semantics.contract.SometimesPassiveObjectFragmentResolverContract
+import semantics.contract.SometimesPassiveObjectPathResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
 import semantics.contract.VariableSelectionIdentityPolicy
@@ -33,6 +34,7 @@ class ResolverContractTest :
     ObjectFragmentFromObjectPathResolverContract,
     SometimesPassiveResolverContract,
     SometimesPassiveObjectFragmentResolverContract,
+    SometimesPassiveObjectPathResolverContract,
     SometimesPassiveSelectiveResolverContract,
     ProductionDeadlockResolverContract,
     VariableSelectionIdentityResolverContract,

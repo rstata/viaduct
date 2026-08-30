@@ -16,6 +16,7 @@ import model.engineObjectDataOf
 import model.groundKey
 import model.requireQueryTypeDef
 import model.registry.demandsFromSibling
+import model.registry.FieldResolver
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 
@@ -147,10 +148,11 @@ internal fun EngineObjectData.Sync.resolveKey(
                         reader = coordinate,
                     )
                 }
+            val queryValue = resolver.resolveQueryFragment(coordinate)
             val fieldValue =
                 resolver(
                     input = input,
-                    queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                    queryValue = queryValue,
                     arguments = arguments,
                     selections = invocationDemand,
                 )
@@ -165,5 +167,35 @@ internal fun EngineObjectData.Sync.resolveKey(
             cell.setAccessResult(true)
             passiveValuesResult
         }
+    }
+}
+
+context(world: Assumptions, resolverSupport: ResolverSupport)
+private fun FieldResolver.resolveQueryFragment(
+    coordinate: List<PathComponent>,
+): EngineObjectData.Sync {
+    val queryFragment = instantiateQueryFragmentAt(coordinate)
+    if (queryFragment.constructionSelections.isEmpty()) {
+        return engineObjectDataOf(world.schema.requireQueryTypeDef())
+    }
+
+    val source = world.resolverRegistry.createRootQueryInput()
+    val queryResult =
+        source.orchestrateKeys(
+            path = emptyList(),
+            selections = queryFragment.constructionSelections,
+            resolved =
+                ObjectEngineResult.of(
+                    type = source.schemaType,
+                    values = emptyMap(),
+                    mutable = true,
+                ),
+        )
+    world.queryValues[coordinate.toList()] = queryResult
+    return runBlocking {
+        queryResult.materialize(
+            selections = queryFragment.materializeSelections,
+            reader = coordinate,
+        )
     }
 }

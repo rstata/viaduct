@@ -932,10 +932,7 @@ private class RegistryGenerator(
         val candidates =
             directFields.filter { field ->
                 !field.isGeneratedHashField() &&
-                    (
-                        field.coordinate !in fieldSites ||
-                            ranks.getValue(field.coordinate) < consumerRank
-                    )
+                    field.hasOnlyLowerRankedResolverDependencies(consumerRank, ranks)
             }
         if (candidates.isEmpty()) {
             return listOf(
@@ -1558,10 +1555,7 @@ private class RegistryGenerator(
             .fieldsOn(ownerName)
             .filter { field ->
                 !field.isGeneratedHashField() &&
-                    (
-                        field.coordinate !in fieldSites ||
-                            ranks.getValue(field.coordinate) < consumerRank
-                    )
+                    field.hasOnlyLowerRankedResolverDependencies(consumerRank, ranks)
             }.flatMap { field ->
                 when {
                     target.matches(field.type) &&
@@ -1819,6 +1813,25 @@ private class RegistryGenerator(
             .objectNamed(coordinate.typeName)
             .fields
             .single { it.name == coordinate.fieldName }
+
+    private fun FieldDefinitionSpec.hasOnlyLowerRankedResolverDependencies(
+        consumerRank: Int,
+        ranks: Map<FieldCoordinate, Int>,
+    ): Boolean =
+        possibleSourceCoordinates().all { coordinate ->
+            coordinate !in fieldSites || ranks.getValue(coordinate) < consumerRank
+        }
+
+    private fun FieldDefinitionSpec.possibleSourceCoordinates(): Set<FieldCoordinate> =
+        if (schema.allObjects.any { objectType -> objectType.name == ownerName }) {
+            setOf(coordinate)
+        } else {
+            schema
+                .possibleObjects(ownerName)
+                .mapTo(linkedSetOf()) { possibleType ->
+                    FieldCoordinate(possibleType.name, name)
+                }
+        }
 
     private fun FieldDefinitionSpec.isGeneratedPassiveAbstractOutput(): Boolean =
         config[PassiveAbstractOutputTypeWeight] > 0.0 &&

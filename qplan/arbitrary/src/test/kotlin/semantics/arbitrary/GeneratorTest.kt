@@ -75,6 +75,22 @@ class GeneratorTest {
     }
 
     @Test
+    fun `resolver query fragments retain acyclic concrete dependencies`() {
+        val config =
+            Config.default +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (InterfacesEnabled to true) +
+                (ResolverFragmentsEnabled to false) +
+                (ResolverQueryFragmentsEnabled to true)
+        val random = RandomSource.seeded(23232L)
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            schema.registry(config).next(random).world(schema)
+        }
+    }
+
+    @Test
     fun `sometimes-passive generation supplies registered argumentless fields`() {
         val config =
             Config.default +

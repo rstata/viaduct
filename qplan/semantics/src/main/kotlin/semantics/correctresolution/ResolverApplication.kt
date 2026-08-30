@@ -7,6 +7,7 @@ import model.EngineOutputData
 import model.ObjectEngineResult
 import model.PathComponent
 import model.engineObjectDataOf
+import model.instantiateBindings
 import model.merge
 import model.requireQueryTypeDef
 import semantics.ResolverSupport
@@ -88,9 +89,9 @@ internal fun ObjectEngineResult.reapplyResolver(
                         ?: return@getOrPut null
                 if (
                     !queryResult.correctResolution(
-                        queryFragment.constructionSelections.merge(
-                            world.schema.requireQueryTypeDef(),
-                        ),
+                        queryFragment.constructionSelections
+                            .merge(world.schema.requireQueryTypeDef())
+                            .instantiateBindings(),
                     )
                 ) {
                     return@getOrPut null

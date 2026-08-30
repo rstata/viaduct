@@ -42,7 +42,7 @@ Current support is:
 | Source-level node resolution | yes | yes | yes | yes |
 | Nonempty object fragments | no | yes | yes | yes |
 | Nonempty fragments with `FromArgument` | no | yes | yes | yes |
-| Query fragments | no | yes | yes | no |
+| Query fragments | no | 02/07 | 03/08 | no |
 | Nonempty fragments with `FromObjectField` | no | no | no | yes |
 | Advanced `FromArgument` demand | no | yes | yes | yes |
 | Advanced `FromObjectField` demand | no | no | no | yes |
@@ -77,7 +77,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
 | `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
 | `object-fragment-from-argument` | `FromArgument` variables, including nested and nullable input paths | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
-| `query-fragment` | Independently orchestrated Query-rooted resolver inputs | Resolver02-03 | `10:3:5` |
+| `query-fragment` | Independently orchestrated Query-rooted resolver inputs | Resolver02-03, Resolver07-08 | `10:3:5` |
 | `object-fragment-from-object-field` | `FromObjectField` variables | Resolver25-26 | `10:3:5` |
 | `mixed-variables` | Both variable sources | Resolver25-26 | fixed aggregate corpus |
 | `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `20:3:5` |

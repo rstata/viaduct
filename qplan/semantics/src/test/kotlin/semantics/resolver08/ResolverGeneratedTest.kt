@@ -14,6 +14,7 @@ import semantics.contract.ListPassiveDeepeningGeneratedResolverContract
 import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
+import semantics.contract.QueryFragmentGeneratedResolverContract
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
@@ -21,6 +22,7 @@ class ResolverGeneratedTest :
     ListPassiveDeepeningGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,
+    QueryFragmentGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
     override val selectiveResolvers: Boolean
         get() = true

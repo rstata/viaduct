@@ -2,6 +2,7 @@ package model
 
 import model.registry.ResolverRegistry
 import viaduct.graphql.schema.ViaductSchema
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The schema, field resolvers, and monotonic variable bindings under which model values and
@@ -23,6 +24,9 @@ sealed interface Assumptions {
 
     /** Whether resolver invocation and passive output traversal are selective to supplied demand. */
     val selectiveResolvers: Boolean
+
+    /** Query-fragment result witnesses keyed by the exact resolver occurrence path. */
+    val queryValues: ConcurrentHashMap<List<PathComponent>, ObjectEngineResult>
 
     /** Whether [variable] has a completed binding, including a binding whose value is null. */
     fun isBound(variable: Arguments.Variable): Boolean
@@ -98,6 +102,9 @@ private class AssumptionsImpl(
     override val resolverRegistry: ResolverRegistry,
     override val selectiveResolvers: Boolean,
 ) : Assumptions {
+    override val queryValues =
+        ConcurrentHashMap<List<PathComponent>, ObjectEngineResult>()
+
     private val bindings =
         OnceStore<Arguments.Variable, Promise<VariableBinding>>()
 

@@ -74,6 +74,7 @@ data class RegistryFeatures(
     val hasNullableProvider: Boolean,
     val hasAbstractProviderPath: Boolean,
     val hasAbstractResolverFragment: Boolean,
+    val queryFragmentCount: Int = 0,
 )
 
 /**
@@ -86,10 +87,12 @@ class ArbitraryRegistry internal constructor(
     val nodeResolverTypes: Set<String>,
     val outputSelectionSets: Map<String, Set<String>>,
     val objectFragmentSources: Map<FieldCoordinate, String>,
+    val queryFragmentSources: Map<FieldCoordinate, String>,
     val variableProviderSources: Map<String, String>,
     internal val fieldValues: Map<FieldCoordinate, ValuePlan>,
     internal val nodeValues: Map<String, ObjectPlan>,
     internal val objectFragments: Map<FieldCoordinate, FragmentPlan>,
+    internal val queryFragments: Map<FieldCoordinate, FragmentPlan>,
     internal val variableProviders: List<VariableProviderPlan>,
     internal val resolverPrograms: Map<FieldCoordinate, ResolverProgramKind>,
     val features: RegistryFeatures,
@@ -236,7 +239,11 @@ class ArbitraryRegistry internal constructor(
         when {
             canonicalField.fieldName == "V_A_typename" -> false
             canonicalField.isNodeLoader(schema) -> true
-            else -> objectFragmentSources.getValue(sourceField(canonicalField)).isNotEmpty()
+            else -> {
+                val sourceField = sourceField(canonicalField)
+                objectFragmentSources.getValue(sourceField).isNotEmpty() ||
+                    queryFragmentSources.getValue(sourceField).isNotEmpty()
+            }
         }
 
     /** Recursive selection counts for every generated field-resolver object fragment. */
@@ -395,7 +402,14 @@ class ArbitraryRegistry internal constructor(
                                         canonicalSchema,
                                         field as ViaductSchema.ObjectField,
                                     ),
-                            function = { input, arguments ->
+                            queryFragment =
+                                queryFragments
+                                    .getValue(coordinate)
+                                    .materialize(
+                                        canonicalSchema,
+                                        field,
+                                    ),
+                            function = { input, _, arguments ->
                                 field.args
                                     .filter { argument -> argument.hasDefault }
                                     .forEach { argument ->
@@ -503,6 +517,9 @@ class ArbitraryRegistry internal constructor(
         objectFragmentSources.values
             .filter(String::isNotEmpty)
             .forEach(world::selectionsFrom)
+        queryFragmentSources.values
+            .filter(String::isNotEmpty)
+            .forEach(world::selectionsFrom)
         variableProviderSources.values.forEach(world::selectionsFrom)
         return world
     }
@@ -514,6 +531,11 @@ class ArbitraryRegistry internal constructor(
                 appendLine("  $site OSS=${outputSelectionSets[site.toString()].orEmpty().sorted()}")
                 val fragment = objectFragmentSources.getValue(site)
                 if (fragment.isNotEmpty()) appendLine(fragment.prependIndent("    "))
+                val queryFragment = queryFragmentSources.getValue(site)
+                if (queryFragment.isNotEmpty()) {
+                    appendLine("    query fragment:")
+                    appendLine(queryFragment.prependIndent("      "))
+                }
             }
             appendLine("variables:")
             variableProviders.sortedBy(VariableProviderPlan::variableName).forEach { provider ->
@@ -597,6 +619,10 @@ private class RegistryGenerator(
             fieldSites.associateWith { site ->
                 fragmentPlan(site, ranks, variableProviders)
             }
+        val queryFragments =
+            fieldSites.associateWith { site ->
+                queryFragmentPlan(site, ranks)
+            }
         val resolverPrograms =
             fieldSites.associateWith { site ->
                 val field = field(site)
@@ -651,6 +677,8 @@ private class RegistryGenerator(
             outputSelectionSets = oss,
             objectFragmentSources =
                 objectFragments.mapValues { (_, fragment) -> fragment.source() },
+            queryFragmentSources =
+                queryFragments.mapValues { (_, fragment) -> fragment.source() },
             variableProviderSources =
                 variableProviders
                     .filterIsInstance<FromObjectFieldVariableProviderPlan>()
@@ -660,6 +688,7 @@ private class RegistryGenerator(
             fieldValues = fieldValues,
             nodeValues = nodeValues,
             objectFragments = objectFragments,
+            queryFragments = queryFragments,
             variableProviders = variableProviders,
             resolverPrograms = resolverPrograms,
             features =
@@ -680,7 +709,8 @@ private class RegistryGenerator(
                         },
                     sometimesPassiveFieldCount = sometimesPassiveFieldCount,
                     resolverErrorArgumentCount =
-                        objectFragments.values.sumOf(FragmentPlan::errorArgumentCount),
+                        objectFragments.values.sumOf(FragmentPlan::errorArgumentCount) +
+                            queryFragments.values.sumOf(FragmentPlan::errorArgumentCount),
                     variableCount = variableProviders.size,
                     fromArgumentVariableCount =
                         variableProviders.count {
@@ -736,10 +766,14 @@ private class RegistryGenerator(
                             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
                             .any(FromObjectFieldVariableProviderPlan::abstractPath),
                     hasAbstractResolverFragment =
-                        objectFragments.any { (_, fragment) ->
+                        (objectFragments.values + queryFragments.values).any { fragment ->
                             fragment.selections.any { selection ->
                                 selection.hasAbstractPath(fragment.ownerName)
                             }
+                        },
+                    queryFragmentCount =
+                        queryFragments.count { (_, fragment) ->
+                            fragment.selections.isNotEmpty()
                         },
                 ),
         )
@@ -797,6 +831,26 @@ private class RegistryGenerator(
 
             else -> this
         }
+    }
+
+    private fun queryFragmentPlan(
+        consumer: FieldCoordinate,
+        ranks: Map<FieldCoordinate, Int>,
+    ): FragmentPlan {
+        if (!config[ResolverQueryFragmentsEnabled]) {
+            return FragmentPlan("Query", emptyList())
+        }
+        return FragmentPlan(
+            ownerName = "Query",
+            selections =
+                fragmentSelections(
+                    ownerName = "Query",
+                    consumerRank = ranks.getValue(consumer),
+                    ranks = ranks,
+                    depth = 0,
+                    targetSelectionCount = resolverFragmentSelectionCount(),
+                ),
+        )
     }
 
     private fun fragmentPlan(

@@ -5,6 +5,7 @@ import model.Assumptions
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
+import model.engineObjectDataOf
 import model.objectOf
 import model.outputType
 import model.requireObjectField
@@ -47,6 +48,30 @@ class GeneratorTest {
         assertEquals(defaultRegistry.fieldValues, explicitZeroRegistry.fieldValues)
         assertEquals(defaultRegistry.nodeValues, explicitZeroRegistry.nodeValues)
         assertEquals(defaultRegistry.features, explicitZeroRegistry.features)
+    }
+
+    @Test
+    fun `resolver query fragment generation is independently configurable`() {
+        val schema = Arb.schema().next(RandomSource.seeded(11111L))
+        val disabled =
+            schema
+                .registry(Config.default)
+                .next(RandomSource.seeded(22222L))
+        val enabled =
+            schema
+                .registry(
+                    Config.default +
+                        (ResolverQueryFragmentsEnabled to true),
+                ).next(RandomSource.seeded(22222L))
+
+        assertEquals(0, disabled.features.queryFragmentCount)
+        assertTrue(disabled.queryFragmentSources.values.all(String::isEmpty))
+        assertEquals(
+            enabled.fieldResolverCoordinates.size,
+            enabled.features.queryFragmentCount,
+        )
+        assertTrue(enabled.queryFragmentSources.values.all(String::isNotEmpty))
+        enabled.world(schema)
     }
 
     @Test
@@ -160,7 +185,11 @@ class GeneratorTest {
 
         registry.clearResolutionApplicationCounts()
         context(Assumptions.of(countWorld.schema, countWorld.resolverRegistry, false)) {
-            countWorld.resolverRegistry.resolver(field)(input, arguments)
+            countWorld.resolverRegistry.resolver(field)(
+                input = input,
+                queryValue = engineObjectDataOf(countWorld.schema.requireQueryTypeDef()),
+                arguments = arguments,
+            )
         }
 
         assertEquals(mapOf(coordinate to 1L), registry.resolutionApplicationCounts())
@@ -432,8 +461,16 @@ class GeneratorTest {
 
                 context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                     assertEquals(
-                        resolver(input, arguments).outputResolutionFingerprint(),
-                        resolver(input, arguments).outputResolutionFingerprint(),
+                        resolver(
+                            input,
+                            engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                            arguments,
+                        ).outputResolutionFingerprint(),
+                        resolver(
+                            input,
+                            engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                            arguments,
+                        ).outputResolutionFingerprint(),
                     )
                 }
                 checkedResolvers += 1

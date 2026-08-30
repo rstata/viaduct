@@ -12,7 +12,9 @@ import model.Arguments
 import model.PathComponent
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
+import model.engineObjectDataOf
 import model.groundKey
+import model.requireQueryTypeDef
 import model.registry.demandsFromSibling
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
@@ -148,6 +150,7 @@ internal fun EngineObjectData.Sync.resolveKey(
             val fieldValue =
                 resolver(
                     input = input,
+                    queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                     arguments = arguments,
                     selections = invocationDemand,
                 )

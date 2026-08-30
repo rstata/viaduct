@@ -36,6 +36,7 @@ import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import model.VariableBinding
 import model.containsErrorValue
+import model.engineObjectDataOf
 import model.fetchBindings
 import model.flatMapToSelectionForest
 import model.groundKey
@@ -45,6 +46,7 @@ import model.mergeWithVariables
 import model.objectKey
 import model.outputValue
 import model.requireField
+import model.requireQueryTypeDef
 import model.selectionForestOf
 import model.toEngineResult
 import model.toEngineSimpleData
@@ -785,6 +787,7 @@ private class ObjectResultOrchestrator(
                 val fieldValue: EngineOutputData? =
                     resolver(
                         input = input,
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                         arguments = arguments,
                         selections = resolutionSelections,
                     ).also {

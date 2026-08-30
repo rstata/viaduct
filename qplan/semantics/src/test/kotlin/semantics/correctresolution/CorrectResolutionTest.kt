@@ -1,12 +1,21 @@
 package semantics.correctresolution
 
+import model.ObjectEngineResult
+import model.emptyFragmentOf
+import model.engineResultOf
+import model.fragmentFrom
+import model.merge
+import model.requireObjectField
+import model.requireQueryTypeDef
 import model.requireType
 import model.ObjectSelectionForest
+import model.testing.fieldResolverOf
 import viaduct.graphql.schema.ViaductSchema
-import model.engineResultOf
 import model.testing.TestWorld
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class CorrectResolutionTest {
     @Test
@@ -24,6 +33,73 @@ class CorrectResolutionTest {
                 result.correctResolution(profileSelections)
             }
         }
+    }
+
+    @Test
+    fun `resolver query fragment witness participates in correctness`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      source: Int!
+                      consumer: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val source = schema.requireObjectField("Query", "source")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment =
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on Query {
+                                          aliased: source
+                                        }
+                                        """.trimIndent(),
+                                    ),
+                            ) { _, queryValue, _ ->
+                                queryValue.get("aliased")
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val consumer = world.schema.requireObjectField("Query", "consumer")
+        val consumerKey = ObjectEngineResult.GroundKey.of(consumer, emptyMap())
+        val selections =
+            world
+                .fragmentFrom(
+                    """
+                    fragment ignored on Query {
+                      consumer
+                    }
+                    """.trimIndent(),
+                ).subselections
+                .merge(world.schema.requireQueryTypeDef())
+        val result =
+            world.engineResultOf("Query") {
+                "consumer" resolvesTo 7
+            }
+
+        assertFalse(context(world) { result.correctResolution(selections) })
+
+        world.queryValues[listOf(consumerKey)] =
+            world.engineResultOf("Query") {
+                "source" resolvesTo 8
+            }
+        assertFalse(context(world) { result.correctResolution(selections) })
+
+        world.queryValues[listOf(consumerKey)] =
+            world.engineResultOf("Query") {
+                "source" resolvesTo 7
+            }
+        assertTrue(context(world) { result.correctResolution(selections) })
     }
 
     private companion object {

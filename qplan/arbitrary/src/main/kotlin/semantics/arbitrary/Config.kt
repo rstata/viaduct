@@ -94,6 +94,7 @@ object InputObjectsEnabled : ConfigKey<Boolean>("inputObjectsEnabled", ConfigVal
 object RecursiveInputTypesEnabled : ConfigKey<Boolean>("recursiveInputTypesEnabled", ConfigValueType.BOOLEAN, true, { null })
 object RecursiveOutputEdgesEnabled : ConfigKey<Boolean>("recursiveOutputEdgesEnabled", ConfigValueType.BOOLEAN, true, { null })
 object QueryFragmentsEnabled : ConfigKey<Boolean>("queryFragmentsEnabled", ConfigValueType.BOOLEAN, true, { null })
+object ResolverQueryFragmentsEnabled : ConfigKey<Boolean>("resolverQueryFragmentsEnabled", ConfigValueType.BOOLEAN, false, { null })
 object InterfacesEnabled : ConfigKey<Boolean>("interfacesEnabled", ConfigValueType.BOOLEAN, true, { null })
 object UnionsEnabled : ConfigKey<Boolean>("unionsEnabled", ConfigValueType.BOOLEAN, true, { null })
 object ListsEnabled : ConfigKey<Boolean>("listsEnabled", ConfigValueType.BOOLEAN, true, { null })
@@ -165,6 +166,7 @@ internal object ConfigKeys {
             RecursiveInputTypesEnabled,
             RecursiveOutputEdgesEnabled,
             QueryFragmentsEnabled,
+            ResolverQueryFragmentsEnabled,
             InterfacesEnabled,
             UnionsEnabled,
             ListsEnabled,

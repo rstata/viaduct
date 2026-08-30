@@ -20,6 +20,7 @@ import model.Stamp
 import model.applicableGroundSelections
 import model.arg
 import model.concatenateSelectionForests
+import model.engineObjectDataOf
 import model.materializeSelectionForestOf
 import model.outputValue
 import model.schemaType
@@ -29,9 +30,9 @@ import model.toCanonicalMaterializeSelectionForest
 import model.variableTemplates
 import viaduct.engine.api.EngineObjectData
 
-/** A deterministic partial map from a resolved object fragment and arguments to an output value. */
+/** A deterministic partial map from resolved object/query fragments and arguments to an output value. */
 typealias FieldResolverFunction =
-    (EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?
+    (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?
 
 /** Observes one complete (null demand) or selective field-resolver application boundary. */
 typealias FieldResolverApplicationObserver =
@@ -44,6 +45,12 @@ sealed interface ResolverObjectFragment {
 
     /** Object-path definitions whose keys retain this fragment's occurrence stamps. */
     val pathVariableDefinitions: List<StampedObjectPathDefinition>
+}
+
+/** Paired resolver-query-fragment views instantiated from one resolver occurrence. */
+sealed interface ResolverQueryFragment {
+    val materializeSelections: MaterializeSelectionForest
+    val constructionSelections: SelectionForest
 }
 
 /**
@@ -71,6 +78,8 @@ sealed interface ResolverObjectFragment {
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,
     private val objectFragmentTemplate: MaterializeSelectionForest,
+    private val queryFragmentTemplate: MaterializeSelectionForest,
+    private val queryType: ViaductSchema.Object,
     val variables: Map<Arguments.Variable, VariableDefinition>,
     private val function: FieldResolverFunction,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
@@ -78,6 +87,9 @@ class FieldResolver private constructor(
 ) {
     val objectFragment: SelectionForest =
         objectFragmentTemplate.constructionSelections()
+
+    val queryFragment: SelectionForest =
+        queryFragmentTemplate.constructionSelections()
 
     private val selectionOccurrenceIds: Map<MaterializeSelection, SelectionOccurrenceId> =
         objectFragmentTemplate.selectionOccurrenceIds()
@@ -116,6 +128,17 @@ class FieldResolver private constructor(
             materializeSelections = materializeSelections,
             constructionSelections = stampedFragment + pathVarSelections,
             pathVariableDefinitions = pathVariableDefinitions,
+        )
+    }
+
+    /** Instantiates response-preserving and construction query views at one resolver path. */
+    fun instantiateQueryFragmentAt(
+        path: List<PathComponent>,
+    ): ResolverQueryFragment {
+        val materializeSelections = queryFragmentTemplate.stampVariables(path)
+        return ResolverQueryFragmentImpl(
+            materializeSelections = materializeSelections,
+            constructionSelections = materializeSelections.constructionSelections(),
         )
     }
 
@@ -270,8 +293,23 @@ class FieldResolver private constructor(
 
     /** Applies this field resolver, projecting its result only for selective resolver worlds. */
     context(world: Assumptions)
+    internal operator fun invoke(
+        input: EngineObjectData.Sync,
+        arguments: Arguments.Resolved,
+        selections: SelectionForest = selectionForestOf(),
+    ): EngineOutputData? =
+        invoke(
+            input = input,
+            queryValue = engineObjectDataOf(queryType),
+            arguments = arguments,
+            selections = selections,
+        )
+
+    /** Applies this field resolver, projecting its result only for selective resolver worlds. */
+    context(world: Assumptions)
     operator fun invoke(
         input: EngineObjectData.Sync,
+        queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
     ): EngineOutputData? {
@@ -280,7 +318,7 @@ class FieldResolver private constructor(
             arguments,
             selections.takeIf { world.selectiveResolvers },
         )
-        val output = evaluateRelation(input, arguments)
+        val output = evaluateRelation(input, queryValue, arguments)
         return if (world.selectiveResolvers) {
             output.snipToDemand(projectionDemand(selections))
         } else {
@@ -295,11 +333,15 @@ class FieldResolver private constructor(
      */
     fun evaluateRelation(
         input: EngineObjectData.Sync,
+        queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
     ): EngineOutputData? {
+        require(queryValue.schemaType == queryType) {
+            "Query value type ${queryValue.schemaType.name} does not match ${queryType.name}"
+        }
         val output =
             try {
-                function(input, arguments)
+                function(input, queryValue, arguments)
             } catch (exception: EngineErrorDataReadException) {
                 exception.errorData
             }
@@ -317,6 +359,8 @@ class FieldResolver private constructor(
         fun of(
             field: ViaductSchema.ObjectField,
             objectFragment: MaterializeSelectionForest,
+            queryFragment: MaterializeSelectionForest,
+            queryType: ViaductSchema.Object,
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
@@ -330,7 +374,19 @@ class FieldResolver private constructor(
             ) {
                 "Object fragment must be specialized to ${field.containingDef.name}"
             }
+            require(
+                queryFragment.all { selection ->
+                    selection.key.field.containingDef == queryType &&
+                        selection.possibleTypes == setOf(queryType)
+                },
+            ) {
+                "Query fragment must be specialized to ${queryType.name}"
+            }
+            require(queryType.name == "Query") {
+                "Query fragment type must be Query"
+            }
             objectFragment.collect(field.containingDef)
+            queryFragment.collect(queryType)
             variables.forEach { (variable, definition) ->
                 require(variable.isTemplate) {
                     "Resolver registry variables must be templates"
@@ -363,6 +419,8 @@ class FieldResolver private constructor(
             return FieldResolver(
                 field = field,
                 objectFragmentTemplate = objectFragment,
+                queryFragmentTemplate = queryFragment,
+                queryType = queryType,
                 variables = variables,
                 function = function,
                 projectionDemand = projectionDemand,
@@ -373,6 +431,8 @@ class FieldResolver private constructor(
         fun of(
             field: ViaductSchema.ObjectField,
             objectFragment: SelectionForest,
+            queryFragment: SelectionForest,
+            queryType: ViaductSchema.Object,
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: FieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
@@ -381,6 +441,8 @@ class FieldResolver private constructor(
             of(
                 field = field,
                 objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
+                queryFragment = queryFragment.toCanonicalMaterializeSelectionForest(),
+                queryType = queryType,
                 variables = variables,
                 function = function,
                 projectionDemand = projectionDemand,
@@ -415,6 +477,11 @@ private class ResolverObjectFragmentImpl(
     override val constructionSelections: SelectionForest,
     override val pathVariableDefinitions: List<StampedObjectPathDefinition>,
 ) : ResolverObjectFragment
+
+private class ResolverQueryFragmentImpl(
+    override val materializeSelections: MaterializeSelectionForest,
+    override val constructionSelections: SelectionForest,
+) : ResolverQueryFragment
 
 private data class OccurrenceProviderPath(
     val definition: StampedObjectPathDefinition,

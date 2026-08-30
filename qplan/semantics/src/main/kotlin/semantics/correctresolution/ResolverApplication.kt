@@ -6,6 +6,9 @@ import model.Assumptions
 import model.EngineOutputData
 import model.ObjectEngineResult
 import model.PathComponent
+import model.engineObjectDataOf
+import model.merge
+import model.requireQueryTypeDef
 import semantics.ResolverSupport
 import semantics.materialize
 import viaduct.engine.api.EngineObjectData
@@ -75,7 +78,37 @@ internal fun ObjectEngineResult.reapplyResolver(
                 field = key.field,
                 fields = arguments.fieldValues,
             )
-        ReappliedResolver(resolver.evaluateRelation(input, resolverArguments))
+        val queryFragment = resolver.instantiateQueryFragmentAt(coordinate)
+        val queryValue =
+            if (queryFragment.constructionSelections.isEmpty()) {
+                engineObjectDataOf(world.schema.requireQueryTypeDef())
+            } else {
+                val queryResult =
+                    world.queryValues[coordinate]
+                        ?: return@getOrPut null
+                if (
+                    !queryResult.correctResolution(
+                        queryFragment.constructionSelections.merge(
+                            world.schema.requireQueryTypeDef(),
+                        ),
+                    )
+                ) {
+                    return@getOrPut null
+                }
+                runBlocking {
+                    queryResult.materialize(
+                        selections = queryFragment.materializeSelections,
+                        reader = coordinate,
+                    )
+                }
+            }
+        ReappliedResolver(
+            resolver.evaluateRelation(
+                input = input,
+                queryValue = queryValue,
+                arguments = resolverArguments,
+            ),
+        )
     }
 
 internal fun EngineObjectData.Sync?.requireArgumentlessField(

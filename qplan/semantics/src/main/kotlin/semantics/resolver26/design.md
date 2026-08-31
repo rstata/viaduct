@@ -68,12 +68,15 @@ The field-resolution task:
 
 1. derives invocation successor demand from the key's closed construction demand;
 2. materializes the resolver's fixed input demand from exact OER cells;
-3. records the occurrence-aware application observation;
-4. invokes the selective resolver once;
-5. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
-6. publishes the containing value.
+3. independently orchestrates a fresh Query-rooted OER for a nonempty query fragment;
+4. records the occurrence-aware application observation;
+5. invokes the selective resolver once;
+6. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
+7. publishes the containing value.
 
 Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same localized child keys; strict occurrence stamps, binding aliases, and reservation rules make disagreement fail rather than silently create another identity.
+
+Query fragments bind `FromArgument` variables from the owning resolver arguments, ground their complete response-preserving selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. The OER is retained as a correctness witness under the owning resolver's exact result path. Query-fragment `FromObjectField` variables remain outside Resolver26's current scope.
 
 Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once.
 
@@ -91,4 +94,4 @@ Binding declaration and completion, cell reservation and claiming, stamp uniquen
 
 Resolver26 models query resolution with canonical field identity and synchronous source values. It supports runtime `FromObjectField` bindings within its stated provider restriction.
 
-The future integration target excludes mutations, subscriptions, custom scalars, query fragments and `fromQueryField`, EOD aliases, and asynchronous EOD variants. These exclusions constrain future alignment; they do not require resolver26-specific production adapters inside qplan.
+The future integration target excludes mutations, subscriptions, custom scalars, `fromQueryField`, EOD aliases, and asynchronous EOD variants. These exclusions constrain future alignment; they do not require resolver26-specific production adapters inside qplan.

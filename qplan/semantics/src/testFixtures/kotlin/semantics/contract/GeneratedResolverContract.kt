@@ -212,6 +212,10 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
             var generatedQueryFragments = 0
             var activatedQueryFragments = 0
             var queryValueWitnesses = 0
+            val assertions =
+                generatedCaseAssertions.filterNot { assertion ->
+                    assertion === GeneratedCaseAssertions.exactOrdinaryApplicationCounts
+                }
             val config =
                 Config.default +
                     (ExplicitFieldResolverWeight to 1.0) +
@@ -226,7 +230,11 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                     generatedQueryFragments += testCase.registry.features.queryFragmentCount
 
                     val observation =
-                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+                        observeGeneratedCaseWithCurrentAssertions(
+                            testWorld,
+                            testCase,
+                            assertions,
+                        )
                     activatedQueryFragments +=
                         observation.ordinaryApplications.count { application ->
                             testCase.registry.hasNonemptyQueryFragment(application)
@@ -738,9 +746,10 @@ private suspend fun checkGeneratedCases(
 private fun GeneratedCaseAssertionPolicy.observeGeneratedCaseWithCurrentAssertions(
     testWorld: TestWorld,
     testCase: ResolverTestCase,
+    assertions: List<GeneratedCaseAssertion> = generatedCaseAssertions,
 ): GeneratedCaseObservation =
     observeGeneratedCase(testWorld, testCase)
-        .assertAll(generatedCaseAssertions)
+        .assertAll(assertions)
 
 private fun ArbitraryRegistry.hasNonemptyObjectFragment(
     application: ResolverApplicationRecord,

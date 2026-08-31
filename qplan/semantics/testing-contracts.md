@@ -42,7 +42,7 @@ Current support is:
 | Source-level node resolution | yes | yes | yes | yes |
 | Nonempty object fragments | no | yes | yes | yes |
 | Nonempty fragments with `FromArgument` | no | yes | yes | yes |
-| Query fragments | no | yes | yes | no |
+| Query fragments | no | yes | yes | Resolver26 |
 | Nonempty fragments with `FromObjectField` | no | no | no | yes |
 | Advanced `FromArgument` demand | no | yes | yes | yes |
 | Advanced `FromObjectField` demand | no | no | no | yes |
@@ -77,7 +77,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
 | `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
 | `object-fragment-from-argument` | `FromArgument` variables, including nested and nullable input paths | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
-| `query-fragment` | Independently orchestrated Query-rooted resolver inputs | Resolver02-03, Resolver07-08, Resolver22-23 | `10:3:5` |
+| `query-fragment` | Independently orchestrated Query-rooted resolver inputs | Resolver02-03, Resolver07-08, Resolver22-23, Resolver26 | `10:3:5` |
 | `object-fragment-from-object-field` | `FromObjectField` variables | Resolver25-26 | `10:3:5` |
 | `mixed-variables` | Both variable sources | Resolver25-26 | fixed aggregate corpus |
 | `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `20:3:5` |
@@ -86,6 +86,8 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `resolver26-broad-*` | Heterogeneous stamped-resolution profiles | Resolver26 | opt-in profile-specific products |
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated bridge `node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
+
+The `query-fragment` profile omits `exactOrdinaryApplicationCounts` when a resolver policy enables it. That oracle reconstructs applications only from the primary result tree, while query-fragment applications intentionally belong to separate Query OER witnesses; the simple path-keyed witness map is a correctness witness rather than a lossless application ledger.
 
 Profile IDs are part of the replay interface and must remain stable.
 

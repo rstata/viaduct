@@ -465,25 +465,39 @@ private class TestResolverRegistry(
             }
             when (declaration) {
                 is FromArgument -> {
+                    val resolver = fieldResolverDefinitions.getValue(variable.field)
                     require(declaration.argument.containingDef == variable.field) {
                         "Variable ${variable.variableName} argument " +
                             "${declaration.argument.name} does not belong to " +
                             "${variable.field.containingDef.name}/${variable.field.name}"
                     }
+                    validateVariableUses(
+                        variable = variable,
+                        fragments = listOfNotNull(resolver.objectFragment, resolver.queryFragment),
+                        sourceDescription =
+                            "argument path " +
+                                (listOf(declaration.argument.name) +
+                                    declaration.inputPath.map(ViaductSchema.Field::name))
+                                    .joinToString("."),
+                        isCompatible = declaration::isCompatibleWith,
+                    )
                 }
                 is FromObjectField -> {
+                    val resolver = fieldResolverDefinitions.getValue(variable.field)
                     require(declaration.objectFragment.nominalType == variable.field.containingDef) {
                         "Variable ${variable.variableName} declaration is not relative to " +
                             "${variable.field.containingDef.name}/${variable.field.name}"
                     }
                     validateProviderContainment(
                         variable.field,
-                        fieldResolverDefinitions.getValue(variable.field).objectFragment,
+                        resolver.objectFragment,
                     )
                     validateVariableUses(
                         variable = variable,
-                        declaration = declaration,
-                        fragment = fieldResolverDefinitions.getValue(variable.field).objectFragment,
+                        fragments = listOfNotNull(resolver.objectFragment, resolver.queryFragment),
+                        sourceDescription =
+                            "provider path " + declaration.responsePath.joinToString("."),
+                        isCompatible = declaration::isCompatibleWith,
                     )
                 }
             }
@@ -589,21 +603,24 @@ private class TestResolverRegistry(
 
     private fun validateVariableUses(
         variable: Arguments.Variable,
-        declaration: FromObjectField,
-        fragment: Fragment,
+        fragments: List<Fragment>,
+        sourceDescription: String,
+        isCompatible: (
+            ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+            Boolean,
+        ) -> Boolean,
     ) {
-        fragment.subselections
-            .variableUses(variable)
+        fragments
+            .flatMap { fragment -> fragment.subselections.variableUses(variable) }
             .forEach { use ->
                 require(
-                    declaration.isCompatibleWith(
-                        locationType = use.typeExpr,
-                        locationHasDefault = use.hasDefault,
+                    isCompatible(
+                        use.typeExpr,
+                        use.hasDefault,
                     ),
                 ) {
-                    "Variable ${variable.variableName} provider path " +
-                        declaration.responsePath.joinToString(".") +
-                        " is incompatible with one of its argument locations"
+                    "Variable ${variable.variableName} $sourceDescription is incompatible " +
+                        "with one of its argument locations"
                 }
             }
     }

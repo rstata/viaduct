@@ -21,6 +21,59 @@ import kotlin.test.assertTrue
 /** Contract for independently resolved Query-rooted field-resolver fragments. */
 interface QueryFragmentResolverContract : ResolverContract {
     @Test
+    fun `one fromArgument binding is shared by object and query fragments`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      source(value: Int!): Int!
+                      consumer(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val source = schema.requireObjectField("Query", "source")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value")
+                            },
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        "fragment ConsumerObject on Query { objectSide: source(value: ${'$'}shared) }",
+                                    ),
+                                queryFragment =
+                                    schema.fragmentFrom(
+                                        "fragment ConsumerQuery on Query { querySide: source(value: ${'$'}shared) }",
+                                    ),
+                            ) { input, queryValue, _ ->
+                                (input.selectionValues().getValue("objectSide") as Int) +
+                                    (queryValue.selectionValues().getValue("querySide") as Int)
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        Arguments.Variable.of(consumer, "shared") to
+                            schema.fromArgument(consumer, "value"),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val consumerKey =
+            world.schema.contractKey("Query", "consumer", mapOf("value" to 7))
+
+        val resolved = resolveAndValidate(world, "query { consumer(value: 7) }")
+
+        assertEquals(14, resolved.getCell(consumerKey).get())
+    }
+
+    @Test
     fun `query fragments preserve aliases bind arguments and do not share OERs`() {
         val sourceApplications = AtomicInteger()
         val testWorld =

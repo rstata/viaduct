@@ -116,10 +116,12 @@ private fun declareBindings(closed: CloseInputDemandResult) {
                         world.declareBinding(variableId)
                     }
 
-                is VariableDefinition.FromObjectField ->
-                    world.declareBinding(variableId)
+                is VariableDefinition.FromObjectField -> Unit
             }
         }
+    }
+    closed.pathVariableDefinitions.forEach { read ->
+        world.declareBinding(requireNotNull(read.definition.variable.instanceId))
     }
 }
 

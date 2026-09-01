@@ -11,6 +11,24 @@ class FromArgument private constructor(
     internal val argument: ViaductSchema.FieldArg,
     internal val inputPath: List<ViaductSchema.Field>,
 ) : VariableDeclaration {
+    internal fun isCompatibleWith(
+        locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+        locationHasDefault: Boolean,
+    ): Boolean {
+        var sourceType = argument.inputType
+        var nullableTraversal = false
+        inputPath.forEach { field ->
+            nullableTraversal = nullableTraversal || sourceType.isNullable
+            sourceType = field.inputType
+        }
+        return compatibleTypes(
+            locationType = locationType,
+            sourceType = sourceType,
+            nullableTraversal = nullableTraversal,
+            locationHasDefault = locationHasDefault,
+        )
+    }
+
     companion object {
         internal fun of(
             argument: ViaductSchema.FieldArg,

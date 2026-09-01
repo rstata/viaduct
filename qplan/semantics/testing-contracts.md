@@ -26,7 +26,7 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `NodeResolverContract` covers source-level node resolution through fixture-lowered `foo_V_A_node` producers and `T_V_A_Bridge.node` loaders.
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including response aliases on argumentless and argument-bearing fields, argument-distinct aliases, non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including nested input-object paths, null intermediate traversal, and a transitive chain.
-- `QueryFragmentResolverContract` covers independently orchestrated Query-rooted resolver inputs, including response aliases, variables bound from resolver arguments, distinct OER identity for each application, separation from the primary result, transitive query-fragment resolution, and occurrence isolation when the same variable-bearing resolver path appears in the request and one or more query fragments.
+- `QueryFragmentResolverContract` covers independently orchestrated Query-rooted resolver inputs, including response aliases, `FromArgument` bindings consumed by either or both resolver fragments, distinct OER identity for each application, separation from the primary result, transitive query-fragment resolution, and occurrence isolation when the same variable-bearing resolver path appears in the request and one or more query fragments. `QueryFragmentFromObjectPathResolverContract` separately covers a Query-fragment use of a `FromObjectField` binding whose provider remains in the object fragment.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
 - `SometimesPassiveResolverContract` covers argumentless active fields exceptionally supplied by ancestor resolver outputs. `SometimesPassiveObjectFragmentResolverContract` checks both ownership branches when the standard resolver has input demand, `SometimesPassiveObjectPathResolverContract` preserves a provider path below an ancestor-supplied active field and verifies that binding validation ignores the unbound object-path variables of a skipped standard resolver, and `SometimesPassiveSelectiveResolverContract` witnesses Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26's single selective ancestor application and conservative pre-execution demand.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
@@ -43,6 +43,7 @@ Current support is:
 | Nonempty object fragments | no | yes | yes | yes |
 | Nonempty fragments with `FromArgument` | no | yes | yes | yes |
 | Query fragments | no | yes | yes | Resolver26 |
+| Query fragments consuming `FromObjectField` | no | no | no | Resolver26 |
 | Nonempty fragments with `FromObjectField` | no | no | no | yes |
 | Advanced `FromArgument` demand | no | yes | yes | yes |
 | Advanced `FromObjectField` demand | no | no | no | yes |

@@ -78,7 +78,7 @@ The field-resolution task:
 
 Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same symbolic child keys; variable-instance equality and strict reservation rules make disagreement fail rather than silently create another identity.
 
-Query fragments bind `FromArgument` variables from the owning resolver arguments, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path. Query-fragment `FromObjectField` variables remain outside Resolver26's current scope.
+Query fragments reuse the defining resolver occurrence's variable bindings, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. A Query-only `FromArgument` use binds directly from the owning resolver arguments, while a binding already established for an object-fragment use is reused without a second write. A Query-fragment `FromObjectField` use awaits the binding produced by its provider path in the object fragment. Resolver26 does not yet produce bindings from Query-fragment paths; that is the planned near-term `FromQueryField` feature described by the shared [variable production and consumption model](../../../../../README.md#variable-production-and-consumption). Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path.
 
 Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once.
 
@@ -96,4 +96,4 @@ Binding declaration and completion, cell reservation and claiming, writer owners
 
 Resolver26 models query resolution with canonical field identity and synchronous source values. It supports runtime `FromObjectField` bindings within its stated provider restriction.
 
-The future integration target excludes mutations, subscriptions, custom scalars, `fromQueryField`, EOD aliases, and asynchronous EOD variants. These exclusions constrain future alignment; they do not require resolver26-specific production adapters inside qplan.
+The current integration target excludes mutations, subscriptions, custom scalars, `FromQueryField`, EOD aliases, and asynchronous EOD variants. `FromQueryField` is nevertheless planned near-term qplan work; its exclusion here describes only the current Resolver26 implementation and integration target. The other exclusions constrain future alignment and do not require resolver26-specific production adapters inside qplan.

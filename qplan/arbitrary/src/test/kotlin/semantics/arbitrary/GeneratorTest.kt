@@ -565,14 +565,137 @@ class GeneratorTest {
             generatedVariables += registry.variableProviderSources.size
             registry.variableProviderSources.keys.forEach { variableName ->
                 assertTrue(
-                    registry.objectFragmentSources.values.any { source ->
-                        "\$$variableName" in source
-                    },
+                    (registry.objectFragmentSources.values + registry.queryFragmentSources.values)
+                        .any { source -> "\$$variableName" in source },
                 )
             }
         }
 
         assertTrue(generatedVariables > 0)
+    }
+
+    @Test
+    fun `query-only resolver fragments receive fromArgument variables`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (QueryFieldCount to 6..8) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentArgumentFieldWeight to 1.0) +
+                (ResolverFragmentsEnabled to false) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverQueryFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableCount to 1..1) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(86425L)
+        var queryVariableUses = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            assertTrue(registry.objectFragmentSources.values.all(String::isEmpty))
+            registry.variableProviders
+                .filterIsInstance<FromArgumentVariableProviderPlan>()
+                .forEach { provider ->
+                    if (
+                        "\$${provider.variableName}" in
+                        registry.queryFragmentSources.getValue(provider.owner)
+                    ) {
+                        queryVariableUses += 1
+                    }
+                }
+        }
+
+        assertTrue(queryVariableUses > 0)
+    }
+
+    @Test
+    fun `one fromArgument variable can be used by both resolver fragments`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (QueryFieldCount to 6..8) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentArgumentFieldWeight to 1.0) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverQueryFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableCount to 1..1) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(86426L)
+        var sharedVariableUses = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            registry.variableProviders
+                .filterIsInstance<FromArgumentVariableProviderPlan>()
+                .forEach { provider ->
+                    val variable = "\$${provider.variableName}"
+                    if (
+                        variable in registry.objectFragmentSources.getValue(provider.owner) &&
+                        variable in registry.queryFragmentSources.getValue(provider.owner)
+                    ) {
+                        sharedVariableUses += 1
+                    }
+                }
+        }
+
+        assertTrue(sharedVariableUses > 0)
+    }
+
+    @Test
+    fun `fromObjectField providers stay object rooted while query fragments use them`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (QueryFieldCount to 6..8) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentArgumentFieldWeight to 1.0) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverQueryFragmentWeight to 1.0) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableCount to 1..1) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(86427L)
+        var queryVariableUses = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.variableProviders
+                .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                .forEach { provider ->
+                    assertTrue(
+                        provider.selection in
+                            registry.objectFragments.getValue(provider.owner).selections,
+                        "Provider for \$${provider.variableName} was not in its object fragment",
+                    )
+                    if (
+                        "\$${provider.variableName}" in
+                        registry.queryFragmentSources.getValue(provider.owner)
+                    ) {
+                        queryVariableUses += 1
+                    }
+                }
+            registry.world(schema)
+        }
+
+        assertTrue(queryVariableUses > 0)
     }
 
     @Test

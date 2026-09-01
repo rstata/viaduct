@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.Fragment
 import model.fragmentFrom
 import model.objectOf
@@ -197,11 +198,16 @@ private suspend fun runResolver26MultithreadedStress(
             val world: Assumptions =
                 testWorld.newAssumptions(selectiveResolvers = true)
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+            val appliedResolverOccurrences =
+                ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
             val result: ObjectEngineResult =
                 context(world) {
                     resolve(
                         selections = fragment.subselections,
                         coroutineContext = dispatcher,
+                        applicationObserver = { application ->
+                            appliedResolverOccurrences += application.resolverOccurrenceId
+                        },
                     )
                 }
             // Resolution has quiesced; all post-resolution oracle work remains serial here.
@@ -211,7 +217,7 @@ private suspend fun runResolver26MultithreadedStress(
                 },
             )
             context(world) {
-                result.validateObjectPathBindings()
+                result.validateObjectPathBindings(appliedResolverOccurrences)
             }
             completedCases += 1
         }

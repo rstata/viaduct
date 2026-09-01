@@ -125,7 +125,12 @@ object GeneratedCaseAssertions {
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
                 context(execution.world) {
-                    execution.result.validateObjectPathBindings()
+                    execution.result.validateObjectPathBindings(
+                        requireNotNull(execution.subject.appliedResolverOccurrences) {
+                            "Object-path binding validation requires exact application " +
+                                "occurrences"
+                        },
+                    )
                 }
             }
         }

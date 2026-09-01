@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.Fragment
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.fragmentFrom
 import semantics.arbitrary.RESOLVER_TEST_CASE_PROPERTY
 import semantics.arbitrary.ResolutionWitness
@@ -14,6 +15,7 @@ import semantics.contract.validateObjectPathBindings
 import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
 object PropertyTestBenchmarkCorpusWriter {
     private const val CAMPAIGN_ROUND = 46
@@ -49,9 +51,13 @@ object PropertyTestBenchmarkCorpusWriter {
                         testWorld.newAssumptions(selectiveResolvers = true)
                     val fragment: Fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
+                    val appliedResolverOccurrences =
+                        ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                     val result: ObjectEngineResult =
                         context(world) {
-                            resolve(fragment.subselections)
+                            resolveObserved(fragment.subselections) { application ->
+                                appliedResolverOccurrences += application.resolverOccurrenceId
+                            }
                         }
                     val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                     check(witness.applications.size == EXPECTED_RESOLVER_APPLICATIONS)
@@ -66,7 +72,7 @@ object PropertyTestBenchmarkCorpusWriter {
                         },
                     )
                     context(world) {
-                        result.validateObjectPathBindings()
+                        result.validateObjectPathBindings(appliedResolverOccurrences)
                     }
 
                     Files.createDirectories(outputDirectory)

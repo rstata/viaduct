@@ -29,6 +29,7 @@ import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.Locale
 import kotlin.math.ceil
 
@@ -243,11 +244,16 @@ internal class CurrentProfileBenchmarkSupport(
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
+                    val appliedResolverOccurrences =
+                        ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                     val result =
-                        subject.resolve(
+                        observedSubject.resolve(
                             world = world,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
+                            applicationObserver = { application ->
+                                appliedResolverOccurrences += application.resolverOccurrenceId
+                            },
                         )
                     val witness = testCase.registry.resolutionWitness()
                     check(
@@ -265,7 +271,7 @@ internal class CurrentProfileBenchmarkSupport(
                         },
                     )
                     context(world) {
-                        result.validateObjectPathBindings()
+                        result.validateObjectPathBindings(appliedResolverOccurrences)
                     }
                     verifiedCases += 1
                 }

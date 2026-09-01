@@ -7,6 +7,7 @@ import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.ResolverOccurrenceId
 import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import semantics.contract.GeneratedResolutionObservation
@@ -16,7 +17,15 @@ import semantics.contract.assertValidResolver25LifecycleTrace
 internal data class Resolver25ResolutionObservation(
     override val result: ObjectEngineResult,
     val lifecycleEvents: List<Resolver25LifecycleEvent>,
-) : ResolverResolutionObservation
+) : ResolverResolutionObservation {
+    override val appliedResolverOccurrences: Set<ResolverOccurrenceId>
+        get() =
+            lifecycleEvents
+                .filterIsInstance<Resolver25LifecycleEvent.ResolverStarted>()
+                .mapTo(linkedSetOf()) { event ->
+                    ResolverOccurrenceId.at(result, event.coordinate)
+                }
+}
 
 internal fun resolveWithLifecycleValidation(
     world: Assumptions,

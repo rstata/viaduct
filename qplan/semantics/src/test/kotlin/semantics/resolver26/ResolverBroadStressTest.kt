@@ -272,7 +272,11 @@ internal suspend fun runResolver26BroadStress(
                     },
                 )
                 context(world) {
-                    result.validateObjectPathBindings()
+                    result.validateObjectPathBindings(
+                        occurrenceWitness.applications
+                            .map { application -> application.resolverOccurrenceId }
+                            .toSet(),
+                    )
                 }
                 completedCases += 1
             }

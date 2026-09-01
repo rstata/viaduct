@@ -249,25 +249,26 @@ class ResolverStressTest {
                         queryActivatedCases += 1
 
                         testCase.registry.clearResolutionWitness()
-                        var completedResult: ObjectEngineResult? = null
+                        var completedObservation: Resolver25ResolutionObservation? = null
                         if (preemptiveTimeout) {
                             assertTimeoutPreemptively(RESOLUTION_TIMEOUT) {
-                                completedResult =
-                                    resolveWithLifecycleValidation(
+                                completedObservation =
+                                    observeWithLifecycleValidation(
                                         world = world,
                                         root = world.objectOf("Query"),
                                         selections = fragment.subselections,
                                     )
                             }
                         } else {
-                            completedResult =
-                                resolveWithLifecycleValidation(
+                            completedObservation =
+                                observeWithLifecycleValidation(
                                     world = world,
                                     root = world.objectOf("Query"),
                                     selections = fragment.subselections,
                                 )
                         }
-                        val result = requireNotNull(completedResult)
+                        val observation = requireNotNull(completedObservation)
+                        val result = observation.result
                         val witness = testCase.registry.resolutionWitness()
                         val activatedFields =
                             witness.applications.mapTo(linkedSetOf()) { application ->
@@ -314,7 +315,9 @@ class ResolverStressTest {
                         }
                         assertTrue(context(world) { result.correctResolution(fragment) })
                         context(world) {
-                            result.validateObjectPathBindings()
+                            result.validateObjectPathBindings(
+                                observation.appliedResolverOccurrences,
+                            )
                         }
                         if (successfulActivation(world, result, testCase, queryTargets)) {
                             completedCases += 1

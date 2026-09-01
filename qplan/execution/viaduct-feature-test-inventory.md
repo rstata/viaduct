@@ -1,10 +1,10 @@
 # Viaduct Feature-Test Inventory
 
-This inventory records only the `core/engine/runtime` feature-test files intentionally omitted from qplan because every test in the file is currently N/A. The source catalog contains 32 files; 13 have been migrated, leaving the 19 file-level exclusions below.
+This inventory records the current synchronization boundary between qplan and the 32 `core/engine/runtime` feature-test files selected for this porting surface. Thirteen qplan port files exist and 19 source files remain whole-file exclusions.
 
-Migration is atomic by source file. Migrated files are authoritative through their copied source tests and coded `@Disabled` reasons; this document intentionally does not duplicate that per-test status.
+Migration is atomic by source file. A synchronized port is authoritative through its copied source tests and coded `@Disabled` reasons; this document intentionally does not duplicate that per-test status.
 
-The 19 exclusions below are the complete file-level N/A list as of 2026-08-24.
+Eleven ports currently match the source test names and counts. The synchronization gaps below keep the other two ports from being complete whole-file migrations.
 
 Migrated tests are source-faithful: aside from package/import plumbing, `runFeatureTest` to `runQPlanFeatureTest`, source metadata, and coded `@Disabled` annotations, their fixture code, helpers, behavior, and assertions must remain unchanged. Tests requiring production `KeyTree` or `KeyTreeBuilder` utilities are out of scope and belong in the N/A worklist until that infrastructure is deliberately added.
 
@@ -16,15 +16,15 @@ The following source files are intentionally not copied because every test in ea
 | --- | ---: | --- |
 | `BatchFieldResolverTest.kt` | 5 | Batched field-executor behavior |
 | `BatchNodeResolverTest.kt` | 8 | Batched node-executor behavior |
-| `CompleteSelectionSetTest.kt` | 9 | Production `completeSelectionSet` API |
+| `CompleteSelectionSetTest.kt` | 8 | Production `completeSelectionSet` API |
 | `CycleDetectorFeatureTest.kt` | 1 | Tenant-loading bootstrap cycle detector |
 | `ExecutionSelectionSetTest.kt` | 146 | Production `ExecutionSelectionSet` implementation and dispatcher projection |
 | `FetchObjectInstrumentationFeatureTest.kt` | 3 | Fetch-object instrumentation ordering |
 | `FieldDataLoaderTest.kt` | 1 | Field data-loader scope and batching |
 | `FieldExecutionObservabilityFeatureTest.kt` | 6 | Production execution observability instrumentation |
 | `FieldResolverExecutionConditionTest.kt` | 2 | Production query-plan execution conditions |
-| `NodeDataLoaderTest.kt` | 15 | Node data-loader caching and selection coverage |
-| `OperationValidationTest.kt` | 3 | Operation/schema-scope validation before resolution |
+| `NodeDataLoaderTest.kt` | 19 | Node data-loader caching and selection coverage |
+| `OperationValidationTest.kt` | 6 | Operation/schema-scope validation before resolution |
 | `ParentManagedValueTest.kt` | 5 | Production parent-managed resolution policy; qplan owns descendant output through resolver output selections |
 | `ResolveSelectionSetTest.kt` | 5 | Production `resolveSelectionSet` API |
 | `ResolverInstrumentationFeatureTest.kt` | 5 | Resolver instrumentation callbacks |
@@ -34,20 +34,25 @@ The following source files are intentionally not copied because every test in ea
 | `SubquerySchemaTest.kt` | 3 | Subquery schema selection |
 | `ViaductFieldResolutionFatalExceptionTest.kt` | 8 | Production instrumentation failure boundaries |
 
+## Port Synchronization Gaps
+
+| Port | Current source difference |
+| --- | --- |
+| `RootFieldReferenceResolutionTest.kt` | Missing `caller is derived from resolver object traversal` and `caller survives a chain of resolver RSS dependencies` (21 of 23 source tests copied). |
+| `SelectiveFieldResolversExecutionTest.kt` | Missing `selective list item can read its non-selective parent` and `selective resolver materialization rejects DataFetcherResult`; still contains the source-removed `errors returned during materialization are included in the response` (63 of 65 current source tests match by name). |
+
 ## Observed Port Boundaries
 
-- **Execution:** `NodeResolverTest.kt` initially exposed two shared fixture-lowering gaps before Resolver26: incomplete feature-test modules omitted unrelated Query resolvers, and raw node lookups were required to repeat the ID already supplied by the producing field's fringe value. `TestWorld` now fills missing nullable Query fields with null producers and missing non-null Query fields with error producers, while node lowering makes the fringe ID authoritative when composing node lookup data, matching production's `NodeEngineObjectDataImpl`. Seven node tests currently pass through qplan; six remain disabled.
+- **Execution:** `TestWorld` fills missing nullable Query fields with null producers and missing non-null Query fields with error producers. Node lowering treats the fringe ID as authoritative when composing raw lookup data, matching production's `NodeEngineObjectDataImpl`; the lookup payload need not repeat it. Seven node tests currently pass through qplan; six remain disabled.
 - **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
 - **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.
 - `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` uses a query required selection, which the executor adapter deliberately rejects.
-- `FromFieldVariablesFeatureTest.kt`'s source-success case `from arg -- path traverses nested input` is restored unchanged and disabled; adapter rejection coverage belongs in a separate qplan-specific test.
+- `FromFieldVariablesFeatureTest.kt`'s source-success case `from arg -- path traverses nested input` remains unchanged and disabled; adapter rejection coverage belongs in a separate qplan-specific test.
 - `OperationValidationTest.kt` is not a Resolver26 candidate. Its invalid operations are rejected before `QPlanExecutionStrategy`, while its valid case only executes two independent constant root fields.
 
 ## Grouped Blocker Counts
 
-Counts overlap because one test may be blocked by more than one requirement. Labels appear
-space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two
-intentional incompatibilities whose specific prose reasons are retained.
+Counts overlap because one test may be blocked by more than one requirement. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two intentional incompatibilities whose specific prose reasons are retained.
 
 | Group | Count | Label |
 | --- | ---: | --- |

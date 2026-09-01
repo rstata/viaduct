@@ -1,4 +1,8 @@
 package execution.viaductfeaturetests
+
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/VariablesResolverTest.kt
+// Copied 11 out of 11 tests as of 2026-09-01
+
 import execution.testing.runQPlanFeatureTest
 
 import graphql.ExecutionResult

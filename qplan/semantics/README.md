@@ -9,7 +9,7 @@ context(world: Assumptions)
 fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
-`correctResolution` judges a completed Query OER extensionally. It does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests.
+`correctResolution` judges a completed primary Query OER extensionally. When a field resolver declares a nonempty Query-rooted fragment, the judgment also requires the independently resolved Query OER stored for that exact resolver occurrence to be correct and uses its materialized value when re-evaluating the resolver relation. It does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests.
 
 ## Vocabulary
 
@@ -21,7 +21,7 @@ An **active field** has a standard registered field resolver. At a particular ou
 
 A **resolver template** is the static registry definition for one concrete object field. A **resolver instance** is the dynamic application associated with one exact field key on one OER occurrence. Unqualified "resolver" usually means the instance when discussing execution and the template when discussing registry structure; use the full term where that distinction matters.
 
-**Content** is the materialized object fragment and arguments a resolver consumes, or the output value it produces. A resolver is a **reader** or consumer of resolver-produced fields selected by its object fragment; the inverse producer is sometimes called the **author**. At the template level this is a guarded may-read relationship, while actual execution relates exact resolver instances.
+**Content** is the materialized object fragment, Query fragment, and arguments a resolver consumes, or the output value it produces. A resolver is a **reader** or consumer of resolver-produced fields selected by either input fragment; the inverse producer is sometimes called the **author**. At the template level this is a guarded may-read relationship, while actual execution relates exact resolver instances.
 
 A producer is a **predecessor** of a consumer when the consumer must materialize content produced by that resolver instance. The inverse relation is **successor**. Predecessor edges arise both from object-fragment reads and from the resolver instance that creates a descendant OER; runtime variables may add value-flow dependencies. These are occurrence relationships, not merely relationships between schema coordinates.
 
@@ -31,7 +31,7 @@ A producer is a **predecessor** of a consumer when the consumer must materialize
 
 Open selections are specialized to a concrete object type with `merge(type)`. The resulting `ObjectKey` values may identify OER cells directly. Bindings are instantiated before operations cross through `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()` when those operations require resolved argument values.
 
-Semantics accepts resolver selection documents that retain named fragment definitions. The current semantic selection carrier cannot represent named fragment spreads, so `fragmentFromDocument` owns lowering those spreads to inline fragments. Keeping that conversion at the semantics boundary allows a future carrier to preserve or optimize named fragments without requiring execution adapters to pre-process them.
+Semantics accepts resolver selection documents that retain named fragment definitions. The current semantic selection carrier cannot represent named fragment spreads, so `fragmentFromDocument` owns lowering those spreads to inline fragments. Keeping that conversion at the semantics boundary allows a future carrier to preserve or optimize named fragments without requiring execution adapters to pre-process them. Resolver query fragments are a different concept: they are Query-rooted resolver inputs that are resolved into an independent OER for each owning resolver occurrence.
 
 `Resolve.kt` contains the recursive monotonic constructor used by Resolver01-03. `ResolvePassiveValues.kt` builds passive result structure, retains child OERs that require active work, and populates those children without replacing their published parents.
 
@@ -41,7 +41,7 @@ Resolver25 and Resolver26 are self-contained advanced experiments with runtime `
 
 ## Variables And Publication
 
-`FromArgument` bindings are declared for the defining resolver occurrence and completed from its exact arguments. Resolver25 and Resolver26 also declare `FromObjectField` bindings and complete them after provider evaluation.
+`FromArgument` bindings are declared for the defining resolver occurrence and completed from its exact arguments. Resolver25 and Resolver26 also declare `FromObjectField` bindings and complete them after provider evaluation. Current query-fragment support permits `FromArgument` bindings; Resolver26 explicitly rejects `FromObjectField` variables in query fragments.
 
 OER construction is monotonic. Active cells have one writer, parent values may publish stable child OERs before those children complete, and each algorithm must install or reserve discoverable child work before a reader can depend on it.
 

@@ -52,7 +52,7 @@ One-shot designs must therefore bound all contributors before application, conse
 
 Demand must be projected through the producer that owns the requested output. Traversal through passive fields remains within the current producer; traversal stops at resolver-bearing boundaries and attributes successor work to the successor resolver.
 
-Resolver object fragments determine input requirements. Resolver arguments identify an eventual resolver instance but do not choose the resolver template or its fixed object fragment. This distinction lets symbolic closure discover fixed input requirements before variable values are available.
+Resolver object and Query fragments determine input requirements. Resolver arguments identify an eventual resolver instance but do not choose the resolver template or its fixed fragments. This distinction lets symbolic closure discover fixed input requirements before variable values are available.
 
 ## Progress Is Monotonic And Strict
 
@@ -90,7 +90,7 @@ Resolver25 remains a useful alternate experiment because it merges late-equal gr
 
 ## Validate Independent Properties Independently
 
-`correctResolution` judges a completed Query OER extensionally. It does not establish resolver application count, supplied demand, binding correctness, execution order, lifecycle ownership, or concurrency.
+`correctResolution` judges the completed primary Query OER and every required occurrence-specific query-fragment OER extensionally. It does not establish resolver application count, supplied demand, binding correctness, execution order, lifecycle ownership, or concurrency.
 
 Keep separate evidence for completed-result correctness, exact and occurrence-aware application identities, object-path bindings, lifecycle invariants, mutation tests, structural activation, and scheduling behavior. An expected-application oracle derived from the completed result under test is not fully independent and must be described accordingly.
 

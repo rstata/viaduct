@@ -85,7 +85,7 @@ The preferred investigation sequence is:
 
 ## Fixture Composition Contracts
 
-`TestWorld` makes incomplete test registries deterministic by supplying an error-producing resolver for every expected Query resolver coordinate before overlaying the resolvers declared by the test. A missing declaration therefore remains an explicit error if execution reaches it without forcing unrelated tests to enumerate unused Query resolvers. This is a test-fixture composition contract, not permission for a production resolver registry to omit required entries.
+`TestWorld` makes incomplete test registries deterministic by supplying a null-producing resolver for each missing nullable Query field and an error-producing resolver for each missing non-null Query field before overlaying the resolvers declared by the test. A missing non-null declaration therefore remains an explicit error if execution reaches it, while incomplete feature-test modules can omit unrelated nullable roots. This is a test-fixture composition contract, not permission for a production resolver registry to omit required entries.
 
 ## Diagnose Liveness And Scale
 

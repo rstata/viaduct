@@ -6,7 +6,7 @@ This file records work needed to turn the passing Resolver01-03 atomic proof bas
 
 This is a separate backlog rather than an immediate project objective. It assumes the aligned carrier boundary recorded in [`../handoff.md`](../handoff.md), but no ordering against other qplan work is implied.
 
-Field-relative variables, `@parent`, checkers, lazy values, and cyclic resolver demand remain outside the current proof scope.
+Field-relative variables, resolver Query fragments and their occurrence-specific Query OERs, `@parent`, checkers, lazy values, and cyclic resolver demand remain outside the current proof scope.
 
 ## Current Assessment
 

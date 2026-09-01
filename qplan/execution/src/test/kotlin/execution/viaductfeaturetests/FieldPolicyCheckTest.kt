@@ -1,4 +1,8 @@
 package execution.viaductfeaturetests
+
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/FieldPolicyCheckTest.kt
+// Copied 5 out of 5 tests as of 2026-09-01
+
 import execution.testing.runQPlanFeatureTest
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi

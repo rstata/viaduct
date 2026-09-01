@@ -26,7 +26,7 @@ import model.stampVars
 import model.toCanonicalMaterializeSelectionForest
 import viaduct.engine.api.EngineObjectData
 
-/** A deterministic partial map from resolved object/query fragments and arguments to an output value. */
+/** A deterministic partial map from resolved object and Query fragments plus arguments to an output value. */
 typealias FieldResolverFunction =
     (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?
 
@@ -55,13 +55,15 @@ sealed interface ResolverQueryFragment {
  * Equality is undefined. Resolver-demand identity is expressed with canonical object fields
  * instead.
  *
- * [objectFragment] is the direct object-valued input requirement. In a canonical registry entry,
- * [variables] maps every variable template defined by this resolver to its argument or nonempty
- * alias-free object-field path definition.
+ * [objectFragment] is the direct parent-object input requirement. [queryFragment] is the
+ * independently resolved Query-rooted input requirement. In a canonical registry entry,
+ * [variables] maps every variable template defined by this resolver and used by either fragment
+ * to its argument or nonempty alias-free object-field path definition.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
- * [objectFragment] is specialized to the resolver field's concrete parent type.
+ * [objectFragment] is specialized to the resolver field's concrete parent type. [queryFragment]
+ * is specialized to the canonical Query type.
  *
  * ### Invariant: field-resolver-variable-definitions
  *

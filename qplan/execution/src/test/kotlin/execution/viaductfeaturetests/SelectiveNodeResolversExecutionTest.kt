@@ -1,5 +1,8 @@
 package execution.viaductfeaturetests
 
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/SelectiveNodeResolversExecutionTest.kt
+// Copied 61 out of 61 tests as of 2026-09-01
+
 import execution.testing.runQPlanFeatureTest
 
 import io.kotest.property.Arb

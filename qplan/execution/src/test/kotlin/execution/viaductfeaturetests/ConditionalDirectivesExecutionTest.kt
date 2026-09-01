@@ -1,4 +1,8 @@
 package execution.viaductfeaturetests
+
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/ConditionalDirectivesExecutionTest.kt
+// Copied 1 out of 1 tests as of 2026-09-01
+
 import execution.testing.runQPlanFeatureTest
 
 import java.util.concurrent.atomic.AtomicInteger

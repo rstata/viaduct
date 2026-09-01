@@ -2,6 +2,9 @@
 
 package execution.viaductfeaturetests
 
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/SelectiveFieldResolversExecutionTest.kt
+// Copied 63 out of 65 current tests as of 2026-09-01; one removed source test remains pending cleanup
+
 import execution.testing.QPlanFeatureTest
 import execution.testing.runQPlanFeatureTest
 

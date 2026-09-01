@@ -14,8 +14,8 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * ### Invariant: assumptions-monotonic-variable-bindings
  *
- * The binding domain grows only through [declareBinding] or [bindVariable]. Every declared stamped
- * variable has exactly one [Promise] of a [VariableBinding]. Each promise completes once, and
+ * The binding domain grows only through [declareBinding] or [bindVariable]. Every declared variable
+ * instance has exactly one [Promise] of a [VariableBinding]. Each promise completes once, and
  * [getBinding] and [fetchBinding] are defined exactly on declared bindings.
  */
 sealed interface Assumptions {
@@ -28,45 +28,45 @@ sealed interface Assumptions {
     /** Query-fragment result witnesses keyed by the exact resolver occurrence path. */
     val queryValues: ConcurrentHashMap<List<PathComponent>, ObjectEngineResult>
 
-    /** Whether [variable] has a completed binding, including a binding whose value is null. */
-    fun isBound(variable: Arguments.Variable): Boolean
+    /** Whether [variableId] has a completed binding, including one whose value is null. */
+    fun isBound(variableId: VariableInstanceId): Boolean
 
     /**
-     * Declares the uncompleted binding promise for [variable].
+     * Declares the uncompleted binding promise for [variableId].
      *
      * @throws IllegalStateException when [variable] has already been declared
      */
-    fun declareBinding(variable: Arguments.Variable)
+    fun declareBinding(variableId: VariableInstanceId)
 
     /**
-     * Binds [variable] immediately to [binding].
+     * Binds [variableId] immediately to [binding].
      *
      * @throws IllegalStateException when [variable] has already been declared or bound
      */
     fun bindVariable(
-        variable: Arguments.Variable,
+        variableId: VariableInstanceId,
         binding: VariableBinding,
     )
 
     fun bindVariable(
-        variable: Arguments.Variable,
+        variableId: VariableInstanceId,
         value: EngineInputData?,
-    ) = bindVariable(variable, VariableBinding.of(value))
+    ) = bindVariable(variableId, VariableBinding.of(value))
 
     /**
-     * Completes the declared binding for [variable] with [binding].
+     * Completes the declared binding for [variableId] with [binding].
      *
      * @throws IllegalStateException when [variable] is undeclared or already completed
      */
     fun completeBinding(
-        variable: Arguments.Variable,
+        variableId: VariableInstanceId,
         binding: VariableBinding,
     )
 
     fun completeBinding(
-        variable: Arguments.Variable,
+        variableId: VariableInstanceId,
         value: EngineInputData?,
-    ) = completeBinding(variable, VariableBinding.of(value))
+    ) = completeBinding(variableId, VariableBinding.of(value))
 
     /**
      * Returns the completed value bound to [variable] without suspending.
@@ -74,14 +74,14 @@ sealed interface Assumptions {
      * @throws IllegalStateException when [variable] is undeclared
      * @throws UncompletedPromiseException when its binding is incomplete
      */
-    fun getBinding(variable: Arguments.Variable): VariableBinding
+    fun getBinding(variableId: VariableInstanceId): VariableBinding
 
     /**
      * Returns the value bound to [variable], suspending until its declared promise completes.
      *
      * @throws IllegalStateException when [variable] is undeclared
      */
-    suspend fun fetchBinding(variable: Arguments.Variable): VariableBinding
+    suspend fun fetchBinding(variableId: VariableInstanceId): VariableBinding
 
     companion object {
         fun of(
@@ -106,45 +106,36 @@ private class AssumptionsImpl(
         ConcurrentHashMap<List<PathComponent>, ObjectEngineResult>()
 
     private val bindings =
-        OnceStore<Arguments.Variable, Promise<VariableBinding>>()
+        OnceStore<VariableInstanceId, Promise<VariableBinding>>()
 
-    override fun isBound(variable: Arguments.Variable): Boolean {
-        require(variable.isStamped) { "Variable templates cannot have bindings" }
-        return bindings.isSet(variable) && bindings.read(variable).isCompleted
-    }
+    override fun isBound(variableId: VariableInstanceId): Boolean =
+        bindings.isSet(variableId) && bindings.read(variableId).isCompleted
 
-    override fun declareBinding(variable: Arguments.Variable) {
-        require(variable.isStamped) { "Variable templates cannot have bindings" }
-        bindings.write(variable, Promise.ofDeferred())
+    override fun declareBinding(variableId: VariableInstanceId) {
+        bindings.write(variableId, Promise.ofDeferred())
     }
 
     override fun bindVariable(
-        variable: Arguments.Variable,
+        variableId: VariableInstanceId,
         binding: VariableBinding,
     ) {
-        require(variable.isStamped) { "Variable templates cannot have bindings" }
-        bindings.write(variable, Promise.of(binding))
+        bindings.write(variableId, Promise.of(binding))
     }
 
     override fun completeBinding(
-        variable: Arguments.Variable,
+        variableId: VariableInstanceId,
         binding: VariableBinding,
     ) {
-        require(variable.isStamped) { "Variable templates cannot have bindings" }
-        bindingPromise(variable).complete(binding)
+        bindingPromise(variableId).complete(binding)
     }
 
-    override fun getBinding(variable: Arguments.Variable): VariableBinding {
-        require(variable.isStamped) { "Variable templates cannot have bindings" }
-        return bindingPromise(variable).get()
-    }
+    override fun getBinding(variableId: VariableInstanceId): VariableBinding =
+        bindingPromise(variableId).get()
 
-    override suspend fun fetchBinding(variable: Arguments.Variable): VariableBinding {
-        require(variable.isStamped) { "Variable templates cannot have bindings" }
-        return bindingPromise(variable).await()
-    }
+    override suspend fun fetchBinding(variableId: VariableInstanceId): VariableBinding =
+        bindingPromise(variableId).await()
 
     private fun bindingPromise(
-        variable: Arguments.Variable,
-    ): Promise<VariableBinding> = bindings.read(variable)
+        variableId: VariableInstanceId,
+    ): Promise<VariableBinding> = bindings.read(variableId)
 }

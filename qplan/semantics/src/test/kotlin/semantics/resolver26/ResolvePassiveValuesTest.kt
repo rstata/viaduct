@@ -12,7 +12,6 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.Selection
 import model.SelectionForest
-import model.Stamp
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fragmentFrom

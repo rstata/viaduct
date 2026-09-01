@@ -60,10 +60,10 @@ fun SelectionForest.successorDemand(): SelectionForest =
     }
 
 /**
- * Extends output demand after awaiting stamped bindings, while deferring unstamped templates.
+ * Extends output demand after awaiting instantiated bindings, while deferring templates.
  *
  * A template-bearing branch belongs to a resolver occurrence whose exact path is not yet available.
- * Stamped branches retain ordinary full successor closure after their bindings complete. Branches
+ * Instantiated branches retain ordinary full successor closure after their bindings complete. Branches
  * whose fetched keys are equal coalesce to that ground key. Provider-path markers remain attached
  * to their grounded keys.
  */

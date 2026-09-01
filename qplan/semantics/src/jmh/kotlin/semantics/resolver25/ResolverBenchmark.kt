@@ -17,6 +17,7 @@ import org.openjdk.jmh.annotations.Warmup
 import org.openjdk.jmh.infra.BenchmarkParams
 import org.openjdk.jmh.infra.Blackhole
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.usedVariables
 import model.variableArgumentNames
 import semantics.benchmark.CurrentProfileBenchmarkSupport
@@ -66,16 +67,19 @@ open class ResolverBenchmark {
                                     variableUseByContribution[event.contributionId] =
                                         VariableUse(
                                             argumentNames = argumentNames,
-                                            sourceOccurrencePaths =
+                                            sourceOccurrenceIds =
                                                 if (argumentNames.isEmpty()) {
                                                     emptySet()
                                                 } else {
                                                     buildSet {
-                                                        event.consumerCoordinate?.let(::add)
+                                                        event.consumerCoordinate
+                                                            ?.let(ResolverOccurrenceId::at)
+                                                            ?.let(::add)
                                                         event.selection.key.arguments
                                                             .usedVariables()
                                                             .mapNotNullTo(this) { variable ->
-                                                                variable.stamp?.resolverPath
+                                                                variable.instanceId
+                                                                    ?.resolverOccurrenceId
                                                             }
                                                     }
                                                 },
@@ -101,10 +105,12 @@ open class ResolverBenchmark {
                                             applicationObserver(
                                                 ResolverBenchmarkApplicationObservation(
                                                     occurrencePath = event.coordinate,
+                                                    resolverOccurrenceId =
+                                                        ResolverOccurrenceId.at(event.coordinate),
                                                     variableArgumentCount =
                                                         variableUse.argumentNames.size,
-                                                    variableSourceOccurrencePaths =
-                                                        variableUse.sourceOccurrencePaths,
+                                                    variableSourceOccurrenceIds =
+                                                        variableUse.sourceOccurrenceIds,
                                                 ),
                                             )
                                         }
@@ -118,13 +124,13 @@ open class ResolverBenchmark {
 
     private data class VariableUse(
         val argumentNames: Set<String>,
-        val sourceOccurrencePaths: Set<List<PathComponent>>,
+        val sourceOccurrenceIds: Set<ResolverOccurrenceId>,
     ) {
         operator fun plus(other: VariableUse): VariableUse =
             VariableUse(
                 argumentNames = argumentNames + other.argumentNames,
-                sourceOccurrencePaths =
-                    sourceOccurrencePaths + other.sourceOccurrencePaths,
+                sourceOccurrenceIds =
+                    sourceOccurrenceIds + other.sourceOccurrenceIds,
             )
 
         companion object {

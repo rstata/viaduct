@@ -7,7 +7,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.PathComponent
+import model.ResolverOccurrenceId
 import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.emptyFragmentOf
@@ -16,7 +16,6 @@ import model.isContextuallyGrounded
 import model.merge
 import model.objectOf
 import model.groundedArguments
-import model.stampedVariables
 import model.usedVariables
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -131,10 +130,12 @@ class SymbolicKeyIdentityTest {
         assertEquals(14, resolved.getCell(resultKey).getValue().get())
         assertEquals(1, childKeys.toSet().size)
         assertEquals(
-            setOf<List<PathComponent>>(listOf(resultKey)),
+            setOf(ResolverOccurrenceId.at(listOf(resultKey))),
             childKeys
                 .flatMap { key -> key.arguments.usedVariables() }
-                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp?.resolverPath },
+                .mapNotNullTo(linkedSetOf()) { variable ->
+                    variable.instanceId?.resolverOccurrenceId
+                },
         )
         assertTrue(
             context(world) {
@@ -410,10 +411,15 @@ class SymbolicKeyIdentityTest {
             )
         }
         assertEquals(
-            setOf<List<PathComponent>>(listOf(leftKey), listOf(rightKey)),
+            setOf(
+                ResolverOccurrenceId.at(listOf(leftKey)),
+                ResolverOccurrenceId.at(listOf(rightKey)),
+            ),
             frankKeys
                 .flatMap { key -> key.arguments.usedVariables() }
-                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp?.resolverPath },
+                .mapNotNullTo(linkedSetOf()) { variable ->
+                    variable.instanceId?.resolverOccurrenceId
+                },
         )
         assertEquals(
             listOf(

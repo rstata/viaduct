@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineErrorData
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.Arguments
 import model.Selection
 import model.emptyFragmentOf
@@ -140,7 +141,7 @@ class SuccessorDemandTest {
     }
 
     @Test
-    fun `template deferral preserves fixed demand until a descendant occurrence can stamp variables`() {
+    fun `template deferral preserves fixed demand until a descendant occurrence can instantiate variables`() {
         val resultFragment =
             """
             fragment Result on Item {
@@ -222,7 +223,7 @@ class SuccessorDemandTest {
     }
 
     @Test
-    fun `deferred successor closure coalesces stamped selections by fetched key`() {
+    fun `deferred successor closure coalesces instantiated selections by fetched key`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -243,17 +244,21 @@ class SuccessorDemandTest {
         val successor = world.schema.requireObjectField("Query", "successor")
         val variable = Arguments.Variable.of(successor, "value")
         val first =
-            variable.stamp(
-                listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 1))),
+            variable.instantiate(
+                ResolverOccurrenceId.at(
+                    listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 1))),
+                ),
             )
         val second =
-            variable.stamp(
-                listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 2))),
+            variable.instantiate(
+                ResolverOccurrenceId.at(
+                    listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 2))),
+                ),
             )
-        world.declareBinding(first)
-        world.completeBinding(first, 7)
-        world.declareBinding(second)
-        world.completeBinding(second, 7)
+        world.declareBinding(requireNotNull(first.instanceId))
+        world.completeBinding(requireNotNull(first.instanceId), 7)
+        world.declareBinding(requireNotNull(second.instanceId))
+        world.completeBinding(requireNotNull(second.instanceId), 7)
         val firstKey =
             ObjectEngineResult.Key.of(
                 successor,

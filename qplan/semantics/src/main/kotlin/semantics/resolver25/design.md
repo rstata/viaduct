@@ -46,8 +46,8 @@ If later demand arrives before launch, it contributes to the key's open demand. 
 Preparing one resolver-backed key:
 
 1. completes `FromArgument` bindings by reading each canonical input path from the exact key;
-2. declares its stamped `FromObjectField` bindings;
-3. contributes the resolver's stamped object fragment as actual demand; and
+2. declares its instantiated `FromObjectField` bindings;
+3. contributes the resolver's instantiated object fragment as actual demand; and
 4. launches provider readers that complete object-field bindings from published OER values.
 
 Resolver inputs must install before the consumer launches. Provider reads use exact OER cells and the shared cycle-checking instrumentation. Provider paths may traverse singular object values; list traversal is outside this reader.

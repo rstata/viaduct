@@ -7,7 +7,7 @@ import viaduct.graphql.schema.ViaductSchema
  *
  * A tuple may be ground, may recursively contain [Variable] expressions, or may be a
  * resolver-registry [Template]. Equality is structural over the represented argument expressions,
- * including each variable's defining field, name, occurrence stamp, and recursive expression
+ * including each variable's defining field, name, instance ID, and recursive expression
  * position. Equality and hashing never inspect a variable's eventual binding.
  *
  * ### Invariant: arguments-schema-canonicality
@@ -54,24 +54,24 @@ sealed interface Arguments {
     /**
      * An argument tuple in a resolver-registry template.
      *
-     * Every recursively contained variable is a [Variable.isTemplate]. Stamping replaces every
-     * contained variable with one carrying the same [Stamp.Occurrence].
+     * Every recursively contained variable is a [Variable.isTemplate]. Instantiation replaces
+     * every contained variable with one owned by the same [ResolverOccurrenceId].
      */
     sealed interface Template : Arguments {
         /**
-         * Returns this argument template stamped at [selectionStamp] and checked against
+         * Returns this argument template instantiated for [resolverOccurrenceId] and checked against
          * [expectedField].
          */
-        fun stamp(
+        fun instantiate(
             expectedField: ViaductSchema.Field,
-            selectionStamp: Stamp.Occurrence,
+            resolverOccurrenceId: ResolverOccurrenceId,
         ): Arguments
 
         companion object {
             /**
              * Wraps [arguments] as a registry argument template checked against [expectedField].
              *
-             * [arguments] may contain only variable templates, never stamped variables.
+             * [arguments] may contain only variable templates, never variable instances.
              */
             fun of(
                 expectedField: ViaductSchema.Field,
@@ -83,8 +83,8 @@ sealed interface Arguments {
     /**
      * Identifier of an execution variable used in argument expressions.
      *
-     * Registry variables are templates. During resolution, templates are stamped as they enter
-     * occurrence-specific structures so separate resolver occurrences have distinct variables.
+     * Registry variables are templates. During resolution, templates are instantiated for their
+     * owning resolver occurrence.
      */
     sealed interface Variable {
         val field: ViaductSchema.ObjectField
@@ -93,26 +93,25 @@ sealed interface Arguments {
         /** Whether this is the registry template rather than an occurrence-specific variable. */
         val isTemplate: Boolean
 
-        /** The occurrence stamp, or null for a registry template. */
-        val stamp: Stamp.Occurrence?
+        /** The variable-instance identity, or null for a registry template. */
+        val instanceId: VariableInstanceId?
 
-        val isStamped: Boolean
-            get() = stamp != null
+        val isInstantiated: Boolean
+            get() = instanceId != null
 
-        /** Returns this variable template stamped at [path]. */
-        fun stamp(path: List<PathComponent>): Variable {
-            require(isTemplate) { "Only variable templates can be stamped" }
-            return OccurrenceVariableImpl(
-                variableName,
-                field,
-                Stamp.Occurrence.of(path),
+        /** Returns this variable template instantiated for [resolverOccurrenceId]. */
+        fun instantiate(resolverOccurrenceId: ResolverOccurrenceId): Variable {
+            require(isTemplate) { "Only variable templates can be instantiated" }
+            return InstanceVariableImpl(
+                variableName = variableName,
+                field = field,
+                instanceId =
+                    VariableInstanceId.of(
+                        resolverOccurrenceId = resolverOccurrenceId,
+                        resolverField = field,
+                        variableName = variableName,
+                    ),
             )
-        }
-
-        /** Returns this variable template at one variable-bearing source selection. */
-        fun stamp(stamp: Stamp.Occurrence): Variable {
-            require(isTemplate) { "Only variable templates can be stamped" }
-            return OccurrenceVariableImpl(variableName, field, stamp)
         }
 
         companion object {
@@ -162,7 +161,7 @@ private data class TemplateVariableImpl(
     override val isTemplate: Boolean
         get() = true
 
-    override val stamp: Stamp.Occurrence?
+    override val instanceId: VariableInstanceId?
         get() = null
 
     override fun toString(): String =
@@ -172,39 +171,21 @@ private data class TemplateVariableImpl(
             ")"
 }
 
-private data class OccurrenceVariableImpl(
+private data class InstanceVariableImpl(
     override val variableName: String,
     override val field: ViaductSchema.ObjectField,
-    override val stamp: Stamp.Occurrence,
+    override val instanceId: VariableInstanceId,
 ) : Arguments.Variable {
     override val isTemplate: Boolean
         get() = false
 
     override fun toString(): String =
-        "Variable.Occurrence(" +
+        "Variable.Instance(" +
             "name=$variableName, " +
             "field=${field.containingDef.name}/${field.name}, " +
-            "path=${stamp.resolverPath.renderVariablePath()}" +
+            "id=$instanceId" +
             ")"
 }
-
-private fun List<PathComponent>.renderVariablePath(): String =
-    joinToString(prefix = "[", postfix = "]") { component ->
-        when (component) {
-            is ObjectEngineResult.ObjectKey ->
-                "${component.field.containingDef.name}/${component.field.name}" +
-                    when (val arguments = component.arguments) {
-                        Arguments.Error -> "(error)"
-                        is Arguments.Resolved ->
-                            arguments.fieldValues
-                                .takeIf { fields -> fields.isNotEmpty() }
-                                ?.let { fields -> "($fields)" }
-                                .orEmpty()
-                        else -> "(symbolic)"
-                    }
-            is ListEngineResult.Index -> "index=${component.index}"
-        }
-    }
 
 internal fun argumentsOfGround(
     fields: EngineInputObjectData,

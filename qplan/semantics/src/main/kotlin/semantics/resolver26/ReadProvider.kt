@@ -17,12 +17,12 @@ import model.fetchGroundedArguments
 import model.objectKey
 import model.selectionForestOf
 import model.toEngineSimpleData
-import model.registry.StampedObjectPathDefinition
+import model.registry.InstantiatedObjectPathDefinition
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
 context(world: Assumptions)
 internal suspend fun ObjectEngineResult.readProvider(
-    definition: StampedObjectPathDefinition,
+    definition: InstantiatedObjectPathDefinition,
     reader: List<PathComponent>,
     support: Resolver26Support,
 ): VariableBinding {

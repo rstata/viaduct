@@ -115,10 +115,10 @@ internal object Resolver25LifecycleTraceValidators {
                                             event.coordinate,
                                     )
                             }
-                            val stampedVariables =
+                            val variableInstances =
                                 submission.selection.key.arguments
                                     .usedVariables()
-                                    .filter(Arguments.Variable::isStamped)
+                                    .filter(Arguments.Variable::isInstantiated)
                                     .toList()
                             val groundedArguments =
                                 (
@@ -128,17 +128,17 @@ internal object Resolver25LifecycleTraceValidators {
                             val requiredVariables =
                                 if (groundedArguments == Arguments.Error) {
                                     val causalErrorIndex =
-                                        stampedVariables.indexOfFirst { variable ->
+                                        variableInstances.indexOfFirst { variable ->
                                             completedBindings[variable] ==
                                                 VariableBinding.Error
                                         }
                                     if (causalErrorIndex >= 0) {
-                                        stampedVariables.take(causalErrorIndex + 1)
+                                        variableInstances.take(causalErrorIndex + 1)
                                     } else {
-                                        stampedVariables
+                                        variableInstances
                                     }
                                 } else {
-                                    stampedVariables
+                                    variableInstances
                                 }
                             val unboundVariables =
                                 requiredVariables.filterNot(completedBindings::containsKey)

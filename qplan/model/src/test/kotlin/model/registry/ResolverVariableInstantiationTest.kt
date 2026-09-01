@@ -4,10 +4,11 @@ import model.requireQueryTypeDef
 import model.requireObjectField
 import model.Arguments
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
-import model.stampedVariables
+import model.instantiatedVariables
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
@@ -19,9 +20,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-class StampedObjectPathDefinitionTest {
+class ResolverVariableInstantiationTest {
     @Test
-    fun `resolver occurrence stamping distinguishes symbolic variables`() {
+    fun `resolver occurrence identity distinguishes symbolic variables`() {
         val fragment =
             """
             fragment Result on Query {
@@ -70,42 +71,38 @@ class StampedObjectPathDefinitionTest {
                 ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 4)),
             )
 
-        val compatibilityFragment = resolver.stampVars(firstPath)
-        val fullyStampedFragment = resolver.stamp(firstPath)
-        val equalFullyStampedFragment = resolver.stamp(firstPath)
-        val otherFullyStampedFragment = resolver.stamp(secondPath)
+        val firstFragment = resolver.instantiateObjectFragmentAt(firstPath).constructionSelections
+        val equalFirstFragment = resolver.instantiateObjectFragmentAt(firstPath).constructionSelections
+        val otherFragment = resolver.instantiateObjectFragmentAt(secondPath).constructionSelections
+        val firstOccurrence = ResolverOccurrenceId.at(firstPath)
 
-        assertEquals(
-            compatibilityFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
-            fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
-        )
         assertTrue(
-            fullyStampedFragment.stampedVariables().all { variable ->
-                variable.stamp?.resolverPath == firstPath
+            firstFragment.instantiatedVariables().all { variable ->
+                variable.instanceId?.resolverOccurrenceId == firstOccurrence
             },
         )
         assertEquals(
-            fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
-            equalFullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            firstFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            equalFirstFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
         )
         assertNotEquals(
-            fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
-            otherFullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            firstFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            otherFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
         )
         assertEquals(
-            fullyStampedFragment
-                .filter { selection -> selection.key.stampedVariables().isEmpty() }
+            firstFragment
+                .filter { selection -> selection.key.instantiatedVariables().isEmpty() }
                 .merge(testWorld.schema.requireQueryTypeDef())
                 .keys(),
-            otherFullyStampedFragment
-                .filter { selection -> selection.key.stampedVariables().isEmpty() }
+            otherFragment
+                .filter { selection -> selection.key.instantiatedVariables().isEmpty() }
                 .merge(testWorld.schema.requireQueryTypeDef())
                 .keys(),
         )
     }
 
     @Test
-    fun `stamps definition fragment and provider path at one occurrence`() {
+    fun `instantiates definition fragment and provider path at one occurrence`() {
         val source =
             """
             fragment Provider on Query {
@@ -179,24 +176,24 @@ class StampedObjectPathDefinitionTest {
                 .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
                 .size,
         )
-        val definition = resolver.stampedPathVarDefinitions(sitePath).single()
+        val definition = objectFragment.pathVariableDefinitions.single()
+        val resolverOccurrenceId = ResolverOccurrenceId.at(sitePath)
         val seed =
             Arguments.Variable.of(
                 testWorld.schema.requireObjectField("Query", "result"),
                 "seed",
-            ).stamp(sitePath)
+            ).instantiate(resolverOccurrenceId)
 
         assertEquals(
             setOf(seed),
-            definition.path.single().stampedVariables(),
+            definition.path.single().instantiatedVariables(),
         )
         assertEquals(
             setOf(seed, definition.variable),
-            resolver.stampVars(sitePath).stampedVariables(),
+            objectFragment.constructionSelections.instantiatedVariables(),
         )
         val marker =
-            resolver
-                .stampVars(sitePath)
+            objectFragment.constructionSelections
                 .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
                 .single()
         assertEquals(
@@ -205,7 +202,7 @@ class StampedObjectPathDefinitionTest {
         )
         assertEquals(
             objectFragment.pathVariableDefinitions,
-            resolver.stampedPathVarDefinitions(sitePath),
+            resolver.instantiatedPathVariableDefinitions(resolverOccurrenceId),
         )
     }
 
@@ -266,10 +263,10 @@ class StampedObjectPathDefinitionTest {
                 testWorld.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
-        val definition = resolver.stampedPathVarDefinitions(listOf(resultKey)).single()
+        val objectFragment = resolver.instantiateObjectFragmentAt(listOf(resultKey))
+        val definition = objectFragment.pathVariableDefinitions.single()
         val markedBox =
-            resolver
-                .stampVars(listOf(resultKey))
+            objectFragment.constructionSelections
                 .filter { selection ->
                     selection.key is ObjectEngineResult.VariableKey &&
                         selection.key.field.name == "box"
@@ -359,7 +356,8 @@ class StampedObjectPathDefinitionTest {
             )
         val markedContainer =
             resolver
-                .stampVars(listOf(resultKey))
+                .instantiateObjectFragmentAt(listOf(resultKey))
+                .constructionSelections
                 .filter { selection ->
                     selection.key is ObjectEngineResult.VariableKey &&
                         selection.key.field.name == "container"

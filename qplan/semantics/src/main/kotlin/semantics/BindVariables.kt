@@ -7,6 +7,7 @@ import model.ObjectEngineResult
 import model.Assumptions
 import model.EngineInputData
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.registry.VariableDefinition
 
 /**
@@ -14,7 +15,7 @@ import model.registry.VariableDefinition
  * occurrences.
  *
  * The exact resolver key completes the containing-object [path], so argument-distinct occurrences
- * of one resolver field define distinct stamped variables. Every occurrence must be declared and
+ * of one resolver field define distinct variable instances. Every occurrence must be declared and
  * completed exactly once.
  */
 context(world: Assumptions)
@@ -39,12 +40,16 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
             .variables
             .forEach { (variable, definition) ->
                 if (definition is VariableDefinition.FromArgument) {
-                    val stamped = variable.stamp(path + key)
+                    val instantiated =
+                        variable.instantiate(
+                            ResolverOccurrenceId.at(path + key),
+                        )
+                    val variableId = requireNotNull(instantiated.instanceId)
                     val value = definition.read(arguments)
-                    onDeclared(stamped, definition)
-                    world.declareBinding(stamped)
-                    onCompleted(stamped, definition, value)
-                    world.completeBinding(stamped, value)
+                    onDeclared(instantiated, definition)
+                    world.declareBinding(variableId)
+                    onCompleted(instantiated, definition, value)
+                    world.completeBinding(variableId, value)
                 }
             }
     }

@@ -12,16 +12,17 @@ import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.engineObjectDataOf
 import model.outputType
 import model.requireQueryTypeDef
 import model.registry.FieldResolver
-import model.registry.VariableDefinition
 import model.schemaType
 import model.toMaterializeSelectionForest
 import model.usedVariables
 import semantics.correctresolution.argumentsContainErrorValue
+import model.registry.VariableDefinition
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
@@ -32,13 +33,14 @@ internal class FieldResolverTask(
     private val selection: ObjectSelection,
     private val groundedArguments: Arguments.Ground,
     private val resolver: FieldResolver,
+    private val resolverOccurrenceId: ResolverOccurrenceId,
     private val inputMaterializeSelections: MaterializeSelectionForest,
     private val target: ObjectEngineResult,
     private val cell: EngineResultCell,
 
     // The following arguments are passed for instrumentation-purposes only
     private val variableArgumentCount: Int,
-    private val variableResolverPaths: Set<List<PathComponent>>,
+    private val variableResolverOccurrenceIds: Set<ResolverOccurrenceId>,
 ) {
     suspend fun run() {
         context(world, support) {
@@ -63,6 +65,7 @@ internal class FieldResolverTask(
             val queryValue =
                 resolver.resolveQueryFragment(
                     coordinate = coordinate,
+                    resolverOccurrenceId = resolverOccurrenceId,
                     arguments = resolverArguments,
                 )
 
@@ -73,8 +76,9 @@ internal class FieldResolverTask(
                     input = input,
                     arguments = resolverArguments,
                     suppliedDemand = invocationDemand,
+                    resolverOccurrenceId = resolverOccurrenceId,
                     variableArgumentCount = variableArgumentCount,
-                    variableResolverPaths = variableResolverPaths,
+                    variableResolverOccurrenceIds = variableResolverOccurrenceIds,
                 ),
             )
 
@@ -102,9 +106,10 @@ internal class FieldResolverTask(
 context(world: Assumptions, support: Resolver26Support)
 private suspend fun FieldResolver.resolveQueryFragment(
     coordinate: List<PathComponent>,
+    resolverOccurrenceId: ResolverOccurrenceId,
     arguments: Arguments.Resolved,
 ): EngineObjectData.Sync {
-    val queryFragment = instantiateQueryFragmentAt(coordinate)
+    val queryFragment = instantiateQueryFragment(resolverOccurrenceId)
     if (queryFragment.constructionSelections.isEmpty()) {
         return engineObjectDataOf(world.schema.requireQueryTypeDef())
     }
@@ -115,7 +120,7 @@ private suspend fun FieldResolver.resolveQueryFragment(
         require(definition is VariableDefinition.FromArgument) {
             "Resolver26 query fragments do not support FromObjectField variables"
         }
-        world.bindVariable(variable, definition.read(arguments))
+        world.bindVariable(requireNotNull(variable.instanceId), definition.read(arguments))
     }
 
     val symbolicSelections = queryFragment.materializeSelections

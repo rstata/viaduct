@@ -10,7 +10,7 @@ import model.Arguments
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.Stamp
+import model.ResolverOccurrenceId
 import model.materializeSelectionForestOf
 import model.merge
 import model.testing.GJSchema
@@ -158,11 +158,10 @@ class MaterializeSelectionFlattenerTest {
     fun `construction-only provider markers cannot enter a materialize forest`() {
         val fixture = SchemaFixture()
         val field = fixture.schema.requireObjectField("Query", "version")
-        val stamp = Stamp.Occurrence.of(resolverPath = emptyList())
         val variable =
             Arguments.Variable
                 .of(field = field, variableName = "provider")
-                .stamp(stamp)
+                .instantiate(ResolverOccurrenceId.at(emptyList()))
         val marker =
             ObjectEngineResult.VariableKey.of(
                 key = ObjectEngineResult.Key.of(field, emptyMap()),

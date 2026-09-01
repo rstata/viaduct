@@ -1,21 +1,21 @@
 package semantics.resolver26
 
-import model.Arguments
 import model.Assumptions
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.merge
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
-import model.registry.StampedObjectPathDefinition
+import model.registry.InstantiatedObjectPathDefinition
+import model.registry.VariableInstanceDefinition
 import model.schemaType
 import model.selectionForestOf
-import model.usedVariables
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
 
@@ -29,7 +29,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
     var accumulatedDemand: SelectionForest = initialDemand
     val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
         linkedMapOf()
-    val pathVariableDefinitions: MutableList<StampedObjectPathDefinition> =
+    val pathVariableDefinitions: MutableList<PathVariableDefinitionRead> =
         mutableListOf()
 
     while (true) {
@@ -62,6 +62,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
         newResolverSelections.forEach { (objectKey, _) ->
             val resolver: FieldResolver =
                 world.resolverRegistry.resolver(objectKey.field)
+            val resolverOccurrenceId = ResolverOccurrenceId.at(path + objectKey)
             if (
                 objectKey is ObjectEngineResult.GroundKey &&
                 objectKey.arguments.argumentsContainErrorValue()
@@ -71,10 +72,11 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                         objectKey,
                         ResolverExpansion(
                             ownerKey = objectKey,
+                            resolverOccurrenceId = resolverOccurrenceId,
                             resolver = resolver,
                             inputDemand = selectionForestOf(),
                             inputMaterializeSelections = materializeSelectionForestOf(),
-                            variableDefinitions = emptyMap(),
+                            variableDefinitions = emptyList(),
                         ),
                     ) == null,
                 ) {
@@ -82,30 +84,29 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 }
                 return@forEach
             }
-            val resolverPath: List<PathComponent> = path + objectKey
+            val readerPath = path + objectKey
             val objectFragment: ResolverObjectFragment =
-                resolver.instantiateObjectFragmentAt(resolverPath)
-            val definitions: Map<Arguments.Variable, model.registry.VariableDefinition> =
-                objectFragment.constructionSelections
-                    .usedVariables()
-                    .associateWith { variable ->
-                        resolver.variables.getValue(
-                            Arguments.Variable.of(variable.field, variable.variableName),
-                        )
-                    }
+                resolver.instantiateObjectFragment(resolverOccurrenceId)
             val expansion =
                 ResolverExpansion(
                     ownerKey = objectKey,
+                    resolverOccurrenceId = resolverOccurrenceId,
                     resolver = resolver,
                     inputDemand = objectFragment.constructionSelections,
                     inputMaterializeSelections = objectFragment.materializeSelections,
-                    variableDefinitions = definitions,
+                    variableDefinitions = objectFragment.variableDefinitions,
                 )
             check(expansions.put(objectKey, expansion) == null) {
                 "Resolver26 expanded object key twice: $objectKey"
             }
 
-            pathVariableDefinitions += objectFragment.pathVariableDefinitions
+            pathVariableDefinitions +=
+                objectFragment.pathVariableDefinitions.map { definition ->
+                    PathVariableDefinitionRead(
+                        definition = definition,
+                        readerPath = readerPath,
+                    )
+                }
             accumulatedDemand += objectFragment.constructionSelections
         }
     }
@@ -129,16 +130,22 @@ private fun EngineObjectData.Sync.requiresStandardResolution(
 
 internal data class ResolverExpansion(
     val ownerKey: ObjectEngineResult.ObjectKey,
+    val resolverOccurrenceId: ResolverOccurrenceId,
     val resolver: FieldResolver,
     val inputDemand: SelectionForest,
     val inputMaterializeSelections: MaterializeSelectionForest,
-    val variableDefinitions: Map<Arguments.Variable, model.registry.VariableDefinition>,
+    val variableDefinitions: List<VariableInstanceDefinition>,
 )
 
 internal class CloseInputDemandResult(
     val demand: ObjectSelectionForest,
     val expansions: Map<ObjectEngineResult.ObjectKey, ResolverExpansion>,
-    val pathVariableDefinitions: List<StampedObjectPathDefinition>,
+    val pathVariableDefinitions: List<PathVariableDefinitionRead>,
 ) {
     var bindingDeclarationStarted: Boolean = false
 }
+
+internal data class PathVariableDefinitionRead(
+    val definition: InstantiatedObjectPathDefinition,
+    val readerPath: List<PathComponent>,
+)

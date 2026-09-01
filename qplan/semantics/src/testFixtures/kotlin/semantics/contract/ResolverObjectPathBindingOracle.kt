@@ -7,13 +7,14 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.ResolverOccurrenceId
 import viaduct.graphql.schema.ViaductSchema
 import model.Selection
 import model.VariableBinding
 import model.objectKey
 import model.outputType
 import model.registry.FieldResolver
-import model.registry.StampedObjectPathDefinition
+import model.registry.InstantiatedObjectPathDefinition
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
@@ -32,7 +33,9 @@ fun ObjectEngineResult.validateObjectPathBindings() {
         val definitions = resolver.boundObjectPathDefinitions(cell.occurrencePath)
         if (
             definitions.isNotEmpty() &&
-            definitions.none { definition -> world.isBound(definition.variable) }
+            definitions.none { definition ->
+                definition.variable.instanceId?.let(world::isBound) == true
+            }
         ) {
             return@forEachRegisteredResolverOccurrence
         }
@@ -42,7 +45,10 @@ fun ObjectEngineResult.validateObjectPathBindings() {
                     path = definition.path,
                     reader = cell.occurrencePath,
                 )
-            assertEquals(expected, world.getBinding(definition.variable))
+            assertEquals(
+                expected,
+                world.getBinding(requireNotNull(definition.variable.instanceId)),
+            )
         }
     }
 }
@@ -50,14 +56,16 @@ fun ObjectEngineResult.validateObjectPathBindings() {
 context(world: Assumptions)
 internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
-): List<StampedObjectPathDefinition> {
+): List<InstantiatedObjectPathDefinition> {
     val occurrenceDefinitions =
         instantiateObjectFragmentAt(path).pathVariableDefinitions
     return occurrenceDefinitions
         .takeIf { definitions ->
             definitions.isNotEmpty() &&
-                definitions.all { definition -> world.isBound(definition.variable) }
-        } ?: stampedPathVarDefinitions(path)
+                definitions.all { definition ->
+                    definition.variable.instanceId?.let(world::isBound) == true
+                }
+        }.orEmpty()
 }
 
 context(world: Assumptions)

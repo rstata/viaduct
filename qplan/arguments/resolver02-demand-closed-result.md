@@ -14,13 +14,13 @@ The argument separates demand discovery, same-object dependency availability, an
 2. dependency order makes each resolver input materializable before its key is resolved; and
 3. resolving each selected value satisfies its accumulated subselections and recursively closes every nested result.
 
-For any present result key, `isClosedUnderResolverDemand` imposes no resolver-fragment obligation when the arguments contain an error or the field has no registered resolver. Otherwise, Lemma 1 places the resolver's applicable stamped and grounded object-fragment selections in the closed forest, Lemma 2 makes that input available during construction, and Lemma 3 shows that the completed containing OER satisfies those selections and that every value below the key is recursively closed.
+For any present result key, `isClosedUnderResolverDemand` imposes no resolver-fragment obligation when the arguments contain an error or the field has no registered resolver. Otherwise, Lemma 1 places the resolver's applicable instantiated and grounded object-fragment selections in the closed forest, Lemma 2 makes that input available during construction, and Lemma 3 shows that the completed containing OER satisfies those selections and that every value below the key is recursively closed.
 
 The ordering lemma is needed to show that Resolver02 can construct the claimed result without materializing an absent input. Once construction is complete, ordering history is not observable by `isClosedUnderResolverDemand`; the extensional closure conclusion follows from the demand and recursive-construction lemmas.
 
 ## Lemma 1: Transitive Resolver Demand Is Included
 
-Let `closedSelections = closeResolverDemand(path, selections)` for one concrete object occurrence. The result contains every applicable occurrence from the incoming selections. For every ground key in `closedSelections` whose arguments contain no error and whose field has a registered resolver, it also contains every applicable selection obtained by stamping the resolver's fixed object fragment at `path + key`, binding its `FromArgument` variables, and specializing it to the concrete object type. The same property holds transitively for resolver keys introduced by those selections.
+Let `closedSelections = closeResolverDemand(path, selections)` for one concrete object occurrence. The result contains every applicable occurrence from the incoming selections. For every ground key in `closedSelections` whose arguments contain no error and whose field has a registered resolver, it also contains every applicable selection obtained by instantiating the resolver's fixed object fragment at `path + key`, binding its `FromArgument` variables, and specializing it to the concrete object type. The same property holds transitively for resolver keys introduced by those selections.
 
 The termination measure is the finite set of reachable resolver keys that have not yet been expanded. Each closure step chooses currently present unexpanded resolver keys, adds their object fragments, and records those keys as expanded. A key is expanded at most once. Resolver fragments and the reachable exact-key universe are finite, so the unexpanded set strictly decreases until no expansion remains.
 
@@ -30,11 +30,11 @@ Concrete-type filtering and specialization through `SelectionForest.merge(type)`
 
 ## Lemma 2: Dependency Order Makes Resolver Inputs Available
 
-Before a key is resolved, every sibling subtree required by its stamped and grounded object fragment is present in the resolved prefix OER.
+Before a key is resolved, every sibling subtree required by its instantiated and grounded object fragment is present in the resolved prefix OER.
 
 Proceed by induction over the prefix of the ordering returned by `dependencyOrder`. A key is ready only when `dependenciesOf(path, key, unresolved)` finds no required sibling in the unresolved suffix. Lemma 1 guarantees that every applicable required sibling belongs to the complete closed key set. A required sibling absent from the unresolved suffix must therefore belong to the resolved prefix.
 
-The prefix induction invariant, using Lemma 3 for keys already resolved, says that each such sibling cell also satisfies its accumulated subselections. The prefix OER consequently conforms to the current resolver's stamped and grounded object fragment, so `materialize` is defined for that resolver input.
+The prefix induction invariant, using Lemma 3 for keys already resolved, says that each such sibling cell also satisfies its accumulated subselections. The prefix OER consequently conforms to the current resolver's instantiated and grounded object fragment, so `materialize` is defined for that resolver input.
 
 The canonical registry's acyclic resolver-demand invariant guarantees that every nonempty unresolved set contains a ready key. `dependencyOrder` rejects a nonempty set with no ready member as a cycle. Independent ready keys may appear in any order because no member requires another member of that ready set.
 

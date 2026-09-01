@@ -72,9 +72,11 @@ class ObjectEngineResultKeyTest {
         val source = schema.requireObjectField("Query", "source")
         val consume = schema.requireObjectField("Query", "consume")
         val variable = Arguments.Variable.of(source, "value")
-        val first = variable.stamp(listOf(ListEngineResult.Index.of(0)))
-        val equalFirst = variable.stamp(listOf(ListEngineResult.Index.of(0)))
-        val second = variable.stamp(listOf(ListEngineResult.Index.of(1)))
+        val firstOccurrence = ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(0)))
+        val secondOccurrence = ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(1)))
+        val first = variable.instantiate(firstOccurrence)
+        val equalFirst = variable.instantiate(firstOccurrence)
+        val second = variable.instantiate(secondOccurrence)
         fun key(variable: Arguments.Variable) =
             ObjectEngineResult.Key.of(
                 consume,
@@ -108,14 +110,15 @@ class ObjectEngineResultKeyTest {
         val abstractField = schema.requireField("Item", "computed")
         val concreteType = schema.requireType("ConcreteItem") as ViaductSchema.Object
         val variable = Arguments.Variable.of(source, "factor")
-        val selectionStamp = Stamp.Occurrence.of(listOf(ListEngineResult.Index.of(1)))
+        val resolverOccurrenceId =
+            ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(1)))
         val arguments =
             Arguments.Template
                 .of(
                     abstractField,
                     Arguments.of(abstractField, mapOf("factor" to variable)),
                 )
-                .stamp(abstractField, selectionStamp)
+                .instantiate(abstractField, resolverOccurrenceId)
         val symbolicKey =
             ObjectEngineResult.Key.of(
                 field = abstractField,
@@ -135,8 +138,12 @@ class ObjectEngineResultKeyTest {
         assertFalse(symbolicKey is ObjectEngineResult.ObjectKey)
         assertIs<ObjectEngineResult.ObjectKey>(specialized)
         assertEquals(
-            selectionStamp,
-            specialized.arguments.usedVariables().single().stamp,
+            resolverOccurrenceId,
+            specialized.arguments
+                .usedVariables()
+                .single()
+                .instanceId
+                ?.resolverOccurrenceId,
         )
     }
 

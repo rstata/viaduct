@@ -108,13 +108,13 @@ class ArgumentsTest {
         assertNotEquals(Arguments.Variable.of(first, "other"), template)
         assertNotEquals(Arguments.Variable.of(second, "value"), template)
         assertTrue(template.isTemplate)
-        assertFalse(template.isStamped)
-        assertNull(template.stamp)
+        assertFalse(template.isInstantiated)
+        assertNull(template.instanceId)
         assertEquals("Variable.Template(name=value, field=Query/first)", "$template")
     }
 
     @Test
-    fun `stamp identity contains its template and occurrence path`() {
+    fun `variable instance identity contains its template and resolver occurrence`() {
         val schema =
             TestWorld.fromSDL(
                 """
@@ -128,27 +128,30 @@ class ArgumentsTest {
         val second = schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(first, "value")
         val path = listOf(ListEngineResult.Index.of(0))
-        val stamp = template.stamp(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val instance = template.instantiate(resolverOccurrenceId)
 
-        assertEquals(template.stamp(path), stamp)
-        assertNotEquals(Arguments.Variable.of(first, "other").stamp(path), stamp)
-        assertNotEquals(Arguments.Variable.of(second, "value").stamp(path), stamp)
-        assertNotEquals<Arguments.Variable>(template, stamp)
-        assertNotEquals(template.stamp(emptyList()), stamp)
-        assertFalse(stamp.isTemplate)
-        assertTrue(stamp.isStamped)
-        assertEquals(path, stamp.stamp?.resolverPath)
+        assertEquals(template.instantiate(resolverOccurrenceId), instance)
+        assertNotEquals(Arguments.Variable.of(first, "other").instantiate(resolverOccurrenceId), instance)
+        assertNotEquals(Arguments.Variable.of(second, "value").instantiate(resolverOccurrenceId), instance)
+        assertNotEquals<Arguments.Variable>(template, instance)
+        assertNotEquals(template.instantiate(ResolverOccurrenceId.at(emptyList())), instance)
+        assertFalse(instance.isTemplate)
+        assertTrue(instance.isInstantiated)
+        assertEquals(resolverOccurrenceId, instance.instanceId?.resolverOccurrenceId)
         assertFailsWith<IllegalArgumentException> {
-            stamp.stamp(path)
+            instance.instantiate(resolverOccurrenceId)
         }
         assertEquals(
-            "Variable.Occurrence(name=value, field=Query/first, path=[index=0])",
-            "$stamp",
+            "Variable.Instance(name=value, field=Query/first, " +
+                "id=VariableInstanceId(resolver=ResolverOccurrenceId(path=[index=0]), " +
+                "variable=Query/first:value))",
+            "$instance",
         )
     }
 
     @Test
-    fun `symbolic equality uses stamped variable identity and recursive position`() {
+    fun `symbolic equality uses variable instance identity and recursive position`() {
         val world =
             TestWorld.fromSDL(
                 """
@@ -167,10 +170,12 @@ class ArgumentsTest {
         val consume = world.schema.requireObjectField("Query", "consume")
         val firstPath = listOf(ListEngineResult.Index.of(0))
         val secondPath = listOf(ListEngineResult.Index.of(1))
-        val firstVariable = Arguments.Variable.of(source, "value").stamp(firstPath)
-        val equalFirstVariable = Arguments.Variable.of(source, "value").stamp(firstPath)
-        val secondVariable = Arguments.Variable.of(source, "value").stamp(secondPath)
-        val differentlyNamedVariable = Arguments.Variable.of(source, "other").stamp(firstPath)
+        val firstOccurrence = ResolverOccurrenceId.at(firstPath)
+        val secondOccurrence = ResolverOccurrenceId.at(secondPath)
+        val firstVariable = Arguments.Variable.of(source, "value").instantiate(firstOccurrence)
+        val equalFirstVariable = Arguments.Variable.of(source, "value").instantiate(firstOccurrence)
+        val secondVariable = Arguments.Variable.of(source, "value").instantiate(secondOccurrence)
+        val differentlyNamedVariable = Arguments.Variable.of(source, "other").instantiate(firstOccurrence)
 
         fun arguments(variable: Arguments.Variable): Arguments =
             Arguments.of(
@@ -221,10 +226,10 @@ class ArgumentsTest {
         assertNotEquals(first, literal)
         assertNotEquals(first, differentPositions)
 
-        world.declareBinding(firstVariable)
-        world.declareBinding(secondVariable)
-        world.completeBinding(firstVariable, 7)
-        world.completeBinding(secondVariable, 7)
+        world.declareBinding(requireNotNull(firstVariable.instanceId))
+        world.declareBinding(requireNotNull(secondVariable.instanceId))
+        world.completeBinding(requireNotNull(firstVariable.instanceId), 7)
+        world.completeBinding(requireNotNull(secondVariable.instanceId), 7)
 
         assertEquals(firstHash, first.hashCode())
         assertEquals(secondHash, second.hashCode())
@@ -250,24 +255,7 @@ class ArgumentsTest {
     }
 
     @Test
-    fun `binding storage rejects a variable template`() {
-        val world =
-            TestWorld.fromSDL(
-                """
-                type Query {
-                  source: Int
-                }
-                """.trimIndent(),
-            ).assumptions
-        val template = Arguments.Variable.of(world.schema.requireObjectField("Query", "source"), "value")
-
-        assertFailsWith<IllegalArgumentException> {
-            world.declareBinding(template)
-        }
-    }
-
-    @Test
-    fun `variable-only stamping recursively stamps and instantiates variable templates`() {
+    fun `variable instantiation recursively instantiates variable templates`() {
         val world =
             TestWorld.fromSDL(
                 """
@@ -300,15 +288,16 @@ class ArgumentsTest {
             )
         val path = listOf(ListEngineResult.Index.of(2))
 
-        val stamped = arguments.stampVars(consume, path)
-        val stampedVariable = template.stamp(path)
-        world.declareBinding(stampedVariable)
-        world.completeBinding(stampedVariable, 9)
-        val instantiated =
+        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val instantiatedArguments = arguments.instantiateVariables(consume, resolverOccurrenceId)
+        val variableInstance = template.instantiate(resolverOccurrenceId)
+        world.declareBinding(requireNotNull(variableInstance.instanceId))
+        world.completeBinding(requireNotNull(variableInstance.instanceId), 9)
+        val grounded =
             context(world) {
-                stamped.instantiateBindings(consume)
+                instantiatedArguments.instantiateBindings(consume)
             }
-        val groundedArguments = assertIs<Arguments.Resolved>(instantiated)
+        val groundedArguments = assertIs<Arguments.Resolved>(grounded)
         val filter =
             assertIs<EngineInputObjectData>(
                 groundedArguments.fieldValues.getValue("filter"),
@@ -323,7 +312,7 @@ class ArgumentsTest {
         assertEquals(1, nested[1])
         assertEquals(9, values.single())
         assertEquals(setOf(template), arguments.variableTemplates())
-        assertEquals(setOf(stampedVariable), stamped.stampedVariables())
+        assertEquals(setOf(variableInstance), instantiatedArguments.instantiatedVariables())
     }
 
     @Test
@@ -341,14 +330,15 @@ class ArgumentsTest {
         val consume = world.schema.requireObjectField("Query", "consume")
         val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(2))
-        val variable = template.stamp(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val variable = template.instantiate(resolverOccurrenceId)
         val arguments =
             Arguments.of(
                 consume,
                 mapOf("values" to template),
-            ).stampVars(consume, path)
-        world.declareBinding(variable)
-        world.completeBinding(variable, 9)
+            ).instantiateVariables(consume, resolverOccurrenceId)
+        world.declareBinding(requireNotNull(variable.instanceId))
+        world.completeBinding(requireNotNull(variable.instanceId), 9)
 
         assertFailsWith<ClassCastException> {
             context(world) {
@@ -382,16 +372,17 @@ class ArgumentsTest {
         val second = world.schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(1))
-        val variable = template.stamp(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val variable = template.instantiate(resolverOccurrenceId)
         val arguments =
             Arguments
                 .of(
                     first,
                     mapOf("filter" to mapOf("value" to template)),
-                ).stampVars(first, path)
+                ).instantiateVariables(first, resolverOccurrenceId)
 
-        world.declareBinding(variable)
-        world.completeBinding(variable, 9)
+        world.declareBinding(requireNotNull(variable.instanceId))
+        world.completeBinding(requireNotNull(variable.instanceId), 9)
 
         val grounded =
             context(world) {
@@ -431,19 +422,19 @@ class ArgumentsTest {
             )
         val firstPath = listOf(ListEngineResult.Index.of(1))
         val secondPath = listOf(ListEngineResult.Index.of(2))
-        val firstStamp = Stamp.Occurrence.of(firstPath)
-        val secondStamp = Stamp.Occurrence.of(secondPath)
-        val firstVariable = template.stamp(firstStamp)
-        val secondVariable = template.stamp(secondStamp)
-        world.declareBinding(firstVariable)
-        world.declareBinding(secondVariable)
-        world.completeBinding(firstVariable, 9)
-        world.completeBinding(secondVariable, 9)
+        val firstOccurrence = ResolverOccurrenceId.at(firstPath)
+        val secondOccurrence = ResolverOccurrenceId.at(secondPath)
+        val firstVariable = template.instantiate(firstOccurrence)
+        val secondVariable = template.instantiate(secondOccurrence)
+        world.declareBinding(requireNotNull(firstVariable.instanceId))
+        world.declareBinding(requireNotNull(secondVariable.instanceId))
+        world.completeBinding(requireNotNull(firstVariable.instanceId), 9)
+        world.completeBinding(requireNotNull(secondVariable.instanceId), 9)
 
-        fun symbolicKey(variableStamp: Stamp.Occurrence): ObjectEngineResult.ObjectKey =
+        fun symbolicKey(resolverOccurrenceId: ResolverOccurrenceId): ObjectEngineResult.ObjectKey =
             ObjectEngineResult.Key.of(
                 field = consume,
-                arguments = arguments.stamp(consume, variableStamp),
+                arguments = arguments.instantiate(consume, resolverOccurrenceId),
             )
 
         fun ground(key: ObjectEngineResult.ObjectKey): ObjectEngineResult.GroundKey =
@@ -460,13 +451,13 @@ class ArgumentsTest {
                     .single()
             }
 
-        val firstOpen = symbolicKey(firstStamp)
-        val equalFirstOpen = symbolicKey(firstStamp)
-        val secondOpen = symbolicKey(secondStamp)
+        val firstOpen = symbolicKey(firstOccurrence)
+        val equalFirstOpen = symbolicKey(firstOccurrence)
+        val secondOpen = symbolicKey(secondOccurrence)
         val first = ground(firstOpen)
         val equalFirst = ground(equalFirstOpen)
         val second = ground(secondOpen)
-        val unstamped = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 9))
+        val literal = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 9))
         val reapplied =
             context(world) {
                 selectionForestOf(
@@ -480,14 +471,14 @@ class ArgumentsTest {
                     .single()
             }
 
-        assertEquals(setOf(firstVariable), firstOpen.stampedVariables())
+        assertEquals(setOf(firstVariable), firstOpen.instantiatedVariables())
         assertEquals(firstOpen, equalFirstOpen)
         assertNotEquals(firstOpen, secondOpen)
         assertIs<ObjectEngineResult.GroundKey>(first)
         assertEquals(first, equalFirst)
         assertEquals(first, reapplied)
         assertEquals(first, second)
-        assertEquals<ObjectEngineResult.GroundKey>(first, unstamped)
+        assertEquals<ObjectEngineResult.GroundKey>(first, literal)
         assertEquals(
             9,
             assertIs<Arguments.Resolved>(first.arguments).fieldValues.getValue("value"),
@@ -495,7 +486,7 @@ class ArgumentsTest {
     }
 
     @Test
-    fun `argument template rejects an existing stamped variable`() {
+    fun `argument template rejects an existing variable instance`() {
         val schema =
             TestWorld.fromSDL(
                 """
@@ -507,8 +498,9 @@ class ArgumentsTest {
             ).schema
         val source = schema.requireObjectField("Query", "source")
         val consume = schema.requireObjectField("Query", "consume")
-        val stampedVariable = Arguments.Variable.of(source, "value").stamp(emptyList())
-        val arguments = Arguments.of(consume, mapOf("value" to stampedVariable))
+        val variableInstance =
+            Arguments.Variable.of(source, "value").instantiate(ResolverOccurrenceId.at(emptyList()))
+        val arguments = Arguments.of(consume, mapOf("value" to variableInstance))
 
         assertFailsWith<IllegalArgumentException> {
             Arguments.Template.of(consume, arguments)
@@ -536,7 +528,7 @@ class ArgumentsTest {
     }
 
     @Test
-    fun `open arguments recursively fetch incomplete stamped variables`(): Unit =
+    fun `open arguments recursively fetch incomplete variable instances`(): Unit =
         runBlocking {
             val world =
                 TestWorld.fromSDL(
@@ -553,7 +545,7 @@ class ArgumentsTest {
                 ).assumptions
             val source = world.schema.requireObjectField("Query", "source")
             val consume = world.schema.requireObjectField("Query", "consume")
-            val stamp = listOf(ListEngineResult.Index.of(1))
+            val path = listOf(ListEngineResult.Index.of(1))
             val variableTemplate = Arguments.Variable.of(source, "value")
             val openArguments =
                 Arguments.of(
@@ -571,14 +563,13 @@ class ArgumentsTest {
                     possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                     subselections = selectionForestOf(),
                 )
-            val selectionStamp =
-                Stamp.Occurrence.of(stamp)
-            val variable = variableTemplate.stamp(selectionStamp)
+            val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+            val variable = variableTemplate.instantiate(resolverOccurrenceId)
             val arguments =
                 Arguments.Template
                     .of(consume, openArguments)
-                    .stamp(consume, selectionStamp)
-            world.declareBinding(variable)
+                    .instantiate(consume, resolverOccurrenceId)
+            world.declareBinding(requireNotNull(variable.instanceId))
 
             val fetched =
                 async {
@@ -588,7 +579,7 @@ class ArgumentsTest {
                 }
 
             assertFalse(fetched.isCompleted)
-            world.completeBinding(variable, 9)
+            world.completeBinding(requireNotNull(variable.instanceId), 9)
             val grounded = fetched.await()
             val groundedArguments = assertIs<Arguments.Resolved>(grounded)
             val filter =

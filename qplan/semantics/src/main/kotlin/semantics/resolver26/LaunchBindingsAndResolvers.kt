@@ -27,18 +27,18 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
 ) {
     context(world, support) {
         coroutineScope {
-            closed.pathVariableDefinitions.forEach { definition ->
+            closed.pathVariableDefinitions.forEach { read ->
                 launch {
-                    val reader: List<PathComponent> =
-                        requireNotNull(definition.variable.stamp)
-                            .resolverPath
                     val binding: VariableBinding =
                         target.readProvider(
-                            definition = definition,
-                            reader = reader,
+                            definition = read.definition,
+                            reader = read.readerPath,
                             support = support,
                         )
-                    world.completeBinding(definition.variable, binding)
+                    world.completeBinding(
+                        requireNotNull(read.definition.variable.instanceId),
+                        binding,
+                    )
                 }
             }
             val demandByKey = closed.demand.byKey()
@@ -61,10 +61,12 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
 ) {
     context(world, support) {
         val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
-        val variableResolverPaths =
+        val variableResolverOccurrenceIds =
             selection.key.arguments
                 .usedVariables()
-                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp?.resolverPath }
+                .mapNotNullTo(linkedSetOf()) { variable ->
+                    variable.instanceId?.resolverOccurrenceId
+                }
         val objectKey = selection.key
         val groundedArguments = objectKey.fetchGroundedArguments()
         check(objectKey.field in world.resolverRegistry) {
@@ -89,11 +91,12 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
                 selection = selection,
                 groundedArguments = groundedArguments,
                 resolver = expansion.resolver,
+                resolverOccurrenceId = expansion.resolverOccurrenceId,
                 inputMaterializeSelections = expansion.inputMaterializeSelections,
                 target = target,
                 cell = cell,
                 variableArgumentCount = variableArgumentCount,
-                variableResolverPaths = variableResolverPaths,
+                variableResolverOccurrenceIds = variableResolverOccurrenceIds,
             )
         support.requestScope.launch {
             fieldResolverTask.run()
@@ -108,13 +111,15 @@ private fun ObjectOrchestrationTask.completeFromArgumentBindings(
     groundedArguments: model.Arguments.Ground,
 ) {
     if (expansion.ownerKey is ObjectEngineResult.GroundKey) return
-    expansion.variableDefinitions.forEach { (variable, variableDefinition) ->
-        if (variableDefinition !is VariableDefinition.FromArgument) {
+    expansion.variableDefinitions.forEach { variableDefinition ->
+        if (variableDefinition.definition !is VariableDefinition.FromArgument) {
             return@forEach
         }
+        val definition =
+            variableDefinition.definition as VariableDefinition.FromArgument
         world.completeBinding(
-            variable,
-            bindingFor(groundedArguments, variableDefinition),
+            requireNotNull(variableDefinition.variable.instanceId),
+            bindingFor(groundedArguments, definition),
         )
     }
 }

@@ -5,7 +5,7 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Stamp
+import model.ResolverOccurrenceId
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
 import model.usedVariables
@@ -120,7 +120,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->
-            variable.isStamped && world.isBound(variable)
+            variable.instanceId?.let(world::isBound) == true
         } &&
             result.conformsToSelectionsAt(
                 selections = constructionSelections,

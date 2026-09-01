@@ -17,7 +17,7 @@ These findings come from production investigation, focused counterexamples, or f
 7. Static paths and schema coordinates do not identify runtime object occurrences, list positions, concrete types, argument tuples, or execution epochs.
 8. Alias-free internal demand is not automatically a valid tenant-visible GraphQL fragment.
 9. Broad random campaigns can miss a decisive counterexample or validate a flawed oracle.
-10. Variable identity belongs to its defining resolver occurrence; nested variables must be stamped and instantiated one activated demand layer at a time.
+10. Variable identity belongs to its defining resolver occurrence; nested variables must be instantiated one activated demand layer at a time.
 11. Production engine input data, resolver output data, OER leaf values, and `EngineObjectData.Sync` overload Kotlin `String` for GraphQL String, ID, and enum values; tenant boundaries temporarily project IDs and enums to `GlobalID<T>` or generated Kotlin enum classes and lower them back to strings before returning to the engine.
 
 The central consequence is producer-specific: every producer-owned value later consumed from one resolver-bearing occurrence must be covered by the demand supplied to that occurrence's producing application. A correct final union, cache hit, widened result, or second materialization is weaker evidence.

@@ -10,6 +10,7 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.fragmentFrom
 import model.instantiateBindings
@@ -60,8 +61,9 @@ internal fun interface ObservedResolverBenchmarkSubject {
 
 internal data class ResolverBenchmarkApplicationObservation(
     val occurrencePath: List<PathComponent>,
+    val resolverOccurrenceId: ResolverOccurrenceId,
     val variableArgumentCount: Int,
-    val variableSourceOccurrencePaths: Set<List<PathComponent>>,
+    val variableSourceOccurrenceIds: Set<ResolverOccurrenceId>,
 )
 
 internal class CurrentProfileBenchmarkSupport(
@@ -425,21 +427,22 @@ internal class CurrentProfileBenchmarkSupport(
     }
 
     private fun List<ResolverBenchmarkApplicationObservation>.maximumVariableStackDepth(): Long {
-        val executedOccurrences = mapTo(linkedSetOf()) { observation -> observation.occurrencePath }
+        val executedOccurrences =
+            mapTo(linkedSetOf()) { observation -> observation.resolverOccurrenceId }
         val childrenBySource =
-            buildMap<List<PathComponent>, MutableSet<List<PathComponent>>> {
+            buildMap<ResolverOccurrenceId, MutableSet<ResolverOccurrenceId>> {
                 this@maximumVariableStackDepth.forEach { observation ->
-                    observation.variableSourceOccurrencePaths
+                    observation.variableSourceOccurrenceIds
                         .filter(executedOccurrences::contains)
-                        .forEach { sourcePath ->
-                            getOrPut(sourcePath, ::linkedSetOf)
-                                .add(observation.occurrencePath)
+                        .forEach { sourceId ->
+                            getOrPut(sourceId, ::linkedSetOf)
+                                .add(observation.resolverOccurrenceId)
                         }
                 }
             }
-        val depthByOccurrence = mutableMapOf<List<PathComponent>, Long>()
-        val visiting = mutableSetOf<List<PathComponent>>()
-        fun depth(identity: List<PathComponent>): Long {
+        val depthByOccurrence = mutableMapOf<ResolverOccurrenceId, Long>()
+        val visiting = mutableSetOf<ResolverOccurrenceId>()
+        fun depth(identity: ResolverOccurrenceId): Long {
             depthByOccurrence[identity]?.let { return it }
             check(visiting.add(identity)) {
                 "Variable resolver dependency cycle at $identity"

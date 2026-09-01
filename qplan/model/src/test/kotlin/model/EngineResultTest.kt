@@ -153,6 +153,52 @@ class EngineResultTest {
     }
 
     @Test
+    fun `symbolic object keys identify immutable and mutable cells without rekeying`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).assumptions
+        val source = world.schema.requireObjectField("Query", "source")
+        val consume = world.schema.requireObjectField("Query", "consume")
+        val variable =
+            Arguments.Variable
+                .of(source, "value")
+                .stamp(listOf(ListEngineResult.Index.of(0)))
+        val arguments = Arguments.of(consume, mapOf("value" to variable))
+        val key = ObjectEngineResult.ObjectKey.of(consume, arguments)
+        val equalKey = ObjectEngineResult.ObjectKey.of(consume, arguments)
+        val initialHash = key.hashCode()
+        val immutable =
+            ObjectEngineResult.of(
+                world.schema.requireQueryTypeDef(),
+                mapOf(key to 11),
+            )
+        val mutable =
+            ObjectEngineResult.of(
+                world.schema.requireQueryTypeDef(),
+                mutable = true,
+            )
+
+        assertFalse(key is ObjectEngineResult.GroundKey)
+        assertFalse(context(world) { key.isContextuallyGrounded() })
+        assertEquals(listOf(key), listOf<PathComponent>(key).toSelectionPath())
+        assertEquals(11, immutable.getCell(equalKey).getValue().get())
+
+        mutable.reserveCell(key).setValue(12)
+        world.bindVariable(variable, 7)
+
+        assertTrue(context(world) { key.isContextuallyGrounded() })
+        assertEquals(initialHash, key.hashCode())
+        assertEquals(12, mutable.getCell(equalKey).getValue().get())
+        assertEquals(setOf(key), mutable.keys)
+    }
+
+    @Test
     fun `object keys reuse stable snapshots between reservations`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val firstKey = schema.key("Query", "first")

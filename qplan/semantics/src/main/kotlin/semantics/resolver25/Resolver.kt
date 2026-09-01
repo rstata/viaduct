@@ -701,7 +701,7 @@ private class ObjectResultOrchestrator(
                             "Passive object at " +
                                 path.joinToString("/") { component ->
                                     when (component) {
-                                        is ObjectEngineResult.GroundKey ->
+                                        is ObjectEngineResult.ObjectKey ->
                                             "${component.field.containingDef.name}/" +
                                                 component.field.name
                                         is ListEngineResult.Index -> "[${component.index}]"

@@ -45,7 +45,7 @@ internal fun EngineObjectData.Sync.orchestrateKeys(
                 resolved = passiveObjectOccurrence.target,
             )
         }
-    val unresolvedKeys = closedDemand.groundKeys() - resolved.keys
+    val unresolvedKeys = closedDemand.groundKeys() - resolved.requireGroundKeys()
     val orderedKeys = dependencyOrder(path, unresolvedKeys)
     orderedKeys.forEach { key ->
         val selection = closedDemand[key]
@@ -60,6 +60,14 @@ internal fun EngineObjectData.Sync.orchestrateKeys(
     }
     return resolved
 }
+
+internal fun ObjectEngineResult.requireGroundKeys(): Set<ObjectEngineResult.GroundKey> =
+    keys.mapTo(linkedSetOf()) { key ->
+        require(key is ObjectEngineResult.GroundKey) {
+            "This resolver family requires grounded OER keys"
+        }
+        key
+    }
 
 /**
  * Returns a topological ordering of [keys] using Kahn's algorithm, with demand before consumption.

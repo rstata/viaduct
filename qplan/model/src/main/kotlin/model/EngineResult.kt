@@ -31,7 +31,7 @@ private data class EngineIDResultImpl(
 /**
  * One step in an exact path through an engine-result tree.
  *
- * An [ObjectEngineResult.GroundKey] selects an object field, while a [ListEngineResult.Index]
+ * An [ObjectEngineResult.ObjectKey] selects an object field, while a [ListEngineResult.Index]
  * selects a list element. Equality is structural within each variant.
  */
 sealed interface PathComponent
@@ -43,8 +43,8 @@ sealed interface PathComponent
  * path and yields null.
  */
 internal fun List<PathComponent>?.toSelectionPath():
-    List<ObjectEngineResult.GroundKey>? =
-    this?.map { component -> component as? ObjectEngineResult.GroundKey ?: return null }
+    List<ObjectEngineResult.ObjectKey>? =
+    this?.map { component -> component as? ObjectEngineResult.ObjectKey ?: return null }
 
 /**
  * One result occurrence with independent write-once value and access-result slots.
@@ -99,8 +99,8 @@ private class ErrorEngineResultImpl(
 /**
  * A finite object result whose exact cells are installed once.
  *
- * Every present key belongs to [type], contains no variables, and its cell value completes only
- * with a result conforming to the field's type expression. [getCell] is a strict read.
+ * Every present key belongs to [type], may contain instantiated variables, and its cell value
+ * completes only with a result conforming to the field's type expression. [getCell] is a strict read.
  * [reserveCell] explicitly installs an unclaimed reader placeholder on a mutable object. A writer
  * claims the value placeholder through [EngineResultCell.createValuePromise] or
  * [EngineResultCell.setValue]. [freeze] seals the key set and freezes every present cell's value
@@ -249,9 +249,10 @@ sealed interface ObjectEngineResult {
      *
      * Every instance carries a [ViaductSchema.ObjectField] and [Arguments]. Equality includes the
      * key's [stamp], so an explicitly occurrence-stamped key remains distinct from an ordinary key
-     * with equal visible arguments.
+     * with equal visible arguments. An object key may select an exact OER cell and serve as an
+     * object path component even when its arguments contain occurrence-specific variables.
      */
-    sealed interface ObjectKey : Key {
+    sealed interface ObjectKey : Key, PathComponent {
         override val field: ViaductSchema.ObjectField
         override val arguments: Arguments
 
@@ -293,9 +294,9 @@ sealed interface ObjectEngineResult {
     }
 
     /**
-     * A concrete-object key whose arguments are ground and which can therefore select an OER field.
+     * A concrete-object key whose arguments have resolved.
      */
-    sealed interface GroundKey : ObjectKey, PathComponent {
+    sealed interface GroundKey : ObjectKey {
         override val arguments: Arguments.Ground
         override val stamp: Stamp
 
@@ -346,12 +347,12 @@ sealed interface ObjectEngineResult {
 
     val type: ViaductSchema.Object
 
-    val keys: Set<GroundKey>
+    val keys: Set<ObjectKey>
 
-    fun isCellSet(field: GroundKey): Boolean = field in keys
+    fun isCellSet(field: ObjectKey): Boolean = field in keys
 
     /** @throws NoSuchElementException when [field] has no cell */
-    fun getCell(field: GroundKey): EngineResultCell
+    fun getCell(field: ObjectKey): EngineResultCell
 
     /**
      * Returns the field cell, explicitly creating an unclaimed reader placeholder when this
@@ -359,7 +360,7 @@ sealed interface ObjectEngineResult {
      *
      * @throws NoSuchElementException when this object is immutable or frozen and has no cell
      */
-    fun reserveCell(field: GroundKey): EngineResultCell
+    fun reserveCell(field: ObjectKey): EngineResultCell
 
     /**
      * Seals this object's cell-key set and freezes every present cell's value slot. Claimed
@@ -377,8 +378,8 @@ sealed interface ObjectEngineResult {
          */
         fun of(
             type: ViaductSchema.Object,
-            values: Map<GroundKey, EngineResult?> = emptyMap(),
-            accessResults: Map<GroundKey, EngineResult> =
+            values: Map<ObjectKey, EngineResult?> = emptyMap(),
+            accessResults: Map<ObjectKey, EngineResult> =
                 values.keys.associateWith { true },
             mutable: Boolean = false,
         ): ObjectEngineResult {
@@ -405,6 +406,16 @@ sealed interface ObjectEngineResult {
         }
     }
 }
+
+/**
+ * Whether every variable carried by this key is occurrence-specific and has a completed binding
+ * in [world]. Variable-free keys are contextually grounded vacuously.
+ */
+context(world: Assumptions)
+fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
+    arguments.usedVariables().all { variable ->
+        variable.isStamped && world.isBound(variable)
+    }
 
 /**
  * A typed list result whose elements are cells.
@@ -763,7 +774,7 @@ private class CellValueStore(
 
 private class ObjectResultImpl(
     override val type: ViaductSchema.Object,
-    cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
+    cells: Map<ObjectEngineResult.ObjectKey, EngineResultCell>,
     mutable: Boolean,
 ) : ObjectEngineResult {
     private val cellStore =
@@ -773,18 +784,18 @@ private class ObjectResultImpl(
             mutable = mutable,
         )
 
-    override val keys: Set<ObjectEngineResult.GroundKey>
+    override val keys: Set<ObjectEngineResult.ObjectKey>
         get() = cellStore.keys
 
-    override fun isCellSet(field: ObjectEngineResult.GroundKey): Boolean = cellStore.isSet(field)
+    override fun isCellSet(field: ObjectEngineResult.ObjectKey): Boolean = cellStore.isSet(field)
 
-    override fun getCell(field: ObjectEngineResult.GroundKey): EngineResultCell {
+    override fun getCell(field: ObjectEngineResult.ObjectKey): EngineResultCell {
         validateObjectField(type, field)
         return cellStore.readOrNull(field)
             ?: throw missingResultCell(type, field)
     }
 
-    override fun reserveCell(field: ObjectEngineResult.GroundKey): EngineResultCell {
+    override fun reserveCell(field: ObjectEngineResult.ObjectKey): EngineResultCell {
         validateObjectField(type, field)
         return cellStore.reserve(field)
     }
@@ -793,7 +804,7 @@ private class ObjectResultImpl(
         cellStore.freeze()
     }
 
-    val completedCells: Map<ObjectEngineResult.GroundKey, EngineResultCell>
+    val completedCells: Map<ObjectEngineResult.ObjectKey, EngineResultCell>
         get() = cellStore.completedCells()
 
     fun requireCompleted() {
@@ -803,7 +814,7 @@ private class ObjectResultImpl(
 
 private class ObjectCellStore(
     private val type: ViaductSchema.Object,
-    cells: Map<ObjectEngineResult.GroundKey, EngineResultCell>,
+    cells: Map<ObjectEngineResult.ObjectKey, EngineResultCell>,
     private val mutable: Boolean,
 ) {
     private val lock = Any()
@@ -811,18 +822,18 @@ private class ObjectCellStore(
     private var keySnapshot = this.cells.keys.toSet()
     private var frozen = !mutable
 
-    val keys: Set<ObjectEngineResult.GroundKey>
+    val keys: Set<ObjectEngineResult.ObjectKey>
         get() = synchronized(lock) { keySnapshot }
 
     val cellValues: List<EngineResultCell>
         get() = synchronized(lock) { cells.values.toList() }
 
-    fun isSet(field: ObjectEngineResult.GroundKey): Boolean = synchronized(lock) { field in cells }
+    fun isSet(field: ObjectEngineResult.ObjectKey): Boolean = synchronized(lock) { field in cells }
 
-    fun readOrNull(field: ObjectEngineResult.GroundKey): EngineResultCell? =
+    fun readOrNull(field: ObjectEngineResult.ObjectKey): EngineResultCell? =
         synchronized(lock) { cells[field] }
 
-    fun reserve(field: ObjectEngineResult.GroundKey): EngineResultCell =
+    fun reserve(field: ObjectEngineResult.ObjectKey): EngineResultCell =
         synchronized(lock) {
             cells[field]
                 ?: if (frozen) {
@@ -850,14 +861,14 @@ private class ObjectCellStore(
         }
     }
 
-    fun completedCells(): Map<ObjectEngineResult.GroundKey, EngineResultCell> =
+    fun completedCells(): Map<ObjectEngineResult.ObjectKey, EngineResultCell> =
         synchronized(lock) {
             cells.mapValues { (_, cell) ->
                 cell.also { it.implementation.requireCompleted() }
             }
         }
 
-    private fun mutableCell(field: ObjectEngineResult.GroundKey): EngineResultCell =
+    private fun mutableCell(field: ObjectEngineResult.ObjectKey): EngineResultCell =
         CellImpl(
             mutable = true,
             validateValue = { value -> validateObjectValue(field, value) },
@@ -866,7 +877,7 @@ private class ObjectCellStore(
 
 private fun missingResultCell(
     type: ViaductSchema.Object,
-    field: ObjectEngineResult.GroundKey,
+    field: ObjectEngineResult.ObjectKey,
 ): NoSuchElementException =
     NoSuchElementException(
         "Missing engine-result cell: ${type.name}.${field.field.name}",
@@ -1047,14 +1058,14 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
 
 private fun validateObjectField(
     type: ViaductSchema.Object,
-    field: ObjectEngineResult.GroundKey,
+    field: ObjectEngineResult.ObjectKey,
 ): Unit =
     require(field.field.containingDef == type) {
         "${type.name} result contains a field owned by another type"
     }
 
 private fun validateObjectValue(
-    field: ObjectEngineResult.GroundKey,
+    field: ObjectEngineResult.ObjectKey,
     value: EngineResult?,
 ) {
     if (field.arguments == Arguments.Error) {

@@ -27,7 +27,7 @@ internal fun ReactorEvent.toContractObservation(): ResolverTaskObservation? =
 private fun List<PathComponent>.toContractObservationPath(): List<String> =
     map { component ->
         when (component) {
-            is ObjectEngineResult.GroundKey -> component.field.name
+            is ObjectEngineResult.ObjectKey -> component.field.name
             is ListEngineResult.Index -> "[${component.index}]"
         }
     }

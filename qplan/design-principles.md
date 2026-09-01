@@ -16,7 +16,7 @@ Compilation, examples, generated tests, stress campaigns, and cross-resolver agr
 
 ## Keep Semantic Domains Distinct
 
-Selections may contain open `ObjectEngineResult.Key` values. An `ObjectEngineResult.ObjectKey` has a concrete object field but may still contain variables. Only a fully instantiated `ObjectEngineResult.GroundKey` belongs in exact OER cells, result paths, materialization lookup, dependency ordering, and resolver application. EOD selections are strings and never contain OER keys.
+Selections may contain open `ObjectEngineResult.Key` values. An `ObjectEngineResult.ObjectKey` has a concrete object field and is therefore eligible for exact OER cells and result paths even when its arguments contain instantiated variables. `ObjectEngineResult.GroundKey` is the refinement whose arguments have resolved; operations such as resolver invocation that require input values must cross that checked boundary explicitly. EOD selections are strings and never contain OER keys.
 
 Resolver input demand, client demand, output projection demand, symbolic or potential demand, and supplied demand serve different purposes. Resolver-owned output, internal selection forests, tenant-visible GraphQL fragments, and completed result coverage are likewise related but not interchangeable representations.
 

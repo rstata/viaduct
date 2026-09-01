@@ -29,7 +29,7 @@ A producer is a **predecessor** of a consumer when the consumer must materialize
 
 ## Shared Semantic Boundaries
 
-Open selections are specialized to a concrete object type with `merge(type)`. Bindings are then instantiated before exact operations cross through `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()`.
+Open selections are specialized to a concrete object type with `merge(type)`. The resulting `ObjectKey` values may identify OER cells directly. Bindings are instantiated before operations cross through `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()` when those operations require resolved argument values.
 
 Semantics accepts resolver selection documents that retain named fragment definitions. The current semantic selection carrier cannot represent named fragment spreads, so `fragmentFromDocument` owns lowering those spreads to inline fragments. Keeping that conversion at the semantics boundary allows a future carrier to preserve or optimize named fragments without requiring execution adapters to pre-process them.
 

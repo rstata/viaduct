@@ -701,7 +701,7 @@ private class FingerprintBudget(
     private fun atom(value: String): String = "${value.length}:$value"
 }
 
-private fun ObjectEngineResult.GroundKey.canonicalFingerprint(
+private fun ObjectEngineResult.ObjectKey.canonicalFingerprint(
     bounds: ResolutionWitnessBounds,
 ): ResolutionFingerprint =
     ResolutionFingerprint(

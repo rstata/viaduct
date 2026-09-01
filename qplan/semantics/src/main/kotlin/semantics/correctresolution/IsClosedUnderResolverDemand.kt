@@ -10,6 +10,7 @@ import model.Arguments
 import model.PathComponent
 import model.Stamp
 import model.applicableGroundSelections
+import model.isContextuallyGrounded
 import model.outputValue
 import model.schemaType
 import model.usedVariables
@@ -55,7 +56,9 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 ): Boolean {
     val registry = world.resolverRegistry
 
-    return keys.all { groundKey ->
+    return keys.all { key ->
+        if (!key.isContextuallyGrounded()) return@all false
+        val groundKey = key as? ObjectEngineResult.GroundKey ?: return@all false
         val value = getCell(groundKey).getValue().get()
         val fieldName = groundKey.field.name
         val argumentsContainError = groundKey.arguments.argumentsContainErrorValue()

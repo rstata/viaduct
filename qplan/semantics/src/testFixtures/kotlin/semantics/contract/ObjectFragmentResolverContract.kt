@@ -4,6 +4,7 @@ import model.requireField
 import model.requireObjectField
 import viaduct.engine.api.EngineObjectData
 import java.util.concurrent.ConcurrentHashMap
+import model.Arguments
 import model.Assumptions
 import model.EngineResult
 import model.ErrorEngineResult
@@ -578,8 +579,13 @@ interface ObjectFragmentResolverContract : ResolverContract {
         )
     }
 
-    private fun ObjectEngineResult.GroundKey.visibleIdentity() =
-        field to arguments
+    private fun ObjectEngineResult.ObjectKey.visibleIdentity():
+        Pair<ViaductSchema.ObjectField, Arguments.Ground> {
+        require(this is ObjectEngineResult.GroundKey) {
+            "This variable-free contract expects grounded result keys"
+        }
+        return field to arguments
+    }
 
     @Test
     fun `object outputs vary by input and arguments at equal-key list occurrences`() {

@@ -30,7 +30,7 @@ A variable template is identified by its local name and defining concrete resolv
 
 Registry assembly compiles `FromArgument` declarations to canonical input paths rooted at a resolver argument and compiles `FromObjectField` declarations to contained canonical object-key paths. Argument paths may traverse input objects, short-circuit to null at a null intermediate, and never traverse a list. Registry assembly validates an acyclic provider/use order before reasoning. Every maintained resolver evaluates `FromArgument`; Resolver25 and Resolver26 additionally evaluate `FromObjectField` at runtime.
 
-`ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining open arguments. `ObjectEngineResult.GroundKey` additionally requires ground arguments and is the only key admitted to OER cells, exact paths, materialization lookup, dependency ordering, and resolver application.
+`ObjectEngineResult.Key` is an open selection key. `ObjectEngineResult.ObjectKey` refines it to a concrete object field while retaining symbolic arguments and is admitted to OER cells and exact paths. `ObjectEngineResult.GroundKey` additionally requires resolved arguments and remains the checked boundary for materialization operations, dependency ordering, and resolver invocation that need concrete input values.
 
 `ObjectEngineResult.Key.stamp` distinguishes three states. A variable-bearing registry template has a null stamp. An ordinary concrete key carries `Stamp.VariableFreeOccurrence`, meaning that its selection occurrence needs no variable-derived identity. Resolver26 explicitly assigns `Stamp.Occurrence` to a variable-bearing resolver-fragment selection; every occurrence-stamped variable in that key's arguments carries the same stamp. Ordinary key factories never infer this identity from stamped variables. Specialization, localization, and grounding preserve an explicit occurrence stamp.
 
@@ -60,7 +60,7 @@ Input-object and argument field values use ordinary maps. Those maps belong to t
 
 Cells are allocated by their containing OER or LER and use reference identity as their occurrence ID. Object construction is immutable by default. Opt-in mutable objects atomically install each absent exact cell once and throw on unset reads, repeated claims, or repeated writes. Lists have immutable positions and may opt into mutable cell slots.
 
-An exact result path contains only `ObjectEngineResult.GroundKey` object steps and `ListEngineResult.Index` list steps. Open keys, schema fields, response keys, and aliases are not path components.
+An exact result path contains only `ObjectEngineResult.ObjectKey` object steps and `ListEngineResult.Index` list steps. Object keys may contain occurrence-specific symbolic variables; abstract-field keys, schema fields, response keys, and aliases are not path components.
 
 Response aliases and response ordering remain outside field-resolution identity. Canonical object fields plus ground arguments identify object cells; aliases belong to resolver-input materialization and must not create parallel OER or exact-path identities.
 
@@ -141,6 +141,10 @@ Semantic logic must not apply equality-dependent operations to undefined-equalit
 `MaterializeSelection` is a separate undefined-equality source-occurrence category. It retains one GraphQL response key alongside the same canonical key, applicability guard, and recursive shape needed for construction. `MaterializeSelectionForest` is its equality-free occurrence family. `constructionSelections()` recursively erases only response keys and is the one ordinary `SelectionForest` view of those occurrences.
 
 Concrete field collection is explicit. `MaterializeSelectionForest.collect(type)` first filters source occurrences by the concrete parent object type, then groups solely by response key. Co-applicable members of one group must have equal concrete fields and syntactically equal open arguments before variable binding. Their nested source occurrences are concatenated without premature child collection. Mutually exclusive alternatives may therefore retain different source field invocations under one response key, while `ObjectMaterializeSelection` represents the one group selected for a concrete parent. Distinct response keys may share one ordinary variable-free construction key.
+
+`ObjectEngineResult.ObjectKey` is the exact OER-cell and object-path key category. Its arguments may be symbolic when every variable is an immutable occurrence-specific instance. `ObjectEngineResult.GroundKey` remains the resolved-argument refinement used at boundaries that need concrete input values. OER key hashing never depends on the eventual values bound to symbolic variables.
+
+An object key is **contextually grounded** under one `Assumptions` value when every variable in its arguments is occurrence-specific and has a completed binding in that world, so its arguments can be grounded without replacing the key by that grounded projection. Variable-free keys satisfy the predicate vacuously. OER storage and exact paths do not require or receive an assumptions context; world-aware operations should require contextual grounding when they need the key's symbolic variables to denote available values.
 
 The test-fixture `Fragment` carrier retains a nominal composite type and an unnormalized forest for parsed selection requirements and pre-reasoning transformations. It is not part of the production model artifact. Canonical field-resolver `objectFragment` values are open `SelectionForest`s whose top-level occurrences have been specialized to the resolver field's concrete containing type.
 

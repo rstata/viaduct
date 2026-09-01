@@ -14,6 +14,7 @@ import model.outputType
 import model.outputValue
 import model.PathComponent
 import model.Stamp
+import model.isContextuallyGrounded
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import model.applicableGroundSelections
@@ -60,7 +61,9 @@ private fun ObjectEngineResult.objectConformsToResolvers(
     path: List<PathComponent>,
     source: EngineObjectData.Sync?,
 ): Boolean =
-    keys.all { groundKey ->
+    keys.all { key ->
+        if (!key.isContextuallyGrounded()) return@all false
+        val groundKey = key as? ObjectEngineResult.GroundKey ?: return@all false
         val value = getCell(groundKey).getValue().get()
         val arguments = groundKey.arguments
         val fieldName = groundKey.field.name

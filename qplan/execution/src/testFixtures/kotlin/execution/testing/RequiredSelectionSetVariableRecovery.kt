@@ -32,9 +32,10 @@ import viaduct.graphql.utils.ParsedSelections
  * executor's object RSS filtered to the retained response-key path. The nested RSS is recovered
  * recursively so providers used by argument-bearing path selections are validated too.
  *
- * Only one-segment argument paths are currently representable by qplan's
- * `VariableDefinition.FromArgument`. Nested input-object paths, query-field paths, and arbitrary
- * [VariablesResolver] callbacks are rejected here rather than approximated.
+ * Qplan's semantic registry supports nested input-object paths, but this adapter can recover only
+ * the one-segment argument recipes retained by the production Engine API. Nested input-object
+ * paths, query-field paths, and arbitrary [VariablesResolver] callbacks are rejected here rather
+ * than approximated.
  */
 internal class RequiredSelectionSetVariableRecovery(
     private val schema: ViaductSchema,

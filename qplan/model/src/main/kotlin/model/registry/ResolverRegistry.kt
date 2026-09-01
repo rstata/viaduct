@@ -21,10 +21,10 @@ import viaduct.engine.api.EngineObjectData
  * Every variable is defined from one argument of its resolver field or from one nonempty canonical
  * [ObjectEngineResult.Key] path relative to that field's containing object. Object-field paths are structurally
  * contained by the defining field resolver's fixed [FieldResolver.objectFragment] envelope.
- * Variables referenced by a field resolver's object fragment or one of its object-field paths
- * belong to that same field. An object-field path must terminate at an input-compatible value whose
- * effective nullability and list shape can be coerced at every argument position consuming the
- * variable.
+ * Variables referenced by a field resolver's object fragment, query fragment, or one of its
+ * object-field paths belong to that same field. An object-field path must terminate at an
+ * input-compatible value whose effective nullability and list shape can be coerced at every
+ * argument position consuming the variable.
  *
  * ### Invariant: resolver-registry-depth-first-variable-stratification
  *

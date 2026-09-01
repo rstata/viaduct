@@ -2,7 +2,7 @@
 
 ## Scope
 
-These modules prove finite, occurrence-scoped construction properties for `semantics.resolver01` through `semantics.resolver03`. One `ResolverCore` instance denotes one concrete OER object occurrence. Its keys are specialized to that occurrence's runtime object type and retain exact argument tuples. Recursive objects and list elements are separate instances, so structurally equal values and repeated node IDs are not coalesced.
+These modules prove finite, occurrence-scoped construction properties for `semantics.resolver01` through `semantics.resolver03`. One `ResolverCore` instance denotes one concrete OER object occurrence. Its keys are specialized to that occurrence's runtime object type and retain exact argument tuples. Recursive objects and list elements are separate instances, so structurally equal values and repeated node IDs are not coalesced. The modules model the primary result OER only; nonempty resolver Query fragments and the occurrence-specific Query OERs retained in `Assumptions.queryValues` are outside this baseline.
 
 The proof is factored at the same boundaries as the Kotlin model:
 
@@ -11,7 +11,7 @@ The proof is factored at the same boundaries as the Kotlin model:
 - `Resolver02.tla` proves exact direct object-fragment closure and lifts local closure over finite OER occurrences.
 - `Resolver03.tla` proves guarded producer completeness when registry extension covers every exact guarded requirement token.
 - `DependencyOrder.tla` models the Kahn-style dependency worklist and proves that dependencies complete before each step, no key is reapplied, and construction terminates.
-- `ResultTree.tla` gives finite OER object, cell, list-position, and resolver-observation occurrences an extensional carrier and states the five conjuncts of `correctResolution`.
+- `ResultTree.tla` gives finite OER object, cell, list-position, and resolver-observation occurrences an extensional carrier and states the five modeled primary-result conjuncts of `correctResolution`.
 - `TreeConstruction.tla` indexes least exact-key demand closure by every reachable object occurrence and lifts completed Resolver01/02 folds to whole-tree selection and resolver-demand conformance.
 - `Projection.tla` proves a finite observation semantics for `snipToDemand`, including behavioral boundaries and overlap coherence.
 - `ValueConstruction.tla` combines projection and the resolver-output typename contract with tree construction to derive conditional Resolver01 and Resolver02 `CorrectResolution` theorems.
@@ -33,13 +33,13 @@ TLAPS proves the following under each module's explicit world assumptions:
 3. Every resolver input dependency precedes its application.
 4. The finite fold terminates and gives each activated resolver key one unique sequence position per OER occurrence.
 5. Resolver03 supplied producer demand contains every guarded requirement represented by each activated nested occurrence's exact predecessor demand.
-6. The least root-reachable finite result-tree carrier turns recursive local judgments into the five modeled whole-tree `correctResolution` conjuncts.
+6. The least root-reachable finite result-tree carrier turns recursive local judgments into the five modeled primary-result `correctResolution` conjuncts.
 7. Completed occurrence-indexed Resolver01 and Resolver02 folds establish whole-tree selection and resolver-demand conformance.
 8. Projecting one raw resolver output retains exactly demanded passive observations, stops at behavioral boundaries, and agrees on every observation shared by two demands.
-9. Under explicit observation alignment and projection coverage, Resolver01 and Resolver02 value construction plus their completed folds imply all five modeled `correctResolution` conjuncts.
+9. Under explicit observation alignment and projection coverage, Resolver01 and Resolver02 value construction plus their completed folds imply all five modeled primary-result `correctResolution` conjuncts.
 10. Every finite reachable object-occurrence fold can run in one interleaved product machine whose terminal built keys equal that occurrence's least closed demand.
 11. Dependency-first prefix materialization and final-result materialization select the same exact input cells, so a deterministic resolver function yields the same raw output at construction time and in the final correctness judgment.
-12. Resolver03 direct predecessor demand and guarded successor demand derive the projection-coverage premise, and its occurrence product fold terminates in a result satisfying every modeled `correctResolution` conjunct.
+12. Resolver03 direct predecessor demand and guarded successor demand derive the projection-coverage premise, and its occurrence product fold terminates in a result satisfying every modeled primary-result `correctResolution` conjunct.
 
 TLC exhaustively checks small models containing transitive sibling demand, an argument-preserving bridge-shaped dependency, guarded nested requirements, occurrence-indexed construction, projection, materialization, and composed Resolver03 application.
 
@@ -59,13 +59,13 @@ The proof fixes a finite canonical world and assumes:
 - each modeled result observation is aligned with the exact passive observation copied by `snipToDemand` from the same raw resolver output used by the correctness judgment;
 - terminal product-fold built keys align with the exact cells present in the returned Kotlin OER.
 
-The modules exclude field-relative execution variables, directives, `@parent`, checkers, lazy values, cyclic resolver demand, mutations and execution epochs, and cross-tree coalescing.
+The modules exclude field-relative execution variables, resolver Query fragments and their independent Query OERs, directives, `@parent`, checkers, lazy values, cyclic resolver demand, mutations and execution epochs, and cross-tree coalescing.
 
 The Kotlin registry's depth-first provider/use branch-order invariant is pre-reasoning infrastructure outside this proof baseline. No current theorem proves the branch extractor, its least fixed point, or the sufficiency of branch stratification for a future variable-aware construction.
 
 ## Proof Boundary
 
-This is a machine-checked proof of the resolver construction calculus and a finite extensional model of the five `correctResolution` conjuncts, not a complete refinement proof from the structural Kotlin carriers. Result-tree recursion, occurrence-indexed demand closure, simultaneous product-fold completion, projection coherence, prefix/final materialization equality, guarded projection coverage, and the resolver-output typename contract are represented and proved.
+This is a machine-checked proof of the resolver construction calculus and a finite extensional model of the five primary-result `correctResolution` conjuncts, not a complete refinement proof from the structural Kotlin carriers or the occurrence-specific query-value judgment. Result-tree recursion, occurrence-indexed demand closure, simultaneous product-fold completion, projection coherence, prefix/final materialization equality, guarded projection coverage, and the resolver-output typename contract are represented and proved.
 
 Structural extraction of schemas, selection forests, objects, lists, materialized resolver inputs, observed demand, object/list union, and resolver-value comparison into those atoms remains explicit, as does alignment between terminal product-fold built keys and returned Kotlin OER cells. The composed Resolver01 through Resolver03 theorems therefore must not be quoted as unconditional proofs of the Kotlin functions.
 

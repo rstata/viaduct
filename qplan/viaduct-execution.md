@@ -4,9 +4,9 @@
 
 Viaduct is an implementation of [GraphQL](https://spec.graphql.org/September2025/). It executes GraphQL operations according to a schema and returns the tree-shaped result prescribed by GraphQL. This document considers only [query operations](https://spec.graphql.org/September2025/#sec-Query) and only the field-resolution part of execution. Mutation ordering, subscriptions, incremental delivery, directives, field completion, error propagation, and response serialization are outside its scope.
 
-The production system has APIs for batching, selective resolution, subqueries, scopes, and other concerns. We deliberately omit those details here. The aim is a small source-world description that explains which resolver is responsible for each value, what information that resolver receives, and how resolver responsibilities compose into a result. The qplanning canonical model subsequently lowers this two-kind source vocabulary to field resolvers only.
+The production system has APIs for batching, selective resolution, subqueries, scopes, and other concerns. We deliberately omit those details here. The aim is a small source-world description that explains which resolver is responsible for each value, what information that resolver receives, and how resolver responsibilities compose into a result. The qplanning canonical model subsequently lowers this two-kind source vocabulary to field resolvers only. It also models Query-rooted resolver inputs and the source-sensitive case in which an ancestor resolver supplies an otherwise active argumentless field.
 
-The central idea is that a query induces a tree of demanded values, but responsibility for producing that tree moves between resolvers at explicit boundaries. A resolver owns a maximal region of the tree, called its output selection set. An explicit field resolver starts a new region at its field, while a node-valued field starts a new region after the containing resolver has produced the node's identifier.
+The central idea is that a query induces a tree of demanded values, but responsibility for producing that tree moves between resolvers at explicit boundaries. A resolver owns a maximal region of the tree, called its output selection set. An explicit field resolver normally starts a new region at its field, while a node-valued field starts a new region after the containing resolver has produced the node's identifier. The field-resolver boundary is source-sensitive for argumentless fields: when an ancestor resolver output already supplies the field, the ancestor owns that occurrence and the standard field resolver is not invoked.
 
 ## A running schema
 
@@ -118,10 +118,10 @@ A node resolver is not attached to one parent field. It can provide a `T` object
 A field resolver is registered at a concrete field coordinate `<T, f>`. It produces the value of that particular field:
 
 ```text
-F_T.f : Object(Fragment_T.f) × Arguments(T.f) ⇀ Value(TypeOf(T.f))
+F_T.f : Object(ObjectFragment_T.f) × Object(QueryFragment_T.f) × Arguments(T.f) ⇀ Value(TypeOf(T.f))
 ```
 
-`Fragment_T.f` is the resolver's `objectFragment`: a GraphQL fragment on `T` declaring the parent-object data needed to resolve `f`. Before applying the field resolver, the engine resolves that fragment and supplies the resulting object value along with the field's coerced arguments.
+`ObjectFragment_T.f` is the resolver's `objectFragment`: a GraphQL fragment on `T` declaring the parent-object data needed to resolve `f`. `QueryFragment_T.f` is an optional GraphQL fragment on `Query` declaring request-root data needed by the same resolver occurrence. Before applying the field resolver, the engine resolves both fragments and supplies their materialized object values along with the field's coerced arguments. An absent query fragment supplies an empty Query value.
 
 For `User.displayName`, the declaration might be:
 
@@ -139,7 +139,7 @@ F_User.displayName({ firstName, lastName }, {}) =
   joinNonNull(firstName, lastName)
 ```
 
-The production documentation calls this fragment a [required selection set](https://viaduct.airbnb.tech/docs/developers/resolvers/field_resolvers/). In this model, `objectFragment` names the fragment itself, while the resolved value of that fragment is the field resolver's first input.
+The production documentation calls these fragments [required selection sets](https://viaduct.airbnb.tech/docs/developers/resolvers/field_resolvers/). In this model, `objectFragment` and `queryFragment` name the fragments themselves, while their independently resolved values are the field resolver's first two inputs. A query fragment may use response aliases and variables derived from the owning resolver's arguments; each resolver occurrence receives a distinct Query OER even when two occurrences request equal root data.
 
 ## Canonical Field-Only Lowering
 
@@ -163,7 +163,7 @@ Starting from a field resolver's field, follow demanded fields recursively:
 
 1. The field resolver owns the value of its own field.
 2. It continues through scalar, enum, list, and non-node object values.
-3. It stops before a nested field having its own field resolver; that field resolver owns the nested field.
+3. At a nested argumentless field having its own field resolver, it continues when the current resolver output supplies that field; otherwise it stops and the standard field resolver owns the nested field. A resolver output may never supply an argument-bearing field.
 4. It stops at a nested node-valued field after materializing the node's `id`; the node resolver selected by that ID owns the remaining fields of the node occurrence.
 
 A node resolver follows the same recursive rule from inside its node object, with one important difference: although its raw object repeats the root node's `id`, it does not own that OER field. That ID was the input used to dispatch the node resolver. The [Viaduct node resolver documentation](https://viaduct.airbnb.tech/docs/developers/resolvers/node_resolvers/) makes the same ownership distinction.
@@ -178,7 +178,7 @@ containing resolver ──produces──> GlobalID(T, k)
 
 The containing resolver therefore cannot omit the ID merely because the client did not select `id`. The ID is an engine bridge: it is internally required to continue resolution. Viaduct exposes this production mechanism as a [node reference](https://viaduct.airbnb.tech/docs/developers/resolvers/node_references/). For the built-in `Query.node` field, `F_Query.node` materializes that node reference directly from its ID argument.
 
-The OSS rule separates ownership from demand. A client selection or an `objectFragment` says which values are needed. Resolver boundaries say which resolver must provide each needed value.
+The OSS rule separates ownership from demand. A client selection, an `objectFragment`, or a `queryFragment` says which values are needed. Resolver boundaries and source presence say which resolver must provide each needed value.
 
 Canonical lowering preserves this transfer as ordinary nested field resolution: the containing producer owns `foo_V_A_node(args)` and its bridge objects, while the generated `node` resolver owns each loaded node payload and requires passive sibling `id`. All further ownership uses the same field-resolver boundary rule.
 
@@ -187,8 +187,8 @@ Canonical lowering preserves this transfer as ordinary nested field resolution: 
 The source-world description does not prescribe a traversal order or a concurrency strategy. Instead, a correct resolution is the least result-shaped collection of resolver obligations closed under the following rules:
 
 1. Each selected root field creates an obligation for its field resolver on `Query`, including the built-in resolver `F_Query.node`.
-2. A field-resolver obligation creates obligations for every field demanded by its `objectFragment`.
-3. Traversing a resolver's OSS creates a field-resolver obligation whenever it reaches a field-resolver boundary.
+2. A field-resolver obligation creates obligations for every field demanded by its `objectFragment` and, independently, its Query-rooted `queryFragment`.
+3. Traversing a resolver's OSS creates a field-resolver obligation whenever it reaches an absent registered field; a source-supplied argumentless registered field remains in the current producer's obligation instead.
 4. Traversing a resolver's OSS to a node-valued field requires the containing resolver to produce an ID and creates a node-resolver obligation selected by the ID's concrete type.
 5. A node-resolver obligation traverses the demanded fields of that node occurrence, excluding the root `id` bridge, and creates further obligations at the same boundaries.
 6. Resolution is complete when every obligation has a value and every demanded result-tree position has the value supplied by its owner.
@@ -331,13 +331,13 @@ An implementation may recognize that both occurrences refer to the same node ID 
 For a validated query `Q`, a schema `S`, a source node-resolver registry `N`, and a source field-resolver registry `F`, resolution constructs a result tree `R` satisfying these conditions:
 
 - Every field collected from `Q` has a corresponding position in `R`, subject to ordinary GraphQL applicability, field merging, and nullability rules deferred by this model.
-- Every value at a field-resolver coordinate `<T, f>`, whether tenant-defined or built-in, is supplied by `F_T.f` from its coerced arguments and a resolved value of `Fragment_T.f`.
+- Every value owned by a field-resolver occurrence `<T, f>`, whether tenant-defined or built-in, is supplied by `F_T.f` from its coerced arguments and resolved values of `ObjectFragment_T.f` and `QueryFragment_T.f`; an argumentless registered field supplied by an ancestor output remains owned by that ancestor occurrence instead.
 - Every demanded concrete node occurrence with identifier `(T, k)` is supplied by `N_T(k)`.
 - The resolver owning a node-valued field supplies `(T, k)`; `N_T` supplies the demanded remainder of that node occurrence.
 - Each resolver supplies every value in the demanded portion of its OSS, and demand crossing an OSS boundary is supplied by the resolver on the other side.
 - Equal node IDs at distinct result positions do not identify those positions. `R` remains a tree.
 
-These conditions characterize acceptable resolution without choosing a query-plan representation or execution order. A planner and executor are correct relative to this model when their completed result satisfies the conditions and every resolver application receives the inputs and demand assigned to it.
+These conditions characterize acceptable resolution without choosing a query-plan representation or execution order. A planner and executor are correct relative to this model when their completed primary result and independently resolved query values satisfy the conditions and every resolver application receives the inputs and demand assigned to it.
 
 The canonical qplanning formulation states the same obligations over the lowered model schema and one field-resolver registry: each source node-valued `foo(args): W<T>` is represented only by `foo_V_A_node(args): W<T_V_A_Bridge>` plus the generated loader at `T_V_A_Bridge.node`, and typed IDs preserve the concrete dispatch formerly expressed by `N`. The unchanged GraphQL-Java schema remains the source-facing validation schema.
 

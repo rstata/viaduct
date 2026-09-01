@@ -1,4 +1,8 @@
 package execution.viaductfeaturetests
+
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/AccessCheckExecutionTest.kt
+// Copied 31 out of 31 tests as of 2026-09-01
+
 import execution.testing.runQPlanFeatureTest
 
 import io.kotest.matchers.string.shouldContain

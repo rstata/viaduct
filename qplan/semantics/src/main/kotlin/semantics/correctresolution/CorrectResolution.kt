@@ -7,7 +7,7 @@ import model.ObjectSelectionForest
 import model.requireQueryTypeDef
 
 /**
- * Whether this Query-rooted result is a correct field-resolution result for [selections].
+ * Whether this primary Query-rooted result is a correct field-resolution result for [selections].
  *
  * The judgment is plan-independent and does not observe access-acceptance results. Also,
  * this judgment is purposefully permissive: as long as the [ObjectEngineResult] conforms
@@ -16,7 +16,9 @@ import model.requireQueryTypeDef
  * [selections] and implicated [model.registry.FieldResolver.objectFragment]s require. Other
  * predicates define various degrees of minimality.
  *
- * [selections] must be rooted at the reasoning world's canonical Query type.
+ * [selections] must be rooted at the reasoning world's canonical Query type. Reapplying a resolver
+ * with a nonempty query fragment also requires the independently resolved Query OER retained in
+ * [Assumptions.queryValues] for that exact resolver occurrence to be a correct resolution.
  *
  * This is math, not programming: the Kotlin application syntax here expresses the
  * modeled function relation, not programming-language procedure executions.  These should

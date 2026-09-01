@@ -49,7 +49,7 @@ In keeping with the architecture of qplan, the adapter translates node executors
 
 `RequiredSelectionSetVariableRecovery` is the boundary that converts supported Engine API RSS variable resolvers back into qplan `VariableDeclaration` values. This intentionally reverse engineers the production compilation path rather than invoking `VariablesResolver.resolve`: [`RequiredSelectionSetSupport`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/bootstrap/executionregistry/RequiredSelectionSetSupport.kt) turns execution-registry declarations into selection-set variables, [`VariablesResolver.Builder.buildOne`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/VariablesResolver.kt) compiles those declarations into resolver recipes, and [`RequiredSelectionSetFactory`](../../core/tenant/runtime/src/main/kotlin/viaduct/tenant/runtime/bootstrap/RequiredSelectionSetFactory.kt) validates and installs them on each executor [`RequiredSelectionSet`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/RequiredSelectionSet.kt).
 
-`FromArgument(name, path)` recovery accepts exactly one path segment. Recovery recursively unwraps production `Validated` decorators, associates each provider name with the exact variable occurrence decoded from its owning resolver fragment, and emits `schema.fromArgument(ownerField, argumentName)`. This preserves renamed bindings such as `$vary` sourced from argument `y`; it also prevents same-named variables owned by different resolvers from being conflated. Engine runtime validates the richer nested-path form in [`FromArgumentVariablesHaveValidPaths`](../../core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/tenantloading/FromArgumentVariablesHaveValidPaths.kt), but qplan recovery rejects that form until its registry model can represent input-object traversal.
+`FromArgument(name, path)` recovery accepts exactly one path segment. Recovery recursively unwraps production `Validated` decorators, associates each provider name with the exact variable occurrence decoded from its owning resolver fragment, and emits `schema.fromArgument(ownerField, argumentName)`. This preserves renamed bindings such as `$vary` sourced from argument `y`; it also prevents same-named variables owned by different resolvers from being conflated. Qplan's registry model supports canonical paths through nested input objects, and Engine runtime validates that richer form in [`FromArgumentVariablesHaveValidPaths`](../../core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/tenantloading/FromArgumentVariablesHaveValidPaths.kt); only this production-recovery adapter remains restricted because it has not yet decoded multi-segment recipes into that model.
 
 `FromFieldVariablesResolver(name, path, requiredSelectionSet)` recovery treats `path` as an alias-preserving object response-key path. Because the Engine API type does not retain whether it came from `fromObjectField` or `fromQueryField`, recovery proves the object origin by requiring its nested RSS to equal the executor object RSS filtered to that path. It recursively checks nested RSS variable dependencies against the root object RSS, requires repeated provider recipes to agree, and emits `schema.fromObjectField(objectFragment, path)`.
 
@@ -125,15 +125,12 @@ package execution.viaductfeaturetests
 
 Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. A completed migration always records equal copied and source counts; unequal counts expose unfinished legacy migration work and must not be normalized as the steady state. The current inventory and next whole-file migrations are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
 
-Run the adapter and ported tests with:
+Run the adapter, RSS-recovery tests, and every ported production feature-test file with:
 
 ```shell
 ./gradlew :execution:test \
   --tests execution.EngineTestModuleQPlanFeatureTest \
-  --tests execution.viaductfeaturetests.EngineFeatureTestExample \
-  --tests execution.viaductfeaturetests.NodeResolverTest \
-  --tests execution.viaductfeaturetests.RequiredSelectionsTest \
-  --tests execution.viaductfeaturetests.FromFieldVariablesFeatureTest \
+  --tests 'execution.viaductfeaturetests.*' \
   --tests execution.testing.RequiredSelectionSetVariableRecoveryTest
 ```
 
@@ -141,7 +138,7 @@ Run the complete execution suite with `./gradlew :execution:test`, and run every
 
 ## Next Steps
 
-Nested input-object argument paths need a deliberate qplan representation before they can be recovered from multi-segment `FromArgument.path` values. From-Query paths and custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
+Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. From-Query paths and custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
 
 After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, requested-selection plumbing for selective executors, and a deliberate batching design. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
 

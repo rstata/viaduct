@@ -70,8 +70,10 @@ data class ResolverApplicationKey(
 /**
  * The observable identity of one deterministic field-resolver application.
  *
- * Separate result occurrences with equal field coordinates and arguments remain distinguishable
- * when their materialized resolver inputs differ.
+ * This identity distinguishes equal field coordinates and arguments when their materialized
+ * resolver inputs differ, but it is not occurrence-complete. Use
+ * [ResolverOccurrenceApplicationIdentity] when equal-input applications at different result paths
+ * must remain distinct.
  */
 data class ResolverApplicationIdentity(
     val key: ResolverApplicationKey,

@@ -32,13 +32,13 @@ Generated node implementations are fixture inputs. Composition retains the gener
 
 Resolver dependencies and variable provider/use branches are generated in one acyclic rank order and then validated by canonical registry assembly. Provider paths are inserted into the defining resolver's fixed object fragment before compilation.
 
-Resolver02/03, Resolver07/08, and Resolver22/23 generated profiles exercise `FromArgument`, including paths through nullable input objects. Resolver25 and Resolver26 profiles additionally execute `FromObjectField`, including mixed-variable, nested-provider, and late-demand interactions described in [`../semantics/testing-contracts.md`](../semantics/testing-contracts.md).
+Resolver02/03, Resolver07/08, and Resolver22/23 generated profiles exercise `FromArgument`, including paths through nullable input objects. Resolver25 and Resolver26 profiles additionally execute `FromObjectField`, including mixed-variable, nested-provider, and late-demand interactions described in [`../semantics/testing-contracts.md`](../semantics/testing-contracts.md). A separate query-fragment profile generates Query-rooted resolver inputs and is enabled only for resolver versions that implement them.
 
 Queries and registries are independently generated from one schema. Query sources are bounded below GraphQL Java's parser limit, and oversized candidates are discarded before becoming test cases.
 
 ## Feature Controls
 
-Configuration controls arguments, resolver fragments, variables by source, interfaces, unions, lists, node lowering, selection depth, resolver density, and other size or weighting decisions. `SometimesPassiveFieldWeight` optionally lets generated resolver outputs supply argumentless fields that also have standard registered resolvers. It defaults to `0.0`, consumes no additional randomness at that value, and is therefore disabled in existing resolver profiles. Feature generation does not imply runtime activation; profiles that claim an interaction must record or require evidence that the relevant resolver application occurred.
+Configuration controls arguments, resolver object and query fragments, variables by source, interfaces, unions, lists, node lowering, selection depth, resolver density, and other size or weighting decisions. `SometimesPassiveFieldWeight` optionally lets generated resolver outputs supply argumentless fields that also have standard registered resolvers. It defaults to `0.0` and consumes no additional randomness at that value. Serialized broad-campaign profiles retain that default, while the Resolver25 nested-variable stress and Resolver26 deep-stress profiles override it to require sometimes-passive activation. Feature generation does not imply runtime activation; profiles that claim an interaction must record or require evidence that the relevant resolver application occurred.
 
 ## Generator Configuration Data
 

@@ -1,4 +1,8 @@
 package execution.viaductfeaturetests
+
+// core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/ParentFieldRequiredSelectionsExecutionTest.kt
+// Copied 13 out of 13 tests as of 2026-09-01
+
 import execution.testing.runQPlanFeatureTest
 
 import graphql.execution.instrumentation.parameters.InstrumentationFieldFetchParameters

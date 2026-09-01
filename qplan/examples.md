@@ -65,10 +65,7 @@ first, last -> display -> greeting
 The `Query.user` resolver supplies `first = 2` and `last = 3`. The `display` resolver receives those
 values and returns `5`; the `greeting` resolver then returns `6`.
 
-At one concrete object-result occurrence, the resolution algorithm repeatedly selects each exact
-resolver occurrence not yet expanded, binds its variables, stamps its fixed fragment at that
-occurrence path, and combines the grounded requirements with local demand. The finite closure
-reaches a fixed point when no activated resolver key remains unexpanded.
+At one concrete object-result occurrence, the resolution algorithm repeatedly selects each exact resolver occurrence not yet expanded, binds its variables, instantiates the variable templates in its fixed fragment at that occurrence path, and combines the resulting requirements with local demand. The finite closure reaches a fixed point when no activated resolver key remains unexpanded.
 
 One question remains: `first` and `last` originated in the raw output of `Query.user`, but the
 client asked only for `greeting`. The next section explains why they survive projection of the

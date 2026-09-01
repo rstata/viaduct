@@ -193,7 +193,7 @@ This appendix records known weaknesses in Resolver26's test infrastructure. They
 
 - [ ] Generate singleton-coercion cases in the property corpus. Runtime coercion is covered by the static regression, but `ListVariableTarget` still requires a list-valued provider, so generated worlds do not reach scalar providers supplying one or more input-list layers.
 - [ ] Generate fields with multiple arguments so grounding, defaults, errors, and variable sources can interact within one resolver key; generated fields currently have at most one argument.
-- [ ] Deliberately reuse one variable across multiple selection occurrences and preserve `VariableInputPlan` as a replacement candidate, so occurrence-stamping behavior is exercised instead of relying on accidental variable layouts.
+- [ ] Deliberately reuse one variable across multiple selection occurrences and preserve `VariableInputPlan` as a replacement candidate, so generated worlds exercise coalescing of equal uses of one variable instance and separation of instances owned by different resolver occurrences instead of relying on accidental variable layouts.
 - [ ] Generate convergence between a `FromObjectField` variable value and a literal argument; the registry generator currently reports this convergence feature as always false.
 - [ ] Enable object-path variables in the default deep-stress configuration, or add a separate required deep profile that cannot silently run with them disabled.
 - [ ] Require activated abstract provider paths in Resolver26 structural coverage, not merely registry metadata that records their availability.

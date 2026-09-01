@@ -22,7 +22,7 @@ Resolver03 is the principal compact semantic reference. Start there when reasoni
 
 ### Explicit Work: Resolver06-08
 
-Resolver06-08 express the same three stages through `DepthFirstReactor` tasks. Resolver08 is especially useful after Resolver03 passes: it exposes task identity, queue ordering, and publication as explicit mechanics without adding `FromObjectField` or occurrence-stamped demand.
+Resolver06-08 express the same three stages through `DepthFirstReactor` tasks. Resolver08 is especially useful after Resolver03 passes: it exposes task identity, queue ordering, and publication as explicit mechanics without adding `FromObjectField`.
 
 ### Structured Suspension: Resolver21-23
 

@@ -125,7 +125,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
                 }
                 ObjectEngineResult.GroundKey.of(field, emptyMap())
             }.toSet()
-    val values =
+    val values: Map<ObjectEngineResult.ObjectKey, EngineResult?> =
         buildMap(selectedKeys.size) {
             selectedKeys.forEach { key ->
                 val arguments = key.arguments

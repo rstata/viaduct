@@ -155,7 +155,7 @@ internal class ReactorInstrumentation(
             "Finished resolver coordinates do not equal launched coordinates"
         }
         orchestratorResults.forEach { result ->
-            val missing = result.closedDemand.groundKeys() - result.target.keys
+            val missing = result.closedDemand.groundKeys() - result.target.requireGroundKeys()
             check(missing.isEmpty()) {
                 "Completed OER ${result.path.renderReactorPath()} is missing sealed demand: " +
                     missing.joinToString { key ->
@@ -178,7 +178,7 @@ internal fun List<PathComponent>.renderReactorPath(): String =
     } else {
         joinToString(separator = "/") { component ->
             when (component) {
-                is ObjectEngineResult.GroundKey ->
+                is ObjectEngineResult.ObjectKey ->
                     "${component.field.containingDef.name}.${component.field.name}" +
                         when (val arguments = component.arguments) {
                             Arguments.Error -> "(error)"
@@ -187,6 +187,7 @@ internal fun List<PathComponent>.renderReactorPath(): String =
                                     prefix = "(",
                                     postfix = ")",
                                 ) { (name, value) -> "$name=$value" }
+                            else -> "(symbolic)"
                         }
                 is ListEngineResult.Index -> "[${component.index}]"
             }

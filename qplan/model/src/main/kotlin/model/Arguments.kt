@@ -193,7 +193,7 @@ private data class OccurrenceVariableImpl(
 private fun List<PathComponent>.renderVariablePath(): String =
     joinToString(prefix = "[", postfix = "]") { component ->
         when (component) {
-            is ObjectEngineResult.GroundKey ->
+            is ObjectEngineResult.ObjectKey ->
                 "${component.field.containingDef.name}/${component.field.name}" +
                     when (val arguments = component.arguments) {
                         Arguments.Error -> "(error)"
@@ -202,6 +202,7 @@ private fun List<PathComponent>.renderVariablePath(): String =
                                 .takeIf { fields -> fields.isNotEmpty() }
                                 ?.let { fields -> "($fields)" }
                                 .orEmpty()
+                        else -> "(symbolic)"
                     }
             is ListEngineResult.Index -> "index=${component.index}"
         }

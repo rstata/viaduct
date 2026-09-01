@@ -127,7 +127,7 @@ private class PriorityQueueDepthFirstReactor(
                     ),
                 )
             }
-        val unresolvedKeys = closedDemand.groundKeys() - target.keys
+        val unresolvedKeys = closedDemand.groundKeys() - target.requireGroundKeys()
         source.dependencyOrder(path, unresolvedKeys).forEach { key ->
             enqueue(
                 DepthFirstReactor.SlotResolver(

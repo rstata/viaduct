@@ -85,7 +85,7 @@ private fun Resolver25LifecycleEvent.debugSummary(): String =
 private fun List<PathComponent>.debugSummary(): String =
     joinToString("/") { component ->
         when (component) {
-            is ObjectEngineResult.GroundKey -> component.field.debugSummary()
+            is ObjectEngineResult.ObjectKey -> component.field.debugSummary()
             is ListEngineResult.Index -> "[${component.index}]"
         }
     }

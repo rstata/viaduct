@@ -39,9 +39,19 @@ Semantics accepts resolver selection documents that retain named fragment defini
 
 Resolver25 and Resolver26 are self-contained advanced experiments with runtime `FromObjectField` bindings and distinct resolver-instance policies. Their current protocols are documented in [`resolver25/design.md`](./src/main/kotlin/semantics/resolver25/design.md) and [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 
-## Variables And Publication
+## Variable Production And Consumption
 
-`FromArgument` bindings are declared for the defining resolver occurrence and completed from its exact arguments. Resolver25 and Resolver26 also declare `FromObjectField` bindings and complete them after provider evaluation. Current query-fragment support permits `FromArgument` bindings; Resolver26 explicitly rejects `FromObjectField` variables in query fragments.
+A variable recipe determines where one resolver-occurrence binding is produced. Independently, every occurrence of that variable in the resolver's object fragment or Query fragment is a consumer of the same binding. The fragment that consumes a variable does not determine or change its source, and a binding may be consumed by either fragment or by both.
+
+| Recipe | Binding producer | Legal consumers |
+| --- | --- | --- |
+| `FromArgument` | A path rooted at an argument of the defining resolver occurrence | Object fragment, Query fragment, or both |
+| `FromObjectField` | A provider path in the defining resolver's object fragment | Object fragment, Query fragment, or both |
+| `FromQueryField` | A provider path in the defining resolver's Query fragment | Object fragment, Query fragment, or both |
+
+Producer/consumer legality is distinct from current implementation support. `FromArgument` is implemented, Resolver25 and Resolver26 implement `FromObjectField`, and Resolver26 supports consuming an object-fragment-produced binding from its Query fragment. `FromQueryField` is not implemented yet, but it is planned near-term work and will complete the symmetric from-field model described above.
+
+## Publication
 
 OER construction is monotonic. Active cells have one writer, parent values may publish stable child OERs before those children complete, and each algorithm must install or reserve discoverable child work before a reader can depend on it.
 

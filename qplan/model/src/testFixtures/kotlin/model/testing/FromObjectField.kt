@@ -277,7 +277,7 @@ private fun ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>.asInputType(): V
     return this as ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>
 }
 
-private tailrec fun compatibleTypes(
+internal tailrec fun compatibleTypes(
     locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     sourceType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
     nullableTraversal: Boolean,

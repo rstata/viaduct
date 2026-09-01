@@ -379,6 +379,90 @@ class ResolverDemandTest {
     }
 
     @Test
+    fun `rejects an incompatible fromObjectField use in a query fragment`() {
+        val providerFragment = "fragment Provider on Query { provided: provider }"
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          result: Int!
+                          provider: String!
+                          consume(value: Int!): Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            result to
+                                fieldResolverOf(
+                                    objectFragment = schema.fragmentFrom(providerFragment),
+                                    queryFragment =
+                                        schema.fragmentFrom(
+                                            "fragment QueryUse on Query { consume(value: ${'$'}value) }",
+                                        ),
+                                ) { _, _, _ -> error("Not invoked") },
+                            schema.requireObjectField("Query", "provider") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                            schema.requireObjectField("Query", "consume") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            Arguments.Variable.of(result, "value") to
+                                schema.fromObjectField(providerFragment, listOf("provided")),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("incompatible with one of its argument locations"))
+    }
+
+    @Test
+    fun `rejects an incompatible fromArgument use in a query fragment`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          result(value: String!): Int!
+                          consume(value: Int!): Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            result to
+                                fieldResolverOf(
+                                    objectFragment = schema.emptyFragmentOf("Query"),
+                                    queryFragment =
+                                        schema.fragmentFrom(
+                                            "fragment QueryUse on Query { consume(value: ${'$'}value) }",
+                                        ),
+                                ) { _, _, _ -> error("Not invoked") },
+                            schema.requireObjectField("Query", "consume") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            Arguments.Variable.of(result, "value") to
+                                schema.fromArgument(result, "value"),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("incompatible with one of its argument locations"))
+    }
+
+    @Test
     fun `rejects a provider path behind a narrowing guard`() {
         val failure =
             assertFailsWith<IllegalArgumentException> {

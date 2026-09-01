@@ -119,10 +119,18 @@ private suspend fun FieldResolver.resolveQueryFragment(
     queryFragment.constructionSelections.usedVariables().forEach { variable ->
         val template = Arguments.Variable.of(variable.field, variable.variableName)
         val definition = variables.getValue(template)
-        require(definition is VariableDefinition.FromArgument) {
-            "Resolver26 query fragments do not support FromObjectField variables"
+        val instanceId = requireNotNull(variable.instanceId)
+        when (definition) {
+            is VariableDefinition.FromArgument -> {
+                if (!world.isBound(instanceId)) {
+                    world.bindVariable(instanceId, definition.read(arguments))
+                }
+            }
+
+            is VariableDefinition.FromObjectField -> {
+                world.fetchBinding(instanceId)
+            }
         }
-        world.bindVariable(requireNotNull(variable.instanceId), definition.read(arguments))
     }
 
     val symbolicSelections = queryFragment.materializeSelections

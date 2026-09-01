@@ -19,7 +19,9 @@ internal class ReappliedResolver(
     val output: EngineOutputData?,
 )
 
-internal class ResolverApplicationCache {
+internal class ResolverApplicationCache(
+    val root: ObjectEngineResult,
+) {
     private val applications =
         IdentityHashMap<
             ObjectEngineResult,
@@ -64,6 +66,7 @@ internal fun ObjectEngineResult.reapplyResolver(
         val coordinate = path + key
         val objectFragment =
             resolver.objectFragmentSatisfiedBy(
+                root = resolverApplicationCache.root,
                 result = this,
                 path = coordinate,
             ) ?: return@getOrPut null
@@ -79,13 +82,15 @@ internal fun ObjectEngineResult.reapplyResolver(
                 field = key.field,
                 fields = arguments.fieldValues,
             )
-        val queryFragment = resolver.instantiateQueryFragmentAt(coordinate)
+        val resolverOccurrenceId =
+            model.ResolverOccurrenceId.at(resolverApplicationCache.root, coordinate)
+        val queryFragment = resolver.instantiateQueryFragment(resolverOccurrenceId)
         val queryValue =
             if (queryFragment.constructionSelections.isEmpty()) {
                 engineObjectDataOf(world.schema.requireQueryTypeDef())
             } else {
                 val queryResult =
-                    world.queryValues[coordinate]
+                    world.queryValues[resolverOccurrenceId]
                         ?: return@getOrPut null
                 val querySelections =
                     queryFragment.constructionSelections

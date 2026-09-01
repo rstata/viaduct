@@ -3,6 +3,7 @@ package semantics.contract
 import java.util.concurrent.atomic.AtomicInteger
 import model.Arguments
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.isContextuallyGrounded
@@ -93,8 +94,10 @@ interface QueryFragmentResolverContract : ResolverContract {
         assertEquals(setOf(firstKey, secondKey), result.keys)
         assertEquals(2, sourceApplications.get())
 
-        val firstQueryResult = world.queryValues.getValue(listOf(firstKey))
-        val secondQueryResult = world.queryValues.getValue(listOf(secondKey))
+        val firstQueryResult =
+            world.queryValues.getValue(ResolverOccurrenceId.at(result, listOf(firstKey)))
+        val secondQueryResult =
+            world.queryValues.getValue(ResolverOccurrenceId.at(result, listOf(secondKey)))
         assertNotSame(firstQueryResult, secondQueryResult)
         listOf(firstQueryResult to 2, secondQueryResult to 3).forEach {
                 (queryResult, expectedValue) ->
@@ -170,8 +173,15 @@ interface QueryFragmentResolverContract : ResolverContract {
         val resolved = resolveAndValidate(world, "query { result }")
 
         assertEquals(4, resolved.getCell(resultKey).get())
-        assertEquals(setOf(middleKey), world.queryValues.getValue(listOf(resultKey)).keys)
-        assertEquals(setOf(baseKey), world.queryValues.getValue(listOf(middleKey)).keys)
+        val middleResult =
+            world.queryValues.getValue(ResolverOccurrenceId.at(resolved, listOf(resultKey)))
+        assertEquals(setOf(middleKey), middleResult.keys)
+        assertEquals(
+            setOf(baseKey),
+            world.queryValues
+                .getValue(ResolverOccurrenceId.at(middleResult, listOf(middleKey)))
+                .keys,
+        )
     }
 
     @Test

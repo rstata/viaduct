@@ -23,11 +23,13 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
         ResolverSupport.noCycleChecking { selections ->
             selections.successorBoundaryDemand()
         }
+    val result = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
     return context(resolverSupport) {
         source.orchestrateKeys(
+            root = result,
             path = emptyList(),
             selections = selections,
-            resolved = ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true),
+            resolved = result,
         )
     }
 }

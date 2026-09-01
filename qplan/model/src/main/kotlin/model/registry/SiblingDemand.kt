@@ -22,6 +22,7 @@ import model.requireField
 context(world: Assumptions)
 fun ObjectEngineResult.GroundKey.demandsFromSibling(
     siblingKey: ObjectEngineResult.GroundKey,
+    root: ObjectEngineResult,
     path: List<PathComponent> = emptyList(),
 ): Boolean {
     val field = this.field
@@ -36,6 +37,6 @@ fun ObjectEngineResult.GroundKey.demandsFromSibling(
     return siblingKey in
         world.resolverRegistry
             .resolver(field)
-            .objectFragmentAt(path)
+            .objectFragmentAt(root, path)
             .groundKeys()
 }

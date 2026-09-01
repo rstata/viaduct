@@ -50,7 +50,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val boundVariable =
             context(world) {
                 resolver
-                    .boundObjectPathDefinitions(listOf(resultKey))
+                    .boundObjectPathDefinitions(resolved, listOf(resultKey))
                     .single()
                     .variable
             }
@@ -304,7 +304,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val boundVariable =
                 context(world) {
                     resolver
-                        .boundObjectPathDefinitions(listOf(resultKey))
+                        .boundObjectPathDefinitions(resolved, listOf(resultKey))
                         .single()
                         .variable
                 }

@@ -20,6 +20,7 @@ import model.instantiateBindings
 import model.merge
 import model.selectionForestOf
 import model.testing.TestWorld
+import model.testing.testRoot
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
 import model.toSelectionForest
@@ -246,12 +247,14 @@ class SuccessorDemandTest {
         val first =
             variable.instantiate(
                 ResolverOccurrenceId.at(
+                    world.schema.testRoot(),
                     listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 1))),
                 ),
             )
         val second =
             variable.instantiate(
                 ResolverOccurrenceId.at(
+                    world.schema.testRoot(),
                     listOf(ObjectEngineResult.GroundKey.of(successor, mapOf("value" to 2))),
                 ),
             )

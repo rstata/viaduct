@@ -26,6 +26,7 @@ import semantics.benchmark.ObservedResolverBenchmarkSubject
 import semantics.benchmark.ResolverBenchmarkApplicationObservation
 import semantics.benchmark.ResolverBenchmarkSubject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 
 @State(Scope.Benchmark)
@@ -58,8 +59,10 @@ open class ResolverBenchmark {
                         ConcurrentHashMap<DemandContributionId, VariableUse>()
                     val variableUseByCoordinate =
                         ConcurrentHashMap<List<PathComponent>, VariableUse>()
+                    val pendingApplications =
+                        ConcurrentLinkedQueue<Pair<List<PathComponent>, VariableUse>>()
                     context(world) {
-                        resolveObserved(selections) { event ->
+                        val result = resolveObserved(selections) { event ->
                             when (event) {
                                 is Resolver25LifecycleEvent.DemandSubmitted -> {
                                     val argumentNames =
@@ -67,14 +70,17 @@ open class ResolverBenchmark {
                                     variableUseByContribution[event.contributionId] =
                                         VariableUse(
                                             argumentNames = argumentNames,
+                                            sourceOccurrencePaths =
+                                                if (argumentNames.isEmpty()) {
+                                                    emptySet()
+                                                } else {
+                                                    setOfNotNull(event.consumerCoordinate)
+                                                },
                                             sourceOccurrenceIds =
                                                 if (argumentNames.isEmpty()) {
                                                     emptySet()
                                                 } else {
                                                     buildSet {
-                                                        event.consumerCoordinate
-                                                            ?.let(ResolverOccurrenceId::at)
-                                                            ?.let(::add)
                                                         event.selection.key.arguments
                                                             .usedVariables()
                                                             .mapNotNullTo(this) { variable ->
@@ -97,44 +103,50 @@ open class ResolverBenchmark {
                                     }
                                 }
                                 is Resolver25LifecycleEvent.ResolverStarted -> {
-                                    (
-                                        variableUseByCoordinate[event.coordinate]
-                                            ?: VariableUse.EMPTY
-                                    )
-                                        .let { variableUse ->
-                                            applicationObserver(
-                                                ResolverBenchmarkApplicationObservation(
-                                                    occurrencePath = event.coordinate,
-                                                    resolverOccurrenceId =
-                                                        ResolverOccurrenceId.at(event.coordinate),
-                                                    variableArgumentCount =
-                                                        variableUse.argumentNames.size,
-                                                    variableSourceOccurrenceIds =
-                                                        variableUse.sourceOccurrenceIds,
-                                                ),
-                                            )
-                                        }
+                                    pendingApplications +=
+                                        event.coordinate to
+                                            (variableUseByCoordinate[event.coordinate]
+                                                ?: VariableUse.EMPTY)
                                 }
                                 else -> Unit
                             }
                         }
+                        pendingApplications.forEach { (coordinate, variableUse) ->
+                            applicationObserver(
+                                ResolverBenchmarkApplicationObservation(
+                                    occurrencePath = coordinate,
+                                    resolverOccurrenceId =
+                                        ResolverOccurrenceId.at(result, coordinate),
+                                    variableArgumentCount = variableUse.argumentNames.size,
+                                    variableSourceOccurrenceIds =
+                                        variableUse.sourceOccurrenceIds +
+                                            variableUse.sourceOccurrencePaths.map { path ->
+                                                ResolverOccurrenceId.at(result, path)
+                                            },
+                                ),
+                            )
+                        }
+                        result
                     }
                 },
         )
 
     private data class VariableUse(
         val argumentNames: Set<String>,
+        val sourceOccurrencePaths: Set<List<PathComponent>>,
         val sourceOccurrenceIds: Set<ResolverOccurrenceId>,
     ) {
         operator fun plus(other: VariableUse): VariableUse =
             VariableUse(
                 argumentNames = argumentNames + other.argumentNames,
+                sourceOccurrencePaths =
+                    sourceOccurrencePaths + other.sourceOccurrencePaths,
                 sourceOccurrenceIds =
                     sourceOccurrenceIds + other.sourceOccurrenceIds,
             )
 
         companion object {
-            val EMPTY = VariableUse(emptySet(), emptySet())
+            val EMPTY = VariableUse(emptySet(), emptySet(), emptySet())
         }
     }
 

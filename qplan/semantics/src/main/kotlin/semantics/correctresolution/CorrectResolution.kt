@@ -31,7 +31,7 @@ fun ObjectEngineResult.correctResolution(
     require(selections.type == world.schema.requireQueryTypeDef()) {
         "Correct-resolution selections must be rooted at Query"
     }
-    val resolverApplicationCache = ResolverApplicationCache()
+    val resolverApplicationCache = ResolverApplicationCache(this)
     return rootedAndWellTyped() &&          // Is the result rooted on the `Query` type?
         conformsToSelections(selections) && // Does the result conform to the selections?
         isClosedUnderResolverDemand(resolverApplicationCache) && // Have the RSSes of all necessary resolvers (transitively) been satisfied

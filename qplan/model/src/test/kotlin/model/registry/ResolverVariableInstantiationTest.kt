@@ -13,6 +13,7 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
+import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -71,10 +72,14 @@ class ResolverVariableInstantiationTest {
                 ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 4)),
             )
 
-        val firstFragment = resolver.instantiateObjectFragmentAt(firstPath).constructionSelections
-        val equalFirstFragment = resolver.instantiateObjectFragmentAt(firstPath).constructionSelections
-        val otherFragment = resolver.instantiateObjectFragmentAt(secondPath).constructionSelections
-        val firstOccurrence = ResolverOccurrenceId.at(firstPath)
+        val root = testWorld.schema.testRoot()
+        val firstFragment =
+            resolver.instantiateObjectFragmentAt(root, firstPath).constructionSelections
+        val equalFirstFragment =
+            resolver.instantiateObjectFragmentAt(root, firstPath).constructionSelections
+        val otherFragment =
+            resolver.instantiateObjectFragmentAt(root, secondPath).constructionSelections
+        val firstOccurrence = ResolverOccurrenceId.at(root, firstPath)
 
         assertTrue(
             firstFragment.instantiatedVariables().all { variable ->
@@ -158,7 +163,7 @@ class ResolverVariableInstantiationTest {
             )
         val sitePath = listOf(resultKey)
         val objectFragment =
-            resolver.instantiateObjectFragmentAt(sitePath)
+            resolver.instantiateObjectFragmentAt(testWorld.schema.testRoot(), sitePath)
         assertEquals(
             setOf("source", "consume"),
             objectFragment.materializeSelections
@@ -177,7 +182,8 @@ class ResolverVariableInstantiationTest {
                 .size,
         )
         val definition = objectFragment.pathVariableDefinitions.single()
-        val resolverOccurrenceId = ResolverOccurrenceId.at(sitePath)
+        val resolverOccurrenceId =
+            ResolverOccurrenceId.at(testWorld.schema.testRoot(), sitePath)
         val seed =
             Arguments.Variable.of(
                 testWorld.schema.requireObjectField("Query", "result"),
@@ -263,7 +269,11 @@ class ResolverVariableInstantiationTest {
                 testWorld.schema.requireObjectField("Query", "result"),
                 emptyMap(),
             )
-        val objectFragment = resolver.instantiateObjectFragmentAt(listOf(resultKey))
+        val objectFragment =
+            resolver.instantiateObjectFragmentAt(
+                testWorld.schema.testRoot(),
+                listOf(resultKey),
+            )
         val definition = objectFragment.pathVariableDefinitions.single()
         val markedBox =
             objectFragment.constructionSelections
@@ -356,7 +366,7 @@ class ResolverVariableInstantiationTest {
             )
         val markedContainer =
             resolver
-                .instantiateObjectFragmentAt(listOf(resultKey))
+                .instantiateObjectFragmentAt(testWorld.schema.testRoot(), listOf(resultKey))
                 .constructionSelections
                 .filter { selection ->
                     selection.key is ObjectEngineResult.VariableKey &&

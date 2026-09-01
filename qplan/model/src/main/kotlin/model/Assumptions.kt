@@ -25,8 +25,8 @@ sealed interface Assumptions {
     /** Whether resolver invocation and passive output traversal are selective to supplied demand. */
     val selectiveResolvers: Boolean
 
-    /** Query-fragment result witnesses keyed by the exact resolver occurrence path. */
-    val queryValues: ConcurrentHashMap<List<PathComponent>, ObjectEngineResult>
+    /** Query-fragment result witnesses keyed by the exact resolver occurrence. */
+    val queryValues: ConcurrentHashMap<ResolverOccurrenceId, ObjectEngineResult>
 
     /** Whether [variableId] has a completed binding, including one whose value is null. */
     fun isBound(variableId: VariableInstanceId): Boolean
@@ -103,7 +103,7 @@ private class AssumptionsImpl(
     override val selectiveResolvers: Boolean,
 ) : Assumptions {
     override val queryValues =
-        ConcurrentHashMap<List<PathComponent>, ObjectEngineResult>()
+        ConcurrentHashMap<ResolverOccurrenceId, ObjectEngineResult>()
 
     private val bindings =
         OnceStore<VariableInstanceId, Promise<VariableBinding>>()

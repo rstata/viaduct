@@ -5,6 +5,7 @@ import viaduct.graphql.schema.ViaductSchema
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
+import model.testing.testRoot
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
@@ -168,7 +169,12 @@ class EngineResultTest {
         val variable =
             Arguments.Variable
                 .of(source, "value")
-                .instantiate(ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(0))))
+                .instantiate(
+                    ResolverOccurrenceId.at(
+                        world.schema.testRoot(),
+                        listOf(ListEngineResult.Index.of(0)),
+                    ),
+                )
         val arguments = Arguments.of(consume, mapOf("value" to variable))
         val key = ObjectEngineResult.ObjectKey.of(consume, arguments)
         val equalKey = ObjectEngineResult.ObjectKey.of(consume, arguments)
@@ -218,7 +224,10 @@ class EngineResultTest {
             val source = world.schema.requireObjectField("Query", "source")
             val consume = world.schema.requireObjectField("Query", "consume")
             val resolverOccurrenceId =
-                ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(0)))
+                ResolverOccurrenceId.at(
+                    world.schema.testRoot(),
+                    listOf(ListEngineResult.Index.of(0)),
+                )
             val errorVariable =
                 Arguments.Variable.of(source, "error").instantiate(resolverOccurrenceId)
             val pendingVariable =
@@ -714,6 +723,52 @@ class EngineResultTest {
         assertTrue(left.sameCompletedResultAs(right))
         assertFalse(left.sameCompletedResultAs(differentCheck))
         assertTrue(leftErrorResult.sameCompletedResultAs(rightErrorResult))
+    }
+
+    @Test
+    fun `completed result comparison treats occurrence ids as root relative`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val query = schema.requireQueryTypeDef()
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
+
+        fun result(occurrenceIndex: Int): ObjectEngineResult {
+            val root = ObjectEngineResult.of(query, mutable = true)
+            val variable =
+                Arguments.Variable.of(source, "value").instantiate(
+                    ResolverOccurrenceId.at(
+                        root,
+                        listOf(ListEngineResult.Index.of(occurrenceIndex)),
+                    ),
+                )
+            val key =
+                ObjectEngineResult.ObjectKey.of(
+                    consume,
+                    Arguments.of(consume, mapOf("value" to variable)),
+                )
+            root.reserveCell(key).apply {
+                setValue(7)
+                setAccessResult(true)
+            }
+            root.freeze()
+            return root
+        }
+
+        val first = result(0)
+        val equivalent = result(0)
+        val differentOccurrence = result(1)
+
+        assertNotEquals(first.keys, equivalent.keys)
+        assertTrue(first.sameCompletedResultAs(equivalent))
+        assertFalse(first.sameCompletedResultAs(differentOccurrence))
     }
 
     @Test

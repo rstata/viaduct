@@ -28,7 +28,7 @@ import viaduct.engine.api.EngineObjectData
  */
 context(world: Assumptions)
 fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
-    isClosedUnderResolverDemand(ResolverApplicationCache())
+    isClosedUnderResolverDemand(ResolverApplicationCache(this))
 
 context(world: Assumptions)
 internal fun ObjectEngineResult.isClosedUnderResolverDemand(
@@ -77,7 +77,10 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                         .let { resolver ->
                             val coordinate = path + key
                             val instantiatedSelections =
-                                resolver.instantiateObjectFragmentSelectionsAt(coordinate)
+                                resolver.instantiateObjectFragmentSelectionsAt(
+                                    resolverApplicationCache.root,
+                                    coordinate,
+                                )
                             if (
                                 instantiatedSelections.usedVariables().all { variable ->
                                     variable.instanceId?.let(world::isBound) == true
@@ -88,7 +91,11 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                                     path = path,
                                 )
                             } else {
-                                val instantiatedFragment = resolver.objectFragmentAt(coordinate)
+                                val instantiatedFragment =
+                                    resolver.objectFragmentAt(
+                                        resolverApplicationCache.root,
+                                        coordinate,
+                                    )
                                 conformsToSelectionsAt(
                                     instantiatedFragment,
                                     path,

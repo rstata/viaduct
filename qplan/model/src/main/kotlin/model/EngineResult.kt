@@ -440,10 +440,12 @@ sealed interface ListEngineResult : List<EngineResultCell> {
  * Returns whether two completed result trees contain the same values and access results.
  *
  * This explicit extensional comparison is distinct from ordinary equality because
- * [EngineResultCell] and [ObjectEngineResult] use reference equality. Both trees must be finite
- * and every present promise they contain must be completed. Its result is meaningful only after
- * both trees are quiescent; the comparison does not take an atomic snapshot while promises or
- * cells are being mutated concurrently.
+ * [EngineResultCell] and [ObjectEngineResult] use reference equality. Symbolic object keys compare
+ * variable occurrences by their root-relative addresses so independently rooted executions of the
+ * same construction can compare extensionally; ordinary key and variable equality remains fully
+ * root-qualified. Both trees must be finite and every present promise they contain must be
+ * completed. Its result is meaningful only after both trees are quiescent; the comparison does not
+ * take an atomic snapshot while promises or cells are being mutated concurrently.
  *
  * @throws UncompletedPromiseException when either tree contains an uncompleted promise
  */
@@ -903,12 +905,22 @@ private val ObjectEngineResult.implementation: ObjectResultImpl
 private fun ObjectEngineResult.sameCompletedObjectResultAs(other: ObjectEngineResult): Boolean {
     val leftCells = implementation.completedCells
     val rightCells = other.implementation.completedCells
+    if (type != other.type || leftCells.size != rightCells.size) return false
 
-    return type == other.type &&
-        leftCells.keys == rightCells.keys &&
-        leftCells.all { (key, cell) ->
-            cell.hasSameCompletedCellAs(rightCells.getValue(key))
+    val unmatchedRightCells = rightCells.entries.toMutableList()
+    return leftCells.all { (leftKey, leftCell) ->
+        val matchIndex =
+            unmatchedRightCells.indexOfFirst { (rightKey, _) ->
+                leftKey.field == rightKey.field &&
+                    leftKey.arguments.hasSameRootRelativeStructureAs(rightKey.arguments)
+            }
+        if (matchIndex < 0) {
+            false
+        } else {
+            val rightCell = unmatchedRightCells.removeAt(matchIndex).value
+            leftCell.hasSameCompletedCellAs(rightCell)
         }
+    }
 }
 
 private fun EngineResult?.requireCompleted() {

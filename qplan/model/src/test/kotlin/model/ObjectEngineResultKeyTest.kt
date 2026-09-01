@@ -3,6 +3,7 @@ package model
 import viaduct.graphql.schema.ViaductSchema
 
 import model.testing.TestWorld
+import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -72,8 +73,10 @@ class ObjectEngineResultKeyTest {
         val source = schema.requireObjectField("Query", "source")
         val consume = schema.requireObjectField("Query", "consume")
         val variable = Arguments.Variable.of(source, "value")
-        val firstOccurrence = ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(0)))
-        val secondOccurrence = ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(1)))
+        val firstOccurrence =
+            ResolverOccurrenceId.at(source.testRoot(), listOf(ListEngineResult.Index.of(0)))
+        val secondOccurrence =
+            ResolverOccurrenceId.at(source.testRoot(), listOf(ListEngineResult.Index.of(1)))
         val first = variable.instantiate(firstOccurrence)
         val equalFirst = variable.instantiate(firstOccurrence)
         val second = variable.instantiate(secondOccurrence)
@@ -111,7 +114,7 @@ class ObjectEngineResultKeyTest {
         val concreteType = schema.requireType("ConcreteItem") as ViaductSchema.Object
         val variable = Arguments.Variable.of(source, "factor")
         val resolverOccurrenceId =
-            ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(1)))
+            ResolverOccurrenceId.at(source.testRoot(), listOf(ListEngineResult.Index.of(1)))
         val arguments =
             Arguments.Template
                 .of(

@@ -1,6 +1,7 @@
 package semantics.correctresolution
 
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
@@ -89,13 +90,13 @@ class CorrectResolutionTest {
 
         assertFalse(context(world) { result.correctResolution(selections) })
 
-        world.queryValues[listOf(consumerKey)] =
+        world.queryValues[ResolverOccurrenceId.at(result, listOf(consumerKey))] =
             world.engineResultOf("Query") {
                 "source" resolvesTo 8
             }
         assertFalse(context(world) { result.correctResolution(selections) })
 
-        world.queryValues[listOf(consumerKey)] =
+        world.queryValues[ResolverOccurrenceId.at(result, listOf(consumerKey))] =
             world.engineResultOf("Query") {
                 "source" resolvesTo 7
             }

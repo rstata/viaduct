@@ -82,12 +82,6 @@ class IsClosedUnderResolverDemandTest {
         val world = testWorld.assumptions
         val resultField = world.schema.requireObjectField("Parent", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
-        val variable = Arguments.Variable.of(resultField, "seed")
-        val instantiated =
-            variable.instantiate(ResolverOccurrenceId.at(listOf(resultKey)))
-        val variableId = requireNotNull(instantiated.instanceId)
-        world.declareBinding(variableId)
-        world.completeBinding(variableId, 7)
         val result =
             world.engineResultOf("Parent") {
                 "child" resolvesTo
@@ -96,6 +90,12 @@ class IsClosedUnderResolverDemandTest {
                     }
                 field("result", "seed" to 7) resolvesTo 14
             }
+        val variable = Arguments.Variable.of(resultField, "seed")
+        val instantiated =
+            variable.instantiate(ResolverOccurrenceId.at(result, listOf(resultKey)))
+        val variableId = requireNotNull(instantiated.instanceId)
+        world.declareBinding(variableId)
+        world.completeBinding(variableId, 7)
 
         assertTrue(context(world) { result.isClosedUnderResolverDemand() })
     }

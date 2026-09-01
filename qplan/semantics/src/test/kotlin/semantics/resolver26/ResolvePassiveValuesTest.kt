@@ -18,6 +18,7 @@ import model.fragmentFrom
 import model.objectOf
 import model.outputType
 import model.requireObjectField
+import model.requireQueryTypeDef
 import model.requireType
 import model.selectionForestOf
 import model.testing.TestWorld
@@ -363,6 +364,11 @@ class ResolvePassiveValuesTest {
                     )
                 context(world, support) {
                     value.resolvePassiveValues(
+                        root =
+                            ObjectEngineResult.of(
+                                world.schema.requireQueryTypeDef(),
+                                values = emptyMap(),
+                            ),
                         expectedType = expectedType,
                         path = path,
                         invocationDemand = invocationDemand,

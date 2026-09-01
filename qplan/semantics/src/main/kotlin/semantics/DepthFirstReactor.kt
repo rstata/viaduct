@@ -115,7 +115,7 @@ private class PriorityQueueDepthFirstReactor(
             "Initial result type ${target.type.name} does not match ${source.schemaType}"
         }
 
-        val closedDemand = source.closeResolverDemand(path, selections)
+        val closedDemand = source.closeResolverDemand(result, path, selections)
         source.materializedChildOccurrences(path, closedDemand, target)
             .forEach { passiveObjectOccurrence ->
                 enqueue(
@@ -128,7 +128,7 @@ private class PriorityQueueDepthFirstReactor(
                 )
             }
         val unresolvedKeys = closedDemand.groundKeys() - target.requireGroundKeys()
-        source.dependencyOrder(path, unresolvedKeys).forEach { key ->
+        source.dependencyOrder(result, path, unresolvedKeys).forEach { key ->
             enqueue(
                 DepthFirstReactor.SlotResolver(
                     path = path,
@@ -144,7 +144,7 @@ private class PriorityQueueDepthFirstReactor(
     context(world: Assumptions, resolverSupport: ResolverSupport)
     private fun DepthFirstReactor.SlotResolver.execute() {
         source
-            .resolveKey(path, selection, target)
+            .resolveKey(result, path, selection, target)
             ?.resolveRetainedObjects { passiveObjectOccurrence ->
                 enqueue(
                     DepthFirstReactor.SlotOrchestrator(

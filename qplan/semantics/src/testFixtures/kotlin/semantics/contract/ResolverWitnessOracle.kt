@@ -28,12 +28,14 @@ import semantics.materialize
 context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> {
+    val root = this as? ObjectEngineResult ?: return emptyMap()
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
     context(ResolverSupport.noCycleChecking { selections -> selections }) {
         forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
             val resolver = world.resolverRegistry.resolver(cell.field)
             val fragment =
                 resolver.objectFragmentSatisfiedBy(
+                    root = root,
                     result = cell.containingObject,
                     path = cell.occurrencePath,
                 ) ?: error("Registered resolver occurrence has no complete object fragment")
@@ -59,12 +61,14 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
 context(world: Assumptions)
 fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
     Map<ResolverOccurrenceApplicationIdentity, Int> {
+    val root = this as? ObjectEngineResult ?: return emptyMap()
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
     context(ResolverSupport.noCycleChecking { selections -> selections }) {
         forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
             val resolver = world.resolverRegistry.resolver(cell.field)
             val fragment =
                 resolver.objectFragmentSatisfiedBy(
+                    root = root,
                     result = cell.containingObject,
                     path = cell.occurrencePath,
                 ) ?: error("Registered resolver occurrence has no complete object fragment")
@@ -93,11 +97,14 @@ fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
 context(world: Assumptions)
 fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolverOccurrence> =
     buildList {
+        val root = this@unclosedRegisteredResolverOccurrences as? ObjectEngineResult
+            ?: return@buildList
         this@unclosedRegisteredResolverOccurrences
             .forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
                 val resolver = world.resolverRegistry.resolver(cell.field)
                 if (
                     resolver.objectFragmentSatisfiedBy(
+                        root = root,
                         result = cell.containingObject,
                         path = cell.occurrencePath,
                     ) == null
@@ -113,10 +120,11 @@ private fun <T> MutableMap<T, Int>.increment(key: T) {
 
 context(world: Assumptions)
 private fun FieldResolver.objectFragmentSatisfiedBy(
+    root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ResolverObjectFragment? {
-    val objectFragment = instantiateObjectFragmentAt(path)
+    val objectFragment = instantiateObjectFragmentAt(root, path)
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->

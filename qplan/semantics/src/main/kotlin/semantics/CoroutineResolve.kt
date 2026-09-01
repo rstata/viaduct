@@ -15,6 +15,7 @@ import model.ObjectSelection
 import model.Arguments
 import model.PathComponent
 import model.Promise
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.engineObjectDataOf
 import model.groundKey
@@ -42,6 +43,7 @@ internal suspend fun EngineObjectData.Sync.coroutineResolve(
 
     coroutineScope {
         orchestrateSlot(
+            root = result,
             path = emptyList(),
             source = this@coroutineResolve,
             selections = selections,
@@ -54,6 +56,7 @@ internal suspend fun EngineObjectData.Sync.coroutineResolve(
 
 context(world: Assumptions, resolverSupport: ResolverSupport)
 private fun CoroutineScope.orchestrateSlot(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     source: EngineObjectData.Sync,
     selections: SelectionForest,
@@ -63,10 +66,11 @@ private fun CoroutineScope.orchestrateSlot(
         "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
     }
 
-    val closedDemand = source.closeResolverDemand(path, selections)
+    val closedDemand = source.closeResolverDemand(root, path, selections)
     source.materializedChildOccurrences(path, closedDemand, target)
         .forEach { child ->
             orchestrateSlot(
+                root = root,
                 path = child.path,
                 source = child.source,
                 selections = child.selections,
@@ -87,6 +91,7 @@ private fun CoroutineScope.orchestrateSlot(
     unresolvedKeys.forEach { key ->
         launch(start = CoroutineStart.DEFAULT) {
             resolveSlot(
+                root = root,
                 path = path,
                 source = source,
                 selection = closedDemand[key],
@@ -99,6 +104,7 @@ private fun CoroutineScope.orchestrateSlot(
 
 context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun resolveSlot(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     source: EngineObjectData.Sync,
     selection: ObjectSelection,
@@ -124,13 +130,13 @@ private suspend fun resolveSlot(
                 val invocationDemand = resolverSupport.complete(selection.subselections)
                 val resolver = world.resolverRegistry.resolver(key.field)
                 val coordinate = path + key
-                val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
+                val objectFragment = resolver.instantiateObjectFragmentAt(root, coordinate)
                 val input =
                     target.materialize(
                         selections = objectFragment.materializeSelections,
                         reader = coordinate,
                     )
-                val queryValue = resolveQueryFragment(resolver, coordinate)
+                val queryValue = resolveQueryFragment(resolver, root, coordinate)
                 val fieldValue =
                     resolver(
                         input = input,
@@ -148,6 +154,7 @@ private suspend fun resolveSlot(
 
                 passiveValuesResult.objectsNeedingResolution.forEach { child ->
                     orchestrateSlot(
+                        root = root,
                         path = child.path,
                         source = child.source,
                         selections = child.selections,
@@ -163,9 +170,10 @@ private suspend fun resolveSlot(
 context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun CoroutineScope.resolveQueryFragment(
     resolver: FieldResolver,
+    owningRoot: ObjectEngineResult,
     coordinate: List<PathComponent>,
 ): EngineObjectData.Sync {
-    val queryFragment = resolver.instantiateQueryFragmentAt(coordinate)
+    val queryFragment = resolver.instantiateQueryFragmentAt(owningRoot, coordinate)
     if (queryFragment.constructionSelections.isEmpty()) {
         return engineObjectDataOf(world.schema.requireQueryTypeDef())
     }
@@ -177,12 +185,13 @@ private suspend fun CoroutineScope.resolveQueryFragment(
             mutable = true,
         )
     orchestrateSlot(
+        root = queryResult,
         path = emptyList(),
         source = source,
         selections = queryFragment.constructionSelections,
         target = queryResult,
     )
-    world.queryValues[coordinate.toList()] = queryResult
+    world.queryValues[ResolverOccurrenceId.at(owningRoot, coordinate)] = queryResult
     return queryResult.materialize(
         selections = queryFragment.materializeSelections,
         reader = coordinate,

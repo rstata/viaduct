@@ -138,7 +138,7 @@ class AdversarialRegressionTest {
                 world.getBinding(
                     Arguments.Variable
                         .of(resultKey.field, "value")
-                        .instantiate(ResolverOccurrenceId.at(listOf(resultKey)))
+                        .instantiate(ResolverOccurrenceId.at(resolved, listOf(resultKey)))
                         .let { variable -> requireNotNull(variable.instanceId) },
                 ),
             )

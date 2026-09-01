@@ -66,7 +66,7 @@ Resolver01/02/06/07/21/22 use complete-output policies; Resolver03/08/23/25/26 u
 
 Sometimes-passive contracts are enabled for Resolver01-03, Resolver06-08, Resolver21-23, Resolver25, and Resolver26. Resolver02-03, Resolver07-08, Resolver22-23, Resolver25, and Resolver26 additionally run the nonempty-standard-object-fragment cases, and Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26 run the selective one-shot witness.
 
-Deferred validation keeps replayed resolver functions from changing fixture application counters before explicit assertions run. Every policy mixin must contain an executable guard.
+Deferred validation keeps replayed resolver functions from changing fixture application counters before explicit assertions run. Resolver25 and Resolver26 generated observations also retain the exact applied `ResolverOccurrenceId` set. Object-path binding validation uses that set to require all and only the `FromObjectField` bindings of applied occurrences, reject any bindings on passive occurrences, compare every binding with its completed provider value, and include Query-fragment roots. There is no unobserved compatibility mode. Every policy mixin must contain an executable guard.
 
 Extended trace, mutation, witness, list-deepening, selective-demand, and stress tests stay separate from ordinary feature acceptance. Mutation, witness, selective-demand, list-deepening, and deep-stress bodies use shared contracts when their assertions are implementation-independent. Resolver25 and Resolver26 both opt into the shared mutation, construction-witness, and selective-demand-witness contracts; Resolver25's nested-variable-use stress profile and Resolver26's deep stress profile additionally require generated and activated sometimes-passive fields. Lifecycle tracing and multithreaded execution remain implementation-specific.
 
@@ -131,7 +131,7 @@ For cross-profile debugging, run the concrete class with only the seed:
 
 Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
 
-Resolver25 also has independent unfiltered broad profiles. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings:
+Resolver25 also has independent unfiltered broad profiles. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings against the exact `ResolverStarted` occurrence set:
 
 ```shell
 ./gradlew :semantics:resolver25BroadStress \
@@ -164,7 +164,7 @@ Replay one failed campaign coordinate through its recorded round and profile:
 
 ## Resolver26 Broad Campaign
 
-Resolver26's broad tests use five directed distributions: balanced worlds, symbolic list descendants, nullable and error providers, equal grounded arguments from distinct symbolic keys, and multiple object-path owners. Every distribution admits query fragments at bounded density and requires both generated and activated query-fragment evidence. Their structural coverage is classified only from completed OER paths and symbolic keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation checks every activated object-path variable. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
+Resolver26's broad tests use five directed distributions: balanced worlds, symbolic list descendants, nullable and error providers, equal grounded arguments from distinct symbolic keys, and multiple object-path owners. Every distribution admits query fragments at bounded density and requires both generated and activated query-fragment evidence. Their structural coverage is classified only from completed OER paths and symbolic keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation compares the exact required and completed object-path binding sets for every observed application across the primary and Query-fragment roots. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
 
 Every generated case checks exact attempted/resolved/completed accounting, root-and-path-qualified application identities, `correctResolution`, and independently reconstructed object-path bindings. Sometimes-passive occurrences form the independently counted difference between registered result occurrences and standard resolver applications. A profile's aggregate run must also observe its required Resolver26 structural signatures.
 

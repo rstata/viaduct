@@ -4,6 +4,7 @@ import viaduct.engine.api.EngineObjectData
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import viaduct.graphql.schema.ViaductSchema
 import model.requireField
 import model.SelectionForest
@@ -11,6 +12,10 @@ import model.SelectionForest
 /** Subject-specific evidence retained alongside one resolution result. */
 interface ResolverResolutionObservation {
     val result: ObjectEngineResult
+
+    /** Exact resolver applications when the subject exposes occurrence-aware instrumentation. */
+    val appliedResolverOccurrences: Set<ResolverOccurrenceId>?
+        get() = null
 }
 
 private data class ResultOnlyResolverResolutionObservation(

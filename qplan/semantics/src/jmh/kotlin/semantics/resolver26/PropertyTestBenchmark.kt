@@ -19,7 +19,8 @@ import org.openjdk.jmh.infra.IterationParams
 import org.openjdk.jmh.runner.IterationType
 import semantics.benchmark.DEFAULT_PROPERTY_TEST_LOOP_COUNT
 import semantics.benchmark.PropertyTestBenchmarkSupport
-import semantics.benchmark.ResolverBenchmarkSubject
+import semantics.benchmark.ObservedResolverBenchmarkSubject
+import semantics.benchmark.ResolverBenchmarkApplicationObservation
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -43,9 +44,24 @@ open class PropertyTestBenchmark {
 
     private val support =
         PropertyTestBenchmarkSupport(
-            subject = ResolverBenchmarkSubject { world, _, selections ->
+            subject = ObservedResolverBenchmarkSubject {
+                    world,
+                    _,
+                    selections,
+                    applicationObserver,
+                ->
                 context(world) {
-                    resolve(selections)
+                    resolveObserved(selections) { observation ->
+                        applicationObserver(
+                            ResolverBenchmarkApplicationObservation(
+                                occurrencePath = observation.occurrencePath,
+                                resolverOccurrenceId = observation.resolverOccurrenceId,
+                                variableArgumentCount = observation.variableArgumentCount,
+                                variableSourceOccurrenceIds =
+                                    observation.variableResolverOccurrenceIds,
+                            ),
+                        )
+                    }
                 }
             },
         )

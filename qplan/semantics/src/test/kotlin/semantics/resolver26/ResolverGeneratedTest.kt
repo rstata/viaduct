@@ -7,6 +7,7 @@ import viaduct.engine.api.EngineObjectData
 import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
@@ -18,7 +19,9 @@ import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromObjectPathGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.ResolverResolutionObservation
 import semantics.contract.SometimesPassiveGeneratedResolverContract
+import java.util.concurrent.ConcurrentHashMap
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
@@ -47,4 +50,28 @@ class ResolverGeneratedTest :
         context(world) {
             resolve(selections)
         }
+
+    override fun observeResolution(
+        world: Assumptions,
+        root: EngineObjectData.Sync,
+        selections: SelectionForest,
+    ): ResolverResolutionObservation {
+        val appliedResolverOccurrences =
+            ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
+        val result =
+            context(world) {
+                resolveObserved(selections) { application ->
+                    appliedResolverOccurrences += application.resolverOccurrenceId
+                }
+            }
+        return Resolver26ResolutionObservation(
+            result = result,
+            appliedResolverOccurrences = appliedResolverOccurrences.toSet(),
+        )
+    }
 }
+
+private data class Resolver26ResolutionObservation(
+    override val result: ObjectEngineResult,
+    override val appliedResolverOccurrences: Set<ResolverOccurrenceId>,
+) : ResolverResolutionObservation

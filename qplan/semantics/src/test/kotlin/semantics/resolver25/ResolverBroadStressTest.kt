@@ -147,12 +147,13 @@ internal suspend fun runResolver25BroadStress(
                 val fragment = world.fragmentFrom(testCase.query.source)
                 testCase.registry.clearResolutionWitness()
                 resolutionCalls += 1
-                val result =
-                    resolveWithLifecycleValidation(
+                val observation =
+                    observeWithLifecycleValidation(
                         world = world,
                         root = world.objectOf("Query"),
                         selections = fragment.subselections,
                     )
+                val result = observation.result
                 val witness = testCase.registry.resolutionWitness()
                 resolverApplications += witness.applications.size
                 witness.applications.forEach { application ->
@@ -196,7 +197,7 @@ internal suspend fun runResolver25BroadStress(
                 }
                 assertTrue(context(world) { result.correctResolution(fragment) })
                 context(world) {
-                    result.validateObjectPathBindings()
+                    result.validateObjectPathBindings(observation.appliedResolverOccurrences)
                 }
                 completedCases += 1
             }

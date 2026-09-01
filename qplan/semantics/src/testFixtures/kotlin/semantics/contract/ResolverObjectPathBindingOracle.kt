@@ -24,54 +24,79 @@ import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
 
 /**
- * Independently reads every activated object-path provider from the completed result.
+ * Independently validates object-path bindings across every request-local Query root.
+ *
+ * An applied occurrence must have exactly all of its declared bindings and a passive occurrence
+ * must have none.
  */
 context(world: Assumptions)
-fun ObjectEngineResult.validateObjectPathBindings() {
-    this.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
-        val resolver = world.resolverRegistry.resolver(cell.field)
-        val definitions =
-            resolver.boundObjectPathDefinitions(
-                root = this@validateObjectPathBindings,
-                path = cell.occurrencePath,
-            )
-        if (
-            definitions.isNotEmpty() &&
-            definitions.none { definition ->
-                definition.variable.instanceId?.let(world::isBound) == true
-            }
-        ) {
-            return@forEachRegisteredResolverOccurrence
-        }
-        definitions.forEach { definition ->
-            val expected =
-                cell.containingObject.readCompletedProvider(
-                    path = definition.path,
-                    reader = cell.occurrencePath,
+fun ObjectEngineResult.validateObjectPathBindings(
+    appliedResolverOccurrences: Set<ResolverOccurrenceId>,
+) {
+    requestQueryRoots().forEach { root ->
+        root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+            val resolver = world.resolverRegistry.resolver(cell.field)
+            val definitions =
+                resolver.objectPathDefinitions(
+                    root = root,
+                    path = cell.occurrencePath,
                 )
-            assertEquals(
-                expected,
-                world.getBinding(requireNotNull(definition.variable.instanceId)),
-            )
+            if (definitions.isEmpty()) {
+                return@forEachRegisteredResolverOccurrence
+            }
+
+            val occurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
+            val requiredBindingIds =
+                definitions.mapTo(linkedSetOf()) { definition ->
+                    requireNotNull(definition.variable.instanceId)
+                }
+            val actualBindingIds = requiredBindingIds.filterTo(linkedSetOf(), world::isBound)
+            when (appliedResolverOccurrences.contains(occurrenceId)) {
+                true ->
+                    assertEquals(
+                        requiredBindingIds,
+                        actualBindingIds,
+                        "Applied resolver occurrence $occurrenceId has incomplete " +
+                            "FromObjectField bindings",
+                    )
+                false -> {
+                    assertEquals(
+                        emptySet(),
+                        actualBindingIds,
+                        "Passive resolver occurrence $occurrenceId unexpectedly has " +
+                            "FromObjectField bindings",
+                    )
+                    return@forEachRegisteredResolverOccurrence
+                }
+            }
+
+            definitions.forEach { definition ->
+                val expected =
+                    cell.containingObject.readCompletedProvider(
+                        path = definition.path,
+                        reader = cell.occurrencePath,
+                    )
+                assertEquals(
+                    expected,
+                    world.getBinding(requireNotNull(definition.variable.instanceId)),
+                )
+            }
         }
     }
 }
 
-context(world: Assumptions)
-internal fun FieldResolver.boundObjectPathDefinitions(
+internal fun FieldResolver.objectPathDefinitions(
     root: ObjectEngineResult,
     path: List<PathComponent>,
-): List<InstantiatedObjectPathDefinition> {
-    val occurrenceDefinitions =
-        instantiateObjectFragmentAt(root, path).pathVariableDefinitions
-    return occurrenceDefinitions
-        .takeIf { definitions ->
-            definitions.isNotEmpty() &&
-                definitions.all { definition ->
-                    definition.variable.instanceId?.let(world::isBound) == true
-                }
-        }.orEmpty()
-}
+): List<InstantiatedObjectPathDefinition> =
+    instantiateObjectFragmentAt(root, path).pathVariableDefinitions
+
+context(world: Assumptions)
+private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
+    buildList {
+        add(this@requestQueryRoots)
+        addAll(world.queryValues.values)
+    }
 
 context(world: Assumptions)
 private fun ObjectEngineResult.readCompletedProvider(

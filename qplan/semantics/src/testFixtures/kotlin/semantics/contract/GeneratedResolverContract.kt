@@ -300,7 +300,9 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
     fun `generated query fragment worlds resolve correctly`(): Unit =
         runBlocking {
             var generatedQueryFragments = 0
+            var generatedArgumentVariables = 0
             var activatedQueryFragments = 0
+            var activatedArgumentVariableApplications = 0
             var queryValueWitnesses = 0
             val assertions =
                 generatedCaseAssertions.filterNot { assertion ->
@@ -308,16 +310,21 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 }
             val config =
                 Config.default +
+                    (FieldArgumentWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 1.0) +
                     (NodeResolversEnabled to false) +
-                    (ResolverFragmentsEnabled to false) +
-                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverQueryFragmentsEnabled to true) +
+                    (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to false)
 
             val run =
                 checkGeneratedProfile("query-fragment", config) { testWorld, testCase ->
                     generatedQueryFragments += testCase.registry.features.queryFragmentCount
+                    generatedArgumentVariables +=
+                        testCase.registry.features.fromArgumentVariableCount
 
                     val observation =
                         observeGeneratedCaseWithCurrentAssertions(
@@ -328,6 +335,12 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                     activatedQueryFragments +=
                         observation.ordinaryApplications.count { application ->
                             testCase.registry.hasNonemptyQueryFragment(application)
+                        }
+                    activatedArgumentVariableApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.sourceResolverHasFromArgumentVariables(
+                                application.key.field,
+                            )
                         }
                     queryValueWitnesses +=
                         observation.executions.sumOf { execution ->
@@ -340,8 +353,16 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 "Generated query-fragment profile produced no query fragments",
             )
             run.assertAggregate(
+                generatedArgumentVariables > 0,
+                "Generated query-fragment profile produced no FromArgument variables",
+            )
+            run.assertAggregate(
                 activatedQueryFragments > 0,
                 "Generated query-fragment profile activated no query fragments",
+            )
+            run.assertAggregate(
+                activatedArgumentVariableApplications > 0,
+                "Generated query-fragment profile activated no FromArgument variables",
             )
             run.assertAggregate(
                 queryValueWitnesses > 0,

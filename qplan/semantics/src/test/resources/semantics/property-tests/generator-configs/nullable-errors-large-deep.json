@@ -12,7 +12,6 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverQueryFragmentsEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -114,18 +113,26 @@
     }
   },
   "resolver25" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : false
+    },
     "doubles" : {
       "errorValueWeight" : 0.25,
       "nullValueWeight" : 0.4,
-      "resolverNestedProviderPathWeight" : 0.8
+      "resolverNestedProviderPathWeight" : 0.8,
+      "resolverQueryFragmentWeight" : 1.0
     },
     "id" : "resolver25-nullable-errors-large-deep"
   },
   "resolver26" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : true
+    },
     "doubles" : {
       "errorValueWeight" : 0.45,
       "nullValueWeight" : 0.45,
-      "resolverNestedProviderPathWeight" : 1.0
+      "resolverNestedProviderPathWeight" : 1.0,
+      "resolverQueryFragmentWeight" : 0.1
     },
     "id" : "resolver26-nullable-errors-large-deep"
   }

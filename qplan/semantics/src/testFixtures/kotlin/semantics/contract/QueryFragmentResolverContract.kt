@@ -173,4 +173,141 @@ interface QueryFragmentResolverContract : ResolverContract {
         assertEquals(setOf(middleKey), world.queryValues.getValue(listOf(resultKey)).keys)
         assertEquals(setOf(baseKey), world.queryValues.getValue(listOf(middleKey)).keys)
     }
+
+    @Test
+    fun `query fragment resolver occurrences are distinct from the same request occurrence`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      source(value: Int!): Int!
+                      dependency(value: Int!): Int!
+                      consumer: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val source = schema.requireObjectField("Query", "source")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value")
+                            },
+                        dependency to
+                            fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        "fragment Dependency on Query { source(value: ${'$'}value) }",
+                                    ),
+                            ) { input, _ ->
+                                input.selectionValues().getValue("source")
+                            },
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment =
+                                    schema.fragmentFrom(
+                                        "fragment ConsumerQuery on Query { dependency(value: 7) }",
+                                    ),
+                            ) { _, queryValue, _ ->
+                                queryValue.selectionValues().getValue("dependency")
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        Arguments.Variable.of(dependency, "value") to
+                            schema.fromArgument(dependency, "value"),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val dependencyKey =
+            world.schema.contractKey("Query", "dependency", mapOf("value" to 7))
+        val consumerKey = world.schema.contractKey("Query", "consumer")
+
+        val resolved =
+            resolveAndValidate(
+                world,
+                "query { dependency(value: 7) consumer }",
+            )
+
+        assertEquals(7, resolved.getCell(dependencyKey).get())
+        assertEquals(7, resolved.getCell(consumerKey).get())
+    }
+
+    @Test
+    fun `the same resolver occurrence path is distinct in two query fragments`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      source(value: Int!): Int!
+                      dependency(value: Int!): Int!
+                      first: Int!
+                      second: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val source = schema.requireObjectField("Query", "source")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    val first = schema.requireObjectField("Query", "first")
+                    val second = schema.requireObjectField("Query", "second")
+                    val dependencyQuery =
+                        schema.fragmentFrom(
+                            "fragment ConsumerQuery on Query { dependency(value: 7) }",
+                        )
+                    mapOf(
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value")
+                            },
+                        dependency to
+                            fieldResolverOf(
+                                objectFragment =
+                                    schema.fragmentFrom(
+                                        "fragment Dependency on Query { source(value: ${'$'}value) }",
+                                    ),
+                            ) { input, _ ->
+                                input.selectionValues().getValue("source")
+                            },
+                        first to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment = dependencyQuery,
+                            ) { _, queryValue, _ ->
+                                queryValue.selectionValues().getValue("dependency")
+                            },
+                        second to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment = dependencyQuery,
+                            ) { _, queryValue, _ ->
+                                queryValue.selectionValues().getValue("dependency")
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        Arguments.Variable.of(dependency, "value") to
+                            schema.fromArgument(dependency, "value"),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val firstKey = world.schema.contractKey("Query", "first")
+        val secondKey = world.schema.contractKey("Query", "second")
+
+        val resolved = resolveAndValidate(world, "query { first second }")
+
+        assertEquals(7, resolved.getCell(firstKey).get())
+        assertEquals(7, resolved.getCell(secondKey).get())
+    }
 }

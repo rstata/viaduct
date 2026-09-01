@@ -13,6 +13,7 @@ import semantics.arbitrary.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverTestExecution
+import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
@@ -127,6 +128,8 @@ internal suspend fun runResolver26BroadStress(
     var maximumVariableUseDepth = 0
     var generatedSometimesPassiveFields = 0
     var activatedSometimesPassiveOccurrences = 0
+    var generatedQueryFragments = 0
+    var activatedQueryFragmentApplications = 0
     val observedSignatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
 
     try {
@@ -144,6 +147,7 @@ internal suspend fun runResolver26BroadStress(
                     testCase.registry.features.fromObjectFieldVariableCount
                 generatedSometimesPassiveFields +=
                     testCase.registry.features.sometimesPassiveFieldCount
+                generatedQueryFragments += testCase.registry.features.queryFragmentCount
                 maximumProviderPathLength =
                     maxOf(
                         maximumProviderPathLength,
@@ -178,6 +182,13 @@ internal suspend fun runResolver26BroadStress(
                 resolverApplications += witness.applications.size
                 witness.applications.forEach { application ->
                     if (
+                        testCase.registry.queryFragmentSources[
+                            testCase.registry.sourceResolverCoordinate(application.key.field)
+                        ]?.isNotEmpty() == true
+                    ) {
+                        activatedQueryFragmentApplications += 1
+                    }
+                    if (
                         testCase.registry.sourceResolverHasFromArgumentVariables(
                             application.key.field,
                         )
@@ -193,7 +204,10 @@ internal suspend fun runResolver26BroadStress(
                     }
                 }
 
-                if (config[SometimesPassiveFieldWeight] > 0.0) {
+                if (
+                    config[SometimesPassiveFieldWeight] > 0.0 &&
+                    !config[ResolverQueryFragmentsEnabled]
+                ) {
                     val resultOccurrenceCounts =
                         context(world) {
                             result.registeredResolverOccurrenceCounts(world.resolverRegistry)
@@ -207,7 +221,7 @@ internal suspend fun runResolver26BroadStress(
                     }
                     activatedSometimesPassiveOccurrences +=
                         resultOccurrenceCounts.values.sum() - witness.applications.size
-                } else {
+                } else if (!config[ResolverQueryFragmentsEnabled]) {
                     assertEquals(
                         context(world) {
                             result.registeredResolverApplicationIdentityCounts()
@@ -236,11 +250,20 @@ internal suspend fun runResolver26BroadStress(
                 "${requiredSignatures - observedSignatures}; " +
                 "observed=$observedSignatures",
         )
-        if (config[SometimesPassiveFieldWeight] > 0.0) {
+        if (
+            config[SometimesPassiveFieldWeight] > 0.0 &&
+            !config[ResolverQueryFragmentsEnabled]
+        ) {
             run.assertAggregate(
                 generatedSometimesPassiveFields > 0 &&
                     activatedSometimesPassiveOccurrences > 0,
                 "Resolver26 profile $propertyProfile did not activate sometimes-passive fields",
+            )
+        }
+        if (config[ResolverQueryFragmentsEnabled]) {
+            run.assertAggregate(
+                generatedQueryFragments > 0 && activatedQueryFragmentApplications > 0,
+                "Resolver26 profile $propertyProfile did not activate query fragments",
             )
         }
         return completedCases
@@ -262,6 +285,8 @@ internal suspend fun runResolver26BroadStress(
                 "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
                 "activatedSometimesPassiveOccurrences=" +
                 "$activatedSometimesPassiveOccurrences, " +
+                "generatedQueryFragments=$generatedQueryFragments, " +
+                "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
                 "signatures=$observedSignatures, " +
                 "elapsedMillis=${(System.nanoTime() - startedAt) / 1_000_000}",
         )

@@ -14,6 +14,8 @@ import semantics.arbitrary.RESOLVER_TEST_PROFILE_PROPERTY
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
+import semantics.arbitrary.ResolverQueryFragmentsEnabled
+import semantics.arbitrary.ResolverQueryFragmentWeight
 import semantics.arbitrary.ResolverTestCaseCoordinate
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.SometimesPassiveFieldWeight
@@ -75,6 +77,16 @@ class ResolverBroadStressCampaignConfigurationTest {
         assertTrue(
             Resolver26BroadStressProfile.entries.all { profile ->
                 profile.config[SometimesPassiveFieldWeight] == 0.25
+            },
+        )
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[ResolverQueryFragmentsEnabled]
+            },
+        )
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[ResolverQueryFragmentWeight] == 0.1
             },
         )
 

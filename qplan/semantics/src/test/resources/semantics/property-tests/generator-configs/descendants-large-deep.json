@@ -12,7 +12,6 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverQueryFragmentsEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : true,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -113,19 +112,27 @@
     }
   },
   "resolver25" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : false
+    },
     "doubles" : {
       "explicitFieldResolverWeight" : 0.8,
       "resolverFromObjectFieldPassiveUseWeight" : 0.25,
       "resolverFromObjectFieldProviderArgumentVariableWeight" : 0.0,
+      "resolverQueryFragmentWeight" : 1.0,
       "resolverVariableWeight" : 0.8
     },
     "id" : "resolver25-list-descendants-large-deep"
   },
   "resolver26" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : true
+    },
     "doubles" : {
       "explicitFieldResolverWeight" : 0.5,
       "resolverFromObjectFieldPassiveUseWeight" : 1.0,
       "resolverFromObjectFieldProviderArgumentVariableWeight" : 1.0,
+      "resolverQueryFragmentWeight" : 0.1,
       "resolverVariableWeight" : 0.9
     },
     "id" : "resolver26-descendant-variables-large-deep"

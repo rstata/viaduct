@@ -15,6 +15,7 @@ import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.SometimesPassiveGeneratedResolverContract
 
 /**
  * Ordinary generated-world acceptance. Extended trace, mutation, depth, witness, and stress
@@ -27,6 +28,7 @@ class ResolverGeneratedTest :
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,
     QueryFragmentGeneratedResolverContract,
+    SometimesPassiveGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
     override val selectiveResolvers: Boolean
         get() = true

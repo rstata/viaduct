@@ -18,6 +18,7 @@ import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromObjectPathGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.SometimesPassiveGeneratedResolverContract
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
@@ -28,6 +29,7 @@ class ResolverGeneratedTest :
     ObjectFragmentFromObjectPathGeneratedResolverContract,
     MixedVariableGeneratedResolverContract,
     QueryFragmentGeneratedResolverContract,
+    SometimesPassiveGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
     override val selectiveResolvers: Boolean
         get() = true

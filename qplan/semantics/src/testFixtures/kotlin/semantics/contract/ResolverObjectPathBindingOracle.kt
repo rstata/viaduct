@@ -29,16 +29,21 @@ context(world: Assumptions)
 fun ObjectEngineResult.validateObjectPathBindings() {
     this.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
         val resolver = world.resolverRegistry.resolver(cell.field)
-        resolver
-            .boundObjectPathDefinitions(cell.occurrencePath)
-            .forEach { definition ->
-                val expected =
-                    cell.containingObject.readCompletedProvider(
-                        path = definition.path,
-                        reader = cell.occurrencePath,
-                    )
-                assertEquals(expected, world.getBinding(definition.variable))
-            }
+        val definitions = resolver.boundObjectPathDefinitions(cell.occurrencePath)
+        if (
+            definitions.isNotEmpty() &&
+            definitions.none { definition -> world.isBound(definition.variable) }
+        ) {
+            return@forEachRegisteredResolverOccurrence
+        }
+        definitions.forEach { definition ->
+            val expected =
+                cell.containingObject.readCompletedProvider(
+                    path = definition.path,
+                    reader = cell.occurrencePath,
+                )
+            assertEquals(expected, world.getBinding(definition.variable))
+        }
     }
 }
 

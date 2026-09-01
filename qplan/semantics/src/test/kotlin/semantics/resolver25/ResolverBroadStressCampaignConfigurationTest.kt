@@ -13,6 +13,7 @@ import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import kotlin.test.assertEquals
@@ -68,6 +69,12 @@ class ResolverBroadStressCampaignConfigurationTest {
         val nullableErrors = Resolver25BroadStressProfile.NULLABLE_ERRORS.config
         val mixedVariables = Resolver25BroadStressProfile.MIXED_VARIABLES.config
         val multipleOwners = Resolver25BroadStressProfile.MULTIPLE_OWNERS.config
+
+        assertTrue(
+            Resolver25BroadStressProfile.entries.all { profile ->
+                profile.config[SometimesPassiveFieldWeight] == 0.25
+            },
+        )
 
         assertTrue(listDescendants[ListTypeWeight] > balanced[ListTypeWeight])
         assertEquals(1..2, listDescendants[ListValueSize])

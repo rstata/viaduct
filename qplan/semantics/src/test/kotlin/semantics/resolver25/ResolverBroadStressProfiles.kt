@@ -36,6 +36,7 @@ import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.ResolverVariablesOnNonQueryFieldsOnly
 import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.SometimesPassiveFieldWeight
 
 internal enum class Resolver25BroadStressProfile(
     val id: String,
@@ -157,4 +158,5 @@ private fun balancedBroadConfig(): Config =
         (ResolverFromObjectFieldVariableUseDepth to 1..3) +
         (ResolverFromObjectFieldVariableOwnerLimit to 4) +
         (ResolverFromObjectFieldPassiveUseWeight to 0.25) +
-        (ResolverFromObjectFieldVariableOwnerUseWeight to 0.25)
+        (ResolverFromObjectFieldVariableOwnerUseWeight to 0.25) +
+        (SometimesPassiveFieldWeight to 0.25)

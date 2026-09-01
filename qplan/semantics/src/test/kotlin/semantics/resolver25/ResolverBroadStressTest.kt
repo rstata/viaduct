@@ -6,9 +6,11 @@ import model.objectOf
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverTestExecution
+import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
 import semantics.arbitrary.executeResolverTestCases
+import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.contract.registeredResolverApplicationIdentityCounts
 import semantics.contract.validateObjectPathBindings
 import semantics.correctresolution.correctResolution
@@ -112,6 +114,8 @@ internal suspend fun runResolver25BroadStress(
     var activatedObjectPathVariableApplications = 0
     var maximumProviderPathLength = 0
     var maximumVariableUseDepth = 0
+    var generatedSometimesPassiveFields = 0
+    var activatedSometimesPassiveOccurrences = 0
 
     try {
         val run =
@@ -126,6 +130,8 @@ internal suspend fun runResolver25BroadStress(
                     testCase.registry.features.fromArgumentVariableCount
                 generatedObjectPathVariables +=
                     testCase.registry.features.fromObjectFieldVariableCount
+                generatedSometimesPassiveFields +=
+                    testCase.registry.features.sometimesPassiveFieldCount
                 maximumProviderPathLength =
                     maxOf(
                         maximumProviderPathLength,
@@ -166,12 +172,28 @@ internal suspend fun runResolver25BroadStress(
                     }
                 }
 
-                assertEquals(
-                    context(world) {
-                        result.registeredResolverApplicationIdentityCounts()
-                    },
-                    witness.applicationIdentityCounts(),
-                )
+                if (config[SometimesPassiveFieldWeight] > 0.0) {
+                    val resultOccurrenceCounts =
+                        context(world) {
+                            result.registeredResolverOccurrenceCounts(world.resolverRegistry)
+                        }
+                    witness.applicationCounts().forEach { (key, count) ->
+                        assertTrue(
+                            count <= resultOccurrenceCounts.getOrDefault(key, 0),
+                            "Observed $count applications of $key but result contains only " +
+                                "${resultOccurrenceCounts.getOrDefault(key, 0)} occurrences",
+                        )
+                    }
+                    activatedSometimesPassiveOccurrences +=
+                        resultOccurrenceCounts.values.sum() - witness.applications.size
+                } else {
+                    assertEquals(
+                        context(world) {
+                            result.registeredResolverApplicationIdentityCounts()
+                        },
+                        witness.applicationIdentityCounts(),
+                    )
+                }
                 assertTrue(context(world) { result.correctResolution(fragment) })
                 context(world) {
                     result.validateObjectPathBindings()
@@ -183,6 +205,13 @@ internal suspend fun runResolver25BroadStress(
         assertEquals(run.expectedCases, attemptedCases)
         assertEquals(run.expectedCases, resolutionCalls)
         assertEquals(run.expectedCases, completedCases)
+        if (config[SometimesPassiveFieldWeight] > 0.0) {
+            run.assertAggregate(
+                generatedSometimesPassiveFields > 0 &&
+                    activatedSometimesPassiveOccurrences > 0,
+                "Resolver25 profile $profile did not activate sometimes-passive fields",
+            )
+        }
         return completedCases
     } finally {
         println(
@@ -199,6 +228,9 @@ internal suspend fun runResolver25BroadStress(
                 "$activatedObjectPathVariableApplications, " +
                 "maximumProviderPathLength=$maximumProviderPathLength, " +
                 "maximumVariableUseDepth=$maximumVariableUseDepth, " +
+                "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
+                "activatedSometimesPassiveOccurrences=" +
+                "$activatedSometimesPassiveOccurrences, " +
                 "elapsedMillis=${(System.nanoTime() - startedAt) / 1_000_000}",
         )
     }

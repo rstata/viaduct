@@ -11,8 +11,8 @@
       "recursiveInputTypesEnabled" : true,
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
-      "resolverQueryFragmentsEnabled" : false,
       "resolverFromArgumentVariablesEnabled" : true,
+      "resolverQueryFragmentsEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -47,7 +47,7 @@
       "resolverLiteralVariableConvergenceWeight" : 0.2,
       "resolverNestedProviderPathWeight" : 0.5,
       "resolverVariableWeight" : 0.9,
-      "sometimesPassiveFieldWeight" : 0.0
+      "sometimesPassiveFieldWeight" : 0.25
     },
     "integers" : {
       "maxInputTypeDepth" : 2,

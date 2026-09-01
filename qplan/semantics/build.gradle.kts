@@ -519,6 +519,7 @@ val resolverPropertyProfiles =
         "empty-object-fragment" to
             "generated empty object fragment worlds resolve correctly",
         "node" to "generated node worlds resolve correctly",
+        "sometimes-passive" to "generated sometimes-passive fields resolve correctly",
         "object-fragment" to
             "generated object fragment worlds without variables resolve correctly",
         "object-fragment-from-argument" to

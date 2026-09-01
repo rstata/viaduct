@@ -36,6 +36,7 @@ import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.ResolverVariablesOnNonQueryFieldsOnly
 import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.SometimesPassiveFieldWeight
 
 // Defines orthogonal generated-world distributions for Resolver26's observable semantics.
 internal enum class Resolver26BroadStressProfile(
@@ -192,4 +193,5 @@ private fun balancedBroadConfig(): Config =
         (ResolverFromObjectFieldVariableUseDepth to 1..3) +
         (ResolverFromObjectFieldVariableOwnerLimit to 4) +
         (ResolverFromObjectFieldPassiveUseWeight to 0.25) +
-        (ResolverFromObjectFieldVariableOwnerUseWeight to 0.25)
+        (ResolverFromObjectFieldVariableOwnerUseWeight to 0.25) +
+        (SometimesPassiveFieldWeight to 0.25)

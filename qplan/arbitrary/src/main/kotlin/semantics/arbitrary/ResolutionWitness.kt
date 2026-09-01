@@ -22,6 +22,7 @@ import model.inputType
 import model.outputValue
 import model.requireArg
 import model.requireField
+import model.rootRelativeHashCode
 import viaduct.engine.api.EngineObjectData
 import model.registry.ResolverRegistry
 import java.security.MessageDigest
@@ -564,7 +565,7 @@ private class FingerprintBudget(
                             } +
                         ")",
                 )
-            else -> node("open-args:${arguments.hashCode()}")
+            else -> node("open-args:${arguments.rootRelativeHashCode()}")
         }
 
     fun output(value: EngineOutputData?): String =

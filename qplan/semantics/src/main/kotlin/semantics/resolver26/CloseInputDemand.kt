@@ -23,6 +23,7 @@ import viaduct.engine.api.EngineObjectData
 // Returns the merged demand together with the resolver and binding metadata used by later phases.
 context(world: Assumptions)
 internal fun EngineObjectData.Sync.closeInputDemand(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     initialDemand: SelectionForest,
 ): CloseInputDemandResult {
@@ -62,7 +63,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
         newResolverSelections.forEach { (objectKey, _) ->
             val resolver: FieldResolver =
                 world.resolverRegistry.resolver(objectKey.field)
-            val resolverOccurrenceId = ResolverOccurrenceId.at(path + objectKey)
+            val resolverOccurrenceId = ResolverOccurrenceId.at(root, path + objectKey)
             if (
                 objectKey is ObjectEngineResult.GroundKey &&
                 objectKey.arguments.argumentsContainErrorValue()

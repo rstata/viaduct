@@ -5,18 +5,21 @@ import viaduct.graphql.schema.ViaductSchema
 /**
  * Opaque identity of one concrete field-resolver application.
  *
- * Equality is structural over a private diagnostic address. Runtime code may carry, compare,
- * hash, and print this value, but cannot decompose its address.
+ * Equality is structural over the identity of the Query-rooted [root] result and the exact result
+ * tree [path]. Runtime code may carry, compare, hash, and print this value, but cannot decompose
+ * its address.
  */
 sealed interface ResolverOccurrenceId {
     companion object {
         /**
-         * Returns the resolver occurrence identified by its exact result-tree [path].
-         *
-         * This factory is used by resolver strategies whose applications already have ground keys.
+         * Returns the resolver occurrence identified by its Query-rooted result and exact path.
          */
-        fun at(path: List<PathComponent>): ResolverOccurrenceId =
+        fun at(
+            root: ObjectEngineResult,
+            path: List<PathComponent>,
+        ): ResolverOccurrenceId =
             ResolverOccurrenceIdImpl(
+                root = root,
                 path = path.toList(),
             )
     }
@@ -50,12 +53,52 @@ sealed interface VariableInstanceId {
 }
 
 private data class ResolverOccurrenceIdImpl(
+    val root: ObjectEngineResult,
     val path: List<PathComponent>,
 ) : ResolverOccurrenceId {
     override fun toString(): String =
         "ResolverOccurrenceId(" +
+            "root=${System.identityHashCode(root)}, " +
             "path=${path.renderOccurrencePath()}" +
             ")"
+}
+
+/**
+ * Returns a hash of this occurrence's root-relative address.
+ *
+ * This deliberately omits the Query-rooted result identity and recursively treats symbolic object
+ * keys the same way. It is suitable only for comparisons between otherwise equivalent executions
+ * rooted at different OERs. Runtime identity and ordinary [Any.hashCode] remain root-qualified.
+ */
+internal fun ResolverOccurrenceId.rootRelativeHashCode(): Int =
+    (this as ResolverOccurrenceIdImpl).path.fold(1) { hash, component ->
+        31 * hash +
+            when (component) {
+                is ObjectEngineResult.ObjectKey -> {
+                    var keyHash = component.field.hashCode()
+                    keyHash = 31 * keyHash + component.arguments.rootRelativeHashCode()
+                    keyHash
+                }
+                is ListEngineResult.Index -> component.hashCode()
+            }
+    }
+
+/** Returns whether these occurrences have equal paths after omitting their root identities. */
+internal fun ResolverOccurrenceId.hasSameRootRelativeAddressAs(
+    other: ResolverOccurrenceId,
+): Boolean {
+    val leftPath = (this as ResolverOccurrenceIdImpl).path
+    val rightPath = (other as ResolverOccurrenceIdImpl).path
+    return leftPath.size == rightPath.size &&
+        leftPath.zip(rightPath).all { (left, right) ->
+            when {
+                left is ObjectEngineResult.ObjectKey && right is ObjectEngineResult.ObjectKey ->
+                    left.field == right.field &&
+                        left.arguments.hasSameRootRelativeStructureAs(right.arguments)
+                left is ListEngineResult.Index && right is ListEngineResult.Index -> left == right
+                else -> false
+            }
+        }
 }
 
 private class VariableInstanceIdImpl(

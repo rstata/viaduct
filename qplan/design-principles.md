@@ -34,7 +34,7 @@ Errors belong to domains rather than to every pre-domain type. Engine results, e
 
 ## Result Occurrence Is Identity
 
-The semantic identity of work is an occurrence in the result tree. Equal node IDs, schema coordinates, arguments, or values do not merge separate object or list occurrences. List indices and concrete containing paths remain part of occurrence identity. Caching, batching, and request deduplication are separate execution layers.
+The semantic identity of work is an occurrence in a rooted result tree. A resolver occurrence combines the reference identity of its Query-rooted OER with its exact path: the primary operation result roots primary occurrences, while each independently executed query fragment has a fresh Query OER that roots its subordinate occurrences. Equal node IDs, schema coordinates, arguments, paths in different roots, or values do not merge separate object or list occurrences. List indices and concrete containing paths remain part of occurrence identity. Caching, batching, and request deduplication are separate execution layers.
 
 Cells are allocated by their containing OER or LER. Cell reference identity is the cell occurrence identity; a parallel numeric cell identifier would duplicate and risk disagreeing with the carrier.
 

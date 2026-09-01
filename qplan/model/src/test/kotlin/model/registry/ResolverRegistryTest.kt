@@ -24,6 +24,7 @@ import model.selectionForestOf
 import model.testing.FieldResolverDefinition
 import model.testing.GJSchema
 import model.testing.TestWorld
+import model.testing.testRoot
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import model.testing.resolverRegistryOf
@@ -209,7 +210,14 @@ class ResolverRegistryTest {
             }
 
         assertEquals(7, result)
-        assertEquals("aliased", resolver.instantiateQueryFragmentAt(emptyList()).materializeSelections.single().responseKey)
+        assertEquals(
+            "aliased",
+            resolver
+                .instantiateQueryFragmentAt(schema.testRoot(), emptyList())
+                .materializeSelections
+                .single()
+                .responseKey,
+        )
     }
 
     @Test

@@ -18,6 +18,7 @@ import viaduct.engine.api.EngineObjectData
 internal class ObjectOrchestrationTask(
     internal val world: Assumptions,
     internal val support: Resolver26Support,
+    internal val root: ObjectEngineResult,
     internal val path: List<PathComponent>,
     internal val source: EngineObjectData.Sync,
     internal val target: ObjectEngineResult,
@@ -38,6 +39,7 @@ internal class ObjectOrchestrationTask(
         val closed: CloseInputDemandResult =
             context(world) {
                 source.closeInputDemand(
+                    root = root,
                     path = path,
                     initialDemand = initialDemand,
                 )

@@ -350,6 +350,79 @@ fun Arguments.variableArgumentNames(): Set<String> =
             .keys
     }
 
+/**
+ * Returns a structural argument hash that compares variable occurrences relative to their roots.
+ *
+ * This is intended for comparing equivalent argument expressions from independently rooted
+ * executions. Ordinary argument equality and [Any.hashCode] retain complete root-qualified
+ * variable identity.
+ */
+fun Arguments.rootRelativeHashCode(): Int =
+    when (this) {
+        Arguments.Error -> Arguments.Error.hashCode()
+        is Arguments.Resolved -> hashCode()
+        else -> fieldExpressions().rootRelativeHashCode()
+    }
+
+/** Returns whether these arguments have equal structure modulo occurrence-root identity. */
+internal fun Arguments.hasSameRootRelativeStructureAs(other: Arguments): Boolean =
+    when {
+        this === Arguments.Error || other === Arguments.Error -> this === other
+        this is Arguments.Resolved || other is Arguments.Resolved -> this == other
+        else -> fieldExpressions().hasSameRootRelativeStructureAs(other.fieldExpressions())
+    }
+
+private fun Map<*, *>.rootRelativeHashCode(): Int =
+    entries.sumOf { (key, value) ->
+        key.hashCode() xor value.rootRelativeHashCode()
+    }
+
+private fun ArgumentExpression?.rootRelativeHashCode(): Int =
+    when (this) {
+        null -> 0
+        is Arguments.Variable -> {
+            var hash = field.hashCode()
+            hash = 31 * hash + variableName.hashCode()
+            hash =
+                31 * hash +
+                    when (val id = instanceId) {
+                        null -> 0
+                        else -> id.resolverOccurrenceId.rootRelativeHashCode()
+                    }
+            hash
+        }
+        is List<*> -> fold(1) { hash, value ->
+            31 * hash + value.rootRelativeHashCode()
+        }
+        is Map<*, *> -> rootRelativeHashCode()
+        else -> hashCode()
+    }
+
+private fun Map<*, *>.hasSameRootRelativeStructureAs(other: Map<*, *>): Boolean =
+    keys == other.keys &&
+        all { (key, value) -> value.hasSameRootRelativeStructureAs(other[key]) }
+
+private fun ArgumentExpression?.hasSameRootRelativeStructureAs(other: ArgumentExpression?): Boolean =
+    when {
+        this is Arguments.Variable && other is Arguments.Variable ->
+            field == other.field &&
+                variableName == other.variableName &&
+                when {
+                    instanceId == null || other.instanceId == null -> instanceId == other.instanceId
+                    else ->
+                        instanceId!!.resolverOccurrenceId.hasSameRootRelativeAddressAs(
+                            other.instanceId!!.resolverOccurrenceId,
+                        )
+                }
+        this is List<*> && other is List<*> ->
+            size == other.size &&
+                indices.all { index ->
+                    this[index].hasSameRootRelativeStructureAs(other[index])
+                }
+        this is Map<*, *> && other is Map<*, *> -> hasSameRootRelativeStructureAs(other)
+        else -> this == other
+    }
+
 private fun ArgumentExpression?.variables(): Set<Arguments.Variable> =
     when (this) {
         is Arguments.Variable -> setOf(this)

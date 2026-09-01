@@ -35,7 +35,7 @@ import semantics.ResolverSupport
  */
 context(world: Assumptions)
 fun ObjectEngineResult.conformsToResolvers(): Boolean =
-    conformsToResolvers(ResolverApplicationCache())
+    conformsToResolvers(ResolverApplicationCache(this))
 
 context(world: Assumptions)
 internal fun ObjectEngineResult.conformsToResolvers(
@@ -97,10 +97,11 @@ private fun ObjectEngineResult.objectConformsToResolvers(
 
 context(world: Assumptions)
 internal fun FieldResolver.objectFragmentSatisfiedBy(
+    root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ResolverObjectFragment? {
-    val objectFragment = instantiateObjectFragmentAt(path)
+    val objectFragment = instantiateObjectFragmentAt(root, path)
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->

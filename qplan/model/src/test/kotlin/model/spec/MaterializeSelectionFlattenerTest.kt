@@ -16,6 +16,7 @@ import model.merge
 import model.testing.GJSchema
 import model.testing.GJSelectionParser
 import model.testing.TestWorld
+import model.testing.testRoot
 import model.usedVariables
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -161,7 +162,7 @@ class MaterializeSelectionFlattenerTest {
         val variable =
             Arguments.Variable
                 .of(field = field, variableName = "provider")
-                .instantiate(ResolverOccurrenceId.at(emptyList()))
+                .instantiate(ResolverOccurrenceId.at(field.testRoot(), emptyList()))
         val marker =
             ObjectEngineResult.VariableKey.of(
                 key = ObjectEngineResult.Key.of(field, emptyMap()),

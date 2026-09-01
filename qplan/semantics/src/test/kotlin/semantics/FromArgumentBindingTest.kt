@@ -5,6 +5,7 @@ import model.requireObjectField
 import model.Arguments
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
+import model.requireQueryTypeDef
 import kotlinx.coroutines.runBlocking
 import model.VariableBinding
 import model.emptyFragmentOf
@@ -42,13 +43,14 @@ class FromArgumentBindingTest {
         val world = testWorld.assumptions
         val field = world.schema.requireObjectField("Query", "echo")
         val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
+        val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), values = emptyMap())
 
         context(world) {
-            listOf(key).bindFromArguments(emptyList())
+            listOf(key).bindFromArguments(root, emptyList())
             val variable =
                 Arguments.Variable
                     .of(field, "value")
-                    .instantiate(ResolverOccurrenceId.at(listOf(key)))
+                    .instantiate(ResolverOccurrenceId.at(root, listOf(key)))
             val variableId = requireNotNull(variable.instanceId)
             assertEquals(VariableBinding.of(1), world.getBinding(variableId))
             assertEquals(
@@ -56,7 +58,7 @@ class FromArgumentBindingTest {
                 runBlocking { world.fetchBinding(variableId) },
             )
             assertFailsWith<IllegalStateException> {
-                listOf(key).bindFromArguments(emptyList())
+                listOf(key).bindFromArguments(root, emptyList())
             }
         }
     }

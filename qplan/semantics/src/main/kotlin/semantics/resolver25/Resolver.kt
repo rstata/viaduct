@@ -89,6 +89,7 @@ private fun resolveWithLifecycleInstrumentation(
                 coroutineScope {
                     val runtime =
                         ResolverRuntime(
+                            root = result,
                             scope = this,
                             instrumentation =
                                 Resolver25LifecycleInstrumentation(eventObserver),
@@ -107,6 +108,7 @@ private fun resolveWithLifecycleInstrumentation(
 }
 
 private class ResolverRuntime(
+    val root: ObjectEngineResult,
     val scope: CoroutineScope,
     val instrumentation: Resolver25LifecycleInstrumentation,
 ) {
@@ -531,8 +533,9 @@ private class ObjectResultOrchestrator(
 
         val resolver = world.resolverRegistry.resolver(groundedKey.field)
         val coordinate = path + groundedKey
-        val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
+        val objectFragment = resolver.instantiateObjectFragmentAt(runtime.root, coordinate)
         listOf(groundedKey).bindFromArguments(
+            root = runtime.root,
             path = path,
             onDeclared = { variable, definition ->
                 runtime.instrumentation.bindingDeclared(

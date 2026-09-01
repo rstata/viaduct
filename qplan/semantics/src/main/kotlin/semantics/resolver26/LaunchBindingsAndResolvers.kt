@@ -87,6 +87,7 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
             FieldResolverTask(
                 world = world,
                 support = support,
+                root = root,
                 path = path,
                 selection = selection,
                 groundedArguments = groundedArguments,

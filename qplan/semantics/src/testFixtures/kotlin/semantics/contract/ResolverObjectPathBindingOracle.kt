@@ -30,7 +30,11 @@ context(world: Assumptions)
 fun ObjectEngineResult.validateObjectPathBindings() {
     this.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
         val resolver = world.resolverRegistry.resolver(cell.field)
-        val definitions = resolver.boundObjectPathDefinitions(cell.occurrencePath)
+        val definitions =
+            resolver.boundObjectPathDefinitions(
+                root = this@validateObjectPathBindings,
+                path = cell.occurrencePath,
+            )
         if (
             definitions.isNotEmpty() &&
             definitions.none { definition ->
@@ -55,10 +59,11 @@ fun ObjectEngineResult.validateObjectPathBindings() {
 
 context(world: Assumptions)
 internal fun FieldResolver.boundObjectPathDefinitions(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
 ): List<InstantiatedObjectPathDefinition> {
     val occurrenceDefinitions =
-        instantiateObjectFragmentAt(path).pathVariableDefinitions
+        instantiateObjectFragmentAt(root, path).pathVariableDefinitions
     return occurrenceDefinitions
         .takeIf { definitions ->
             definitions.isNotEmpty() &&

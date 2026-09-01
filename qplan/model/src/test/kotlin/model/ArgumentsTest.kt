@@ -3,6 +3,7 @@ package model
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
+import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -128,14 +129,17 @@ class ArgumentsTest {
         val second = schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(first, "value")
         val path = listOf(ListEngineResult.Index.of(0))
-        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(schema.testRoot(), path)
         val instance = template.instantiate(resolverOccurrenceId)
 
         assertEquals(template.instantiate(resolverOccurrenceId), instance)
         assertNotEquals(Arguments.Variable.of(first, "other").instantiate(resolverOccurrenceId), instance)
         assertNotEquals(Arguments.Variable.of(second, "value").instantiate(resolverOccurrenceId), instance)
         assertNotEquals<Arguments.Variable>(template, instance)
-        assertNotEquals(template.instantiate(ResolverOccurrenceId.at(emptyList())), instance)
+        assertNotEquals(
+            template.instantiate(ResolverOccurrenceId.at(schema.testRoot(), emptyList())),
+            instance,
+        )
         assertFalse(instance.isTemplate)
         assertTrue(instance.isInstantiated)
         assertEquals(resolverOccurrenceId, instance.instanceId?.resolverOccurrenceId)
@@ -144,7 +148,8 @@ class ArgumentsTest {
         }
         assertEquals(
             "Variable.Instance(name=value, field=Query/first, " +
-                "id=VariableInstanceId(resolver=ResolverOccurrenceId(path=[index=0]), " +
+                "id=VariableInstanceId(resolver=ResolverOccurrenceId(" +
+                "root=${System.identityHashCode(schema.testRoot())}, path=[index=0]), " +
                 "variable=Query/first:value))",
             "$instance",
         )
@@ -170,8 +175,8 @@ class ArgumentsTest {
         val consume = world.schema.requireObjectField("Query", "consume")
         val firstPath = listOf(ListEngineResult.Index.of(0))
         val secondPath = listOf(ListEngineResult.Index.of(1))
-        val firstOccurrence = ResolverOccurrenceId.at(firstPath)
-        val secondOccurrence = ResolverOccurrenceId.at(secondPath)
+        val firstOccurrence = ResolverOccurrenceId.at(world.schema.testRoot(), firstPath)
+        val secondOccurrence = ResolverOccurrenceId.at(world.schema.testRoot(), secondPath)
         val firstVariable = Arguments.Variable.of(source, "value").instantiate(firstOccurrence)
         val equalFirstVariable = Arguments.Variable.of(source, "value").instantiate(firstOccurrence)
         val secondVariable = Arguments.Variable.of(source, "value").instantiate(secondOccurrence)
@@ -237,6 +242,55 @@ class ArgumentsTest {
     }
 
     @Test
+    fun `root-relative hash omits only variable occurrence root identity`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                input Filter {
+                  direct: Int
+                  nested: [Int]
+                }
+
+                type Query {
+                  source: Int
+                  consume(filter: Filter): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
+        val firstRoot = ObjectEngineResult.of(schema.requireQueryTypeDef(), values = emptyMap())
+        val secondRoot = ObjectEngineResult.of(schema.requireQueryTypeDef(), values = emptyMap())
+        val path = listOf(ListEngineResult.Index.of(1))
+        val firstVariable =
+            Arguments.Variable.of(source, "value")
+                .instantiate(ResolverOccurrenceId.at(firstRoot, path))
+        val secondVariable =
+            Arguments.Variable.of(source, "value")
+                .instantiate(ResolverOccurrenceId.at(secondRoot, path))
+
+        fun arguments(variable: Arguments.Variable): Arguments =
+            Arguments.of(
+                consume,
+                mapOf(
+                    "filter" to
+                        mapOf(
+                            "direct" to variable,
+                            "nested" to listOf(1, variable),
+                        ),
+                ),
+            )
+
+        val first = arguments(firstVariable)
+        val second = arguments(secondVariable)
+
+        assertNotEquals(firstVariable, secondVariable)
+        assertNotEquals(first, second)
+        assertTrue(first.hasSameRootRelativeStructureAs(second))
+        assertEquals(first.rootRelativeHashCode(), second.rootRelativeHashCode())
+    }
+
+    @Test
     fun `argument defaults normalize before structural equality`() {
         val schema =
             TestWorld.fromSDL(
@@ -288,7 +342,7 @@ class ArgumentsTest {
             )
         val path = listOf(ListEngineResult.Index.of(2))
 
-        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(world.schema.testRoot(), path)
         val instantiatedArguments = arguments.instantiateVariables(consume, resolverOccurrenceId)
         val variableInstance = template.instantiate(resolverOccurrenceId)
         world.declareBinding(requireNotNull(variableInstance.instanceId))
@@ -330,7 +384,7 @@ class ArgumentsTest {
         val consume = world.schema.requireObjectField("Query", "consume")
         val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(2))
-        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(world.schema.testRoot(), path)
         val variable = template.instantiate(resolverOccurrenceId)
         val arguments =
             Arguments.of(
@@ -372,7 +426,7 @@ class ArgumentsTest {
         val second = world.schema.requireObjectField("Query", "second")
         val template = Arguments.Variable.of(source, "value")
         val path = listOf(ListEngineResult.Index.of(1))
-        val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(world.schema.testRoot(), path)
         val variable = template.instantiate(resolverOccurrenceId)
         val arguments =
             Arguments
@@ -422,8 +476,8 @@ class ArgumentsTest {
             )
         val firstPath = listOf(ListEngineResult.Index.of(1))
         val secondPath = listOf(ListEngineResult.Index.of(2))
-        val firstOccurrence = ResolverOccurrenceId.at(firstPath)
-        val secondOccurrence = ResolverOccurrenceId.at(secondPath)
+        val firstOccurrence = ResolverOccurrenceId.at(world.schema.testRoot(), firstPath)
+        val secondOccurrence = ResolverOccurrenceId.at(world.schema.testRoot(), secondPath)
         val firstVariable = template.instantiate(firstOccurrence)
         val secondVariable = template.instantiate(secondOccurrence)
         world.declareBinding(requireNotNull(firstVariable.instanceId))
@@ -499,7 +553,9 @@ class ArgumentsTest {
         val source = schema.requireObjectField("Query", "source")
         val consume = schema.requireObjectField("Query", "consume")
         val variableInstance =
-            Arguments.Variable.of(source, "value").instantiate(ResolverOccurrenceId.at(emptyList()))
+            Arguments.Variable
+                .of(source, "value")
+                .instantiate(ResolverOccurrenceId.at(schema.testRoot(), emptyList()))
         val arguments = Arguments.of(consume, mapOf("value" to variableInstance))
 
         assertFailsWith<IllegalArgumentException> {
@@ -563,7 +619,7 @@ class ArgumentsTest {
                     possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                     subselections = selectionForestOf(),
                 )
-            val resolverOccurrenceId = ResolverOccurrenceId.at(path)
+            val resolverOccurrenceId = ResolverOccurrenceId.at(world.schema.testRoot(), path)
             val variable = variableTemplate.instantiate(resolverOccurrenceId)
             val arguments =
                 Arguments.Template

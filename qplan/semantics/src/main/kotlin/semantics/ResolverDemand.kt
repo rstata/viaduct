@@ -18,14 +18,16 @@ import viaduct.engine.api.EngineObjectData
  * Returns the applicable demand closed under the direct object fragments of its resolver fields.
  *
  * Each closure step normalizes under existing bindings, binds variables defined by newly discovered
- * resolver occurrences, and stamps those occurrences' direct object fragments at their exact paths.
+ * resolver occurrences, and instantiates their direct object fragments at their exact identities.
  */
 context(world: Assumptions)
 fun ViaductSchema.Object.closeResolverDemand(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     selections: SelectionForest,
 ): ObjectSelectionForest =
     closeResolverDemand(
+        root = root,
         path = path,
         selections = selections,
         expanded = emptySet(),
@@ -34,10 +36,12 @@ fun ViaductSchema.Object.closeResolverDemand(
 /** Closes demand only for standard resolvers whose fields are absent from this source object. */
 context(world: Assumptions)
 fun EngineObjectData.Sync.closeResolverDemand(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     selections: SelectionForest,
 ): ObjectSelectionForest =
     schemaType.closeResolverDemand(
+        root = root,
         path = path,
         selections = selections,
         expanded = emptySet(),
@@ -56,6 +60,7 @@ fun EngineObjectData.Sync.closeResolverDemand(
 
 context(world: Assumptions)
 private fun ViaductSchema.Object.closeResolverDemand(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     selections: SelectionForest,
     expanded: Set<ObjectEngineResult.GroundKey>,
@@ -72,15 +77,16 @@ private fun ViaductSchema.Object.closeResolverDemand(
 
     if (unexpandedResolverKeys.isEmpty()) return applicableSelections
 
-    unexpandedResolverKeys.bindFromArguments(path)
+    unexpandedResolverKeys.bindFromArguments(root, path)
     val resolverDemand =
         unexpandedResolverKeys.flatMapToSelectionForest { key ->
             world.resolverRegistry
                 .resolver(key.field)
-                .instantiateObjectFragmentAt(path + key)
+                .instantiateObjectFragmentAt(root, path + key)
                 .constructionSelections
         }
     return closeResolverDemand(
+        root = root,
         path = path,
         selections = applicableSelections + resolverDemand,
         expanded = expanded + unexpandedResolverKeys,

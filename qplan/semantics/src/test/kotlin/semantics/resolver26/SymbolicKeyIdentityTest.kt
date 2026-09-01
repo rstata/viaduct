@@ -130,7 +130,7 @@ class SymbolicKeyIdentityTest {
         assertEquals(14, resolved.getCell(resultKey).getValue().get())
         assertEquals(1, childKeys.toSet().size)
         assertEquals(
-            setOf(ResolverOccurrenceId.at(listOf(resultKey))),
+            setOf(ResolverOccurrenceId.at(resolved, listOf(resultKey))),
             childKeys
                 .flatMap { key -> key.arguments.usedVariables() }
                 .mapNotNullTo(linkedSetOf()) { variable ->
@@ -412,8 +412,8 @@ class SymbolicKeyIdentityTest {
         }
         assertEquals(
             setOf(
-                ResolverOccurrenceId.at(listOf(leftKey)),
-                ResolverOccurrenceId.at(listOf(rightKey)),
+                ResolverOccurrenceId.at(resolved, listOf(leftKey)),
+                ResolverOccurrenceId.at(resolved, listOf(rightKey)),
             ),
             frankKeys
                 .flatMap { key -> key.arguments.usedVariables() }

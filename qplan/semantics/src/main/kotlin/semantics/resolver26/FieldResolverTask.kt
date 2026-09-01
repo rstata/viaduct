@@ -29,6 +29,7 @@ import viaduct.engine.api.EngineObjectData
 internal class FieldResolverTask(
     private val world: Assumptions,
     private val support: Resolver26Support,
+    private val root: ObjectEngineResult,
     private val path: List<PathComponent>,
     private val selection: ObjectSelection,
     private val groundedArguments: Arguments.Ground,
@@ -92,6 +93,7 @@ internal class FieldResolverTask(
 
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
+                    root = root,
                     expectedType = objectKey.field.outputType,
                     path = coordinate,
                     invocationDemand = invocationDemand,
@@ -134,6 +136,7 @@ private suspend fun FieldResolver.resolveQueryFragment(
         ObjectOrchestrationTask(
             world = world,
             support = support,
+            root = queryResult,
             path = emptyList(),
             source = source,
             target = queryResult,
@@ -141,7 +144,7 @@ private suspend fun FieldResolver.resolveQueryFragment(
         )
     orchestration.prepare()
     orchestration.launch()
-    world.queryValues[coordinate.toList()] = queryResult
+    world.queryValues[resolverOccurrenceId] = queryResult
     return queryResult.materializeResolverInput(
         selections = symbolicSelections,
         reader = coordinate,

@@ -15,6 +15,7 @@ import model.fragmentFrom
 import model.requireArg
 import model.requireObjectField
 import model.testing.TestWorld
+import model.testing.testRoot
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.usedVariables
@@ -64,6 +65,7 @@ class VariableInstantiationTest {
             )
         val occurrence =
             ResolverOccurrenceId.at(
+                world.schema.testRoot(),
                 listOf(ListEngineResult.Index.of(1)),
             )
 
@@ -85,13 +87,19 @@ class VariableInstantiationTest {
 
         val first =
             resolver
-                .instantiateObjectFragmentAt(listOf(ListEngineResult.Index.of(1)))
+                .instantiateObjectFragmentAt(
+                    world.schema.testRoot(),
+                    listOf(ListEngineResult.Index.of(1)),
+                )
                 .variableDefinitions
                 .single()
                 .variable
         val second =
             resolver
-                .instantiateObjectFragmentAt(listOf(ListEngineResult.Index.of(2)))
+                .instantiateObjectFragmentAt(
+                    world.schema.testRoot(),
+                    listOf(ListEngineResult.Index.of(2)),
+                )
                 .variableDefinitions
                 .single()
                 .variable
@@ -106,7 +114,7 @@ class VariableInstantiationTest {
         val template = Arguments.Variable.of(result, "seed")
         val variable =
             template.instantiate(
-                ResolverOccurrenceId.at(emptyList()),
+                ResolverOccurrenceId.at(world.schema.testRoot(), emptyList()),
             )
         val providerPath =
             listOf(ObjectEngineResult.Key.of(consume, mapOf("value" to 1)))

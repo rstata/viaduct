@@ -96,9 +96,10 @@ class FieldResolver private constructor(
 
     /** Instantiates response-preserving and construction views for one resolver occurrence. */
     fun instantiateObjectFragmentAt(
+        root: ObjectEngineResult,
         path: List<PathComponent>,
     ): ResolverObjectFragment =
-        instantiateObjectFragment(ResolverOccurrenceId.at(path))
+        instantiateObjectFragment(ResolverOccurrenceId.at(root, path))
 
     /** Instantiates response-preserving and construction views for one resolver occurrence. */
     fun instantiateObjectFragment(
@@ -133,9 +134,10 @@ class FieldResolver private constructor(
 
     /** Instantiates response-preserving and construction query views at one resolver path. */
     fun instantiateQueryFragmentAt(
+        root: ObjectEngineResult,
         path: List<PathComponent>,
     ): ResolverQueryFragment =
-        instantiateQueryFragment(ResolverOccurrenceId.at(path))
+        instantiateQueryFragment(ResolverOccurrenceId.at(root, path))
 
     /** Instantiates response-preserving and construction query views for one application. */
     fun instantiateQueryFragment(
@@ -151,8 +153,9 @@ class FieldResolver private constructor(
 
     /** Returns the construction object fragment instantiated at [path]. */
     fun instantiateObjectFragmentSelectionsAt(
+        root: ObjectEngineResult,
         path: List<PathComponent>,
-    ): SelectionForest = instantiateObjectFragmentAt(path).constructionSelections
+    ): SelectionForest = instantiateObjectFragmentAt(root, path).constructionSelections
 
     /** Returns each resolver variable definition instantiated once for this application. */
     fun instantiatedVariableDefinitions(
@@ -191,9 +194,10 @@ class FieldResolver private constructor(
     /** Returns this resolver's object fragment grounded at exact occurrence [path]. */
     context(world: Assumptions)
     fun objectFragmentAt(
+        root: ObjectEngineResult,
         path: List<PathComponent>,
     ): ObjectSelectionForest =
-        instantiateObjectFragmentAt(path)
+        instantiateObjectFragmentAt(root, path)
             .constructionSelections
             .applicableGroundSelections(field.containingDef)
 

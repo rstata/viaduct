@@ -5,6 +5,7 @@ import viaduct.graphql.schema.ViaductSchema
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
+import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -712,7 +713,7 @@ class AssumptionsTest {
 
 private fun Arguments.Variable.testInstance(
     path: List<PathComponent>,
-): Arguments.Variable = instantiate(ResolverOccurrenceId.at(path))
+): Arguments.Variable = instantiate(ResolverOccurrenceId.at(field.testRoot(), path))
 
 private val Arguments.Variable.testId: VariableInstanceId
     get() = requireNotNull(instanceId)

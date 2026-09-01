@@ -10,6 +10,7 @@ import model.outputType
 import model.ObjectSelection
 import model.Arguments
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
 import model.engineObjectDataOf
@@ -28,6 +29,7 @@ import semantics.correctresolution.argumentsContainErrorValue
  */
 context(world: Assumptions, resolverSupport: ResolverSupport)
 internal fun EngineObjectData.Sync.orchestrateKeys(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     selections: SelectionForest,
     resolved: ObjectEngineResult,
@@ -36,22 +38,24 @@ internal fun EngineObjectData.Sync.orchestrateKeys(
         "Initial result type ${resolved.type.name} does not match $schemaType"
     }
 
-    val closedDemand = closeResolverDemand(path, selections)
+    val closedDemand = closeResolverDemand(root, path, selections)
     materializedChildOccurrences(path, closedDemand, resolved)
         .forEach { passiveObjectOccurrence ->
             passiveObjectOccurrence.source.orchestrateKeys(
+                root = root,
                 path = passiveObjectOccurrence.path,
                 selections = passiveObjectOccurrence.selections,
                 resolved = passiveObjectOccurrence.target,
             )
         }
     val unresolvedKeys = closedDemand.groundKeys() - resolved.requireGroundKeys()
-    val orderedKeys = dependencyOrder(path, unresolvedKeys)
+    val orderedKeys = dependencyOrder(root, path, unresolvedKeys)
     orderedKeys.forEach { key ->
         val selection = closedDemand[key]
-        resolveKey(path, selection, resolved)
+        resolveKey(root, path, selection, resolved)
             ?.resolveRetainedObjects { passiveObjectOccurrence ->
                 passiveObjectOccurrence.source.orchestrateKeys(
+                    root = root,
                     path = passiveObjectOccurrence.path,
                     selections = passiveObjectOccurrence.selections,
                     resolved = passiveObjectOccurrence.target,
@@ -74,6 +78,7 @@ internal fun ObjectEngineResult.requireGroundKeys(): Set<ObjectEngineResult.Grou
  */
 context(world: Assumptions)
 internal fun EngineObjectData.Sync.dependencyOrder(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     keys: Set<ObjectEngineResult.GroundKey>,
     ordered: List<ObjectEngineResult.GroundKey> = emptyList(),
@@ -82,12 +87,13 @@ internal fun EngineObjectData.Sync.dependencyOrder(
 
     val ready =
         keys.filter { key ->
-            dependenciesOf(path, key, keys).isEmpty()
+            dependenciesOf(root, path, key, keys).isEmpty()
         }.toSet()
     require(ready.isNotEmpty()) {
         "Resolver dependencies on ${schemaType.name} contain a cycle"
     }
     return dependencyOrder(
+        root = root,
         path = path,
         keys = keys - ready,
         ordered = ordered + ready,
@@ -97,6 +103,7 @@ internal fun EngineObjectData.Sync.dependencyOrder(
 /** Returns the unresolved sibling keys demanded by the field resolver for [consumer]. */
 context(world: Assumptions)
 private fun EngineObjectData.Sync.dependenciesOf(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     consumer: ObjectEngineResult.GroundKey,
     unresolved: Set<ObjectEngineResult.GroundKey>,
@@ -112,7 +119,7 @@ private fun EngineObjectData.Sync.dependenciesOf(
     return unresolved
         .filter { sibling ->
             sibling != consumer &&
-                consumer.demandsFromSibling(sibling, path + consumer)
+                consumer.demandsFromSibling(sibling, root, path + consumer)
         }.toSet()
 }
 
@@ -122,6 +129,7 @@ private fun EngineObjectData.Sync.dependenciesOf(
  */
 context(world: Assumptions, resolverSupport: ResolverSupport)
 internal fun EngineObjectData.Sync.resolveKey(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     fieldSelection: ObjectSelection,
     resolved: ObjectEngineResult,
@@ -146,7 +154,7 @@ internal fun EngineObjectData.Sync.resolveKey(
             val invocationDemand = resolverSupport.complete(fieldSelection.subselections)
             val resolver = world.resolverRegistry.resolver(key.field)
             val coordinate = path + key
-            val objectFragment = resolver.instantiateObjectFragmentAt(coordinate)
+            val objectFragment = resolver.instantiateObjectFragmentAt(root, coordinate)
             val input =
                 runBlocking {
                     // Because of the depth-first nature of resolvers01-03 && 06-08
@@ -156,7 +164,7 @@ internal fun EngineObjectData.Sync.resolveKey(
                         reader = coordinate,
                     )
                 }
-            val queryValue = resolver.resolveQueryFragment(coordinate)
+            val queryValue = resolver.resolveQueryFragment(root, coordinate)
             val fieldValue =
                 resolver(
                     input = input,
@@ -180,26 +188,28 @@ internal fun EngineObjectData.Sync.resolveKey(
 
 context(world: Assumptions, resolverSupport: ResolverSupport)
 private fun FieldResolver.resolveQueryFragment(
+    owningRoot: ObjectEngineResult,
     coordinate: List<PathComponent>,
 ): EngineObjectData.Sync {
-    val queryFragment = instantiateQueryFragmentAt(coordinate)
+    val queryFragment = instantiateQueryFragmentAt(owningRoot, coordinate)
     if (queryFragment.constructionSelections.isEmpty()) {
         return engineObjectDataOf(world.schema.requireQueryTypeDef())
     }
 
     val source = world.resolverRegistry.createRootQueryInput()
-    val queryResult =
-        source.orchestrateKeys(
-            path = emptyList(),
-            selections = queryFragment.constructionSelections,
-            resolved =
-                ObjectEngineResult.of(
-                    type = source.schemaType,
-                    values = emptyMap(),
-                    mutable = true,
-                ),
+    val queryResult: ObjectEngineResult =
+        ObjectEngineResult.of(
+            type = source.schemaType,
+            values = emptyMap(),
+            mutable = true,
         )
-    world.queryValues[coordinate.toList()] = queryResult
+    source.orchestrateKeys(
+        root = queryResult,
+        path = emptyList(),
+        selections = queryFragment.constructionSelections,
+        resolved = queryResult,
+    )
+    world.queryValues[ResolverOccurrenceId.at(owningRoot, coordinate)] = queryResult
     return runBlocking {
         queryResult.materialize(
             selections = queryFragment.materializeSelections,

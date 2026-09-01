@@ -64,6 +64,7 @@ internal fun resolve(
                     ObjectOrchestrationTask(
                         world = world,
                         support = support,
+                        root = result,
                         path = emptyList(),
                         source = source,
                         target = result,

@@ -20,6 +20,7 @@ import model.registry.VariableDefinition
  */
 context(world: Assumptions)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     onDeclared: (
         Arguments.Variable,
@@ -42,7 +43,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                 if (definition is VariableDefinition.FromArgument) {
                     val instantiated =
                         variable.instantiate(
-                            ResolverOccurrenceId.at(path + key),
+                            ResolverOccurrenceId.at(root, path + key),
                         )
                     val variableId = requireNotNull(instantiated.instanceId)
                     val value = definition.read(arguments)

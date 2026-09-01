@@ -4,6 +4,7 @@ import viaduct.graphql.schema.ViaductSchema
 
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
+import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -655,7 +656,7 @@ class SelectionMergeTest {
 
 private fun Arguments.Variable.instanceAt(
     path: List<PathComponent>,
-): Arguments.Variable = instantiate(ResolverOccurrenceId.at(path))
+): Arguments.Variable = instantiate(ResolverOccurrenceId.at(field.testRoot(), path))
 
 private val Arguments.Variable.bindingId: VariableInstanceId
     get() = requireNotNull(instanceId)

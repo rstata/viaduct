@@ -15,6 +15,7 @@ import model.objectOf
 import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -30,6 +31,7 @@ class SiblingDemandTest {
             context(world) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 1)),
+                    schema.testRoot(),
                 )
             },
         )
@@ -37,6 +39,7 @@ class SiblingDemandTest {
             context(world) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "other"),
+                    schema.testRoot(),
                 )
             },
         )
@@ -44,6 +47,7 @@ class SiblingDemandTest {
             context(world) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 2)),
+                    schema.testRoot(),
                 )
             },
         )
@@ -58,6 +62,7 @@ class SiblingDemandTest {
             context(world) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "other"),
+                    schema.testRoot(),
                 )
             },
         )
@@ -75,6 +80,7 @@ class SiblingDemandTest {
                         schema.requireType("Payload") as ViaductSchema.Object,
                         "nested",
                     ),
+                    schema.testRoot(),
                 )
             }
         }

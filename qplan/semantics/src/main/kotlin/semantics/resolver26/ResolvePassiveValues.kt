@@ -25,6 +25,7 @@ import viaduct.engine.api.EngineObjectData
 // Builds one passive result value, launching an orchestration lifecycle for every object it creates.
 context(world: Assumptions, support: Resolver26Support)
 internal fun EngineOutputData?.resolvePassiveValues(
+    root: ObjectEngineResult,
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     invocationDemand: SelectionForest,
@@ -38,6 +39,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
         is EngineErrorData -> ErrorEngineResult.of(this)
         is EngineObjectData.Sync ->
             resolvePassiveObjectValues(
+                root = root,
                 path = path,
                 invocationDemand = invocationDemand,
                 constructionDemand = constructionDemand,
@@ -49,6 +51,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
                 values =
                     mapIndexed { index, value ->
                         value.resolvePassiveValues(
+                            root = root,
                             expectedType = elementType,
                             path = path + ListEngineResult.Index.of(index),
                             invocationDemand = invocationDemand,
@@ -65,6 +68,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
 // Creates one mutable OER and enters its orchestration lifecycle before descending into children.
 context(world: Assumptions, support: Resolver26Support)
 private fun EngineObjectData.Sync.resolvePassiveObjectValues(
+    root: ObjectEngineResult,
     path: List<PathComponent>,
     invocationDemand: SelectionForest,
     constructionDemand: SelectionForest,
@@ -78,6 +82,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
         ObjectOrchestrationTask(
             world = world,
             support = support,
+            root = root,
             path = path,
             source = this,
             target = target,
@@ -85,6 +90,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
         )
     val closedDemand = orchestration.prepare()
     materializePassiveFields(
+        root = root,
         target = target,
         path = path,
         invocationDemand = invocationDemand,
@@ -97,6 +103,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
 // Copies every passive field returned by the resolver and orchestrates its value recursively.
 context(world: Assumptions, support: Resolver26Support)
 private fun EngineObjectData.Sync.materializePassiveFields(
+    root: ObjectEngineResult,
     target: ObjectEngineResult,
     path: List<PathComponent>,
     invocationDemand: SelectionForest,
@@ -145,6 +152,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
             val value =
                 outputValue(key.field.name)
                     .resolvePassiveValues(
+                        root = root,
                         expectedType = key.field.outputType,
                         path = path + key,
                         invocationDemand = childInvocationDemand,

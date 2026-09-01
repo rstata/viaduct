@@ -11,12 +11,40 @@ import com.google.inject.ProvisionException
 import jakarta.inject.Singleton
 import model.Assumptions
 import model.EngineErrorData
+import model.ObjectEngineResult
 import model.SelectionForest
 import model.emptyFragmentOf
 import model.lowering.LOWERED_TYPENAME_FIELD
 import model.requireQueryTypeDef
 import model.registry.ResolverRegistry
 import model.selectionsFrom
+import java.util.IdentityHashMap
+
+private val testRoots = IdentityHashMap<ViaductSchema, ObjectEngineResult>()
+private val fieldTestRoots =
+    IdentityHashMap<ViaductSchema.Object, ObjectEngineResult>()
+
+/** Returns one stable synthetic Query root for occurrence-identity unit tests on this schema. */
+fun ViaductSchema.testRoot(): ObjectEngineResult =
+    synchronized(testRoots) {
+        testRoots.getOrPut(this) {
+            ObjectEngineResult.of(
+                type = requireQueryTypeDef(),
+                values = emptyMap(),
+            )
+        }
+    }
+
+/** Returns one stable synthetic occurrence root for isolated tests involving this field. */
+fun ViaductSchema.ObjectField.testRoot(): ObjectEngineResult =
+    synchronized(fieldTestRoots) {
+        fieldTestRoots.getOrPut(containingDef) {
+            ObjectEngineResult.of(
+                type = containingDef,
+                values = emptyMap(),
+            )
+        }
+    }
 
 /**
  * One Guice-assembled reasoning world for model and semantics tests.

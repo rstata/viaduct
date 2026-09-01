@@ -7,19 +7,24 @@ import model.testing.TestWorld
 
 class OccurrenceIdsTest {
     @Test
-    fun `resolver occurrence identity is structural and opaque`() {
+    fun `resolver occurrence identity includes root identity and path`() {
+        val queryType =
+            TestWorld.fromSDL("type Query { value: Int }").schema.requireQueryTypeDef()
+        val firstRoot = ObjectEngineResult.of(queryType, values = emptyMap())
+        val secondRoot = ObjectEngineResult.of(queryType, values = emptyMap())
         val firstPath = listOf(ListEngineResult.Index.of(1))
         val secondPath = listOf(ListEngineResult.Index.of(2))
 
-        val first = ResolverOccurrenceId.at(firstPath)
-        val equalFirst = ResolverOccurrenceId.at(firstPath.toList())
-        val second = ResolverOccurrenceId.at(secondPath)
+        val first = ResolverOccurrenceId.at(firstRoot, firstPath)
+        val equalFirst = ResolverOccurrenceId.at(firstRoot, firstPath.toList())
+        val second = ResolverOccurrenceId.at(firstRoot, secondPath)
 
         assertEquals(first, equalFirst)
         assertEquals(first.hashCode(), equalFirst.hashCode())
         assertNotEquals(first, second)
+        assertNotEquals(first, ResolverOccurrenceId.at(secondRoot, firstPath))
         assertEquals(
-            "ResolverOccurrenceId(path=[index=1])",
+            "ResolverOccurrenceId(root=${System.identityHashCode(firstRoot)}, path=[index=1])",
             first.toString(),
         )
     }
@@ -37,12 +42,13 @@ class OccurrenceIdsTest {
             ).schema
         val firstField = schema.requireObjectField("Query", "first")
         val secondField = schema.requireObjectField("Query", "second")
+        val root = ObjectEngineResult.of(schema.requireQueryTypeDef(), values = emptyMap())
         val firstOccurrence =
-            ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(1)))
+            ResolverOccurrenceId.at(root, listOf(ListEngineResult.Index.of(1)))
         val equalFirstOccurrence =
-            ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(1)))
+            ResolverOccurrenceId.at(root, listOf(ListEngineResult.Index.of(1)))
         val secondOccurrence =
-            ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(2)))
+            ResolverOccurrenceId.at(root, listOf(ListEngineResult.Index.of(2)))
 
         val first =
             VariableInstanceId.of(
@@ -73,7 +79,8 @@ class OccurrenceIdsTest {
         )
         assertEquals(
             "VariableInstanceId(" +
-                "resolver=ResolverOccurrenceId(path=[index=1]), " +
+                "resolver=ResolverOccurrenceId(" +
+                "root=${System.identityHashCode(root)}, path=[index=1]), " +
                 "variable=Query/first:value)",
             first.toString(),
         )

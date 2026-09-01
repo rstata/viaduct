@@ -14,6 +14,7 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.isContextuallyGrounded
 import model.groundedArguments
 import model.Selection
@@ -86,13 +87,19 @@ data class ResolverApplicationObservation(
     val suppliedDemandFingerprint: ResolutionFingerprint?,
 )
 
-/** One application identity qualified by its exact root-to-field OER path. */
+/** One application key qualified by its exact Query-rooted resolver occurrence. */
+data class ResolverOccurrenceApplicationKey(
+    val resolverOccurrenceId: ResolverOccurrenceId,
+    val applicationKey: ResolverApplicationKey,
+)
+
+/** One application identity qualified by its exact Query-rooted resolver occurrence. */
 data class ResolverOccurrenceApplicationIdentity(
-    val occurrencePath: List<PathComponent>,
+    val resolverOccurrenceId: ResolverOccurrenceId,
     val applicationIdentity: ResolverApplicationIdentity,
 )
 
-/** One path-qualified application identity and its supplied-demand fingerprint. */
+/** One occurrence-qualified application identity and its supplied-demand fingerprint. */
 data class ResolverOccurrenceApplicationObservation(
     val identity: ResolverOccurrenceApplicationIdentity,
     val suppliedDemandFingerprint: ResolutionFingerprint?,
@@ -126,11 +133,15 @@ data class ResolverApplicationRecord(
 }
 
 data class ResolverOccurrenceApplicationRecord(
+    val resolverOccurrenceId: ResolverOccurrenceId,
     val occurrencePath: List<PathComponent>,
     val application: ResolverApplicationRecord,
 ) {
+    val occurrenceKey: ResolverOccurrenceApplicationKey
+        get() = ResolverOccurrenceApplicationKey(resolverOccurrenceId, application.key)
+
     val identity: ResolverOccurrenceApplicationIdentity
-        get() = ResolverOccurrenceApplicationIdentity(occurrencePath, application.identity)
+        get() = ResolverOccurrenceApplicationIdentity(resolverOccurrenceId, application.identity)
 
     val observation: ResolverOccurrenceApplicationObservation
         get() =
@@ -141,6 +152,7 @@ data class ResolverOccurrenceApplicationRecord(
 
     companion object {
         fun capture(
+            resolverOccurrenceId: ResolverOccurrenceId,
             occurrencePath: List<PathComponent>,
             field: FieldCoordinate,
             arguments: Arguments.Resolved,
@@ -149,6 +161,7 @@ data class ResolverOccurrenceApplicationRecord(
             bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
         ): ResolverOccurrenceApplicationRecord =
             ResolverOccurrenceApplicationRecord(
+                resolverOccurrenceId = resolverOccurrenceId,
                 occurrencePath = occurrencePath.toList(),
                 application =
                     ResolverApplicationRecord.capture(
@@ -232,6 +245,7 @@ class ResolutionOccurrenceApplicationLog(
     private val records = mutableListOf<ResolverOccurrenceApplicationRecord>()
 
     fun record(
+        resolverOccurrenceId: ResolverOccurrenceId,
         occurrencePath: List<PathComponent>,
         field: FieldCoordinate,
         arguments: Arguments.Resolved,
@@ -240,6 +254,7 @@ class ResolutionOccurrenceApplicationLog(
     ) {
         val record =
             ResolverOccurrenceApplicationRecord.capture(
+                resolverOccurrenceId = resolverOccurrenceId,
                 occurrencePath = occurrencePath,
                 field = field,
                 arguments = arguments,
@@ -291,6 +306,9 @@ data class ResolutionWitness(
 data class ResolutionOccurrenceWitness(
     val applications: List<ResolverOccurrenceApplicationRecord>,
 ) {
+    fun applicationKeyCounts(): Map<ResolverOccurrenceApplicationKey, Int> =
+        applications.groupingBy(ResolverOccurrenceApplicationRecord::occurrenceKey).eachCount()
+
     fun applicationIdentityCounts(): Map<ResolverOccurrenceApplicationIdentity, Int> =
         applications.groupingBy(ResolverOccurrenceApplicationRecord::identity).eachCount()
 

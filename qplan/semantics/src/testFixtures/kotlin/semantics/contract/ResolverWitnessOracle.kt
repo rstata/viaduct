@@ -11,6 +11,7 @@ import model.registry.ResolverObjectFragment
 import model.usedVariables
 import semantics.ResolverSupport
 import semantics.arbitrary.ResolverApplicationIdentity
+import semantics.arbitrary.ResolverOccurrenceApplicationKey
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
 import semantics.arbitrary.RegisteredResolverOccurrence
 import semantics.arbitrary.forEachRegisteredResolverOccurrence
@@ -20,78 +21,133 @@ import semantics.correctresolution.conformsToSelectionsAt
 import semantics.materialize
 
 /**
- * Expected deterministic resolver applications reconstructed from resolver-bearing result cells.
+ * Expected deterministic resolver applications reconstructed from every request-local Query root.
  *
- * This is independent of the observed application stream, but not of the completed result under
+ * The receiver is the primary result root; Query-fragment roots come from [Assumptions.queryValues].
+ * This is independent of the observed application stream, but not of the completed results under
  * test: an extra result cell paired with an extra invocation can increase both counts together.
  */
 context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> {
-    val root = this as? ObjectEngineResult ?: return emptyMap()
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
     context(ResolverSupport.noCycleChecking { selections -> selections }) {
-        forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
-            val resolver = world.resolverRegistry.resolver(cell.field)
-            val fragment =
-                resolver.objectFragmentSatisfiedBy(
-                    root = root,
-                    result = cell.containingObject,
-                    path = cell.occurrencePath,
-                ) ?: error("Registered resolver occurrence has no complete object fragment")
-            val identity =
-                ResolverApplicationIdentity(
-                    key = cell.applicationKey,
-                    inputFingerprint =
-                        runBlocking {
-                            cell.containingObject
-                                .materialize(
-                                    selections = fragment.materializeSelections,
-                                    reader = cell.occurrencePath,
-                                ).resolutionFingerprint()
-                        },
-                )
-            counts.increment(identity)
+        requestQueryRoots().forEach { root ->
+            root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+                val resolver = world.resolverRegistry.resolver(cell.field)
+                val fragment =
+                    resolver.objectFragmentSatisfiedBy(
+                        root = root,
+                        result = cell.containingObject,
+                        path = cell.occurrencePath,
+                    ) ?: error("Registered resolver occurrence has no complete object fragment")
+                val identity =
+                    ResolverApplicationIdentity(
+                        key = cell.applicationKey,
+                        inputFingerprint =
+                            runBlocking {
+                                cell.containingObject
+                                    .materialize(
+                                        selections = fragment.materializeSelections,
+                                        reader = cell.occurrencePath,
+                                    ).resolutionFingerprint()
+                            },
+                    )
+                counts.increment(identity)
+            }
         }
     }
     return counts
 }
 
-/** Expected deterministic resolver applications qualified by their exact result occurrence path. */
+/** Expected deterministic applications qualified by their exact request-local Query root and path. */
 context(world: Assumptions)
-fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts():
-    Map<ResolverOccurrenceApplicationIdentity, Int> {
-    val root = this as? ObjectEngineResult ?: return emptyMap()
+fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts(): Map<
+    ResolverOccurrenceApplicationIdentity,
+    Int,
+> =
+    reconstructResolverOccurrenceApplicationIdentityCounts(null)
+
+/**
+ * Expected exact identities for the requested occurrences only.
+ *
+ * This supports sometimes-passive validation: a skipped standard resolver can retain unbound
+ * object-fragment variables, while every actually observed application has complete bindings.
+ */
+context(world: Assumptions)
+fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCountsFor(
+    includedOccurrences: Set<ResolverOccurrenceId>,
+): Map<ResolverOccurrenceApplicationIdentity, Int> =
+    reconstructResolverOccurrenceApplicationIdentityCounts(includedOccurrences)
+
+context(world: Assumptions)
+private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts(
+    includedOccurrences: Set<ResolverOccurrenceId>?,
+): Map<ResolverOccurrenceApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
     context(ResolverSupport.noCycleChecking { selections -> selections }) {
-        forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
-            val resolver = world.resolverRegistry.resolver(cell.field)
-            val fragment =
-                resolver.objectFragmentSatisfiedBy(
-                    root = root,
-                    result = cell.containingObject,
-                    path = cell.occurrencePath,
-                ) ?: error("Registered resolver occurrence has no complete object fragment")
-            val identity =
-                ResolverOccurrenceApplicationIdentity(
-                    occurrencePath = cell.occurrencePath,
-                    applicationIdentity =
-                        ResolverApplicationIdentity(
-                            key = cell.applicationKey,
-                            inputFingerprint =
-                                runBlocking {
-                                    cell.containingObject
-                                        .materialize(
-                                            selections = fragment.materializeSelections,
-                                            reader = cell.occurrencePath,
-                                        ).resolutionFingerprint()
-                                },
-                        ),
-                )
-            counts.increment(identity)
+        requestQueryRoots().forEach { root ->
+            root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+                val resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
+                if (includedOccurrences != null && resolverOccurrenceId !in includedOccurrences) {
+                    return@forEachRegisteredResolverOccurrence
+                }
+                val resolver = world.resolverRegistry.resolver(cell.field)
+                val fragment =
+                    resolver.objectFragmentSatisfiedBy(
+                        root = root,
+                        result = cell.containingObject,
+                        path = cell.occurrencePath,
+                    ) ?: error("Registered resolver occurrence has no complete object fragment")
+                val identity =
+                    ResolverOccurrenceApplicationIdentity(
+                        resolverOccurrenceId =
+                            resolverOccurrenceId,
+                        applicationIdentity =
+                            ResolverApplicationIdentity(
+                                key = cell.applicationKey,
+                                inputFingerprint =
+                                    runBlocking {
+                                        cell.containingObject
+                                            .materialize(
+                                                selections = fragment.materializeSelections,
+                                                reader = cell.occurrencePath,
+                                            ).resolutionFingerprint()
+                                    },
+                            ),
+                    )
+                counts.increment(identity)
+            }
         }
     }
     return counts
+}
+
+/** Expected registered resolver occurrences without requiring their inputs to be materializable. */
+context(world: Assumptions)
+fun EngineResult?.registeredResolverOccurrenceApplicationKeyCounts():
+    Map<ResolverOccurrenceApplicationKey, Int> {
+    val counts = linkedMapOf<ResolverOccurrenceApplicationKey, Int>()
+    requestQueryRoots().forEach { root ->
+        root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
+            counts.increment(
+                ResolverOccurrenceApplicationKey(
+                    resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath),
+                    applicationKey = cell.applicationKey,
+                ),
+            )
+        }
+    }
+    return counts
+}
+
+context(world: Assumptions)
+private fun EngineResult?.requestQueryRoots(): List<ObjectEngineResult> {
+    val primaryRoot = this as? ObjectEngineResult ?: return emptyList()
+    return buildList {
+        add(primaryRoot)
+        addAll(world.queryValues.values)
+    }
 }
 
 context(world: Assumptions)

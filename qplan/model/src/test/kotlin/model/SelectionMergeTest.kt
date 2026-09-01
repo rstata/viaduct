@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -253,6 +254,55 @@ class SelectionMergeTest {
         assertFailsWith<IllegalStateException> {
             merged.groundKeys()
         }
+    }
+
+    @Test
+    fun `merge coalesces equal stamped arguments and keeps distinct instances separate`() {
+        val fixture = Fixture()
+        val definingField = fixture.schema.requireObjectField("Query", "search")
+        val firstVariable =
+            Arguments.Variable.of(definingField, "value")
+                .stamp(listOf(ListEngineResult.Index.of(0)))
+        val equalFirstVariable =
+            Arguments.Variable.of(definingField, "value")
+                .stamp(listOf(ListEngineResult.Index.of(0)))
+        val secondVariable =
+            Arguments.Variable.of(definingField, "value")
+                .stamp(listOf(ListEngineResult.Index.of(1)))
+        val a = fixture.selection("ConcreteItem", "a")
+        val b = fixture.selection("ConcreteItem", "b")
+
+        fun itemSelection(
+            variable: Arguments.Variable,
+            subselections: SelectionForest,
+        ): Selection =
+            fixture.selection(
+                typeName = "Query",
+                fieldName = "find",
+                arguments =
+                    mapOf(
+                        "filter" to
+                            mapOf(
+                                "values" to listOf(variable),
+                            ),
+                    ),
+                subselections = subselections,
+            )
+
+        val first = itemSelection(firstVariable, selectionForestOf(a))
+        val equalFirst = itemSelection(equalFirstVariable, selectionForestOf(b))
+        val second = itemSelection(secondVariable, selectionForestOf(a))
+        val merged = selectionForestOf(first, equalFirst, second).merge(fixture.query)
+        val firstKey = first.objectKey(fixture.query)
+        val secondKey = second.objectKey(fixture.query)
+
+        assertEquals(firstKey, equalFirst.objectKey(fixture.query))
+        assertNotEquals(firstKey, secondKey)
+        assertEquals(2, merged.size)
+        assertEquals(
+            setOf(a.key, b.key),
+            merged[firstKey].subselections.merge(fixture.item).keys(),
+        )
     }
 
     @Test
@@ -595,6 +645,7 @@ class SelectionMergeTest {
               item: ConcreteItem!
               optionalItem: ConcreteItem
               search(filter: Filter!): Int!
+              find(filter: Filter!): ConcreteItem!
               source(values: [Int!]!): Int!
               nested(values: [[Int]]): Int!
             }

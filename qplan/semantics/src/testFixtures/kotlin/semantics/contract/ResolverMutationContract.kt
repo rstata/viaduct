@@ -65,7 +65,9 @@ interface ResolverMutationContract : ResolverContract {
                         )
                     assertTrue(
                         context(ordinaryAssumptions) {
-                            ordinary.correctResolution(ordinaryFragment)
+                            ordinary.correctResolution(
+                                ordinaryFragment,
+                            )
                         },
                     )
 

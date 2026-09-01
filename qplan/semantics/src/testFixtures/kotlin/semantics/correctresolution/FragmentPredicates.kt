@@ -5,16 +5,16 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.Fragment
-import model.instantiateBindings
 import model.merge
 
 context(world: Assumptions)
-internal fun ObjectEngineResult.correctResolution(fragment: Fragment): Boolean =
+internal fun ObjectEngineResult.correctResolution(
+    fragment: Fragment,
+): Boolean =
     fragment.nominalType == world.schema.requireQueryTypeDef() &&
         correctResolution(
             fragment.subselections
-                .merge(world.schema.requireQueryTypeDef())
-                .instantiateBindings(),
+                .merge(world.schema.requireQueryTypeDef()),
         )
 
 context(world: Assumptions)

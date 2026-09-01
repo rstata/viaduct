@@ -111,14 +111,16 @@ class ResolverStressTest {
                 }
             },
             successfulActivation = { world, result, _, targets ->
-                result
-                    .registeredResolverOccurrences(world.resolverRegistry)
-                    .any { occurrence ->
-                        occurrence.canonicalField in targets &&
-                            occurrence.occurrencePath.any { component ->
-                                component is ListEngineResult.Index
-                            }
-                    }
+                context(world) {
+                    result
+                        .registeredResolverOccurrences(world.resolverRegistry)
+                        .any { occurrence ->
+                            occurrence.canonicalField in targets &&
+                                occurrence.occurrencePath.any { component ->
+                                    component is ListEngineResult.Index
+                                }
+                        }
+                }
             },
         )
 
@@ -288,9 +290,11 @@ class ResolverStressTest {
 
                         if (profile in SOMETIMES_PASSIVE_PROFILES) {
                             val resultOccurrenceCounts =
-                                result.registeredResolverOccurrenceCounts(
-                                    world.resolverRegistry,
-                                )
+                                context(world) {
+                                    result.registeredResolverOccurrenceCounts(
+                                        world.resolverRegistry,
+                                    )
+                                }
                             witness.applicationCounts().forEach { (key, count) ->
                                 assertTrue(
                                     count <= resultOccurrenceCounts.getOrDefault(key, 0),

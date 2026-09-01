@@ -103,7 +103,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 objectKey.stamp as? Stamp.Occurrence
             val resolverPath: List<PathComponent> =
                 if (ownerStamp == null) {
-                    path + (objectKey as ObjectEngineResult.GroundKey)
+                    path + objectKey
                 } else {
                     ownerStamp.resolverPath
                 }

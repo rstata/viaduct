@@ -6,14 +6,11 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.ObjectSelection
-import model.ObjectSelectionForest
 import model.PathComponent
 import viaduct.graphql.schema.ViaductSchema
 import model.Selection
 import model.Stamp
 import model.VariableBinding
-import model.instantiateBindings
 import model.localizeTopLevelSelectionStamps
 import model.objectKey
 import model.outputType
@@ -22,6 +19,7 @@ import model.registry.StampedObjectPathDefinition
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
+import semantics.findStoredKey
 import semantics.arbitrary.forEachRegisteredResolverOccurrence
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
@@ -50,9 +48,9 @@ context(world: Assumptions)
 internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
 ): List<StampedObjectPathDefinition> {
-    val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
+    val objectKey = path.lastOrNull() as? ObjectEngineResult.ObjectKey
     val resolverStamp =
-        (groundKey?.stamp as? Stamp.Occurrence)
+        (objectKey?.stamp as? Stamp.Occurrence)
             ?: Stamp.Occurrence.of(path)
     val occurrenceDefinitions =
         instantiateObjectFragment(resolverStamp).pathVariableDefinitions
@@ -92,18 +90,8 @@ private fun ObjectEngineResult.readCompletedProvider(
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
         val key =
-            ObjectSelectionForest.of(
-                current.type,
-                listOf(
-                    ObjectSelection.of(
-                        key = specialized,
-                        possibleTypes = setOf(current.type),
-                        subselections = selectionForestOf(),
-                    ),
-                ),
-            ).instantiateBindings()
-                .groundKeys()
-                .single()
+            current.findStoredKey(specialized)
+                ?: error("Completed provider key is absent from result: $specialized")
         val value = current.getCell(key).get()
         if (value == null) return VariableBinding.of(null)
         if (value is ErrorEngineResult) return VariableBinding.Error

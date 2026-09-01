@@ -297,14 +297,21 @@ class ResolutionWitnessTest {
                 computedTwoKey to 1,
                 baseKey to 3,
             ),
-            result.registeredResolverOccurrenceCounts(world.resolverRegistry),
+            context(world.assumptions) {
+                result.registeredResolverOccurrenceCounts(world.resolverRegistry)
+            },
         )
-        val cells = result.registeredResolverOccurrences(world.resolverRegistry)
+        val cells =
+            context(world.assumptions) {
+                result.registeredResolverOccurrences(world.resolverRegistry)
+            }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        result.forEachRegisteredResolverOccurrence(
-            registry = world.resolverRegistry,
-            visitOccurrence = streamedCells::add,
-        )
+        context(world.assumptions) {
+            result.forEachRegisteredResolverOccurrence(
+                registry = world.resolverRegistry,
+                visitOccurrence = streamedCells::add,
+            )
+        }
         assertEquals(
             cells.groupingBy { cell -> cell }.eachCount(),
             streamedCells.groupingBy { cell -> cell }.eachCount(),
@@ -380,25 +387,31 @@ class ResolutionWitnessTest {
             ResolutionWitnessBounds(maxFingerprintCharacters = 1)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            result.registeredResolverOccurrences(
-                registry = world.resolverRegistry,
-                bounds = fingerprintBounds,
-            )
+            context(world.assumptions) {
+                result.registeredResolverOccurrences(
+                    registry = world.resolverRegistry,
+                    bounds = fingerprintBounds,
+                )
+            }
         }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        result.forEachRegisteredResolverOccurrence(
-            registry = world.resolverRegistry,
-            bounds = fingerprintBounds,
-            visitOccurrence = streamedCells::add,
-        )
+        context(world.assumptions) {
+            result.forEachRegisteredResolverOccurrence(
+                registry = world.resolverRegistry,
+                bounds = fingerprintBounds,
+                visitOccurrence = streamedCells::add,
+            )
+        }
         assertEquals(2, streamedCells.size)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            result.forEachRegisteredResolverOccurrence(
-                registry = world.resolverRegistry,
-                bounds = ResolutionWitnessBounds(maxResultNodes = 1),
-                visitOccurrence = {},
-            )
+            context(world.assumptions) {
+                result.forEachRegisteredResolverOccurrence(
+                    registry = world.resolverRegistry,
+                    bounds = ResolutionWitnessBounds(maxResultNodes = 1),
+                    visitOccurrence = {},
+                )
+            }
         }
     }
 
@@ -426,7 +439,11 @@ class ResolutionWitnessTest {
         assertEquals(
             mapOf(computedKey to 2),
             result
-                .registeredResolverOccurrenceCounts(world.resolverRegistry)
+                .let {
+                    context(world.assumptions) {
+                        it.registeredResolverOccurrenceCounts(world.resolverRegistry)
+                    }
+                }
                 .filterKeys { key -> key == computedKey },
         )
         val firstInput =

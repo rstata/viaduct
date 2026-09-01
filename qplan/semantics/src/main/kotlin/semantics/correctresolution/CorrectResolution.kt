@@ -23,11 +23,12 @@ import model.requireQueryTypeDef
  * be reasoned about as inductively-defined relations, not recursive routines.
  */
 context(world: Assumptions)
-fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean {
+fun ObjectEngineResult.correctResolution(
+    selections: ObjectSelectionForest,
+): Boolean {
     require(selections.type == world.schema.requireQueryTypeDef()) {
         "Correct-resolution selections must be rooted at Query"
     }
-    selections.byGroundKey()
     val resolverApplicationCache = ResolverApplicationCache()
     return rootedAndWellTyped() &&          // Is the result rooted on the `Query` type?
         conformsToSelections(selections) && // Does the result conform to the selections?

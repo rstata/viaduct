@@ -6,7 +6,6 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.Stamp
-import model.applicableGroundSelections
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
 import model.usedVariables
@@ -117,8 +116,8 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ResolverObjectFragment? {
-    val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
-    val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
+    val objectKey = path.lastOrNull() as? ObjectEngineResult.ObjectKey
+    val selectionStamp = objectKey?.stamp as? Stamp.Occurrence
     val candidates =
         if (selectionStamp != null) {
             listOf(instantiateObjectFragment(selectionStamp))
@@ -134,8 +133,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
             variable.isStamped && world.isBound(variable)
         } &&
             result.conformsToSelectionsAt(
-                selections =
-                    constructionSelections.applicableGroundSelections(field.containingDef),
+                selections = constructionSelections,
                 path = path.dropLast(1),
             )
     }

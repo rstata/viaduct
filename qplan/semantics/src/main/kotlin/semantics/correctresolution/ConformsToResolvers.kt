@@ -15,9 +15,9 @@ import model.outputValue
 import model.PathComponent
 import model.Stamp
 import model.isContextuallyGrounded
+import model.groundedArguments
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
-import model.applicableGroundSelections
 import model.toEngineOutputData
 import model.usedVariables
 import model.registry.FieldResolver
@@ -63,11 +63,10 @@ private fun ObjectEngineResult.objectConformsToResolvers(
 ): Boolean =
     keys.all { key ->
         if (!key.isContextuallyGrounded()) return@all false
-        val groundKey = key as? ObjectEngineResult.GroundKey ?: return@all false
-        val value = getCell(groundKey).getValue().get()
-        val arguments = groundKey.arguments
-        val fieldName = groundKey.field.name
-        source.requireArgumentlessField(groundKey)
+        val value = getCell(key).getValue().get()
+        val arguments = key.groundedArguments()
+        val fieldName = key.field.name
+        source.requireArgumentlessField(key)
         when {
             arguments !is Arguments.Resolved ->
                 value is ErrorEngineResult
@@ -76,22 +75,22 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                 arguments.fieldValues.isEmpty() &&
                     value.engineResultConformsToResolverValue(
                         resolverValue = source.outputValue(fieldName),
-                        expectedType = groundKey.field.outputType,
-                        path = path + groundKey,
+                        expectedType = key.field.outputType,
+                        path = path + key,
                     )
 
-            groundKey.field in world.resolverRegistry ->
-                reapplyResolver(groundKey, path)
+            key.field in world.resolverRegistry ->
+                reapplyResolver(key, path)
                     ?.let { application ->
                         value.engineResultConformsToResolverValue(
                             resolverValue = application.output,
-                            expectedType = groundKey.field.outputType,
-                            path = path + groundKey,
+                            expectedType = key.field.outputType,
+                            path = path + key,
                         )
                     } == true
 
             source == null ->
-                value.engineResultConformsToResolvers(path + groundKey)
+                value.engineResultConformsToResolvers(path + key)
 
             else -> false
         }
@@ -102,8 +101,8 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ResolverObjectFragment? {
-    val groundKey = path.lastOrNull() as? ObjectEngineResult.GroundKey
-    val selectionStamp = groundKey?.stamp as? Stamp.Occurrence
+    val objectKey = path.lastOrNull() as? ObjectEngineResult.ObjectKey
+    val selectionStamp = objectKey?.stamp as? Stamp.Occurrence
     val candidates =
         if (selectionStamp != null) {
             listOf(instantiateObjectFragment(selectionStamp))
@@ -119,8 +118,7 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
             variable.isStamped && world.isBound(variable)
         } &&
             result.conformsToSelectionsAt(
-                selections =
-                    constructionSelections.applicableGroundSelections(field.containingDef),
+                selections = constructionSelections,
                 path = path.dropLast(1),
             )
     }

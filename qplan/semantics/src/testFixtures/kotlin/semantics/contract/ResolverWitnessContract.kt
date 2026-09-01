@@ -102,7 +102,8 @@ interface ResolverWitnessContract : ResolverContract {
                     },
                     context(world) {
                         "rooted=${result.rootedAndWellTyped()}, " +
-                            "selections=${result.conformsToSelections(fragment.subselections)}, " +
+                            "selections=" +
+                            "${result.conformsToSelections(fragment.subselections)}, " +
                             "closed=${result.isClosedUnderResolverDemand()}, " +
                             "resolvers=${result.conformsToResolvers()}, " +
                             "unclosed=${result.unclosedRegisteredResolverOccurrences().map { cell ->

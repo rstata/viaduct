@@ -7,21 +7,20 @@ import model.ObjectSelection
 import model.PathComponent
 import model.VariableBinding
 import model.fetchBindings
-import model.groundKey
-import model.merge
+import model.fetchGroundedArguments
 import model.registry.VariableDefinition
-import model.selectionForestOf
 import model.variableArgumentNames
 import model.variableSourceSelectionStamps
 
 /**
  * Fills binding aliases, reads object-path providers, and installs every local field resolver.
  *
- * Each installation grounds its selection, completes argument bindings unlocked by grounding,
- * claims the exact target cell, and registers its writer for cycle detection. This function waits
- * for all installations before returning so the enclosing orchestration can freeze the target,
- * while the launched field-resolver tasks may continue afterward. Freezing the target without
- * waiting for installation would race with those installations reserving their cells.
+ * Each installation resolves its invocation arguments, completes argument bindings unlocked by
+ * that resolution, claims the original symbolic target cell, and registers its writer for cycle
+ * detection. This function waits for all installations before returning so the enclosing
+ * orchestration can freeze the target, while the launched field-resolver tasks may continue
+ * afterward. Freezing the target without waiting for installation would race with those
+ * installations reserving their cells.
  */
 internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
     closed: CloseInputDemandResult,
@@ -64,8 +63,7 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
     }
 }
 
-// Grounds one active selection, claims its exact target cell, and registers its writer.
-// Launches a field-resolver task after completing any argument bindings unlocked by grounding.
+// Resolves one active selection's invocation arguments while retaining its symbolic cell key.
 private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
     selection: ObjectSelection,
     expansion: ResolverExpansion,
@@ -74,34 +72,29 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
         val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
         val variableSourceSelectionStamps =
             selection.key.arguments.variableSourceSelectionStamps()
-        val groundedSelection: ObjectSelection =
-            selectionForestOf(selection)
-                .merge(target.type)
-                .fetchBindings()
-                .byGroundKey()
-                .values
-                .single()
-        val groundKey = groundedSelection.groundKey()
-        check(groundKey.field in world.resolverRegistry) {
-            "Resolver26 attempted to install passive key $groundKey"
+        val objectKey = selection.key
+        val groundedArguments = objectKey.fetchGroundedArguments()
+        check(objectKey.field in world.resolverRegistry) {
+            "Resolver26 attempted to install passive key $objectKey"
         }
-        check(!source.isPresent(groundKey.field.name)) {
-            "Resolver26 attempted to install source-provided key $groundKey"
+        check(!source.isPresent(objectKey.field.name)) {
+            "Resolver26 attempted to install source-provided key $objectKey"
         }
-        completeFromArgumentBindings(expansion, groundKey)
+        completeFromArgumentBindings(expansion, groundedArguments)
 
-        val cell = target.reserveCell(groundKey)
+        val cell = target.reserveCell(objectKey)
         cell.createValuePromise()
         support.registerWriter(
             cell = cell,
-            writer = path + groundKey,
+            writer = path + objectKey,
         )
         val fieldResolverTask =
             FieldResolverTask(
                 world = world,
                 support = support,
                 path = path,
-                groundedSelection = groundedSelection,
+                selection = selection,
+                groundedArguments = groundedArguments,
                 resolver = expansion.resolver,
                 inputMaterializeSelections = expansion.inputMaterializeSelections,
                 target = target,
@@ -115,11 +108,11 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
     }
 }
 
-// Fills FromArgument bindings that were declared while their owning resolver key was still open.
-// Bindings for owners that were already ground received their values during binding declaration.
+// Fills FromArgument bindings that were declared while their owning resolver key was symbolic.
+// Bindings for already-ground owners received their values during binding declaration.
 private fun ObjectOrchestrationTask.completeFromArgumentBindings(
     expansion: ResolverExpansion,
-    groundKey: ObjectEngineResult.GroundKey,
+    groundedArguments: model.Arguments.Ground,
 ) {
     if (expansion.ownerKey is ObjectEngineResult.GroundKey) return
     expansion.variableDefinitions.forEach { stampedDefinition ->
@@ -130,7 +123,7 @@ private fun ObjectOrchestrationTask.completeFromArgumentBindings(
             stampedDefinition.definition as VariableDefinition.FromArgument
         world.completeBinding(
             stampedDefinition.variable,
-            bindingFor(groundKey.arguments, definition),
+            bindingFor(groundedArguments, definition),
         )
     }
 }

@@ -7,9 +7,9 @@ import model.EngineOutputData
 import model.ObjectEngineResult
 import model.PathComponent
 import model.engineObjectDataOf
-import model.instantiateBindings
 import model.merge
 import model.requireQueryTypeDef
+import model.groundedArguments
 import semantics.ResolverSupport
 import semantics.materialize
 import viaduct.engine.api.EngineObjectData
@@ -23,12 +23,12 @@ internal class ResolverApplicationCache {
     private val applications =
         IdentityHashMap<
             ObjectEngineResult,
-            MutableMap<ObjectEngineResult.GroundKey, CachedResolverApplication>,
+            MutableMap<ObjectEngineResult.ObjectKey, CachedResolverApplication>,
         >()
 
     fun getOrPut(
         result: ObjectEngineResult,
-        key: ObjectEngineResult.GroundKey,
+        key: ObjectEngineResult.ObjectKey,
         compute: () -> ReappliedResolver?,
     ): ReappliedResolver? {
         val byKey = applications.getOrPut(result, ::linkedMapOf)
@@ -55,11 +55,11 @@ context(
     resolverApplicationCache: ResolverApplicationCache,
 )
 internal fun ObjectEngineResult.reapplyResolver(
-    key: ObjectEngineResult.GroundKey,
+    key: ObjectEngineResult.ObjectKey,
     path: List<PathComponent>,
 ): ReappliedResolver? =
     resolverApplicationCache.getOrPut(this, key) {
-        val arguments = key.arguments as? Arguments.Resolved ?: return@getOrPut null
+        val arguments = key.groundedArguments() as? Arguments.Resolved ?: return@getOrPut null
         val resolver = world.resolverRegistry.resolver(key.field)
         val coordinate = path + key
         val objectFragment =
@@ -87,13 +87,10 @@ internal fun ObjectEngineResult.reapplyResolver(
                 val queryResult =
                     world.queryValues[coordinate]
                         ?: return@getOrPut null
-                if (
-                    !queryResult.correctResolution(
-                        queryFragment.constructionSelections
-                            .merge(world.schema.requireQueryTypeDef())
-                            .instantiateBindings(),
-                    )
-                ) {
+                val querySelections =
+                    queryFragment.constructionSelections
+                        .merge(world.schema.requireQueryTypeDef())
+                if (!queryResult.correctResolution(querySelections)) {
                     return@getOrPut null
                 }
                 runBlocking {
@@ -113,7 +110,7 @@ internal fun ObjectEngineResult.reapplyResolver(
     }
 
 internal fun EngineObjectData.Sync?.requireArgumentlessField(
-    key: ObjectEngineResult.GroundKey,
+    key: ObjectEngineResult.ObjectKey,
 ) {
     if (this?.isPresent(key.field.name) == true) {
         require(key.field.args.isEmpty()) {

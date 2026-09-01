@@ -8,9 +8,9 @@ import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
-import model.applicableGroundSelections
-import model.groundKey
 import model.localizeTopLevelSelectionStamps
+import model.merge
+import semantics.findStoredKey
 
 /**
  * Whether this result contains every value required by [selections].
@@ -26,14 +26,16 @@ import model.localizeTopLevelSelectionStamps
  * This operation is defined only when applicable selection keys contain no unbound variables.
  */
 context(world: Assumptions)
-fun ObjectEngineResult.conformsToSelections(selections: SelectionForest): Boolean =
-    conformsToSelectionsAt(selections, emptyList())
+fun ObjectEngineResult.conformsToSelections(
+    selections: SelectionForest,
+): Boolean = conformsToSelectionsAt(selections, emptyList())
 
 context(world: Assumptions)
-fun ObjectEngineResult.conformsToSelections(selections: ObjectSelectionForest): Boolean {
-    selections.byGroundKey()
-    return type == selections.type && conformsToSelectionsAt(selections, emptyList())
-}
+fun ObjectEngineResult.conformsToSelections(
+    selections: ObjectSelectionForest,
+): Boolean =
+    type == selections.type &&
+        conformsToSelectionsAt(selections, emptyList())
 
 // Checks selections rooted at an OER whose exact absolute path is supplied by the caller.
 context(world: Assumptions)
@@ -47,9 +49,9 @@ private fun ObjectEngineResult.objectConformsToSelections(
     selections: SelectionForest,
     path: List<PathComponent>,
 ): Boolean =
-    selections.applicableGroundSelections(type).byGroundKey().values.all { selection ->
-        val key = selection.groundKey()
-        key in keys &&
+    selections.merge(type).byKey().values.all { selection ->
+        val key = findStoredKey(selection.key)
+        key != null &&
             getCell(key)
                 .getValue()
                 .get()

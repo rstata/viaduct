@@ -199,6 +199,54 @@ class EngineResultTest {
     }
 
     @Test
+    fun `fetching grounded arguments awaits every symbolic variable after an error`() =
+        runBlocking {
+            val world =
+                TestWorld.fromSDL(
+                    """
+                    input Filter {
+                      first: Int
+                      second: Int
+                    }
+
+                    type Query {
+                      source: Int
+                      consume(filter: Filter): Int
+                    }
+                    """.trimIndent(),
+                ).assumptions
+            val source = world.schema.requireObjectField("Query", "source")
+            val consume = world.schema.requireObjectField("Query", "consume")
+            val stamp = listOf(ListEngineResult.Index.of(0))
+            val errorVariable = Arguments.Variable.of(source, "error").stamp(stamp)
+            val pendingVariable = Arguments.Variable.of(source, "pending").stamp(stamp)
+            val key =
+                ObjectEngineResult.ObjectKey.of(
+                    consume,
+                    Arguments.of(
+                        consume,
+                        mapOf(
+                            "filter" to
+                                mapOf(
+                                    "first" to errorVariable,
+                                    "second" to pendingVariable,
+                                ),
+                        ),
+                    ),
+                )
+            world.bindVariable(errorVariable, VariableBinding.Error)
+            world.declareBinding(pendingVariable)
+
+            val grounded = async { context(world) { key.fetchGroundedArguments() } }
+
+            assertFalse(grounded.isCompleted)
+            assertFalse(context(world) { key.isContextuallyGrounded() })
+            world.completeBinding(pendingVariable, 2)
+            assertSame(Arguments.Error, grounded.await())
+            assertTrue(context(world) { key.isContextuallyGrounded() })
+        }
+
+    @Test
     fun `object keys reuse stable snapshots between reservations`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val firstKey = schema.key("Query", "first")

@@ -12,12 +12,16 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
+import model.ObjectMaterializeSelection
+import model.Selection
+import model.fetchGroundedArguments
+import model.localizeTopLevelSelectionStamps
 import model.outputType
 import model.PathComponent
 import model.materializedEngineObjectDataOf
+import model.selectionForestOf
 import model.toEngineOutputData
 import semantics.ResolverSupport
-import semantics.materializedGroundKey
 import viaduct.engine.api.EngineObjectData
 
 // Returns a resolver-visible input object collected by GraphQL response key.
@@ -45,20 +49,20 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
     val selectedValues =
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
-        val storedGroundKey = selection.materializedGroundKey(selectionPath)
-        val cell = reserveCell(storedGroundKey)
+        val storedKey = selection.materializedObjectKey(selectionPath)
+        val cell = reserveCell(storedKey)
         resolverSupport.cycleCheck(reader, cell)
         val selectedValue: EngineOutputData? =
             cell
                 .reserveValue()
                 .await()
                 .materializeSelectedValue(
-                    expectedType = storedGroundKey.field.outputType,
+                    expectedType = storedKey.field.outputType,
                     selections = selection.subselections,
                     reader = reader,
-                    resultPath = resultPath + storedGroundKey,
+                    resultPath = resultPath + storedKey,
                 )
-        selectedValues[responseKey] = storedGroundKey.field to selectedValue
+        selectedValues[responseKey] = storedKey.field to selectedValue
     }
     return materializedEngineObjectDataOf(
         schemaType = type,
@@ -67,6 +71,29 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                 EngineObjectDataEntry.of(key, fieldAndValue.first, fieldAndValue.second)
             },
     )
+}
+
+// Awaits every argument binding but preserves the selection's symbolic OER-cell identity.
+context(world: Assumptions)
+private suspend fun ObjectMaterializeSelection.materializedObjectKey(
+    selectionPath: List<PathComponent>,
+): ObjectEngineResult.ObjectKey {
+    val storedKey =
+        if (selectionPath.isEmpty()) {
+            key
+        } else {
+            selectionForestOf(
+                Selection.of(
+                    key = key,
+                    possibleTypes = setOf(key.field.containingDef),
+                    subselections = selectionForestOf(),
+                ),
+            ).localizeTopLevelSelectionStamps(selectionPath)
+                .single()
+                .key as ObjectEngineResult.ObjectKey
+        }
+    storedKey.fetchGroundedArguments()
+    return storedKey
 }
 
 // Recursively materializes one selected engine result while preserving null, error, and list shape.

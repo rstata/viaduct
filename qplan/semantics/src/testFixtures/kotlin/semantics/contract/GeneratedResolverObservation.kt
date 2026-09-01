@@ -7,9 +7,8 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.SelectionForest
-import model.applicableGroundSelections
 import model.fragmentFrom
-import model.groundKey
+import model.merge
 import model.objectOf
 import model.testing.TestWorld
 import semantics.arbitrary.ResolverApplicationRecord
@@ -19,6 +18,7 @@ import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
+import semantics.findStoredKey
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -211,23 +211,24 @@ private fun EngineResult?.sameSelectedResultAs(
                 indices.all { index ->
                     this[index]
                         .get()
-                        .sameSelectedResultAs(other[index].get(), selections)
+                        .sameSelectedResultAs(
+                            other[index].get(),
+                            selections,
+                        )
                 }
         is ObjectEngineResult ->
             other is ObjectEngineResult &&
                 type == other.type &&
-                selections
-                    .applicableGroundSelections(type)
-                    .byGroundKey()
-                    .values
+                selections.merge(type).byKey().values
                     .all { selection ->
-                        val key = selection.groundKey()
-                        key in keys &&
-                            key in other.keys &&
-                            getCell(key)
+                        val leftKey = findStoredKey(selection.key)
+                        val rightKey = other.findStoredKey(selection.key)
+                        leftKey != null &&
+                            rightKey != null &&
+                            getCell(leftKey)
                                 .get()
                                 .sameSelectedResultAs(
-                                    other = other.getCell(key).get(),
+                                    other = other.getCell(rightKey).get(),
                                     selections = selection.subselections,
                                 )
                     }

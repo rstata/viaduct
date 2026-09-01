@@ -85,6 +85,10 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                     .mapTo(linkedSetOf()) { key -> key.field.name }
             },
         )
-        assertTrue(context(world) { result.correctResolution(fragment) })
+        assertTrue(
+            context(world) {
+                result.correctResolution(fragment)
+            },
+        )
     }
 }

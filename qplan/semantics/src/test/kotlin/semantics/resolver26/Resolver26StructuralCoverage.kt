@@ -37,7 +37,7 @@ internal fun resolver26StructuralSignatures(
     val signatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
     val stampedOccurrences: List<RegisteredResolverOccurrence> =
         occurrences.filter { occurrence ->
-            (occurrence.groundKey().stamp as? Stamp.Occurrence)?.sourceKey != null
+            (occurrence.objectKey().stamp as? Stamp.Occurrence)?.sourceKey != null
         }
     val activeSourceFields: Set<FieldCoordinate> =
         witness.applications
@@ -52,7 +52,7 @@ internal fun resolver26StructuralSignatures(
     }
     if (
         stampedOccurrences.any { occurrence ->
-            (occurrence.groundKey().stamp as? Stamp.Occurrence)
+            (occurrence.objectKey().stamp as? Stamp.Occurrence)
                 ?.resolverPath
                 ?.any { component ->
                 component is ListEngineResult.Index
@@ -72,7 +72,7 @@ internal fun resolver26StructuralSignatures(
             }.values
             .any { equalVisibleOccurrences ->
                 equalVisibleOccurrences
-                    .map { occurrence -> occurrence.groundKey().stamp }
+                    .map { occurrence -> occurrence.objectKey().stamp }
                     .filterIsInstance<Stamp.Occurrence>()
                     .toSet()
                     .size > 1
@@ -145,8 +145,8 @@ private data class VisibleResolverOccurrence(
 )
 
 // Returns the exact stored key at this registered resolver occurrence.
-private fun RegisteredResolverOccurrence.groundKey(): ObjectEngineResult.GroundKey =
-    occurrencePath.last() as ObjectEngineResult.GroundKey
+private fun RegisteredResolverOccurrence.objectKey(): ObjectEngineResult.ObjectKey =
+    occurrencePath.last() as ObjectEngineResult.ObjectKey
 
 // Reports whether this recorded application belongs to a FromArgument variable owner.
 private fun ArbitraryRegistry.applicationUsesFromArgumentVariable(

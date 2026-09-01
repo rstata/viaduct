@@ -205,7 +205,11 @@ private suspend fun runResolver26MultithreadedStress(
                     )
                 }
             // Resolution has quiesced; all post-resolution oracle work remains serial here.
-            assertTrue(context(world) { result.correctResolution(fragment) })
+            assertTrue(
+                context(world) {
+                    result.correctResolution(fragment)
+                },
+            )
             context(world) {
                 result.validateObjectPathBindings()
             }

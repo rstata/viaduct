@@ -13,9 +13,11 @@ import model.Stamp
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.instantiateBindings
+import model.isContextuallyGrounded
 import model.localizeTopLevelSelectionStamps
 import model.merge
 import model.objectOf
+import model.groundedArguments
 import model.stampedVariables
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
@@ -24,6 +26,7 @@ import semantics.correctresolution.correctResolution
 import semantics.contract.selectionValues
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -245,11 +248,15 @@ class ArgumentStampingTest {
             stamps.map { stamp -> stamp.resolverPath },
         )
         assertEquals(2, stamps.toSet().size)
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(
+            context(world) {
+                resolved.correctResolution(fragment)
+            },
+        )
     }
 
     @Test
-    fun `distinct response groups remain separate after grounding`() {
+    fun `symbolic cell identity coalesces only equal variable instances`() {
         var frankApplications = 0
         val frankDemandFields = mutableListOf<Set<String>>()
         val resultFragment =
@@ -349,9 +356,35 @@ class ArgumentStampingTest {
             context(world) {
                 resolve(fragment.subselections)
             }
+        val frankKeys =
+            resolved.keys.filter { objectKey -> objectKey.field.name == "frank" }
+        val literalKeys =
+            frankKeys.filterIsInstance<ObjectEngineResult.GroundKey>()
+        val symbolicKeys =
+            frankKeys.filterNot { objectKey -> objectKey is ObjectEngineResult.GroundKey }
 
         assertEquals(8, resolved.getCell(resultKey).getValue().get())
         assertEquals(3, frankApplications)
+        assertEquals(3, frankKeys.size)
+        assertEquals(1, literalKeys.size)
+        assertEquals(2, symbolicKeys.size)
+        symbolicKeys.forEach { objectKey ->
+            assertTrue(context(world) { objectKey.isContextuallyGrounded() })
+            assertEquals(
+                Arguments.Resolved.of(
+                    world.schema.requireObjectField("Query", "frank"),
+                    mapOf("arg" to "hi"),
+                ),
+                context(world) { objectKey.groundedArguments() },
+            )
+        }
+        assertEquals(
+            2,
+            symbolicKeys
+                .map { objectKey -> assertIs<Stamp.Occurrence>(objectKey.stamp) }
+                .toSet()
+                .size,
+        )
         assertEquals(
             mapOf(
                 setOf("one") to 2,
@@ -359,7 +392,11 @@ class ArgumentStampingTest {
             ),
             frankDemandFields.groupingBy { fields -> fields }.eachCount(),
         )
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(
+            context(world) {
+                resolved.correctResolution(fragment)
+            },
+        )
     }
 
     @Test
@@ -469,13 +506,22 @@ class ArgumentStampingTest {
                 resolve(fragment.subselections)
             }
         val frankKeys =
-            resolved.keys.filter { groundKey -> groundKey.field.name == "frank" }
+            resolved.keys.filter { objectKey -> objectKey.field.name == "frank" }
 
         assertEquals(3, resolved.getCell(leftKey).getValue().get())
         assertEquals(5, resolved.getCell(rightKey).getValue().get())
         assertEquals(2, frankKeys.size)
-        frankKeys.forEach { groundKey ->
-            val selectionStamp = assertIs<Stamp.Occurrence>(groundKey.stamp)
+        frankKeys.forEach { objectKey ->
+            assertFalse(objectKey is ObjectEngineResult.GroundKey)
+            assertTrue(context(world) { objectKey.isContextuallyGrounded() })
+            assertEquals(
+                Arguments.Resolved.of(
+                    world.schema.requireObjectField("Query", "frank"),
+                    mapOf("arg" to "hi"),
+                ),
+                context(world) { objectKey.groundedArguments() },
+            )
+            val selectionStamp = assertIs<Stamp.Occurrence>(objectKey.stamp)
             val sourceKey = assertNotNull(selectionStamp.sourceKey)
             assertEquals(null, sourceKey.stamp)
         }
@@ -496,6 +542,10 @@ class ArgumentStampingTest {
             setOf(setOf("one"), setOf("two")),
             frankDemandFields.toSet(),
         )
-        assertTrue(context(world) { resolved.correctResolution(fragment) })
+        assertTrue(
+            context(world) {
+                resolved.correctResolution(fragment)
+            },
+        )
     }
 }

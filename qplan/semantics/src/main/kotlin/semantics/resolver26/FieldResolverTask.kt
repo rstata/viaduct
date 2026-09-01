@@ -15,8 +15,6 @@ import model.PathComponent
 import model.SelectionForest
 import model.Stamp
 import model.engineObjectDataOf
-import model.fetchBindings
-import model.groundKey
 import model.outputType
 import model.requireQueryTypeDef
 import model.registry.FieldResolver
@@ -32,7 +30,8 @@ internal class FieldResolverTask(
     private val world: Assumptions,
     private val support: Resolver26Support,
     private val path: List<PathComponent>,
-    private val groundedSelection: ObjectSelection,
+    private val selection: ObjectSelection,
+    private val groundedArguments: Arguments.Ground,
     private val resolver: FieldResolver,
     private val inputMaterializeSelections: MaterializeSelectionForest,
     private val target: ObjectEngineResult,
@@ -44,14 +43,14 @@ internal class FieldResolverTask(
 ) {
     suspend fun run() {
         context(world, support) {
-            val groundKey = groundedSelection.groundKey()
-            if (groundKey.arguments.argumentsContainErrorValue()) {
+            val objectKey = selection.key
+            if (groundedArguments.argumentsContainErrorValue()) {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
                 cell.getValue().complete(errorResult)
                 return
             }
 
-            val coordinate = path + groundKey
+            val coordinate = path + objectKey
             val input: EngineObjectData.Sync =
                 target.materializeResolverInput(
                     selections = inputMaterializeSelections,
@@ -59,8 +58,8 @@ internal class FieldResolverTask(
                     resultPath = path,
                 )
 
-            val resolverArguments = groundKey.arguments as Arguments.Resolved
-            val constructionDemand: SelectionForest = groundedSelection.subselections
+            val resolverArguments = groundedArguments as Arguments.Resolved
+            val constructionDemand: SelectionForest = selection.subselections
             val invocationDemand: SelectionForest = constructionDemand.successorDemand()
             val queryValue =
                 resolver.resolveQueryFragment(
@@ -71,12 +70,12 @@ internal class FieldResolverTask(
             support.observeApplication(
                 Resolver26ApplicationObservation(
                     occurrencePath = coordinate,
-                    field = groundKey.field,
+                    field = objectKey.field,
                     input = input,
                     arguments = resolverArguments,
                     suppliedDemand = invocationDemand,
                     variableArgumentCount = variableArgumentCount,
-                    occurrenceStamp = groundKey.stamp as? Stamp.Occurrence,
+                    occurrenceStamp = objectKey.stamp as? Stamp.Occurrence,
                     variableSourceSelectionStamps = variableSourceSelectionStamps,
                 ),
             )
@@ -91,7 +90,7 @@ internal class FieldResolverTask(
 
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
-                    expectedType = groundKey.field.outputType,
+                    expectedType = objectKey.field.outputType,
                     path = coordinate,
                     invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
@@ -121,7 +120,7 @@ private suspend fun FieldResolver.resolveQueryFragment(
         world.bindVariable(variable, definition.read(arguments))
     }
 
-    val groundedSelections = queryFragment.materializeSelections.fetchAllBindings()
+    val symbolicSelections = queryFragment.materializeSelections
     val source = world.resolverRegistry.createRootQueryInput()
     val queryResult =
         ObjectEngineResult.of(
@@ -135,36 +134,14 @@ private suspend fun FieldResolver.resolveQueryFragment(
             path = emptyList(),
             source = source,
             target = queryResult,
-            initialDemand = groundedSelections.constructionSelections(),
+            initialDemand = symbolicSelections.constructionSelections(),
         )
     orchestration.prepare()
     orchestration.launch()
     world.queryValues[coordinate.toList()] = queryResult
     return queryResult.materializeResolverInput(
-        selections = groundedSelections,
+        selections = symbolicSelections,
         reader = coordinate,
         resultPath = emptyList(),
     )
-}
-
-context(world: Assumptions)
-private suspend fun MaterializeSelectionForest.fetchAllBindings(): MaterializeSelectionForest {
-    val selections =
-        buildList<MaterializeSelection> {
-            this@fetchAllBindings.forEach(::add)
-        }
-    return selections
-        .map { selection ->
-            val groundedKey =
-                ObjectEngineResult.Key.of(
-                    field = selection.key.field,
-                    arguments = selection.key.arguments.fetchBindings(selection.key.field),
-                )
-            MaterializeSelection.of(
-                responseKey = selection.responseKey,
-                key = groundedKey,
-                possibleTypes = selection.possibleTypes,
-                subselections = selection.subselections.fetchAllBindings(),
-            )
-        }.toMaterializeSelectionForest()
 }

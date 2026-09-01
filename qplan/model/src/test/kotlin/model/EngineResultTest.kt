@@ -772,6 +772,73 @@ class EngineResultTest {
     }
 
     @Test
+    fun `completed result comparison requires the exact cell set`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val selectedOnly =
+            schema.engineResultOf("Query") {
+                "first" resolvesTo "same"
+            }
+        val withExtraCell =
+            schema.engineResultOf("Query") {
+                "first" resolvesTo "same"
+                "second" resolvesTo "extra"
+            }
+
+        assertFalse(selectedOnly.sameCompletedResultAs(withExtraCell))
+    }
+
+    @Test
+    fun `completed result comparison distinguishes symbolic and grounded keys`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val query = schema.requireQueryTypeDef()
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
+        val symbolicRoot = ObjectEngineResult.of(query, mutable = true)
+        val variable =
+            Arguments.Variable.of(source, "value").instantiate(
+                ResolverOccurrenceId.at(symbolicRoot, emptyList()),
+            )
+        val symbolicKey =
+            ObjectEngineResult.ObjectKey.of(
+                consume,
+                Arguments.of(consume, mapOf("value" to variable)),
+            )
+        symbolicRoot.reserveCell(symbolicKey).apply {
+            setValue(7)
+            setAccessResult(true)
+        }
+        symbolicRoot.freeze()
+        val grounded =
+            ObjectEngineResult.of(
+                type = query,
+                values =
+                    mapOf(
+                        ObjectEngineResult.GroundKey.of(
+                            consume,
+                            mapOf("value" to 7),
+                        ) to 7,
+                    ),
+                accessResults =
+                    mapOf(
+                        ObjectEngineResult.GroundKey.of(
+                            consume,
+                            mapOf("value" to 7),
+                        ) to true,
+                    ),
+            )
+
+        assertFalse(symbolicRoot.sameCompletedResultAs(grounded))
+    }
+
+    @Test
     fun `completed result comparison rejects an uncompleted promise`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val incomplete =

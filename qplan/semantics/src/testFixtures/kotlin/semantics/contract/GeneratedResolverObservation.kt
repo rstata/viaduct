@@ -2,14 +2,11 @@ package semantics.contract
 
 import model.Assumptions
 import model.EngineResult
-import model.ErrorEngineResult
-import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
-import model.SelectionForest
 import model.fragmentFrom
-import model.merge
 import model.objectOf
+import model.sameCompletedResultAs
 import model.testing.TestWorld
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverTestCase
@@ -18,7 +15,6 @@ import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
-import semantics.findStoredKey
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -98,12 +94,9 @@ object GeneratedCaseAssertions {
     val permutationEquivalentResult =
         GeneratedCaseAssertion { observation ->
             assertTrue(
-                context(observation.ordinary.world) {
-                    observation.ordinary.result.sameSelectedResultAs(
-                        other = observation.permutationEquivalent.result,
-                        selections = observation.ordinary.fragment.subselections,
-                    )
-                },
+                observation.ordinary.result.sameCompletedResultAs(
+                    observation.permutationEquivalent.result,
+                ),
             )
         }
 
@@ -199,48 +192,4 @@ private fun ResolverContract.observeGeneratedResolution(
         fragment = fragment,
         subject = subject,
     )
-}
-
-context(world: Assumptions)
-private fun EngineResult?.sameSelectedResultAs(
-    other: EngineResult?,
-    selections: SelectionForest,
-): Boolean {
-    if (this == null || other == null) return this == other
-    return when (this) {
-        is ErrorEngineResult -> other is ErrorEngineResult
-        is ListEngineResult ->
-            other is ListEngineResult &&
-                typeExpr == other.typeExpr &&
-                size == other.size &&
-                indices.all { index ->
-                    this[index]
-                        .get()
-                        .sameSelectedResultAs(
-                            other[index].get(),
-                            selections,
-                        )
-                }
-        is ObjectEngineResult ->
-            other is ObjectEngineResult &&
-                type == other.type &&
-                selections.merge(type).byKey().values
-                    .all { selection ->
-                        val leftKey = findStoredKey(selection.key)
-                        val rightKey = other.findStoredKey(selection.key)
-                        leftKey != null &&
-                            rightKey != null &&
-                            getCell(leftKey)
-                                .get()
-                                .sameSelectedResultAs(
-                                    other = other.getCell(rightKey).get(),
-                                    selections = selection.subselections,
-                                )
-                    }
-        else ->
-            other !is ErrorEngineResult &&
-                other !is ListEngineResult &&
-                other !is ObjectEngineResult &&
-                this == other
-    }
 }

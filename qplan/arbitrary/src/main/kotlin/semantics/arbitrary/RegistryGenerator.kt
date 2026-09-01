@@ -837,7 +837,10 @@ private class RegistryGenerator(
         consumer: FieldCoordinate,
         ranks: Map<FieldCoordinate, Int>,
     ): FragmentPlan {
-        if (!config[ResolverQueryFragmentsEnabled]) {
+        if (
+            !config[ResolverQueryFragmentsEnabled] ||
+            !chance(config[ResolverQueryFragmentWeight])
+        ) {
             return FragmentPlan("Query", emptyList())
         }
         return FragmentPlan(

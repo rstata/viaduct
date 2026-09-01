@@ -12,7 +12,6 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverQueryFragmentsEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -106,6 +105,9 @@
     }
   },
   "resolver25" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : false
+    },
     "doubles" : {
       "duplicateSelectionWeight" : 0.2,
       "fieldArgumentWeight" : 0.65,
@@ -113,6 +115,7 @@
       "resolverFromObjectFieldProviderArgumentVariableWeight" : 1.0,
       "resolverFromObjectFieldVariableOwnerUseWeight" : 0.5,
       "resolverLiteralVariableConvergenceWeight" : 0.45,
+      "resolverQueryFragmentWeight" : 1.0,
       "resolverVariableWeight" : 0.9
     },
     "id" : "resolver25-mixed-variables-standard",
@@ -124,6 +127,9 @@
     }
   },
   "resolver26" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : true
+    },
     "doubles" : {
       "duplicateSelectionWeight" : 0.5,
       "fieldArgumentWeight" : 0.9,
@@ -131,6 +137,7 @@
       "resolverFromObjectFieldProviderArgumentVariableWeight" : 0.0,
       "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,
       "resolverLiteralVariableConvergenceWeight" : 0.75,
+      "resolverQueryFragmentWeight" : 0.1,
       "resolverVariableWeight" : 0.95
     },
     "id" : "resolver26-symbolic-identity-standard",

@@ -12,7 +12,6 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverQueryFragmentsEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -117,9 +116,21 @@
     }
   },
   "resolver25" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : false
+    },
+    "doubles" : {
+      "resolverQueryFragmentWeight" : 1.0
+    },
     "id" : "resolver25-balanced-large-deep"
   },
   "resolver26" : {
+    "booleans" : {
+      "resolverQueryFragmentsEnabled" : true
+    },
+    "doubles" : {
+      "resolverQueryFragmentWeight" : 0.1
+    },
     "id" : "resolver26-balanced-large-deep"
   }
 }

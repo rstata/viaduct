@@ -304,10 +304,6 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
             var activatedQueryFragments = 0
             var activatedArgumentVariableApplications = 0
             var queryValueWitnesses = 0
-            val assertions =
-                generatedCaseAssertions.filterNot { assertion ->
-                    assertion === GeneratedCaseAssertions.exactOrdinaryApplicationCounts
-                }
             val config =
                 Config.default +
                     (FieldArgumentWeight to 1.0) +
@@ -330,7 +326,6 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                         observeGeneratedCaseWithCurrentAssertions(
                             testWorld,
                             testCase,
-                            assertions,
                         )
                     activatedQueryFragments +=
                         observation.ordinaryApplications.count { application ->

@@ -89,7 +89,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated bridge `node` loader application, the argument-variable profile requires an application of a variable-bearing resolver, and the sometimes-passive profile requires registered result occurrences whose standard resolvers were not applied. The `mixed-variables` and `sometimes-passive` profiles apply the caller-provided seed as randomized correctness pressure and use fixed generated seed `1` as their aggregate activation corpus, so a valid random batch cannot fail merely because it misses the promised interaction.
 
-The `query-fragment` profile jointly enables variable-bearing object fragments and Query-rooted resolver fragments, and requires generation and activation evidence for both Query fragments and `FromArgument` variables. It omits `exactOrdinaryApplicationCounts` when a resolver policy enables it. That oracle reconstructs applications only from the primary result tree, while query-fragment applications intentionally belong to separate Query OER witnesses.
+The `query-fragment` profile jointly enables variable-bearing object fragments and Query-rooted resolver fragments, and requires generation and activation evidence for both Query fragments and `FromArgument` variables. Its exact application oracle reconstructs applications across both the primary result and every request-local Query-fragment OER.
 
 Profile IDs are part of the replay interface and must remain stable.
 
@@ -166,7 +166,7 @@ Replay one failed campaign coordinate through its recorded round and profile:
 
 Resolver26's broad tests use five directed distributions: balanced worlds, symbolic list descendants, nullable and error providers, equal grounded arguments from distinct symbolic keys, and multiple object-path owners. Every distribution admits query fragments at bounded density and requires both generated and activated query-fragment evidence. Their structural coverage is classified only from completed OER paths and symbolic keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation checks every activated object-path variable. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
 
-Every generated case checks exact attempted/resolved/completed accounting, exact application identity counts, `correctResolution`, and independently reconstructed object-path bindings. A profile's aggregate run must also observe its required Resolver26 structural signatures.
+Every generated case checks exact attempted/resolved/completed accounting, root-and-path-qualified application identities, `correctResolution`, and independently reconstructed object-path bindings. Sometimes-passive occurrences form the independently counted difference between registered result occurrences and standard resolver applications. A profile's aggregate run must also observe its required Resolver26 structural signatures.
 
 The checked-in campaign uses fresh JVM rounds and persisted seeds distributed across schema breadth, registry diversity, query interactions, and large/deep worlds. Large/deep worlds bound generated list fanout so the budget explores depth instead of combinatorial list multiplication. Run persisted rounds with:
 

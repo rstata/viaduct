@@ -7,12 +7,14 @@ import model.EngineResult
 import model.EngineErrorData
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
 import model.objectOf
 import model.requireField
 import model.requireObjectField
+import model.requireQueryTypeDef
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import java.util.concurrent.Executors
@@ -518,19 +520,41 @@ class ResolutionWitnessTest {
                 computedKey,
                 input.resolutionFingerprint(),
             )
+        val root = ObjectEngineResult.of(schema.requireQueryTypeDef())
+        val firstOccurrenceId = ResolverOccurrenceId.at(root, firstPath)
+        val secondOccurrenceId = ResolverOccurrenceId.at(root, secondPath)
         val expected =
             mapOf(
-                ResolverOccurrenceApplicationIdentity(firstPath, applicationIdentity) to 1,
-                ResolverOccurrenceApplicationIdentity(secondPath, applicationIdentity) to 1,
+                ResolverOccurrenceApplicationIdentity(firstOccurrenceId, applicationIdentity) to 1,
+                ResolverOccurrenceApplicationIdentity(secondOccurrenceId, applicationIdentity) to 1,
             )
         val validLog = ResolutionOccurrenceApplicationLog()
-        validLog.record(firstPath, computedKey.field, computedKey.arguments, input)
-        validLog.record(secondPath, computedKey.field, computedKey.arguments, input)
+        validLog.record(
+            firstOccurrenceId,
+            firstPath,
+            computedKey.field,
+            computedKey.arguments,
+            input,
+        )
+        validLog.record(
+            secondOccurrenceId,
+            secondPath,
+            computedKey.field,
+            computedKey.arguments,
+            input,
+        )
         assertEquals(expected, validLog.snapshot().applicationIdentityCounts())
 
         val malformedLog = ResolutionOccurrenceApplicationLog()
-        malformedLog.record(firstPath, computedKey.field, computedKey.arguments, input)
-        malformedLog.record(firstPath, computedKey.field, computedKey.arguments, input)
+        repeat(2) {
+            malformedLog.record(
+                firstOccurrenceId,
+                firstPath,
+                computedKey.field,
+                computedKey.arguments,
+                input,
+            )
+        }
 
         assertNotEquals(
             expected,

@@ -9,7 +9,9 @@ import model.fragmentFrom
 import model.objectOf
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
+import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.RegisteredResolverOccurrence
+import semantics.arbitrary.ResolutionOccurrenceApplicationLog
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverTestExecution
@@ -18,9 +20,10 @@ import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
 import semantics.arbitrary.executeResolverTestCases
-import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.arbitrary.registeredResolverOccurrences
-import semantics.contract.registeredResolverApplicationIdentityCounts
+import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
+import semantics.contract.registeredResolverOccurrenceApplicationIdentityCountsFor
+import semantics.contract.registeredResolverOccurrenceApplicationKeyCounts
 import semantics.contract.validateObjectPathBindings
 import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
@@ -163,12 +166,34 @@ internal suspend fun runResolver26BroadStress(
                     testWorld.newAssumptions(selectiveResolvers = true)
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
                 testCase.registry.clearResolutionWitness()
+                val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1
                 val result: ObjectEngineResult =
                     context(world) {
-                        resolve(fragment.subselections)
+                        resolveObserved(fragment.subselections) { application ->
+                            occurrenceLog.record(
+                                resolverOccurrenceId = application.resolverOccurrenceId,
+                                occurrencePath = application.occurrencePath,
+                                field =
+                                    FieldCoordinate(
+                                        application.field.containingDef.name,
+                                        application.field.name,
+                                    ),
+                                arguments = application.arguments,
+                                input = application.input,
+                                suppliedDemand = application.suppliedDemand,
+                            )
+                        }
                     }
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
+                val occurrenceWitness = occurrenceLog.snapshot()
+                assertEquals(
+                    witness.applicationIdentityCounts(),
+                    occurrenceWitness.applications
+                        .groupingBy { application -> application.application.identity }
+                        .eachCount(),
+                    "Resolver26 occurrence instrumentation missed an application",
+                )
                 val occurrences: List<RegisteredResolverOccurrence> =
                     context(world) {
                         result.registeredResolverOccurrences(world.resolverRegistry)
@@ -204,29 +229,41 @@ internal suspend fun runResolver26BroadStress(
                     }
                 }
 
-                if (
-                    config[SometimesPassiveFieldWeight] > 0.0 &&
-                    !config[ResolverQueryFragmentsEnabled]
-                ) {
-                    val resultOccurrenceCounts =
+                val observedOccurrenceCounts = occurrenceWitness.applicationIdentityCounts()
+                if (config[SometimesPassiveFieldWeight] > 0.0) {
+                    val expectedOccurrenceKeyCounts =
                         context(world) {
-                            result.registeredResolverOccurrenceCounts(world.resolverRegistry)
+                            result.registeredResolverOccurrenceApplicationKeyCounts()
                         }
-                    witness.applicationCounts().forEach { (key, count) ->
+                    occurrenceWitness.applicationKeyCounts().forEach { (key, count) ->
                         assertTrue(
-                            count <= resultOccurrenceCounts.getOrDefault(key, 0),
-                            "Observed $count applications of $key but result contains only " +
-                                "${resultOccurrenceCounts.getOrDefault(key, 0)} occurrences",
+                            count <= expectedOccurrenceKeyCounts.getOrDefault(key, 0),
+                            "Observed $count applications of $key but request results " +
+                                "contain only " +
+                                "${expectedOccurrenceKeyCounts.getOrDefault(key, 0)} " +
+                                "matching occurrences",
                         )
                     }
-                    activatedSometimesPassiveOccurrences +=
-                        resultOccurrenceCounts.values.sum() - witness.applications.size
-                } else if (!config[ResolverQueryFragmentsEnabled]) {
-                    assertEquals(
+                    val expectedObservedIdentities =
                         context(world) {
-                            result.registeredResolverApplicationIdentityCounts()
-                        },
-                        witness.applicationIdentityCounts(),
+                            result.registeredResolverOccurrenceApplicationIdentityCountsFor(
+                                occurrenceWitness.applications
+                                    .map { application -> application.resolverOccurrenceId }
+                                    .toSet(),
+                            )
+                        }
+                    assertEquals(expectedObservedIdentities, observedOccurrenceCounts)
+                    activatedSometimesPassiveOccurrences +=
+                        expectedOccurrenceKeyCounts.values.sum() -
+                            occurrenceWitness.applications.size
+                } else {
+                    val expectedOccurrenceCounts =
+                        context(world) {
+                            result.registeredResolverOccurrenceApplicationIdentityCounts()
+                        }
+                    assertEquals(
+                        expectedOccurrenceCounts,
+                        observedOccurrenceCounts,
                     )
                 }
                 assertTrue(
@@ -250,10 +287,7 @@ internal suspend fun runResolver26BroadStress(
                 "${requiredSignatures - observedSignatures}; " +
                 "observed=$observedSignatures",
         )
-        if (
-            config[SometimesPassiveFieldWeight] > 0.0 &&
-            !config[ResolverQueryFragmentsEnabled]
-        ) {
+        if (config[SometimesPassiveFieldWeight] > 0.0) {
             run.assertAggregate(
                 generatedSometimesPassiveFields > 0 &&
                     activatedSometimesPassiveOccurrences > 0,

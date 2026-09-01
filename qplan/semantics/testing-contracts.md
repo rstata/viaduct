@@ -57,7 +57,7 @@ Policies describe implementation choices that cut across feature scopes:
 
 - `CompleteResolverOutputPolicyContract` and `SelectiveResolverOutputPolicyContract` check unselected passive fields.
 - `CompleteObjectFragmentOutputPolicyContract` and `SelectiveObjectFragmentOutputPolicyContract` check recursive passive subtrees reached while satisfying object-fragment demand.
-- `VariableSelectionIdentityResolverContract` runs one equal-grounded-key fixture under an explicit policy: Resolver25 merges equal grounded keys, while Resolver26 preserves variable-selection occurrences.
+- `VariableSelectionIdentityResolverContract` distinguishes Resolver25's grounded-key storage from Resolver26's symbolic-key storage. Resolver26 coalesces equal symbolic arguments but keeps different variable instances distinct even when their bindings agree.
 - `LateObjectPathDemandResolverContract` separately records whether an ancestor resolver retains an open variable boundary or receives only its passive predecessors; this policy is independent of equal-key identity.
 - `CorrectResolutionPostTestPolicy` records results produced through `resolveAndValidate` and validates them in `@AfterEach`.
 
@@ -83,7 +83,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `feature-interaction` | Full ordinary interaction | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `20:3:5` |
 | `resolver03-construction-witness` | Construction witness | Resolver03, Resolver25-26 | `12:2:4` |
 | `resolver25-broad-*` | Unfiltered balanced, list-descendant, nullable/error, mixed-variable, and multiple-owner pressure | Resolver25 | opt-in |
-| `resolver26-broad-*` | Heterogeneous stamped-resolution profiles | Resolver26 | opt-in profile-specific products |
+| `resolver26-broad-*` | Heterogeneous symbolic-resolution profiles | Resolver26 | opt-in profile-specific products |
 
 Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated bridge `node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
 
@@ -162,7 +162,7 @@ Replay one failed campaign coordinate through its recorded round and profile:
 
 ## Resolver26 Broad Campaign
 
-Resolver26's broad tests use five directed distributions: balanced worlds, localized descendants, nullable and error providers, stamp collisions, and multiple object-path owners. Their structural coverage is classified only from completed OER paths and stamped keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation checks every activated object-path variable. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
+Resolver26's broad tests use five directed distributions: balanced worlds, symbolic list descendants, nullable and error providers, equal grounded arguments from distinct symbolic keys, and multiple object-path owners. Their structural coverage is classified only from completed OER paths and symbolic keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation checks every activated object-path variable. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
 
 Every generated case checks exact attempted/resolved/completed accounting, exact application identity counts, `correctResolution`, and independently reconstructed object-path bindings. A profile's aggregate run must also observe its required Resolver26 structural signatures.
 

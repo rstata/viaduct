@@ -1,7 +1,5 @@
 package semantics.resolver25
 
-import model.ObjectEngineResult
-
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode
 import org.openjdk.jmh.annotations.Fork
@@ -19,9 +17,8 @@ import org.openjdk.jmh.annotations.Warmup
 import org.openjdk.jmh.infra.BenchmarkParams
 import org.openjdk.jmh.infra.Blackhole
 import model.PathComponent
-import model.Stamp
+import model.usedVariables
 import model.variableArgumentNames
-import model.variableSourceSelectionStamps
 import semantics.benchmark.CurrentProfileBenchmarkSupport
 import semantics.benchmark.DEFAULT_OVERHEAD_LOOP_COUNT
 import semantics.benchmark.ObservedResolverBenchmarkSubject
@@ -73,11 +70,15 @@ open class ResolverBenchmark {
                                                 if (argumentNames.isEmpty()) {
                                                     emptySet()
                                                 } else {
-                                                    setOfNotNull(event.consumerCoordinate)
+                                                    buildSet {
+                                                        event.consumerCoordinate?.let(::add)
+                                                        event.selection.key.arguments
+                                                            .usedVariables()
+                                                            .mapNotNullTo(this) { variable ->
+                                                                variable.stamp?.resolverPath
+                                                            }
+                                                    }
                                                 },
-                                            sourceSelectionStamps =
-                                                event.selection.key.arguments
-                                                    .variableSourceSelectionStamps(),
                                         )
                                 }
                                 is Resolver25LifecycleEvent.DemandGrounded -> {
@@ -100,17 +101,10 @@ open class ResolverBenchmark {
                                             applicationObserver(
                                                 ResolverBenchmarkApplicationObservation(
                                                     occurrencePath = event.coordinate,
-                                                    occurrenceStamp =
-                                                        (
-                                                            event.coordinate.lastOrNull()
-                                                                as? ObjectEngineResult.GroundKey
-                                                        )?.stamp as? Stamp.Occurrence,
                                                     variableArgumentCount =
                                                         variableUse.argumentNames.size,
                                                     variableSourceOccurrencePaths =
                                                         variableUse.sourceOccurrencePaths,
-                                                    variableSourceSelectionStamps =
-                                                        variableUse.sourceSelectionStamps,
                                                 ),
                                             )
                                         }
@@ -125,19 +119,16 @@ open class ResolverBenchmark {
     private data class VariableUse(
         val argumentNames: Set<String>,
         val sourceOccurrencePaths: Set<List<PathComponent>>,
-        val sourceSelectionStamps: Set<Stamp.Occurrence>,
     ) {
         operator fun plus(other: VariableUse): VariableUse =
             VariableUse(
                 argumentNames = argumentNames + other.argumentNames,
                 sourceOccurrencePaths =
                     sourceOccurrencePaths + other.sourceOccurrencePaths,
-                sourceSelectionStamps =
-                    sourceSelectionStamps + other.sourceSelectionStamps,
             )
 
         companion object {
-            val EMPTY = VariableUse(emptySet(), emptySet(), emptySet())
+            val EMPTY = VariableUse(emptySet(), emptySet())
         }
     }
 

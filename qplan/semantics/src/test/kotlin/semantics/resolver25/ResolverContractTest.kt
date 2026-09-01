@@ -22,7 +22,6 @@ import semantics.contract.SometimesPassiveObjectFragmentResolverContract
 import semantics.contract.SometimesPassiveObjectPathResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
-import semantics.contract.VariableSelectionIdentityPolicy
 import semantics.contract.VariableSelectionIdentityResolverContract
 
 class ResolverContractTest :
@@ -40,11 +39,11 @@ class ResolverContractTest :
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
-    override val variableSelectionIdentityPolicy: VariableSelectionIdentityPolicy
-        get() = VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS
-
     override val lateAncestorDemandPolicy: LateAncestorDemandPolicy
         get() = LateAncestorDemandPolicy.RETAIN_OPEN_VARIABLE_BOUNDARY
+
+    override val retainsSymbolicObjectKeys: Boolean
+        get() = false
 
     override fun resolve(
         world: Assumptions,

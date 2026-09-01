@@ -211,22 +211,6 @@ private fun ArgumentExpression?.conformsToArgumentType(
     }
 }
 
-/**
- * Returns this tuple checked against [expectedType], replacing the stamp on every recursively
- * contained selection-stamped variable.
- */
-internal fun Arguments.restampSelectionVariables(
-    expectedField: ViaductSchema.Field,
-    selectionStamp: Stamp.Occurrence,
-): Arguments {
-    if (this == Arguments.Error) return this
-    return argumentsOfExpressions(
-        fieldExpressions().mapValues { (_, value) ->
-            value.restampVariables(selectionStamp)
-        },
-    ).validatedAgainst(expectedField)
-}
-
 internal fun Arguments.stampVars(
     expectedField: ViaductSchema.Field,
     path: List<PathComponent>,
@@ -257,27 +241,6 @@ private fun ArgumentExpression?.stampVariables(
         is Map<*, *> ->
             toStringKeyedArgumentMap()
                 .mapValues { (_, value) -> value.stampVariables(selectionStamp) }
-        else -> this
-    }
-
-private fun ArgumentExpression?.restampVariables(
-    selectionStamp: Stamp.Occurrence,
-): ArgumentExpression? =
-    when (this) {
-        is Arguments.Variable ->
-            if (stamp?.occurrenceLineage.isNullOrEmpty()) {
-                this
-            } else {
-                Arguments.Variable
-                    .of(
-                        field = field,
-                        variableName = variableName,
-                    ).stamp(selectionStamp)
-            }
-        is List<*> -> map { value -> value.restampVariables(selectionStamp) }
-        is Map<*, *> ->
-            toStringKeyedArgumentMap()
-                .mapValues { (_, value) -> value.restampVariables(selectionStamp) }
         else -> this
     }
 
@@ -388,13 +351,6 @@ fun Arguments.variableArgumentNames(): Set<String> =
             .filterValues(ArgumentExpression?::containsVariable)
             .keys
     }
-
-/** Returns the source-selection identities carried by variables in this tuple. */
-fun Arguments.variableSourceSelectionStamps(): Set<Stamp.Occurrence> =
-    variables()
-        .mapNotNullTo(linkedSetOf()) { variable ->
-            variable.stamp?.takeIf { stamp -> stamp.occurrenceLineage.isNotEmpty() }
-        }
 
 private fun ArgumentExpression?.variables(): Set<Arguments.Variable> =
     when (this) {

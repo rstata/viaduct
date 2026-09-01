@@ -37,7 +37,7 @@ Run the same static, generated, witness, and mutation suite with five resolution
 Run one class or test method by using the normal Gradle test filter and the same thread-count property:
 
 ```shell
-./gradlew :semantics:test --tests 'semantics.resolver26.ArgumentStampingTest' -Presolver26ThreadCount=2
+./gradlew :semantics:test --tests 'semantics.resolver26.SymbolicKeyIdentityTest' -Presolver26ThreadCount=2
 ```
 
 Run the generated Resolver26 contracts under a fixed property seed:
@@ -144,15 +144,15 @@ These ten persisted rounds contain exactly 100,000 cases and sample schema bread
 
 A 100,000- to 1,000,000-case run should explore a broad state space rather than repeat one distribution. Split the budget across fresh JVM rounds, independent seeds, directed profiles, and different `S:R:Q` shapes; persist each round's command, seed, profile, dimensions, thread count, and log.
 
-The checked-in million-case campaign varies schema breadth, registry diversity, query interaction count, and large/deep worlds. Its directed profiles emphasize balanced worlds, localized descendants, nullable and error providers, stamp collisions, and multiple object-path-variable owners. Keep all of those axes represented in future campaigns.
+The checked-in million-case campaign varies schema breadth, registry diversity, query interaction count, and large/deep worlds. Its directed profiles emphasize balanced worlds, descendant variable uses, nullable and error providers, symbolic-key identity, and multiple object-path-variable owners. Keep all of those axes represented in future campaigns.
 
-Favor cases that activate combinations of features, not registries that merely contain them. Important combinations include `FromObjectField` with `FromArgument`, nested provider paths, passive and resolver-bearing descendants, lists and list-localized stamps, node lowering and node arrays, many field resolvers with complex object fragments, nullable or error intermediates, equal grounded arguments from distinct stamps, multiple variable owners and owner dependencies, aliases, duplicate selections, deep selection sets, and high resolver density.
+Favor cases that activate combinations of features, not registries that merely contain them. Important combinations include `FromObjectField` with `FromArgument`, nested provider paths, passive and resolver-bearing descendants, lists containing symbolic resolver keys, node lowering and node arrays, many field resolvers with complex object fragments, nullable or error intermediates, distinct symbolic expressions whose bindings resolve to equal values, multiple variable owners and owner dependencies, aliases, duplicate selections, deep selection sets, and high resolver density.
 
 Bound list fanout and other multiplicative dimensions so large worlds do not collapse into a few resource explosions, but do not make the corpus shallow. Preserve registry diversity during query-heavy phases; many queries against one simple registry are not a substitute for varied resolver graphs.
 
 Use low and high thread counts across the campaign. One worker preserves a deterministic baseline, two to ten workers exercise common interleavings, and a larger pool supplies additional scheduling pressure. The thread count changes scheduling, not the semantic corpus, so exact seeds and coordinates remain replayable at any count.
 
-Audit both generated features and activated behavior. Track attempted and completed cases, resolver applications, variable-owner applications, provider-path depth, selection depth, list occurrences, stamp collisions, and required structural signatures. A green run that never activates its target interaction is not evidence for that interaction.
+Audit both generated features and activated behavior. Track attempted and completed cases, resolver applications, variable-owner applications, provider-path depth, selection depth, list occurrences, equal visible symbolic arguments, and required structural signatures. A green run that never activates its target interaction is not evidence for that interaction.
 
 When a case fails, first replay its exact profile, seed, coordinate, and thread count. Then replay at one and several worker counts, classify the failure as resolver, generator, oracle, campaign, or resource-envelope behavior, and reduce a real Resolver26 defect to a deterministic regression before changing the implementation.
 

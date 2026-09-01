@@ -1,12 +1,8 @@
 package model.registry
 
 import model.requireObjectField
-import model.requireField
 import model.Arguments
 import model.ObjectEngineResult
-import model.SelectionOccurrenceId
-import model.Stamp
-import model.requireArg
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,54 +55,4 @@ class StampedVariableDefinitionFactoryTest {
         }
     }
 
-    @Test
-    fun `selection stamped definitions have structural equality`() {
-        val occurrence =
-            Stamp.Occurrence.of(
-                resolverPath = path,
-                occurrenceLineage =
-                    listOf(
-                        SelectionOccurrenceId(
-                            ObjectEngineResult.Key.of(source, emptyMap()),
-                        ),
-                    ),
-            )
-        val variable = template.stamp(occurrence)
-        val definition =
-            VariableDefinition.FromArgument.of(
-                result.requireArg("seed"),
-            )
-
-        assertEquals(
-            SelectionStampedVariableDefinition.of(variable, definition),
-            SelectionStampedVariableDefinition.of(
-                variable,
-                VariableDefinition.FromArgument.of(
-                    result.requireArg("seed"),
-                ),
-            ),
-        )
-        assertNotEquals(
-            SelectionStampedVariableDefinition.of(variable, definition),
-            SelectionStampedVariableDefinition.of(
-                variable,
-                VariableDefinition.FromObjectField.of(
-                    listOf(ObjectEngineResult.Key.of(source, emptyMap())),
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun `selection stamped definition requires selection lineage`() {
-        assertFailsWith<IllegalArgumentException> {
-            SelectionStampedVariableDefinition.of(
-                variable = template.stamp(path),
-                definition =
-                    VariableDefinition.FromArgument.of(
-                        result.requireArg("seed"),
-                    ),
-            )
-        }
-    }
 }

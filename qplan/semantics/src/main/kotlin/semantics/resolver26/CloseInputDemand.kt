@@ -1,7 +1,5 @@
 package semantics.resolver26
 
-import viaduct.graphql.schema.ViaductSchema
-
 import model.Arguments
 import model.Assumptions
 import model.MaterializeSelectionForest
@@ -9,15 +7,11 @@ import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
-import model.Selection
 import model.SelectionForest
-import model.Stamp
-import model.localizeTopLevelSelectionStamps
 import model.materializeSelectionForestOf
 import model.merge
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
-import model.registry.SelectionStampedVariableDefinition
 import model.registry.StampedObjectPathDefinition
 import model.schemaType
 import model.selectionForestOf
@@ -32,12 +26,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
     path: List<PathComponent>,
     initialDemand: SelectionForest,
 ): CloseInputDemandResult {
-    val localizedDemand: LocalizeTopLevelStampsResult =
-        localizeTopLevelStamps(
-            path = path,
-            demand = initialDemand,
-        )
-    var accumulatedDemand: SelectionForest = localizedDemand.demand
+    var accumulatedDemand: SelectionForest = initialDemand
     val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
         linkedMapOf()
     val pathVariableDefinitions: MutableList<StampedObjectPathDefinition> =
@@ -63,15 +52,9 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             ) {
                 "Resolver26 closed demand and resolver expansions are misaligned"
             }
-            val selectionStamps: List<Stamp.Occurrence> =
-                mergedDemand.keys().mapNotNull { key -> key.stamp as? Stamp.Occurrence }
-            check(selectionStamps.size == selectionStamps.toSet().size) {
-                "Resolver26 closed demand contains duplicate selection stamps"
-            }
             return CloseInputDemandResult(
                 demand = mergedDemand,
                 expansions = expansions,
-                bindingAliases = localizedDemand.bindingAliases,
                 pathVariableDefinitions = pathVariableDefinitions,
             )
         }
@@ -91,7 +74,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                             resolver = resolver,
                             inputDemand = selectionForestOf(),
                             inputMaterializeSelections = materializeSelectionForestOf(),
-                            variableDefinitions = emptyList(),
+                            variableDefinitions = emptyMap(),
                         ),
                     ) == null,
                 ) {
@@ -99,25 +82,17 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 }
                 return@forEach
             }
-            val ownerStamp: Stamp.Occurrence? =
-                objectKey.stamp as? Stamp.Occurrence
-            val resolverPath: List<PathComponent> =
-                if (ownerStamp == null) {
-                    path + objectKey
-                } else {
-                    ownerStamp.resolverPath
-                }
-            val resolverStamp: Stamp.Occurrence =
-                ownerStamp
-                    ?: Stamp.Occurrence.of(resolverPath = resolverPath)
+            val resolverPath: List<PathComponent> = path + objectKey
             val objectFragment: ResolverObjectFragment =
-                resolver.instantiateObjectFragment(resolverStamp)
-            val definitions: List<SelectionStampedVariableDefinition> =
-                if (ownerStamp == null) {
-                    resolver.selectionStampedVariableDefinitions(resolverPath)
-                } else {
-                    resolver.selectionStampedVariableDefinitionsFrom(ownerStamp)
-                }
+                resolver.instantiateObjectFragmentAt(resolverPath)
+            val definitions: Map<Arguments.Variable, model.registry.VariableDefinition> =
+                objectFragment.constructionSelections
+                    .usedVariables()
+                    .associateWith { variable ->
+                        resolver.variables.getValue(
+                            Arguments.Variable.of(variable.field, variable.variableName),
+                        )
+                    }
             val expansion =
                 ResolverExpansion(
                     ownerKey = objectKey,
@@ -152,87 +127,18 @@ private fun EngineObjectData.Sync.requiresStandardResolution(
     return false
 }
 
-// Rebases top-level occurrence stamps onto this object's concrete result path.
-// Records aliases that connect each localized variable to its source occurrence.
-private fun localizeTopLevelStamps(
-    path: List<PathComponent>,
-    demand: SelectionForest,
-): LocalizeTopLevelStampsResult {
-    if (path.isEmpty()) {
-        return LocalizeTopLevelStampsResult(demand, emptyList())
-    }
-    val bindingAliases = linkedSetOf<BindingAlias>()
-    val localizedDemand: SelectionForest =
-        demand.flatMap { selection ->
-            val localizedSelection: Selection =
-                selectionForestOf(selection)
-                    .localizeTopLevelSelectionStamps(path)
-                    .single()
-            val sourceVariables:
-                Map<Pair<ViaductSchema.ObjectField, String>, Arguments.Variable> =
-                selection.key
-                    .selectionStampedVariables()
-                    .associateBy { variable -> variable.field to variable.variableName }
-            localizedSelection.key
-                .selectionStampedVariables()
-                .forEach { localizedVariable ->
-                    val sourceVariable: Arguments.Variable =
-                        sourceVariables.getValue(
-                            localizedVariable.field to localizedVariable.variableName,
-                        )
-                    if (sourceVariable != localizedVariable) {
-                        bindingAliases +=
-                            BindingAlias(
-                                sourceVariable = sourceVariable,
-                                localizedVariable = localizedVariable,
-                            )
-                    }
-                }
-            selectionForestOf(localizedSelection)
-        }
-    return LocalizeTopLevelStampsResult(
-        demand = localizedDemand,
-        bindingAliases = bindingAliases.toList(),
-    )
-}
-
-// Collects occurrence-stamped variables carried by this key's arguments or variable-definition marker.
-private fun ObjectEngineResult.Key.selectionStampedVariables(): Set<Arguments.Variable> =
-    buildSet {
-        addAll(
-            arguments
-                .usedVariables()
-                .filter { variable -> variable.stamp?.sourceKey != null },
-        )
-        val marker =
-            (this@selectionStampedVariables as? ObjectEngineResult.VariableKey)
-                ?.variableDefinedByThisKey
-        if (marker?.stamp?.sourceKey != null) add(marker)
-    }
-
 internal data class ResolverExpansion(
     val ownerKey: ObjectEngineResult.ObjectKey,
     val resolver: FieldResolver,
     val inputDemand: SelectionForest,
     val inputMaterializeSelections: MaterializeSelectionForest,
-    val variableDefinitions: List<SelectionStampedVariableDefinition>,
+    val variableDefinitions: Map<Arguments.Variable, model.registry.VariableDefinition>,
 )
 
 internal class CloseInputDemandResult(
     val demand: ObjectSelectionForest,
     val expansions: Map<ObjectEngineResult.ObjectKey, ResolverExpansion>,
-    val bindingAliases: List<BindingAlias>,
     val pathVariableDefinitions: List<StampedObjectPathDefinition>,
 ) {
     var bindingDeclarationStarted: Boolean = false
 }
-
-private data class LocalizeTopLevelStampsResult(
-    val demand: SelectionForest,
-    val bindingAliases: List<BindingAlias>,
-)
-
-internal data class BindingAlias(
-    val sourceVariable: Arguments.Variable,
-    val localizedVariable: Arguments.Variable,
-)

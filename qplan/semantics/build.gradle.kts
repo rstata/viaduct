@@ -543,11 +543,11 @@ val resolverPropertyProfiles =
             "broad full-feature worlds resolve correctly",
         "resolver26-broad-stress" to
             "broad full-feature worlds resolve correctly",
-        "resolver26-broad-localized-descendants" to
+        "resolver26-broad-descendant-variables" to
             "broad full-feature worlds resolve correctly",
         "resolver26-broad-nullable-errors" to
             "broad full-feature worlds resolve correctly",
-        "resolver26-broad-stamp-collisions" to
+        "resolver26-broad-symbolic-identity" to
             "broad full-feature worlds resolve correctly",
         "resolver26-broad-multiple-owners" to
             "broad full-feature worlds resolve correctly",
@@ -820,10 +820,10 @@ val resolver26BroadStressProfile =
 val resolver26BroadStressProfiles =
     mapOf(
         "balanced" to Pair("resolver26-broad-stress", "10:20:50"),
-        "localized-descendants" to
-            Pair("resolver26-broad-localized-descendants", "10:20:50"),
+        "descendant-variables" to
+            Pair("resolver26-broad-descendant-variables", "10:20:50"),
         "nullable-errors" to Pair("resolver26-broad-nullable-errors", "10:20:50"),
-        "stamp-collisions" to Pair("resolver26-broad-stamp-collisions", "10:20:50"),
+        "symbolic-identity" to Pair("resolver26-broad-symbolic-identity", "10:20:50"),
         "multiple-owners" to Pair("resolver26-broad-multiple-owners", "10:50:20"),
     )
 

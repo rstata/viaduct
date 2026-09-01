@@ -31,7 +31,7 @@ object PropertyTestBenchmarkCorpusWriter {
                 .round(CAMPAIGN_ROUND)
                 .runs
                 .single { run ->
-                    run.profile == Resolver26BroadStressProfile.STAMP_COLLISIONS
+                    run.profile == Resolver26BroadStressProfile.SYMBOLIC_IDENTITY
                 }
         val previousCase = System.getProperty(RESOLVER_TEST_CASE_PROPERTY)
         System.setProperty(RESOLVER_TEST_CASE_PROPERTY, SELECTED_CASE)

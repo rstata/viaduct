@@ -11,11 +11,11 @@ import model.schemaType
 import semantics.ResolverSupport
 
 /**
- * Resolves selective demand once per ordinary or occurrence-stamped resolver instance.
+ * Resolves selective demand once per object-local symbolic key.
  *
- * Pre-grounded selections coalesce by ordinary ground key. Every variable-bearing selection in a
- * resolver object fragment retains its occurrence lineage and therefore resolves
- * independently.
+ * Keys coalesce when their fields and argument expressions are equal. Variables in those
+ * expressions identify their owning resolver occurrences, so equal uses of one variable instance
+ * coalesce while variables owned by different resolver occurrences remain distinct.
  */
 context(world: Assumptions)
 fun resolve(selections: SelectionForest): ObjectEngineResult =

@@ -28,7 +28,6 @@ class ObjectEngineResultKeyTest {
 
         assertIs<ObjectEngineResult.GroundKey>(general)
         assertEquals(precise, general)
-        assertEquals(Stamp.VariableFreeOccurrence, general.stamp)
         assertSame(field, general.field)
     }
 
@@ -56,12 +55,11 @@ class ObjectEngineResultKeyTest {
 
         assertIs<ObjectEngineResult.ObjectKey>(key)
         assertFalse(key is ObjectEngineResult.GroundKey)
-        assertNull(key.stamp)
         assertSame(field, key.field)
     }
 
     @Test
-    fun `key stamps distinguish templates ordinary occurrences and explicit selection occurrences`() {
+    fun `symbolic key equality includes variable instance identity`() {
         val schema =
             TestWorld.fromSDL(
                 """
@@ -74,76 +72,21 @@ class ObjectEngineResultKeyTest {
         val source = schema.requireObjectField("Query", "source")
         val consume = schema.requireObjectField("Query", "consume")
         val variable = Arguments.Variable.of(source, "value")
-        val templateKey =
+        val first = variable.stamp(listOf(ListEngineResult.Index.of(0)))
+        val equalFirst = variable.stamp(listOf(ListEngineResult.Index.of(0)))
+        val second = variable.stamp(listOf(ListEngineResult.Index.of(1)))
+        fun key(variable: Arguments.Variable) =
             ObjectEngineResult.Key.of(
                 consume,
                 Arguments.of(consume, mapOf("value" to variable)),
             )
-        val ordinaryKey = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 7))
-        val occurrence =
-            Stamp.Occurrence.of(
-                resolverPath = listOf(ordinaryKey),
-                occurrenceLineage = listOf(SelectionOccurrenceId(templateKey)),
-            )
-        val occurrenceKey =
-            ObjectEngineResult.GroundKey.of(
-                stamp = occurrence,
-                field = consume,
-                arguments = ordinaryKey.arguments,
-            )
-        val equalOccurrenceKey =
-            ObjectEngineResult.GroundKey.of(
-                stamp = occurrence,
-                field = consume,
-                arguments = ordinaryKey.arguments,
-            )
-        val otherOccurrenceKey =
-            ObjectEngineResult.GroundKey.of(
-                stamp =
-                    Stamp.Occurrence.of(
-                        resolverPath = listOf(ordinaryKey),
-                        occurrenceLineage = listOf(SelectionOccurrenceId(templateKey)),
-                    ),
-                field = consume,
-                arguments = ordinaryKey.arguments,
-            )
 
-        assertNull(templateKey.stamp)
-        assertEquals(Stamp.VariableFreeOccurrence, ordinaryKey.stamp)
-        assertEquals(occurrence, occurrenceKey.stamp)
-        assertEquals(occurrenceKey, equalOccurrenceKey)
-        assertNotEquals(ordinaryKey, occurrenceKey)
-        assertNotEquals(occurrenceKey, otherOccurrenceKey)
+        assertEquals(key(first), key(equalFirst))
+        assertNotEquals(key(first), key(second))
     }
 
     @Test
-    fun `ordinary key factories do not infer occurrence identity from stamped variables`() {
-        val schema =
-            TestWorld.fromSDL(
-                """
-                type Query {
-                  source: Int
-                  consume(value: Int): Int
-                }
-                """.trimIndent(),
-            ).schema
-        val source = schema.requireObjectField("Query", "source")
-        val consume = schema.requireObjectField("Query", "consume")
-        val stampedVariable =
-            Arguments.Variable
-                .of(source, "value")
-                .stamp(listOf(ListEngineResult.Index.of(0)))
-        val key =
-            ObjectEngineResult.Key.of(
-                consume,
-                Arguments.of(consume, mapOf("value" to stampedVariable)),
-            )
-
-        assertEquals(Stamp.VariableFreeOccurrence, key.stamp)
-    }
-
-    @Test
-    fun `stamped abstract key specializes without losing its occurrence identity`() {
+    fun `symbolic abstract key specializes without losing variable identity`() {
         val schema =
             TestWorld.fromSDL(
                 """
@@ -165,30 +108,23 @@ class ObjectEngineResultKeyTest {
         val abstractField = schema.requireField("Item", "computed")
         val concreteType = schema.requireType("ConcreteItem") as ViaductSchema.Object
         val variable = Arguments.Variable.of(source, "factor")
-        val sourceKey =
-            ObjectEngineResult.Key.of(
-                abstractField,
-                Arguments.of(abstractField, mapOf("factor" to variable)),
-            )
-        val selectionStamp =
-            Stamp.Occurrence.of(
-                resolverPath = listOf(ListEngineResult.Index.of(1)),
-                occurrenceLineage = listOf(SelectionOccurrenceId(sourceKey)),
-            )
+        val selectionStamp = Stamp.Occurrence.of(listOf(ListEngineResult.Index.of(1)))
         val arguments =
             Arguments.Template
-                .of(abstractField, sourceKey.arguments)
+                .of(
+                    abstractField,
+                    Arguments.of(abstractField, mapOf("factor" to variable)),
+                )
                 .stamp(abstractField, selectionStamp)
-        val stampedKey =
+        val symbolicKey =
             ObjectEngineResult.Key.of(
-                stamp = selectionStamp,
                 field = abstractField,
                 arguments = arguments,
             )
         val specialized =
             selectionForestOf(
                 Selection.of(
-                    key = stampedKey,
+                    key = symbolicKey,
                     possibleTypes = setOf(concreteType),
                     subselections = selectionForestOf(),
                 ),
@@ -196,9 +132,8 @@ class ObjectEngineResultKeyTest {
                 .keys()
                 .single()
 
-        assertFalse(stampedKey is ObjectEngineResult.ObjectKey)
+        assertFalse(symbolicKey is ObjectEngineResult.ObjectKey)
         assertIs<ObjectEngineResult.ObjectKey>(specialized)
-        assertEquals(selectionStamp, specialized.stamp)
         assertEquals(
             selectionStamp,
             specialized.arguments.usedVariables().single().stamp,

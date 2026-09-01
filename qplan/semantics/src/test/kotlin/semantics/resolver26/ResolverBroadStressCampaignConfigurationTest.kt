@@ -66,19 +66,19 @@ class ResolverBroadStressCampaignConfigurationTest {
     @Test
     fun `broad profile knobs exert distinct Resolver26 pressure`() {
         val balanced = Resolver26BroadStressProfile.BALANCED.config
-        val localized = Resolver26BroadStressProfile.LOCALIZED_DESCENDANTS.config
+        val descendants = Resolver26BroadStressProfile.DESCENDANT_VARIABLES.config
         val nullableErrors = Resolver26BroadStressProfile.NULLABLE_ERRORS.config
-        val collisions = Resolver26BroadStressProfile.STAMP_COLLISIONS.config
+        val symbolicIdentity = Resolver26BroadStressProfile.SYMBOLIC_IDENTITY.config
         val multipleOwners = Resolver26BroadStressProfile.MULTIPLE_OWNERS.config
 
-        assertTrue(localized[ListTypeWeight] > balanced[ListTypeWeight])
-        assertEquals(1..2, localized[ListValueSize])
+        assertTrue(descendants[ListTypeWeight] > balanced[ListTypeWeight])
+        assertEquals(1..2, descendants[ListValueSize])
         assertTrue(nullableErrors[ErrorValueWeight] > balanced[ErrorValueWeight])
         assertTrue(
-            collisions[ResolverLiteralVariableConvergenceWeight] >
+            symbolicIdentity[ResolverLiteralVariableConvergenceWeight] >
                 balanced[ResolverLiteralVariableConvergenceWeight],
         )
-        assertEquals(0..1, collisions[InputScalarValueRange])
+        assertEquals(0..1, symbolicIdentity[InputScalarValueRange])
         assertTrue(
             multipleOwners[ResolverFromObjectFieldVariableOwnerUseWeight] >
                 balanced[ResolverFromObjectFieldVariableOwnerUseWeight],
@@ -107,7 +107,7 @@ class ResolverBroadStressCampaignConfigurationTest {
             0.1,
             round81Runs
                 .single { run ->
-                    run.profile == Resolver26BroadStressProfile.STAMP_COLLISIONS
+                    run.profile == Resolver26BroadStressProfile.SYMBOLIC_IDENTITY
                 }.config[DuplicateSelectionWeight],
         )
         assertEquals(
@@ -130,7 +130,7 @@ class ResolverBroadStressCampaignConfigurationTest {
             Resolver26BroadStressCampaign.round(46)
         val registryShapedProfiles: Set<Resolver26BroadStressProfile> =
             setOf(
-                Resolver26BroadStressProfile.LOCALIZED_DESCENDANTS,
+                Resolver26BroadStressProfile.DESCENDANT_VARIABLES,
                 Resolver26BroadStressProfile.NULLABLE_ERRORS,
                 Resolver26BroadStressProfile.MULTIPLE_OWNERS,
             )
@@ -180,12 +180,12 @@ class ResolverBroadStressCampaignConfigurationTest {
     @Test
     fun `large deep profiles generate bounded queries`() =
         runBlocking {
-            val collisionRun: Resolver26BroadStressCampaignRun =
+            val symbolicIdentityRun: Resolver26BroadStressCampaignRun =
                 Resolver26BroadStressCampaign
                     .round(81)
                     .runs
                     .single { run ->
-                        run.profile == Resolver26BroadStressProfile.STAMP_COLLISIONS
+                        run.profile == Resolver26BroadStressProfile.SYMBOLIC_IDENTITY
                     }
             val balancedRun: Resolver26BroadStressCampaignRun =
                 Resolver26BroadStressCampaign
@@ -197,7 +197,7 @@ class ResolverBroadStressCampaignConfigurationTest {
             val runCoordinates:
                 List<Pair<Resolver26BroadStressCampaignRun, List<String>>> =
                 listOf(
-                    collisionRun to listOf("1:1:1", "12:1:1"),
+                    symbolicIdentityRun to listOf("1:1:1", "12:1:1"),
                     balancedRun to listOf("14:1:1"),
                 )
 
@@ -222,10 +222,10 @@ class ResolverBroadStressCampaignConfigurationTest {
         }
 
     @Test
-    fun `localized descendant generation orders multiple passive variable branches acyclically`() =
+    fun `descendant variable generation orders multiple passive branches acyclically`() =
         runBlocking {
             val profile: Resolver26BroadStressProfile =
-                Resolver26BroadStressProfile.LOCALIZED_DESCENDANTS
+                Resolver26BroadStressProfile.DESCENDANT_VARIABLES
             withSystemProperties(
                 RESOLVER_TEST_CASE_PROPERTY to "48:1:1",
                 RESOLVER_TEST_PROFILE_PROPERTY to profile.propertyProfile,

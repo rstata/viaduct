@@ -37,7 +37,7 @@ internal data class Resolver26BroadStressCampaignRound(
             }
         return if (
             phase.largeDeep &&
-            (profile == Resolver26BroadStressProfile.STAMP_COLLISIONS || number >= 95)
+            (profile == Resolver26BroadStressProfile.SYMBOLIC_IDENTITY || number >= 95)
         ) {
             config + (DuplicateSelectionWeight to 0.1)
         } else {
@@ -113,7 +113,7 @@ private fun Resolver26BroadStressCampaignPhase.countsFor(
         this == Resolver26BroadStressCampaignPhase.QUERY_INTERACTIONS &&
             profile in
             setOf(
-                Resolver26BroadStressProfile.LOCALIZED_DESCENDANTS,
+                Resolver26BroadStressProfile.DESCENDANT_VARIABLES,
                 Resolver26BroadStressProfile.NULLABLE_ERRORS,
             ) ->
             Resolver26BroadStressCampaignPhase.REGISTRY_DIVERSITY.commonCounts

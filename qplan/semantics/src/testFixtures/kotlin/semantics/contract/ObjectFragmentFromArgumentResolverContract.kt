@@ -73,18 +73,10 @@ interface ObjectFragmentFromArgumentResolverContract :
             secondKey to 8,
         ).forEach { (groundKey, expectedValue) ->
             val path = listOf(groundKey)
-            val selectionStampedVariables =
-                resolver
-                    .selectionStampedVariableDefinitions(path)
-                    .map { definition -> definition.variable }
-            val boundVariables =
-                selectionStampedVariables
-                    .takeIf { variables ->
-                        variables.isNotEmpty() && variables.all(world::isBound)
-                    } ?: listOf(variable.stamp(path))
-            boundVariables.forEach { boundVariable ->
-                assertEquals(VariableBinding.of(expectedValue), world.getBinding(boundVariable))
-            }
+            assertEquals(
+                VariableBinding.of(expectedValue),
+                world.getBinding(variable.stamp(path)),
+            )
         }
     }
 

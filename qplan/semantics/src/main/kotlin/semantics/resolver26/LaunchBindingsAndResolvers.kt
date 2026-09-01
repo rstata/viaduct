@@ -9,11 +9,11 @@ import model.VariableBinding
 import model.fetchBindings
 import model.fetchGroundedArguments
 import model.registry.VariableDefinition
+import model.usedVariables
 import model.variableArgumentNames
-import model.variableSourceSelectionStamps
 
 /**
- * Fills binding aliases, reads object-path providers, and installs every local field resolver.
+ * Reads object-path providers and installs every local field resolver.
  *
  * Each installation resolves its invocation arguments, completes argument bindings unlocked by
  * that resolution, claims the original symbolic target cell, and registers its writer for cycle
@@ -27,14 +27,6 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
 ) {
     context(world, support) {
         coroutineScope {
-            closed.bindingAliases.forEach { alias ->
-                launch {
-                    world.completeBinding(
-                        alias.localizedVariable,
-                        world.fetchBinding(alias.sourceVariable),
-                    )
-                }
-            }
             closed.pathVariableDefinitions.forEach { definition ->
                 launch {
                     val reader: List<PathComponent> =
@@ -44,7 +36,6 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                         target.readProvider(
                             definition = definition,
                             reader = reader,
-                            containingObjectPath = path,
                             support = support,
                         )
                     world.completeBinding(definition.variable, binding)
@@ -70,8 +61,10 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
 ) {
     context(world, support) {
         val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
-        val variableSourceSelectionStamps =
-            selection.key.arguments.variableSourceSelectionStamps()
+        val variableResolverPaths =
+            selection.key.arguments
+                .usedVariables()
+                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp?.resolverPath }
         val objectKey = selection.key
         val groundedArguments = objectKey.fetchGroundedArguments()
         check(objectKey.field in world.resolverRegistry) {
@@ -100,7 +93,7 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
                 target = target,
                 cell = cell,
                 variableArgumentCount = variableArgumentCount,
-                variableSourceSelectionStamps = variableSourceSelectionStamps,
+                variableResolverPaths = variableResolverPaths,
             )
         support.requestScope.launch {
             fieldResolverTask.run()
@@ -115,15 +108,13 @@ private fun ObjectOrchestrationTask.completeFromArgumentBindings(
     groundedArguments: model.Arguments.Ground,
 ) {
     if (expansion.ownerKey is ObjectEngineResult.GroundKey) return
-    expansion.variableDefinitions.forEach { stampedDefinition ->
-        if (stampedDefinition.definition !is VariableDefinition.FromArgument) {
+    expansion.variableDefinitions.forEach { (variable, variableDefinition) ->
+        if (variableDefinition !is VariableDefinition.FromArgument) {
             return@forEach
         }
-        val definition =
-            stampedDefinition.definition as VariableDefinition.FromArgument
         world.completeBinding(
-            stampedDefinition.variable,
-            bindingFor(groundedArguments, definition),
+            variable,
+            bindingFor(groundedArguments, variableDefinition),
         )
     }
 }

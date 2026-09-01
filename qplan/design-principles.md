@@ -38,7 +38,7 @@ The semantic identity of work is an occurrence in the result tree. Equal node ID
 
 Cells are allocated by their containing OER or LER. Cell reference identity is the cell occurrence identity; a parallel numeric cell identifier would duplicate and risk disagreeing with the carrier.
 
-Resolver26 additionally preserves the identity of variable-bearing source selections through `SelectionOccurrenceId` lineage.
+Symbolic object keys preserve variable-instance identity structurally in their arguments. Equal symbolic keys may occur in different containing OERs without collision because the OER occurrence already supplies their concrete result-tree location.
 
 ## One-Shot Correctness Is Producer-Specific
 
@@ -68,7 +68,7 @@ Duplicate claims, duplicate writers, repeated lifecycle transitions, undeclared 
 
 Provider paths are compiled and validated before semantic reasoning, but provider evaluation occurs at runtime in Resolver25 and Resolver26. Provider containment and branch ordering are domain restrictions; they are not themselves an execution algorithm.
 
-Substitution precedes exact-key grouping. Resolver25 merges selections that become the same ground key before launch. Resolver26 instead gives variable-bearing source selections distinct occurrence identity even when they ground to equal visible arguments.
+Substitution precedes exact-key grouping in Resolver01 through Resolver25, so Resolver25 merges selections that become the same ground key before launch. Resolver26 retains symbolic keys: selections with the same field and variable instances coalesce, while keys containing different variable instances remain distinct even when those variables bind to equal values.
 
 ## Structured Concurrency Owns Request Lifetime
 

@@ -191,7 +191,7 @@ class ResolvePassiveValuesTest {
     }
 
     @Test
-    fun `source-provided active field retains invocation and construction occurrence keys`() {
+    fun `source-provided active field coalesces equal invocation and construction keys`() {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -220,7 +220,6 @@ class ResolvePassiveValuesTest {
         val computedField = schema.requireObjectField("Item", "computed")
         val computedKey =
             ObjectEngineResult.GroundKey.of(
-                stamp = Stamp.Occurrence.of(listOf(itemKey)),
                 field = computedField,
                 arguments = Arguments.Resolved.of(computedField, emptyMap()),
             )
@@ -249,7 +248,7 @@ class ResolvePassiveValuesTest {
                 ),
             )
 
-        assertEquals(2, result.keys.size)
+        assertEquals(1, result.keys.size)
         assertEquals(computedKey, result.keys.single { key -> key == computedKey })
         result.keys.forEach { key ->
             assertEquals("ancestor", result.getCell(key).getValue().get())

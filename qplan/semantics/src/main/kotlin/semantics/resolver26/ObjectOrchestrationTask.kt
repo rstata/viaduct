@@ -54,7 +54,7 @@ internal class ObjectOrchestrationTask(
 
     /**
      * Finishes synchronous orchestration after passive materialization.
-     * Launches a coroutine only when alias copying or active field installation may suspend.
+     * Launches a coroutine only when active field installation may suspend.
      */
     fun launch() {
         require(launched.compareAndSet(false, true)) {
@@ -66,7 +66,7 @@ internal class ObjectOrchestrationTask(
             }
         validatePassiveFields(closed)
 
-        if (closed.expansions.isNotEmpty() || closed.bindingAliases.isNotEmpty()) {
+        if (closed.expansions.isNotEmpty()) {
             support.requestScope.launch {
                 this@ObjectOrchestrationTask.launchBindingsAndResolvers(closed)
                 target.freeze()
@@ -100,24 +100,21 @@ private fun declareBindings(closed: CloseInputDemandResult) {
         "Resolver26 closed demand attempted to declare its bindings twice"
     }
     closed.bindingDeclarationStarted = true
-    closed.bindingAliases.forEach { alias ->
-        world.declareBinding(alias.localizedVariable)
-    }
     closed.expansions.values.forEach { expansion ->
-        expansion.variableDefinitions.forEach { stampedDefinition ->
-            when (val definition = stampedDefinition.definition) {
+        expansion.variableDefinitions.forEach { (variable, definition) ->
+            when (definition) {
                 is VariableDefinition.FromArgument ->
                     if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
                         world.bindVariable(
-                            stampedDefinition.variable,
+                            variable,
                             bindingFor(expansion.ownerKey.arguments, definition),
                         )
                     } else {
-                        world.declareBinding(stampedDefinition.variable)
+                        world.declareBinding(variable)
                     }
 
                 is VariableDefinition.FromObjectField ->
-                    world.declareBinding(stampedDefinition.variable)
+                    world.declareBinding(variable)
             }
         }
     }

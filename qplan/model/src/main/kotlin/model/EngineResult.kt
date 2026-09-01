@@ -121,43 +121,14 @@ sealed interface ObjectEngineResult {
      *
      * A key's [field] is a [ViaductSchema.ObjectField] exactly when the key is an [ObjectKey].
      *
-     * Key equality is structural over [field], [arguments], and [stamp], using canonical schema
-     * equality. Registry templates have a null stamp. Ordinary concrete keys carry
-     * [Stamp.VariableFreeOccurrence], while keys explicitly created for a Resolver26 selection
-     * occurrence carry [Stamp.Occurrence].
+     * Key equality is structural over [field] and [arguments], using canonical schema equality.
+     * Variable-instance identity is carried by variables recursively contained in [arguments].
      */
     sealed interface Key {
         val field: ViaductSchema.Field
         val arguments: Arguments
-        val stamp: Stamp?
 
         companion object {
-            /**
-             * Constructs a key belonging to one variable-bearing source-selection occurrence.
-             *
-             * The stamp participates in structural equality before and after grounding.
-             */
-            fun of(
-                stamp: Stamp.Occurrence,
-                field: ViaductSchema.Field,
-                arguments: Arguments,
-            ): Key {
-                require(arguments.conformsToArgumentDefinition(field)) {
-                    "Stamped key arguments do not belong to its output field"
-                }
-                return when (field) {
-                    is ViaductSchema.ObjectField -> ObjectKey.of(stamp, field, arguments)
-                    else -> StampedKeyImpl(field, arguments, stamp)
-                }
-            }
-
-            /** Constructs the precise stamped key category for a concrete object field. */
-            fun of(
-                stamp: Stamp.Occurrence,
-                field: ViaductSchema.ObjectField,
-                arguments: Arguments,
-            ): ObjectKey = ObjectKey.of(stamp, field, arguments)
-
             /**
              * ### Invariant: map-key-factory-schema-conformance
              *
@@ -188,7 +159,7 @@ sealed interface ObjectEngineResult {
                 }
                 return when (field) {
                     is ViaductSchema.ObjectField -> ObjectKey.of(field, arguments)
-                    else -> KeyImpl(field, arguments, arguments.inferredKeyStamp())
+                    else -> KeyImpl(field, arguments)
                 }
             }
 
@@ -224,22 +195,11 @@ sealed interface ObjectEngineResult {
                 require(variableDefinedByThisKey.isStamped) {
                     "A provider-path key must define a stamped variable"
                 }
-                val stamp = key.stamp
-                return if (stamp is Stamp.Occurrence) {
-                    StampedVariableKeyImpl(
-                        field = key.field,
-                        arguments = key.arguments,
-                        variableDefinedByThisKey = variableDefinedByThisKey,
-                        stamp = stamp,
-                    )
-                } else {
-                    VariableKeyImpl(
-                        field = key.field,
-                        arguments = key.arguments,
-                        variableDefinedByThisKey = variableDefinedByThisKey,
-                        stamp = stamp,
-                    )
-                }
+                return VariableKeyImpl(
+                    field = key.field,
+                    arguments = key.arguments,
+                    variableDefinedByThisKey = variableDefinedByThisKey,
+                )
             }
         }
     }
@@ -247,31 +207,15 @@ sealed interface ObjectEngineResult {
     /**
      * A key whose field belongs to a concrete object type.
      *
-     * Every instance carries a [ViaductSchema.ObjectField] and [Arguments]. Equality includes the
-     * key's [stamp], so an explicitly occurrence-stamped key remains distinct from an ordinary key
-     * with equal visible arguments. An object key may select an exact OER cell and serve as an
-     * object path component even when its arguments contain occurrence-specific variables.
+     * Every instance carries a [ViaductSchema.ObjectField] and [Arguments]. An object key may select
+     * an exact OER cell and serve as an object path component even when its arguments contain
+     * occurrence-specific variables.
      */
     sealed interface ObjectKey : Key, PathComponent {
         override val field: ViaductSchema.ObjectField
         override val arguments: Arguments
 
         companion object {
-            fun of(
-                stamp: Stamp.Occurrence,
-                field: ViaductSchema.ObjectField,
-                arguments: Arguments,
-            ): ObjectKey {
-                require(arguments.conformsToArgumentDefinition(field)) {
-                    "Stamped object-key arguments do not belong to its output field"
-                }
-                return if (arguments is Arguments.Ground) {
-                    GroundKey.of(stamp, field, arguments)
-                } else {
-                    StampedObjectKeyImpl(field, arguments, stamp)
-                }
-            }
-
             fun of(
                 field: ViaductSchema.ObjectField,
                 arguments: Map<String, Any?>,
@@ -285,9 +229,9 @@ sealed interface ObjectEngineResult {
                     "Key arguments do not belong to its output field"
                 }
                 return if (arguments is Arguments.Ground) {
-                    GroundKeyImpl(field, arguments, Stamp.VariableFreeOccurrence)
+                    GroundKeyImpl(field, arguments)
                 } else {
-                    ObjectKeyImpl(field, arguments, arguments.inferredKeyStamp())
+                    ObjectKeyImpl(field, arguments)
                 }
             }
         }
@@ -298,30 +242,8 @@ sealed interface ObjectEngineResult {
      */
     sealed interface GroundKey : ObjectKey {
         override val arguments: Arguments.Ground
-        override val stamp: Stamp
 
         companion object {
-            /**
-             * Constructs a ground key produced from a variable-bearing source selection.
-             *
-             * [stamp] distinguishes different source selections even when their grounded arguments
-             * agree.
-             */
-            fun of(
-                stamp: Stamp.Occurrence,
-                field: ViaductSchema.ObjectField,
-                arguments: Arguments.Ground,
-            ): GroundKey {
-                require(arguments.conformsToArgumentDefinition(field)) {
-                    "Ground arguments do not belong to the stamped selection field"
-                }
-                return StampedGroundKeyImpl(
-                    field = field,
-                    arguments = arguments,
-                    stamp = stamp,
-                )
-            }
-
             fun of(
                 field: ViaductSchema.ObjectField,
                 arguments: Map<String, Any?>,
@@ -340,7 +262,7 @@ sealed interface ObjectEngineResult {
                 require(arguments.conformsToArgumentDefinition(field)) {
                     "Key arguments do not belong to its output field"
                 }
-                return GroundKeyImpl(field, arguments, Stamp.VariableFreeOccurrence)
+                return GroundKeyImpl(field, arguments)
             }
         }
     }
@@ -933,61 +855,23 @@ private data class ListIndexImpl(
 private data class KeyImpl(
     override val field: ViaductSchema.Field,
     override val arguments: Arguments,
-    override val stamp: Stamp?,
-) : ObjectEngineResult.Key
-
-private data class StampedKeyImpl(
-    override val field: ViaductSchema.Field,
-    override val arguments: Arguments,
-    override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.Key
 
 private data class VariableKeyImpl(
     override val field: ViaductSchema.Field,
     override val arguments: Arguments,
     override val variableDefinedByThisKey: Arguments.Variable,
-    override val stamp: Stamp?,
-) : ObjectEngineResult.VariableKey
-
-private data class StampedVariableKeyImpl(
-    override val field: ViaductSchema.Field,
-    override val arguments: Arguments,
-    override val variableDefinedByThisKey: Arguments.Variable,
-    override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.VariableKey
 
 private data class ObjectKeyImpl(
     override val field: ViaductSchema.ObjectField,
     override val arguments: Arguments,
-    override val stamp: Stamp?,
-) : ObjectEngineResult.ObjectKey
-
-private data class StampedObjectKeyImpl(
-    override val field: ViaductSchema.ObjectField,
-    override val arguments: Arguments,
-    override val stamp: Stamp.Occurrence,
 ) : ObjectEngineResult.ObjectKey
 
 private data class GroundKeyImpl(
     override val field: ViaductSchema.ObjectField,
     override val arguments: Arguments.Ground,
-    override val stamp: Stamp,
 ) : ObjectEngineResult.GroundKey
-
-private data class StampedGroundKeyImpl(
-    override val field: ViaductSchema.ObjectField,
-    override val arguments: Arguments.Ground,
-    override val stamp: Stamp.Occurrence,
-) : ObjectEngineResult.GroundKey
-
-private fun Arguments.inferredKeyStamp(): Stamp? {
-    val variables = usedVariables()
-    return if (variables.any(Arguments.Variable::isTemplate)) {
-        null
-    } else {
-        Stamp.VariableFreeOccurrence
-    }
-}
 
 private data class CompletedCell(
     val value: EngineResult?,

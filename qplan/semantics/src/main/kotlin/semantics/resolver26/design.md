@@ -8,13 +8,13 @@ The exercise assumes every field resolver completes normally, including with res
 
 ## Resolver Identity
 
-Pre-grounded external selections and variable-free resolver-fragment selections use ordinary ground-key identity and coalesce when their keys are equal. A variable-bearing resolver-fragment selection retains its symbolic `ObjectKey` as its permanent OER-cell and exact-path identity. Completing its bindings makes that key contextually grounded but never rekeys the cell.
+Every OER is a map whose keys compare by canonical field and argument expression. Ground keys with equal values coalesce. Symbolic keys coalesce when they contain equal variable instances in equal expression positions. A variable-bearing resolver-fragment selection retains that symbolic `ObjectKey` as its permanent cell identity; completing its bindings makes the key contextually grounded but never rekeys the cell.
 
-Every variable-bearing selection introduced from a resolver object fragment carries a `Stamp.Occurrence`. The stamp combines the concrete resolver path with a nonempty lineage of registry-assigned `SelectionOccurrenceId` values. Selection equality is undefined; the occurrence IDs provide stable identity. Registry template keys have a null stamp, and ordinary concrete keys carry `Stamp.VariableFreeOccurrence`.
+Registry variables are templates. Instantiating a resolver fragment replaces all uses of each template with one variable instance identified by the concrete resolver path. Equal uses of that instance therefore coalesce within an OER, including duplicate selections and aliases that project the same canonical key. Different variable names, defining fields, or resolver paths remain distinct even when their completed bindings have equal values.
 
-When demand descends into an object or list occurrence, its top-level stamps localize through that exact result path. Distinct list positions and object occurrences therefore remain distinct. Stamped symbolic keys never coalesce with ordinary keys or with another occurrence lineage, even when their contextually grounded arguments are equal.
+Keys need no child-occurrence localization. Each object and list element owns a distinct OER, so the same symbolic key can be reused in multiple containing objects without conflating their cells. A nested resolver receives its own concrete path when its fragment is instantiated.
 
-Resolver input materialization filters source occurrences to the concrete object type and collects them by response key. Each response group awaits every argument binding, localizes its symbolic construction key, requires that key to be contextually grounded, and reads the exact OER cell without substituting arguments into its identity. Duplicate occurrences in one response-key group contribute one input entry with their combined subselections. Distinct aliases remain distinct input entries when they project one shared construction key.
+Resolver input materialization filters source occurrences to the concrete object type and collects them by response key. Each response group awaits every argument binding, requires its symbolic construction key to be contextually grounded, and reads that exact OER cell without substituting arguments into its identity. Duplicate occurrences in one response-key group contribute one input entry with their combined subselections. Distinct aliases remain distinct input entries even when they project one shared construction key.
 
 Shared correctness validation has no resolver-family addressing mode. Every stored key it traverses must be contextually grounded. To validate demanded selections and reconstructed resolver input, it prefers the exact symbolic key when that cell exists and otherwise accepts the key's grounded projection, which keeps validation compatible with earlier resolver families without weakening Resolver26's runtime identity.
 
@@ -22,15 +22,15 @@ Shared correctness validation has no resolver-family addressing mode. Every stor
 
 One root `coroutineScope` owns the request. Every orchestration task and field-resolution task is a direct child of that request scope. Successful synchronous return therefore means all request work has reached quiescence.
 
-Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's bindings-declared signal. The dispatcher changes scheduling only; it does not change resolver, selection, stamp, path, or task identity.
+Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's bindings-declared signal. The dispatcher changes scheduling only; it does not change resolver, variable, path, or task identity.
 
 ## Synchronous Demand Closure
 
-`orchestrateObject` first localizes incoming stamps to the concrete OER path and synchronously computes one final `ObjectSelectionForest`.
+`orchestrateObject` synchronously computes one final `ObjectSelectionForest` for its concrete OER.
 
-Closure repeatedly expands each newly seen resolver `ObjectKey` whose field is absent from the source EOD with that resolver's complete stamped object fragment. A source-present argumentless field remains unexpanded and is materialized from the source even when the registry contains its standard resolver. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and its stamped variable definitions.
+Closure repeatedly expands each newly seen resolver `ObjectKey` whose field is absent from the source EOD with that resolver's complete object fragment instantiated at the resolver path. A source-present argumentless field remains unexpanded and is materialized from the source even when the registry contains its standard resolver. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and one definition for each instantiated variable.
 
-Every resolver key in the closed forest is represented either by the expansion map or by an argumentless source-provided field, and every selection stamp must be unique. There is no later demand contribution, re-orchestration loop, pending-demand registry, or outer fixpoint.
+Every resolver key in the closed forest is represented either by the expansion map or by an argumentless source-provided field. There is no later demand contribution, re-orchestration loop, pending-demand registry, or outer fixpoint.
 
 An open resolver key contributes its object-fragment dependencies before its arguments ground. If those arguments later become an error, those dependencies may have executed speculatively. That imprecision is accepted by the current model.
 
@@ -38,13 +38,13 @@ An open resolver key contributes its object-fragment dependencies before its arg
 
 After closure, the orchestrator declares every open binding before launching local field work.
 
-`FromArgument` definitions owned by an already-ground key read their canonical input paths and complete immediately. A null input-object intermediate produces a null binding. Definitions owned by symbolic keys complete after the owner's arguments resolve, while the owner key itself remains unchanged. Localized child stamps use explicit binding aliases whose values are copied from the source occurrence.
+`FromArgument` definitions owned by an already-ground key read their canonical input paths and complete immediately. A null input-object intermediate produces a null binding. Definitions owned by symbolic keys complete after the owner's arguments resolve, while the owner key itself remains unchanged.
 
-Each `FromObjectField` definition launches a provider reader that follows its occurrence-stamped compiled path through OER promises and completes the declared binding. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
+Each `FromObjectField` definition launches a provider reader that follows its compiled path through OER promises and completes the declared binding. The provider path's variable templates are instantiated for the owning resolver occurrence. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
 
 Before reading a provider component inside an OER, its reader awaits that OER's bindings-declared signal and every argument binding needed to make the component key contextually grounded. `ObjectOrchestrationTask.prepare` marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before recursively materializing passive children or launching local field work.
 
-Nested provider keys resolve their argument values against the owning resolver occurrence, then localize the original symbolic key to the concrete provider object path. The separately resolved arguments are a readiness and invocation witness; they do not replace the localized key used for OER lookup.
+Nested provider keys resolve their argument values against the owning resolver occurrence and use the original symbolic key for OER lookup. The separately resolved arguments are a readiness and invocation witness; they do not replace the key.
 
 Readers never insert undeclared binding promises.
 
@@ -52,9 +52,9 @@ Readers never insert undeclared binding promises.
 
 Every argumentless field present in a resolver's source EOD is read by canonical field name through resolver26's local `resolvePassiveValues` path, including fields that have standard resolvers in the registry. Source-provided argument-bearing fields are errors. A demanded registry field absent from the source uses its standard resolver; a demanded non-registry field absent from the source remains an error.
 
-The field-resolution task builds the passive result tree supplied by the resolver before publishing the containing value. Resolver26 creates one `ObjectOrchestrationTask` with each OER and calls its non-suspending `prepare` function immediately. Prepare closes only construction demand propagated through the parent, using source presence to decide which standard resolvers remain actual work, then declares and marks bindings. Invocation demand separately validates selective output and guides recursive materialization of every passive returned field before the task's non-suspending `launch` function runs. This parent-first recursion establishes each binding domain before any descendant can copy an alias from it without retaining a separate object-occurrence collection.
+The field-resolution task builds the passive result tree supplied by the resolver before publishing the containing value. Resolver26 creates one `ObjectOrchestrationTask` with each OER and calls its non-suspending `prepare` function immediately. Prepare closes only construction demand propagated through the parent, using source presence to decide which standard resolvers remain actual work, then declares and marks bindings. Invocation demand separately validates selective output and guides recursive materialization of every passive returned field before the task's non-suspending `launch` function runs. This parent-first recursion establishes every descendant binding domain before field work starts.
 
-After passive children have launched, the parent launch validates its materialized passive cells. An object with neither active expansions nor binding aliases freezes synchronously without creating a coroutine. Otherwise, launch schedules the task's suspending `run` function to copy aliases, read providers associated with its active expansions, install active fields, and freeze the OER.
+After passive children have launched, the parent launch validates its materialized passive cells. An object with no active expansions freezes synchronously without creating a coroutine. Otherwise, launch schedules the task's suspending `run` function to read providers associated with its active expansions, install active fields, and freeze the OER.
 
 ## Active Installation And Freeze
 
@@ -76,7 +76,7 @@ The field-resolution task:
 6. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
 7. publishes the containing value.
 
-Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same localized child keys; strict occurrence stamps, binding aliases, and reservation rules make disagreement fail rather than silently create another identity.
+Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same symbolic child keys; variable-instance equality and strict reservation rules make disagreement fail rather than silently create another identity.
 
 Query fragments bind `FromArgument` variables from the owning resolver arguments, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path. Query-fragment `FromObjectField` variables remain outside Resolver26's current scope.
 
@@ -90,7 +90,7 @@ Each boundary resolver's fixed object fragment contributes its passive predecess
 
 ## Strictness
 
-Binding declaration and completion, cell reservation and claiming, stamp uniqueness, writer ownership, and OER freezing are strict. Repeated or contradictory transitions are protocol defects, not harmless idempotence.
+Binding declaration and completion, cell reservation and claiming, writer ownership, and OER freezing are strict. Repeated or contradictory transitions are protocol defects, not harmless idempotence.
 
 ## Deliberate Scope
 

@@ -267,8 +267,7 @@ private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
 /**
  * Instantiates this normalized forest's current bindings and normalizes by the resulting exact key.
  *
- * Every result key is a [ObjectEngineResult.GroundKey]. Equal unstamped keys coalesce after substitution.
- * Distinct selection-stamped keys remain distinct even when their grounded argument values agree.
+ * Every result key is a [ObjectEngineResult.GroundKey]. Equal keys coalesce after substitution.
  *
  * @throws IllegalStateException when a key contains an unbound stamped variable or an unstamped
  * template
@@ -310,21 +309,11 @@ suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
 
 private fun ObjectEngineResult.ObjectKey.ground(
     arguments: Arguments.Ground,
-): ObjectEngineResult.GroundKey {
-    val currentSelectionStamp = stamp as? Stamp.Occurrence
-    return if (currentSelectionStamp != null) {
-        ObjectEngineResult.GroundKey.of(
-            stamp = currentSelectionStamp,
-            field = field,
-            arguments = arguments,
-        )
-    } else {
-        ObjectEngineResult.GroundKey.of(
-            field = field,
-            arguments = arguments,
-        )
-    }
-}
+): ObjectEngineResult.GroundKey =
+    ObjectEngineResult.GroundKey.of(
+        field = field,
+        arguments = arguments,
+    )
 
 private fun normalizedObjectSelectionForest(
     type: ViaductSchema.Object,
@@ -358,78 +347,6 @@ fun SelectionForest.applicableGroundSelections(
     type: ViaductSchema.Object,
 ): ObjectSelectionForest =
     merge(type).instantiateBindings()
-
-/**
- * Extends every top-level selection-stamped key and provider marker through one concrete OER path.
- *
- * Descendant selections remain unchanged until traversal reaches their concrete parent OER.
- */
-fun SelectionForest.localizeTopLevelSelectionStamps(
-    path: List<PathComponent>,
-): SelectionForest {
-    if (path.isEmpty()) return this
-    return flatMap { selection ->
-        selectionForestOf(
-            Selection.of(
-                key = selection.key.localizeSelectionStamps(path),
-                possibleTypes = selection.possibleTypes,
-                subselections = selection.subselections,
-            ),
-        )
-    }
-}
-
-// Returns this key with each occurrence stamp extended through the concrete OER path.
-private fun ObjectEngineResult.Key.localizeSelectionStamps(
-    path: List<PathComponent>,
-): ObjectEngineResult.Key {
-    val localizedStamp = (stamp as? Stamp.Occurrence)?.extendThrough(path)
-    val localizedArguments =
-        if (localizedStamp == null) {
-            arguments
-        } else {
-            arguments.restampSelectionVariables(field, localizedStamp)
-        }
-    val baseKey =
-        if (localizedStamp == null) {
-            ObjectEngineResult.Key.of(field = field, arguments = localizedArguments)
-        } else {
-            ObjectEngineResult.Key.of(
-                stamp = localizedStamp,
-                field = field,
-                arguments = localizedArguments,
-            )
-        }
-    val marker = (this as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
-    return if (marker == null) {
-        baseKey
-    } else {
-        ObjectEngineResult.VariableKey.of(
-            key = baseKey,
-            variableDefinedByThisKey = marker.localizeSelectionStamp(path),
-        )
-    }
-}
-
-// Returns this variable with its selection stamp extended through the concrete OER path.
-private fun Arguments.Variable.localizeSelectionStamp(
-    path: List<PathComponent>,
-): Arguments.Variable =
-    stamp
-        ?.let { currentStamp ->
-            Arguments.Variable
-                .of(field = field, variableName = variableName)
-                .stamp(currentStamp.extendThrough(path))
-        } ?: this
-
-// Appends one concrete OER path to this resolver-instance identity.
-private fun Stamp.Occurrence.extendThrough(
-    path: List<PathComponent>,
-): Stamp.Occurrence =
-    Stamp.Occurrence.of(
-        resolverPath = resolverPath + path,
-        occurrenceLineage = occurrenceLineage,
-    )
 
 /** Returns this selection's ground key. */
 fun ObjectSelection.groundKey(): ObjectEngineResult.GroundKey =
@@ -476,15 +393,6 @@ internal fun ObjectEngineResult.Key.objectKey(
     type: ViaductSchema.Object,
 ): ObjectEngineResult.ObjectKey {
     val concreteField = type.requireField(field.name)
-    val sourceKey = this
-    val selectionStamp = sourceKey.stamp as? Stamp.Occurrence
-    if (selectionStamp != null) {
-        return ObjectEngineResult.ObjectKey.of(
-            stamp = selectionStamp,
-            field = concreteField,
-            arguments = sourceKey.arguments.retarget(concreteField),
-        )
-    }
     return ObjectEngineResult.ObjectKey.of(
         field = concreteField,
         arguments = arguments.retarget(concreteField),

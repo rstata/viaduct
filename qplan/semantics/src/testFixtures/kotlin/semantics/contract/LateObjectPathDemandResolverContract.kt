@@ -20,8 +20,8 @@ enum class LateAncestorDemandPolicy {
 }
 
 interface LateObjectPathDemandResolverContract : ResolverContract {
-    val variableSelectionIdentityPolicy: VariableSelectionIdentityPolicy
     val lateAncestorDemandPolicy: LateAncestorDemandPolicy
+    val retainsSymbolicObjectKeys: Boolean
 
     @Test
     fun `disjoint successor demand is closed before one selective producer application`() {
@@ -396,11 +396,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         assertEquals(1, resolved.getCell(outerKey).get())
         assertEquals(1, parentApplications)
-        val expectedChildApplications =
-            when (variableSelectionIdentityPolicy) {
-                VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> 1
-                VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES -> 2
-            }
+        val expectedChildApplications = if (retainsSymbolicObjectKeys) 2 else 1
         assertEquals(expectedChildApplications, childApplications)
         assertEquals(
             expectedChildApplications,

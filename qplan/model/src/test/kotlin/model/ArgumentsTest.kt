@@ -149,6 +149,108 @@ class ArgumentsTest {
     }
 
     @Test
+    fun `symbolic equality uses stamped variable identity and recursive position`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                input Filter {
+                  direct: Int
+                  nested: [Int]
+                }
+
+                type Query {
+                  source: Int
+                  consume(filter: Filter): Int
+                }
+                """.trimIndent(),
+            ).assumptions
+        val source = world.schema.requireObjectField("Query", "source")
+        val consume = world.schema.requireObjectField("Query", "consume")
+        val firstPath = listOf(ListEngineResult.Index.of(0))
+        val secondPath = listOf(ListEngineResult.Index.of(1))
+        val firstVariable = Arguments.Variable.of(source, "value").stamp(firstPath)
+        val equalFirstVariable = Arguments.Variable.of(source, "value").stamp(firstPath)
+        val secondVariable = Arguments.Variable.of(source, "value").stamp(secondPath)
+        val differentlyNamedVariable = Arguments.Variable.of(source, "other").stamp(firstPath)
+
+        fun arguments(variable: Arguments.Variable): Arguments =
+            Arguments.of(
+                consume,
+                mapOf(
+                    "filter" to
+                        mapOf(
+                            "direct" to variable,
+                            "nested" to listOf(1, variable),
+                        ),
+                ),
+            )
+
+        val first = arguments(firstVariable)
+        val equalFirst = arguments(equalFirstVariable)
+        val second = arguments(secondVariable)
+        val differentlyNamed = arguments(differentlyNamedVariable)
+        val literal =
+            Arguments.of(
+                consume,
+                mapOf(
+                    "filter" to
+                        mapOf(
+                            "direct" to 7,
+                            "nested" to listOf(1, 7),
+                        ),
+                ),
+            )
+        val differentPositions =
+            Arguments.of(
+                consume,
+                mapOf(
+                    "filter" to
+                        mapOf(
+                            "direct" to 1,
+                            "nested" to listOf(firstVariable, 1),
+                        ),
+                ),
+            )
+        val firstHash = first.hashCode()
+        val secondHash = second.hashCode()
+
+        assertEquals(first, equalFirst)
+        assertEquals(firstHash, equalFirst.hashCode())
+        assertEquals("first", mapOf(first to "first")[equalFirst])
+        assertNotEquals(first, second)
+        assertNotEquals(first, differentlyNamed)
+        assertNotEquals(first, literal)
+        assertNotEquals(first, differentPositions)
+
+        world.declareBinding(firstVariable)
+        world.declareBinding(secondVariable)
+        world.completeBinding(firstVariable, 7)
+        world.completeBinding(secondVariable, 7)
+
+        assertEquals(firstHash, first.hashCode())
+        assertEquals(secondHash, second.hashCode())
+        assertNotEquals(first, second)
+    }
+
+    @Test
+    fun `argument defaults normalize before structural equality`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  consume(value: Int = 7): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val consume = schema.requireObjectField("Query", "consume")
+        val omitted = Arguments.of(consume, emptyMap())
+        val explicit = Arguments.of(consume, mapOf("value" to 7))
+
+        assertEquals(omitted, explicit)
+        assertEquals(omitted.hashCode(), explicit.hashCode())
+    }
+
+    @Test
     fun `binding storage rejects a variable template`() {
         val world =
             TestWorld.fromSDL(

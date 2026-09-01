@@ -6,7 +6,9 @@ import viaduct.graphql.schema.ViaductSchema
  * One schema-checked output-field argument tuple.
  *
  * A tuple may be ground, may recursively contain [Variable] expressions, or may be a
- * resolver-registry [Template]. Equality is structural over the represented argument expressions.
+ * resolver-registry [Template]. Equality is structural over the represented argument expressions,
+ * including each variable's defining field, name, occurrence stamp, and recursive expression
+ * position. Equality and hashing never inspect a variable's eventual binding.
  *
  * ### Invariant: arguments-schema-canonicality
  *

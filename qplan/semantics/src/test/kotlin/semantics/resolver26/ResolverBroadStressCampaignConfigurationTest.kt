@@ -14,9 +14,15 @@ import semantics.arbitrary.RESOLVER_TEST_PROFILE_PROPERTY
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
+import semantics.arbitrary.ResolverTestCaseCoordinate
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
+import semantics.propertytest.PropertyTestCampaignConfigFile
+import semantics.propertytest.PropertyTestJson
+import semantics.propertytest.PropertyTestRoundExecution
+import semantics.propertytest.PropertyTestRoundRunner
+import semantics.propertytest.roundConfig
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -141,6 +147,35 @@ class ResolverBroadStressCampaignConfigurationTest {
         )
         assertTrue(registryShapedRuns.all { run -> run.expectedCases == 2_000 })
     }
+
+    @Test
+    fun `persisted campaign coordinate executes Resolver26 validation oracles`() =
+        runBlocking {
+            val campaign =
+                PropertyTestJson.readResource<PropertyTestCampaignConfigFile>(
+                    "/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json",
+                )
+            val profile = Resolver26BroadStressProfile.BALANCED
+            val round = campaign.roundConfig(number = 1, selectedProfileId = profile.id)
+            val run = round.runs.single()
+
+            val result =
+                PropertyTestRoundRunner.run(
+                    round = round,
+                    execution =
+                        PropertyTestRoundExecution(
+                            selectedTestInputProfileId = run.testInputProfileId,
+                            selectedCase =
+                                ResolverTestCaseCoordinate(
+                                    schemaIndex = 1,
+                                    registryIndex = 1,
+                                    queryIndex = 1,
+                                ),
+                        ),
+                )
+
+            assertEquals(1, result.completedCases)
+        }
 
     @Test
     fun `large deep profiles generate bounded queries`() =

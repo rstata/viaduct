@@ -620,6 +620,56 @@ class EngineResultTest {
     }
 
     @Test
+    fun `completed result comparison preserves exact occurrence-stamped keys`() {
+        val schema =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: Int
+                  consume(value: Int): Int
+                }
+                """.trimIndent(),
+            ).schema
+        val source = schema.requireObjectField("Query", "source")
+        val consume = schema.requireObjectField("Query", "consume")
+        val variable = Arguments.Variable.of(source, "value")
+        val sourceKey =
+            ObjectEngineResult.Key.of(
+                consume,
+                Arguments.of(consume, mapOf("value" to variable)),
+            )
+        val firstStamp =
+            Stamp.Occurrence.of(
+                resolverPath = emptyList(),
+                occurrenceLineage = listOf(SelectionOccurrenceId(sourceKey)),
+            )
+        val secondStamp =
+            Stamp.Occurrence.of(
+                resolverPath = emptyList(),
+                occurrenceLineage = listOf(SelectionOccurrenceId(sourceKey)),
+            )
+        val resolvedArguments = Arguments.Resolved.of(consume, mapOf("value" to 7))
+        val firstKey =
+            ObjectEngineResult.GroundKey.of(firstStamp, consume, resolvedArguments)
+        val secondKey =
+            ObjectEngineResult.GroundKey.of(secondStamp, consume, resolvedArguments)
+        val first =
+            ObjectEngineResult.of(
+                schema.requireQueryTypeDef(),
+                mapOf(firstKey to 11),
+            )
+        val second =
+            ObjectEngineResult.of(
+                schema.requireQueryTypeDef(),
+                mapOf(secondKey to 11),
+            )
+
+        assertNotEquals(firstStamp, secondStamp)
+        assertNotEquals(firstKey, secondKey)
+        assertFalse(first.sameCompletedResultAs(second))
+    }
+
+    @Test
     fun `completed result comparison rejects an uncompleted promise`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val incomplete =

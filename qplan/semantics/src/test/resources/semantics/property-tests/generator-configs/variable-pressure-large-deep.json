@@ -133,7 +133,7 @@
       "resolverLiteralVariableConvergenceWeight" : 0.75,
       "resolverVariableWeight" : 0.95
     },
-    "id" : "resolver26-stamp-collisions-large-deep-low-duplicates",
+    "id" : "resolver26-symbolic-identity-large-deep-low-duplicates",
     "ranges" : {
       "inputScalarValueRange" : {
         "maximum" : 1,

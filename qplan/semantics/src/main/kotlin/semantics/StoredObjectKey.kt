@@ -2,7 +2,6 @@ package semantics
 
 import model.Assumptions
 import model.ObjectEngineResult
-import model.Stamp
 import model.groundedArguments
 import model.isContextuallyGrounded
 
@@ -19,12 +18,6 @@ internal fun ObjectEngineResult.findStoredKey(
     if (!candidate.isContextuallyGrounded()) return null
     if (candidate in keys) return candidate
     val arguments = candidate.groundedArguments()
-    val occurrenceStamp = candidate.stamp as? Stamp.Occurrence
-    val grounded =
-        if (occurrenceStamp == null) {
-            ObjectEngineResult.GroundKey.of(candidate.field, arguments)
-        } else {
-            ObjectEngineResult.GroundKey.of(occurrenceStamp, candidate.field, arguments)
-        }
+    val grounded = ObjectEngineResult.GroundKey.of(candidate.field, arguments)
     return grounded.takeIf { it in keys }
 }

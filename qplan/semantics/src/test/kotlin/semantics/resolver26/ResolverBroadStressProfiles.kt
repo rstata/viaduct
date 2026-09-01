@@ -51,21 +51,21 @@ internal enum class Resolver26BroadStressProfile(
         defaultSize = "10:20:50",
         requiredSignatures =
             setOf(
-                Resolver26StructuralSignature.STAMPED_RESOLVER_INSTANCE,
+                Resolver26StructuralSignature.SYMBOLIC_RESOLVER_INSTANCE,
                 Resolver26StructuralSignature.OBJECT_PATH_VARIABLE_OWNER,
                 Resolver26StructuralSignature.MIXED_BINDING_SOURCES,
             ),
         config = balancedBroadConfig(),
     ),
-    LOCALIZED_DESCENDANTS(
-        id = "localized-descendants",
-        propertyProfile = "resolver26-broad-localized-descendants",
+    DESCENDANT_VARIABLES(
+        id = "descendant-variables",
+        propertyProfile = "resolver26-broad-descendant-variables",
         defaultSize = "10:20:50",
         requiredSignatures =
             setOf(
                 Resolver26StructuralSignature.NESTED_VARIABLE_USE,
                 Resolver26StructuralSignature.PASSIVE_DESCENDANT_VARIABLE_USE,
-                Resolver26StructuralSignature.LIST_LOCALIZED_STAMP,
+                Resolver26StructuralSignature.LIST_SYMBOLIC_RESOLVER_INSTANCE,
             ),
         config =
             balancedBroadConfig() +
@@ -97,13 +97,13 @@ internal enum class Resolver26BroadStressProfile(
                 (ResolverNestedProviderPathWeight to 1.0) +
                 (ResolverFromObjectFieldProviderPathLength to 2..4),
     ),
-    STAMP_COLLISIONS(
-        id = "stamp-collisions",
-        propertyProfile = "resolver26-broad-stamp-collisions",
+    SYMBOLIC_IDENTITY(
+        id = "symbolic-identity",
+        propertyProfile = "resolver26-broad-symbolic-identity",
         defaultSize = "10:20:50",
         requiredSignatures =
             setOf(
-                Resolver26StructuralSignature.EQUAL_STAMPED_ARGUMENTS,
+                Resolver26StructuralSignature.EQUAL_SYMBOLIC_ARGUMENTS,
             ),
         config =
             balancedBroadConfig() +

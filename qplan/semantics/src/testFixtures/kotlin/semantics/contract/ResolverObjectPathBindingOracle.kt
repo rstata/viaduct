@@ -9,9 +9,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import viaduct.graphql.schema.ViaductSchema
 import model.Selection
-import model.Stamp
 import model.VariableBinding
-import model.localizeTopLevelSelectionStamps
 import model.objectKey
 import model.outputType
 import model.registry.FieldResolver
@@ -48,12 +46,8 @@ context(world: Assumptions)
 internal fun FieldResolver.boundObjectPathDefinitions(
     path: List<PathComponent>,
 ): List<StampedObjectPathDefinition> {
-    val objectKey = path.lastOrNull() as? ObjectEngineResult.ObjectKey
-    val resolverStamp =
-        (objectKey?.stamp as? Stamp.Occurrence)
-            ?: Stamp.Occurrence.of(path)
     val occurrenceDefinitions =
-        instantiateObjectFragment(resolverStamp).pathVariableDefinitions
+        instantiateObjectFragmentAt(path).pathVariableDefinitions
     return occurrenceDefinitions
         .takeIf { definitions ->
             definitions.isNotEmpty() &&
@@ -67,25 +61,10 @@ private fun ObjectEngineResult.readCompletedProvider(
     reader: List<PathComponent>,
 ): VariableBinding {
     var current = this
-    var currentPath = reader.dropLast(1)
     path.forEachIndexed { index, openKey ->
-        val localizedKey =
-            if (index == 0) {
-                openKey
-            } else {
-                selectionForestOf(
-                    Selection.of(
-                        key = openKey,
-                        possibleTypes = setOf(current.type),
-                        subselections = selectionForestOf(),
-                    ),
-                ).localizeTopLevelSelectionStamps(currentPath)
-                    .single()
-                    .key
-            }
         val specialized =
             Selection.of(
-                key = localizedKey,
+                key = openKey,
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
@@ -101,7 +80,6 @@ private fun ObjectEngineResult.readCompletedProvider(
         current =
             value as? ObjectEngineResult
                 ?: error("Completed provider path crossed a non-object at $key")
-        currentPath += key
     }
     error("Provider path must be nonempty")
 }

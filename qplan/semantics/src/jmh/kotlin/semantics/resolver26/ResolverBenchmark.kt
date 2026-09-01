@@ -63,12 +63,10 @@ open class ResolverBenchmark {
                             applicationObserver(
                                 ResolverBenchmarkApplicationObservation(
                                     occurrencePath = observation.occurrencePath,
-                                    occurrenceStamp = observation.occurrenceStamp,
                                     variableArgumentCount =
                                         observation.variableArgumentCount,
-                                    variableSourceOccurrencePaths = emptySet(),
-                                    variableSourceSelectionStamps =
-                                        observation.variableSourceSelectionStamps,
+                                    variableSourceOccurrencePaths =
+                                        observation.variableResolverPaths,
                                 ),
                             )
                         }

@@ -7,18 +7,17 @@ import model.Assumptions
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.PathComponent
 import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
-import model.Stamp
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.instantiateBindings
 import model.isContextuallyGrounded
-import model.localizeTopLevelSelectionStamps
 import model.merge
 import model.objectOf
 import model.groundedArguments
 import model.stampedVariables
+import model.usedVariables
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
@@ -28,122 +27,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
 
-class ArgumentStampingTest {
+class SymbolicKeyIdentityTest {
     @Test
-    fun `grounding and localization commute when each stamp has its binding`() {
-        val resultFragment: String =
-            """
-            fragment Result on Query {
-              box {
-                child(value: ${'$'}seed)
-              }
-            }
-            """.trimIndent()
-        val testWorld: TestWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Box {
-                      child(value: Int!): Int!
-                    }
-
-                    type Query {
-                      result(seed: Int!): Int!
-                      box: Box!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    mapOf(
-                        schema.requireObjectField("Query", "result") to
-                            fieldResolverOf(schema.fragmentFrom(resultFragment)) { _, _ ->
-                                0
-                            },
-                        schema.requireObjectField("Query", "box") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Box")
-                            },
-                        schema.requireObjectField("Box", "child") to
-                            fieldResolverOf(schema.emptyFragmentOf("Box")) { _, arguments ->
-                                arguments.fieldValues.getValue("value") as Int
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    mapOf(
-                        Arguments.Variable.of(result, "seed") to
-                            schema.fromArgument(result, "seed"),
-                    )
-                },
-            )
-        val world: Assumptions = testWorld.assumptions
-        val resultField: ViaductSchema.ObjectField =
-            world.schema.requireObjectField("Query", "result")
-        val resultKey: ObjectEngineResult.GroundKey =
-            ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
-        val boxType: ViaductSchema.Object =
-            world.schema.requireType("Box") as ViaductSchema.Object
-        val boxKey: ObjectEngineResult.GroundKey =
-            ObjectEngineResult.GroundKey.of(
-                world.schema.requireObjectField("Query", "box"),
-                emptyMap(),
-            )
-        val childDemand: SelectionForest =
-            world.resolverRegistry
-                .resolver(resultField)
-                .stamp(listOf(resultKey))
-                .merge(world.schema.requireType("Query") as ViaductSchema.Object)[boxKey]
-                .subselections
-        val sourceVariable: Arguments.Variable =
-            childDemand.stampedVariables().single()
-        world.bindVariable(sourceVariable, 7)
-
-        val groundThenLocalize: ObjectEngineResult.GroundKey =
-            context(world) {
-                childDemand
-                    .merge(boxType)
-                    .instantiateBindings()
-                    .localizeTopLevelSelectionStamps(listOf(boxKey))
-                    .merge(boxType)
-                    .groundKeys()
-                    .single()
-            }
-        val localizedDemand: SelectionForest =
-            childDemand.localizeTopLevelSelectionStamps(listOf(boxKey))
-        val localizedVariable: Arguments.Variable =
-            localizedDemand.stampedVariables().single()
-        val localizedOpenKey =
-            assertIs<ObjectEngineResult.ObjectKey>(
-                localizedDemand.merge(boxType).keys().single(),
-            )
-        assertEquals(
-            localizedOpenKey.stamp,
-            localizedVariable.stamp,
-        )
-        world.bindVariable(localizedVariable, 7)
-        val localizeThenGround: ObjectEngineResult.GroundKey =
-            context(world) {
-                localizedDemand
-                    .merge(boxType)
-                    .instantiateBindings()
-                    .groundKeys()
-                    .single()
-            }
-
-        assertEquals(groundThenLocalize, localizeThenGround)
-        assertEquals(
-            listOf(resultKey, boxKey),
-            assertIs<Stamp.Occurrence>(localizeThenGround.stamp)
-                .resolverPath,
-        )
-    }
-
-    @Test
-    fun `list element resolver instances include their concrete indices in selection stamps`() {
+    fun `list elements reuse one resolver-owned symbolic child key`() {
         val resultFragment =
             """
             fragment Result on Query {
@@ -228,7 +117,7 @@ class ArgumentStampingTest {
                 resolve(fragment.subselections)
             }
         val items = assertIs<ListEngineResult>(resolved.getCell(itemsKey).getValue().get())
-        val stamps =
+        val childKeys =
             items.indices.map { index ->
                 val item =
                     assertIs<ObjectEngineResult>(items[index].getValue().get())
@@ -236,18 +125,17 @@ class ArgumentStampingTest {
                     item.keys.single { groundKey ->
                         groundKey.field.name == "child"
                     }
-                assertIs<Stamp.Occurrence>(childKey.stamp)
+                childKey
             }
 
         assertEquals(14, resolved.getCell(resultKey).getValue().get())
+        assertEquals(1, childKeys.toSet().size)
         assertEquals(
-            listOf(
-                listOf(resultKey, itemsKey, ListEngineResult.Index.of(0)),
-                listOf(resultKey, itemsKey, ListEngineResult.Index.of(1)),
-            ),
-            stamps.map { stamp -> stamp.resolverPath },
+            setOf<List<PathComponent>>(listOf(resultKey)),
+            childKeys
+                .flatMap { key -> key.arguments.usedVariables() }
+                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp?.resolverPath },
         )
-        assertEquals(2, stamps.toSet().size)
         assertTrue(
             context(world) {
                 resolved.correctResolution(fragment)
@@ -379,11 +267,10 @@ class ArgumentStampingTest {
             )
         }
         assertEquals(
-            2,
-            symbolicKeys
-                .map { objectKey -> assertIs<Stamp.Occurrence>(objectKey.stamp) }
-                .toSet()
-                .size,
+            setOf("seed", "other"),
+            symbolicKeys.flatMapTo(linkedSetOf()) { key ->
+                key.arguments.usedVariables().map(Arguments.Variable::variableName)
+            },
         )
         assertEquals(
             mapOf(
@@ -521,10 +408,13 @@ class ArgumentStampingTest {
                 ),
                 context(world) { objectKey.groundedArguments() },
             )
-            val selectionStamp = assertIs<Stamp.Occurrence>(objectKey.stamp)
-            val sourceKey = assertNotNull(selectionStamp.sourceKey)
-            assertEquals(null, sourceKey.stamp)
         }
+        assertEquals(
+            setOf<List<PathComponent>>(listOf(leftKey), listOf(rightKey)),
+            frankKeys
+                .flatMap { key -> key.arguments.usedVariables() }
+                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp?.resolverPath },
+        )
         assertEquals(
             listOf(
                 Arguments.Resolved.of(

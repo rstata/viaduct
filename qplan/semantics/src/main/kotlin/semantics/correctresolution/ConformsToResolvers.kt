@@ -13,7 +13,6 @@ import model.ObjectEngineResult
 import model.outputType
 import model.outputValue
 import model.PathComponent
-import model.Stamp
 import model.isContextuallyGrounded
 import model.groundedArguments
 import model.schemaType
@@ -101,18 +100,8 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ResolverObjectFragment? {
-    val objectKey = path.lastOrNull() as? ObjectEngineResult.ObjectKey
-    val selectionStamp = objectKey?.stamp as? Stamp.Occurrence
-    val candidates =
-        if (selectionStamp != null) {
-            listOf(instantiateObjectFragment(selectionStamp))
-        } else {
-            listOf(
-                instantiateObjectFragment(Stamp.Occurrence.of(resolverPath = path)),
-                instantiateObjectFragmentAt(path),
-            )
-        }
-    return candidates.firstOrNull { objectFragment ->
+    val objectFragment = instantiateObjectFragmentAt(path)
+    return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->
             variable.isStamped && world.isBound(variable)

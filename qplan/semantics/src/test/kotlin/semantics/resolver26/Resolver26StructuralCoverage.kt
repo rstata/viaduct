@@ -5,18 +5,17 @@ import model.Arguments
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
-import model.Stamp
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverApplicationRecord
 
-// Names result-visible structures that distinguish Resolver26's stamped execution cases.
+// Names result-visible structures that distinguish Resolver26's symbolic execution cases.
 internal enum class Resolver26StructuralSignature {
-    STAMPED_RESOLVER_INSTANCE,
-    LIST_LOCALIZED_STAMP,
-    EQUAL_STAMPED_ARGUMENTS,
+    SYMBOLIC_RESOLVER_INSTANCE,
+    LIST_SYMBOLIC_RESOLVER_INSTANCE,
+    EQUAL_SYMBOLIC_ARGUMENTS,
     OBJECT_PATH_VARIABLE_OWNER,
     NESTED_VARIABLE_USE,
     PASSIVE_DESCENDANT_VARIABLE_USE,
@@ -35,9 +34,9 @@ internal fun resolver26StructuralSignatures(
     registry: ArbitraryRegistry,
 ): Set<Resolver26StructuralSignature> {
     val signatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
-    val stampedOccurrences: List<RegisteredResolverOccurrence> =
+    val symbolicOccurrences: List<RegisteredResolverOccurrence> =
         occurrences.filter { occurrence ->
-            (occurrence.objectKey().stamp as? Stamp.Occurrence)?.sourceKey != null
+            occurrence.objectKey() !is ObjectEngineResult.GroundKey
         }
     val activeSourceFields: Set<FieldCoordinate> =
         witness.applications
@@ -47,22 +46,20 @@ internal fun resolver26StructuralSignatures(
     val activeObjectPathOwners: Set<FieldCoordinate> =
         activeSourceFields.intersect(registry.fromObjectFieldVariableOwnerFields)
 
-    if (stampedOccurrences.isNotEmpty()) {
-        signatures += Resolver26StructuralSignature.STAMPED_RESOLVER_INSTANCE
+    if (symbolicOccurrences.isNotEmpty()) {
+        signatures += Resolver26StructuralSignature.SYMBOLIC_RESOLVER_INSTANCE
     }
     if (
-        stampedOccurrences.any { occurrence ->
-            (occurrence.objectKey().stamp as? Stamp.Occurrence)
-                ?.resolverPath
-                ?.any { component ->
+        symbolicOccurrences.any { occurrence ->
+            occurrence.occurrencePath.any { component ->
                 component is ListEngineResult.Index
-                } == true
+            }
         }
     ) {
-        signatures += Resolver26StructuralSignature.LIST_LOCALIZED_STAMP
+        signatures += Resolver26StructuralSignature.LIST_SYMBOLIC_RESOLVER_INSTANCE
     }
     if (
-        stampedOccurrences
+        symbolicOccurrences
             .groupBy { occurrence ->
     VisibleResolverOccurrence(
                     containingObjectPath = occurrence.occurrencePath.dropLast(1),
@@ -71,14 +68,10 @@ internal fun resolver26StructuralSignatures(
                 )
             }.values
             .any { equalVisibleOccurrences ->
-                equalVisibleOccurrences
-                    .map { occurrence -> occurrence.objectKey().stamp }
-                    .filterIsInstance<Stamp.Occurrence>()
-                    .toSet()
-                    .size > 1
+                equalVisibleOccurrences.size > 1
             }
     ) {
-        signatures += Resolver26StructuralSignature.EQUAL_STAMPED_ARGUMENTS
+        signatures += Resolver26StructuralSignature.EQUAL_SYMBOLIC_ARGUMENTS
     }
     if (activeObjectPathOwners.isNotEmpty()) {
         signatures += Resolver26StructuralSignature.OBJECT_PATH_VARIABLE_OWNER
@@ -137,7 +130,7 @@ internal fun resolver26StructuralSignatures(
     return signatures
 }
 
-// Describes the GraphQL-visible identity shared by stamped occurrences before stamp comparison.
+// Describes the visible identity shared by symbolic occurrences before variable-instance comparison.
 private data class VisibleResolverOccurrence(
     val containingObjectPath: List<PathComponent>,
     val field: FieldCoordinate,

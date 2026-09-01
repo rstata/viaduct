@@ -8,7 +8,6 @@ import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
-import model.localizeTopLevelSelectionStamps
 import model.merge
 import semantics.findStoredKey
 
@@ -73,7 +72,7 @@ private fun EngineResult?.engineResultConformsToSelections(
 
         is ObjectEngineResult ->
             objectConformsToSelections(
-                selections = selections.localizeTopLevelSelectionStamps(path),
+                selections = selections,
                 path = path,
             )
         is ListEngineResult ->

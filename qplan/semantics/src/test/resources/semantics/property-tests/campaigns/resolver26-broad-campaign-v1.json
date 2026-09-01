@@ -16,7 +16,7 @@
             "schemas" : 40
           }
         },
-        "stamp-collisions" : {
+        "symbolic-identity" : {
           "testInputVariant" : "large-deep-low-duplicates"
         }
       },
@@ -46,7 +46,7 @@
         "schemas" : 10
       },
       "profileOverrides" : {
-        "localized-descendants" : {
+        "descendant-variables" : {
           "counts" : {
             "queriesPerSchema" : 2,
             "registriesPerSchema" : 25,
@@ -89,7 +89,7 @@
   },
   "profiles" : [ {
     "id" : "balanced",
-    "requiredCoverage" : [ "mixed-binding-sources", "object-path-variable-owner", "stamped-resolver-instance" ],
+    "requiredCoverage" : [ "mixed-binding-sources", "object-path-variable-owner", "symbolic-resolver-instance" ],
     "seedOffset" : 1,
     "testInputProfiles" : {
       "large-deep" : "resolver26-balanced-large-deep",
@@ -97,13 +97,13 @@
       "standard" : "resolver26-balanced-standard"
     }
   }, {
-    "id" : "localized-descendants",
-    "requiredCoverage" : [ "list-localized-stamp", "nested-variable-use", "passive-descendant-variable-use" ],
+    "id" : "descendant-variables",
+    "requiredCoverage" : [ "list-symbolic-resolver-instance", "nested-variable-use", "passive-descendant-variable-use" ],
     "seedOffset" : 2,
     "testInputProfiles" : {
-      "large-deep" : "resolver26-localized-descendants-large-deep",
-      "large-deep-low-duplicates" : "resolver26-localized-descendants-large-deep-low-duplicates",
-      "standard" : "resolver26-localized-descendants-standard"
+      "large-deep" : "resolver26-descendant-variables-large-deep",
+      "large-deep-low-duplicates" : "resolver26-descendant-variables-large-deep-low-duplicates",
+      "standard" : "resolver26-descendant-variables-standard"
     }
   }, {
     "id" : "nullable-errors",
@@ -115,12 +115,12 @@
       "standard" : "resolver26-nullable-errors-standard"
     }
   }, {
-    "id" : "stamp-collisions",
-    "requiredCoverage" : [ "equal-stamped-arguments" ],
+    "id" : "symbolic-identity",
+    "requiredCoverage" : [ "equal-symbolic-arguments" ],
     "seedOffset" : 4,
     "testInputProfiles" : {
-      "large-deep-low-duplicates" : "resolver26-stamp-collisions-large-deep-low-duplicates",
-      "standard" : "resolver26-stamp-collisions-standard"
+      "large-deep-low-duplicates" : "resolver26-symbolic-identity-large-deep-low-duplicates",
+      "standard" : "resolver26-symbolic-identity-standard"
     }
   }, {
     "id" : "multiple-owners",

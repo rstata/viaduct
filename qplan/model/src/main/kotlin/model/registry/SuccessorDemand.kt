@@ -8,7 +8,6 @@ import model.EngineInputData
 import model.Arguments
 import model.Selection
 import model.SelectionForest
-import model.Stamp
 import model.concatenateSelectionForests
 import model.fetchBindings
 import model.flatMapToSelectionForest
@@ -154,7 +153,7 @@ suspend fun SelectionForest.fetchSuccessorDemandDeferringTemplates(): SelectionF
         if (identity !in deferredSelections) {
             val groundedIdentity =
                 SelectionIdentity(
-                    key = identity.key.fetchStampedBindings(),
+                    key = identity.key.fetchBindingsPreservingMarker(),
                     possibleTypes = identity.possibleTypes,
                 )
             groundedChildrenBySelection
@@ -183,23 +182,14 @@ private data class SelectionIdentity(
 )
 
 context(world: Assumptions)
-private suspend fun ObjectEngineResult.Key.fetchStampedBindings(): ObjectEngineResult.Key {
+private suspend fun ObjectEngineResult.Key.fetchBindingsPreservingMarker(): ObjectEngineResult.Key {
     if (arguments is Arguments.Resolved) return this
     val groundedArguments = arguments.fetchBindings(field)
-    val currentSelectionStamp = stamp as? Stamp.Occurrence
     val groundedKey =
-        if (currentSelectionStamp != null) {
-            ObjectEngineResult.Key.of(
-                stamp = currentSelectionStamp,
-                field = field,
-                arguments = groundedArguments,
-            )
-        } else {
-            ObjectEngineResult.Key.of(
-                field = field,
-                arguments = groundedArguments,
-            )
-        }
+        ObjectEngineResult.Key.of(
+            field = field,
+            arguments = groundedArguments,
+        )
     val marker =
         (this as? ObjectEngineResult.VariableKey)?.variableDefinedByThisKey
     return if (marker == null) {

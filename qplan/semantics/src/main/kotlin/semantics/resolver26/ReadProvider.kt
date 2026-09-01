@@ -14,7 +14,6 @@ import model.PathComponent
 import model.Selection
 import model.VariableBinding
 import model.fetchGroundedArguments
-import model.localizeTopLevelSelectionStamps
 import model.objectKey
 import model.selectionForestOf
 import model.toEngineSimpleData
@@ -25,11 +24,9 @@ context(world: Assumptions)
 internal suspend fun ObjectEngineResult.readProvider(
     definition: StampedObjectPathDefinition,
     reader: List<PathComponent>,
-    containingObjectPath: List<PathComponent>,
     support: Resolver26Support,
 ): VariableBinding {
     var current = this
-    var currentPath = containingObjectPath
     definition.path.forEachIndexed { index, openKey ->
         support.awaitBindingsDeclared(current)
         val specializedKey =
@@ -39,20 +36,7 @@ internal suspend fun ObjectEngineResult.readProvider(
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
         specializedKey.fetchGroundedArguments()
-        val objectKey =
-            if (index == 0) {
-                specializedKey
-            } else {
-                selectionForestOf(
-                    Selection.of(
-                        key = specializedKey,
-                        possibleTypes = setOf(current.type),
-                        subselections = selectionForestOf(),
-                    ),
-                ).localizeTopLevelSelectionStamps(currentPath)
-                    .single()
-                    .key as ObjectEngineResult.ObjectKey
-            }
+        val objectKey = specializedKey
         objectKey.fetchGroundedArguments()
         val cell = current.reserveCell(objectKey)
         support.cycleCheck(reader, cell)
@@ -66,7 +50,6 @@ internal suspend fun ObjectEngineResult.readProvider(
             is ObjectEngineResult -> current = value
             else -> error("Resolver26 provider path crossed a non-object at $objectKey")
         }
-        currentPath += objectKey
     }
     error("Resolver26 provider path must be nonempty")
 }

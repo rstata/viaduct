@@ -3,12 +3,9 @@ package model.registry
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.Arguments
-import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Stamp
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.localizeTopLevelSelectionStamps
 import model.merge
 import model.stampedVariables
 import model.testing.TestWorld
@@ -24,7 +21,7 @@ import kotlin.test.assertTrue
 
 class StampedObjectPathDefinitionTest {
     @Test
-    fun `selection stamping distinguishes variables while ground arguments remain compatible`() {
+    fun `resolver occurrence stamping distinguishes symbolic variables`() {
         val fragment =
             """
             fragment Result on Query {
@@ -78,23 +75,15 @@ class StampedObjectPathDefinitionTest {
         val equalFullyStampedFragment = resolver.stamp(firstPath)
         val otherFullyStampedFragment = resolver.stamp(secondPath)
 
-        compatibilityFragment.forEach { selection ->
-            assertEquals(Stamp.VariableFreeOccurrence, selection.key.stamp)
-        }
-        fullyStampedFragment.forEach { selection ->
-            if (selection.key.stampedVariables().isEmpty()) {
-                assertIs<Arguments.Resolved>(selection.key.arguments)
-                assertEquals(Stamp.VariableFreeOccurrence, selection.key.stamp)
-            } else {
-                val stampedKey = selection.key
-                assertEquals(
-                    setOf(stampedKey.stamp),
-                    selection.key
-                        .stampedVariables()
-                        .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp },
-                )
-            }
-        }
+        assertEquals(
+            compatibilityFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+            fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
+        )
+        assertTrue(
+            fullyStampedFragment.stampedVariables().all { variable ->
+                variable.stamp?.resolverPath == firstPath
+            },
+        )
         assertEquals(
             fullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
             equalFullyStampedFragment.merge(testWorld.schema.requireQueryTypeDef()).keys(),
@@ -172,9 +161,7 @@ class StampedObjectPathDefinitionTest {
             )
         val sitePath = listOf(resultKey)
         val objectFragment =
-            resolver.instantiateObjectFragment(
-                Stamp.Occurrence.of(resolverPath = sitePath),
-            )
+            resolver.instantiateObjectFragmentAt(sitePath)
         assertEquals(
             setOf("source", "consume"),
             objectFragment.materializeSelections
@@ -216,66 +203,9 @@ class StampedObjectPathDefinitionTest {
             definition.variable,
             assertIs<ObjectEngineResult.VariableKey>(marker.key).variableDefinedByThisKey,
         )
-        val fullyStampedMarker =
-            resolver
-                .stamp(sitePath)
-                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
-                .single()
-        val selectionStampedValue =
-            resolver
-                .selectionStampedVariableDefinitions(sitePath)
-                .single { stampedDefinition ->
-                    stampedDefinition.variable.variableName == "value"
-                }.variable
-        val fullyStampedMarkerKey =
-            assertIs<ObjectEngineResult.VariableKey>(fullyStampedMarker.key)
-        val fullyStampedMarkerStamp =
-            assertIs<Stamp.Occurrence>(fullyStampedMarkerKey.stamp)
-        val occurrenceDefinition = objectFragment.pathVariableDefinitions.single()
-        val occurrenceProviderKey =
-            objectFragment.materializeSelections
-                .filter { selection -> selection.responseKey == "source" }
-                .single()
-                .key
         assertEquals(
-            selectionStampedValue,
-            assertIs<ObjectEngineResult.VariableKey>(
-                fullyStampedMarker.key,
-            ).variableDefinedByThisKey,
-        )
-        assertEquals(selectionStampedValue, occurrenceDefinition.variable)
-        assertEquals(listOf(occurrenceProviderKey), occurrenceDefinition.path)
-
-        val localizationPath = listOf(ListEngineResult.Index.of(2))
-        val localizedMarker =
-            resolver
-                .stamp(sitePath)
-                .localizeTopLevelSelectionStamps(localizationPath)
-                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
-                .single()
-        val localizedMarkerKey =
-            assertIs<ObjectEngineResult.VariableKey>(localizedMarker.key)
-        val localizedMarkerStamp =
-            assertIs<Stamp.Occurrence>(localizedMarkerKey.stamp)
-        val localizedMarkerVariable = localizedMarkerKey.variableDefinedByThisKey
-        val selectionStampedValueStamp =
-            assertIs<Stamp.Occurrence>(selectionStampedValue.stamp)
-        val localizedMarkerVariableStamp =
-            assertIs<Stamp.Occurrence>(localizedMarkerVariable.stamp)
-
-        assertEquals(
-            fullyStampedMarkerStamp.resolverPath + localizationPath,
-            localizedMarkerStamp.resolverPath,
-        )
-        assertEquals(
-            selectionStampedValueStamp.resolverPath + localizationPath,
-            localizedMarkerVariableStamp.resolverPath,
-        )
-        assertEquals(
-            setOf(localizedMarkerStamp),
-            localizedMarkerKey.arguments
-                .stampedVariables()
-                .mapNotNullTo(linkedSetOf()) { variable -> variable.stamp },
+            objectFragment.pathVariableDefinitions,
+            resolver.stampedPathVarDefinitions(sitePath),
         )
     }
 

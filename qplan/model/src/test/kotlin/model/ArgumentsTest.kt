@@ -138,12 +138,11 @@ class ArgumentsTest {
         assertFalse(stamp.isTemplate)
         assertTrue(stamp.isStamped)
         assertEquals(path, stamp.stamp?.resolverPath)
-        assertEquals(emptyList(), stamp.stamp?.occurrenceLineage)
         assertFailsWith<IllegalArgumentException> {
             stamp.stamp(path)
         }
         assertEquals(
-            "Variable.Occurrence(name=value, field=Query/first, path=[index=0], lineage=0)",
+            "Variable.Occurrence(name=value, field=Query/first, path=[index=0])",
             "$stamp",
         )
     }
@@ -412,7 +411,7 @@ class ArgumentsTest {
     }
 
     @Test
-    fun `open key survives grounding as stamped ground-key identity`() {
+    fun `symbolic keys distinguish variable instances and coalesce after grounding`() {
         val world =
             TestWorld.fromSDL(
                 """
@@ -430,17 +429,10 @@ class ArgumentsTest {
                 consume,
                 Arguments.of(consume, mapOf("value" to template)),
             )
-        val sourceSelection =
-            Selection.of(
-                key = ObjectEngineResult.Key.of(consume, arguments),
-                possibleTypes = setOf(world.schema.requireQueryTypeDef()),
-                subselections = selectionForestOf(),
-            )
         val firstPath = listOf(ListEngineResult.Index.of(1))
         val secondPath = listOf(ListEngineResult.Index.of(2))
-        val occurrenceId = SelectionOccurrenceId(sourceSelection.key)
-        val firstStamp = Stamp.Occurrence.of(firstPath, listOf(occurrenceId))
-        val secondStamp = Stamp.Occurrence.of(secondPath, listOf(occurrenceId))
+        val firstStamp = Stamp.Occurrence.of(firstPath)
+        val secondStamp = Stamp.Occurrence.of(secondPath)
         val firstVariable = template.stamp(firstStamp)
         val secondVariable = template.stamp(secondStamp)
         world.declareBinding(firstVariable)
@@ -448,11 +440,10 @@ class ArgumentsTest {
         world.completeBinding(firstVariable, 9)
         world.completeBinding(secondVariable, 9)
 
-        fun stampedKey(selectionStamp: Stamp.Occurrence): ObjectEngineResult.ObjectKey =
+        fun symbolicKey(variableStamp: Stamp.Occurrence): ObjectEngineResult.ObjectKey =
             ObjectEngineResult.Key.of(
-                stamp = selectionStamp,
                 field = consume,
-                arguments = arguments.stamp(consume, selectionStamp),
+                arguments = arguments.stamp(consume, variableStamp),
             )
 
         fun ground(key: ObjectEngineResult.ObjectKey): ObjectEngineResult.GroundKey =
@@ -469,9 +460,9 @@ class ArgumentsTest {
                     .single()
             }
 
-        val firstOpen = stampedKey(firstStamp)
-        val equalFirstOpen = stampedKey(firstStamp)
-        val secondOpen = stampedKey(secondStamp)
+        val firstOpen = symbolicKey(firstStamp)
+        val equalFirstOpen = symbolicKey(firstStamp)
+        val secondOpen = symbolicKey(secondStamp)
         val first = ground(firstOpen)
         val equalFirst = ground(equalFirstOpen)
         val second = ground(secondOpen)
@@ -489,17 +480,14 @@ class ArgumentsTest {
                     .single()
             }
 
-        assertEquals(firstStamp, firstOpen.stamp)
-        assertEquals(firstVariable.stamp, firstOpen.stamp)
         assertEquals(setOf(firstVariable), firstOpen.stampedVariables())
         assertEquals(firstOpen, equalFirstOpen)
         assertNotEquals(firstOpen, secondOpen)
         assertIs<ObjectEngineResult.GroundKey>(first)
-        assertEquals(firstStamp, first.stamp)
         assertEquals(first, equalFirst)
         assertEquals(first, reapplied)
-        assertNotEquals(first, second)
-        assertNotEquals<ObjectEngineResult.GroundKey>(first, unstamped)
+        assertEquals(first, second)
+        assertEquals<ObjectEngineResult.GroundKey>(first, unstamped)
         assertEquals(
             9,
             assertIs<Arguments.Resolved>(first.arguments).fieldValues.getValue("value"),
@@ -584,10 +572,7 @@ class ArgumentsTest {
                     subselections = selectionForestOf(),
                 )
             val selectionStamp =
-                Stamp.Occurrence.of(
-                    stamp,
-                    listOf(SelectionOccurrenceId(sourceSelection.key)),
-                )
+                Stamp.Occurrence.of(stamp)
             val variable = variableTemplate.stamp(selectionStamp)
             val arguments =
                 Arguments.Template

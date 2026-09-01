@@ -24,7 +24,6 @@ sealed interface Arguments {
      * definition.
      *
      * This tuple is ground and inspectable. Equality is structural over its field values.
-     * Occurrence identity belongs to [ObjectEngineResult.Key.stamp], not the grounded tuple.
      */
     sealed interface Resolved : Ground {
         val fieldValues: EngineInputObjectData
@@ -185,8 +184,7 @@ private data class OccurrenceVariableImpl(
         "Variable.Occurrence(" +
             "name=$variableName, " +
             "field=${field.containingDef.name}/${field.name}, " +
-            "path=${stamp.resolverPath.renderVariablePath()}, " +
-            "lineage=${stamp.occurrenceLineage.size}" +
+            "path=${stamp.resolverPath.renderVariablePath()}" +
             ")"
 }
 

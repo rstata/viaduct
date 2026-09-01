@@ -37,7 +37,7 @@ Use the narrowest relevant module or test class before broadening:
 ./gradlew :model:test
 ./gradlew :arbitrary:test
 ./gradlew :semantics:test
-./gradlew :semantics:test --tests 'semantics.resolver26.ArgumentStampingTest'
+./gradlew :semantics:test --tests 'semantics.resolver26.SymbolicKeyIdentityTest'
 ./gradlew :semantics:test --tests 'semantics.resolver26.*'
 ```
 

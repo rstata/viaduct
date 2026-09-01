@@ -24,7 +24,6 @@ import model.fragmentFrom
 import viaduct.graphql.schema.graphqljava.gjDef
 import model.materializeSelectionForestOf
 import model.testing.TestWorld
-import model.testing.occurrenceStampOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -323,68 +322,4 @@ class MaterializeTest {
             assertEquals("same", materialized.selectionValues().getValue("second"))
         }
 
-    @Test
-    fun `distinct response aliases read their exact occurrence keys`() =
-        runBlocking {
-            val world =
-                TestWorld
-                    .fromSDL(
-                        """
-                        type Query { value: String! }
-                        """.trimIndent(),
-                    ).assumptions
-            val field = world.schema.requireObjectField("Query", "value")
-            val arguments = Arguments.Resolved.of(field, emptyMap())
-            val first =
-                ObjectEngineResult.GroundKey.of(
-                    occurrenceStampOf(listOf(ListEngineResult.Index.of(0))),
-                    field,
-                    arguments,
-                )
-            val second =
-                ObjectEngineResult.GroundKey.of(
-                    occurrenceStampOf(listOf(ListEngineResult.Index.of(1))),
-                    field,
-                    arguments,
-                )
-            val selections =
-                materializeSelectionForestOf(
-                    MaterializeSelection.of(
-                        responseKey = "first",
-                        key = first,
-                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
-                        subselections = materializeSelectionForestOf(),
-                    ),
-                    MaterializeSelection.of(
-                        responseKey = "second",
-                        key = second,
-                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
-                        subselections = materializeSelectionForestOf(),
-                    ),
-                )
-            val result =
-                ObjectEngineResult.of(
-                    type = world.schema.requireQueryTypeDef(),
-                    values =
-                        mapOf(
-                            first to "first-value",
-                            second to "second-value",
-                        ),
-                )
-
-            val materialized =
-                context(world, resolverSupport) {
-                    result.materialize(selections, emptyList())
-                }
-
-            assertEquals(setOf("first", "second"), materialized.selectionValues().keys)
-            assertEquals(
-                "first-value",
-                materialized.selectionValues().getValue("first"),
-            )
-            assertEquals(
-                "second-value",
-                materialized.selectionValues().getValue("second"),
-            )
-        }
 }

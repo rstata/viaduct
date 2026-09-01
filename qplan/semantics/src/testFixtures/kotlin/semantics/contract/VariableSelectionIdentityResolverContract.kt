@@ -5,7 +5,6 @@ import model.requireObjectField
 import model.EngineResult
 import model.ObjectEngineResult
 import viaduct.graphql.schema.ViaductSchema
-import model.Stamp
 import model.instantiateBindings
 import model.merge
 import model.objectOf
@@ -18,16 +17,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-enum class VariableSelectionIdentityPolicy {
-    MERGE_EQUAL_GROUNDED_KEYS,
-    PRESERVE_RESPONSE_GROUP_OCCURRENCES,
-}
-
 /**
- * Policy contract for variable-bearing selections that ground to the same arguments.
+ * Contract for coalescing selections with equal symbolic or grounded arguments.
  */
 interface VariableSelectionIdentityResolverContract : ResolverContract {
-    val variableSelectionIdentityPolicy: VariableSelectionIdentityPolicy
+    val retainsSymbolicObjectKeys: Boolean
 
     @Test
     fun `equal pre-grounded selections merge in fragments and external queries`() {
@@ -118,11 +112,10 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             listOf(setOf("one", "two"), setOf("one", "two")),
             suppliedDemandFields.toList(),
         )
-        assertEquals(Stamp.VariableFreeOccurrence, payloadKey.stamp)
     }
 
     @Test
-    fun `applies the configured identity policy after variable selections ground equally`() {
+    fun `equal symbolic selections coalesce independently of response aliases`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
         val testWorld =
             TestWorld.fromDSL(
@@ -178,21 +171,17 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             resolveAndValidate(world, selections)
 
         assertEquals(8, resolved.getCell(resultKey).get())
-        when (variableSelectionIdentityPolicy) {
-            VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> {
-                assertEquals(1, suppliedDemandFields.size)
-                assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
-            }
-            VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES -> {
-                assertEquals(3, suppliedDemandFields.size)
-                assertEquals(
-                    mapOf(
-                        setOf("one") to 2,
-                        setOf("two") to 1,
-                    ),
-                    suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
-                )
-            }
+        if (retainsSymbolicObjectKeys) {
+            assertEquals(
+                mapOf(
+                    setOf("one") to 2,
+                    setOf("two") to 1,
+                ),
+                suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
+            )
+        } else {
+            assertEquals(1, suppliedDemandFields.size)
+            assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
         }
         assertTrue(
             context(world) {
@@ -280,19 +269,13 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         val resolved = resolveAndValidate(world, selections)
 
         assertEquals(5, resolved.getCell(resultKey).get())
-        when (variableSelectionIdentityPolicy) {
-            VariableSelectionIdentityPolicy.MERGE_EQUAL_GROUNDED_KEYS -> {
-                assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
-            }
-            VariableSelectionIdentityPolicy.PRESERVE_RESPONSE_GROUP_OCCURRENCES -> {
-                assertEquals(
-                    mapOf(
-                        setOf("one") to 1,
-                        setOf("two") to 1,
-                    ),
-                    suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
-                )
-            }
+        if (retainsSymbolicObjectKeys) {
+            assertEquals(
+                setOf(setOf("one"), setOf("two")),
+                suppliedDemandFields.toSet(),
+            )
+        } else {
+            assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
         }
     }
 }

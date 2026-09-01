@@ -11,12 +11,10 @@ import model.ObjectEngineResult
 import model.Fragment
 import model.PathComponent
 import model.SelectionForest
-import model.Stamp
 import model.fragmentFrom
 import model.instantiateBindings
 import model.merge
 import model.objectOf
-import model.ownerResolverStamp
 import model.requireQueryTypeDef
 import org.openjdk.jmh.infra.Blackhole
 import semantics.arbitrary.ResolverBenchmarkCorpus
@@ -62,10 +60,8 @@ internal fun interface ObservedResolverBenchmarkSubject {
 
 internal data class ResolverBenchmarkApplicationObservation(
     val occurrencePath: List<PathComponent>,
-    val occurrenceStamp: Stamp.Occurrence?,
     val variableArgumentCount: Int,
     val variableSourceOccurrencePaths: Set<List<PathComponent>>,
-    val variableSourceSelectionStamps: Set<Stamp.Occurrence>,
 )
 
 internal class CurrentProfileBenchmarkSupport(
@@ -429,22 +425,21 @@ internal class CurrentProfileBenchmarkSupport(
     }
 
     private fun List<ResolverBenchmarkApplicationObservation>.maximumVariableStackDepth(): Long {
-        val executedOccurrences = mapTo(linkedSetOf()) { observation -> observation.identity() }
+        val executedOccurrences = mapTo(linkedSetOf()) { observation -> observation.occurrencePath }
         val childrenBySource =
-            buildMap<ResolverOccurrenceIdentity, MutableSet<ResolverOccurrenceIdentity>> {
+            buildMap<List<PathComponent>, MutableSet<List<PathComponent>>> {
                 this@maximumVariableStackDepth.forEach { observation ->
-                    observation
-                        .sourceIdentities()
+                    observation.variableSourceOccurrencePaths
                         .filter(executedOccurrences::contains)
-                        .forEach { sourceIdentity ->
-                            getOrPut(sourceIdentity, ::linkedSetOf)
-                                .add(observation.identity())
+                        .forEach { sourcePath ->
+                            getOrPut(sourcePath, ::linkedSetOf)
+                                .add(observation.occurrencePath)
                         }
                 }
             }
-        val depthByOccurrence = mutableMapOf<ResolverOccurrenceIdentity, Long>()
-        val visiting = mutableSetOf<ResolverOccurrenceIdentity>()
-        fun depth(identity: ResolverOccurrenceIdentity): Long {
+        val depthByOccurrence = mutableMapOf<List<PathComponent>, Long>()
+        val visiting = mutableSetOf<List<PathComponent>>()
+        fun depth(identity: List<PathComponent>): Long {
             depthByOccurrence[identity]?.let { return it }
             check(visiting.add(identity)) {
                 "Variable resolver dependency cycle at $identity"
@@ -460,32 +455,6 @@ internal class CurrentProfileBenchmarkSupport(
         }
         return executedOccurrences.maxOfOrNull(::depth) ?: 0
     }
-
-    private sealed interface ResolverOccurrenceIdentity {
-        data class Ordinary(
-            val path: List<PathComponent>,
-        ) : ResolverOccurrenceIdentity
-
-        data class Stamped(
-            val stamp: Stamp.Occurrence,
-        ) : ResolverOccurrenceIdentity
-    }
-
-    private fun ResolverBenchmarkApplicationObservation.identity(): ResolverOccurrenceIdentity =
-        occurrenceStamp
-            ?.let(ResolverOccurrenceIdentity::Stamped)
-            ?: ResolverOccurrenceIdentity.Ordinary(occurrencePath)
-
-    private fun ResolverBenchmarkApplicationObservation.sourceIdentities():
-        Set<ResolverOccurrenceIdentity> =
-        buildSet {
-            variableSourceOccurrencePaths.mapTo(this, ResolverOccurrenceIdentity::Ordinary)
-            variableSourceSelectionStamps.mapTo(this) { sourceStamp ->
-                sourceStamp.ownerResolverStamp()
-                    ?.let(ResolverOccurrenceIdentity::Stamped)
-                    ?: ResolverOccurrenceIdentity.Ordinary(sourceStamp.resolverPath)
-            }
-        }
 
     private companion object {
         const val FULL_CASE_COUNT = 1_000

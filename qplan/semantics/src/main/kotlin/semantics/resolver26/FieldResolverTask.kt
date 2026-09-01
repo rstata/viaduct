@@ -13,7 +13,6 @@ import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
 import model.SelectionForest
-import model.Stamp
 import model.engineObjectDataOf
 import model.outputType
 import model.requireQueryTypeDef
@@ -39,7 +38,7 @@ internal class FieldResolverTask(
 
     // The following arguments are passed for instrumentation-purposes only
     private val variableArgumentCount: Int,
-    private val variableSourceSelectionStamps: Set<Stamp.Occurrence>,
+    private val variableResolverPaths: Set<List<PathComponent>>,
 ) {
     suspend fun run() {
         context(world, support) {
@@ -75,8 +74,7 @@ internal class FieldResolverTask(
                     arguments = resolverArguments,
                     suppliedDemand = invocationDemand,
                     variableArgumentCount = variableArgumentCount,
-                    occurrenceStamp = objectKey.stamp as? Stamp.Occurrence,
-                    variableSourceSelectionStamps = variableSourceSelectionStamps,
+                    variableResolverPaths = variableResolverPaths,
                 ),
             )
 

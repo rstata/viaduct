@@ -77,13 +77,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                         .resolver(key.field)
                         .let { resolver ->
                             val coordinate = path + key
-                            val selectionStamp = key.stamp as? Stamp.Occurrence
-                            val selectionStamped =
-                                if (selectionStamp != null) {
-                                    resolver.stampFrom(selectionStamp)
-                                } else {
-                                    resolver.stamp(coordinate)
-                                }
+                            val selectionStamped = resolver.stamp(coordinate)
                             if (
                                 selectionStamped.usedVariables().all { variable ->
                                     variable.isStamped && world.isBound(variable)

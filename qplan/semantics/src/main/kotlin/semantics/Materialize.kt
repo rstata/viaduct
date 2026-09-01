@@ -15,11 +15,8 @@ import model.ObjectEngineResult
 import model.outputType
 import model.ObjectMaterializeSelection
 import model.PathComponent
-import model.Selection
 import model.fetchGroundedArguments
-import model.localizeTopLevelSelectionStamps
 import model.materializedEngineObjectDataOf
-import model.selectionForestOf
 import model.toEngineOutputData
 import viaduct.engine.api.EngineObjectData
 
@@ -40,7 +37,6 @@ internal suspend fun ObjectEngineResult.materialize(
         selections = selections,
         reader = reader,
         resultPath = reader.dropLast(1),
-        selectionPath = emptyList(),
     )
 }
 
@@ -50,12 +46,11 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
     resultPath: List<PathComponent>,
-    selectionPath: List<PathComponent>,
 ): EngineObjectData.Sync {
     val selectedValues =
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
-        val candidateKey = selection.materializedSymbolicKey(selectionPath)
+        val candidateKey = selection.materializedSymbolicKey()
         val storedKey = findStoredKey(candidateKey) ?: candidateKey
         val cell = getCell(storedKey)
         val promise = cell.getValue()
@@ -82,24 +77,9 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
 
 context(world: Assumptions)
 private suspend fun ObjectMaterializeSelection.materializedSymbolicKey(
-    selectionPath: List<PathComponent>,
 ): ObjectEngineResult.ObjectKey {
-    val storedKey =
-        if (selectionPath.isEmpty()) {
-            key
-        } else {
-            selectionForestOf(
-                Selection.of(
-                    key = key,
-                    possibleTypes = setOf(key.field.containingDef),
-                    subselections = selectionForestOf(),
-                ),
-            ).localizeTopLevelSelectionStamps(selectionPath)
-                .single()
-                .key as ObjectEngineResult.ObjectKey
-        }
-    storedKey.fetchGroundedArguments()
-    return storedKey
+    key.fetchGroundedArguments()
+    return key
 }
 
 // Recursively materializes one selected result while retaining its exact stored path.
@@ -118,7 +98,6 @@ private suspend fun EngineResult?.materializeEngineResultValue(
                 selections = selections,
                 reader = reader,
                 resultPath = resultPath,
-                selectionPath = resultPath,
             )
         is ListEngineResult -> {
             require(expectedType.isList)

@@ -72,7 +72,7 @@ private fun generatorConfigData(): Map<String, GeneratorConfigData> =
         Resolver26BroadStressProfile.entries.forEach { profile ->
             add("resolver26-${profile.id}-standard", profile.config)
             val largeDeep = profile.config.withLargeDeepResolver26Worlds()
-            if (profile != Resolver26BroadStressProfile.STAMP_COLLISIONS) {
+            if (profile != Resolver26BroadStressProfile.SYMBOLIC_IDENTITY) {
                 add("resolver26-${profile.id}-large-deep", largeDeep)
             }
             add(
@@ -142,7 +142,7 @@ private fun generatorConfigFamilies(): List<GeneratorConfigFamily> =
         pairedFamily(
             "descendants-standard",
             "list-descendants",
-            "localized-descendants",
+            "descendant-variables",
             "standard",
         ),
         pairedFamily(
@@ -154,7 +154,7 @@ private fun generatorConfigFamilies(): List<GeneratorConfigFamily> =
         pairedFamily(
             "variable-pressure-standard",
             "mixed-variables",
-            "stamp-collisions",
+            "symbolic-identity",
             "standard",
         ),
         pairedFamily(
@@ -167,7 +167,7 @@ private fun generatorConfigFamilies(): List<GeneratorConfigFamily> =
         pairedFamily(
             "descendants-large-deep",
             "list-descendants",
-            "localized-descendants",
+            "descendant-variables",
             "large-deep",
         ),
         pairedFamily(
@@ -180,7 +180,7 @@ private fun generatorConfigFamilies(): List<GeneratorConfigFamily> =
             resourceId = "variable-pressure-large-deep",
             resolver25ProfileId = "resolver25-mixed-variables-large-deep",
             resolver26ProfileId =
-                "resolver26-stamp-collisions-large-deep-low-duplicates",
+                "resolver26-symbolic-identity-large-deep-low-duplicates",
         ),
         pairedFamily(
             "multiple-owners-large-deep",
@@ -189,7 +189,7 @@ private fun generatorConfigFamilies(): List<GeneratorConfigFamily> =
             "large-deep",
         ),
         resolver26Family("balanced-large-deep-low-duplicates"),
-        resolver26Family("localized-descendants-large-deep-low-duplicates"),
+        resolver26Family("descendant-variables-large-deep-low-duplicates"),
         resolver26Family("nullable-errors-large-deep-low-duplicates"),
         resolver26Family("multiple-owners-large-deep-low-duplicates"),
     )

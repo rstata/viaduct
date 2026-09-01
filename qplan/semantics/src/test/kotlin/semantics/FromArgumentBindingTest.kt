@@ -4,6 +4,7 @@ import model.requireField
 import model.requireObjectField
 import model.Arguments
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import kotlinx.coroutines.runBlocking
 import model.VariableBinding
 import model.emptyFragmentOf
@@ -45,11 +46,14 @@ class FromArgumentBindingTest {
         context(world) {
             listOf(key).bindFromArguments(emptyList())
             val variable =
-                Arguments.Variable.of(field, "value").stamp(listOf(key))
-            assertEquals(VariableBinding.of(1), world.getBinding(variable))
+                Arguments.Variable
+                    .of(field, "value")
+                    .instantiate(ResolverOccurrenceId.at(listOf(key)))
+            val variableId = requireNotNull(variable.instanceId)
+            assertEquals(VariableBinding.of(1), world.getBinding(variableId))
             assertEquals(
                 VariableBinding.of(1),
-                runBlocking { world.fetchBinding(variable) },
+                runBlocking { world.fetchBinding(variableId) },
             )
             assertFailsWith<IllegalStateException> {
                 listOf(key).bindFromArguments(emptyList())

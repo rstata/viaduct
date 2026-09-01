@@ -5,6 +5,7 @@ import model.requireObjectField
 import model.Arguments
 import model.EngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.VariableBinding
@@ -60,7 +61,8 @@ class DemandSealingTest {
             testWorld.assumptions.getBinding(
                 Arguments.Variable
                     .of(resultKey.field, "value")
-                    .stamp(listOf(resultKey)),
+                    .instantiate(ResolverOccurrenceId.at(listOf(resultKey)))
+                    .let { variable -> requireNotNull(variable.instanceId) },
             ),
         )
     }
@@ -335,7 +337,8 @@ class DemandSealingTest {
             testWorld.assumptions.getBinding(
                 Arguments.Variable
                     .of(resultKey.field, "value")
-                    .stamp(listOf(resultKey)),
+                    .instantiate(ResolverOccurrenceId.at(listOf(resultKey)))
+                    .let { variable -> requireNotNull(variable.instanceId) },
             ),
         )
     }

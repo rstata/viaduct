@@ -67,7 +67,7 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
     if (
         grounding.any { event ->
             val submission = submissions[event.contributionId] ?: return@any false
-            submission.stampedVariables().any { variable ->
+            submission.instantiatedVariables().any { variable ->
                 declarations[variable]?.source is Resolver25BindingSource.FromObjectField &&
                     completions[variable]
                         ?.sequence
@@ -94,11 +94,11 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
                     events.mapNotNull { event -> submissions[event.contributionId] }
                 val literal =
                     groupedSubmissions.filter { submission ->
-                        submission.stampedVariables().isEmpty()
+                        submission.instantiatedVariables().isEmpty()
                     }
                 val symbolic =
                     groupedSubmissions.filter { submission ->
-                        submission.stampedVariables().isNotEmpty()
+                        submission.instantiatedVariables().isNotEmpty()
                     }
                 literal.any { literalSubmission ->
                     symbolic.any { symbolicSubmission ->
@@ -161,9 +161,9 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
         signatures += Resolver25StructuralSignature.STAGGERED_DISTINCT_KEYS
     }
 
-    val nestedStampedVariableUse =
+    val nestedInstantiatedVariableUse =
         submissions.values.any { submission ->
-            submission.stampedVariables().any { variable ->
+            submission.instantiatedVariables().any { variable ->
                 val ownerPath =
                     declarations[variable]
                         ?.ownerCoordinate
@@ -192,7 +192,7 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
                     groundedKey.arguments.containsBinding(completion.binding)
             }
         }
-    if (nestedStampedVariableUse || nestedEagerGroundedVariableUse) {
+    if (nestedInstantiatedVariableUse || nestedEagerGroundedVariableUse) {
         signatures += Resolver25StructuralSignature.NESTED_VARIABLE_USE
     }
 
@@ -251,11 +251,11 @@ internal fun List<Resolver25LifecycleEvent>.resolver25StructuralSignatures():
     return signatures
 }
 
-private fun Resolver25LifecycleEvent.DemandSubmitted.stampedVariables():
+private fun Resolver25LifecycleEvent.DemandSubmitted.instantiatedVariables():
     Set<Arguments.Variable> =
     selection.key.arguments
         .usedVariables()
-        .filterTo(linkedSetOf(), Arguments.Variable::isStamped)
+        .filterTo(linkedSetOf(), Arguments.Variable::isInstantiated)
 
 private fun Resolver25LifecycleEvent.DemandSubmitted.subselectionFields() =
     selection.subselections.fields()

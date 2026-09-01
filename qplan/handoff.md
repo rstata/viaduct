@@ -6,7 +6,7 @@ Qplan is a compiling Kotlin model of Viaduct query field resolution. Resolver26 
 
 Every reasoning world uses one canonical lowered `viaduct.graphql.schema.ViaductSchema`. Fields, arguments, enum values, object types, type conditions, possible-object-type sets, type expressions, resolver keys, selections, and EOD schema types come from that schema instance. Model, fixtures, arbitrary generation, semantics, and execution use `ViaductSchema` and its flat `TypeExpr` representation directly.
 
-The model distinguishes `EngineInputData`, `EngineOutputData`, and `EngineResult`. OER cells and paths use canonical `ObjectEngineResult.ObjectKey` values, which may retain occurrence-specific variables in their arguments. `GroundKey` remains the refinement for operations that require resolved argument values. Variable instances retain their defining resolver occurrence; keys carry no separate occurrence stamp.
+The model distinguishes `EngineInputData`, `EngineOutputData`, and `EngineResult`. OER cells and paths use canonical `ObjectEngineResult.ObjectKey` values, which may retain occurrence-specific variables in their arguments. `GroundKey` remains the refinement for operations that require resolved argument values. Variable instances retain their defining `ResolverOccurrenceId`; keys carry no separate occurrence identity.
 
 ## Source And Lowered Schema Boundary
 

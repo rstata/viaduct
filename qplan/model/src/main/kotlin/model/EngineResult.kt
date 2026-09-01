@@ -178,7 +178,7 @@ sealed interface ObjectEngineResult {
     }
 
     /**
-     * A selection-only key marking one component of a stamped path-variable's provider path.
+     * A selection-only key marking one component of an instantiated path-variable's provider path.
      *
      * The marker remains distinct from [ObjectKey] even when [field] belongs to a concrete object
      * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key
@@ -192,8 +192,8 @@ sealed interface ObjectEngineResult {
                 key: Key,
                 variableDefinedByThisKey: Arguments.Variable,
             ): VariableKey {
-                require(variableDefinedByThisKey.isStamped) {
-                    "A provider-path key must define a stamped variable"
+                require(variableDefinedByThisKey.isInstantiated) {
+                    "A provider-path key must define an instantiated variable"
                 }
                 return VariableKeyImpl(
                     field = key.field,
@@ -336,7 +336,7 @@ sealed interface ObjectEngineResult {
 context(world: Assumptions)
 fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
     arguments.usedVariables().all { variable ->
-        variable.isStamped && world.isBound(variable)
+        variable.isInstantiated && world.isBound(requireNotNull(variable.instanceId))
     }
 
 /**
@@ -361,10 +361,10 @@ fun ObjectEngineResult.ObjectKey.groundedArguments(): Arguments.Ground {
 context(world: Assumptions)
 suspend fun ObjectEngineResult.ObjectKey.fetchGroundedArguments(): Arguments.Ground {
     arguments.usedVariables().forEach { variable ->
-        require(variable.isStamped) {
-            "Variable template $variable must be stamped before its binding can be fetched"
+        require(variable.isInstantiated) {
+            "Variable template $variable must be instantiated before its binding can be fetched"
         }
-        world.fetchBinding(variable)
+        world.fetchBinding(requireNotNull(variable.instanceId))
     }
     return groundedArguments()
 }

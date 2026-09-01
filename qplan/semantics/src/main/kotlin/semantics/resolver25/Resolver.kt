@@ -51,7 +51,7 @@ import model.selectionForestOf
 import model.toEngineResult
 import model.toEngineSimpleData
 import model.invariants.conformsToOutputSchemaType
-import model.registry.StampedObjectPathDefinition
+import model.registry.InstantiatedObjectPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
 import semantics.ResolverSupport
 import semantics.bindFromArguments
@@ -515,7 +515,7 @@ private class ObjectResultOrchestrator(
      * This operation:
      * - binds arg-variables;
      * - declares path-variable bindings;
-     * - contributes the complete stamped object fragment;
+     * - contributes the complete instantiated object fragment;
      * - launches path-variable readers.
      */
     context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
@@ -553,7 +553,7 @@ private class ObjectResultOrchestrator(
                 )
             },
         )
-        val definitions = resolver.stampedPathVarDefinitions(coordinate)
+        val definitions = objectFragment.pathVariableDefinitions
         definitions.forEach { definition ->
             runtime.instrumentation.bindingDeclared(
                 ownerCoordinate = coordinate,
@@ -563,7 +563,7 @@ private class ObjectResultOrchestrator(
                         definition.path.toList(),
                     ),
             )
-            world.declareBinding(definition.variable)
+            world.declareBinding(requireNotNull(definition.variable.instanceId))
         }
         val resolverInputs =
             addDemand(
@@ -579,7 +579,7 @@ private class ObjectResultOrchestrator(
                     binding = value,
                 )
                 world.completeBinding(
-                    definition.variable,
+                    requireNotNull(definition.variable.instanceId),
                     value,
                 )
             }
@@ -592,7 +592,7 @@ private class ObjectResultOrchestrator(
 
     context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private suspend fun readProvider(
-        definition: StampedObjectPathDefinition,
+        definition: InstantiatedObjectPathDefinition,
         reader: List<PathComponent>,
     ): VariableBinding {
         var current = target

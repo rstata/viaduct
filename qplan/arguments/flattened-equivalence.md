@@ -6,7 +6,7 @@ Consider an interpreter for spec selections. A field emits one resolution obliga
 
 The flattened interpreter emits a selection exactly when the concrete runtime type belongs to its `possibleTypes`. It obtains the field coordinate and immediate field-lookup context directly from `key.field`, then interprets `subselections` against returned object occurrences.
 
-These flattened `ObjectEngineResult.Key` values are selection keys outside an OER, so their fields may belong to abstract nominal types and their arguments may contain variable templates. Any later materialization of one of these obligations in an OER must use the corresponding field of the applicable concrete object type and occurrence-instantiated arguments; keys actually present in an OER never carry interface or union field coordinates or unstamped variable templates, although they may retain resolver-occurrence variable instances until their bindings complete. Resolver-visible EODs use response-key strings rather than this key hierarchy.
+These flattened `ObjectEngineResult.Key` values are selection keys outside an OER, so their fields may belong to abstract nominal types and their arguments may contain variable templates. Any later materialization of one of these obligations in an OER must use the corresponding field of the applicable concrete object type and occurrence-instantiated arguments; keys actually present in an OER never carry interface or union field coordinates or uninstantiated variable templates, although they may retain resolver-occurrence variable instances until their bindings complete. Resolver-visible EODs use response-key strings rather than this key hierarchy.
 
 Flattening preserves the following invariant for every field occurrence:
 

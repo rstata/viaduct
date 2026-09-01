@@ -257,18 +257,18 @@ class SelectionMergeTest {
     }
 
     @Test
-    fun `merge coalesces equal stamped arguments and keeps distinct instances separate`() {
+    fun `merge coalesces equal instantiated arguments and keeps distinct instances separate`() {
         val fixture = Fixture()
         val definingField = fixture.schema.requireObjectField("Query", "search")
         val firstVariable =
             Arguments.Variable.of(definingField, "value")
-                .stamp(listOf(ListEngineResult.Index.of(0)))
+                .instanceAt(listOf(ListEngineResult.Index.of(0)))
         val equalFirstVariable =
             Arguments.Variable.of(definingField, "value")
-                .stamp(listOf(ListEngineResult.Index.of(0)))
+                .instanceAt(listOf(ListEngineResult.Index.of(0)))
         val secondVariable =
             Arguments.Variable.of(definingField, "value")
-                .stamp(listOf(ListEngineResult.Index.of(1)))
+                .instanceAt(listOf(ListEngineResult.Index.of(1)))
         val a = fixture.selection("ConcreteItem", "a")
         val b = fixture.selection("ConcreteItem", "b")
 
@@ -306,7 +306,7 @@ class SelectionMergeTest {
     }
 
     @Test
-    fun `instantiation rejects an unstamped variable template`() {
+    fun `instantiation rejects an uninstantiated variable template`() {
         val fixture = Fixture()
         val variableField = fixture.schema.requireObjectField("Query", "search")
         val symbolic =
@@ -327,10 +327,10 @@ class SelectionMergeTest {
     }
 
     @Test
-    fun `instantiation rejects an unbound stamped variable`() {
+    fun `instantiation rejects an unbound variable instance`() {
         val fixture = Fixture()
         val variableField = fixture.schema.requireObjectField("Query", "search")
-        val variable = Arguments.Variable.of(variableField, "x").stamp(emptyList())
+        val variable = Arguments.Variable.of(variableField, "x").instanceAt(emptyList())
         val symbolic =
             fixture.searchSelection(
                 mapOf("values" to listOf(variable)),
@@ -351,7 +351,7 @@ class SelectionMergeTest {
         val variableField = fixture.schema.requireObjectField("Query", "search")
         val variable =
             Arguments.Variable.of(variableField, "x")
-                .stamp(listOf(ListEngineResult.Index.of(0)))
+                .instanceAt(listOf(ListEngineResult.Index.of(0)))
         val symbolic =
             fixture.searchSelection(
                 mapOf("values" to listOf(variable)),
@@ -360,8 +360,8 @@ class SelectionMergeTest {
             fixture.searchSelection(
                 mapOf("values" to listOf(1)),
             )
-        fixture.world.declareBinding(variable)
-        fixture.world.completeBinding(variable, 1)
+        fixture.world.declareBinding(variable.bindingId)
+        fixture.world.completeBinding(variable.bindingId, 1)
 
         val merged =
             context(fixture.world) {
@@ -378,7 +378,7 @@ class SelectionMergeTest {
     fun `repeated merge preserves a key containing substituted list bindings`() {
         val fixture = Fixture()
         val source = fixture.schema.requireObjectField("Query", "source")
-        val variable = Arguments.Variable.of(source, "values").stamp(emptyList())
+        val variable = Arguments.Variable.of(source, "values").instanceAt(emptyList())
         val binding =
             Arguments.Resolved
                 .of(source, mapOf("values" to listOf(1, 2)))
@@ -390,8 +390,8 @@ class SelectionMergeTest {
                 fieldName = "nested",
                 arguments = mapOf("values" to listOf(variable, variable)),
             )
-        fixture.world.declareBinding(variable)
-        fixture.world.completeBinding(variable, binding)
+        fixture.world.declareBinding(variable.bindingId)
+        fixture.world.completeBinding(variable.bindingId, binding)
 
         val once =
             context(fixture.world) {
@@ -412,9 +412,9 @@ class SelectionMergeTest {
         val fixture = Fixture()
         val definingField = fixture.schema.requireObjectField("Query", "search")
         val firstVariable =
-            Arguments.Variable.of(definingField, "first").stamp(emptyList())
+            Arguments.Variable.of(definingField, "first").instanceAt(emptyList())
         val secondVariable =
-            Arguments.Variable.of(definingField, "second").stamp(emptyList())
+            Arguments.Variable.of(definingField, "second").instanceAt(emptyList())
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val firstMarker =
             Selection.of(
@@ -477,7 +477,7 @@ class SelectionMergeTest {
     fun `variable markers report no binding for absent or incomplete result keys`() {
         val fixture = Fixture()
         val definingField = fixture.schema.requireObjectField("Query", "search")
-        val variable = Arguments.Variable.of(definingField, "value").stamp(emptyList())
+        val variable = Arguments.Variable.of(definingField, "value").instanceAt(emptyList())
         val ordinary = fixture.selection("Query", "scalar", mapOf("arg" to 1))
         val marker =
             Selection.of(
@@ -511,7 +511,7 @@ class SelectionMergeTest {
     fun `intermediate markers continue through objects and bind premature values`() {
         val fixture = Fixture()
         val definingField = fixture.schema.requireObjectField("Query", "search")
-        val variable = Arguments.Variable.of(definingField, "value").stamp(emptyList())
+        val variable = Arguments.Variable.of(definingField, "value").instanceAt(emptyList())
         val leaf = fixture.selection("ConcreteItem", "a")
         val markedLeaf =
             Selection.of(
@@ -652,3 +652,10 @@ class SelectionMergeTest {
             """.trimIndent()
     }
 }
+
+private fun Arguments.Variable.instanceAt(
+    path: List<PathComponent>,
+): Arguments.Variable = instantiate(ResolverOccurrenceId.at(path))
+
+private val Arguments.Variable.bindingId: VariableInstanceId
+    get() = requireNotNull(instanceId)

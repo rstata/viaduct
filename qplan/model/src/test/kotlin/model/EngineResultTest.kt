@@ -168,7 +168,7 @@ class EngineResultTest {
         val variable =
             Arguments.Variable
                 .of(source, "value")
-                .stamp(listOf(ListEngineResult.Index.of(0)))
+                .instantiate(ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(0))))
         val arguments = Arguments.of(consume, mapOf("value" to variable))
         val key = ObjectEngineResult.ObjectKey.of(consume, arguments)
         val equalKey = ObjectEngineResult.ObjectKey.of(consume, arguments)
@@ -190,7 +190,7 @@ class EngineResultTest {
         assertEquals(11, immutable.getCell(equalKey).getValue().get())
 
         mutable.reserveCell(key).setValue(12)
-        world.bindVariable(variable, 7)
+        world.bindVariable(requireNotNull(variable.instanceId), 7)
 
         assertTrue(context(world) { key.isContextuallyGrounded() })
         assertEquals(initialHash, key.hashCode())
@@ -217,9 +217,12 @@ class EngineResultTest {
                 ).assumptions
             val source = world.schema.requireObjectField("Query", "source")
             val consume = world.schema.requireObjectField("Query", "consume")
-            val stamp = listOf(ListEngineResult.Index.of(0))
-            val errorVariable = Arguments.Variable.of(source, "error").stamp(stamp)
-            val pendingVariable = Arguments.Variable.of(source, "pending").stamp(stamp)
+            val resolverOccurrenceId =
+                ResolverOccurrenceId.at(listOf(ListEngineResult.Index.of(0)))
+            val errorVariable =
+                Arguments.Variable.of(source, "error").instantiate(resolverOccurrenceId)
+            val pendingVariable =
+                Arguments.Variable.of(source, "pending").instantiate(resolverOccurrenceId)
             val key =
                 ObjectEngineResult.ObjectKey.of(
                     consume,
@@ -234,14 +237,14 @@ class EngineResultTest {
                         ),
                     ),
                 )
-            world.bindVariable(errorVariable, VariableBinding.Error)
-            world.declareBinding(pendingVariable)
+            world.bindVariable(requireNotNull(errorVariable.instanceId), VariableBinding.Error)
+            world.declareBinding(requireNotNull(pendingVariable.instanceId))
 
             val grounded = async { context(world) { key.fetchGroundedArguments() } }
 
             assertFalse(grounded.isCompleted)
             assertFalse(context(world) { key.isContextuallyGrounded() })
-            world.completeBinding(pendingVariable, 2)
+            world.completeBinding(requireNotNull(pendingVariable.instanceId), 2)
             assertSame(Arguments.Error, grounded.await())
             assertTrue(context(world) { key.isContextuallyGrounded() })
         }

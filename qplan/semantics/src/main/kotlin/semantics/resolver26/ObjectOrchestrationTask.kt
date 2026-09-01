@@ -54,7 +54,7 @@ internal class ObjectOrchestrationTask(
 
     /**
      * Finishes synchronous orchestration after passive materialization.
-     * Launches a coroutine only when active field installation may suspend.
+     * Launches a coroutine only when provider reads or active field installation may suspend.
      */
     fun launch() {
         require(launched.compareAndSet(false, true)) {
@@ -101,20 +101,21 @@ private fun declareBindings(closed: CloseInputDemandResult) {
     }
     closed.bindingDeclarationStarted = true
     closed.expansions.values.forEach { expansion ->
-        expansion.variableDefinitions.forEach { (variable, definition) ->
-            when (definition) {
+        expansion.variableDefinitions.forEach { variableDefinition ->
+            val variableId = requireNotNull(variableDefinition.variable.instanceId)
+            when (val definition = variableDefinition.definition) {
                 is VariableDefinition.FromArgument ->
                     if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
                         world.bindVariable(
-                            variable,
+                            variableId,
                             bindingFor(expansion.ownerKey.arguments, definition),
                         )
                     } else {
-                        world.declareBinding(variable)
+                        world.declareBinding(variableId)
                     }
 
                 is VariableDefinition.FromObjectField ->
-                    world.declareBinding(variable)
+                    world.declareBinding(variableId)
             }
         }
     }

@@ -77,7 +77,8 @@ private fun ViaductSchema.Object.closeResolverDemand(
         unexpandedResolverKeys.flatMapToSelectionForest { key ->
             world.resolverRegistry
                 .resolver(key.field)
-                .stampVars(path + key)
+                .instantiateObjectFragmentAt(path + key)
+                .constructionSelections
         }
     return closeResolverDemand(
         path = path,

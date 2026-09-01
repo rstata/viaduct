@@ -5,7 +5,7 @@ import viaduct.graphql.schema.ViaductSchema
 /**
  * Grounds this argument tuple under [world] for [expectedField].
  *
- * @throws IllegalStateException when a stamped variable is unbound or a template is unstamped
+ * @throws IllegalStateException when a variable instance is unbound or a template is uninstantiated
  */
 context(world: Assumptions)
 internal fun Arguments.instantiateBindings(
@@ -17,7 +17,7 @@ internal fun Arguments.instantiateBindings(
     }
 }
 
-/** Grounds this argument tuple for [expectedField], suspending for incomplete stamped variables. */
+/** Grounds this argument tuple for [expectedField], suspending for incomplete variable instances. */
 context(world: Assumptions)
 suspend fun Arguments.fetchBindings(
     expectedField: ViaductSchema.Field,
@@ -51,10 +51,10 @@ private fun ArgumentExpression?.instantiateBindings(
         null -> VariableBinding.of(null)
         ArgumentResolutionError -> VariableBinding.Error
         is Arguments.Variable ->
-            if (isStamped) {
-                world.getBinding(this).coerceTo(expectedType)
+            if (isInstantiated) {
+                world.getBinding(requireNotNull(instanceId)).coerceTo(expectedType)
             } else {
-                error("Variable template $this must be stamped before it can be instantiated")
+                error("Variable template $this must be instantiated before it can be grounded")
             }
         is List<*> -> {
             val elementType = expectedType.unwrapList()
@@ -96,10 +96,10 @@ private suspend fun ArgumentExpression?.fetchBindings(
         null -> VariableBinding.of(null)
         ArgumentResolutionError -> VariableBinding.Error
         is Arguments.Variable ->
-            if (isStamped) {
-                world.fetchBinding(this).coerceTo(expectedType)
+            if (isInstantiated) {
+                world.fetchBinding(requireNotNull(instanceId)).coerceTo(expectedType)
             } else {
-                error("Variable template $this must be stamped before it can be instantiated")
+                error("Variable template $this must be instantiated before it can be grounded")
             }
         is List<*> -> {
             val elementType = expectedType.unwrapList()

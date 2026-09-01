@@ -8,7 +8,6 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
-import model.Stamp
 import model.isContextuallyGrounded
 import model.groundedArguments
 import model.outputValue
@@ -77,20 +76,21 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                         .resolver(key.field)
                         .let { resolver ->
                             val coordinate = path + key
-                            val selectionStamped = resolver.stamp(coordinate)
+                            val instantiatedSelections =
+                                resolver.instantiateObjectFragmentSelectionsAt(coordinate)
                             if (
-                                selectionStamped.usedVariables().all { variable ->
-                                    variable.isStamped && world.isBound(variable)
+                                instantiatedSelections.usedVariables().all { variable ->
+                                    variable.instanceId?.let(world::isBound) == true
                                 }
                             ) {
                                 conformsToSelectionsAt(
-                                    selections = selectionStamped,
+                                    selections = instantiatedSelections,
                                     path = path,
                                 )
                             } else {
-                                val variableStamped = resolver.objectFragmentAt(coordinate)
+                                val instantiatedFragment = resolver.objectFragmentAt(coordinate)
                                 conformsToSelectionsAt(
-                                    variableStamped,
+                                    instantiatedFragment,
                                     path,
                                 )
                             }

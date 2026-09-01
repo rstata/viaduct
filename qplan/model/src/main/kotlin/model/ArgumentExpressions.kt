@@ -20,13 +20,13 @@ private data class ArgumentsImpl(
 private data class ArgumentsTemplateImpl(
     val fieldValues: Map<String, ArgumentExpression?>,
 ) : Arguments.Template {
-    override fun stamp(
+    override fun instantiate(
         expectedField: ViaductSchema.Field,
-        selectionStamp: Stamp.Occurrence,
+        resolverOccurrenceId: ResolverOccurrenceId,
     ): Arguments =
         argumentsOfExpressions(
             fieldValues.mapValues { (_, value) ->
-                value.stampVariables(selectionStamp)
+                value.instantiateVariables(resolverOccurrenceId)
             },
         ).validatedAgainst(expectedField)
 }
@@ -51,7 +51,7 @@ internal fun argumentTemplateOf(
         "Erroneous arguments cannot become a registry template"
     }
     require(arguments.usedVariables().all(Arguments.Variable::isTemplate)) {
-        "A registry argument template cannot contain stamped variables"
+        "A registry argument template cannot contain instantiated variables"
     }
     val template =
         if (arguments is Arguments.Template) {
@@ -211,36 +211,34 @@ private fun ArgumentExpression?.conformsToArgumentType(
     }
 }
 
-internal fun Arguments.stampVars(
+internal fun Arguments.instantiateVariables(
     expectedField: ViaductSchema.Field,
-    path: List<PathComponent>,
+    resolverOccurrenceId: ResolverOccurrenceId,
 ): Arguments {
     if (this == Arguments.Error) return this
     return argumentsOfExpressions(
-        fieldExpressions().mapValues { (_, value) -> value.stampVars(path) },
+        fieldExpressions().mapValues { (_, value) ->
+            value.instantiateVariables(resolverOccurrenceId)
+        },
     ).validatedAgainst(expectedField)
 }
 
-private fun ArgumentExpression?.stampVars(
-    path: List<PathComponent>,
+private fun ArgumentExpression?.instantiateVariables(
+    resolverOccurrenceId: ResolverOccurrenceId,
 ): ArgumentExpression? =
     when (this) {
-        is Arguments.Variable -> if (isTemplate) stamp(path) else this
-        is List<*> -> map { value -> value.stampVars(path) }
-        is Map<*, *> ->
-            toStringKeyedArgumentMap().mapValues { (_, value) -> value.stampVars(path) }
-        else -> this
-    }
-
-private fun ArgumentExpression?.stampVariables(
-    selectionStamp: Stamp.Occurrence,
-): ArgumentExpression? =
-    when (this) {
-        is Arguments.Variable -> if (isTemplate) stamp(selectionStamp) else this
-        is List<*> -> map { value -> value.stampVariables(selectionStamp) }
+        is Arguments.Variable ->
+            if (isTemplate) {
+                instantiate(resolverOccurrenceId)
+            } else {
+                this
+            }
+        is List<*> -> map { value -> value.instantiateVariables(resolverOccurrenceId) }
         is Map<*, *> ->
             toStringKeyedArgumentMap()
-                .mapValues { (_, value) -> value.stampVariables(selectionStamp) }
+                .mapValues { (_, value) ->
+                    value.instantiateVariables(resolverOccurrenceId)
+                }
         else -> this
     }
 
@@ -318,7 +316,7 @@ private fun ArgumentExpression?.mapVariableTemplates(
                 }
             } else {
                 throw IllegalArgumentException(
-                    "Pre-reasoning expressions cannot contain stamped variables",
+                    "Pre-reasoning expressions cannot contain instantiated variables",
                 )
             }
         is List<*> -> map { value -> value.mapVariableTemplates(transform) }
@@ -335,9 +333,9 @@ internal fun Arguments.variables(): Set<Arguments.Variable> =
         fieldExpressions().values.flatMapTo(linkedSetOf()) { value -> value.variables() }
     }
 
-/** Returns the occurrence-specific variables used anywhere in this argument tuple. */
-internal fun Arguments.stampedVariables(): Set<Arguments.Variable> =
-    variables().filterTo(linkedSetOf(), Arguments.Variable::isStamped)
+/** Returns the variable instances used anywhere in this argument tuple. */
+internal fun Arguments.instantiatedVariables(): Set<Arguments.Variable> =
+    variables().filterTo(linkedSetOf(), Arguments.Variable::isInstantiated)
 
 /** Returns every variable expression used anywhere in this argument tuple. */
 fun Arguments.usedVariables(): Set<Arguments.Variable> = variables()

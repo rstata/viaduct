@@ -269,8 +269,7 @@ private fun ListEngineResult.toPathVariableInputListBinding(): VariableBinding {
  *
  * Every result key is a [ObjectEngineResult.GroundKey]. Equal keys coalesce after substitution.
  *
- * @throws IllegalStateException when a key contains an unbound stamped variable or an unstamped
- * template
+ * @throws IllegalStateException when a key contains an unbound variable instance or a template
  */
 context(world: Assumptions)
 fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
@@ -353,18 +352,18 @@ fun ObjectSelection.groundKey(): ObjectEngineResult.GroundKey =
     key as? ObjectEngineResult.GroundKey
         ?: error("Object selection key contains open arguments: $key")
 
-/** Returns the occurrence-specific variables used by this key's arguments. */
-internal fun ObjectEngineResult.Key.stampedVariables(): Set<Arguments.Variable> =
-    arguments.stampedVariables()
+/** Returns the variable instances used by this key's arguments. */
+internal fun ObjectEngineResult.Key.instantiatedVariables(): Set<Arguments.Variable> =
+    arguments.instantiatedVariables()
 
-/** Returns the occurrence-specific variables used recursively by this selection. */
-private fun Selection.stampedVariables(): Set<Arguments.Variable> =
-    key.stampedVariables() + subselections.stampedVariables()
+/** Returns the variable instances used recursively by this selection. */
+private fun Selection.instantiatedVariables(): Set<Arguments.Variable> =
+    key.instantiatedVariables() + subselections.instantiatedVariables()
 
-/** Returns the occurrence-specific variables used recursively by this forest. */
-fun SelectionForest.stampedVariables(): Set<Arguments.Variable> {
+/** Returns the variable instances used recursively by this forest. */
+fun SelectionForest.instantiatedVariables(): Set<Arguments.Variable> {
     val variables = linkedSetOf<Arguments.Variable>()
-    forEach { selection -> variables += selection.stampedVariables() }
+    forEach { selection -> variables += selection.instantiatedVariables() }
     return variables
 }
 

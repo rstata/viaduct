@@ -104,7 +104,7 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->
-            variable.isStamped && world.isBound(variable)
+            variable.instanceId?.let(world::isBound) == true
         } &&
             result.conformsToSelectionsAt(
                 selections = constructionSelections,

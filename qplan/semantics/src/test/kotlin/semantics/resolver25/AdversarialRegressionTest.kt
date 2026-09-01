@@ -8,6 +8,7 @@ import model.EngineErrorData
 import model.EngineOutputData
 import model.ErrorEngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.VariableBinding
 import model.objectOf
 import model.operationSelectionsFrom
@@ -137,7 +138,8 @@ class AdversarialRegressionTest {
                 world.getBinding(
                     Arguments.Variable
                         .of(resultKey.field, "value")
-                        .stamp(listOf(resultKey)),
+                        .instantiate(ResolverOccurrenceId.at(listOf(resultKey)))
+                        .let { variable -> requireNotNull(variable.instanceId) },
                 ),
             )
         }

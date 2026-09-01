@@ -4,6 +4,7 @@ import model.requireField
 import model.requireObjectField
 import model.Arguments
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -73,10 +74,18 @@ interface ObjectFragmentFromArgumentResolverContract :
             secondKey to 8,
         ).forEach { (groundKey, expectedValue) ->
             val path = listOf(groundKey)
-            assertEquals(
-                VariableBinding.of(expectedValue),
-                world.getBinding(variable.stamp(path)),
-            )
+            val variableInstances =
+                resolver
+                    .instantiatedVariableDefinitions(
+                        ResolverOccurrenceId.at(path),
+                    )
+                    .map { definition -> definition.variable }
+            variableInstances.forEach { boundVariable ->
+                assertEquals(
+                    VariableBinding.of(expectedValue),
+                    world.getBinding(requireNotNull(boundVariable.instanceId)),
+                )
+            }
         }
     }
 

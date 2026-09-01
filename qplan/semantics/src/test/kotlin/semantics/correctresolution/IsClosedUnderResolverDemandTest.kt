@@ -3,6 +3,7 @@ package semantics.correctresolution
 import model.requireObjectField
 import model.Arguments
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
@@ -82,9 +83,11 @@ class IsClosedUnderResolverDemandTest {
         val resultField = world.schema.requireObjectField("Parent", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
         val variable = Arguments.Variable.of(resultField, "seed")
-        val stamped = variable.stamp(listOf(resultKey))
-        world.declareBinding(stamped)
-        world.completeBinding(stamped, 7)
+        val instantiated =
+            variable.instantiate(ResolverOccurrenceId.at(listOf(resultKey)))
+        val variableId = requireNotNull(instantiated.instanceId)
+        world.declareBinding(variableId)
+        world.completeBinding(variableId, 7)
         val result =
             world.engineResultOf("Parent") {
                 "child" resolvesTo

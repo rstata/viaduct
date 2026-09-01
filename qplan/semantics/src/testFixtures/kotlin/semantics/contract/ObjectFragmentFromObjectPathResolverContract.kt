@@ -58,7 +58,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         assertEquals(14, resolved.getCell(resultKey).get())
         assertEquals(
             VariableBinding.of(7),
-            world.getBinding(boundVariable),
+            world.getBinding(requireNotNull(boundVariable.instanceId)),
         )
     }
 
@@ -321,7 +321,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 } else {
                     VariableBinding.of(provided)
                 },
-                world.getBinding(boundVariable),
+                world.getBinding(requireNotNull(boundVariable.instanceId)),
             )
             assertEquals("consume", consumedKey)
             assertEquals(true, observedResultInput)

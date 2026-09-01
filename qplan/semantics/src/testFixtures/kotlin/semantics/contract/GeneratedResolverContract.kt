@@ -32,8 +32,10 @@ import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.registeredResolverOccurrenceCounts
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -56,6 +58,94 @@ interface EmptyObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionP
                 assertTrue(testCase.registry.objectFragmentSources.values.all(String::isEmpty))
                 assertEquals(0, testCase.registry.features.variableCount)
                 observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+            }
+        }
+}
+
+/** Generated contract for active fields exceptionally supplied by ancestor resolver outputs. */
+interface SometimesPassiveGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    @Test
+    fun `generated sometimes-passive fields resolve correctly`(): Unit =
+        runBlocking {
+            val assertions =
+                generatedCaseAssertions.filterNot { assertion ->
+                    assertion === GeneratedCaseAssertions.exactOrdinaryApplicationCounts
+                }
+            val config =
+                Config.default +
+                    (FieldArgumentWeight to 0.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (NodeResolversEnabled to false) +
+                    (ResolverFragmentsEnabled to false) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverVariablesEnabled to false) +
+                    (SometimesPassiveFieldWeight to 1.0)
+
+            fun property(
+                coverage: SometimesPassiveCoverage,
+            ): suspend (TestWorld, ResolverTestCase) -> Unit =
+                { testWorld, testCase ->
+                    coverage.generatedFields +=
+                        testCase.registry.features.sometimesPassiveFieldCount
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(
+                            testWorld = testWorld,
+                            testCase = testCase,
+                            assertions = assertions,
+                        )
+                    val occurrenceCounts =
+                        context(observation.ordinary.world) {
+                            observation.ordinary.result.registeredResolverOccurrenceCounts(
+                                observation.ordinary.world.resolverRegistry,
+                            )
+                        }
+                    val applicationCounts =
+                        observation.ordinaryApplications
+                            .groupingBy(ResolverApplicationRecord::key)
+                            .eachCount()
+                    applicationCounts.forEach { (key, count) ->
+                        assertTrue(
+                            count <= occurrenceCounts.getOrDefault(key, 0),
+                            "Observed $count applications of $key but result contains only " +
+                                "${occurrenceCounts.getOrDefault(key, 0)} occurrences",
+                        )
+                    }
+                    coverage.activatedOccurrences +=
+                        occurrenceCounts.values.sum() - observation.ordinaryApplications.size
+                }
+
+            val sampledCoverage = SometimesPassiveCoverage()
+            val sampledRun =
+                checkGeneratedProfile(
+                    profile = "sometimes-passive",
+                    config = config,
+                    property = property(sampledCoverage),
+                )
+            if (sampledRun.selectedCase == null) {
+                val activationCoverage: SometimesPassiveCoverage
+                val activationRun: ResolverTestRun
+                if (sampledRun.seed == SOMETIMES_PASSIVE_ACTIVATION_SEED) {
+                    activationCoverage = sampledCoverage
+                    activationRun = sampledRun
+                } else {
+                    activationCoverage = SometimesPassiveCoverage()
+                    activationRun =
+                        checkGeneratedProfile(
+                            profile = "sometimes-passive",
+                            config = config,
+                            seed = SOMETIMES_PASSIVE_ACTIVATION_SEED,
+                            property = property(activationCoverage),
+                        )
+                }
+
+                activationRun.assertAggregate(
+                    activationCoverage.generatedFields > 0,
+                    "Sometimes-passive activation corpus produced no source-owned fields",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.activatedOccurrences > 0,
+                    "Sometimes-passive activation corpus activated no source-owned fields",
+                )
             }
         }
 }
@@ -651,6 +741,7 @@ private const val FEATURE_INTERACTION_CASE_BUDGET = 300
 private const val NODE_ACTIVATION_SEED = 1L
 private const val FROM_ARGUMENT_ACTIVATION_SEED = 1L
 private const val MIXED_VARIABLE_ACTIVATION_SEED = 1L
+private const val SOMETIMES_PASSIVE_ACTIVATION_SEED = 1L
 
 private val GENERATED_PROFILE_COUNTS =
     TestCaseCount(
@@ -686,6 +777,11 @@ private data class MixedVariableCoverage(
     var generatedFromArgument: Int = 0,
     var generatedFromObjectField: Int = 0,
     var coactivatedCases: Int = 0,
+)
+
+private data class SometimesPassiveCoverage(
+    var generatedFields: Int = 0,
+    var activatedOccurrences: Int = 0,
 )
 
 private suspend fun checkGeneratedProfile(

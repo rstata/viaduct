@@ -221,6 +221,51 @@ interface SometimesPassiveObjectPathResolverContract : ResolverContract {
         assertEquals(11, item.getCell(world.schema.contractKey("Item", "result")).get())
         assertEquals(emptyList(), standardApplications)
     }
+
+    @Test
+    fun `does not validate object-path bindings for a source-owned resolver occurrence`() {
+        val standardApplications = mutableListOf<String>()
+        val testWorld =
+            TestWorld.fromDSL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    extend type Query {
+                      item: Item! @resolver(result: {computed: 11})
+                    }
+
+                    type Item {
+                      computed: Int!
+                        @resolver(
+                          of: "provider consume(value: ${'$'}value)"
+                          pathVars: [{name: "value", path: ["provider"]}]
+                          result: "sum(consume)"
+                        )
+                      provider: Int! @resolver(result: 99)
+                      consume(value: Int!): Int!
+                        @resolver(result: "sum(${'$'}value)")
+                    }
+                    """.trimIndent(),
+                applicationObserver = { field, _, _, _ ->
+                    if (field.containingDef.name == "Item") {
+                        standardApplications += field.name
+                    }
+                },
+            )
+        val world = testWorld.assumptions
+
+        val resolved = resolveAndValidate(world, "query { item { computed } }")
+        val item =
+            assertIs<ObjectEngineResult>(
+                resolved.getCell(world.schema.contractKey("Query", "item")).get(),
+            )
+        context(world) {
+            resolved.validateObjectPathBindings()
+        }
+
+        assertEquals(11, item.getCell(world.schema.contractKey("Item", "computed")).get())
+        assertEquals(emptyList(), standardApplications)
+    }
 }
 
 /** One-shot selective witness for conservative standard demand and dynamic output ownership. */

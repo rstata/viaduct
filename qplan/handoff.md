@@ -25,6 +25,8 @@ Resolver02/03, Resolver07/08, Resolver22/23, and Resolver26 support independentl
 
 Every maintained resolver supports canonical `FromArgument` paths through nested input objects, with null propagation through nullable intermediate objects and no list traversal. Resolver25 and Resolver26 additionally evaluate compiled `FromObjectField` provider paths at runtime. Resolver25 merges demand by grounded key; Resolver26 preserves symbolic OER keys and treats grounding as readiness and invocation data rather than a rekeying operation.
 
+Ordinary generated tests include a replayable `sometimes-passive` profile across the full maintained resolver grid. Resolver25 and Resolver26 broad campaign profiles also enable sometimes-passive generation and require independent evidence that registered result occurrences were supplied by their source owner without invoking the standard field resolver.
+
 ## Execution Harness Boundary
 
 The execution module runs validated GraphQL queries through Resolver26 and uses GraphQL Java for response completion. `EngineTestModule.runQPlanFeatureTest` adapts pre-dispatcher Engine API field and node executors into ordinary qplan fixture inputs; it does not construct production dispatchers or data loaders.

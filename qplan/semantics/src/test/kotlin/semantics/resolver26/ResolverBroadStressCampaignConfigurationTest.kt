@@ -16,6 +16,7 @@ import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverTestCaseCoordinate
 import semantics.arbitrary.SchemaObjectCount
+import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.propertytest.PropertyTestCampaignConfigFile
@@ -70,6 +71,12 @@ class ResolverBroadStressCampaignConfigurationTest {
         val nullableErrors = Resolver26BroadStressProfile.NULLABLE_ERRORS.config
         val symbolicIdentity = Resolver26BroadStressProfile.SYMBOLIC_IDENTITY.config
         val multipleOwners = Resolver26BroadStressProfile.MULTIPLE_OWNERS.config
+
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[SometimesPassiveFieldWeight] == 0.25
+            },
+        )
 
         assertTrue(descendants[ListTypeWeight] > balanced[ListTypeWeight])
         assertEquals(1..2, descendants[ListValueSize])

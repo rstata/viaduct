@@ -28,10 +28,10 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including nested input-object paths, null intermediate traversal, and a transitive chain.
 - `QueryFragmentResolverContract` covers independently orchestrated Query-rooted resolver inputs, including response aliases, variables bound from resolver arguments, distinct OER identity for each application, separation from the primary result, and transitive query-fragment resolution.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
-- `SometimesPassiveResolverContract` covers argumentless active fields exceptionally supplied by ancestor resolver outputs. `SometimesPassiveObjectFragmentResolverContract` checks both ownership branches when the standard resolver has input demand, `SometimesPassiveObjectPathResolverContract` preserves a provider path below an ancestor-supplied active field without activating that field's standard demand, and `SometimesPassiveSelectiveResolverContract` witnesses Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26's single selective ancestor application and conservative pre-execution demand.
+- `SometimesPassiveResolverContract` covers argumentless active fields exceptionally supplied by ancestor resolver outputs. `SometimesPassiveObjectFragmentResolverContract` checks both ownership branches when the standard resolver has input demand, `SometimesPassiveObjectPathResolverContract` preserves a provider path below an ancestor-supplied active field and verifies that binding validation ignores the unbound object-path variables of a skipped standard resolver, and `SometimesPassiveSelectiveResolverContract` witnesses Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26's single selective ancestor application and conservative pre-execution demand.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
 - `LateObjectPathDemandResolverContract` covers late symbolic demand across already-published active and passive objects.
-- `GeneratedResolverContract.kt` applies those scopes to generated correctness and permutation properties and adds a full-feature interaction contract.
+- `GeneratedResolverContract.kt` applies those scopes to generated correctness and permutation properties, includes a sometimes-passive profile with separate generation and activation evidence, and adds a full-feature interaction contract.
 - `ListPassiveDeepeningGeneratedResolverContract` biases toward list-valued passive fields and verifies exact witnessed applications when resolver input demand deepens those lists.
 
 Current support is:
@@ -75,6 +75,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | --- | --- | --- | --- |
 | `empty-object-fragment` | Empty fragments | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
 | `node` | Fixture-lowered nodes | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
+| `sometimes-passive` | Source-owned argumentless active fields | Resolver01-03, Resolver06-08, Resolver21-23, Resolver25-26 | `10:3:5` |
 | `object-fragment` | Nonempty fragments | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
 | `object-fragment-from-argument` | `FromArgument` variables, including nested and nullable input paths | Resolver02-03, Resolver07-08, Resolver22-23, Resolver25-26 | `10:3:5` |
 | `query-fragment` | Independently orchestrated Query-rooted resolver inputs | Resolver02-03, Resolver07-08, Resolver22-23, Resolver26 | `10:3:5` |
@@ -85,7 +86,7 @@ Extended trace, mutation, witness, list-deepening, selective-demand, and stress 
 | `resolver25-broad-*` | Unfiltered balanced, list-descendant, nullable/error, mixed-variable, and multiple-owner pressure | Resolver25 | opt-in |
 | `resolver26-broad-*` | Heterogeneous symbolic-resolution profiles | Resolver26 | opt-in profile-specific products |
 
-Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated bridge `node` loader application, and the argument-variable profile requires an application of a variable-bearing resolver. The `mixed-variables` profile applies the caller-provided seed as randomized correctness pressure and uses fixed generated seed `1` as its aggregate generation/coactivation corpus, so a valid random batch cannot fail merely because it samples only one variable kind.
+Ordinary profiles check whole-result correctness and permutation-equivalent query results. Profile guards distinguish generation from activation; for example, the node profile requires an actual generated bridge `node` loader application, the argument-variable profile requires an application of a variable-bearing resolver, and the sometimes-passive profile requires registered result occurrences whose standard resolvers were not applied. The `mixed-variables` and `sometimes-passive` profiles apply the caller-provided seed as randomized correctness pressure and use fixed generated seed `1` as their aggregate activation corpus, so a valid random batch cannot fail merely because it misses the promised interaction.
 
 The `query-fragment` profile omits `exactOrdinaryApplicationCounts` when a resolver policy enables it. That oracle reconstructs applications only from the primary result tree, while query-fragment applications intentionally belong to separate Query OER witnesses; the simple path-keyed witness map is a correctness witness rather than a lossless application ledger.
 

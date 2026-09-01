@@ -522,6 +522,8 @@ val resolverPropertyProfiles =
         "sometimes-passive" to "generated sometimes-passive fields resolve correctly",
         "object-fragment" to
             "generated object fragment worlds without variables resolve correctly",
+        "query-fragment" to
+            "generated query fragment worlds resolve correctly",
         "object-fragment-from-argument" to
             "generated object fragment worlds with fromArgument resolve correctly",
         "object-fragment-from-object-field" to

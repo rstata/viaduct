@@ -9,8 +9,8 @@ import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
 import model.Stamp
-import model.applicableGroundSelections
 import model.isContextuallyGrounded
+import model.groundedArguments
 import model.outputValue
 import model.schemaType
 import model.usedVariables
@@ -58,26 +58,26 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 
     return keys.all { key ->
         if (!key.isContextuallyGrounded()) return@all false
-        val groundKey = key as? ObjectEngineResult.GroundKey ?: return@all false
-        val value = getCell(groundKey).getValue().get()
-        val fieldName = groundKey.field.name
-        val argumentsContainError = groundKey.arguments.argumentsContainErrorValue()
+        val arguments = key.groundedArguments()
+        val value = getCell(key).getValue().get()
+        val fieldName = key.field.name
+        val argumentsContainError = arguments.argumentsContainErrorValue()
         val sourceSuppliesField = source?.isPresent(fieldName) == true
-        source.requireArgumentlessField(groundKey)
+        source.requireArgumentlessField(key)
         val fieldResolverDemandIsClosed =
             when {
                 argumentsContainError -> true
                 sourceSuppliesField ->
-                    (groundKey.arguments as? Arguments.Resolved)
+                    (arguments as? Arguments.Resolved)
                         ?.fieldValues
                         ?.isEmpty() == true
-                groundKey.field !in registry -> source == null
+                key.field !in registry -> source == null
                 else ->
                     registry
-                        .resolver(groundKey.field)
+                        .resolver(key.field)
                         .let { resolver ->
-                            val coordinate = path + groundKey
-                            val selectionStamp = groundKey.stamp as? Stamp.Occurrence
+                            val coordinate = path + key
+                            val selectionStamp = key.stamp as? Stamp.Occurrence
                             val selectionStamped =
                                 if (selectionStamp != null) {
                                     resolver.stampFrom(selectionStamp)
@@ -90,15 +90,15 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                                 }
                             ) {
                                 conformsToSelectionsAt(
-                                    selections =
-                                        selectionStamped.applicableGroundSelections(
-                                            groundKey.field.containingDef,
-                                        ),
+                                    selections = selectionStamped,
                                     path = path,
                                 )
                             } else {
                                 val variableStamped = resolver.objectFragmentAt(coordinate)
-                                conformsToSelectionsAt(variableStamped, path)
+                                conformsToSelectionsAt(
+                                    variableStamped,
+                                    path,
+                                )
                             }
                         }
             }
@@ -108,17 +108,18 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                 argumentsContainError -> true
                 sourceSuppliesField ->
                     value.engineResultIsClosedUnderResolverDemand(
-                        path = path + groundKey,
+                        path = path + key,
                         source = source.outputValue(fieldName),
                     )
-                groundKey.field in registry ->
-                    reapplyResolver(groundKey, path)?.let { application ->
+                key.field in registry ->
+                    reapplyResolver(key, path)?.let { application ->
                         value.engineResultIsClosedUnderResolverDemand(
-                            path = path + groundKey,
+                            path = path + key,
                             source = application.output,
                         )
                     } == true
-                source == null -> value.engineResultIsClosedUnderResolverDemand(path + groundKey)
+                source == null ->
+                    value.engineResultIsClosedUnderResolverDemand(path + key)
                 else -> false
             }
     }

@@ -3,6 +3,7 @@ package semantics.arbitrary
 import viaduct.graphql.schema.ViaductSchema
 
 import model.EngineResult
+import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineInputData
@@ -13,6 +14,8 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
+import model.isContextuallyGrounded
+import model.groundedArguments
 import model.Selection
 import model.SelectionForest
 import model.inputType
@@ -295,7 +298,7 @@ data class ResolutionOccurrenceWitness(
 /**
  * One registered resolver occurrence found by traversing a returned result independently of the
  * resolver constructors and correctness predicates. [occurrencePath] is the exact root-to-field
- * OER path: [ObjectEngineResult.GroundKey] components select object fields and [ListEngineResult.Index] components
+ * OER path: [ObjectEngineResult.ObjectKey] components select object fields and [ListEngineResult.Index] components
  * select list elements, distinguishing equal fields at different list positions.
  */
 data class RegisteredResolverOccurrence(
@@ -308,6 +311,7 @@ data class RegisteredResolverOccurrence(
         get() = applicationKey.field
 }
 
+context(world: Assumptions)
 fun EngineResult?.registeredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
@@ -327,6 +331,7 @@ fun EngineResult?.registeredResolverOccurrences(
  *
  * This avoids canonical sorting and list materialization for order-insensitive consumers.
  */
+context(world: Assumptions)
 fun EngineResult?.forEachRegisteredResolverOccurrence(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
@@ -340,6 +345,7 @@ fun EngineResult?.forEachRegisteredResolverOccurrence(
     )
 }
 
+context(world: Assumptions)
 private fun EngineResult?.visitRegisteredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds,
@@ -368,10 +374,13 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
                         value.keys.sortedBy { key -> key.canonicalFingerprint(bounds).value }
                     } else {
                         value.keys
-                    }
+                }
                 keys.forEach { key ->
                     val fieldPath = path + key
-                    val arguments = key.arguments as? Arguments.Resolved
+                    require(key.isContextuallyGrounded()) {
+                        "Resolver occurrence key is not contextually grounded: $key"
+                    }
+                    val arguments = key.groundedArguments() as? Arguments.Resolved
                     if (key.field in registry && arguments != null) {
                         visitOccurrence(
                             RegisteredResolverOccurrence(
@@ -405,6 +414,7 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
     visit(this, emptyList())
 }
 
+context(world: Assumptions)
 fun EngineResult?.registeredResolverOccurrenceCounts(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),

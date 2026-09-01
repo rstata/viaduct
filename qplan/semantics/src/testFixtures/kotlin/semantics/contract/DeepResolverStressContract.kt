@@ -148,9 +148,11 @@ interface DeepResolverStressContract : ResolverContract {
                     if (sometimesPassiveCoverageRequired) {
                         // Source-owned registry fields have result occurrences but no application.
                         val resultOccurrenceCounts =
-                            result.registeredResolverOccurrenceCounts(
-                                world.resolverRegistry,
-                            )
+                            context(world) {
+                                result.registeredResolverOccurrenceCounts(
+                                    world.resolverRegistry,
+                                )
+                            }
                         witness.applicationCounts().forEach { (key, count) ->
                             assertTrue(
                                 count <= resultOccurrenceCounts.getOrDefault(key, 0),
@@ -168,7 +170,11 @@ interface DeepResolverStressContract : ResolverContract {
                             witness.applicationIdentityCounts(),
                         )
                     }
-                    assertTrue(context(world) { result.correctResolution(fragment) })
+                    assertTrue(
+                        context(world) {
+                            result.correctResolution(fragment)
+                        },
+                    )
                     resolverApplications += witness.applications.size
                     var activatedFromArgument = false
                     var activatedObjectPath = false

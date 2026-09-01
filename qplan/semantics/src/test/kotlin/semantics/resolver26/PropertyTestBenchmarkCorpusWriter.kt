@@ -60,7 +60,11 @@ object PropertyTestBenchmarkCorpusWriter {
                             result.registeredResolverApplicationIdentityCounts()
                         } == witness.applicationIdentityCounts(),
                     )
-                    check(context(world) { result.correctResolution(fragment) })
+                    check(
+                        context(world) {
+                            result.correctResolution(fragment)
+                        },
+                    )
                     context(world) {
                         result.validateObjectPathBindings()
                     }

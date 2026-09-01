@@ -2,15 +2,20 @@ package semantics.contract
 
 import java.util.concurrent.atomic.AtomicInteger
 import model.Arguments
+import model.ObjectEngineResult
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.isContextuallyGrounded
 import model.requireObjectField
+import model.groundedArguments
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
+import kotlin.test.assertTrue
 
 /** Contract for independently resolved Query-rooted field-resolver fragments. */
 interface QueryFragmentResolverContract : ResolverContract {
@@ -91,14 +96,27 @@ interface QueryFragmentResolverContract : ResolverContract {
         val firstQueryResult = world.queryValues.getValue(listOf(firstKey))
         val secondQueryResult = world.queryValues.getValue(listOf(secondKey))
         assertNotSame(firstQueryResult, secondQueryResult)
-        assertEquals(
-            setOf(world.schema.contractKey("Query", "source", mapOf("value" to 2))),
-            firstQueryResult.keys,
-        )
-        assertEquals(
-            setOf(world.schema.contractKey("Query", "source", mapOf("value" to 3))),
-            secondQueryResult.keys,
-        )
+        listOf(firstQueryResult to 2, secondQueryResult to 3).forEach {
+                (queryResult, expectedValue) ->
+            val expectedKey =
+                world.schema.contractKey(
+                    "Query",
+                    "source",
+                    mapOf("value" to expectedValue),
+                )
+            val actualKey = queryResult.keys.single()
+            if (actualKey is ObjectEngineResult.GroundKey) {
+                assertEquals(expectedKey, actualKey)
+            } else {
+                    assertFalse(actualKey is ObjectEngineResult.GroundKey)
+                    assertEquals(expectedKey.field, actualKey.field)
+                    assertTrue(context(world) { actualKey.isContextuallyGrounded() })
+                    assertEquals(
+                        expectedKey.arguments,
+                        context(world) { actualKey.groundedArguments() },
+                    )
+            }
+        }
     }
 
     @Test

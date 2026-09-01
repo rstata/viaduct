@@ -6,7 +6,6 @@ import model.Assumptions
 import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.instantiateBindings
 import model.merge
 import model.objectOf
 import model.operationSelectionsFrom
@@ -52,16 +51,19 @@ private object ContractPostTestState {
                 context(validation.world) {
                     validation.result.correctResolution(
                         validation.selections
-                            .merge(validation.world.schema.requireQueryTypeDef())
-                            .instantiateBindings(),
+                            .merge(validation.world.schema.requireQueryTypeDef()),
                     )
                 },
                 context(validation.world) {
                     "rooted=${validation.result.rootedAndWellTyped()}, " +
                         "selections=" +
-                        validation.result.conformsToSelections(validation.selections) +
-                        ", closed=${validation.result.isClosedUnderResolverDemand()}, " +
-                        "resolvers=${validation.result.conformsToResolvers()}"
+                        validation.result.conformsToSelections(
+                            validation.selections,
+                        ) +
+                        ", closed=" +
+                        validation.result.isClosedUnderResolverDemand() +
+                        ", resolvers=" +
+                        validation.result.conformsToResolvers()
                 },
             )
         }

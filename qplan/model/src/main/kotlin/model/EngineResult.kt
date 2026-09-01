@@ -418,6 +418,36 @@ fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
     }
 
 /**
+ * Grounds this contextually grounded key's arguments without changing the key's identity.
+ *
+ * @throws IllegalArgumentException when any variable is a template or lacks a completed binding
+ */
+context(world: Assumptions)
+fun ObjectEngineResult.ObjectKey.groundedArguments(): Arguments.Ground {
+    require(isContextuallyGrounded()) {
+        "Object key is not contextually grounded"
+    }
+    return arguments.instantiateBindings(field)
+}
+
+/**
+ * Awaits every variable carried by this key before grounding its arguments.
+ *
+ * Unlike [Arguments.fetchBindings], this does not stop awaiting variables after an argument error.
+ * The returned value may still be [Arguments.Error], but the key is contextually grounded.
+ */
+context(world: Assumptions)
+suspend fun ObjectEngineResult.ObjectKey.fetchGroundedArguments(): Arguments.Ground {
+    arguments.usedVariables().forEach { variable ->
+        require(variable.isStamped) {
+            "Variable template $variable must be stamped before its binding can be fetched"
+        }
+        world.fetchBinding(variable)
+    }
+    return groundedArguments()
+}
+
+/**
  * A typed list result whose elements are cells.
  *
  * [typeExpr] is the expected type of each cell value, including its nullability and nested lists.

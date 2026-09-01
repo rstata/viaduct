@@ -12,9 +12,8 @@ import model.ObjectEngineResult
 import model.outputType
 import model.PathComponent
 import model.Selection
-import model.Stamp
 import model.VariableBinding
-import model.fetchBindings
+import model.fetchGroundedArguments
 import model.localizeTopLevelSelectionStamps
 import model.objectKey
 import model.selectionForestOf
@@ -39,51 +38,35 @@ internal suspend fun ObjectEngineResult.readProvider(
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
-        val groundedArguments =
-            specializedKey.arguments.fetchBindings(
-                specializedKey.field,
-            )
-        val occurrenceStamp = specializedKey.stamp as? Stamp.Occurrence
-        val ownerGroundKey: ObjectEngineResult.GroundKey =
-            if (occurrenceStamp == null) {
-                ObjectEngineResult.GroundKey.of(
-                    field = specializedKey.field,
-                    arguments = groundedArguments,
-                )
-            } else {
-                ObjectEngineResult.GroundKey.of(
-                    stamp = occurrenceStamp,
-                    field = specializedKey.field,
-                    arguments = groundedArguments,
-                )
-            }
-        val groundKey =
+        specializedKey.fetchGroundedArguments()
+        val objectKey =
             if (index == 0) {
-                ownerGroundKey
+                specializedKey
             } else {
                 selectionForestOf(
                     Selection.of(
-                        key = ownerGroundKey,
+                        key = specializedKey,
                         possibleTypes = setOf(current.type),
                         subselections = selectionForestOf(),
                     ),
                 ).localizeTopLevelSelectionStamps(currentPath)
                     .single()
-                    .key as ObjectEngineResult.GroundKey
+                    .key as ObjectEngineResult.ObjectKey
             }
-        val cell = current.reserveCell(groundKey)
+        objectKey.fetchGroundedArguments()
+        val cell = current.reserveCell(objectKey)
         support.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == definition.path.lastIndex) {
-            return value.toProviderBinding(groundKey.field.outputType)
+            return value.toProviderBinding(objectKey.field.outputType)
         }
         when (value) {
             null -> return VariableBinding.of(null)
             is ErrorEngineResult -> return VariableBinding.Error
             is ObjectEngineResult -> current = value
-            else -> error("Resolver26 provider path crossed a non-object at $groundKey")
+            else -> error("Resolver26 provider path crossed a non-object at $objectKey")
         }
-        currentPath += groundKey
+        currentPath += objectKey
     }
     error("Resolver26 provider path must be nonempty")
 }

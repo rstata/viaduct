@@ -160,7 +160,9 @@ internal suspend fun runResolver26BroadStress(
                     }
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                 val occurrences: List<RegisteredResolverOccurrence> =
-                    result.registeredResolverOccurrences(world.resolverRegistry)
+                    context(world) {
+                        result.registeredResolverOccurrences(world.resolverRegistry)
+                    }
                 observedSignatures +=
                     resolver26StructuralSignatures(
                         occurrences = occurrences,
@@ -191,7 +193,11 @@ internal suspend fun runResolver26BroadStress(
                     },
                     witness.applicationIdentityCounts(),
                 )
-                assertTrue(context(world) { result.correctResolution(fragment) })
+                assertTrue(
+                    context(world) {
+                        result.correctResolution(fragment)
+                    },
+                )
                 context(world) {
                     result.validateObjectPathBindings()
                 }

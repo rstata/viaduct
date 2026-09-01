@@ -85,7 +85,11 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                         },
                         witness.applicationIdentityCounts(),
                     )
-                    assertTrue(context(world) { result.correctResolution(fragment) })
+                    assertTrue(
+                        context(world) {
+                            result.correctResolution(fragment)
+                        },
+                    )
                     verifiedCases += 1
                 }
             }

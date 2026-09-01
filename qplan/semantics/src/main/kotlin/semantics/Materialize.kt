@@ -2,8 +2,6 @@ package semantics
 
 import viaduct.graphql.schema.ViaductSchema
 
-import model.Arguments
-
 import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
@@ -18,8 +16,7 @@ import model.outputType
 import model.ObjectMaterializeSelection
 import model.PathComponent
 import model.Selection
-import model.Stamp
-import model.fetchBindings
+import model.fetchGroundedArguments
 import model.localizeTopLevelSelectionStamps
 import model.materializedEngineObjectDataOf
 import model.selectionForestOf
@@ -31,7 +28,8 @@ import viaduct.engine.api.EngineObjectData
  *
  * [reader] is the exact root-relative coordinate of the resolver consuming the materialized value.
  *
- * This operation is defined when this result contains every value promise selected by [selections] and every selection applicable at an object visited by this operation contains no [Arguments.Variable] in its key arguments.
+ * This operation is defined when this result contains every value promise selected by [selections]
+ * and every applicable selection key is contextually grounded.
  */
 context(world: Assumptions, resolverSupport: ResolverSupport)
 internal suspend fun ObjectEngineResult.materialize(
@@ -57,7 +55,8 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     val selectedValues =
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
-        val storedKey = selection.materializedGroundKey(selectionPath)
+        val candidateKey = selection.materializedSymbolicKey(selectionPath)
+        val storedKey = findStoredKey(candidateKey) ?: candidateKey
         val cell = getCell(storedKey)
         val promise = cell.getValue()
         resolverSupport.cycleCheck(reader, cell)
@@ -82,30 +81,25 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
 }
 
 context(world: Assumptions)
-internal suspend fun ObjectMaterializeSelection.materializedGroundKey(
+private suspend fun ObjectMaterializeSelection.materializedSymbolicKey(
     selectionPath: List<PathComponent>,
-): ObjectEngineResult.GroundKey {
-    val arguments = key.arguments.fetchBindings(key.field)
-    val stamp = key.stamp as? Stamp.Occurrence
-    val groundedKey =
-        if (stamp == null) {
-            ObjectEngineResult.GroundKey.of(key.field, arguments)
+): ObjectEngineResult.ObjectKey {
+    val storedKey =
+        if (selectionPath.isEmpty()) {
+            key
         } else {
-            ObjectEngineResult.GroundKey.of(stamp, key.field, arguments)
+            selectionForestOf(
+                Selection.of(
+                    key = key,
+                    possibleTypes = setOf(key.field.containingDef),
+                    subselections = selectionForestOf(),
+                ),
+            ).localizeTopLevelSelectionStamps(selectionPath)
+                .single()
+                .key as ObjectEngineResult.ObjectKey
         }
-    if (selectionPath.isEmpty()) return groundedKey
-    val localizedKey =
-        selectionForestOf(
-            Selection.of(
-                key = groundedKey,
-                possibleTypes = setOf(groundedKey.field.containingDef),
-                subselections = selectionForestOf(),
-            ),
-        ).localizeTopLevelSelectionStamps(selectionPath)
-        .single()
-        .key
-    return localizedKey as? ObjectEngineResult.GroundKey
-        ?: error("Localized materialize key is not ground: $localizedKey")
+    storedKey.fetchGroundedArguments()
+    return storedKey
 }
 
 // Recursively materializes one selected result while retaining its exact stored path.

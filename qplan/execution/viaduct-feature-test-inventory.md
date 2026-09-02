@@ -46,7 +46,7 @@ The following source files are intentionally not copied because every test in ea
 - **Execution:** `TestWorld` fills missing nullable Query fields with null producers and missing non-null Query fields with error producers. Node lowering treats the fringe ID as authoritative when composing raw lookup data, matching production's `NodeEngineObjectDataImpl`; the lookup payload need not repeat it. Seven node tests currently pass through qplan; six remain disabled.
 - **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
 - **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.
-- `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` uses a query required selection, which the executor adapter deliberately rejects.
+- `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` tests memoization across the primary operation and an independently rooted resolver Query fragment. Qplan will not support memoizing query-fragment OERs across resolver roots, so the test is N/A rather than an intentional behavior alternative.
 - `FromFieldVariablesFeatureTest.kt`'s source-success case `from arg -- path traverses nested input` remains unchanged and disabled; adapter rejection coverage belongs in a separate qplan-specific test.
 - `OperationValidationTest.kt` is not a Resolver26 candidate. Its invalid operations are rejected before `QPlanExecutionStrategy`, while its valid case only executes two independent constant root fields.
 
@@ -56,7 +56,7 @@ Counts overlap because one test may be blocked by more than one requirement. Lab
 
 | Group | Count | Label |
 | --- | ---: | --- |
-| Query RSS / from-query providers | 28 | `QueryRss` |
+| Query RSS interactions requiring another unsupported feature | 7 | `QueryRss` |
 | Selective executors / requested selections | 13 | `Selective` |
 | Parent-field semantics | 7 | `ParentFld` |
 | Checkers / access checks | 8 | `AccessChk` |
@@ -111,6 +111,7 @@ Counts overlap because one test may be blocked by more than one requirement. Lab
 
 | Test | Reason |
 | --- | --- |
+| [`node resolver not executed twice for the same query path`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L512) | Tests memoization of query-fragment OERs across resolvers, which qplan will not support. |
 | [`node field executes in parallel with node resolver`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L191) | Tests production's pending-OER/Dispatcher scheduling policy, not resolver correctness. |
 | [`node resolver reads from dataloader cache`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L374) | Tests request-scoped `NodeDataLoader` caching; production already marks it flaky. |
 | [`non-selective node resolver reads from dataloader cache for different selection sets`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L408) | Tests production's non-selective data-loader cache-key policy. |

@@ -13,6 +13,7 @@ import viaduct.engine.api.FromArgument
 import viaduct.engine.api.FromArgumentVariable
 import viaduct.engine.api.FromFieldVariablesResolver
 import viaduct.engine.api.FromObjectFieldVariable
+import viaduct.engine.api.FromQueryFieldVariable
 import viaduct.engine.api.RequiredSelectionSet
 import viaduct.engine.api.VariablesResolver
 import viaduct.engine.api.select.SelectionsParser
@@ -119,6 +120,89 @@ class RequiredSelectionSetVariableRecoveryTest {
     }
 
     @Test
+    fun `recovers Query path across both resolver fragments`() {
+        val objectSelections = SelectionsParser.parse("Query", "source")
+        val querySelections = SelectionsParser.parse("Query", "bar(x: \$vary), selected: source")
+        val variablesResolvers =
+            VariablesResolver.fromSelectionSetVariables(
+                objectSelections = objectSelections,
+                querySelections = querySelections,
+                variables = listOf(FromQueryFieldVariable("vary", "selected")),
+                forChecker = false,
+            )
+
+        val recovered =
+            recovery.recover(
+                field = field,
+                objectFragment =
+                    schema.fragmentFrom(
+                        "fragment _ on Query { source }",
+                        variableField = field,
+                    ),
+                objectRequiredSelectionSet =
+                    RequiredSelectionSet(
+                        objectSelections,
+                        variablesResolvers,
+                        forChecker = false,
+                    ),
+                queryFragment =
+                    schema.fragmentFrom(
+                        "fragment _ on Query { bar(x: \$vary), selected: source }",
+                        variableField = field,
+                    ),
+                queryRequiredSelectionSet =
+                    RequiredSelectionSet(
+                        querySelections,
+                        variablesResolvers,
+                        forChecker = false,
+                    ),
+            )
+
+        val declaration = assertIs<FromField>(recovered.values.single())
+        assertEquals(listOf("selected"), declaration.responsePath)
+    }
+
+    @Test
+    fun `rejects erased from-field provider that matches both fragments`() {
+        val selections = SelectionsParser.parse("Query", "bar(x: \$vary), selected: source")
+        val variablesResolvers =
+            VariablesResolver.fromSelectionSetVariables(
+                objectSelections = selections,
+                querySelections = selections,
+                variables = listOf(FromQueryFieldVariable("vary", "selected")),
+                forChecker = false,
+            )
+        val fragment =
+            schema.fragmentFrom(
+                "fragment _ on Query { bar(x: \$vary), selected: source }",
+                variableField = field,
+            )
+
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                recovery.recover(
+                    field = field,
+                    objectFragment = fragment,
+                    objectRequiredSelectionSet =
+                        RequiredSelectionSet(
+                            selections,
+                            variablesResolvers,
+                            forChecker = false,
+                        ),
+                    queryFragment = fragment,
+                    queryRequiredSelectionSet =
+                        RequiredSelectionSet(
+                            selections,
+                            variablesResolvers,
+                            forChecker = false,
+                        ),
+                )
+            }
+
+        assertTrue(error.message.orEmpty().contains("ambiguously matches path selected"))
+    }
+
+    @Test
     fun `recovers provider dependencies against root object RSS`() {
         val selections = "bar(x: \$value), scaled: source(scale: \$scale)"
         val parsedSelections = SelectionsParser.parse("Query", selections)
@@ -177,7 +261,7 @@ class RequiredSelectionSetVariableRecoveryTest {
                 )
             }
 
-        assertTrue(error.message.orEmpty().contains("nested RSS that does not match object path"))
+        assertTrue(error.message.orEmpty().contains("nested RSS that does not match path"))
     }
 
     @Test
@@ -237,7 +321,7 @@ class RequiredSelectionSetVariableRecoveryTest {
         assertTrue(
             error.message
                 .orEmpty()
-                .contains("support only FromArgument and object-path variable providers"),
+                .contains("support only FromArgument and from-field variable providers"),
         )
     }
 

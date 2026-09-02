@@ -39,9 +39,9 @@ GraphQL Java parsing, validation, and input coercion
 
 `EngineTestModule.runQPlanFeatureTest` is defined in `src/testFixtures/kotlin/execution/testing/EngineTestModuleQPlanFeatureTest.kt`. It consumes the pre-dispatcher field and node executor maps exposed by `EngineTestModule`.
 
-The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object required selections into the canonical schema, recovers supported variable declarations from the same executor RSS, passes resolved arguments and synchronous object data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan.
+The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object and Query required selections into the canonical schema, recovers supported variable declarations across both executor fragments, passes resolved arguments plus synchronous object and occurrence-specific Query data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan.
 
-The mock field-executor surface returns `Any?` and permits a raw map as the source for a concrete GraphQL object field. Qplan's `EngineOutputData` contract does not: object output must be `EngineObjectData.Sync`. The adapter therefore uses the declared concrete object type to recursively materialize such maps and normalizes the resulting EOD before it crosses into qplan. It does not accept raw maps for interface or union outputs because those values do not provide the concrete runtime type needed for an unambiguous conversion.
+The mock field-executor surface returns `Any?`, permits a raw map or source-shaped EOD as the source for a concrete GraphQL object field, and relies on GraphQL completion to serialize built-in scalar results. Qplan's `EngineOutputData` contract is stricter: object output must be a conforming `EngineObjectData.Sync`, and scalar output must already inhabit its canonical runtime domain. The adapter therefore uses the declared concrete object type to recursively materialize those object sources and applies the source scalar's GraphQL-Java serialization before values cross into qplan. It does not accept raw maps for interface or union outputs because those values do not provide the concrete runtime type needed for an unambiguous conversion.
 
 In keeping with the architecture of qplan, the adapter translates node executors into field resolvers on fields that return Node types.  This is a process called "lowering:" the schema used for field resolution is slightly modified ("lowered") to conveniently support node-resolvers-as-field resolvers, and similarly node-resolver executors are modified to be put into the resolver registry as field resolvers. A raw node-executor payload may omit the repeated `id`: shared fixture lowering combines its fields with the authoritative ID supplied by the Node-valued fringe before the effective object enters qplan. The adapter also supplies local equivalents of built-in `Query.node` and `Query.nodes` when the module does not provide those executors.
 
@@ -49,11 +49,11 @@ In keeping with the architecture of qplan, the adapter translates node executors
 
 `RequiredSelectionSetVariableRecovery` is the boundary that converts supported Engine API RSS variable resolvers back into qplan `VariableDeclaration` values. This intentionally reverse engineers the production compilation path rather than invoking `VariablesResolver.resolve`: [`RequiredSelectionSetSupport`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/bootstrap/executionregistry/RequiredSelectionSetSupport.kt) turns execution-registry declarations into selection-set variables, [`VariablesResolver.Builder.buildOne`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/VariablesResolver.kt) compiles those declarations into resolver recipes, and [`RequiredSelectionSetFactory`](../../core/tenant/runtime/src/main/kotlin/viaduct/tenant/runtime/bootstrap/RequiredSelectionSetFactory.kt) validates and installs them on each executor [`RequiredSelectionSet`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/RequiredSelectionSet.kt).
 
-`FromArgument(name, path)` recovery accepts exactly one path segment. Recovery recursively unwraps production `Validated` decorators, associates each provider name with the exact variable occurrence decoded from its owning resolver fragment, and emits `schema.fromArgument(ownerField, argumentName)`. This preserves renamed bindings such as `$vary` sourced from argument `y`; it also prevents same-named variables owned by different resolvers from being conflated. Qplan's registry model supports canonical paths through nested input objects, and Engine runtime validates that richer form in [`FromArgumentVariablesHaveValidPaths`](../../core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/tenantloading/FromArgumentVariablesHaveValidPaths.kt); only this production-recovery adapter remains restricted because it has not yet decoded multi-segment recipes into that model.
+`FromArgument(name, path)` recovery accepts exactly one path segment. Recovery recursively unwraps production `Validated` decorators, associates each provider name with the exact variable occurrence decoded across its owning resolver's object and Query fragments, and emits `schema.fromArgument(ownerField, argumentName)`. This preserves renamed bindings such as `$vary` sourced from argument `y`; it also prevents same-named variables owned by different resolvers from being conflated. Qplan's registry model supports canonical paths through nested input objects, and Engine runtime validates that richer form in [`FromArgumentVariablesHaveValidPaths`](../../core/engine/runtime/src/main/kotlin/viaduct/engine/runtime/tenantloading/FromArgumentVariablesHaveValidPaths.kt); only this production-recovery adapter remains restricted because it has not yet decoded multi-segment recipes into that model.
 
-`FromFieldVariablesResolver(name, path, requiredSelectionSet)` recovery treats `path` as an alias-preserving object response-key path. Because the Engine API type does not retain whether it came from `fromObjectField` or `fromQueryField`, recovery proves the object origin by requiring its nested RSS to equal the executor object RSS filtered to that path. It recursively checks nested RSS variable dependencies against the root object RSS, requires repeated provider recipes to agree, and emits `schema.fromObjectField(objectFragment, path)`.
+`FromFieldVariablesResolver(name, path, requiredSelectionSet)` recovery treats `path` as an alias-preserving response-key path. Because the Engine API type does not retain whether it came from `fromObjectField` or `fromQueryField`, recovery reconstructs the origin by requiring its nested RSS to equal exactly one of the executor's object or Query RSSes filtered to that path. It recursively checks nested RSS variable dependencies against both root fragments, requires repeated provider recipes to agree, and emits `schema.fromObjectField(objectFragment, path)` or `schema.fromQueryField(queryFragment, path)`. A provider that matches both fragments is rejected as ambiguous rather than guessed.
 
-Recovery requires exact agreement between the fragment's variable occurrences and the RSS provider names. It rejects missing, unused, duplicate, or inconsistent providers; nested argument paths; field paths not proven by the root object RSS; and arbitrary provider callbacks. Query RSS variables remain outside this adapter because query required selections themselves are not yet supported.
+Recovery requires exact agreement between both fragments' variable occurrences and the RSS provider names. It rejects missing, unused, duplicate, inconsistent, or ambiguous providers; nested argument paths; field paths not proven by either root RSS; and arbitrary provider callbacks.
 
 ## Feature Test Guidelines
 
@@ -79,8 +79,9 @@ The feature-test adapter currently supports:
 - Unbatched, non-selective field and node resolvers.
 - Field arguments, including values supplied by GraphQL operation variables.
 - Object required selections, including aliases, arguments, transitive requirements, repeated argumented fields, shared requirements, and multiple requirements.
-- Top-level from-argument variables in object required selections, including variable names that differ from their source argument names.
-- From-object-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, non-root resolver owners, and argument-bearing provider keys grounded from literals, defaults, owner arguments, or other acyclic object-path bindings.
+- Query required selections, including aliases, arguments, fragments, transitive requirements, nested object access, null values, and combinations with object required selections.
+- Top-level from-argument variables in object or Query required selections, including variable names that differ from their source argument names.
+- From-object-field and from-Query-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, non-root resolver owners, cross-fragment consumption, and argument-bearing provider keys grounded from literals, defaults, owner arguments, or other acyclic from-field bindings.
 - Synchronous scalar, enum, list, object, and `NodeReference` outputs, including raw map sources for concrete object fields.
 - Partially populated Query executor maps, with missing nullable fields resolving to null and missing non-null fields resolving to an error.
 - Node-valued fields and built-in `Query.node` and `Query.nodes`.
@@ -89,10 +90,9 @@ The feature-test adapter currently supports:
 The adapter rejects or does not yet model:
 
 - Nested input-object paths for from-argument variables.
-- From-Query-field and arbitrary callback variable providers.
+- Arbitrary callback variable providers and from-field providers whose erased production representation ambiguously matches both resolver fragments.
 - Batched or selective field and node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
-- Query required selections.
 - Checker and type-checker executors.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
 
@@ -138,7 +138,7 @@ Run the complete execution suite with `./gradlew :execution:test`, and run every
 
 ## Next Steps
 
-Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. From-Query paths and custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
+Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. Custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
 
 After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, requested-selection plumbing for selective executors, and a deliberate batching design. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
 

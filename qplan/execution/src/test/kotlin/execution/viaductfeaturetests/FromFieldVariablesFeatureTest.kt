@@ -616,7 +616,6 @@ class FromFieldVariablesFeatureTest {
         assertEquals("b", err.variableName)
     }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- simple`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z:Int }") {
@@ -637,7 +636,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- variables used by field on non-root object`() =
         EngineTestModule(
@@ -697,7 +695,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("mutation {x}").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- binds variable to query field with different name`() =
         EngineTestModule("extend type Query { x:Int, y(a:Int):Int, z:Int }") {
@@ -718,7 +715,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 30}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- returns null value`() =
         EngineTestModule("extend type Query { x:Int!, y(a:Int):Int!, z:Int }") {
@@ -740,7 +736,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data:{x:-2}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `from query field -- single-field-multiple-variable -- multiple variables on required selection`() =
         EngineTestModule("extend type Query { x:Int, y(b:Int, c:Int):Int, z:Int, w:Int }") {
@@ -818,7 +813,6 @@ class FromFieldVariablesFeatureTest {
         )
     }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `mixed variables -- from query field and from argument`() =
         EngineTestModule("extend type Query { x(a:Int):Int, y(a:Int, b:Int):Int, z:Int }") {
@@ -845,7 +839,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x(a:2)}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `mixed variables -- from query field and from object field`() =
         EngineTestModule("extend type Query { x:Int, y(a:Int, b:Int):Int, z(w:Int):Int }") {
@@ -1021,7 +1014,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{foo(x:2) bar(x:3)}").assertJson("{data:{foo:110, bar:7}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `mixed variables -- non-root resolver uses fromObjectField in queryFragment`() =
         EngineTestModule(

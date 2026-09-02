@@ -2014,7 +2014,6 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - simple field access`() =
         EngineTestModule("extend type Query { currentUser: String, userGreeting: String }") {
@@ -2101,7 +2100,6 @@ class RequiredSelectionsTest {
         assertEquals(1, selectedValueCount.get())
     }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - with aliases`() =
         EngineTestModule("extend type Query { currentUser: String, userCount: Int, summary: String }") {
@@ -2122,7 +2120,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"summary": "Bob has 42 items"}}""")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - with arguments`() =
         EngineTestModule("extend type Query { user(id: String!): String, userMessage: String }") {
@@ -2148,7 +2145,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"userMessage": "Message for: User-123"}}""")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - using fragments`() =
         EngineTestModule("extend type Query { userName: String, userEmail: String, profile: String }") {
@@ -2169,7 +2165,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"profile": "Name: Charlie, Email: charlie@example.com"}}""")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment and objectValueFragment together`() =
         EngineTestModule("extend type Query { globalConfig: String, baz: Baz } type Baz { x: Int, y: String }") {
@@ -2191,7 +2186,6 @@ class RequiredSelectionsTest {
                 .assertJson("{data: {baz: {y: \"Premium item with value 100\"}}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - transitive dependencies`() =
         EngineTestModule("extend type Query { baseValue: Int, multipliedValue: Int, finalValue: Int }") {
@@ -2217,7 +2211,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"finalValue": 20}}""")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - multiple query selections`() {
         val userCount = AtomicInteger()
@@ -2259,7 +2252,6 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - inline fragment without type condition`() =
         EngineTestModule("extend type Query { isEnabled: Boolean, config: String, result: String }") {
@@ -2280,7 +2272,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"result": "Running in production"}}""")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - handles null gracefully`() =
         EngineTestModule("extend type Query { optionalValue: String, result: String }") {
@@ -2318,7 +2309,6 @@ class RequiredSelectionsTest {
                 .assertJson("{data: {string1: \"Mutated from: InitialValue\"}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - nested object access`() =
         EngineTestModule("extend type Query { bar: Bar, baz: Baz } type Bar { value: String } type Baz { x: Int, y: String }") {
@@ -2340,7 +2330,6 @@ class RequiredSelectionsTest {
                 .assertJson("{data: {baz: {y: \"Baz sees bar value: BarValue\"}}}")
         }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `resolve field with queryValueFragment - typed inline fragment`() =
         EngineTestModule("extend type Query { enabled: Boolean, message: String, status: String }") {

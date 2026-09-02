@@ -47,7 +47,6 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("TODO: QueryRss")
     @Test
     fun `simple query selections test`() {
         EngineTestModule(

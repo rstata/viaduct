@@ -7,6 +7,7 @@ import model.fragmentFrom
 import model.testing.VariableDeclaration
 import model.testing.fromArgument
 import model.testing.fromObjectField
+import model.testing.fromQueryField
 import model.usedVariables
 import viaduct.engine.api.FromArgument
 import viaduct.engine.api.FromFieldVariablesResolver
@@ -17,7 +18,7 @@ import viaduct.graphql.schema.ViaductSchema
 import viaduct.graphql.utils.ParsedSelections
 
 /**
- * Recovers qplan registry variable declarations from a field executor's object RSS.
+ * Recovers qplan registry variable declarations from a field executor's object and Query RSSes.
  *
  * This reverses the `FromArgumentVariable` and `FromObjectFieldVariable` recipes compiled by:
  *
@@ -28,14 +29,14 @@ import viaduct.graphql.utils.ParsedSelections
  *   resolvers in [Validated] and installs them on the field executor's [RequiredSelectionSet]
  *
  * A [FromFieldVariablesResolver] does not retain whether it originated as `fromObjectField` or
- * `fromQueryField`. Recovery proves the former by checking that its nested RSS is exactly the
- * executor's object RSS filtered to the retained response-key path. The nested RSS is recovered
- * recursively so providers used by argument-bearing path selections are validated too.
+ * `fromQueryField`. Recovery reconstructs that distinction by checking whether its nested RSS is
+ * exactly the executor's object or Query RSS filtered to the retained response-key path. The
+ * nested RSS is recovered recursively so providers used by argument-bearing path selections are
+ * validated too.
  *
  * Qplan's semantic registry supports nested input-object paths, but this adapter can recover only
  * the one-segment argument recipes retained by the production Engine API. Nested input-object
- * paths, query-field paths, and arbitrary [VariablesResolver] callbacks are rejected here rather
- * than approximated.
+ * paths and arbitrary [VariablesResolver] callbacks are rejected here rather than approximated.
  */
 internal class RequiredSelectionSetVariableRecovery(
     private val schema: ViaductSchema,
@@ -59,6 +60,14 @@ internal class RequiredSelectionSetVariableRecovery(
         val responsePath: List<String>,
     ) : RecoveredConfiguration
 
+    /**
+     * One recovered Query response path before it is compiled into a qplan declaration.
+     */
+    data class RecoveredFromQueryField(
+        override val variable: Arguments.Variable,
+        val responsePath: List<String>,
+    ) : RecoveredConfiguration
+
     sealed interface RecoveredConfiguration {
         val variable: Arguments.Variable
     }
@@ -70,9 +79,39 @@ internal class RequiredSelectionSetVariableRecovery(
         field: ViaductSchema.ObjectField,
         objectFragment: Fragment,
         requiredSelectionSet: RequiredSelectionSet?,
+    ): Map<Arguments.Variable, VariableDeclaration> =
+        recover(
+            field = field,
+            objectFragment = objectFragment,
+            objectRequiredSelectionSet = requiredSelectionSet,
+            queryFragment = null,
+            queryRequiredSelectionSet = null,
+        )
+
+    /**
+     * Returns declarations from both resolver fragments ready for
+     * `TestWorld.fromSDL(variableProviders = ...)`.
+     */
+    fun recover(
+        field: ViaductSchema.ObjectField,
+        objectFragment: Fragment,
+        objectRequiredSelectionSet: RequiredSelectionSet?,
+        queryFragment: Fragment?,
+        queryRequiredSelectionSet: RequiredSelectionSet?,
     ): Map<Arguments.Variable, VariableDeclaration> {
-        val objectFragmentSource = requiredSelectionSet?.fragmentSource()
-        return recoverConfigurations(field, objectFragment, requiredSelectionSet)
+        val objectFragmentSource = objectRequiredSelectionSet?.fragmentSource()
+        val queryFragmentSource = queryRequiredSelectionSet?.fragmentSource()
+        return recoverConfigurations(
+            field = field,
+            fragments = listOfNotNull(objectFragment, queryFragment),
+            variableResolvers =
+                listOfNotNull(objectRequiredSelectionSet, queryRequiredSelectionSet)
+                    .flatMap(RequiredSelectionSet::variablesResolvers)
+                    .distinct(),
+            objectSelections = objectRequiredSelectionSet?.selections,
+            querySelections = queryRequiredSelectionSet?.selections,
+            observedSources = linkedMapOf(),
+        )
             .associate { configuration ->
                 configuration.variable to
                     when (configuration) {
@@ -83,6 +122,15 @@ internal class RequiredSelectionSetVariableRecovery(
                                 objectFragmentSource =
                                     checkNotNull(objectFragmentSource) {
                                         "FromObjectField recovery requires an object RSS"
+                                    },
+                                responsePath = configuration.responsePath,
+                                variableField = field,
+                            )
+                        is RecoveredFromQueryField ->
+                            schema.fromQueryField(
+                                queryFragmentSource =
+                                    checkNotNull(queryFragmentSource) {
+                                        "FromQueryField recovery requires a Query RSS"
                                     },
                                 responsePath = configuration.responsePath,
                                 variableField = field,
@@ -98,44 +146,48 @@ internal class RequiredSelectionSetVariableRecovery(
         field: ViaductSchema.ObjectField,
         objectFragment: Fragment,
         requiredSelectionSet: RequiredSelectionSet?,
-    ): List<RecoveredConfiguration> =
-        recoverConfigurations(
+    ): List<RecoveredConfiguration> {
+        require(objectFragment.nominalType == field.containingDef) {
+            "Object required selection type ${objectFragment.nominalType.name} does not match " +
+                "${field.containingDef.name}.${field.name}"
+        }
+        return recoverConfigurations(
             field = field,
-            objectFragment = objectFragment,
-            requiredSelectionSet = requiredSelectionSet,
+            fragments = listOf(objectFragment),
+            variableResolvers = requiredSelectionSet?.variablesResolvers.orEmpty(),
             objectSelections = requiredSelectionSet?.selections,
+            querySelections = null,
             observedSources = linkedMapOf(),
         )
+    }
 
     private fun recoverConfigurations(
         field: ViaductSchema.ObjectField,
-        objectFragment: Fragment,
-        requiredSelectionSet: RequiredSelectionSet?,
+        fragments: List<Fragment>,
+        variableResolvers: List<VariablesResolver>,
         objectSelections: ParsedSelections?,
+        querySelections: ParsedSelections?,
         observedSources: MutableMap<String, RecoveredSource>,
     ): List<RecoveredConfiguration> {
         val coordinate = "${field.containingDef.name}.${field.name}"
-        require(objectFragment.nominalType == field.containingDef) {
-            "Object required selection type ${objectFragment.nominalType.name} does not match $coordinate"
-        }
 
         val variablesByName =
-            objectFragment.subselections
-                .usedVariables()
+            fragments
+                .flatMap { fragment -> fragment.subselections.usedVariables() }
+                .toSet()
                 .also { variables ->
                     require(variables.all { it.isTemplate && it.field == field }) {
-                        "Object required selections for $coordinate contain a variable owned by another field"
+                        "Required selections for $coordinate contain a variable owned by another field"
                     }
                 }.groupBy(Arguments.Variable::variableName)
         require(variablesByName.values.all { it.size == 1 }) {
-            "Object required selections for $coordinate contain ambiguous variable templates"
+            "Required selections for $coordinate contain ambiguous variable templates"
         }
 
         val recoveredByName =
-            requiredSelectionSet
-                ?.variablesResolvers
-                .orEmpty()
+            variableResolvers
                 .map(::unwrapValidated)
+                .distinct()
                 .filter { resolver -> resolver.variableNames.isNotEmpty() }
                 .flatMap { resolver ->
                     when (resolver) {
@@ -156,25 +208,36 @@ internal class RequiredSelectionSetVariableRecovery(
                                 "FromFieldVariablesResolver ${resolver.name} on $coordinate " +
                                     "reports inconsistent variable names"
                             }
-                            val rootObjectSelections =
-                                checkNotNull(objectSelections) {
-                                    "FromFieldVariablesResolver ${resolver.name} on $coordinate " +
-                                        "has no object RSS"
-                                }
-                            val expectedSource =
-                                checkNotNull(rootObjectSelections.filterToPath(resolver.path)) {
-                                    "FromFieldVariablesResolver ${resolver.name} on $coordinate " +
-                                        "does not select object path ${resolver.path.joinToString(".")}"
-                                }
-                            require(
-                                ParsedSelections.equals(
-                                    expectedSource,
-                                    resolver.requiredSelectionSet.selections,
-                                ),
-                            ) {
+                            val selectedSources =
+                                listOfNotNull(
+                                    objectSelections?.filterToPath(resolver.path),
+                                    querySelections?.filterToPath(resolver.path),
+                                )
+                            require(selectedSources.isNotEmpty()) {
+                                "FromFieldVariablesResolver ${resolver.name} on $coordinate does not " +
+                                    "select path ${resolver.path.joinToString(".")} in its object or Query RSS"
+                            }
+                            val matchingSources =
+                                listOfNotNull(
+                                    objectSelections.matchingSource(
+                                        resolver.path,
+                                        resolver.requiredSelectionSet.selections,
+                                        RecoveredSource.FromObjectField(resolver.path),
+                                    ),
+                                    querySelections.matchingSource(
+                                        resolver.path,
+                                        resolver.requiredSelectionSet.selections,
+                                        RecoveredSource.FromQueryField(resolver.path),
+                                    ),
+                                )
+                            require(matchingSources.isNotEmpty()) {
                                 "FromFieldVariablesResolver ${resolver.name} on $coordinate has a " +
-                                    "nested RSS that does not match object path " +
+                                    "nested RSS that does not match path " +
                                     resolver.path.joinToString(".")
+                            }
+                            require(matchingSources.size == 1) {
+                                "FromFieldVariablesResolver ${resolver.name} on $coordinate ambiguously " +
+                                    "matches path ${resolver.path.joinToString(".")} in both its object and Query RSS"
                             }
                             val nestedFragment =
                                 schema.fragmentFrom(
@@ -182,19 +245,20 @@ internal class RequiredSelectionSetVariableRecovery(
                                     variableField = field,
                                 )
                             recoverConfigurations(
-                                field,
-                                nestedFragment,
-                                resolver.requiredSelectionSet,
-                                rootObjectSelections,
-                                observedSources,
+                                field = field,
+                                fragments = listOf(nestedFragment),
+                                variableResolvers = resolver.requiredSelectionSet.variablesResolvers,
+                                objectSelections = objectSelections,
+                                querySelections = querySelections,
+                                observedSources = observedSources,
                             )
-                            val source = RecoveredSource.FromObjectField(resolver.path)
+                            val source = matchingSources.single()
                             observedSources.record(resolver.name, source, coordinate)
                             listOf(resolver.name to source)
                         }
                         else ->
                             throw IllegalArgumentException(
-                                "Qplan feature tests support only FromArgument and object-path " +
+                                "Qplan feature tests support only FromArgument and from-field " +
                                     "variable providers; $coordinate uses " +
                                     resolver::class.qualifiedName,
                             )
@@ -202,17 +266,17 @@ internal class RequiredSelectionSetVariableRecovery(
                 }.groupBy({ (name, _) -> name }, { (_, source) -> source })
 
         require(recoveredByName.values.all { it.size == 1 }) {
-            "Object required selections for $coordinate contain duplicate variable providers"
+            "Required selections for $coordinate contain duplicate variable providers"
         }
 
         val missing = variablesByName.keys - recoveredByName.keys
         require(missing.isEmpty()) {
-            "Object required selections for $coordinate have variables without providers: " +
+            "Required selections for $coordinate have variables without providers: " +
                 missing.sorted().joinToString { "\$$it" }
         }
         val unused = recoveredByName.keys - variablesByName.keys
         require(unused.isEmpty()) {
-            "Object required selections for $coordinate have unused variable providers: " +
+            "Required selections for $coordinate have unused variable providers: " +
                 unused.sorted().joinToString { "\$$it" }
         }
 
@@ -225,6 +289,11 @@ internal class RequiredSelectionSetVariableRecovery(
                     )
                 is RecoveredSource.FromObjectField ->
                     RecoveredFromObjectField(
+                        variable = variables.single(),
+                        responsePath = source.responsePath,
+                    )
+                is RecoveredSource.FromQueryField ->
+                    RecoveredFromQueryField(
                         variable = variables.single(),
                         responsePath = source.responsePath,
                     )
@@ -241,6 +310,19 @@ private sealed interface RecoveredSource {
     data class FromObjectField(
         val responsePath: List<String>,
     ) : RecoveredSource
+
+    data class FromQueryField(
+        val responsePath: List<String>,
+    ) : RecoveredSource
+}
+
+private fun <T : RecoveredSource> ParsedSelections?.matchingSource(
+    path: List<String>,
+    nestedSelections: ParsedSelections,
+    source: T,
+): T? {
+    val selected = this?.filterToPath(path) ?: return null
+    return source.takeIf { ParsedSelections.equals(selected, nestedSelections) }
 }
 
 private fun MutableMap<String, RecoveredSource>.record(

@@ -35,6 +35,30 @@ class EngineTestModuleQPlanFeatureTest {
     }
 
     @Test
+    fun `executes field executors with Query required selections`() {
+        EngineTestModule(
+            """
+            extend type Query {
+              base: Int!
+              total: Int!
+            }
+            """.trimIndent(),
+        ) {
+            fieldWithValue("Query" to "base", 5)
+            field("Query" to "total") {
+                resolver {
+                    querySelections("base")
+                    fn { _, _, queryValue, _, _ ->
+                        queryValue.get("base") as Int + 4
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ total }").assertJson("{data: {total: 9}}")
+        }
+    }
+
+    @Test
     fun `supports named fragments in object required selections`() {
         EngineTestModule(
             """

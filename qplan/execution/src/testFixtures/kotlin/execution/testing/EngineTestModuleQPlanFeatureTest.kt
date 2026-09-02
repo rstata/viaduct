@@ -1,13 +1,16 @@
 package execution.testing
 
 import graphql.ExecutionResult
+import graphql.GraphQLContext
 import graphql.schema.GraphQLCompositeType
 import graphql.schema.GraphQLList
 import graphql.schema.GraphQLNonNull
 import graphql.schema.GraphQLObjectType
 import graphql.schema.GraphQLOutputType
+import graphql.schema.GraphQLScalarType
 import graphql.schema.idl.SchemaPrinter
 import java.util.IdentityHashMap
+import java.util.Locale
 import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.EngineErrorData
@@ -145,9 +148,6 @@ private fun EngineTestModule.validateSupportedExecutors() {
         if (executor.isSelective) {
             TODO("Qplan feature tests do not support selective field executor ${coordinate.render()}")
         }
-        if (executor.querySelectionSet != null) {
-            TODO("Qplan feature tests do not support query required selections for ${coordinate.render()}")
-        }
     }
     nodeResolverExecutors.forEach { (typeName, executor) ->
         if (executor.isBatching) {
@@ -171,11 +171,6 @@ private fun EngineTestModule.qplanRegistryInputs(
     val sourceSchema = SourceSchemaAdapter(schema)
     val variableRecovery = RequiredSelectionSetVariableRecovery(schema)
     val variableProviders = linkedMapOf<Arguments.Variable, VariableDeclaration>()
-    val queryData =
-        ResolvedEngineObjectData(
-            fullSchema.schema.queryType,
-            emptyMap(),
-        )
     val supplied =
         fieldResolverExecutors.associate { (coordinate, executor) ->
             val field =
@@ -188,8 +183,15 @@ private fun EngineTestModule.qplanRegistryInputs(
                 requireNotNull(fullSchema.schema.getObjectType(coordinate.first))
                     .getFieldDefinition(coordinate.second)
             val objectFragment = executor.objectFragment(schema, field)
+            val queryFragment = executor.queryFragment(schema, field)
             variableRecovery
-                .recover(field, objectFragment, executor.objectSelectionSet)
+                .recover(
+                    field = field,
+                    objectFragment = objectFragment,
+                    objectRequiredSelectionSet = executor.objectSelectionSet,
+                    queryFragment = queryFragment,
+                    queryRequiredSelectionSet = executor.querySelectionSet,
+                )
                 .forEach { (variable, declaration) ->
                     require(variableProviders.put(variable, declaration) == null) {
                         "Duplicate variable provider \$${variable.variableName} for ${coordinate.render()}"
@@ -198,13 +200,14 @@ private fun EngineTestModule.qplanRegistryInputs(
             field to
                 fieldResolverOf(
                     objectFragment = objectFragment,
-                    function = { input, arguments ->
+                    queryFragment = queryFragment,
+                    function = { input, queryValue, arguments ->
                         val selector =
                             FieldResolverExecutor.Selector(
                                 arguments = arguments.fieldValues,
                                 selections = null,
                                 syncObjectValueGetter = { input },
-                                syncQueryValueGetter = { queryData },
+                                syncQueryValueGetter = { queryValue },
                             )
                         val output =
                             runBlocking {
@@ -242,6 +245,17 @@ private fun FieldResolverExecutor.objectFragment(
             variableField = field,
         )
     } ?: schema.emptyFragmentOf(field.containingDef.name)
+
+private fun FieldResolverExecutor.queryFragment(
+    schema: QPlanSchema,
+    field: QPlanSchema.ObjectField,
+): Fragment =
+    querySelectionSet?.let { required ->
+        schema.fragmentFromDocument(
+            document = required.selections.toDocument(),
+            variableField = field,
+        )
+    } ?: schema.emptyFragmentOf(schema.requireQueryTypeDef().name)
 
 private fun EngineTestModule.builtInNodeFieldResolvers(
     schema: QPlanSchema,
@@ -353,7 +367,7 @@ private fun normalizeSourceOutput(
         is GraphQLObjectType ->
             when (value) {
                 is NodeReference -> normalizeNodeReference(value)
-                is EngineObjectData.Sync -> normalizeSourceObject(value)
+                is EngineObjectData.Sync -> normalizeSourceObject(expectedType, value)
                 is Map<*, *> -> normalizeSourceObjectMap(expectedType, value)
                 else -> value
             }
@@ -362,6 +376,14 @@ private fun normalizeSourceOutput(
                 is NodeReference -> normalizeNodeReference(value)
                 is EngineObjectData.Sync -> normalizeSourceObject(value)
                 else -> value
+            }
+        is GraphQLScalarType ->
+            value?.let {
+                expectedType.coercing.serialize(
+                    it,
+                    GraphQLContext.getDefault(),
+                    Locale.getDefault(),
+                )
             }
         else -> value
     }
@@ -397,7 +419,13 @@ private fun normalizeSourceObject(value: EngineObjectData): EngineObjectData.Syn
     require(value is EngineObjectData.Sync) {
         "Qplan feature tests require synchronous EngineObjectData executor outputs"
     }
-    val type = value.type
+    return normalizeSourceObject(value.type, value)
+}
+
+private fun normalizeSourceObject(
+    type: GraphQLObjectType,
+    value: EngineObjectData.Sync,
+): EngineObjectData.Sync {
     val fields =
         value.getSelections().associateWith { selection ->
             val field =

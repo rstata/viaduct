@@ -508,7 +508,7 @@ class NodeResolverTest {
         }
     }
 
-    @Disabled("TODO: QueryRss")
+    @Disabled("N/A: Tests memoization of query-fragment OERs across resolvers, which qplan will not support")
     @Test
     fun `node resolver not executed twice for the same query path`() {
         // This is a regression test for NodeEngineObjectDataImpl.resolveData() calling the
@@ -543,4 +543,5 @@ class NodeResolverTest {
             assertEquals(1, execCount.get())
         }
     }
+
 }

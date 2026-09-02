@@ -12,6 +12,7 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
+      "resolverVariableSingletonCoercionEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : true,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -53,6 +54,10 @@
       "resolverFromObjectFieldVariableOwnerLimit" : 4
     },
     "ranges" : {
+      "fieldArgumentCount" : {
+        "maximum" : 3,
+        "minimum" : 1
+      },
       "inputObjectCount" : {
         "maximum" : 2,
         "minimum" : 0
@@ -126,7 +131,8 @@
   },
   "resolver26" : {
     "booleans" : {
-      "resolverQueryFragmentsEnabled" : true
+      "resolverQueryFragmentsEnabled" : true,
+      "resolverVariableSingletonCoercionEnabled" : true
     },
     "doubles" : {
       "explicitFieldResolverWeight" : 0.5,

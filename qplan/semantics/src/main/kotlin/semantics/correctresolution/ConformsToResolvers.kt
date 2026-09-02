@@ -129,14 +129,20 @@ context(world: Assumptions)
 private fun FieldResolver.fromArgumentBindingsAgree(
     resolverOccurrenceId: ResolverOccurrenceId,
     arguments: Arguments.Resolved,
-): Boolean =
-    instantiatedVariableDefinitions(resolverOccurrenceId).all { variableDefinition ->
-        val definition = variableDefinition.definition
-        if (definition !is VariableDefinition.FromArgument) return@all true
-        val instanceId = requireNotNull(variableDefinition.variable.instanceId)
-        world.isBound(instanceId) &&
-            world.getBinding(instanceId) == VariableBinding.of(definition.read(arguments))
-    }
+): Boolean {
+    val usedVariables =
+        instantiateObjectFragment(resolverOccurrenceId).constructionSelections.usedVariables() +
+            instantiateQueryFragment(resolverOccurrenceId).constructionSelections.usedVariables()
+    return instantiatedVariableDefinitions(resolverOccurrenceId)
+        .filter { variableDefinition -> variableDefinition.variable in usedVariables }
+        .all { variableDefinition ->
+            val definition = variableDefinition.definition
+            if (definition !is VariableDefinition.FromArgument) return@all true
+            val instanceId = requireNotNull(variableDefinition.variable.instanceId)
+            world.isBound(instanceId) &&
+                world.getBinding(instanceId) == VariableBinding.of(definition.read(arguments))
+        }
+}
 
 context(
     world: Assumptions,

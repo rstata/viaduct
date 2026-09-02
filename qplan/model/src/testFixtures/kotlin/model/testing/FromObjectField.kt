@@ -310,7 +310,9 @@ internal tailrec fun compatibleTypes(
 
         locationType.isList -> {
             val locationElement = checkNotNull(locationType.unwrapList())
-            val sourceElement = sourceType.unwrapList() ?: return false
+            val sourceElement =
+                sourceType.unwrapList()
+                    ?: sourceType.withNullable(false)
             compatibleTypes(
                 locationType = locationElement,
                 sourceType = sourceElement,

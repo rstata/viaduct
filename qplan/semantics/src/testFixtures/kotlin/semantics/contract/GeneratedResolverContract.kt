@@ -296,11 +296,15 @@ interface ObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy
 
 /** Generated contract for independently resolved field-resolver query fragments. */
 interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    val queryFragmentObjectPathVariablesEnabled: Boolean
+        get() = false
+
     @Test
     fun `generated query fragment worlds resolve correctly`(): Unit =
         runBlocking {
             var generatedQueryFragments = 0
             var generatedArgumentVariables = 0
+            var generatedObjectPathVariables = 0
             var activatedQueryFragments = 0
             var activatedArgumentVariableApplications = 0
             var queryValueWitnesses = 0
@@ -314,13 +318,16 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverQueryFragmentsEnabled to true) +
                     (ResolverVariableWeight to 1.0) +
-                    (ResolverVariablesEnabled to false)
+                    (ResolverVariablesEnabled to queryFragmentObjectPathVariablesEnabled) +
+                    generatedResolverConfigOverrides
 
             val run =
                 checkGeneratedProfile("query-fragment", config) { testWorld, testCase ->
                     generatedQueryFragments += testCase.registry.features.queryFragmentCount
                     generatedArgumentVariables +=
                         testCase.registry.features.fromArgumentVariableCount
+                    generatedObjectPathVariables +=
+                        testCase.registry.features.fromObjectFieldVariableCount
 
                     val observation =
                         observeGeneratedCaseWithCurrentAssertions(
@@ -351,6 +358,12 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 generatedArgumentVariables > 0,
                 "Generated query-fragment profile produced no FromArgument variables",
             )
+            if (queryFragmentObjectPathVariablesEnabled) {
+                run.assertAggregate(
+                    generatedObjectPathVariables > 0,
+                    "Generated query-fragment profile produced no FromObjectField variables",
+                )
+            }
             run.assertAggregate(
                 activatedQueryFragments > 0,
                 "Generated query-fragment profile activated no query fragments",
@@ -383,7 +396,8 @@ interface ObjectFragmentFromArgumentGeneratedResolverContract : GeneratedCaseAss
                     (ResolverFromArgumentNestedPathWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverVariableWeight to 1.0) +
-                    (ResolverVariablesEnabled to false)
+                    (ResolverVariablesEnabled to false) +
+                    generatedResolverConfigOverrides
 
             fun property(
                 coverage: FromArgumentCoverage,
@@ -505,7 +519,8 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
                     (ResolverVariableCount to 2..4) +
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to true) +
-                    objectPathGeneratorConfigOverrides
+                    objectPathGeneratorConfigOverrides +
+                    generatedResolverConfigOverrides
 
             val run =
                 checkGeneratedProfile(
@@ -590,7 +605,8 @@ interface MixedVariableGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                     (ResolverFragmentWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverVariableWeight to 1.0) +
-                    (ResolverVariablesEnabled to true)
+                    (ResolverVariablesEnabled to true) +
+                    generatedResolverConfigOverrides
 
             fun property(
                 coverage: MixedVariableCoverage,
@@ -682,7 +698,8 @@ interface FeatureInteractionGeneratedResolverContract : GeneratedCaseAssertionPo
                     (ResolverFragmentWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverVariableWeight to 1.0) +
-                    (ResolverVariablesEnabled to false)
+                    (ResolverVariablesEnabled to false) +
+                    generatedResolverConfigOverrides
 
             val run = checkGeneratedFeatureInteractionProfile(config) { testWorld, testCase ->
                 val registry = testCase.registry

@@ -8,6 +8,7 @@ import model.fragmentFrom
 import model.objectOf
 import model.sameCompletedResultAs
 import model.testing.TestWorld
+import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverTestCase
 import semantics.correctresolution.correctResolution
@@ -137,6 +138,9 @@ object GeneratedCaseAssertions {
 
 /** Assertion policy independently extended by each generated resolver test subject. */
 interface GeneratedCaseAssertionPolicy : ResolverContract {
+    val generatedResolverConfigOverrides: Config
+        get() = Config.default
+
     val generatedCaseAssertions: List<GeneratedCaseAssertion>
         get() = GeneratedCaseAssertions.defaultGeneratedContract
 }

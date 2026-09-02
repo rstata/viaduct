@@ -260,7 +260,7 @@ interface SometimesPassiveObjectPathResolverContract : ResolverContract {
                 resolved.getCell(world.schema.contractKey("Query", "item")).get(),
             )
         context(world) {
-            resolved.validateObjectPathBindings(emptySet())
+            resolved.validateFromFieldBindings(emptySet())
         }
 
         assertEquals(11, item.getCell(world.schema.contractKey("Item", "computed")).get())

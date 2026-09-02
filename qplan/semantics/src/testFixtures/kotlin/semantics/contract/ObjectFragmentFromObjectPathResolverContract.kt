@@ -7,6 +7,7 @@ import model.EngineOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.VariableBinding
+import model.registry.ProviderFragment
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,7 +51,10 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val boundVariable =
             context(world) {
                 resolver
-                    .objectPathDefinitions(resolved, listOf(resultKey))
+                    .fieldPathDefinitions(resolved, listOf(resultKey))
+                    .filter { definition ->
+                        definition.providerFragment == ProviderFragment.OBJECT
+                    }
                     .single()
                     .variable
             }
@@ -304,7 +308,10 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val boundVariable =
                 context(world) {
                     resolver
-                        .objectPathDefinitions(resolved, listOf(resultKey))
+                        .fieldPathDefinitions(resolved, listOf(resultKey))
+                        .filter { definition ->
+                            definition.providerFragment == ProviderFragment.OBJECT
+                        }
                         .single()
                         .variable
                 }

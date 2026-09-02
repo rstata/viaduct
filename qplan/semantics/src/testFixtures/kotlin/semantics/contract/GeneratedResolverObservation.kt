@@ -115,13 +115,13 @@ object GeneratedCaseAssertions {
             )
         }
 
-    val objectPathBindings =
+    val fromFieldBindings =
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
                 context(execution.world) {
-                    execution.result.validateObjectPathBindings(
+                    execution.result.validateFromFieldBindings(
                         requireNotNull(execution.subject.appliedResolverOccurrences) {
-                            "Object-path binding validation requires exact application " +
+                            "From-field binding validation requires exact application " +
                                 "occurrences"
                         },
                     )

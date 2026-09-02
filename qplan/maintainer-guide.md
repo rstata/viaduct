@@ -97,7 +97,7 @@ An unresolved demanded cell means a missing writer, a dependency cycle, failed t
 
 ## Maintain Independent Evidence
 
-Keep extensional correctness, application identities, occurrence identities, object-path bindings, lifecycle invariants, mutation tests, metamorphic variants, and structural activation as separate evidence sources.
+Keep extensional correctness, application identities, occurrence identities, from-field bindings, lifecycle invariants, mutation tests, metamorphic variants, and structural activation as separate evidence sources.
 
 An oracle derived from returned cells can miss an omitted occurrence or accept an extra cell paired with an extra invocation. State such limitations explicitly and preserve independent reconstruction work as an open testing task.
 

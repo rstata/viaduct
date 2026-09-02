@@ -53,7 +53,7 @@ import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.arbitrary.registeredResolverOccurrences
 import semantics.contract.registeredResolverApplicationIdentityCounts
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -315,7 +315,7 @@ class ResolverStressTest {
                         }
                         assertTrue(context(world) { result.correctResolution(fragment) })
                         context(world) {
-                            result.validateObjectPathBindings(
+                            result.validateFromFieldBindings(
                                 observation.appliedResolverOccurrences,
                             )
                         }

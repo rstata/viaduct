@@ -14,7 +14,7 @@ import org.openjdk.jmh.infra.Blackhole
 import semantics.arbitrary.ResolverBenchmarkCorpus
 import semantics.arbitrary.ResolutionWitness
 import semantics.contract.registeredResolverApplicationIdentityCounts
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import jdk.jfr.Category
 import jdk.jfr.Event
@@ -135,9 +135,9 @@ internal class PropertyTestBenchmarkSupport(
                         },
                     )
                 }
-                profilePhase(profilePhases, "object-path binding oracle") {
+                profilePhase(profilePhases, "from-field binding oracle") {
                     context(world) {
-                        result.validateObjectPathBindings(appliedResolverOccurrences)
+                        result.validateFromFieldBindings(appliedResolverOccurrences)
                     }
                 }
                 blackhole.consume(result)

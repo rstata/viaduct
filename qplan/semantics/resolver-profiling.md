@@ -66,7 +66,7 @@ Run:
 ./gradlew :semantics:propertyTestProfile --console=plain
 ```
 
-The task loads the frozen Resolver26 broad-campaign case, runs one unrecorded warmup case, and records one measured case. The recording includes request preparation, Resolver26, witness snapshotting, application-identity reconstruction and comparison, `correctResolution`, and object-path binding validation. Resource decoding and `TestWorld` assembly occur during trial setup and are excluded. The default recording is `semantics/build/reports/resolver-benchmarks/property-test.jfr`.
+The task loads the frozen Resolver26 broad-campaign case, runs one unrecorded warmup case, and records one measured case. The recording includes request preparation, Resolver26, witness snapshotting, application-identity reconstruction and comparison, `correctResolution`, and from-field binding validation. Resource decoding and `TestWorld` assembly occur during trial setup and are excluded. The default recording is `semantics/build/reports/resolver-benchmarks/property-test.jfr`.
 
 Repeat the frozen case inside the recording or preserve the result at another location with:
 
@@ -239,7 +239,7 @@ Base revision: `568dbc95d6b93342ed94b770814c95624d5fd291`; the profiling documen
 
 Profile evidence: [`profiles/2026-08-21-568dbc95`](./profiles/2026-08-21-568dbc95)
 
-This session added the three narrow JFR targets documented above and the isolated `correctResolution` and frozen property-test JMH benchmarks. The frozen property workload serializes Resolver26 broad-campaign round 46's `symbolic-identity` case at historical coordinate `S=10 R=4 Q=3`, so its 12,763 expected resolver applications remain stable as generators evolve. The property profile's phase events made Resolver26, application-identity reconstruction, `correctResolution`, and object-path binding validation independently visible.
+This session added the three narrow JFR targets documented above and the isolated `correctResolution` and frozen property-test JMH benchmarks. The frozen property workload serializes Resolver26 broad-campaign round 46's `symbolic-identity` case at historical coordinate `S=10 R=4 Q=3`, so its 12,763 expected resolver applications remain stable as generators evolve. The property profile's phase events made Resolver26, application-identity reconstruction, `correctResolution`, and from-field binding validation independently visible.
 
 Initial profiles identified repeated schema-coordinate recovery, output-type conformance checks, temporary required-argument sets, structural map hashing, and repeated property-oracle materialization as useful targets. Changes made during the session use direct required-argument checks, canonical qplan type identity when available, deterministic source-to-lowered coordinate navigation, direct `HMap` membership checks, and a streaming registered-resolver-occurrence traversal that carries canonical fields and accumulates identity counts without intermediate occurrence and grouping collections. Focused equivalence tests compare the streaming traversal with the prior sorted traversal, including complete paths, canonical fields, application keys, containing-object identity, binding outcomes, and fingerprint-bound behavior.
 

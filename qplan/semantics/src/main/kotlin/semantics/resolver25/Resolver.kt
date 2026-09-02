@@ -51,7 +51,7 @@ import model.selectionForestOf
 import model.toEngineResult
 import model.toEngineSimpleData
 import model.invariants.conformsToOutputSchemaType
-import model.registry.InstantiatedObjectPathDefinition
+import model.registry.InstantiatedFieldPathDefinition
 import model.registry.fetchSuccessorDemandDeferringTemplates
 import semantics.ResolverSupport
 import semantics.bindFromArguments
@@ -595,7 +595,7 @@ private class ObjectResultOrchestrator(
 
     context(world: Assumptions, diagnosticInstrumentation: ResolverSupport)
     private suspend fun readProvider(
-        definition: InstantiatedObjectPathDefinition,
+        definition: InstantiatedFieldPathDefinition,
         reader: List<PathComponent>,
     ): VariableBinding {
         var current = target

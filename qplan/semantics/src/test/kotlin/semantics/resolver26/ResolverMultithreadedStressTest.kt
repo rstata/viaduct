@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -217,7 +217,7 @@ private suspend fun runResolver26MultithreadedStress(
                 },
             )
             context(world) {
-                result.validateObjectPathBindings(appliedResolverOccurrences)
+                result.validateFromFieldBindings(appliedResolverOccurrences)
             }
             completedCases += 1
         }

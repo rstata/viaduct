@@ -1,25 +1,30 @@
 package semantics.resolver26
 
 import model.Assumptions
+import model.Arguments
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
+import model.emptyFragmentOf
 import model.engineResultOf
-import model.registry.InstantiatedObjectPathDefinition
+import model.fragmentFrom
+import model.registry.InstantiatedFieldPathDefinition
 import model.requireObjectField
 import model.testing.TestWorld
-import semantics.contract.validateObjectPathBindings
+import model.testing.fieldResolverOf
+import model.testing.fromQueryField
+import semantics.contract.validateFromFieldBindings
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
-class ResolverObjectPathBindingOracleTest {
+class ResolverFromFieldBindingOracleTest {
     @Test
-    fun `partial object-path binding state is rejected`() {
+    fun `partial from-field binding state is rejected`() {
         val fixture = bindingFixture()
         fixture.bind(fixture.definitions.first())
 
         assertFailsWith<AssertionError> {
             context(fixture.world) {
-                fixture.result.validateObjectPathBindings(setOf(fixture.occurrenceId))
+                fixture.result.validateFromFieldBindings(setOf(fixture.occurrenceId))
             }
         }
     }
@@ -30,7 +35,7 @@ class ResolverObjectPathBindingOracleTest {
 
         assertFailsWith<AssertionError> {
             context(fixture.world) {
-                fixture.result.validateObjectPathBindings(setOf(fixture.occurrenceId))
+                fixture.result.validateFromFieldBindings(setOf(fixture.occurrenceId))
             }
         }
     }
@@ -40,7 +45,7 @@ class ResolverObjectPathBindingOracleTest {
         val fixture = bindingFixture()
 
         context(fixture.world) {
-            fixture.result.validateObjectPathBindings(emptySet())
+            fixture.result.validateFromFieldBindings(emptySet())
         }
     }
 
@@ -51,7 +56,7 @@ class ResolverObjectPathBindingOracleTest {
 
         assertFailsWith<AssertionError> {
             context(fixture.world) {
-                fixture.result.validateObjectPathBindings(emptySet())
+                fixture.result.validateFromFieldBindings(emptySet())
             }
         }
     }
@@ -73,7 +78,76 @@ class ResolverObjectPathBindingOracleTest {
 
         assertFailsWith<AssertionError> {
             context(world) {
-                primaryResult.validateObjectPathBindings(setOf(queryFixture.occurrenceId))
+                primaryResult.validateFromFieldBindings(setOf(queryFixture.occurrenceId))
+            }
+        }
+    }
+
+    @Test
+    fun `Query-path bindings are validated against their occurrence Query root`() {
+        val queryFragment =
+            "fragment Input on Query { provided: provider use(value: ${'$'}value) }"
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = true,
+                schemaSDL =
+                    """
+                    type Query {
+                      provider: Int!
+                      use(value: Int!): Int!
+                      consumer: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val empty = schema.emptyFragmentOf("Query")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        schema.requireObjectField("Query", "provider") to
+                            fieldResolverOf(empty) { _, _ -> 7 },
+                        schema.requireObjectField("Query", "use") to
+                            fieldResolverOf(empty) { _, arguments ->
+                                arguments.fieldValues.getValue("value")
+                            },
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment = empty,
+                                queryFragment = schema.fragmentFrom(queryFragment),
+                            ) { _, _, _ -> 7 },
+                    )
+                },
+                variableProviders = { schema ->
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        Arguments.Variable.of(consumer, "value") to
+                            schema.fromQueryField(queryFragment, listOf("provided")),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val result =
+            world.engineResultOf("Query") {
+                "consumer" resolvesTo 7
+            }
+        val consumer = world.schema.requireObjectField("Query", "consumer")
+        val consumerKey = ObjectEngineResult.GroundKey.of(consumer, emptyMap())
+        val occurrenceId = ResolverOccurrenceId.at(result, listOf(consumerKey))
+        val queryResult =
+            world.engineResultOf("Query") {
+                "provider" resolvesTo 7
+                field("use", "value" to 7) resolvesTo 7
+            }
+        world.queryValues[occurrenceId] = queryResult
+        val definition =
+            world.resolverRegistry
+                .resolver(consumer)
+                .instantiateQueryFragment(occurrenceId)
+                .pathVariableDefinitions
+                .single()
+        world.bindVariable(requireNotNull(definition.variable.instanceId), -1)
+
+        assertFailsWith<AssertionError> {
+            context(world) {
+                result.validateFromFieldBindings(setOf(occurrenceId))
             }
         }
     }
@@ -83,9 +157,9 @@ private data class BindingFixture(
     val world: Assumptions,
     val result: ObjectEngineResult,
     val occurrenceId: ResolverOccurrenceId,
-    val definitions: List<InstantiatedObjectPathDefinition>,
+    val definitions: List<InstantiatedFieldPathDefinition>,
 ) {
-    fun bind(definition: InstantiatedObjectPathDefinition) {
+    fun bind(definition: InstantiatedFieldPathDefinition) {
         val providerField = definition.path.single().field.name
         val value =
             when (providerField) {

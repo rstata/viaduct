@@ -5,10 +5,10 @@ import kotlinx.coroutines.launch
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
-import model.VariableBinding
 import model.fetchBindings
 import model.fetchGroundedArguments
 import model.requireQueryTypeDef
+import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import model.usedVariables
 import model.variableArgumentNames
@@ -32,19 +32,12 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
             support.declareQueryValue(expansion.resolverOccurrenceId)
         }
         coroutineScope {
-            closed.pathVariableDefinitions.forEach { read ->
-                launch {
-                    val binding: VariableBinding =
-                        target.readProvider(
-                            definition = read.definition,
-                            reader = read.readerPath,
-                            support = support,
-                        )
-                    world.completeBinding(
-                        requireNotNull(read.definition.variable.instanceId),
-                        binding,
-                    )
-                }
+            launch {
+                target.completeProviderBindings(
+                    reads = closed.objectProviderReads,
+                    providerFragment = ProviderFragment.OBJECT,
+                    support = support,
+                )
             }
             val demandByKey = closed.demand.byKey()
             closed.expansions.forEach { (objectKey, expansion) ->
@@ -56,7 +49,7 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                         ) {
                             model.engineObjectDataOf(world.schema.requireQueryTypeDef())
                         } else {
-                            expansion.queryFragment.resolveQueryFragment(
+                            expansion.fragments.queryFragment.resolveQueryFragment(
                                 coordinate = path + objectKey,
                             )
                         }
@@ -134,17 +127,15 @@ private fun ObjectOrchestrationTask.completeFromArgumentBindings(
     groundedArguments: model.Arguments.Ground,
 ) {
     if (expansion.ownerKey is ObjectEngineResult.GroundKey) return
-    (expansion.variableDefinitions + expansion.queryFragment.variableDefinitions)
-        .distinctBy { variableDefinition -> variableDefinition.variable }
-        .forEach { variableDefinition ->
-            if (variableDefinition.definition !is VariableDefinition.FromArgument) {
-                return@forEach
-            }
-            val definition =
-                variableDefinition.definition as VariableDefinition.FromArgument
-            world.completeBinding(
-                requireNotNull(variableDefinition.variable.instanceId),
-                bindingFor(groundedArguments, definition),
-            )
+    expansion.variableDefinitions.forEach { variableDefinition ->
+        if (variableDefinition.definition !is VariableDefinition.FromArgument) {
+            return@forEach
         }
+        val definition =
+            variableDefinition.definition as VariableDefinition.FromArgument
+        world.completeBinding(
+            requireNotNull(variableDefinition.variable.instanceId),
+            bindingFor(groundedArguments, definition),
+        )
+    }
 }

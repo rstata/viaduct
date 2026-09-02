@@ -8,54 +8,49 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
-import viaduct.graphql.schema.ViaductSchema
 import model.Selection
 import model.VariableBinding
 import model.objectKey
 import model.outputType
 import model.registry.FieldResolver
-import model.registry.InstantiatedObjectPathDefinition
-import model.registry.InstantiatedQueryPathDefinition
+import model.registry.InstantiatedFieldPathDefinition
+import model.registry.ProviderFragment
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
-import semantics.findStoredKey
 import semantics.arbitrary.forEachRegisteredResolverOccurrence
+import semantics.findStoredKey
+import viaduct.graphql.schema.ViaductSchema
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
 
 /**
- * Independently validates object- and Query-path bindings across every request-local Query root.
+ * Independently validates from-field bindings across every request-local Query root.
  *
  * An applied occurrence must have exactly all of its declared bindings and a passive occurrence
  * must have none.
  */
 context(world: Assumptions)
-fun ObjectEngineResult.validateObjectPathBindings(
+fun ObjectEngineResult.validateFromFieldBindings(
     appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) {
     requestQueryRoots().forEach { root ->
         root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
             val resolver = world.resolverRegistry.resolver(cell.field)
-            val objectDefinitions =
-                resolver.objectPathDefinitions(
+            val definitions =
+                resolver.fieldPathDefinitions(
                     root = root,
                     path = cell.occurrencePath,
                 )
-            val queryDefinitions =
-                resolver.queryPathDefinitions(
-                    root = root,
-                    path = cell.occurrencePath,
-                )
-            if (objectDefinitions.isEmpty() && queryDefinitions.isEmpty()) {
+            if (definitions.isEmpty()) {
                 return@forEachRegisteredResolverOccurrence
             }
 
             val occurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
             val requiredBindingIds =
-                (objectDefinitions.map { definition -> definition.variable } +
-                    queryDefinitions.map { definition -> definition.variable })
-                    .mapTo(linkedSetOf()) { variable -> requireNotNull(variable.instanceId) }
+                definitions.mapTo(linkedSetOf()) { definition ->
+                    requireNotNull(definition.variable.instanceId)
+                }
             val actualBindingIds = requiredBindingIds.filterTo(linkedSetOf(), world::isBound)
             when (appliedResolverOccurrences.contains(occurrenceId)) {
                 true ->
@@ -76,24 +71,15 @@ fun ObjectEngineResult.validateObjectPathBindings(
                 }
             }
 
-            objectDefinitions.forEach { definition ->
+            definitions.forEach { definition ->
+                val providerRoot =
+                    when (definition.providerFragment) {
+                        ProviderFragment.OBJECT -> cell.containingObject
+                        ProviderFragment.QUERY -> world.queryValues.getValue(occurrenceId)
+                    }
                 val expected =
-                    cell.containingObject.readCompletedProvider(
+                    providerRoot.readCompletedProvider(
                         path = definition.path,
-                        reader = cell.occurrencePath,
-                    )
-                assertEquals(
-                    expected,
-                    world.getBinding(requireNotNull(definition.variable.instanceId)),
-                )
-            }
-            queryDefinitions.forEach { definition ->
-                val queryRoot =
-                    world.queryValues.getValue(occurrenceId)
-                val expected =
-                    queryRoot.readCompletedProvider(
-                        path = definition.path,
-                        reader = cell.occurrencePath,
                     )
                 assertEquals(
                     expected,
@@ -104,17 +90,11 @@ fun ObjectEngineResult.validateObjectPathBindings(
     }
 }
 
-internal fun FieldResolver.objectPathDefinitions(
+internal fun FieldResolver.fieldPathDefinitions(
     root: ObjectEngineResult,
     path: List<PathComponent>,
-): List<InstantiatedObjectPathDefinition> =
-    instantiateObjectFragmentAt(root, path).pathVariableDefinitions
-
-internal fun FieldResolver.queryPathDefinitions(
-    root: ObjectEngineResult,
-    path: List<PathComponent>,
-): List<InstantiatedQueryPathDefinition> =
-    instantiateQueryFragmentAt(root, path).pathVariableDefinitions
+): List<InstantiatedFieldPathDefinition> =
+    instantiateFragments(ResolverOccurrenceId.at(root, path)).pathVariableDefinitions
 
 context(world: Assumptions)
 private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
@@ -126,7 +106,6 @@ private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
 context(world: Assumptions)
 private fun ObjectEngineResult.readCompletedProvider(
     path: List<ObjectEngineResult.Key>,
-    reader: List<PathComponent>,
 ): VariableBinding {
     var current = this
     path.forEachIndexed { index, openKey ->
@@ -159,7 +138,7 @@ private fun EngineResult.toVariableBinding(
         is ErrorEngineResult -> VariableBinding.Error
         is ListEngineResult -> toInputListBinding()
         is ObjectEngineResult ->
-            error("An object-path provider cannot terminate at an object")
+            error("A from-field provider cannot terminate at an object")
         else ->
             VariableBinding.of(
                 toEngineSimpleData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef),

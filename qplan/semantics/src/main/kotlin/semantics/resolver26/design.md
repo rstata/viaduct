@@ -96,4 +96,6 @@ Binding declaration and completion, cell reservation and claiming, writer owners
 
 Resolver26 models query resolution with canonical field identity and synchronous source values. It supports runtime `FromObjectField` bindings within its stated provider restriction.
 
+Correctness validation currently requires an error result only to agree with the resolver value's error variant. Exact `EngineErrorData` carrier identity and metadata agreement are deferred: fixture node lowering and other derived resolver boundaries may replace the carrier while preserving the modeled error outcome. A future error-attribution contract must first define which boundaries preserve identity and which construct a derived carrier before `correctResolution` can validate metadata without rejecting supported resolver behavior.
+
 The current integration target excludes mutations, subscriptions, custom scalars, `FromQueryField`, EOD aliases, and asynchronous EOD variants. `FromQueryField` is nevertheless planned near-term qplan work; its exclusion here describes only the current Resolver26 implementation and integration target. The other exclusions constrain future alignment and do not require resolver26-specific production adapters inside qplan.

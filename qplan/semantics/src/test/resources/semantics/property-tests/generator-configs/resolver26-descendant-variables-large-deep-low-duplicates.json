@@ -12,7 +12,10 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
+      "resolverFromObjectFieldVariablesEnabled" : true,
+      "resolverFromQueryFieldVariablesEnabled" : false,
       "resolverQueryFragmentsEnabled" : true,
+      "resolverVariableSingletonCoercionEnabled" : true,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : true,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -41,9 +44,9 @@
       "resolverFragmentLongTailWeight" : 0.0,
       "resolverFragmentWeight" : 0.8,
       "resolverFromArgumentNestedPathWeight" : 0.5,
-      "resolverFromObjectFieldPassiveUseWeight" : 1.0,
-      "resolverFromObjectFieldProviderArgumentVariableWeight" : 1.0,
-      "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,
+      "resolverFromFieldPassiveUseWeight" : 1.0,
+      "resolverFromFieldProviderArgumentVariableWeight" : 1.0,
+      "resolverFromFieldVariableOwnerUseWeight" : 0.25,
       "resolverLiteralVariableConvergenceWeight" : 0.2,
       "resolverNestedProviderPathWeight" : 0.5,
       "resolverQueryFragmentWeight" : 0.1,
@@ -56,7 +59,7 @@
       "maxSelectionDepth" : 6,
       "minimumSelectionDepth" : 4,
       "resolverFragmentDepth" : 5,
-      "resolverFromObjectFieldVariableOwnerLimit" : 4
+      "resolverFromFieldVariableOwnerLimit" : 4
     },
     "ranges" : {
       "fieldArgumentCount" : {
@@ -99,11 +102,11 @@
         "maximum" : 0,
         "minimum" : 0
       },
-      "resolverFromObjectFieldProviderPathLength" : {
+      "resolverFromFieldProviderPathLength" : {
         "maximum" : 3,
         "minimum" : 1
       },
-      "resolverFromObjectFieldVariableUseDepth" : {
+      "resolverFromFieldVariableUseDepth" : {
         "maximum" : 4,
         "minimum" : 2
       },
@@ -122,9 +125,6 @@
     }
   },
   "resolver26" : {
-    "booleans" : {
-      "resolverVariableSingletonCoercionEnabled" : true
-    },
     "id" : "resolver26-descendant-variables-large-deep-low-duplicates"
   }
 }

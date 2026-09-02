@@ -22,7 +22,7 @@ import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
-import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
+import semantics.arbitrary.ResolverFromFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverTestCase
@@ -515,7 +515,7 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
                     (ResolverFragmentWeight to 1.0) +
                     (ResolverFromArgumentVariablesEnabled to false) +
                     (ResolverNestedProviderPathWeight to 1.0) +
-                    (ResolverFromObjectFieldProviderArgumentVariableWeight to 1.0) +
+                    (ResolverFromFieldProviderArgumentVariableWeight to 1.0) +
                     (ResolverVariableCount to 2..4) +
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to true) +

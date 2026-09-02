@@ -12,7 +12,8 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverVariableSingletonCoercionEnabled" : false,
+      "resolverFromObjectFieldVariablesEnabled" : true,
+      "resolverFromQueryFieldVariablesEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : true,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -40,7 +41,7 @@
       "resolverFragmentLongTailWeight" : 0.0,
       "resolverFragmentWeight" : 0.8,
       "resolverFromArgumentNestedPathWeight" : 0.5,
-      "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,
+      "resolverFromFieldVariableOwnerUseWeight" : 0.25,
       "resolverLiteralVariableConvergenceWeight" : 0.2,
       "resolverNestedProviderPathWeight" : 0.5,
       "sometimesPassiveFieldWeight" : 0.25
@@ -51,7 +52,7 @@
       "maxSelectionDepth" : 6,
       "minimumSelectionDepth" : 4,
       "resolverFragmentDepth" : 5,
-      "resolverFromObjectFieldVariableOwnerLimit" : 4
+      "resolverFromFieldVariableOwnerLimit" : 4
     },
     "ranges" : {
       "fieldArgumentCount" : {
@@ -94,11 +95,11 @@
         "maximum" : 0,
         "minimum" : 0
       },
-      "resolverFromObjectFieldProviderPathLength" : {
+      "resolverFromFieldProviderPathLength" : {
         "maximum" : 3,
         "minimum" : 1
       },
-      "resolverFromObjectFieldVariableUseDepth" : {
+      "resolverFromFieldVariableUseDepth" : {
         "maximum" : 4,
         "minimum" : 2
       },
@@ -118,12 +119,13 @@
   },
   "resolver25" : {
     "booleans" : {
-      "resolverQueryFragmentsEnabled" : false
+      "resolverQueryFragmentsEnabled" : false,
+      "resolverVariableSingletonCoercionEnabled" : false
     },
     "doubles" : {
       "explicitFieldResolverWeight" : 0.8,
-      "resolverFromObjectFieldPassiveUseWeight" : 0.25,
-      "resolverFromObjectFieldProviderArgumentVariableWeight" : 0.0,
+      "resolverFromFieldPassiveUseWeight" : 0.25,
+      "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
       "resolverQueryFragmentWeight" : 1.0,
       "resolverVariableWeight" : 0.8
     },
@@ -136,8 +138,8 @@
     },
     "doubles" : {
       "explicitFieldResolverWeight" : 0.5,
-      "resolverFromObjectFieldPassiveUseWeight" : 1.0,
-      "resolverFromObjectFieldProviderArgumentVariableWeight" : 1.0,
+      "resolverFromFieldPassiveUseWeight" : 1.0,
+      "resolverFromFieldProviderArgumentVariableWeight" : 1.0,
       "resolverQueryFragmentWeight" : 0.1,
       "resolverVariableWeight" : 0.9
     },

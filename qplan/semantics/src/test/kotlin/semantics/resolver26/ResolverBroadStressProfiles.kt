@@ -22,12 +22,12 @@ import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
-import semantics.arbitrary.ResolverFromObjectFieldPassiveUseWeight
-import semantics.arbitrary.ResolverFromObjectFieldProviderArgumentVariableWeight
-import semantics.arbitrary.ResolverFromObjectFieldProviderPathLength
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
-import semantics.arbitrary.ResolverFromObjectFieldVariableUseDepth
+import semantics.arbitrary.ResolverFromFieldPassiveUseWeight
+import semantics.arbitrary.ResolverFromFieldProviderArgumentVariableWeight
+import semantics.arbitrary.ResolverFromFieldProviderPathLength
+import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
+import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
+import semantics.arbitrary.ResolverFromFieldVariableUseDepth
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
@@ -78,9 +78,9 @@ internal enum class Resolver26BroadStressProfile(
                 (ListTypeWeight to 0.65) +
                 (ListValueSize to 1..2) +
                 (ResolverVariableWeight to 0.9) +
-                (ResolverFromObjectFieldPassiveUseWeight to 1.0) +
-                (ResolverFromObjectFieldProviderArgumentVariableWeight to 1.0) +
-                (ResolverFromObjectFieldVariableUseDepth to 2..4) +
+                (ResolverFromFieldPassiveUseWeight to 1.0) +
+                (ResolverFromFieldProviderArgumentVariableWeight to 1.0) +
+                (ResolverFromFieldVariableUseDepth to 2..4) +
                 (ResolverVariablesOnNonQueryFieldsOnly to true),
     ),
     NULLABLE_ERRORS(
@@ -100,7 +100,7 @@ internal enum class Resolver26BroadStressProfile(
                 (ErrorValueWeight to 0.45) +
                 (ResolverArgumentErrorWeight to 0.15) +
                 (ResolverNestedProviderPathWeight to 1.0) +
-                (ResolverFromObjectFieldProviderPathLength to 2..4),
+                (ResolverFromFieldProviderPathLength to 2..4),
     ),
     SYMBOLIC_IDENTITY(
         id = "symbolic-identity",
@@ -133,8 +133,8 @@ internal enum class Resolver26BroadStressProfile(
                 (RootQueryFieldCount to 6..8) +
                 (ResolverVariableWeight to 0.9) +
                 (ResolverVariableCount to 1..1) +
-                (ResolverFromObjectFieldVariableOwnerLimit to 4) +
-                (ResolverFromObjectFieldVariableOwnerUseWeight to 1.0),
+                (ResolverFromFieldVariableOwnerLimit to 4) +
+                (ResolverFromFieldVariableOwnerUseWeight to 1.0),
     ),
     ;
 
@@ -196,9 +196,9 @@ private fun balancedBroadConfig(): Config =
         (ResolverVariableSingletonCoercionEnabled to true) +
         (ResolverLiteralVariableConvergenceWeight to 0.2) +
         (ResolverNestedProviderPathWeight to 0.5) +
-        (ResolverFromObjectFieldProviderPathLength to 1..3) +
-        (ResolverFromObjectFieldVariableUseDepth to 1..3) +
-        (ResolverFromObjectFieldVariableOwnerLimit to 4) +
-        (ResolverFromObjectFieldPassiveUseWeight to 0.25) +
-        (ResolverFromObjectFieldVariableOwnerUseWeight to 0.25) +
+        (ResolverFromFieldProviderPathLength to 1..3) +
+        (ResolverFromFieldVariableUseDepth to 1..3) +
+        (ResolverFromFieldVariableOwnerLimit to 4) +
+        (ResolverFromFieldPassiveUseWeight to 0.25) +
+        (ResolverFromFieldVariableOwnerUseWeight to 0.25) +
         (SometimesPassiveFieldWeight to 0.25)

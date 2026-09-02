@@ -112,6 +112,8 @@ object ResolverFragmentArgumentFieldWeight : ConfigKey<Double>("resolverFragment
 object ResolverArgumentErrorWeight : ConfigKey<Double>("resolverArgumentErrorWeight", ConfigValueType.DOUBLE, 0.05, ::weight)
 object ResolverVariablesEnabled : ConfigKey<Boolean>("resolverVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromArgumentVariablesEnabled : ConfigKey<Boolean>("resolverFromArgumentVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
+object ResolverFromObjectFieldVariablesEnabled : ConfigKey<Boolean>("resolverFromObjectFieldVariablesEnabled", ConfigValueType.BOOLEAN, true, { null })
+object ResolverFromQueryFieldVariablesEnabled : ConfigKey<Boolean>("resolverFromQueryFieldVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromArgumentNestedPathWeight :
     ConfigKey<Double>("resolverFromArgumentNestedPathWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverVariableWeight : ConfigKey<Double>("resolverVariableWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
@@ -119,17 +121,17 @@ object ResolverVariableCount : ConfigKey<IntRange>("resolverVariableCount", Conf
 object ResolverVariableSingletonCoercionEnabled : ConfigKey<Boolean>("resolverVariableSingletonCoercionEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverLiteralVariableConvergenceWeight : ConfigKey<Double>("resolverLiteralVariableConvergenceWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverNestedProviderPathWeight : ConfigKey<Double>("resolverNestedProviderPathWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
-object ResolverFromObjectFieldProviderPathLength :
-    ConfigKey<IntRange>("resolverFromObjectFieldProviderPathLength", ConfigValueType.INTEGER_RANGE, 1..Int.MAX_VALUE, ::range)
-object ResolverFromObjectFieldVariableUseDepth :
-    ConfigKey<IntRange>("resolverFromObjectFieldVariableUseDepth", ConfigValueType.INTEGER_RANGE, 1..Int.MAX_VALUE, ::range)
-object ResolverFromObjectFieldPassiveUseWeight : ConfigKey<Double>("resolverFromObjectFieldPassiveUseWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
-object ResolverFromObjectFieldVariableOwnerUseWeight : ConfigKey<Double>("resolverFromObjectFieldVariableOwnerUseWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
-object ResolverFromObjectFieldProviderArgumentVariableWeight : ConfigKey<Double>("resolverFromObjectFieldProviderArgumentVariableWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
+object ResolverFromFieldProviderPathLength :
+    ConfigKey<IntRange>("resolverFromFieldProviderPathLength", ConfigValueType.INTEGER_RANGE, 1..Int.MAX_VALUE, ::range)
+object ResolverFromFieldVariableUseDepth :
+    ConfigKey<IntRange>("resolverFromFieldVariableUseDepth", ConfigValueType.INTEGER_RANGE, 1..Int.MAX_VALUE, ::range)
+object ResolverFromFieldPassiveUseWeight : ConfigKey<Double>("resolverFromFieldPassiveUseWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
+object ResolverFromFieldVariableOwnerUseWeight : ConfigKey<Double>("resolverFromFieldVariableOwnerUseWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
+object ResolverFromFieldProviderArgumentVariableWeight : ConfigKey<Double>("resolverFromFieldProviderArgumentVariableWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverVariablesOnQueryFieldsOnly : ConfigKey<Boolean>("resolverVariablesOnQueryFieldsOnly", ConfigValueType.BOOLEAN, false, { null })
 object ResolverVariablesOnNonQueryFieldsOnly : ConfigKey<Boolean>("resolverVariablesOnNonQueryFieldsOnly", ConfigValueType.BOOLEAN, false, { null })
-object ResolverFromObjectFieldVariableOwnerLimit :
-    ConfigKey<Int>("resolverFromObjectFieldVariableOwnerLimit", ConfigValueType.INTEGER, Int.MAX_VALUE, ::positive)
+object ResolverFromFieldVariableOwnerLimit :
+    ConfigKey<Int>("resolverFromFieldVariableOwnerLimit", ConfigValueType.INTEGER, Int.MAX_VALUE, ::positive)
 
 internal object ConfigKeys {
     val all: List<ConfigKey<*>> =
@@ -187,20 +189,22 @@ internal object ConfigKeys {
             ResolverArgumentErrorWeight,
             ResolverVariablesEnabled,
             ResolverFromArgumentVariablesEnabled,
+            ResolverFromObjectFieldVariablesEnabled,
+            ResolverFromQueryFieldVariablesEnabled,
             ResolverFromArgumentNestedPathWeight,
             ResolverVariableWeight,
             ResolverVariableCount,
             ResolverVariableSingletonCoercionEnabled,
             ResolverLiteralVariableConvergenceWeight,
             ResolverNestedProviderPathWeight,
-            ResolverFromObjectFieldProviderPathLength,
-            ResolverFromObjectFieldVariableUseDepth,
-            ResolverFromObjectFieldPassiveUseWeight,
-            ResolverFromObjectFieldVariableOwnerUseWeight,
-            ResolverFromObjectFieldProviderArgumentVariableWeight,
+            ResolverFromFieldProviderPathLength,
+            ResolverFromFieldVariableUseDepth,
+            ResolverFromFieldPassiveUseWeight,
+            ResolverFromFieldVariableOwnerUseWeight,
+            ResolverFromFieldProviderArgumentVariableWeight,
             ResolverVariablesOnQueryFieldsOnly,
             ResolverVariablesOnNonQueryFieldsOnly,
-            ResolverFromObjectFieldVariableOwnerLimit,
+            ResolverFromFieldVariableOwnerLimit,
         )
 
     init {

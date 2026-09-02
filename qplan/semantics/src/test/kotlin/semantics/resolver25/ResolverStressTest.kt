@@ -32,10 +32,10 @@ import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
-import semantics.arbitrary.ResolverFromObjectFieldProviderPathLength
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
-import semantics.arbitrary.ResolverFromObjectFieldVariableUseDepth
+import semantics.arbitrary.ResolverFromFieldProviderPathLength
+import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
+import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
+import semantics.arbitrary.ResolverFromFieldVariableUseDepth
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverVariableCount
@@ -75,7 +75,7 @@ class ResolverStressTest {
                     (NullValueWeight to 0.7) +
                     (ErrorValueWeight to 0.0) +
                     (ResolverNestedProviderPathWeight to 1.0) +
-                    (ResolverFromObjectFieldProviderPathLength to 2..3),
+                    (ResolverFromFieldProviderPathLength to 2..3),
             targetFields = ArbitraryRegistry::nullIntermediateFromObjectFieldVariableOwnerFields,
             preemptiveTimeout = true,
         )
@@ -90,7 +90,7 @@ class ResolverStressTest {
                     (NullValueWeight to 0.0) +
                     (ErrorValueWeight to 1.0) +
                     (ResolverNestedProviderPathWeight to 1.0) +
-                    (ResolverFromObjectFieldProviderPathLength to 2..3),
+                    (ResolverFromFieldProviderPathLength to 2..3),
             targetFields = ArbitraryRegistry::errorIntermediateFromObjectFieldVariableOwnerFields,
             preemptiveTimeout = true,
         )
@@ -136,9 +136,9 @@ class ResolverStressTest {
                     (QueryScalarFieldWeight to 0.45) +
                     (ResolverFragmentDepth to 3) +
                     (ResolverNestedProviderPathWeight to 0.0) +
-                    (ResolverFromObjectFieldProviderPathLength to 1..1) +
-                    (ResolverFromObjectFieldVariableUseDepth to 2..3) +
-                    (ResolverFromObjectFieldVariableOwnerLimit to 1) +
+                    (ResolverFromFieldProviderPathLength to 1..1) +
+                    (ResolverFromFieldVariableUseDepth to 2..3) +
+                    (ResolverFromFieldVariableOwnerLimit to 1) +
                     (ResolverVariablesOnQueryFieldsOnly to true) +
                     (SometimesPassiveFieldWeight to 0.25),
             targetFields = ArbitraryRegistry::nestedFromObjectFieldVariableUseOwnerFields,
@@ -152,8 +152,8 @@ class ResolverStressTest {
                 directUseConfig +
                     (RootQueryFieldCount to 6..8) +
                     (ResolverVariableCount to 1..1) +
-                    (ResolverFromObjectFieldVariableOwnerLimit to 4) +
-                    (ResolverFromObjectFieldVariableOwnerUseWeight to 1.0),
+                    (ResolverFromFieldVariableOwnerLimit to 4) +
+                    (ResolverFromFieldVariableOwnerUseWeight to 1.0),
             targetFields = { registry ->
                 registry.fromObjectFieldVariableOwnerDependencies
                     .flatMapTo(linkedSetOf()) { dependency ->
@@ -442,9 +442,9 @@ class ResolverStressTest {
                 (ListTypeWeight to 0.0) +
                 (QueryScalarFieldWeight to 0.45) +
                 (ResolverFragmentDepth to 1) +
-                (ResolverFromObjectFieldProviderPathLength to 1..1) +
-                (ResolverFromObjectFieldVariableUseDepth to 1..1) +
-                (ResolverFromObjectFieldVariableOwnerLimit to 1) +
+                (ResolverFromFieldProviderPathLength to 1..1) +
+                (ResolverFromFieldVariableUseDepth to 1..1) +
+                (ResolverFromFieldVariableOwnerLimit to 1) +
                 (ResolverVariablesOnQueryFieldsOnly to true) +
                 (ResolverVariablesOnNonQueryFieldsOnly to false)
     }

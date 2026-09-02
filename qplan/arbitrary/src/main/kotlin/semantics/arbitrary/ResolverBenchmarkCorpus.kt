@@ -549,8 +549,15 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
             queryFragments.mapValues { (_, fragment) -> fragment.source() },
         variableProviderSources =
             variableProviders
-                .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                .associate { provider -> provider.variableName to provider.source() },
+                .mapNotNull { provider ->
+                    when (provider) {
+                        is FromObjectFieldVariableProviderPlan ->
+                            provider.variableName to provider.source()
+                        is FromQueryFieldVariableProviderPlan ->
+                            provider.variableName to provider.source()
+                        is FromArgumentVariableProviderPlan -> null
+                    }
+                }.toMap(),
         fieldValues = fieldValues,
         nodeValues = nodeValues,
         objectFragments = objectFragments,
@@ -856,6 +863,21 @@ private fun VariableProviderPlan.toDocument(): VariableProviderDocument =
                 topLevelUseField = topLevelUseField.toDocument(),
                 literalConvergence = literalConvergence,
             )
+        is FromQueryFieldVariableProviderPlan ->
+            VariableProviderDocument(
+                kind = "from-query-field",
+                owner = owner.toDocument(),
+                variableName = variableName,
+                argumentName = null,
+                selection = selection.toDocument(),
+                nestedInput = nestedInput,
+                listValue = listValue,
+                nullable = nullable,
+                abstractPath = abstractPath,
+                useDepth = useDepth,
+                topLevelUseField = topLevelUseField.toDocument(),
+                literalConvergence = literalConvergence,
+            )
     }
 
 private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderPlan =
@@ -874,6 +896,19 @@ private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderP
             )
         "from-object-field" ->
             FromObjectFieldVariableProviderPlan(
+                owner = owner.toCoordinate(),
+                variableName = variableName,
+                selection = requireNotNull(selection).toFragmentSelectionPlan(),
+                nestedInput = nestedInput,
+                listValue = listValue,
+                nullable = nullable,
+                abstractPath = requireNotNull(abstractPath),
+                useDepth = requireNotNull(useDepth),
+                topLevelUseField = requireNotNull(topLevelUseField).toCoordinate(),
+                literalConvergence = literalConvergence,
+            )
+        "from-query-field" ->
+            FromQueryFieldVariableProviderPlan(
                 owner = owner.toCoordinate(),
                 variableName = variableName,
                 selection = requireNotNull(selection).toFragmentSelectionPlan(),

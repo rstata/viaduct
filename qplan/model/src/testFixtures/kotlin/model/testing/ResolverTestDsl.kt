@@ -476,6 +476,7 @@ private class ResultEvaluator(
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
     private val nodeType = schema.requireType("Node") as ViaductSchema.Interface
+    private val errorResult = EngineErrorData.of()
 
     fun evaluateFieldResult(
         field: ViaductSchema.ObjectField,
@@ -503,7 +504,7 @@ private class ResultEvaluator(
         context: EvaluationContext,
         nodeRoot: CompiledNodeResult? = null,
     ): EngineOutputData? {
-        if (source is StringValue && source.value == ERROR_SENTINEL) return EngineErrorData.of()
+        if (source is StringValue && source.value == ERROR_SENTINEL) return errorResult
         if (source is NullValue) {
             require(typeExpr.isNullable) { "null does not conform to $typeExpr" }
             return null

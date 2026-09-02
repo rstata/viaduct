@@ -2686,12 +2686,14 @@ internal data object NullPlan : ValuePlan {
 }
 
 internal data object ErrorPlan : ValuePlan {
+    private val error = EngineErrorData.of()
+
     override fun materialize(
         schema: ViaductSchema,
         typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
-    ): EngineOutputData = EngineErrorData.of()
+    ): EngineOutputData = error
 
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
 }

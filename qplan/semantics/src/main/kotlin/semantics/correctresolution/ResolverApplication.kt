@@ -64,12 +64,13 @@ internal fun ObjectEngineResult.reapplyResolver(
         val arguments = key.groundedArguments() as? Arguments.Resolved ?: return@getOrPut null
         val resolver = world.resolverRegistry.resolver(key.field)
         val coordinate = path + key
-        val objectFragment =
-            resolver.objectFragmentSatisfiedBy(
+        val fragments =
+            resolver.fragmentsSatisfiedBy(
                 root = resolverApplicationCache.root,
                 result = this,
                 path = coordinate,
             ) ?: return@getOrPut null
+        val objectFragment = fragments.objectFragment
         val input: EngineObjectData.Sync =
             runBlocking {
                 materialize(
@@ -82,9 +83,8 @@ internal fun ObjectEngineResult.reapplyResolver(
                 field = key.field,
                 fields = arguments.fieldValues,
             )
-        val resolverOccurrenceId =
-            model.ResolverOccurrenceId.at(resolverApplicationCache.root, coordinate)
-        val queryFragment = resolver.instantiateQueryFragment(resolverOccurrenceId)
+        val resolverOccurrenceId = objectFragment.resolverOccurrenceId
+        val queryFragment = fragments.queryFragment
         val queryValue =
             if (queryFragment.constructionSelections.isEmpty()) {
                 engineObjectDataOf(world.schema.requireQueryTypeDef())

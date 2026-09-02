@@ -74,11 +74,11 @@ class ResolverVariableInstantiationTest {
 
         val root = testWorld.schema.testRoot()
         val firstFragment =
-            resolver.instantiateObjectFragmentAt(root, firstPath).constructionSelections
+            resolver.instantiateFragmentsAt(root, firstPath).objectFragment.constructionSelections
         val equalFirstFragment =
-            resolver.instantiateObjectFragmentAt(root, firstPath).constructionSelections
+            resolver.instantiateFragmentsAt(root, firstPath).objectFragment.constructionSelections
         val otherFragment =
-            resolver.instantiateObjectFragmentAt(root, secondPath).constructionSelections
+            resolver.instantiateFragmentsAt(root, secondPath).objectFragment.constructionSelections
         val firstOccurrence = ResolverOccurrenceId.at(root, firstPath)
 
         assertTrue(
@@ -163,7 +163,7 @@ class ResolverVariableInstantiationTest {
             )
         val sitePath = listOf(resultKey)
         val objectFragment =
-            resolver.instantiateObjectFragmentAt(testWorld.schema.testRoot(), sitePath)
+            resolver.instantiateFragmentsAt(testWorld.schema.testRoot(), sitePath).objectFragment
         assertEquals(
             setOf("source", "consume"),
             objectFragment.materializeSelections
@@ -272,10 +272,10 @@ class ResolverVariableInstantiationTest {
                 emptyMap(),
             )
         val objectFragment =
-            resolver.instantiateObjectFragmentAt(
+            resolver.instantiateFragmentsAt(
                 testWorld.schema.testRoot(),
                 listOf(resultKey),
-            )
+            ).objectFragment
         val definition = objectFragment.pathVariableDefinitions.single()
         val markedBox =
             objectFragment.constructionSelections
@@ -368,7 +368,8 @@ class ResolverVariableInstantiationTest {
             )
         val markedContainer =
             resolver
-                .instantiateObjectFragmentAt(testWorld.schema.testRoot(), listOf(resultKey))
+                .instantiateFragmentsAt(testWorld.schema.testRoot(), listOf(resultKey))
+                .objectFragment
                 .constructionSelections
                 .filter { selection ->
                     selection.key is ObjectEngineResult.VariableKey &&

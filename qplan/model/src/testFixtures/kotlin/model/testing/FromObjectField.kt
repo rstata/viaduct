@@ -105,16 +105,13 @@ class FromField private constructor(
     }
 }
 
-typealias FromObjectField = FromField
-typealias FromQueryField = FromField
-
 /** Compiles a production-shaped response-key path against an alias-preserving object fragment. */
 fun ViaductSchema.fromObjectField(
     objectFragmentSource: String,
     responsePath: List<String>,
     variableField: ViaductSchema.ObjectField? = null,
     bindings: Map<String, EngineInputData?> = emptyMap(),
-): FromObjectField =
+): FromField =
     FromField.compile(
         schema = this as GJSchema,
         fragmentSource = objectFragmentSource,
@@ -130,7 +127,7 @@ fun ViaductSchema.fromQueryField(
     responsePath: List<String>,
     variableField: ViaductSchema.ObjectField? = null,
     bindings: Map<String, EngineInputData?> = emptyMap(),
-): FromQueryField =
+): FromField =
     FromField.compile(
         schema = this as GJSchema,
         fragmentSource = queryFragmentSource,

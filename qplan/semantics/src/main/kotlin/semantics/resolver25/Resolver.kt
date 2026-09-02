@@ -533,7 +533,8 @@ private class ObjectResultOrchestrator(
 
         val resolver = world.resolverRegistry.resolver(groundedKey.field)
         val coordinate = path + groundedKey
-        val objectFragment = resolver.instantiateObjectFragmentAt(runtime.root, coordinate)
+        val objectFragment =
+            resolver.instantiateFragmentsAt(runtime.root, coordinate).objectFragment
         listOf(groundedKey).bindFromArguments(
             root = runtime.root,
             path = path,

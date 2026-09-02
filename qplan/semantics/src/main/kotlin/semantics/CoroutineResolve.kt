@@ -15,12 +15,11 @@ import model.ObjectSelection
 import model.Arguments
 import model.PathComponent
 import model.Promise
-import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.engineObjectDataOf
 import model.groundKey
 import model.requireQueryTypeDef
-import model.registry.FieldResolver
+import model.registry.ResolverFragment
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
@@ -130,13 +129,14 @@ private suspend fun resolveSlot(
                 val invocationDemand = resolverSupport.complete(selection.subselections)
                 val resolver = world.resolverRegistry.resolver(key.field)
                 val coordinate = path + key
-                val objectFragment = resolver.instantiateObjectFragmentAt(root, coordinate)
+                val fragments = resolver.instantiateFragmentsAt(root, coordinate)
+                val objectFragment = fragments.objectFragment
                 val input =
                     target.materialize(
                         selections = objectFragment.materializeSelections,
                         reader = coordinate,
                     )
-                val queryValue = resolveQueryFragment(resolver, root, coordinate)
+                val queryValue = resolveQueryFragment(fragments.queryFragment, coordinate)
                 val fieldValue =
                     resolver(
                         input = input,
@@ -169,11 +169,9 @@ private suspend fun resolveSlot(
 
 context(world: Assumptions, resolverSupport: ResolverSupport)
 private suspend fun CoroutineScope.resolveQueryFragment(
-    resolver: FieldResolver,
-    owningRoot: ObjectEngineResult,
+    queryFragment: ResolverFragment,
     coordinate: List<PathComponent>,
 ): EngineObjectData.Sync {
-    val queryFragment = resolver.instantiateQueryFragmentAt(owningRoot, coordinate)
     if (queryFragment.constructionSelections.isEmpty()) {
         return engineObjectDataOf(world.schema.requireQueryTypeDef())
     }
@@ -191,7 +189,7 @@ private suspend fun CoroutineScope.resolveQueryFragment(
         selections = queryFragment.constructionSelections,
         target = queryResult,
     )
-    world.queryValues[ResolverOccurrenceId.at(owningRoot, coordinate)] = queryResult
+    world.queryValues[queryFragment.resolverOccurrenceId] = queryResult
     return queryResult.materialize(
         selections = queryFragment.materializeSelections,
         reader = coordinate,

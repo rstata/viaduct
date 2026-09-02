@@ -69,7 +69,7 @@ class VariableInstantiationTest {
                 listOf(ListEngineResult.Index.of(1)),
             )
 
-        val fragment = resolver.instantiateObjectFragment(occurrence)
+        val fragment = resolver.instantiateFragments(occurrence).objectFragment
         val definition = fragment.variableDefinitions.single()
         val variables = fragment.constructionSelections.usedVariables()
 
@@ -87,19 +87,21 @@ class VariableInstantiationTest {
 
         val first =
             resolver
-                .instantiateObjectFragmentAt(
+                .instantiateFragmentsAt(
                     world.schema.testRoot(),
                     listOf(ListEngineResult.Index.of(1)),
                 )
+                .objectFragment
                 .variableDefinitions
                 .single()
                 .variable
         val second =
             resolver
-                .instantiateObjectFragmentAt(
+                .instantiateFragmentsAt(
                     world.schema.testRoot(),
                     listOf(ListEngineResult.Index.of(2)),
                 )
+                .objectFragment
                 .variableDefinitions
                 .single()
                 .variable

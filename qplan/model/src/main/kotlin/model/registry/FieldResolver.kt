@@ -91,12 +91,11 @@ class FieldResolver private constructor(
     val queryFragment: SelectionForest =
         queryFragmentTemplate.constructionSelections()
 
-    /** Instantiates response-preserving and construction views for one resolver occurrence. */
-    fun instantiateObjectFragmentAt(
+    /** Instantiates both resolver input fragments at one exact resolver path. */
+    fun instantiateFragmentsAt(
         root: ObjectEngineResult,
         path: List<PathComponent>,
-    ): ResolverFragment =
-        instantiateObjectFragment(ResolverOccurrenceId.at(root, path))
+    ): ResolverFragments = instantiateFragments(ResolverOccurrenceId.at(root, path))
 
     /** Instantiates both resolver input fragments from one shared occurrence-variable set. */
     fun instantiateFragments(
@@ -122,43 +121,6 @@ class FieldResolver private constructor(
                 ),
         )
     }
-
-    /** Instantiates response-preserving and construction views for one resolver occurrence. */
-    fun instantiateObjectFragment(
-        resolverOccurrenceId: ResolverOccurrenceId,
-    ): ResolverFragment =
-        instantiateFragment(
-            resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = ProviderFragment.OBJECT,
-            variableDefinitions = instantiatedVariableDefinitions(resolverOccurrenceId),
-            pathVariableDefinitions =
-                instantiatedFieldPathVariableDefinitions(resolverOccurrenceId),
-        )
-
-    /** Instantiates response-preserving and construction query views at one resolver path. */
-    fun instantiateQueryFragmentAt(
-        root: ObjectEngineResult,
-        path: List<PathComponent>,
-    ): ResolverFragment =
-        instantiateQueryFragment(ResolverOccurrenceId.at(root, path))
-
-    /** Instantiates response-preserving and construction query views for one application. */
-    fun instantiateQueryFragment(
-        resolverOccurrenceId: ResolverOccurrenceId,
-    ): ResolverFragment =
-        instantiateFragment(
-            resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = ProviderFragment.QUERY,
-            variableDefinitions = instantiatedVariableDefinitions(resolverOccurrenceId),
-            pathVariableDefinitions =
-                instantiatedFieldPathVariableDefinitions(resolverOccurrenceId),
-        )
-
-    /** Returns the construction object fragment instantiated at [path]. */
-    fun instantiateObjectFragmentSelectionsAt(
-        root: ObjectEngineResult,
-        path: List<PathComponent>,
-    ): SelectionForest = instantiateObjectFragmentAt(root, path).constructionSelections
 
     /** Returns each resolver variable definition instantiated once for this application. */
     fun instantiatedVariableDefinitions(
@@ -240,7 +202,8 @@ class FieldResolver private constructor(
         root: ObjectEngineResult,
         path: List<PathComponent>,
     ): ObjectSelectionForest =
-        instantiateObjectFragmentAt(root, path)
+        instantiateFragmentsAt(root, path)
+            .objectFragment
             .constructionSelections
             .applicableGroundSelections(field.containingDef)
 

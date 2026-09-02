@@ -12,8 +12,8 @@ import model.inputType
  * The source of one field-relative variable defined by a field resolver.
  *
  * Equality is structural: two definitions are equal exactly when they have the same variant and
- * equal [FromArgument.argument] and [FromArgument.inputPath], or [FromObjectField.path],
- * respectively.
+ * equal [FromArgument.argument] and [FromArgument.inputPath], [FromObjectField.path], or
+ * [FromQueryField.path], respectively.
  */
 sealed interface VariableDefinition {
     /** A variable whose value is read from an input path rooted at one resolver argument. */
@@ -93,6 +93,26 @@ sealed interface VariableDefinition {
             }
         }
     }
+
+    /** A variable whose value is read from one path in its defining resolver's Query fragment. */
+    sealed interface FromQueryField : VariableDefinition {
+        val path: List<ObjectEngineResult.Key>
+
+        companion object {
+            /**
+             * Returns the definition that reads [path].
+             *
+             * ### Invariant: from-query-field-variable-definition-path-shape
+             *
+             * [path] is nonempty, every nonterminal key selects a non-list composite value, and
+             * the terminal key selects a simple value.
+             */
+            fun of(path: List<ObjectEngineResult.Key>): FromQueryField {
+                validateFieldPath(path, "query")
+                return FromQueryFieldImpl(path.toList())
+            }
+        }
+    }
 }
 
 private data class FromArgumentImpl(
@@ -114,3 +134,30 @@ private data class FromArgumentImpl(
 private data class FromObjectFieldImpl(
     override val path: List<ObjectEngineResult.Key>,
 ) : VariableDefinition.FromObjectField
+
+private data class FromQueryFieldImpl(
+    override val path: List<ObjectEngineResult.Key>,
+) : VariableDefinition.FromQueryField
+
+private fun validateFieldPath(
+    path: List<ObjectEngineResult.Key>,
+    fragmentName: String,
+) {
+    require(path.isNotEmpty()) {
+        "From-$fragmentName-field variable path must not be empty"
+    }
+    path.dropLast(1).forEach { key ->
+        require(
+            !key.field.type.isList &&
+                key.field.type.baseTypeDef is ViaductSchema.CompositeTypeDef,
+        ) {
+            "From-$fragmentName-field variable path cannot cross list or simple field " +
+                "${key.field.containingDef.name}/${key.field.name}"
+        }
+    }
+    val terminal = path.last().field
+    require(terminal.type.baseTypeDef is ViaductSchema.SimpleTypeDef) {
+        "From-$fragmentName-field variable path must end at a simple field, not " +
+            "${terminal.containingDef.name}/${terminal.name}"
+    }
+}

@@ -9,6 +9,7 @@ import model.EngineInputData
 import model.SourceSchemaAdapter
 import model.spec.SpecSelection
 import model.requireField
+import model.requireQueryTypeDef
 import model.spec.flatten
 import model.spec.flattenForMaterialization
 import viaduct.graphql.utils.GraphQLTypeRelation
@@ -25,7 +26,7 @@ class FromObjectField private constructor(
     internal val objectFragment: Fragment,
     internal val keyPath: List<ObjectEngineResult.Key>,
     internal val terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-    private val nullableTraversal: Boolean,
+    internal val nullableTraversal: Boolean,
 ) : VariableDeclaration {
     internal fun mapVariables(
         transform: (Arguments.Variable) -> Arguments.Variable,
@@ -96,6 +97,72 @@ class FromObjectField private constructor(
     }
 }
 
+/**
+ * One external `fromQueryField` declaration compiled for canonical registry construction.
+ *
+ * [responsePath] contains GraphQL response keys, including aliases. Composition validates that
+ * path against the alias-preserving Query-fragment source, then retains only the canonical
+ * alias-free key path for semantic reasoning.
+ */
+class FromQueryField private constructor(
+    val responsePath: List<String>,
+    internal val queryFragment: Fragment,
+    internal val keyPath: List<ObjectEngineResult.Key>,
+    internal val terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+    private val nullableTraversal: Boolean,
+) : VariableDeclaration {
+    internal fun mapVariables(
+        transform: (Arguments.Variable) -> Arguments.Variable,
+    ): FromQueryField =
+        FromQueryField(
+            responsePath = responsePath,
+            queryFragment = queryFragment.mapVariables(transform),
+            keyPath = keyPath.mapVariables(transform),
+            terminalType = terminalType,
+            nullableTraversal = nullableTraversal,
+        )
+
+    internal fun isCompatibleWith(
+        locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+        locationHasDefault: Boolean,
+    ): Boolean =
+        compatibleTypes(
+            locationType = locationType,
+            sourceType = terminalType.asInputType(),
+            nullableTraversal = nullableTraversal,
+            locationHasDefault = locationHasDefault,
+        )
+
+    companion object {
+        internal fun compile(
+            schema: GJSchema,
+            queryFragmentSource: String,
+            responsePath: List<String>,
+            variableField: ViaductSchema.ObjectField?,
+            bindings: Map<String, EngineInputData?>,
+        ): FromQueryField {
+            val compiled =
+                FromObjectField.compile(
+                    schema = schema,
+                    objectFragmentSource = queryFragmentSource,
+                    responsePath = responsePath,
+                    variableField = variableField,
+                    bindings = bindings,
+                )
+            require(compiled.objectFragment.nominalType == schema.requireQueryTypeDef()) {
+                "fromQueryField provider fragment must be rooted at Query"
+            }
+            return FromQueryField(
+                responsePath = compiled.responsePath,
+                queryFragment = compiled.objectFragment,
+                keyPath = compiled.keyPath,
+                terminalType = compiled.terminalType,
+                nullableTraversal = compiled.nullableTraversal,
+            )
+        }
+    }
+}
+
 /** Compiles a production-shaped response-key path against an alias-preserving object fragment. */
 fun ViaductSchema.fromObjectField(
     objectFragmentSource: String,
@@ -106,6 +173,21 @@ fun ViaductSchema.fromObjectField(
     FromObjectField.compile(
         schema = this as GJSchema,
         objectFragmentSource = objectFragmentSource,
+        responsePath = responsePath,
+        variableField = variableField,
+        bindings = bindings,
+    )
+
+/** Compiles a production-shaped response-key path against an alias-preserving Query fragment. */
+fun ViaductSchema.fromQueryField(
+    queryFragmentSource: String,
+    responsePath: List<String>,
+    variableField: ViaductSchema.ObjectField? = null,
+    bindings: Map<String, EngineInputData?> = emptyMap(),
+): FromQueryField =
+    FromQueryField.compile(
+        schema = this as GJSchema,
+        queryFragmentSource = queryFragmentSource,
         responsePath = responsePath,
         variableField = variableField,
         bindings = bindings,

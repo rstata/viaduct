@@ -29,6 +29,30 @@ sealed interface InstantiatedObjectPathDefinition {
 }
 
 /**
+ * One variable instance and its occurrence-specific Query provider path.
+ *
+ * Equality is structural: two definitions are equal exactly when their [variable] and [path] are
+ * equal.
+ */
+sealed interface InstantiatedQueryPathDefinition {
+    val variable: Arguments.Variable
+    val path: List<ObjectEngineResult.Key>
+
+    companion object {
+        /** Returns a Query-path definition for the instantiated [variable]. */
+        fun of(
+            variable: Arguments.Variable,
+            path: List<ObjectEngineResult.Key>,
+        ): InstantiatedQueryPathDefinition {
+            require(variable.isInstantiated) {
+                "A Query-path definition requires an instantiated variable"
+            }
+            return InstantiatedQueryPathDefinitionImpl(variable, path)
+        }
+    }
+}
+
+/**
  * One resolver-application variable instance and the resolver definition that supplies its value.
  *
  * Equality is structural: two definitions are equal exactly when their [variable] and [definition]
@@ -56,6 +80,11 @@ private data class InstantiatedObjectPathDefinitionImpl(
     override val variable: Arguments.Variable,
     override val path: List<ObjectEngineResult.Key>,
 ) : InstantiatedObjectPathDefinition
+
+private data class InstantiatedQueryPathDefinitionImpl(
+    override val variable: Arguments.Variable,
+    override val path: List<ObjectEngineResult.Key>,
+) : InstantiatedQueryPathDefinition
 
 private data class VariableInstanceDefinitionImpl(
     override val variable: Arguments.Variable,

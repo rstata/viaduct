@@ -77,10 +77,12 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                         .let { resolver ->
                             val coordinate = path + key
                             val instantiatedSelections =
-                                resolver.instantiateObjectFragmentSelectionsAt(
-                                    resolverApplicationCache.root,
-                                    coordinate,
-                                )
+                                resolver
+                                    .instantiateFragmentsAt(
+                                        resolverApplicationCache.root,
+                                        coordinate,
+                                    ).objectFragment
+                                    .constructionSelections
                             if (
                                 instantiatedSelections.usedVariables().all { variable ->
                                     variable.instanceId?.let(world::isBound) == true

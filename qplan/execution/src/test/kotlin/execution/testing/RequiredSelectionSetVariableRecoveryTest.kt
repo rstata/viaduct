@@ -7,7 +7,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import model.fragmentFrom
 import model.requireObjectField
-import model.testing.FromObjectField
+import model.testing.FromField
 import model.testing.TestWorld
 import viaduct.engine.api.FromArgument
 import viaduct.engine.api.FromArgumentVariable
@@ -114,7 +114,7 @@ class RequiredSelectionSetVariableRecoveryTest {
                 ),
             )
 
-        val declaration = recovered.values.single() as FromObjectField
+        val declaration = recovered.values.single() as FromField
         assertEquals(listOf("selected"), declaration.responsePath)
     }
 

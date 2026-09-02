@@ -180,7 +180,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     result: ObjectEngineResult,
     path: List<PathComponent>,
 ): ResolverFragment? {
-    val objectFragment = instantiateObjectFragmentAt(root, path)
+    val objectFragment = instantiateFragmentsAt(root, path).objectFragment
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->

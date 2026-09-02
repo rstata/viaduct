@@ -10,14 +10,13 @@ import model.outputType
 import model.ObjectSelection
 import model.Arguments
 import model.PathComponent
-import model.ResolverOccurrenceId
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
 import model.engineObjectDataOf
 import model.groundKey
 import model.requireQueryTypeDef
 import model.registry.demandsFromSibling
-import model.registry.FieldResolver
+import model.registry.ResolverFragment
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 
@@ -154,7 +153,8 @@ internal fun EngineObjectData.Sync.resolveKey(
             val invocationDemand = resolverSupport.complete(fieldSelection.subselections)
             val resolver = world.resolverRegistry.resolver(key.field)
             val coordinate = path + key
-            val objectFragment = resolver.instantiateObjectFragmentAt(root, coordinate)
+            val fragments = resolver.instantiateFragmentsAt(root, coordinate)
+            val objectFragment = fragments.objectFragment
             val input =
                 runBlocking {
                     // Because of the depth-first nature of resolvers01-03 && 06-08
@@ -164,7 +164,7 @@ internal fun EngineObjectData.Sync.resolveKey(
                         reader = coordinate,
                     )
                 }
-            val queryValue = resolver.resolveQueryFragment(root, coordinate)
+            val queryValue = fragments.queryFragment.resolveQueryFragment(coordinate)
             val fieldValue =
                 resolver(
                     input = input,
@@ -187,12 +187,10 @@ internal fun EngineObjectData.Sync.resolveKey(
 }
 
 context(world: Assumptions, resolverSupport: ResolverSupport)
-private fun FieldResolver.resolveQueryFragment(
-    owningRoot: ObjectEngineResult,
+private fun ResolverFragment.resolveQueryFragment(
     coordinate: List<PathComponent>,
 ): EngineObjectData.Sync {
-    val queryFragment = instantiateQueryFragmentAt(owningRoot, coordinate)
-    if (queryFragment.constructionSelections.isEmpty()) {
+    if (constructionSelections.isEmpty()) {
         return engineObjectDataOf(world.schema.requireQueryTypeDef())
     }
 
@@ -206,13 +204,13 @@ private fun FieldResolver.resolveQueryFragment(
     source.orchestrateKeys(
         root = queryResult,
         path = emptyList(),
-        selections = queryFragment.constructionSelections,
+        selections = constructionSelections,
         resolved = queryResult,
     )
-    world.queryValues[ResolverOccurrenceId.at(owningRoot, coordinate)] = queryResult
+    world.queryValues[resolverOccurrenceId] = queryResult
     return runBlocking {
         queryResult.materialize(
-            selections = queryFragment.materializeSelections,
+            selections = materializeSelections,
             reader = coordinate,
         )
     }

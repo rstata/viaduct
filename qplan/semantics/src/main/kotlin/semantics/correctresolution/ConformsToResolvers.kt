@@ -13,7 +13,6 @@ import model.ObjectEngineResult
 import model.outputType
 import model.outputValue
 import model.PathComponent
-import model.ResolverOccurrenceId
 import model.VariableBinding
 import model.isContextuallyGrounded
 import model.groundedArguments
@@ -22,7 +21,7 @@ import viaduct.engine.api.EngineObjectData
 import model.toEngineOutputData
 import model.usedVariables
 import model.registry.FieldResolver
-import model.registry.ResolverFragment
+import model.registry.ResolverFragments
 import model.registry.VariableDefinition
 import semantics.ResolverSupport
 
@@ -99,20 +98,21 @@ private fun ObjectEngineResult.objectConformsToResolvers(
     }
 
 context(world: Assumptions)
-internal fun FieldResolver.objectFragmentSatisfiedBy(
+internal fun FieldResolver.fragmentsSatisfiedBy(
     root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
-): ResolverFragment? {
-    val objectFragment = instantiateObjectFragmentAt(root, path)
+): ResolverFragments? {
+    val fragments = instantiateFragmentsAt(root, path)
+    val objectFragment = fragments.objectFragment
     val arguments =
         (path.lastOrNull() as? ObjectEngineResult.ObjectKey)
             ?.groundedArguments() as? Arguments.Resolved
             ?: return null
-    return objectFragment.takeIf {
+    return fragments.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         fromArgumentBindingsAgree(
-            resolverOccurrenceId = objectFragment.resolverOccurrenceId,
+            fragments = fragments,
             arguments = arguments,
         ) &&
             constructionSelections.usedVariables().all { variable ->
@@ -127,12 +127,13 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
 
 context(world: Assumptions)
 private fun FieldResolver.fromArgumentBindingsAgree(
-    resolverOccurrenceId: ResolverOccurrenceId,
+    fragments: ResolverFragments,
     arguments: Arguments.Resolved,
 ): Boolean {
     val usedVariables =
-        instantiateObjectFragment(resolverOccurrenceId).constructionSelections.usedVariables() +
-            instantiateQueryFragment(resolverOccurrenceId).constructionSelections.usedVariables()
+        fragments.objectFragment.constructionSelections.usedVariables() +
+            fragments.queryFragment.constructionSelections.usedVariables()
+    val resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId
     return instantiatedVariableDefinitions(resolverOccurrenceId)
         .filter { variableDefinition -> variableDefinition.variable in usedVariables }
         .all { variableDefinition ->

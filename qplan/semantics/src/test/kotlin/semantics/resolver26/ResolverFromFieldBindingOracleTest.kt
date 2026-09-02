@@ -112,7 +112,10 @@ private fun bindingFixture(
     val occurrenceId = ResolverOccurrenceId.at(result, listOf(resultKey))
     val resolver = world.resolverRegistry.resolver(resultField)
     val definitions =
-        resolver.instantiateObjectFragmentAt(result, listOf(resultKey)).pathVariableDefinitions
+        resolver
+            .instantiateFragmentsAt(result, listOf(resultKey))
+            .objectFragment
+            .pathVariableDefinitions
     return BindingFixture(
         world = world,
         result = result,

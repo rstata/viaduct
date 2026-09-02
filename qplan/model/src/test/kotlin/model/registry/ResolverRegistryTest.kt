@@ -213,7 +213,8 @@ class ResolverRegistryTest {
         assertEquals(
             "aliased",
             resolver
-                .instantiateQueryFragmentAt(schema.testRoot(), emptyList())
+                .instantiateFragmentsAt(schema.testRoot(), emptyList())
+                .queryFragment
                 .materializeSelections
                 .single()
                 .responseKey,

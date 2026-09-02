@@ -9,7 +9,7 @@ import model.Fragment
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.FieldResolverDefinition
-import model.testing.FromObjectField
+import model.testing.FromField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromObjectField
@@ -494,7 +494,7 @@ class BranchOrderInvariantTest {
             name: String,
             provider: String,
             responsePath: List<String>,
-        ): Map<Arguments.Variable, FromObjectField> {
+        ): Map<Arguments.Variable, FromField> {
             val owner = schema.requireField("Query", "result") as ViaductSchema.ObjectField
             return mapOf(
                 Arguments.Variable.of(owner, name) to

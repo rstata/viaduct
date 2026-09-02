@@ -424,12 +424,10 @@ private class TestResolverRegistry(
                         inputPath = declaration.inputPath,
                     )
                 is FromField ->
-                    when (declaration.providerFragment) {
-                        ProviderFragment.OBJECT ->
-                            VariableDefinition.FromObjectField.of(declaration.keyPath)
-                        ProviderFragment.QUERY ->
-                            VariableDefinition.FromQueryField.of(declaration.keyPath)
-                    }
+                    VariableDefinition.FromField.of(
+                        providerFragment = declaration.providerFragment,
+                        path = declaration.keyPath,
+                    )
             }
         }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>

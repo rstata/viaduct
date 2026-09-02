@@ -39,35 +39,16 @@ typealias FieldResolverApplicationObserver =
 /** Paired materialization and construction views of one instantiated resolver input fragment. */
 sealed interface ResolverFragment {
     val resolverOccurrenceId: ResolverOccurrenceId
-    val providerFragment: ProviderFragment
     val materializeSelections: MaterializeSelectionForest
     val constructionSelections: SelectionForest
     val variableDefinitions: List<VariableInstanceDefinition>
     val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>
 }
 
-/** Paired resolver-object-fragment views instantiated from one resolver occurrence. */
-sealed interface ResolverObjectFragment : ResolverFragment
-
-/** Paired resolver-query-fragment views instantiated from one resolver occurrence. */
-sealed interface ResolverQueryFragment : ResolverFragment
-
-/** Both resolver input fragments instantiated from one resolver occurrence. */
 data class ResolverFragments(
-    val objectFragment: ResolverObjectFragment,
-    val queryFragment: ResolverQueryFragment,
-) {
-    init {
-        require(objectFragment.resolverOccurrenceId == queryFragment.resolverOccurrenceId)
-    }
-
-    val variableDefinitions: List<VariableInstanceDefinition> =
-        (objectFragment.variableDefinitions + queryFragment.variableDefinitions)
-            .distinctBy(VariableInstanceDefinition::variable)
-
-    val pathVariableDefinitions: List<InstantiatedFieldPathDefinition> =
-        objectFragment.pathVariableDefinitions + queryFragment.pathVariableDefinitions
-}
+    val objectFragment: ResolverFragment,
+    val queryFragment: ResolverFragment,
+)
 
 /**
  * A field resolver supplied by the reasoning world's external resolver registry.
@@ -89,11 +70,10 @@ data class ResolverFragments(
  *
  * Every variable is defined by this resolver's field. A [VariableDefinition.FromArgument]
  * references one schema-valid input path rooted at an argument belonging to that field. A
- * [VariableDefinition.FromObjectField] is a valid selection path relative to that field's
- * containing type and is structurally contained by [objectFragment]; its factory additionally
- * ensures that the path does not cross a list and ends at a simple value. A
- * [VariableDefinition.FromQueryField] satisfies the same path invariant relative to Query and is
- * structurally contained by [queryFragment].
+ * [VariableDefinition.FromField] supplied by [ProviderFragment.OBJECT] is a valid selection path
+ * relative to that field's containing type and is structurally contained by [objectFragment]. A
+ * definition supplied by [ProviderFragment.QUERY] satisfies the same path invariant relative to
+ * Query and is structurally contained by [queryFragment].
  */
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,
@@ -115,7 +95,7 @@ class FieldResolver private constructor(
     fun instantiateObjectFragmentAt(
         root: ObjectEngineResult,
         path: List<PathComponent>,
-    ): ResolverObjectFragment =
+    ): ResolverFragment =
         instantiateObjectFragment(ResolverOccurrenceId.at(root, path))
 
     /** Instantiates both resolver input fragments from one shared occurrence-variable set. */
@@ -127,14 +107,16 @@ class FieldResolver private constructor(
             instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
         return ResolverFragments(
             objectFragment =
-                instantiateObjectFragment(
+                instantiateFragment(
                     resolverOccurrenceId = resolverOccurrenceId,
+                    providerFragment = ProviderFragment.OBJECT,
                     variableDefinitions = variableDefinitions,
                     pathVariableDefinitions = pathVariableDefinitions,
                 ),
             queryFragment =
-                instantiateQueryFragment(
+                instantiateFragment(
                     resolverOccurrenceId = resolverOccurrenceId,
+                    providerFragment = ProviderFragment.QUERY,
                     variableDefinitions = variableDefinitions,
                     pathVariableDefinitions = pathVariableDefinitions,
                 ),
@@ -144,9 +126,10 @@ class FieldResolver private constructor(
     /** Instantiates response-preserving and construction views for one resolver occurrence. */
     fun instantiateObjectFragment(
         resolverOccurrenceId: ResolverOccurrenceId,
-    ): ResolverObjectFragment =
-        instantiateObjectFragment(
+    ): ResolverFragment =
+        instantiateFragment(
             resolverOccurrenceId = resolverOccurrenceId,
+            providerFragment = ProviderFragment.OBJECT,
             variableDefinitions = instantiatedVariableDefinitions(resolverOccurrenceId),
             pathVariableDefinitions =
                 instantiatedFieldPathVariableDefinitions(resolverOccurrenceId),
@@ -156,15 +139,16 @@ class FieldResolver private constructor(
     fun instantiateQueryFragmentAt(
         root: ObjectEngineResult,
         path: List<PathComponent>,
-    ): ResolverQueryFragment =
+    ): ResolverFragment =
         instantiateQueryFragment(ResolverOccurrenceId.at(root, path))
 
     /** Instantiates response-preserving and construction query views for one application. */
     fun instantiateQueryFragment(
         resolverOccurrenceId: ResolverOccurrenceId,
-    ): ResolverQueryFragment =
-        instantiateQueryFragment(
+    ): ResolverFragment =
+        instantiateFragment(
             resolverOccurrenceId = resolverOccurrenceId,
+            providerFragment = ProviderFragment.QUERY,
             variableDefinitions = instantiatedVariableDefinitions(resolverOccurrenceId),
             pathVariableDefinitions =
                 instantiatedFieldPathVariableDefinitions(resolverOccurrenceId),
@@ -211,39 +195,17 @@ class FieldResolver private constructor(
             }
         }
 
-    private fun instantiateObjectFragment(
-        resolverOccurrenceId: ResolverOccurrenceId,
-        variableDefinitions: List<VariableInstanceDefinition>,
-        pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-    ): ResolverObjectFragment =
-        instantiateFragment(
-            resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = ProviderFragment.OBJECT,
-            template = objectFragmentTemplate,
-            variableDefinitions = variableDefinitions,
-            pathVariableDefinitions = pathVariableDefinitions,
-        ).toObjectFragment()
-
-    private fun instantiateQueryFragment(
-        resolverOccurrenceId: ResolverOccurrenceId,
-        variableDefinitions: List<VariableInstanceDefinition>,
-        pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-    ): ResolverQueryFragment =
-        instantiateFragment(
-            resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = ProviderFragment.QUERY,
-            template = queryFragmentTemplate,
-            variableDefinitions = variableDefinitions,
-            pathVariableDefinitions = pathVariableDefinitions,
-        ).toQueryFragment()
-
     private fun instantiateFragment(
         resolverOccurrenceId: ResolverOccurrenceId,
         providerFragment: ProviderFragment,
-        template: MaterializeSelectionForest,
         variableDefinitions: List<VariableInstanceDefinition>,
         pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-    ): ResolverFragmentParts {
+    ): ResolverFragment {
+        val template =
+            when (providerFragment) {
+                ProviderFragment.OBJECT -> objectFragmentTemplate
+                ProviderFragment.QUERY -> queryFragmentTemplate
+            }
         val materializeSelections = template.instantiateVariables(resolverOccurrenceId)
         val instantiatedFragment = materializeSelections.constructionSelections()
         val fragmentPathDefinitions =
@@ -260,9 +222,8 @@ class FieldResolver private constructor(
                 }.concatenateSelectionForests()
         val constructionSelections = instantiatedFragment + providerSelections
         val usedVariables = constructionSelections.usedVariables()
-        return ResolverFragmentParts(
+        return ResolverFragmentImpl(
             resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = providerFragment,
             materializeSelections = materializeSelections,
             constructionSelections = constructionSelections,
             variableDefinitions =
@@ -471,56 +432,13 @@ private fun EngineOutputData?.requireArgumentlessObjectFields() {
     }
 }
 
-private class ResolverObjectFragmentImpl(
+private data class ResolverFragmentImpl(
     override val resolverOccurrenceId: ResolverOccurrenceId,
-    override val providerFragment: ProviderFragment,
     override val materializeSelections: MaterializeSelectionForest,
     override val constructionSelections: SelectionForest,
     override val variableDefinitions: List<VariableInstanceDefinition>,
     override val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-) : ResolverObjectFragment
-
-private class ResolverQueryFragmentImpl(
-    override val resolverOccurrenceId: ResolverOccurrenceId,
-    override val providerFragment: ProviderFragment,
-    override val materializeSelections: MaterializeSelectionForest,
-    override val constructionSelections: SelectionForest,
-    override val variableDefinitions: List<VariableInstanceDefinition>,
-    override val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-) : ResolverQueryFragment
-
-private data class ResolverFragmentParts(
-    val resolverOccurrenceId: ResolverOccurrenceId,
-    val providerFragment: ProviderFragment,
-    val materializeSelections: MaterializeSelectionForest,
-    val constructionSelections: SelectionForest,
-    val variableDefinitions: List<VariableInstanceDefinition>,
-    val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-) {
-    fun toObjectFragment(): ResolverObjectFragment {
-        require(providerFragment == ProviderFragment.OBJECT)
-        return ResolverObjectFragmentImpl(
-            resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = providerFragment,
-            materializeSelections = materializeSelections,
-            constructionSelections = constructionSelections,
-            variableDefinitions = variableDefinitions,
-            pathVariableDefinitions = pathVariableDefinitions,
-        )
-    }
-
-    fun toQueryFragment(): ResolverQueryFragment {
-        require(providerFragment == ProviderFragment.QUERY)
-        return ResolverQueryFragmentImpl(
-            resolverOccurrenceId = resolverOccurrenceId,
-            providerFragment = providerFragment,
-            materializeSelections = materializeSelections,
-            constructionSelections = constructionSelections,
-            variableDefinitions = variableDefinitions,
-            pathVariableDefinitions = pathVariableDefinitions,
-        )
-    }
-}
+) : ResolverFragment
 
 private fun MaterializeSelectionForest.instantiateVariables(
     resolverOccurrenceId: ResolverOccurrenceId,

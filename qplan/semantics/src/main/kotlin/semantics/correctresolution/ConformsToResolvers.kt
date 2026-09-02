@@ -22,7 +22,7 @@ import viaduct.engine.api.EngineObjectData
 import model.toEngineOutputData
 import model.usedVariables
 import model.registry.FieldResolver
-import model.registry.ResolverObjectFragment
+import model.registry.ResolverFragment
 import model.registry.VariableDefinition
 import semantics.ResolverSupport
 
@@ -103,7 +103,7 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
     root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
-): ResolverObjectFragment? {
+): ResolverFragment? {
     val objectFragment = instantiateObjectFragmentAt(root, path)
     val arguments =
         (path.lastOrNull() as? ObjectEngineResult.ObjectKey)

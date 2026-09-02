@@ -16,7 +16,6 @@ import model.fetchGroundedArguments
 import model.objectKey
 import model.outputType
 import model.registry.InstantiatedFieldPathDefinition
-import model.registry.ProviderFragment
 import model.selectionForestOf
 import model.toEngineSimpleData
 import viaduct.graphql.schema.ViaductSchema
@@ -33,10 +32,8 @@ internal suspend fun ObjectEngineResult.readProvider(
 context(world: Assumptions)
 internal suspend fun ObjectEngineResult.completeProviderBindings(
     reads: List<ProviderDefinitionRead>,
-    providerFragment: ProviderFragment,
     support: Resolver26Support,
 ) {
-    require(reads.all { read -> read.definition.providerFragment == providerFragment })
     coroutineScope {
         reads.forEach { read ->
             launch {

@@ -13,7 +13,6 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
-import model.testing.fromQueryField
 import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,78 +22,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ResolverVariableInstantiationTest {
-    @Test
-    fun `instantiates Query fragment provider path at one occurrence`() {
-        val queryFragment =
-            """
-            fragment QueryInput on Query {
-              provider: source(value: ${'$'}seed)
-              consume(value: ${'$'}provided)
-            }
-            """.trimIndent()
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      result(seed: Int): Int!
-                      source(value: Int): Int!
-                      consume(value: Int): Int!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    val empty = schema.emptyFragmentOf("Query")
-                    mapOf(
-                        result to
-                            fieldResolverOf(
-                                objectFragment = empty,
-                                queryFragment = schema.fragmentFrom(queryFragment),
-                            ) { _, _, _ -> 1 },
-                        schema.requireObjectField("Query", "source") to
-                            fieldResolverOf(empty) { _, _ -> 1 },
-                        schema.requireObjectField("Query", "consume") to
-                            fieldResolverOf(empty) { _, _ -> 1 },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    mapOf(
-                        Arguments.Variable.of(result, "seed") to
-                            schema.fromArgument(result, "seed"),
-                        Arguments.Variable.of(result, "provided") to
-                            schema.fromQueryField(queryFragment, listOf("provider")),
-                    )
-                },
-            )
-        val schema = testWorld.schema
-        val result = schema.requireObjectField("Query", "result")
-        val path = listOf(ObjectEngineResult.GroundKey.of(result, mapOf("seed" to 3)))
-        val occurrence = ResolverOccurrenceId.at(schema.testRoot(), path)
-        val fragment =
-            testWorld.resolverRegistry.resolver(result).instantiateQueryFragment(occurrence)
-        val definition = fragment.pathVariableDefinitions.single()
-        val seed = Arguments.Variable.of(result, "seed").instantiate(occurrence)
-
-        assertEquals(setOf(seed), definition.path.single().instantiatedVariables())
-        assertEquals(
-            setOf(seed, definition.variable),
-            fragment.constructionSelections.instantiatedVariables(),
-        )
-        assertEquals(
-            definition.variable,
-            assertIs<ObjectEngineResult.VariableKey>(
-                fragment.constructionSelections
-                    .filter { selection ->
-                        selection.key.field.name == "source" &&
-                            selection.key is ObjectEngineResult.VariableKey
-                    }
-                    .single()
-                    .key,
-            ).variableDefinedByThisKey,
-        )
-    }
-
     @Test
     fun `resolver occurrence identity distinguishes symbolic variables`() {
         val fragment =
@@ -283,9 +210,7 @@ class ResolverVariableInstantiationTest {
             objectFragment.pathVariableDefinitions,
             resolver
                 .instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
-                .filter { definition ->
-                    definition.providerFragment == ProviderFragment.OBJECT
-                },
+                .filter { definition -> definition.providerFragment == ProviderFragment.OBJECT },
         )
     }
 

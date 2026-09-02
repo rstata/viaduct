@@ -174,13 +174,13 @@ class ResolverDemandTest {
         )
         assertEquals(
             schema.requireObjectField("Query", "xSource"),
-            assertIs<VariableDefinition.FromObjectField>(
+            assertIs<VariableDefinition.FromField>(
                 world.resolverRegistry.resolver(x).variables.getValue(xVariable),
             ).path.single().field,
         )
         assertEquals(
             schema.requireObjectField("Query", "ySource"),
-            assertIs<VariableDefinition.FromObjectField>(
+            assertIs<VariableDefinition.FromField>(
                 world.resolverRegistry.resolver(y).variables.getValue(yVariable),
             ).path.single().field,
         )
@@ -275,109 +275,48 @@ class ResolverDemandTest {
     }
 
     @Test
-    fun `rejects variable cycles`() {
-        val schemaSDL =
-            """
-            type Query {
-              x: Int
-              y: Int
-              z(a: Int, b: Int): Int
-            }
-            """.trimIndent()
-        val cycle =
-            assertFailsWith<IllegalArgumentException> {
-                TestWorld.fromSDL(
-                    schemaSDL = schemaSDL,
-                    fieldResolvers = { schema ->
-                        val resolvers =
-                            mutableMapOf<ViaductSchema.Field, FieldResolverDefinition>()
-                        schema.requireQueryTypeDef().fields
-                            .filter { it.name != "V_A_typename" }
-                            .forEach { field ->
-                                resolvers[field] = resolver(schema.emptyFragmentOf("Query"))
-                            }
-                        resolvers[schema.requireField("Query", "x")] =
-                            resolver(
-                                schema.fragmentFrom(
-                                    """
-                                    fragment ignored on Query {
-                                      z(a: ${'$'}a, b: 0)
-                                      z(a: 0, b: ${'$'}b)
-                                    }
-                                    """.trimIndent(),
-                                ),
-                            )
-                        resolvers
-                    },
-                    variableProviders = { schema ->
-                        val owner = schema.requireObjectField("Query", "x")
-                        mapOf(
-                            Arguments.Variable.of(owner, "a") to
-                                schema.fromObjectField(
-                                    "fragment ignored on Query { z(a: 0, b: ${'$'}b) }",
-                                    listOf("z"),
-                                ),
-                            Arguments.Variable.of(owner, "b") to
-                                schema.fromObjectField(
-                                    "fragment ignored on Query { z(a: ${'$'}a, b: 0) }",
-                                    listOf("z"),
-                                ),
-                        )
-                    },
-                )
-            }
-        assertTrue(cycle.message!!.contains("demand cycle"))
-    }
+    fun `rejects variable cycles`() = assertRejectedVariableCycle(mixedFragments = false)
 
     @Test
-    fun `rejects mixed object and Query field variable cycles`() {
-        val objectFragment =
-            """
-            fragment ObjectInput on Subject {
-              objectProvider: source(value: ${'$'}queryValue)
-              consume(value: ${'$'}objectValue)
-            }
-            """.trimIndent()
-        val queryFragment =
-            """
-            fragment QueryInput on Query {
-              queryProvider: source(value: ${'$'}objectValue)
-            }
-            """.trimIndent()
+    fun `rejects mixed object and Query field variable cycles`() =
+        assertRejectedVariableCycle(mixedFragments = true)
 
+    private fun assertRejectedVariableCycle(mixedFragments: Boolean) {
+        val objectFragment =
+            "fragment ObjectInput on Query { " +
+                "objectProvider: z(a: ${'$'}queryValue) " +
+                (if (mixedFragments) "" else "queryProvider: z(a: ${'$'}objectValue)") +
+                " }"
+        val queryFragment =
+            "fragment QueryInput on Query { queryProvider: z(a: ${'$'}objectValue) }"
         val failure =
             assertFailsWith<IllegalArgumentException> {
                 TestWorld.fromSDL(
                     schemaSDL =
                         """
                         type Query {
-                          subject: Subject!
-                          source(value: Int): Int
-                        }
-
-                        type Subject {
                           result: Int
-                          source(value: Int): Int
-                          consume(value: Int): Int
+                          z(a: Int): Int
                         }
                         """.trimIndent(),
                     fieldResolvers = { schema ->
-                        val emptyQuery = schema.emptyFragmentOf("Query")
-                        val emptySubject = schema.emptyFragmentOf("Subject")
+                        val empty = schema.emptyFragmentOf("Query")
                         mapOf(
-                            schema.requireField("Query", "subject") to resolver(emptyQuery),
-                            schema.requireField("Query", "source") to resolver(emptyQuery),
-                            schema.requireField("Subject", "result") to
+                            schema.requireField("Query", "result") to
                                 fieldResolverOf(
                                     objectFragment = schema.fragmentFrom(objectFragment),
-                                    queryFragment = schema.fragmentFrom(queryFragment),
+                                    queryFragment =
+                                        if (mixedFragments) {
+                                            schema.fragmentFrom(queryFragment)
+                                        } else {
+                                            empty
+                                        },
                                 ) { _, _, _ -> 1 },
-                            schema.requireField("Subject", "source") to resolver(emptySubject),
-                            schema.requireField("Subject", "consume") to resolver(emptySubject),
+                            schema.requireField("Query", "z") to resolver(empty),
                         )
                     },
                     variableProviders = { schema ->
-                        val owner = schema.requireObjectField("Subject", "result")
+                        val owner = schema.requireObjectField("Query", "result")
                         mapOf(
                             Arguments.Variable.of(owner, "objectValue") to
                                 schema.fromObjectField(
@@ -385,10 +324,11 @@ class ResolverDemandTest {
                                     listOf("objectProvider"),
                                 ),
                             Arguments.Variable.of(owner, "queryValue") to
-                                schema.fromQueryField(
-                                    queryFragment,
-                                    listOf("queryProvider"),
-                                ),
+                                if (mixedFragments) {
+                                    schema.fromQueryField(queryFragment, listOf("queryProvider"))
+                                } else {
+                                    schema.fromObjectField(objectFragment, listOf("queryProvider"))
+                                },
                         )
                     },
                 )

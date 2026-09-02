@@ -13,6 +13,7 @@ import model.SourceSchemaAdapter
 import model.fieldExpressions
 import model.objectOf
 import model.outputValue
+import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -95,7 +96,10 @@ class ResolverTestDslTest {
         val fromSource = Arguments.Variable.of(result, "fromSource")
 
         assertIs<VariableDefinition.FromArgument>(resolver.variables.getValue(seed))
-        assertIs<VariableDefinition.FromObjectField>(resolver.variables.getValue(fromSource))
+        assertEquals(
+            ProviderFragment.OBJECT,
+            assertIs<VariableDefinition.FromField>(resolver.variables.getValue(fromSource)).providerFragment,
+        )
     }
 
     @Test

@@ -7,34 +7,26 @@ import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromQueryField
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.DynamicTest.dynamicTest
+import org.junit.jupiter.api.TestFactory
 import kotlin.test.assertEquals
 
 /** Contract for variables produced by exact paths in the defining Query fragment. */
 interface FromQueryFieldResolverContract : ResolverContract {
-    @Test
-    fun `Query field binding can be consumed within the Query fragment`() {
-        assertFromQueryFieldConsumers(
-            consumeInObjectFragment = false,
-            consumeInQueryFragment = true,
-        )
-    }
-
-    @Test
-    fun `Query field binding can be consumed within the object fragment`() {
-        assertFromQueryFieldConsumers(
-            consumeInObjectFragment = true,
-            consumeInQueryFragment = false,
-        )
-    }
-
-    @Test
-    fun `Query field binding can be consumed within both fragments`() {
-        assertFromQueryFieldConsumers(
-            consumeInObjectFragment = true,
-            consumeInQueryFragment = true,
-        )
-    }
+    @TestFactory
+    fun `Query field bindings support every fragment consumer`() =
+        listOf(
+            Triple("Query fragment", false, true),
+            Triple("object fragment", true, false),
+            Triple("both fragments", true, true),
+        ).map { (name, consumeInObjectFragment, consumeInQueryFragment) ->
+            dynamicTest(name) {
+                assertFromQueryFieldConsumers(
+                    consumeInObjectFragment = consumeInObjectFragment,
+                    consumeInQueryFragment = consumeInQueryFragment,
+                )
+            }
+        }
 
     private fun assertFromQueryFieldConsumers(
         consumeInObjectFragment: Boolean,
@@ -46,14 +38,10 @@ interface FromQueryFieldResolverContract : ResolverContract {
             } else {
                 ""
             }
+        val queryConsumer =
+            if (consumeInQueryFragment) " querySide: consume(value: ${'$'}provided)" else ""
         val queryFragmentSource =
-            buildString {
-                append("fragment ConsumerQuery on Query { providedSource: provider")
-                if (consumeInQueryFragment) {
-                    append(" querySide: consume(value: ${'$'}provided)")
-                }
-                append(" }")
-            }
+            "fragment ConsumerQuery on Query { providedSource: provider$queryConsumer }"
         val testWorld =
             TestWorld.fromSDL(
                 selectiveResolvers = selectiveResolvers,
@@ -79,17 +67,13 @@ interface FromQueryFieldResolverContract : ResolverContract {
                         consumer to
                             fieldResolverOf(
                                 objectFragment =
-                                    if (consumeInObjectFragment) {
-                                        schema.fragmentFrom(objectFragmentSource)
-                                    } else {
-                                        empty
-                                    },
+                                    objectFragmentSource
+                                        .takeIf(String::isNotEmpty)
+                                        ?.let(schema::fragmentFrom) ?: empty,
                                 queryFragment = schema.fragmentFrom(queryFragmentSource),
                             ) { input, queryValue, _ ->
-                                listOfNotNull(
-                                    input.selectionValues()["objectSide"] as? Int,
-                                    queryValue.selectionValues()["querySide"] as? Int,
-                                ).sum()
+                                (input.selectionValues()["objectSide"] as? Int ?: 0) +
+                                    (queryValue.selectionValues()["querySide"] as? Int ?: 0)
                             },
                     )
                 },

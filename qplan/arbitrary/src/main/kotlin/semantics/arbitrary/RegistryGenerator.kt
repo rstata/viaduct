@@ -81,9 +81,6 @@ data class RegistryFeatures(
     val hasAbstractResolverFragment: Boolean,
     val queryFragmentCount: Int = 0,
     val fromQueryFieldVariableCount: Int = 0,
-    val fromQueryFieldLiteralVariableConvergenceCount: Int = 0,
-    val passiveTopLevelFromQueryFieldVariableUseCount: Int = 0,
-    val fromQueryFieldProviderArgumentVariableCount: Int = 0,
     val maximumFromQueryFieldPathLength: Int = 0,
     val maximumFromQueryFieldVariableUseDepth: Int = 0,
 )
@@ -710,14 +707,10 @@ private class RegistryGenerator(
                     put(typeName, value.selectedPaths())
                 }
             }
-        val fromFieldFeatures =
-            ProviderFragment.entries.associateWith { providerFragment ->
-                variableProviders
-                    .fromField(providerFragment)
-                    .features(fieldSites)
-            }
-        val objectFieldFeatures = fromFieldFeatures.getValue(ProviderFragment.OBJECT)
-        val queryFieldFeatures = fromFieldFeatures.getValue(ProviderFragment.QUERY)
+        val objectFieldFeatures =
+            variableProviders.fromField(ProviderFragment.OBJECT).features(fieldSites)
+        val queryFieldFeatures =
+            variableProviders.fromField(ProviderFragment.QUERY).features(fieldSites)
         return ArbitraryRegistry(
             fieldResolverCoordinates = fieldSites,
             nodeResolverTypes = nodeSites,
@@ -835,12 +828,6 @@ private class RegistryGenerator(
                             fragment.selections.isNotEmpty()
                         },
                     fromQueryFieldVariableCount = queryFieldFeatures.variableCount,
-                    fromQueryFieldLiteralVariableConvergenceCount =
-                        queryFieldFeatures.literalVariableConvergenceCount,
-                    passiveTopLevelFromQueryFieldVariableUseCount =
-                        queryFieldFeatures.passiveTopLevelVariableUseCount,
-                    fromQueryFieldProviderArgumentVariableCount =
-                        queryFieldFeatures.providerArgumentVariableCount,
                     maximumFromQueryFieldPathLength = queryFieldFeatures.maximumPathLength,
                     maximumFromQueryFieldVariableUseDepth =
                         queryFieldFeatures.maximumVariableUseDepth,
@@ -913,37 +900,35 @@ private class RegistryGenerator(
                 .filterTo(linkedSetOf()) { owner ->
                     owner.typeName == consumer.typeName
                 }
-        return ResolverFragmentPlans(
-            objectFragment =
-                fragmentPlan(
-                    ownerName = consumer.typeName,
-                    consumer = consumer,
-                    ranks = ranks,
-                    enabled = config[ResolverFragmentsEnabled],
-                    weight = config[ResolverFragmentWeight],
-                    preferredTopLevelFields = preferredObjectFields,
-                ),
-            queryFragment =
-                fragmentPlan(
-                    ownerName = "Query",
-                    consumer = consumer,
-                    ranks = ranks,
-                    enabled = config[ResolverQueryFragmentsEnabled],
-                    weight = config[ResolverQueryFragmentWeight],
-                ),
-        )
-            .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
-            .withFromFieldVariableProvider(
-                consumer,
-                ranks,
-                variableProviders,
-                ProviderFragment.OBJECT,
-            ).withFromFieldVariableProvider(
-                consumer,
-                ranks,
-                variableProviders,
-                ProviderFragment.QUERY,
+        val fragments =
+            ResolverFragmentPlans(
+                objectFragment =
+                    fragmentPlan(
+                        ownerName = consumer.typeName,
+                        consumer = consumer,
+                        ranks = ranks,
+                        enabled = config[ResolverFragmentsEnabled],
+                        weight = config[ResolverFragmentWeight],
+                        preferredTopLevelFields = preferredObjectFields,
+                    ),
+                queryFragment =
+                    fragmentPlan(
+                        ownerName = "Query",
+                        consumer = consumer,
+                        ranks = ranks,
+                        enabled = config[ResolverQueryFragmentsEnabled],
+                        weight = config[ResolverQueryFragmentWeight],
+                    ),
             )
+                .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
+        return ProviderFragment.entries.fold(fragments) { result, providerFragment ->
+            result.withFromFieldVariableProvider(
+                consumer,
+                ranks,
+                variableProviders,
+                providerFragment,
+            )
+        }
     }
 
     private fun fragmentPlan(

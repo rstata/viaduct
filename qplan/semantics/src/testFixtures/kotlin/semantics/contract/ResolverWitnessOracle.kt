@@ -7,7 +7,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.registry.FieldResolver
-import model.registry.ResolverObjectFragment
+import model.registry.ResolverFragment
 import model.usedVariables
 import semantics.ResolverSupport
 import semantics.arbitrary.ResolverApplicationIdentity
@@ -179,7 +179,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
-): ResolverObjectFragment? {
+): ResolverFragment? {
     val objectFragment = instantiateObjectFragmentAt(root, path)
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections

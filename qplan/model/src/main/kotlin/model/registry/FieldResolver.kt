@@ -29,8 +29,23 @@ import model.usedVariables
 import viaduct.engine.api.EngineObjectData
 
 /** A deterministic partial map from resolved object and Query fragments plus arguments to an output value. */
-typealias FieldResolverFunction =
+typealias NonselectiveFieldResolverFunction =
     (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?
+
+/**
+ * A deterministic partial map from resolved inputs and output demand to an output value.
+ *
+ * For fixed non-selection inputs, calls with different demands have the same null, error, simple,
+ * list, and concrete-object skeleton and agree at every object-field coordinate selected by both
+ * demands. The returned value may omit object fields outside the supplied demand.
+ */
+typealias SelectiveFieldResolverFunction =
+    (
+        EngineObjectData.Sync,
+        EngineObjectData.Sync,
+        Arguments.Resolved,
+        SelectionForest,
+    ) -> EngineOutputData?
 
 /** Observes one complete (null demand) or selective field-resolver application boundary. */
 typealias FieldResolverApplicationObserver =
@@ -81,7 +96,8 @@ class FieldResolver private constructor(
     private val queryFragmentTemplate: MaterializeSelectionForest,
     private val queryType: ViaductSchema.Object,
     val variables: Map<Arguments.Variable, VariableDefinition>,
-    private val function: FieldResolverFunction,
+    private val function: SelectiveFieldResolverFunction,
+    private val projectNonselectiveOutput: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
@@ -207,7 +223,7 @@ class FieldResolver private constructor(
             .constructionSelections
             .applicableGroundSelections(field.containingDef)
 
-    /** Applies this field resolver, projecting its result only for selective resolver worlds. */
+    /** Applies this field resolver to the supplied output demand. */
     context(world: Assumptions)
     internal operator fun invoke(
         input: EngineObjectData.Sync,
@@ -221,7 +237,7 @@ class FieldResolver private constructor(
             selections = selections,
         )
 
-    /** Applies this field resolver, projecting its result only for selective resolver worlds. */
+    /** Applies this field resolver to the supplied output demand. */
     context(world: Assumptions)
     operator fun invoke(
         input: EngineObjectData.Sync,
@@ -234,12 +250,7 @@ class FieldResolver private constructor(
             arguments,
             selections.takeIf { world.selectiveResolvers },
         )
-        val output = evaluateRelation(input, queryValue, arguments)
-        return if (world.selectiveResolvers) {
-            output.snipToDemand(projectionDemand(selections))
-        } else {
-            output
-        }
+        return evaluateRelation(input, queryValue, arguments, selections)
     }
 
     /**
@@ -247,22 +258,30 @@ class FieldResolver private constructor(
      *
      * This is not an observed resolver application and establishes no execution-count property.
      */
+    context(world: Assumptions)
     fun evaluateRelation(
         input: EngineObjectData.Sync,
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
+        selections: SelectionForest,
     ): EngineOutputData? {
         require(queryValue.schemaType == queryType) {
             "Query value type ${queryValue.schemaType.name} does not match ${queryType.name}"
         }
         val output =
             try {
-                function(input, queryValue, arguments)
+                function(input, queryValue, arguments, selections)
             } catch (exception: EngineErrorDataReadException) {
                 exception.errorData
             }
         output.requireArgumentlessObjectFields()
-        return output
+        val selectedOutput =
+            if (projectNonselectiveOutput && world.selectiveResolvers) {
+                output.snipToDemand(projectionDemand(selections))
+            } else {
+                output
+            }
+        return selectedOutput
     }
 
     companion object {
@@ -278,10 +297,114 @@ class FieldResolver private constructor(
             queryFragment: MaterializeSelectionForest,
             queryType: ViaductSchema.Object,
             variables: Map<Arguments.Variable, VariableDefinition>,
-            function: FieldResolverFunction,
+            function: NonselectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
         ): FieldResolver {
+            validateFactoryArguments(
+                field = field,
+                objectFragment = objectFragment,
+                queryFragment = queryFragment,
+                queryType = queryType,
+                variables = variables,
+            )
+            return FieldResolver(
+                field = field,
+                objectFragmentTemplate = objectFragment,
+                queryFragmentTemplate = queryFragment,
+                queryType = queryType,
+                variables = variables,
+                function = { input, queryValue, arguments, _ ->
+                    function(input, queryValue, arguments)
+                },
+                projectNonselectiveOutput = true,
+                projectionDemand = projectionDemand,
+                applicationObserver = applicationObserver,
+            )
+        }
+
+        /**
+         * Constructs one fully assembled canonical registry entry backed by a selective relation.
+         *
+         * Unlike [of], this factory passes output demand directly to [function] and does not project
+         * the returned value afterward.
+         */
+        fun ofSelective(
+            field: ViaductSchema.ObjectField,
+            objectFragment: MaterializeSelectionForest,
+            queryFragment: MaterializeSelectionForest,
+            queryType: ViaductSchema.Object,
+            variables: Map<Arguments.Variable, VariableDefinition>,
+            function: SelectiveFieldResolverFunction,
+            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+        ): FieldResolver {
+            validateFactoryArguments(
+                field = field,
+                objectFragment = objectFragment,
+                queryFragment = queryFragment,
+                queryType = queryType,
+                variables = variables,
+            )
+            return FieldResolver(
+                field = field,
+                objectFragmentTemplate = objectFragment,
+                queryFragmentTemplate = queryFragment,
+                queryType = queryType,
+                variables = variables,
+                function = function,
+                projectNonselectiveOutput = false,
+                projectionDemand = { it },
+                applicationObserver = applicationObserver,
+            )
+        }
+
+        fun of(
+            field: ViaductSchema.ObjectField,
+            objectFragment: SelectionForest,
+            queryFragment: SelectionForest,
+            queryType: ViaductSchema.Object,
+            variables: Map<Arguments.Variable, VariableDefinition>,
+            function: NonselectiveFieldResolverFunction,
+            projectionDemand: (SelectionForest) -> SelectionForest = { it },
+            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+        ): FieldResolver =
+            of(
+                field = field,
+                objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
+                queryFragment = queryFragment.toCanonicalMaterializeSelectionForest(),
+                queryType = queryType,
+                variables = variables,
+                function = function,
+                projectionDemand = projectionDemand,
+                applicationObserver = applicationObserver,
+            )
+
+        fun ofSelective(
+            field: ViaductSchema.ObjectField,
+            objectFragment: SelectionForest,
+            queryFragment: SelectionForest,
+            queryType: ViaductSchema.Object,
+            variables: Map<Arguments.Variable, VariableDefinition>,
+            function: SelectiveFieldResolverFunction,
+            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+        ): FieldResolver =
+            ofSelective(
+                field = field,
+                objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
+                queryFragment = queryFragment.toCanonicalMaterializeSelectionForest(),
+                queryType = queryType,
+                variables = variables,
+                function = function,
+                applicationObserver = applicationObserver,
+            )
+
+        private fun validateFactoryArguments(
+            field: ViaductSchema.ObjectField,
+            objectFragment: MaterializeSelectionForest,
+            queryFragment: MaterializeSelectionForest,
+            queryType: ViaductSchema.Object,
+            variables: Map<Arguments.Variable, VariableDefinition>,
+        ) {
             require(
                 objectFragment.all { selection ->
                     selection.key.field.containingDef == field.containingDef &&
@@ -339,38 +462,7 @@ class FieldResolver private constructor(
                     }
                 }
             }
-            return FieldResolver(
-                field = field,
-                objectFragmentTemplate = objectFragment,
-                queryFragmentTemplate = queryFragment,
-                queryType = queryType,
-                variables = variables,
-                function = function,
-                projectionDemand = projectionDemand,
-                applicationObserver = applicationObserver,
-            )
         }
-
-        fun of(
-            field: ViaductSchema.ObjectField,
-            objectFragment: SelectionForest,
-            queryFragment: SelectionForest,
-            queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
-            function: FieldResolverFunction,
-            projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
-        ): FieldResolver =
-            of(
-                field = field,
-                objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
-                queryFragment = queryFragment.toCanonicalMaterializeSelectionForest(),
-                queryType = queryType,
-                variables = variables,
-                function = function,
-                projectionDemand = projectionDemand,
-                applicationObserver = applicationObserver,
-            )
     }
 }
 

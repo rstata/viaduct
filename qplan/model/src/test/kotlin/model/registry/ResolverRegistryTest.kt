@@ -34,10 +34,113 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
 
 class ResolverRegistryTest {
+    @Test
+    fun `selective field resolver receives demand without output projection`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      name: String!
+                      age: Int!
+                    }
+
+                    type Query {
+                      user: User!
+                    }
+                    """.trimIndent(),
+            )
+        val schema = world.schema
+        val query = schema.requireQueryTypeDef()
+        val userField = schema.requireObjectField("Query", "user")
+        val demand =
+            schema.fragmentFrom(
+                "fragment ignored on User { name }",
+            ).subselections
+        var observedDemand: SelectionForest? = null
+        val resolver =
+            FieldResolver.ofSelective(
+                field = userField,
+                objectFragment = selectionForestOf(),
+                queryFragment = selectionForestOf(),
+                queryType = query,
+                variables = emptyMap(),
+                function = { _, _, _, selections ->
+                    observedDemand = selections
+                    schema.objectOf("User") {
+                        "name" setTo "Ada"
+                        "age" setTo 37
+                    }
+                },
+            )
+
+        val output =
+            context(world.assumptions) {
+                resolver(
+                    input = engineObjectDataOf(query),
+                    arguments = Arguments.Resolved.of(userField, emptyMap()),
+                    selections = demand,
+                )
+            }
+
+        assertSame(demand, observedDemand)
+        assertEquals(setOf("name", "age"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
+    }
+
+    @Test
+    fun `nonselective field resolver factory projects output in selective worlds`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      name: String!
+                      age: Int!
+                    }
+
+                    type Query {
+                      user: User!
+                    }
+                    """.trimIndent(),
+            )
+        val schema = world.schema
+        val query = schema.requireQueryTypeDef()
+        val userField = schema.requireObjectField("Query", "user")
+        val resolver =
+            FieldResolver.of(
+                field = userField,
+                objectFragment = selectionForestOf(),
+                queryFragment = selectionForestOf(),
+                queryType = query,
+                variables = emptyMap(),
+                function = { _, _, _ ->
+                    schema.objectOf("User") {
+                        "name" setTo "Ada"
+                        "age" setTo 37
+                    }
+                },
+            )
+
+        val output =
+            context(world.assumptions) {
+                resolver(
+                    input = engineObjectDataOf(query),
+                    arguments = Arguments.Resolved.of(userField, emptyMap()),
+                    selections =
+                        schema.fragmentFrom(
+                            "fragment ignored on User { name }",
+                        ).subselections,
+                )
+            }
+
+        assertEquals(setOf("name"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
+    }
+
     @Test
     fun `lowers node and field resolvers to field coordinates`() {
         val observedFields = mutableListOf<String>()

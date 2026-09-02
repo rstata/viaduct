@@ -7,19 +7,77 @@ import model.emptyFragmentOf
 import model.engineResultOf
 import model.fragmentFrom
 import model.merge
+import model.objectOf
 import model.requireObjectField
 import model.requireQueryTypeDef
 import model.requireType
 import model.ObjectSelectionForest
 import model.testing.fieldResolverOf
+import model.testing.selectiveFieldResolverOf
 import viaduct.graphql.schema.ViaductSchema
 import model.testing.TestWorld
+import semantics.resolver26.resolve
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class CorrectResolutionTest {
+    @Test
+    fun `correctness reapplies a selective resolver with completed output demand`() {
+        val observedFields = mutableListOf<Set<String>>()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      name: String!
+                      age: Int!
+                    }
+
+                    type Query {
+                      user: User!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val user = schema.requireObjectField("Query", "user")
+                    mapOf(
+                        user to
+                            selectiveFieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                function = { _, _, selections ->
+                                    val fields = mutableSetOf<String>()
+                                    selections.forEach { selection -> fields += selection.key.field.name }
+                                    observedFields += fields
+                                    schema.objectOf("User") {
+                                        if ("name" in fields) "name" setTo "Ada"
+                                        if ("age" in fields) "age" setTo 37
+                                    }
+                                },
+                            ),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val selections =
+            world
+                .fragmentFrom(
+                    """
+                    fragment ignored on Query {
+                      user {
+                        name
+                      }
+                    }
+                    """.trimIndent(),
+                ).subselections
+        val result = context(world) { resolve(selections) }
+        val querySelections = selections.merge(world.schema.requireQueryTypeDef())
+
+        assertTrue(context(world) { result.correctResolution(querySelections) })
+        assertEquals(listOf(setOf("name"), setOf("name")), observedFields)
+    }
+
     @Test
     fun `selections must be rooted at Query`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions

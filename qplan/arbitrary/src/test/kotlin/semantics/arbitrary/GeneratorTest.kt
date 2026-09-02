@@ -742,8 +742,8 @@ class GeneratorTest {
                 (ResolverFragmentDepth to 3) +
                 (ResolverVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
-                (ResolverFromObjectFieldProviderPathLength to 1..3) +
-                (ResolverFromObjectFieldVariableUseDepth to 1..3)
+                (ResolverFromFieldProviderPathLength to 1..3) +
+                (ResolverFromFieldVariableUseDepth to 1..3)
         val random = RandomSource.seeded(86422L)
         var generatedVariables = 0
 
@@ -757,6 +757,85 @@ class GeneratorTest {
             generatedVariables += providers.size
             assertTrue(providers.all { provider -> provider.responsePath().size in 1..3 })
             assertTrue(providers.all { provider -> provider.useDepth in 1..3 })
+        }
+
+        assertTrue(generatedVariables > 0)
+    }
+
+    @Test
+    fun `Query path variables require their explicit generator knob`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (QueryFieldCount to 6..8) +
+                (QueryScalarFieldWeight to 0.5) +
+                (FieldArgumentWeight to 0.8) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverQueryFragmentWeight to 1.0) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverFromObjectFieldVariablesEnabled to false) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(86425L)
+
+        repeat(50) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            assertEquals(0, registry.features.fromQueryFieldVariableCount)
+            assertTrue(
+                registry.variableProviders.none {
+                    it is FromQueryFieldVariableProviderPlan
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `Query path variable shape constraints remain generative`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (QueryFieldCount to 6..8) +
+                (QueryScalarFieldWeight to 0.5) +
+                (FieldArgumentWeight to 0.8) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (NodeResolversEnabled to false) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverQueryFragmentWeight to 1.0) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverFromObjectFieldVariablesEnabled to false) +
+                (ResolverFromQueryFieldVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 2..3) +
+                (ResolverFromFieldProviderPathLength to 1..3) +
+                (ResolverFromFieldVariableUseDepth to 1..3)
+        val random = RandomSource.seeded(86426L)
+        var generatedVariables = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+            val providers =
+                registry.variableProviders
+                    .filterIsInstance<FromQueryFieldVariableProviderPlan>()
+
+            registry.world(schema)
+            generatedVariables += providers.size
+            assertEquals(providers.size, registry.features.fromQueryFieldVariableCount)
+            assertTrue(providers.all { provider -> provider.responsePath().size in 1..3 })
+            assertTrue(providers.all { provider -> provider.useDepth in 1..3 })
+            assertTrue(
+                providers.all { provider ->
+                    registry.queryFragmentSources.getValue(provider.owner).isNotEmpty()
+                },
+            )
         }
 
         assertTrue(generatedVariables > 0)
@@ -807,10 +886,10 @@ class GeneratorTest {
                 (ResolverVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
                 (ResolverVariableCount to 1..1) +
-                (ResolverFromObjectFieldProviderPathLength to 1..1) +
-                (ResolverFromObjectFieldVariableUseDepth to 1..1) +
-                (ResolverFromObjectFieldVariableOwnerLimit to 4) +
-                (ResolverFromObjectFieldVariableOwnerUseWeight to 1.0) +
+                (ResolverFromFieldProviderPathLength to 1..1) +
+                (ResolverFromFieldVariableUseDepth to 1..1) +
+                (ResolverFromFieldVariableOwnerLimit to 4) +
+                (ResolverFromFieldVariableOwnerUseWeight to 1.0) +
                 (ResolverVariablesOnQueryFieldsOnly to true)
         val random = RandomSource.seeded(86424L)
         var ownerDependencies = 0
@@ -1002,10 +1081,10 @@ class GeneratorTest {
                 (ResolverVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
                 (ResolverVariableCount to 2..3) +
-                (ResolverFromObjectFieldProviderPathLength to 1..3) +
-                (ResolverFromObjectFieldVariableOwnerLimit to 1) +
-                (ResolverFromObjectFieldVariableUseDepth to 2..3) +
-                (ResolverFromObjectFieldPassiveUseWeight to 1.0) +
+                (ResolverFromFieldProviderPathLength to 1..3) +
+                (ResolverFromFieldVariableOwnerLimit to 1) +
+                (ResolverFromFieldVariableUseDepth to 2..3) +
+                (ResolverFromFieldPassiveUseWeight to 1.0) +
                 (UnionsEnabled to false)
         val random = RandomSource.seeded(97533L)
         var generatedPassiveUses = 0
@@ -1038,7 +1117,7 @@ class GeneratorTest {
                 (QueryFieldCount to 6..6) +
                 (ResolverFragmentWeight to 1.0) +
                 (ResolverFromArgumentVariablesEnabled to false) +
-                (ResolverFromObjectFieldProviderArgumentVariableWeight to 1.0) +
+                (ResolverFromFieldProviderArgumentVariableWeight to 1.0) +
                 (ResolverVariableCount to 2..4) +
                 (ResolverVariableWeight to 1.0) +
                 (ResolverVariablesEnabled to true)

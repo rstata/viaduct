@@ -12,7 +12,8 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverVariableSingletonCoercionEnabled" : false,
+      "resolverFromObjectFieldVariablesEnabled" : true,
+      "resolverFromQueryFieldVariablesEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -48,7 +49,7 @@
       "maxSelectionDepth" : 4,
       "minimumSelectionDepth" : 2,
       "resolverFragmentDepth" : 3,
-      "resolverFromObjectFieldVariableOwnerLimit" : 4
+      "resolverFromFieldVariableOwnerLimit" : 4
     },
     "ranges" : {
       "fieldArgumentCount" : {
@@ -87,11 +88,11 @@
         "maximum" : 0,
         "minimum" : 0
       },
-      "resolverFromObjectFieldProviderPathLength" : {
+      "resolverFromFieldProviderPathLength" : {
         "maximum" : 3,
         "minimum" : 1
       },
-      "resolverFromObjectFieldVariableUseDepth" : {
+      "resolverFromFieldVariableUseDepth" : {
         "maximum" : 3,
         "minimum" : 1
       },
@@ -111,14 +112,15 @@
   },
   "resolver25" : {
     "booleans" : {
-      "resolverQueryFragmentsEnabled" : false
+      "resolverQueryFragmentsEnabled" : false,
+      "resolverVariableSingletonCoercionEnabled" : false
     },
     "doubles" : {
       "duplicateSelectionWeight" : 0.2,
       "fieldArgumentWeight" : 0.65,
-      "resolverFromObjectFieldPassiveUseWeight" : 0.5,
-      "resolverFromObjectFieldProviderArgumentVariableWeight" : 1.0,
-      "resolverFromObjectFieldVariableOwnerUseWeight" : 0.5,
+      "resolverFromFieldPassiveUseWeight" : 0.5,
+      "resolverFromFieldProviderArgumentVariableWeight" : 1.0,
+      "resolverFromFieldVariableOwnerUseWeight" : 0.5,
       "resolverLiteralVariableConvergenceWeight" : 0.45,
       "resolverQueryFragmentWeight" : 1.0,
       "resolverVariableWeight" : 0.9
@@ -139,9 +141,9 @@
     "doubles" : {
       "duplicateSelectionWeight" : 0.5,
       "fieldArgumentWeight" : 0.9,
-      "resolverFromObjectFieldPassiveUseWeight" : 0.25,
-      "resolverFromObjectFieldProviderArgumentVariableWeight" : 0.0,
-      "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,
+      "resolverFromFieldPassiveUseWeight" : 0.25,
+      "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
+      "resolverFromFieldVariableOwnerUseWeight" : 0.25,
       "resolverLiteralVariableConvergenceWeight" : 0.75,
       "resolverQueryFragmentWeight" : 0.1,
       "resolverVariableWeight" : 0.95

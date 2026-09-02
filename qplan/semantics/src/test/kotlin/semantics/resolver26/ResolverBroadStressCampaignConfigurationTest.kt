@@ -11,8 +11,8 @@ import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.RESOLVER_TEST_CASE_PROPERTY
 import semantics.arbitrary.RESOLVER_TEST_PROFILE_PROPERTY
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerUseWeight
+import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
+import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverQueryFragmentWeight
@@ -99,10 +99,10 @@ class ResolverBroadStressCampaignConfigurationTest {
         )
         assertEquals(0..1, symbolicIdentity[InputScalarValueRange])
         assertTrue(
-            multipleOwners[ResolverFromObjectFieldVariableOwnerUseWeight] >
-                balanced[ResolverFromObjectFieldVariableOwnerUseWeight],
+            multipleOwners[ResolverFromFieldVariableOwnerUseWeight] >
+                balanced[ResolverFromFieldVariableOwnerUseWeight],
         )
-        assertEquals(4, multipleOwners[ResolverFromObjectFieldVariableOwnerLimit])
+        assertEquals(4, multipleOwners[ResolverFromFieldVariableOwnerLimit])
 
         val largeDeep = balanced.withLargeDeepResolver26Worlds()
         assertEquals(8..12, largeDeep[SchemaObjectCount])

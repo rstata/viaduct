@@ -64,11 +64,11 @@ fun resolverBenchmarkCorpusSearchConfig(): Config =
         (ResolverVariableWeight to 0.95) +
         (ResolverVariableCount to 3..6) +
         (ResolverNestedProviderPathWeight to 0.9) +
-        (ResolverFromObjectFieldProviderPathLength to 2..5) +
-        (ResolverFromObjectFieldVariableUseDepth to 1..6) +
-        (ResolverFromObjectFieldPassiveUseWeight to 0.25) +
-        (ResolverFromObjectFieldVariableOwnerLimit to 12) +
-        (ResolverFromObjectFieldVariableOwnerUseWeight to 1.0)
+        (ResolverFromFieldProviderPathLength to 2..5) +
+        (ResolverFromFieldVariableUseDepth to 1..6) +
+        (ResolverFromFieldPassiveUseWeight to 0.25) +
+        (ResolverFromFieldVariableOwnerLimit to 12) +
+        (ResolverFromFieldVariableOwnerUseWeight to 1.0)
 
 /**
  * Produces random overhead queries against the fixed corpus pair.

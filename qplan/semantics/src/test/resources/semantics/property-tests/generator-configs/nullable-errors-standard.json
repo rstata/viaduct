@@ -12,7 +12,8 @@
       "recursiveOutputEdgesEnabled" : true,
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
-      "resolverVariableSingletonCoercionEnabled" : false,
+      "resolverFromObjectFieldVariablesEnabled" : true,
+      "resolverFromQueryFieldVariablesEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -39,9 +40,9 @@
       "resolverFragmentLongTailWeight" : 0.0,
       "resolverFragmentWeight" : 0.8,
       "resolverFromArgumentNestedPathWeight" : 0.5,
-      "resolverFromObjectFieldPassiveUseWeight" : 0.25,
-      "resolverFromObjectFieldProviderArgumentVariableWeight" : 0.0,
-      "resolverFromObjectFieldVariableOwnerUseWeight" : 0.25,
+      "resolverFromFieldPassiveUseWeight" : 0.25,
+      "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
+      "resolverFromFieldVariableOwnerUseWeight" : 0.25,
       "resolverLiteralVariableConvergenceWeight" : 0.2,
       "resolverVariableWeight" : 0.65,
       "sometimesPassiveFieldWeight" : 0.25
@@ -52,7 +53,7 @@
       "maxSelectionDepth" : 4,
       "minimumSelectionDepth" : 2,
       "resolverFragmentDepth" : 3,
-      "resolverFromObjectFieldVariableOwnerLimit" : 4
+      "resolverFromFieldVariableOwnerLimit" : 4
     },
     "ranges" : {
       "fieldArgumentCount" : {
@@ -95,11 +96,11 @@
         "maximum" : 0,
         "minimum" : 0
       },
-      "resolverFromObjectFieldProviderPathLength" : {
+      "resolverFromFieldProviderPathLength" : {
         "maximum" : 4,
         "minimum" : 2
       },
-      "resolverFromObjectFieldVariableUseDepth" : {
+      "resolverFromFieldVariableUseDepth" : {
         "maximum" : 3,
         "minimum" : 1
       },
@@ -119,7 +120,8 @@
   },
   "resolver25" : {
     "booleans" : {
-      "resolverQueryFragmentsEnabled" : false
+      "resolverQueryFragmentsEnabled" : false,
+      "resolverVariableSingletonCoercionEnabled" : false
     },
     "doubles" : {
       "errorValueWeight" : 0.25,

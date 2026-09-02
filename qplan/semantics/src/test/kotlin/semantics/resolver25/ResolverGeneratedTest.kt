@@ -23,10 +23,10 @@ import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
-import semantics.arbitrary.ResolverFromObjectFieldPassiveUseWeight
-import semantics.arbitrary.ResolverFromObjectFieldProviderPathLength
-import semantics.arbitrary.ResolverFromObjectFieldVariableUseDepth
-import semantics.arbitrary.ResolverFromObjectFieldVariableOwnerLimit
+import semantics.arbitrary.ResolverFromFieldPassiveUseWeight
+import semantics.arbitrary.ResolverFromFieldProviderPathLength
+import semantics.arbitrary.ResolverFromFieldVariableUseDepth
+import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverVariableCount
@@ -165,10 +165,10 @@ class ResolverGeneratedTest :
                     (ResolverFragmentWeight to 1.0) +
                     (ResolverFragmentDepth to 3) +
                     (ResolverFromArgumentVariablesEnabled to false) +
-                    (ResolverFromObjectFieldPassiveUseWeight to 1.0) +
-                    (ResolverFromObjectFieldProviderPathLength to 1..1) +
-                    (ResolverFromObjectFieldVariableOwnerLimit to 1) +
-                    (ResolverFromObjectFieldVariableUseDepth to 2..3) +
+                    (ResolverFromFieldPassiveUseWeight to 1.0) +
+                    (ResolverFromFieldProviderPathLength to 1..1) +
+                    (ResolverFromFieldVariableOwnerLimit to 1) +
+                    (ResolverFromFieldVariableUseDepth to 2..3) +
                     (ResolverVariableCount to 1..1) +
                     (ResolverVariableWeight to 1.0) +
                     (ResolverVariablesEnabled to true) +

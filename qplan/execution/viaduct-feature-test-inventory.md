@@ -52,11 +52,10 @@ The following source files are intentionally not copied because every test in ea
 
 ## Grouped Blocker Counts
 
-Counts overlap because one test may be blocked by more than one requirement. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two intentional incompatibilities whose specific prose reasons are retained.
+Counts overlap because one test may be blocked by more than one requirement. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two intentional incompatibilities whose specific prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker.
 
 | Group | Count | Label |
 | --- | ---: | --- |
-| Query RSS interactions requiring another unsupported feature | 7 | `QueryRss` |
 | Selective executors / requested selections | 13 | `Selective` |
 | Parent-field semantics | 7 | `ParentFld` |
 | Checkers / access checks | 8 | `AccessChk` |

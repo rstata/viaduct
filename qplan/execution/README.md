@@ -39,7 +39,7 @@ GraphQL Java parsing, validation, and input coercion
 
 `EngineTestModule.runQPlanFeatureTest` is defined in `src/testFixtures/kotlin/execution/testing/EngineTestModuleQPlanFeatureTest.kt`. It consumes the pre-dispatcher field and node executor maps exposed by `EngineTestModule`.
 
-The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object and Query required selections into the canonical schema, recovers supported variable declarations across both executor fragments, passes resolved arguments plus synchronous object and occurrence-specific Query data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan.
+The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object and Query required selections into the canonical schema, recovers supported variable declarations across both executor fragments, passes resolved arguments plus synchronous object and occurrence-specific Query data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan. Selective field executors are assembled with `selectiveFieldResolverOf`; their Resolver26 successor demand is converted to an `EngineSelectionSet` for composite outputs, while scalar outputs receive no selection set. The conversion restores qplan's lowered typename field to source `__typename` before crossing the Engine API boundary.
 
 The mock field-executor surface returns `Any?`, permits a raw map or source-shaped EOD as the source for a concrete GraphQL object field, and relies on GraphQL completion to serialize built-in scalar results. Qplan's `EngineOutputData` contract is stricter: object output must be a conforming `EngineObjectData.Sync`, and scalar output must already inhabit its canonical runtime domain. The adapter therefore uses the declared concrete object type to recursively materialize those object sources and applies the source scalar's GraphQL-Java serialization before values cross into qplan. It does not accept raw maps for interface or union outputs because those values do not provide the concrete runtime type needed for an unambiguous conversion.
 
@@ -76,7 +76,8 @@ Keep production test fixtures, behavior, and assertions intact so failures conti
 
 The feature-test adapter currently supports:
 
-- Unbatched, non-selective field and node resolvers.
+- Unbatched selective and non-selective field resolvers, and unbatched non-selective node resolvers.
+- Resolver-demand conversion to `EngineSelectionSet`, including concrete applicability, nested demand, resolved arguments, and lowered `__typename` restoration.
 - Field arguments, including values supplied by GraphQL operation variables.
 - Object required selections, including aliases, arguments, transitive requirements, repeated argumented fields, shared requirements, and multiple requirements.
 - Query required selections, including aliases, arguments, fragments, transitive requirements, nested object access, null values, and combinations with object required selections.
@@ -91,7 +92,7 @@ The adapter rejects or does not yet model:
 
 - Nested input-object paths for from-argument variables.
 - Arbitrary callback variable providers and from-field providers whose erased production representation ambiguously matches both resolver fragments.
-- Batched or selective field and node resolvers.
+- Batched field resolvers, and batched or selective node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
 - Checker and type-checker executors, including their object- and Query-rooted required selections.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
@@ -140,6 +141,6 @@ Run the complete execution suite with `./gradlew :execution:test`, and run every
 
 Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. Custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
 
-After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, requested-selection plumbing for selective executors, and a deliberate batching design. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
+After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, and a deliberate batching design. Selective integration still has distinct follow-up work around production/rematerialization policy, directives, custom engine configuration, and Resolver26 demand-shape differences; these are recorded as specific feature-test blockers rather than part of basic requested-selection plumbing. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
 
 [Future work: From Qplan Execution Harness to an Engine Implementation](https://slate.airbnb.tools/zGyuI7hCin) analyzes the gap between the current execution harness and a production implementation of the three `Engine` API methods, including the recommended implementation sequence.

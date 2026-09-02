@@ -14,7 +14,9 @@ import java.util.Locale
 import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.EngineErrorData
+import model.EngineOutputData
 import model.Fragment
+import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -26,10 +28,12 @@ import model.testing.TestWorld
 import model.testing.VariableDeclaration
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
+import model.testing.selectiveFieldResolverOf
 import semantics.fragmentFromDocument
 import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineExecutionContext
 import viaduct.engine.api.EngineObjectData
+import viaduct.engine.api.EngineSelectionSet
 import viaduct.engine.api.NodeReference
 import viaduct.engine.api.ResolvedEngineObjectData
 import viaduct.engine.api.ViaductSchema as EngineSchema
@@ -46,8 +50,8 @@ import viaduct.graphql.test.assertJson as realAssertJson
  * GraphQL feature-test surface backed directly by qplan and an [EngineTestModule]'s executors.
  *
  * This is intentionally a pre-dispatcher integration: it does not construct a DispatcherRegistry
- * or data loaders. The first integration slice accepts only synchronous, unbatched,
- * non-selective executors.
+ * or data loaders. The current integration accepts synchronous, unbatched field executors,
+ * including selective ones.
  */
 class QPlanFeatureTest internal constructor(
     private val fixture: ExecutionTestFixture,
@@ -145,9 +149,6 @@ private fun EngineTestModule.validateSupportedExecutors() {
         if (executor.isBatching) {
             TODO("Qplan feature tests do not support batching field executor ${coordinate.render()}")
         }
-        if (executor.isSelective) {
-            TODO("Qplan feature tests do not support selective field executor ${coordinate.render()}")
-        }
     }
     nodeResolverExecutors.forEach { (typeName, executor) ->
         if (executor.isBatching) {
@@ -197,32 +198,56 @@ private fun EngineTestModule.qplanRegistryInputs(
                         "Duplicate variable provider \$${variable.variableName} for ${coordinate.render()}"
                     }
                 }
-            field to
-                fieldResolverOf(
-                    objectFragment = objectFragment,
-                    queryFragment = queryFragment,
-                    function = { input, queryValue, arguments ->
-                        val selector =
-                            FieldResolverExecutor.Selector(
-                                arguments = arguments.fieldValues,
-                                selections = null,
-                                syncObjectValueGetter = { input },
-                                syncQueryValueGetter = { queryValue },
-                            )
-                        val output =
-                            runBlocking {
-                                executor.batchResolve(listOf(selector), context)[selector]
-                            } ?: Result.failure(
-                                IllegalStateException(
-                                    "Field executor ${coordinate.render()} omitted its selector",
-                                ),
-                            )
-                        output.fold(
-                            onSuccess = { normalizeSourceOutput(sourceField.type, it) },
-                            onFailure = { EngineErrorData.of(it) },
+            val invokeExecutor =
+                fun(
+                    input: EngineObjectData.Sync,
+                    queryValue: EngineObjectData.Sync,
+                    arguments: Arguments.Resolved,
+                    selections: EngineSelectionSet?,
+                ): EngineOutputData? {
+                    val selector =
+                        FieldResolverExecutor.Selector(
+                            arguments = arguments.fieldValues,
+                            selections = selections,
+                            syncObjectValueGetter = { input },
+                            syncQueryValueGetter = { queryValue },
                         )
-                    },
-                )
+                    val output =
+                        runBlocking {
+                            executor.batchResolve(listOf(selector), context)[selector]
+                        } ?: Result.failure(
+                            IllegalStateException(
+                                "Field executor ${coordinate.render()} omitted its selector",
+                            ),
+                        )
+                    return output.fold(
+                        onSuccess = { normalizeSourceOutput(sourceField.type, it) },
+                        onFailure = { EngineErrorData.of(it) },
+                    )
+                }
+            val resolver =
+                if (executor.isSelective) {
+                    selectiveFieldResolverOf(
+                        objectFragment = objectFragment,
+                        queryFragment = queryFragment,
+                        function = { input, queryValue, arguments, selections ->
+                            val selectionSet =
+                                (field.type.baseTypeDef as? QPlanSchema.CompositeTypeDef)?.let {
+                                    selections.toEngineSelectionSet(it, fullSchema)
+                                }
+                            invokeExecutor(input, queryValue, arguments, selectionSet)
+                        },
+                    )
+                } else {
+                    fieldResolverOf(
+                        objectFragment = objectFragment,
+                        queryFragment = queryFragment,
+                        function = { input, queryValue, arguments ->
+                            invokeExecutor(input, queryValue, arguments, null)
+                        },
+                    )
+                }
+            field to resolver
         }
 
     val duplicateCount = fieldResolverExecutors.count() - supplied.size

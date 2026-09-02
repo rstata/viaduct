@@ -18,6 +18,8 @@ class ResolverStressTest : DeepResolverStressContract {
 
     override val objectPathVariablesEnabled: Boolean = true
 
+    override val queryPathVariablesEnabled: Boolean = true
+
     override val sometimesPassiveCoverageRequired: Boolean = true
 
     override val stressConfigOverrides: Config =

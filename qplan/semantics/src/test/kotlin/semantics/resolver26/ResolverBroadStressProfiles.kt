@@ -28,6 +28,7 @@ import semantics.arbitrary.ResolverFromFieldProviderPathLength
 import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverFromFieldVariableUseDepth
+import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
@@ -191,6 +192,7 @@ private fun balancedBroadConfig(): Config =
         (ResolverFromArgumentNestedPathWeight to 0.5) +
         (ResolverFromArgumentVariablesEnabled to true) +
         (ResolverVariablesEnabled to true) +
+        (ResolverFromQueryFieldVariablesEnabled to true) +
         (ResolverVariableWeight to 0.65) +
         (ResolverVariableCount to 1..3) +
         (ResolverVariableSingletonCoercionEnabled to true) +

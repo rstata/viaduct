@@ -10,6 +10,7 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
+import semantics.contract.FromQueryFieldResolverContract
 import semantics.contract.LateObjectPathDemandResolverContract
 import semantics.contract.LateAncestorDemandPolicy
 import semantics.contract.NodeResolverContract
@@ -35,6 +36,7 @@ class ResolverContractTest :
     ObjectFragmentFromObjectPathResolverContract,
     QueryFragmentResolverContract,
     QueryFragmentFromObjectPathResolverContract,
+    FromQueryFieldResolverContract,
     SometimesPassiveResolverContract,
     SometimesPassiveObjectFragmentResolverContract,
     SometimesPassiveObjectPathResolverContract,

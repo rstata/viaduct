@@ -23,6 +23,7 @@ import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverFromFieldProviderArgumentVariableWeight
+import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverTestCase
@@ -298,6 +299,8 @@ interface ObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy
 interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy {
     val queryFragmentObjectPathVariablesEnabled: Boolean
         get() = false
+    val queryFragmentQueryPathVariablesEnabled: Boolean
+        get() = false
 
     @Test
     fun `generated query fragment worlds resolve correctly`(): Unit =
@@ -305,8 +308,10 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
             var generatedQueryFragments = 0
             var generatedArgumentVariables = 0
             var generatedObjectPathVariables = 0
+            var generatedQueryPathVariables = 0
             var activatedQueryFragments = 0
             var activatedArgumentVariableApplications = 0
+            var activatedQueryPathVariableApplications = 0
             var queryValueWitnesses = 0
             val config =
                 Config.default +
@@ -318,7 +323,11 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                     (ResolverFromArgumentVariablesEnabled to true) +
                     (ResolverQueryFragmentsEnabled to true) +
                     (ResolverVariableWeight to 1.0) +
-                    (ResolverVariablesEnabled to queryFragmentObjectPathVariablesEnabled) +
+                    (ResolverVariablesEnabled to
+                        (queryFragmentObjectPathVariablesEnabled ||
+                            queryFragmentQueryPathVariablesEnabled)) +
+                    (ResolverFromQueryFieldVariablesEnabled to
+                        queryFragmentQueryPathVariablesEnabled) +
                     generatedResolverConfigOverrides
 
             val run =
@@ -328,6 +337,8 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                         testCase.registry.features.fromArgumentVariableCount
                     generatedObjectPathVariables +=
                         testCase.registry.features.fromObjectFieldVariableCount
+                    generatedQueryPathVariables +=
+                        testCase.registry.features.fromQueryFieldVariableCount
 
                     val observation =
                         observeGeneratedCaseWithCurrentAssertions(
@@ -341,6 +352,12 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                     activatedArgumentVariableApplications +=
                         observation.ordinaryApplications.count { application ->
                             testCase.registry.sourceResolverHasFromArgumentVariables(
+                                application.key.field,
+                            )
+                        }
+                    activatedQueryPathVariableApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.sourceResolverHasFromQueryFieldVariables(
                                 application.key.field,
                             )
                         }
@@ -362,6 +379,16 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 run.assertAggregate(
                     generatedObjectPathVariables > 0,
                     "Generated query-fragment profile produced no FromObjectField variables",
+                )
+            }
+            if (queryFragmentQueryPathVariablesEnabled) {
+                run.assertAggregate(
+                    generatedQueryPathVariables > 0,
+                    "Generated query-fragment profile produced no FromQueryField variables",
+                )
+                run.assertAggregate(
+                    activatedQueryPathVariableApplications > 0,
+                    "Generated query-fragment profile activated no FromQueryField variables",
                 )
             }
             run.assertAggregate(

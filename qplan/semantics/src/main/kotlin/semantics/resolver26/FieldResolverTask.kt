@@ -1,5 +1,7 @@
 package semantics.resolver26
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
@@ -18,11 +20,10 @@ import model.engineObjectDataOf
 import model.outputType
 import model.requireQueryTypeDef
 import model.registry.FieldResolver
+import model.registry.ResolverQueryFragment
 import model.schemaType
 import model.toMaterializeSelectionForest
-import model.usedVariables
 import semantics.correctresolution.argumentsContainErrorValue
-import model.registry.VariableDefinition
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
@@ -63,12 +64,7 @@ internal class FieldResolverTask(
             val resolverArguments = groundedArguments as Arguments.Resolved
             val constructionDemand: SelectionForest = selection.subselections
             val invocationDemand: SelectionForest = constructionDemand.successorDemand()
-            val queryValue =
-                resolver.resolveQueryFragment(
-                    coordinate = coordinate,
-                    resolverOccurrenceId = resolverOccurrenceId,
-                    arguments = resolverArguments,
-                )
+            val queryValue = support.fetchQueryValue(resolverOccurrenceId)
 
             support.observeApplication(
                 Resolver26ApplicationObservation(
@@ -106,38 +102,14 @@ internal class FieldResolverTask(
 }
 
 context(world: Assumptions, support: Resolver26Support)
-private suspend fun FieldResolver.resolveQueryFragment(
+internal suspend fun ResolverQueryFragment.resolveQueryFragment(
     coordinate: List<PathComponent>,
-    resolverOccurrenceId: ResolverOccurrenceId,
-    arguments: Arguments.Resolved,
 ): EngineObjectData.Sync {
-    val queryFragment = instantiateQueryFragment(resolverOccurrenceId)
-    if (queryFragment.constructionSelections.isEmpty()) {
+    if (constructionSelections.isEmpty()) {
         return engineObjectDataOf(world.schema.requireQueryTypeDef())
     }
 
-    queryFragment.constructionSelections.usedVariables().forEach { variable ->
-        val template = Arguments.Variable.of(variable.field, variable.variableName)
-        val definition = variables.getValue(template)
-        val instanceId = requireNotNull(variable.instanceId)
-        when (definition) {
-            is VariableDefinition.FromArgument -> {
-                if (!world.isBound(instanceId)) {
-                    world.bindVariable(instanceId, definition.read(arguments))
-                }
-            }
-
-            is VariableDefinition.FromObjectField -> {
-                world.fetchBinding(instanceId)
-            }
-
-            is VariableDefinition.FromQueryField -> {
-                world.fetchBinding(instanceId)
-            }
-        }
-    }
-
-    val symbolicSelections = queryFragment.materializeSelections
+    val symbolicSelections = materializeSelections
     val source = world.resolverRegistry.createRootQueryInput()
     val queryResult =
         ObjectEngineResult.of(
@@ -155,8 +127,24 @@ private suspend fun FieldResolver.resolveQueryFragment(
             initialDemand = symbolicSelections.constructionSelections(),
         )
     orchestration.prepare()
-    orchestration.launch()
     world.queryValues[resolverOccurrenceId] = queryResult
+    coroutineScope {
+        orchestration.launch()
+        pathVariableDefinitions.forEach { definition ->
+            launch {
+                val binding =
+                    queryResult.readProvider(
+                        definition = definition,
+                        reader = coordinate,
+                        support = support,
+                    )
+                world.completeBinding(
+                    requireNotNull(definition.variable.instanceId),
+                    binding,
+                )
+            }
+        }
+    }
     return queryResult.materializeResolverInput(
         selections = symbolicSelections,
         reader = coordinate,

@@ -18,6 +18,7 @@ import model.objectKey
 import model.selectionForestOf
 import model.toEngineSimpleData
 import model.registry.InstantiatedObjectPathDefinition
+import model.registry.InstantiatedQueryPathDefinition
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
 context(world: Assumptions)
@@ -26,8 +27,27 @@ internal suspend fun ObjectEngineResult.readProvider(
     reader: List<PathComponent>,
     support: Resolver26Support,
 ): VariableBinding {
+    return readProvider(definition.path, reader, support)
+}
+
+// Traverses a Query-fragment provider path through OER promises.
+context(world: Assumptions)
+internal suspend fun ObjectEngineResult.readProvider(
+    definition: InstantiatedQueryPathDefinition,
+    reader: List<PathComponent>,
+    support: Resolver26Support,
+): VariableBinding {
+    return readProvider(definition.path, reader, support)
+}
+
+context(world: Assumptions)
+private suspend fun ObjectEngineResult.readProvider(
+    path: List<ObjectEngineResult.Key>,
+    reader: List<PathComponent>,
+    support: Resolver26Support,
+): VariableBinding {
     var current = this
-    definition.path.forEachIndexed { index, openKey ->
+    path.forEachIndexed { index, openKey ->
         support.awaitBindingsDeclared(current)
         val specializedKey =
             Selection.of(
@@ -41,7 +61,7 @@ internal suspend fun ObjectEngineResult.readProvider(
         val cell = current.reserveCell(objectKey)
         support.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
-        if (index == definition.path.lastIndex) {
+        if (index == path.lastIndex) {
             return value.toProviderBinding(objectKey.field.outputType)
         }
         when (value) {

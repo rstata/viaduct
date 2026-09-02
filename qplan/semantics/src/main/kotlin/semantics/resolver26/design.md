@@ -40,7 +40,7 @@ After closure, the orchestrator declares every open binding before launching loc
 
 `FromArgument` definitions owned by an already-ground key read their canonical input paths and complete immediately. A null input-object intermediate produces a null binding. Definitions owned by symbolic keys complete after the owner's arguments resolve, while the owner key itself remains unchanged.
 
-Each `FromObjectField` definition launches a provider reader that follows its compiled path through OER promises and completes the declared binding. The provider path's variable templates are instantiated for the owning resolver occurrence. Provider arguments may be grounded from literals, defaults, the owning resolver's arguments, or other acyclic `FromObjectField` bindings; all binding promises are declared before readers and field resolvers launch.
+Each `FromObjectField` definition launches a provider reader that follows its compiled path through the defining occurrence's object OER promises. Each `FromQueryField` definition launches an equivalent reader through that occurrence's fresh Query OER. Provider path templates are instantiated for the owning resolver occurrence, and provider arguments may be grounded from literals, defaults, the owner's arguments, or other acyclic from-field bindings of either kind. All binding promises are declared before provider readers and field resolvers launch.
 
 Before reading a provider component inside an OER, its reader awaits that OER's bindings-declared signal and every argument binding needed to make the component key contextually grounded. `ObjectOrchestrationTask.prepare` marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before recursively materializing passive children or launching local field work.
 
@@ -58,7 +58,7 @@ After passive children have launched, the parent launch validates its materializ
 
 ## Active Installation And Freeze
 
-Each active selection awaits only its declared argument bindings and derives one `Arguments.Ground` value for invocation. Installation requires the original `ObjectEngineResult.ObjectKey` to be contextually grounded, completes any delayed `FromArgument` bindings from the resolved argument tuple, reserves the target cell under that original key, claims the value promise, registers the writer, and launches one field-resolution task carrying cell identity and invocation arguments separately.
+Each active selection awaits only its declared argument bindings and derives one `Arguments.Ground` value for invocation. Installation requires the original `ObjectEngineResult.ObjectKey` to be contextually grounded, completes any delayed `FromArgument` bindings used by either resolver fragment from the resolved argument tuple, reserves the target cell under that original key, claims the value promise, registers the writer, and launches one field-resolution task carrying cell identity and invocation arguments separately.
 
 `reserveCell` explicitly creates an unclaimed cell placeholder when needed. `Cell.createValuePromise` claims that placeholder for the writer. Strict claiming makes disagreement between readers and writers observable.
 
@@ -70,7 +70,7 @@ The field-resolution task:
 
 1. derives invocation successor demand from the key's closed construction demand;
 2. materializes the resolver's fixed input demand from exact OER cells;
-3. independently orchestrates a fresh Query-rooted OER for a nonempty query fragment;
+3. awaits the independently orchestrated Query-rooted input;
 4. records the occurrence-aware application observation;
 5. invokes the selective resolver once;
 6. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
@@ -78,7 +78,7 @@ The field-resolution task:
 
 Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same symbolic child keys; variable-instance equality and strict reservation rules make disagreement fail rather than silently create another identity.
 
-Query fragments reuse the defining resolver occurrence's variable bindings, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. A Query-only `FromArgument` use binds directly from the owning resolver arguments, while a binding already established for an object-fragment use is reused without a second write. A Query-fragment `FromObjectField` use awaits the binding produced by its provider path in the object fragment. Resolver26 does not yet produce bindings from Query-fragment paths; that is the planned near-term `FromQueryField` feature described by the shared [variable production and consumption model](../../../../../README.md#variable-production-and-consumption). Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path.
+Query fragments reuse the defining resolver occurrence's variable bindings, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. Their orchestration starts alongside object-path provider readers and active field installation so a `FromQueryField` binding can ground the object fragment and a `FromObjectField` binding can ground the Query fragment without imposing an artificial fragment order. Query-provider readers complete their bindings as soon as their exact paths resolve; the owning field resolver separately awaits materialization of the complete Query input. A Query-only `FromArgument` use binds directly from the owning resolver arguments, while a binding used by both fragments is declared and completed only once. Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path.
 
 Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not publish access-result slots: access-check execution and its validation are future work, and the `true` access results written by some earlier resolver experiments are not part of the current resolver contract.
 
@@ -94,8 +94,8 @@ Binding declaration and completion, cell reservation and claiming, writer owners
 
 ## Deliberate Scope
 
-Resolver26 models query resolution with canonical field identity and synchronous source values. It supports runtime `FromObjectField` bindings within its stated provider restriction.
+Resolver26 models query resolution with canonical field identity and synchronous source values. It supports runtime `FromObjectField` and `FromQueryField` bindings within their stated provider restrictions.
 
 Correctness validation currently requires an error result only to agree with the resolver value's error variant. Exact `EngineErrorData` carrier identity and metadata agreement are deferred: fixture node lowering and other derived resolver boundaries may replace the carrier while preserving the modeled error outcome. A future error-attribution contract must first define which boundaries preserve identity and which construct a derived carrier before `correctResolution` can validate metadata without rejecting supported resolver behavior.
 
-The current integration target excludes mutations, subscriptions, custom scalars, `FromQueryField`, EOD aliases, and asynchronous EOD variants. `FromQueryField` is nevertheless planned near-term qplan work; its exclusion here describes only the current Resolver26 implementation and integration target. The other exclusions constrain future alignment and do not require resolver26-specific production adapters inside qplan.
+The current integration target excludes mutations, subscriptions, custom scalars, EOD aliases, and asynchronous EOD variants. These exclusions constrain future alignment and do not require resolver26-specific production adapters inside qplan. The separate execution feature-test adapter still rejects production `FromQueryField` recipes; that adapter boundary does not limit Resolver26's semantic capability.

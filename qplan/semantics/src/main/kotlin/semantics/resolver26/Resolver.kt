@@ -59,7 +59,7 @@ internal fun resolve(
                         requestScope = this,
                         applicationObserver = applicationObserver,
                         resolverSupport = ResolverSupport.cycleChecking(),
-                )
+                    )
                 val orchestration =
                     ObjectOrchestrationTask(
                         world = world,

@@ -18,6 +18,7 @@ import graphql.schema.GraphQLNamedType
 import graphql.schema.GraphQLNonNull
 import graphql.schema.GraphQLScalarType
 import graphql.schema.InputValueWithState
+import model.ArgumentExpression
 import model.ArgumentResolutionError
 import model.Arguments
 import model.EngineInputData
@@ -37,7 +38,7 @@ internal fun decodeInputValue(
     variableValues: Map<String, EngineInputData?>,
     schema: ViaductSchema,
     variableField: ViaductSchema.ObjectField? = null,
-): Any? =
+): ArgumentExpression? =
     if (value.isLiteral) {
         decodeLiteral(
             type,
@@ -59,7 +60,7 @@ internal fun decodeLiteral(
     variableValues: Map<String, EngineInputData?>,
     schema: ViaductSchema,
     variableField: ViaductSchema.ObjectField? = null,
-): Any? {
+): ArgumentExpression? {
     if (value is VariableReference) {
         return if (variableValues.containsKey(value.name)) {
             val bound = variableValues.getValue(value.name)
@@ -143,12 +144,12 @@ private fun decodeScalarLiteral(
 private inline fun decodeInputObjectFields(
     type: GraphQLInputObjectType,
     isFieldSupplied: (String) -> Boolean,
-    decodeSupplied: (GraphQLInputType, String) -> Any?,
+    decodeSupplied: (GraphQLInputType, String) -> ArgumentExpression?,
     variableValues: Map<String, EngineInputData?>,
     schema: ViaductSchema,
-): Any {
+): ArgumentExpression {
     val fields =
-        buildMap<String, Any?> {
+        buildMap<String, ArgumentExpression?> {
             type.fieldDefinitions.forEach { field ->
                 when {
                     isFieldSupplied(field.name) ->
@@ -182,7 +183,7 @@ private fun decodeObjectLiteral(
     variableValues: Map<String, EngineInputData?>,
     schema: ViaductSchema,
     variableField: ViaductSchema.ObjectField?,
-): Any {
+): ArgumentExpression {
     val suppliedFields = value.objectFields.associateBy { it.name }
     return decodeInputObjectFields(
         type = type,
@@ -234,7 +235,7 @@ internal fun decodeExternalInputValue(
     type: GraphQLInputType,
     value: Any?,
     schema: ViaductSchema,
-): Any? =
+): ArgumentExpression? =
     coerceArgumentExpression(
         decodeModelInputType(type, schema),
         decodeExternal(type, value, emptyMap(), schema),

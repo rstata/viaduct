@@ -237,15 +237,15 @@ class QPlanEngineObjectDataTest {
     private class OtherEngineObjectData(
         override val type: GraphQLObjectType,
     ) : EngineObjectData.Sync {
-        override suspend fun fetch(selection: String): Any? = null
+        override suspend fun fetch(selection: String): EngineOutputData? = null
 
-        override suspend fun fetchOrNull(selection: String): Any? = null
+        override suspend fun fetchOrNull(selection: String): EngineOutputData? = null
 
         override suspend fun fetchSelections(): Iterable<String> = emptyList()
 
-        override fun get(selection: String): Any? = null
+        override fun get(selection: String): EngineOutputData? = null
 
-        override fun getOrNull(selection: String): Any? = null
+        override fun getOrNull(selection: String): EngineOutputData? = null
 
         override fun isPresent(selection: String): Boolean = false
 

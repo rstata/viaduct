@@ -20,6 +20,7 @@ import graphql.schema.GraphQLTypeUtil
 import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import java.util.Locale
+import model.ArgumentExpression
 import model.EngineInputData
 import model.MaterializeSelectionForest
 import model.SourceSchemaAdapter
@@ -309,7 +310,7 @@ internal class GJSelectionParser(
         fun decode(
             field: Field,
             fieldDefinition: GraphQLFieldDefinition,
-        ): Map<String, Any?>
+        ): Map<String, ArgumentExpression?>
     }
 
     private enum class TranslationMode {
@@ -321,7 +322,7 @@ internal class GJSelectionParser(
         override fun decode(
             field: Field,
             fieldDefinition: GraphQLFieldDefinition,
-        ): Map<String, Any?> {
+        ): Map<String, ArgumentExpression?> {
             val suppliedArguments = field.arguments.associateBy { it.name }
             return fieldDefinition.arguments
                 .mapNotNull { argumentDefinition ->
@@ -359,7 +360,7 @@ internal class GJSelectionParser(
         override fun decode(
             field: Field,
             fieldDefinition: GraphQLFieldDefinition,
-        ): Map<String, Any?> {
+        ): Map<String, ArgumentExpression?> {
             val values =
                 ValuesResolver.getArgumentValues(
                     schema.graphQLSchema.codeRegistry,

@@ -1,7 +1,10 @@
+import io.gitlab.arturbosch.detekt.Detekt
+
 plugins {
     kotlin("jvm")
     `java-library`
     `java-test-fixtures`
+    id("io.gitlab.arturbosch.detekt")
 }
 
 dependencies {
@@ -18,6 +21,8 @@ dependencies {
 
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    detektPlugins("detekt.build-logic:detekt-rules")
 }
 
 kotlin {
@@ -29,4 +34,20 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// Only our own rule is active here (config.setFrom + disableDefaultRuleSets).
+detekt {
+    disableDefaultRuleSets = true
+    config.setFrom(rootProject.layout.projectDirectory.file("detekt-engine-data.yml"))
+    ignoreFailures = true
+}
+
+// The plain `detekt` task has no classpath, so it skips @RequiresTypeResolution rules. These
+// per-compilation tasks do, but aren't wired into `check` by the plugin.
+val typeResolvedDetektTasks = tasks.withType<Detekt>().matching {
+    it.name in setOf("detektMain", "detektTest", "detektTestFixtures")
+}
+tasks.named("check") {
+    dependsOn(typeResolvedDetektTasks)
 }

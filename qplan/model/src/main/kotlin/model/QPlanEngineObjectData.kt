@@ -214,13 +214,13 @@ private class QPlanEngineObjectDataImpl(
 ) : QPlanEngineObjectData {
     private val values = values.toMap()
 
-    override suspend fun fetch(selection: String): Any? = get(selection)
+    override suspend fun fetch(selection: String): EngineOutputData? = get(selection)
 
-    override suspend fun fetchOrNull(selection: String): Any? = getOrNull(selection)
+    override suspend fun fetchOrNull(selection: String): EngineOutputData? = getOrNull(selection)
 
     override suspend fun fetchSelections(): Iterable<String> = getSelections()
 
-    override fun get(selection: String): Any? {
+    override fun get(selection: String): EngineOutputData? {
         val value = outputValue(selection)
         value.firstErrorDataOrNull()?.let { errorData ->
             throw EngineErrorDataReadException(errorData)
@@ -239,7 +239,7 @@ private class QPlanEngineObjectDataImpl(
         return values[selection]
     }
 
-    override fun getOrNull(selection: String): Any? =
+    override fun getOrNull(selection: String): EngineOutputData? =
         if (isPresent(selection)) get(selection) else null
 
     override fun isPresent(selection: String): Boolean = selection in values

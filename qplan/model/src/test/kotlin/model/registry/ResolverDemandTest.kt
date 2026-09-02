@@ -22,6 +22,7 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
+import model.testing.fromQueryField
 import model.testing.nodeResolverOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -326,6 +327,74 @@ class ResolverDemandTest {
                 )
             }
         assertTrue(cycle.message!!.contains("demand cycle"))
+    }
+
+    @Test
+    fun `rejects mixed object and Query field variable cycles`() {
+        val objectFragment =
+            """
+            fragment ObjectInput on Subject {
+              objectProvider: source(value: ${'$'}queryValue)
+              consume(value: ${'$'}objectValue)
+            }
+            """.trimIndent()
+        val queryFragment =
+            """
+            fragment QueryInput on Query {
+              queryProvider: source(value: ${'$'}objectValue)
+            }
+            """.trimIndent()
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          subject: Subject!
+                          source(value: Int): Int
+                        }
+
+                        type Subject {
+                          result: Int
+                          source(value: Int): Int
+                          consume(value: Int): Int
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val emptyQuery = schema.emptyFragmentOf("Query")
+                        val emptySubject = schema.emptyFragmentOf("Subject")
+                        mapOf(
+                            schema.requireField("Query", "subject") to resolver(emptyQuery),
+                            schema.requireField("Query", "source") to resolver(emptyQuery),
+                            schema.requireField("Subject", "result") to
+                                fieldResolverOf(
+                                    objectFragment = schema.fragmentFrom(objectFragment),
+                                    queryFragment = schema.fragmentFrom(queryFragment),
+                                ) { _, _, _ -> 1 },
+                            schema.requireField("Subject", "source") to resolver(emptySubject),
+                            schema.requireField("Subject", "consume") to resolver(emptySubject),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val owner = schema.requireObjectField("Subject", "result")
+                        mapOf(
+                            Arguments.Variable.of(owner, "objectValue") to
+                                schema.fromObjectField(
+                                    objectFragment,
+                                    listOf("objectProvider"),
+                                ),
+                            Arguments.Variable.of(owner, "queryValue") to
+                                schema.fromQueryField(
+                                    queryFragment,
+                                    listOf("queryProvider"),
+                                ),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("demand cycle"), failure.message)
     }
 
     @Test

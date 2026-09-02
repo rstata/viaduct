@@ -50,8 +50,14 @@ sealed interface ResolverObjectFragment {
 
 /** Paired resolver-query-fragment views instantiated from one resolver occurrence. */
 sealed interface ResolverQueryFragment {
+    val resolverOccurrenceId: ResolverOccurrenceId
     val materializeSelections: MaterializeSelectionForest
     val constructionSelections: SelectionForest
+
+    val variableDefinitions: List<VariableInstanceDefinition>
+
+    /** Query-path definitions instantiated with this fragment's variable identities. */
+    val pathVariableDefinitions: List<InstantiatedQueryPathDefinition>
 }
 
 /**
@@ -63,7 +69,7 @@ sealed interface ResolverQueryFragment {
  * [objectFragment] is the direct parent-object input requirement. [queryFragment] is the
  * independently resolved Query-rooted input requirement. In a canonical registry entry,
  * [variables] maps every variable template defined by this resolver and used by either fragment
- * to its argument or nonempty alias-free object-field path definition.
+ * to its argument or nonempty alias-free object- or Query-field path definition.
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
@@ -76,7 +82,9 @@ sealed interface ResolverQueryFragment {
  * references one schema-valid input path rooted at an argument belonging to that field. A
  * [VariableDefinition.FromObjectField] is a valid selection path relative to that field's
  * containing type and is structurally contained by [objectFragment]; its factory additionally
- * ensures that the path does not cross a list and ends at a simple value.
+ * ensures that the path does not cross a list and ends at a simple value. A
+ * [VariableDefinition.FromQueryField] satisfies the same path invariant relative to Query and is
+ * structurally contained by [queryFragment].
  */
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,
@@ -145,9 +153,27 @@ class FieldResolver private constructor(
     ): ResolverQueryFragment {
         val materializeSelections =
             queryFragmentTemplate.instantiateVariables(resolverOccurrenceId)
+        val instantiatedFragment = materializeSelections.constructionSelections()
+        val pathVariableDefinitions =
+            instantiatedQueryPathVariableDefinitions(resolverOccurrenceId)
+        val pathVarSelections =
+            pathVariableDefinitions
+                .map { definition ->
+                    instantiatedFragment.markProviderPath(
+                        path = definition.path,
+                        variable = definition.variable,
+                    )
+                }.concatenateSelectionForests()
+        val constructionSelections = instantiatedFragment + pathVarSelections
+        val usedVariables = constructionSelections.usedVariables()
         return ResolverQueryFragmentImpl(
+            resolverOccurrenceId = resolverOccurrenceId,
             materializeSelections = materializeSelections,
-            constructionSelections = materializeSelections.constructionSelections(),
+            constructionSelections = constructionSelections,
+            variableDefinitions =
+                instantiatedVariableDefinitions(resolverOccurrenceId)
+                    .filter { definition -> definition.variable in usedVariables },
+            pathVariableDefinitions = pathVariableDefinitions,
         )
     }
 
@@ -175,6 +201,29 @@ class FieldResolver private constructor(
         variables.mapNotNull { (variable, definition) ->
             (definition as? VariableDefinition.FromObjectField)?.let {
                 InstantiatedObjectPathDefinition.of(
+                    variable = variable.instantiate(resolverOccurrenceId),
+                    path =
+                        it.path.map { key ->
+                            ObjectEngineResult.Key.of(
+                                field = key.field,
+                                arguments =
+                                    key.arguments.instantiateVariables(
+                                        key.field,
+                                        resolverOccurrenceId,
+                                    ),
+                            )
+                        },
+                )
+            }
+        }
+
+    /** Returns this resolver's Query-path definitions for one application. */
+    fun instantiatedQueryPathVariableDefinitions(
+        resolverOccurrenceId: ResolverOccurrenceId,
+    ): List<InstantiatedQueryPathDefinition> =
+        variables.mapNotNull { (variable, definition) ->
+            (definition as? VariableDefinition.FromQueryField)?.let {
+                InstantiatedQueryPathDefinition.of(
                     variable = variable.instantiate(resolverOccurrenceId),
                     path =
                         it.path.map { key ->
@@ -324,6 +373,13 @@ class FieldResolver private constructor(
                                 "${variable.field.name} object fragment"
                         }
                     }
+                    is VariableDefinition.FromQueryField -> {
+                        require(queryFragment.constructionSelections().containsPath(definition.path)) {
+                            "Variable ${variable.variableName} Query-field path is not contained " +
+                                "by ${variable.field.containingDef.name}/" +
+                                "${variable.field.name} Query fragment"
+                        }
+                    }
                 }
             }
             return FieldResolver(
@@ -391,8 +447,11 @@ private class ResolverObjectFragmentImpl(
 ) : ResolverObjectFragment
 
 private class ResolverQueryFragmentImpl(
+    override val resolverOccurrenceId: ResolverOccurrenceId,
     override val materializeSelections: MaterializeSelectionForest,
     override val constructionSelections: SelectionForest,
+    override val variableDefinitions: List<VariableInstanceDefinition>,
+    override val pathVariableDefinitions: List<InstantiatedQueryPathDefinition>,
 ) : ResolverQueryFragment
 
 private fun MaterializeSelectionForest.instantiateVariables(

@@ -130,6 +130,10 @@ private suspend fun FieldResolver.resolveQueryFragment(
             is VariableDefinition.FromObjectField -> {
                 world.fetchBinding(instanceId)
             }
+
+            is VariableDefinition.FromQueryField -> {
+                world.fetchBinding(instanceId)
+            }
         }
     }
 

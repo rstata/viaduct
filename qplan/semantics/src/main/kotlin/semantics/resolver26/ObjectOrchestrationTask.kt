@@ -116,7 +116,9 @@ private fun declareBindings(closed: CloseInputDemandResult) {
                         world.declareBinding(variableId)
                     }
 
-                is VariableDefinition.FromObjectField -> Unit
+                is VariableDefinition.FromObjectField,
+                is VariableDefinition.FromQueryField,
+                -> Unit
             }
         }
     }

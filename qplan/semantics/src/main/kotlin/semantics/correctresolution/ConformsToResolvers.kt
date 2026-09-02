@@ -13,6 +13,8 @@ import model.ObjectEngineResult
 import model.outputType
 import model.outputValue
 import model.PathComponent
+import model.ResolverOccurrenceId
+import model.VariableBinding
 import model.isContextuallyGrounded
 import model.groundedArguments
 import model.schemaType
@@ -21,6 +23,7 @@ import model.toEngineOutputData
 import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
+import model.registry.VariableDefinition
 import semantics.ResolverSupport
 
 /**
@@ -102,17 +105,38 @@ internal fun FieldResolver.objectFragmentSatisfiedBy(
     path: List<PathComponent>,
 ): ResolverObjectFragment? {
     val objectFragment = instantiateObjectFragmentAt(root, path)
+    val arguments =
+        (path.lastOrNull() as? ObjectEngineResult.ObjectKey)
+            ?.groundedArguments() as? Arguments.Resolved
+            ?: return null
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
-        constructionSelections.usedVariables().all { variable ->
-            variable.instanceId?.let(world::isBound) == true
-        } &&
+        fromArgumentBindingsAgree(
+            resolverOccurrenceId = objectFragment.resolverOccurrenceId,
+            arguments = arguments,
+        ) &&
+            constructionSelections.usedVariables().all { variable ->
+                variable.instanceId?.let(world::isBound) == true
+            } &&
             result.conformsToSelectionsAt(
                 selections = constructionSelections,
                 path = path.dropLast(1),
             )
     }
 }
+
+context(world: Assumptions)
+private fun FieldResolver.fromArgumentBindingsAgree(
+    resolverOccurrenceId: ResolverOccurrenceId,
+    arguments: Arguments.Resolved,
+): Boolean =
+    instantiatedVariableDefinitions(resolverOccurrenceId).all { variableDefinition ->
+        val definition = variableDefinition.definition
+        if (definition !is VariableDefinition.FromArgument) return@all true
+        val instanceId = requireNotNull(variableDefinition.variable.instanceId)
+        world.isBound(instanceId) &&
+            world.getBinding(instanceId) == VariableBinding.of(definition.read(arguments))
+    }
 
 context(
     world: Assumptions,

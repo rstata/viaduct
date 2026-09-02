@@ -24,6 +24,7 @@ import model.fragmentFrom
 import model.materializeSelectionForestOf
 import model.objectOf
 import model.requireType
+import model.registry.ProviderFragment
 import model.selectionForestOf
 import model.toMaterializeSelectionForest
 import model.testing.CanonicalFieldResolverApplicationObserver
@@ -133,54 +134,54 @@ class ArbitraryRegistry internal constructor(
     /** Source resolver fields whose generated fragments consume a FromObjectField variable. */
     val fromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated fragments consume a FromQueryField variable. */
     val fromQueryFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromQueryFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.QUERY)
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated object-path provider crosses an abstract type. */
     val abstractFromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-            .filter(FromObjectFieldVariableProviderPlan::abstractPath)
+            .fromField(ProviderFragment.OBJECT)
+            .filter(FromFieldVariableProviderPlan::abstractPath)
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolvers whose provider key arguments depend on another object-path variable. */
     val fromObjectFieldProviderArgumentVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .filter { provider -> provider.providerArgumentVariableNames().isNotEmpty() }
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose path variable is used below a passive top-level branch. */
     val passiveTopLevelFromObjectFieldVariableUseOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .filter { provider -> provider.topLevelUseField !in fieldResolverCoordinates }
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated fragments consume a nested FromObjectField path. */
     val nestedFromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .filter { provider -> provider.responsePath().size > 1 }
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated fragments use a FromObjectField variable below a top-level selection. */
     val nestedFromObjectFieldVariableUseOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .filter { provider -> provider.useDepth > 1 }
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields whose generated nested provider path encounters a planned null intermediate. */
     val nullIntermediateFromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .filter { provider ->
                 provider.intermediateOutcome(fieldValues) == ProviderIntermediateOutcome.NULL
             }.mapTo(linkedSetOf(), VariableProviderPlan::owner)
@@ -188,7 +189,7 @@ class ArbitraryRegistry internal constructor(
     /** Source resolver fields whose generated nested provider path encounters a planned error intermediate. */
     val errorIntermediateFromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .filter { provider ->
                 provider.intermediateOutcome(fieldValues) == ProviderIntermediateOutcome.ERROR
             }.mapTo(linkedSetOf(), VariableProviderPlan::owner)
@@ -196,7 +197,7 @@ class ArbitraryRegistry internal constructor(
     /** Directed owner pairs where the first owner's variable-bearing fragment selects the second owner. */
     val fromObjectFieldVariableOwnerDependencies: Set<Pair<FieldCoordinate, FieldCoordinate>> =
         variableProviders
-            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .fromField(ProviderFragment.OBJECT)
             .mapNotNullTo(linkedSetOf()) { provider ->
                 provider.topLevelUseField
                     .takeIf { useField -> useField in fromObjectFieldVariableOwnerFields }
@@ -531,20 +532,23 @@ class ArbitraryRegistry internal constructor(
                                     field = field,
                                     path = provider.argumentPath,
                                 )
-                            is FromObjectFieldVariableProviderPlan ->
-                                canonicalSchema.fromObjectField(
-                                    objectFragmentSource =
-                                        objectFragmentSources.getValue(provider.owner),
-                                    responsePath = provider.responsePath(),
-                                    variableField = field,
-                                )
-                            is FromQueryFieldVariableProviderPlan ->
-                                canonicalSchema.fromQueryField(
-                                    queryFragmentSource =
-                                        queryFragmentSources.getValue(provider.owner),
-                                    responsePath = provider.responsePath(),
-                                    variableField = field,
-                                )
+                            is FromFieldVariableProviderPlan ->
+                                when (provider.providerFragment) {
+                                    ProviderFragment.OBJECT ->
+                                        canonicalSchema.fromObjectField(
+                                            objectFragmentSource =
+                                                objectFragmentSources.getValue(provider.owner),
+                                            responsePath = provider.responsePath(),
+                                            variableField = field,
+                                        )
+                                    ProviderFragment.QUERY ->
+                                        canonicalSchema.fromQueryField(
+                                            queryFragmentSource =
+                                                queryFragmentSources.getValue(provider.owner),
+                                            responsePath = provider.responsePath(),
+                                            variableField = field,
+                                        )
+                                }
                         }
                 }
             },
@@ -580,13 +584,7 @@ class ArbitraryRegistry internal constructor(
                             "  \$${provider.variableName} owner=${provider.owner} " +
                                 "fromArgument=${provider.argumentPath.joinToString(".")}",
                         )
-                    is FromObjectFieldVariableProviderPlan -> {
-                        appendLine(
-                            "  \$${provider.variableName} owner=${provider.owner}",
-                        )
-                        appendLine(provider.source().prependIndent("    "))
-                    }
-                    is FromQueryFieldVariableProviderPlan -> {
+                    is FromFieldVariableProviderPlan -> {
                         appendLine(
                             "  \$${provider.variableName} owner=${provider.owner}",
                         )
@@ -712,6 +710,14 @@ private class RegistryGenerator(
                     put(typeName, value.selectedPaths())
                 }
             }
+        val fromFieldFeatures =
+            ProviderFragment.entries.associateWith { providerFragment ->
+                variableProviders
+                    .fromField(providerFragment)
+                    .features(fieldSites)
+            }
+        val objectFieldFeatures = fromFieldFeatures.getValue(ProviderFragment.OBJECT)
+        val queryFieldFeatures = fromFieldFeatures.getValue(ProviderFragment.QUERY)
         return ArbitraryRegistry(
             fieldResolverCoordinates = fieldSites,
             nodeResolverTypes = nodeSites,
@@ -722,13 +728,11 @@ private class RegistryGenerator(
                 queryFragments.mapValues { (_, fragment) -> fragment.source() },
             variableProviderSources =
                 variableProviders
-                    .mapNotNull { provider ->
-                        when (provider) {
-                            is FromObjectFieldVariableProviderPlan ->
-                                provider.variableName to provider.source()
-                            is FromQueryFieldVariableProviderPlan ->
-                                provider.variableName to provider.source()
-                            is FromArgumentVariableProviderPlan -> null
+                        .mapNotNull { provider ->
+                            when (provider) {
+                                is FromFieldVariableProviderPlan ->
+                                    provider.variableName to provider.source()
+                                is FromArgumentVariableProviderPlan -> null
                         }
                     }.toMap(),
             fieldValues = fieldValues,
@@ -770,16 +774,11 @@ private class RegistryGenerator(
                         variableProviders
                             .filterIsInstance<FromArgumentVariableProviderPlan>()
                             .count(FromArgumentVariableProviderPlan::nullableTraversal),
-                    fromObjectFieldVariableCount =
-                        variableProviders.count {
-                            it is FromObjectFieldVariableProviderPlan
-                        },
+                    fromObjectFieldVariableCount = objectFieldFeatures.variableCount,
                     literalVariableConvergenceCount =
                         variableProviders.count(VariableProviderPlan::literalConvergence),
                     fromObjectFieldLiteralVariableConvergenceCount =
-                        variableProviders
-                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                            .count(VariableProviderPlan::literalConvergence),
+                        objectFieldFeatures.literalVariableConvergenceCount,
                     sameFragmentVariableReuseCount =
                         variableProviders.count { provider ->
                             val objectUses =
@@ -807,25 +806,12 @@ private class RegistryGenerator(
                                     ).any { target -> target is ListVariableTarget }
                             },
                     passiveTopLevelFromObjectFieldVariableUseCount =
-                        variableProviders
-                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                            .count { provider -> provider.topLevelUseField !in fieldSites },
+                        objectFieldFeatures.passiveTopLevelVariableUseCount,
                     fromObjectFieldProviderArgumentVariableCount =
-                        variableProviders
-                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                            .count { provider ->
-                                provider.providerArgumentVariableNames().isNotEmpty()
-                            },
-                    maximumFromObjectFieldPathLength =
-                        variableProviders
-                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                            .maxOfOrNull { provider -> provider.responsePath().size }
-                            ?: 0,
+                        objectFieldFeatures.providerArgumentVariableCount,
+                    maximumFromObjectFieldPathLength = objectFieldFeatures.maximumPathLength,
                     maximumFromObjectFieldVariableUseDepth =
-                        variableProviders
-                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                            .maxOfOrNull(FromObjectFieldVariableProviderPlan::useDepth)
-                            ?: 0,
+                        objectFieldFeatures.maximumVariableUseDepth,
                     maximumVariablesPerOwner =
                         variableProviders
                             .groupingBy(VariableProviderPlan::owner)
@@ -837,10 +823,7 @@ private class RegistryGenerator(
                         variableProviders.any(VariableProviderPlan::nestedInput),
                     hasListVariable = variableProviders.any(VariableProviderPlan::listValue),
                     hasNullableProvider = variableProviders.any(VariableProviderPlan::nullable),
-                    hasAbstractProviderPath =
-                        variableProviders
-                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                            .any(FromObjectFieldVariableProviderPlan::abstractPath),
+                    hasAbstractProviderPath = objectFieldFeatures.hasAbstractProviderPath,
                     hasAbstractResolverFragment =
                         (objectFragments.values + queryFragments.values).any { fragment ->
                             fragment.selections.any { selection ->
@@ -851,34 +834,16 @@ private class RegistryGenerator(
                         queryFragments.count { (_, fragment) ->
                             fragment.selections.isNotEmpty()
                         },
-                    fromQueryFieldVariableCount =
-                        variableProviders.count {
-                            it is FromQueryFieldVariableProviderPlan
-                        },
+                    fromQueryFieldVariableCount = queryFieldFeatures.variableCount,
                     fromQueryFieldLiteralVariableConvergenceCount =
-                        variableProviders
-                            .filterIsInstance<FromQueryFieldVariableProviderPlan>()
-                            .count(VariableProviderPlan::literalConvergence),
+                        queryFieldFeatures.literalVariableConvergenceCount,
                     passiveTopLevelFromQueryFieldVariableUseCount =
-                        variableProviders
-                            .filterIsInstance<FromQueryFieldVariableProviderPlan>()
-                            .count { provider -> provider.topLevelUseField !in fieldSites },
+                        queryFieldFeatures.passiveTopLevelVariableUseCount,
                     fromQueryFieldProviderArgumentVariableCount =
-                        variableProviders
-                            .filterIsInstance<FromQueryFieldVariableProviderPlan>()
-                            .count { provider ->
-                                provider.providerArgumentVariableNames().isNotEmpty()
-                            },
-                    maximumFromQueryFieldPathLength =
-                        variableProviders
-                            .filterIsInstance<FromQueryFieldVariableProviderPlan>()
-                            .maxOfOrNull { provider -> provider.responsePath().size }
-                            ?: 0,
+                        queryFieldFeatures.providerArgumentVariableCount,
+                    maximumFromQueryFieldPathLength = queryFieldFeatures.maximumPathLength,
                     maximumFromQueryFieldVariableUseDepth =
-                        variableProviders
-                            .filterIsInstance<FromQueryFieldVariableProviderPlan>()
-                            .maxOfOrNull(FromQueryFieldVariableProviderPlan::useDepth)
-                            ?: 0,
+                        queryFieldFeatures.maximumVariableUseDepth,
                 ),
         )
     }
@@ -968,8 +933,17 @@ private class RegistryGenerator(
                 ),
         )
             .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
-            .withFromObjectFieldVariableProvider(consumer, ranks, variableProviders)
-            .withFromQueryFieldVariableProvider(consumer, ranks, variableProviders)
+            .withFromFieldVariableProvider(
+                consumer,
+                ranks,
+                variableProviders,
+                ProviderFragment.OBJECT,
+            ).withFromFieldVariableProvider(
+                consumer,
+                ranks,
+                variableProviders,
+                ProviderFragment.QUERY,
+            )
     }
 
     private fun fragmentPlan(
@@ -1374,6 +1348,23 @@ private class RegistryGenerator(
             FragmentLocation.QUERY -> queryFragment
         }
 
+    private fun ResolverFragmentPlans.appendSelection(
+        location: FragmentLocation,
+        selection: FragmentSelectionPlan,
+    ): ResolverFragmentPlans =
+        when (location) {
+            FragmentLocation.OBJECT ->
+                copy(
+                    objectFragment =
+                        objectFragment.copy(selections = objectFragment.selections + selection),
+                )
+            FragmentLocation.QUERY ->
+                copy(
+                    queryFragment =
+                        queryFragment.copy(selections = queryFragment.selections + selection),
+                )
+        }
+
     private fun ResolverFragmentPlans.replaceArgument(
         location: FragmentLocation,
         occurrence: ArgumentOccurrence,
@@ -1457,283 +1448,27 @@ private class RegistryGenerator(
         }
     }
 
-    private fun ResolverFragmentPlans.withFromObjectFieldVariableProvider(
+    private fun ResolverFragmentPlans.withFromFieldVariableProvider(
         consumer: FieldCoordinate,
         ranks: Map<FieldCoordinate, Int>,
         variableProviders: MutableList<VariableProviderPlan>,
+        providerFragment: ProviderFragment,
     ): ResolverFragmentPlans {
+        val providerLocation = providerFragment.location()
+        val providerPlan = fragment(providerLocation)
+        val providerOwnerName = providerPlan.ownerName
+        val variablesEnabled =
+            when (providerFragment) {
+                ProviderFragment.OBJECT -> config[ResolverFromObjectFieldVariablesEnabled]
+                ProviderFragment.QUERY -> config[ResolverFromQueryFieldVariablesEnabled]
+            }
         if (
             !config[ResolverVariablesEnabled] ||
-            !config[ResolverFromObjectFieldVariablesEnabled] ||
+            !variablesEnabled ||
             (config[ResolverVariablesOnQueryFieldsOnly] && consumer.typeName != "Query") ||
             (config[ResolverVariablesOnNonQueryFieldsOnly] && consumer.typeName == "Query") ||
             variableProviders
-                .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                .map(VariableProviderPlan::owner)
-                .distinct()
-                .size >= config[ResolverFromFieldVariableOwnerLimit] ||
-            !chance(config[ResolverVariableWeight])
-        ) {
-            return this
-        }
-        val variableCount = Arb.int(config[ResolverVariableCount]).next(random)
-        return (0 until variableCount).fold(this) { fragments, variableIndex ->
-            val existingOwners =
-                variableProviders
-                    .mapTo(linkedSetOf(), VariableProviderPlan::owner)
-            val occurrences =
-                fragments.argumentOccurrences()
-                    .shuffled(random)
-                    .filter { locatedOccurrence ->
-                        locatedOccurrence.occurrence.existingVariableName == null &&
-                        locatedOccurrence.occurrence.selectionPath.size in
-                            config[ResolverFromFieldVariableUseDepth]
-                    }
-            val passiveUseOccurrences =
-                occurrences.filter { locatedOccurrence ->
-                    fragments
-                        .fragment(locatedOccurrence.location)
-                        .topLevelField(locatedOccurrence.occurrence) !in fieldSites
-                }
-            val ownerUseOccurrences =
-                occurrences.filter { locatedOccurrence ->
-                    fragments
-                        .fragment(locatedOccurrence.location)
-                        .topLevelField(locatedOccurrence.occurrence) in existingOwners
-                }
-            val providerArgumentOccurrences =
-                occurrences.filter { locatedOccurrence ->
-                    if (locatedOccurrence.location != FragmentLocation.OBJECT) {
-                        return@filter false
-                    }
-                    val useBranch =
-                        fragments.objectFragment.selections[
-                            locatedOccurrence.occurrence.selectionPath.first()
-                        ]
-                    variableProviders
-                        .filterIsInstance<FromObjectFieldVariableProviderPlan>()
-                        .any { provider ->
-                            provider.owner == consumer && provider.selection == useBranch
-                        }
-                }
-            var orderedOccurrences = occurrences
-            if (
-                passiveUseOccurrences.isNotEmpty() &&
-                config[ResolverFromFieldPassiveUseWeight] > 0.0 &&
-                chance(config[ResolverFromFieldPassiveUseWeight])
-            ) {
-                orderedOccurrences =
-                    passiveUseOccurrences +
-                        orderedOccurrences.filterNot(passiveUseOccurrences::contains)
-            }
-            if (
-                    ownerUseOccurrences.isNotEmpty() &&
-                    config[ResolverFromFieldVariableOwnerUseWeight] > 0.0 &&
-                    chance(config[ResolverFromFieldVariableOwnerUseWeight])
-            ) {
-                orderedOccurrences =
-                    ownerUseOccurrences +
-                        orderedOccurrences.filterNot(ownerUseOccurrences::contains)
-            }
-            if (
-                providerArgumentOccurrences.isNotEmpty() &&
-                chance(config[ResolverFromFieldProviderArgumentVariableWeight])
-            ) {
-                orderedOccurrences =
-                    providerArgumentOccurrences +
-                        orderedOccurrences.filterNot(providerArgumentOccurrences::contains)
-            }
-            val candidate =
-                orderedOccurrences.firstNotNullOfOrNull { locatedOccurrence ->
-                    val fragment = fragments.fragment(locatedOccurrence.location)
-                    val occurrence = locatedOccurrence.occurrence
-                    val useBranch =
-                        fragment.selections[occurrence.selectionPath.first()]
-                    val useField = fragment.topLevelField(occurrence)
-                    val passiveUse = useField !in fieldSites
-                    val useRank =
-                        structuralBranchRank(
-                            ownerName = fragment.ownerName,
-                            selection = useBranch,
-                            ranks = ranks,
-                        )
-                    occurrence.target
-                        ?.let { target ->
-                            variableProviderPaths(
-                                ownerName = fragments.objectFragment.ownerName,
-                                target = target,
-                                consumerRank = ranks.getValue(consumer),
-                                ranks = ranks,
-                            )
-                        }.orEmpty()
-                        .filter { provider ->
-                            provider.pathLength() in
-                                config[ResolverFromFieldProviderPathLength]
-                        }
-                        .filter { provider ->
-                            if (!passiveUse) {
-                                true
-                            } else {
-                                val providerField =
-                                    provider.topLevelField(fragments.objectFragment.ownerName)
-                                providerField !in fieldSites && providerField != useField
-                            }
-                        }
-                        .filter { provider ->
-                            structuralBranchRank(
-                                fragments.objectFragment.ownerName,
-                                provider,
-                                ranks,
-                            ) < useRank
-                        }
-                        .chooseProviderPath()
-                        ?.let { provider ->
-                            FromObjectFieldCandidate(
-                                location = locatedOccurrence.location,
-                                occurrence = occurrence,
-                                provider = provider,
-                            )
-                        }
-                } ?: return@fold fragments
-            val literalConvergence =
-                fragments
-                    .fragment(candidate.location)
-                    .selectionAt(candidate.occurrence)
-                    .subselections
-                    .size >= 2 &&
-                    chance(config[ResolverLiteralVariableConvergenceWeight])
-            val variableName = "resolverVar${ranks.getValue(consumer)}_$variableIndex"
-            val providerSelection =
-                candidate.provider.withResponseAliases(variableName)
-            val sharedOccurrence =
-                fragments
-                    .argumentOccurrences()
-                    .filter { locatedOccurrence ->
-                        locatedOccurrence.occurrence.existingVariableName == null
-                    }
-                    .filterNot { locatedOccurrence ->
-                        locatedOccurrence.location == candidate.location &&
-                            (
-                                literalConvergence ||
-                                    locatedOccurrence.occurrence.selectionPath ==
-                                    candidate.occurrence.selectionPath
-                            )
-                    }
-                    .shuffled(random)
-                    .firstOrNull { locatedOccurrence ->
-                        val orderedAfterProvider =
-                            if (locatedOccurrence.location == FragmentLocation.QUERY) {
-                                true
-                            } else {
-                                val useBranch =
-                                    fragments.objectFragment.selections[
-                                        locatedOccurrence.occurrence.selectionPath.first()
-                                    ]
-                                structuralBranchRank(
-                                    fragments.objectFragment.ownerName,
-                                    providerSelection,
-                                    ranks,
-                                ) < structuralBranchRank(
-                                    fragments.objectFragment.ownerName,
-                                    useBranch,
-                                    ranks,
-                                )
-                            }
-                        orderedAfterProvider &&
-                            locatedOccurrence.occurrence.selectionPath.size in
-                            config[ResolverFromFieldVariableUseDepth] &&
-                            locatedOccurrence.occurrence.target?.let { target ->
-                                providerSelection.isCompatibleProviderFor(
-                                    ownerName = fragments.objectFragment.ownerName,
-                                    target = target,
-                                )
-                            } == true
-                    }
-            val objectUseOccurrence =
-                if (candidate.location == FragmentLocation.OBJECT) {
-                    candidate.occurrence
-                } else {
-                    sharedOccurrence
-                        ?.takeIf { occurrence ->
-                            occurrence.location == FragmentLocation.OBJECT
-                        }?.occurrence
-                }
-            val providerArgumentDependents =
-                objectUseOccurrence?.let { occurrence ->
-                    variableProviders.withIndex().mapNotNull { indexed ->
-                        (indexed.value as? FromObjectFieldVariableProviderPlan)
-                            ?.takeIf { provider ->
-                                provider.owner == consumer &&
-                                    provider.selection ==
-                                    fragments.objectFragment.selections[
-                                        occurrence.selectionPath.first()
-                                    ]
-                            }?.let { provider -> indexed.index to provider }
-                    }
-                }.orEmpty()
-            variableProviders +=
-                FromObjectFieldVariableProviderPlan(
-                    owner = consumer,
-                    variableName = variableName,
-                    selection = providerSelection,
-                    nestedInput = candidate.occurrence.valuePath.isNotEmpty(),
-                    listValue = candidate.occurrence.target is ListVariableTarget,
-                    nullable = candidate.occurrence.target?.nullable == true,
-                    abstractPath =
-                        candidate.provider.hasAbstractPath(fragments.objectFragment.ownerName),
-                    useDepth = candidate.occurrence.selectionPath.size,
-                    topLevelUseField =
-                        fragments
-                            .fragment(candidate.location)
-                            .topLevelField(candidate.occurrence),
-                    literalConvergence = literalConvergence,
-                )
-            var updated =
-                fragments.copy(
-                    objectFragment =
-                        fragments.objectFragment.copy(
-                            selections = fragments.objectFragment.selections + providerSelection,
-                        ),
-                ).replaceArgument(
-                    location = candidate.location,
-                    occurrence = candidate.occurrence,
-                    variableName = variableName,
-                    literalConvergence = literalConvergence,
-                )
-            if (sharedOccurrence != null) {
-                updated =
-                    updated.replaceArgument(
-                        location = sharedOccurrence.location,
-                        occurrence = sharedOccurrence.occurrence,
-                        variableName = variableName,
-                        literalConvergence = false,
-                    )
-            }
-            providerArgumentDependents.forEach { (index, provider) ->
-                variableProviders[index] =
-                    provider.copy(
-                        selection =
-                            updated.objectFragment.selections[
-                                requireNotNull(objectUseOccurrence).selectionPath.first()
-                            ],
-                    )
-            }
-            updated
-        }
-    }
-
-    private fun ResolverFragmentPlans.withFromQueryFieldVariableProvider(
-        consumer: FieldCoordinate,
-        ranks: Map<FieldCoordinate, Int>,
-        variableProviders: MutableList<VariableProviderPlan>,
-    ): ResolverFragmentPlans {
-        if (
-            !config[ResolverVariablesEnabled] ||
-            !config[ResolverFromQueryFieldVariablesEnabled] ||
-            (config[ResolverVariablesOnQueryFieldsOnly] && consumer.typeName != "Query") ||
-            (config[ResolverVariablesOnNonQueryFieldsOnly] && consumer.typeName == "Query") ||
-            variableProviders
-                .filterIsInstance<FromQueryFieldVariableProviderPlan>()
+                .fromField(providerFragment)
                 .map(VariableProviderPlan::owner)
                 .distinct()
                 .size >= config[ResolverFromFieldVariableOwnerLimit] ||
@@ -1767,15 +1502,15 @@ private class RegistryGenerator(
                 }
             val providerArgumentOccurrences =
                 occurrences.filter { locatedOccurrence ->
-                    if (locatedOccurrence.location != FragmentLocation.QUERY) {
+                    if (locatedOccurrence.location != providerLocation) {
                         return@filter false
                     }
                     val useBranch =
-                        fragments.queryFragment.selections[
+                        fragments.fragment(providerLocation).selections[
                             locatedOccurrence.occurrence.selectionPath.first()
                         ]
                     variableProviders
-                        .filterIsInstance<FromQueryFieldVariableProviderPlan>()
+                        .fromField(providerFragment)
                         .any { provider ->
                             provider.owner == consumer && provider.selection == useBranch
                         }
@@ -1814,15 +1549,15 @@ private class RegistryGenerator(
                     val passiveUse = useField !in fieldSites
                     val useBranch = fragment.selections[occurrence.selectionPath.first()]
                     val useRank =
-                        if (locatedOccurrence.location == FragmentLocation.QUERY) {
-                            structuralBranchRank("Query", useBranch, ranks)
+                        if (locatedOccurrence.location == providerLocation) {
+                            structuralBranchRank(providerOwnerName, useBranch, ranks)
                         } else {
                             null
                         }
                     occurrence.target
                         ?.let { target ->
                             variableProviderPaths(
-                                ownerName = "Query",
+                                ownerName = providerOwnerName,
                                 target = target,
                                 consumerRank = ranks.getValue(consumer),
                                 ranks = ranks,
@@ -1834,19 +1569,19 @@ private class RegistryGenerator(
                             provider.pathLength() in
                                 config[ResolverFromFieldProviderPathLength]
                         }.filter { provider ->
-                            if (locatedOccurrence.location != FragmentLocation.QUERY) {
+                            if (locatedOccurrence.location != providerLocation) {
                                 true
                             } else {
-                                val providerField = provider.topLevelField("Query")
+                                val providerField = provider.topLevelField(providerOwnerName)
                                 (!passiveUse || providerField !in fieldSites) &&
                                     providerField != useField &&
-                                    structuralBranchRank("Query", provider, ranks) <
+                                    structuralBranchRank(providerOwnerName, provider, ranks) <
                                     requireNotNull(useRank)
                             }
                         }.chooseProviderPath(
                             config[ResolverFromFieldProviderArgumentVariableWeight],
                         )?.let { provider ->
-                            FromQueryFieldCandidate(
+                            FromFieldCandidate(
                                 location = locatedOccurrence.location,
                                 occurrence = occurrence,
                                 provider = provider,
@@ -1860,7 +1595,12 @@ private class RegistryGenerator(
                     .subselections
                     .size >= 2 &&
                     chance(config[ResolverLiteralVariableConvergenceWeight])
-            val variableName = "resolverQueryVar${ranks.getValue(consumer)}_$variableIndex"
+            val variablePrefix =
+                when (providerFragment) {
+                    ProviderFragment.OBJECT -> "resolverVar"
+                    ProviderFragment.QUERY -> "resolverQueryVar"
+                }
+            val variableName = "$variablePrefix${ranks.getValue(consumer)}_$variableIndex"
             val providerSelection = candidate.provider.withResponseAliases(variableName)
             val sharedOccurrence =
                 fragments.argumentOccurrences()
@@ -1876,21 +1616,21 @@ private class RegistryGenerator(
                     }.shuffled(random)
                     .firstOrNull { locatedOccurrence ->
                         val orderedAfterProvider =
-                            if (locatedOccurrence.location == FragmentLocation.OBJECT) {
+                            if (locatedOccurrence.location != providerLocation) {
                                 true
                             } else {
                                 val useBranch =
-                                    fragments.queryFragment.selections[
+                                    fragments.fragment(providerLocation).selections[
                                         locatedOccurrence.occurrence.selectionPath.first()
                                     ]
-                                structuralBranchRank("Query", providerSelection, ranks) <
-                                    structuralBranchRank("Query", useBranch, ranks)
+                                structuralBranchRank(providerOwnerName, providerSelection, ranks) <
+                                    structuralBranchRank(providerOwnerName, useBranch, ranks)
                             }
                         orderedAfterProvider &&
                             locatedOccurrence.occurrence.selectionPath.size in
                             config[ResolverFromFieldVariableUseDepth] &&
                             locatedOccurrence.occurrence.target?.let { target ->
-                                providerSelection.isCompatibleProviderFor("Query", target)
+                                providerSelection.isCompatibleProviderFor(providerOwnerName, target)
                             } == true
                     }
             val replacedOccurrences =
@@ -1907,12 +1647,9 @@ private class RegistryGenerator(
                     variableProviders.withIndex().mapNotNull { indexed ->
                         val matches =
                             when (val provider = indexed.value) {
-                                is FromObjectFieldVariableProviderPlan ->
-                                    locatedOccurrence.location == FragmentLocation.OBJECT &&
-                                        provider.owner == consumer &&
-                                        provider.selection == oldSelection
-                                is FromQueryFieldVariableProviderPlan ->
-                                    locatedOccurrence.location == FragmentLocation.QUERY &&
+                                is FromFieldVariableProviderPlan ->
+                                    locatedOccurrence.location ==
+                                        provider.providerFragment.location() &&
                                         provider.owner == consumer &&
                                         provider.selection == oldSelection
                                 is FromArgumentVariableProviderPlan -> false
@@ -1927,26 +1664,24 @@ private class RegistryGenerator(
                     }
                 }.distinctBy { dependent -> dependent.first }
             variableProviders +=
-                FromQueryFieldVariableProviderPlan(
+                FromFieldVariableProviderPlan(
                     owner = consumer,
                     variableName = variableName,
+                    providerFragment = providerFragment,
                     selection = providerSelection,
                     nestedInput = candidate.occurrence.valuePath.isNotEmpty(),
                     listValue = candidate.occurrence.target is ListVariableTarget,
                     nullable = candidate.occurrence.target?.nullable == true,
-                    abstractPath = candidate.provider.hasAbstractPath("Query"),
+                    abstractPath = candidate.provider.hasAbstractPath(providerOwnerName),
                     useDepth = candidate.occurrence.selectionPath.size,
                     topLevelUseField =
                         fragments.fragment(candidate.location).topLevelField(candidate.occurrence),
                     literalConvergence = literalConvergence,
                 )
             var updated =
-                fragments.copy(
-                    queryFragment =
-                        fragments.queryFragment.copy(
-                            selections = fragments.queryFragment.selections + providerSelection,
-                        ),
-                ).replaceArgument(
+                fragments
+                    .appendSelection(providerLocation, providerSelection)
+                    .replaceArgument(
                     location = candidate.location,
                     occurrence = candidate.occurrence,
                     variableName = variableName,
@@ -1965,9 +1700,7 @@ private class RegistryGenerator(
                 val selection = updated.fragment(location).selections[selectionIndex]
                 variableProviders[index] =
                     when (val provider = variableProviders[index]) {
-                        is FromObjectFieldVariableProviderPlan ->
-                            provider.copy(selection = selection)
-                        is FromQueryFieldVariableProviderPlan ->
+                        is FromFieldVariableProviderPlan ->
                             provider.copy(selection = selection)
                         is FromArgumentVariableProviderPlan -> provider
                     }
@@ -2439,18 +2172,18 @@ private enum class FragmentLocation {
     QUERY,
 }
 
+private fun ProviderFragment.location(): FragmentLocation =
+    when (this) {
+        ProviderFragment.OBJECT -> FragmentLocation.OBJECT
+        ProviderFragment.QUERY -> FragmentLocation.QUERY
+    }
+
 private data class LocatedArgumentOccurrence(
     val location: FragmentLocation,
     val occurrence: ArgumentOccurrence,
 )
 
-private data class FromObjectFieldCandidate(
-    val location: FragmentLocation,
-    val occurrence: ArgumentOccurrence,
-    val provider: FragmentSelectionPlan,
-)
-
-private data class FromQueryFieldCandidate(
+private data class FromFieldCandidate(
     val location: FragmentLocation,
     val occurrence: ArgumentOccurrence,
     val provider: FragmentSelectionPlan,
@@ -2823,6 +2556,12 @@ internal sealed interface VariableProviderPlan {
     val literalConvergence: Boolean
 }
 
+private fun Iterable<VariableProviderPlan>.fromField(
+    providerFragment: ProviderFragment,
+): List<FromFieldVariableProviderPlan> =
+    filterIsInstance<FromFieldVariableProviderPlan>()
+        .filter { provider -> provider.providerFragment == providerFragment }
+
 internal data class FromArgumentVariableProviderPlan(
     override val owner: FieldCoordinate,
     override val variableName: String,
@@ -2838,9 +2577,10 @@ internal data class FromArgumentVariableProviderPlan(
         get() = listOf(argumentName) + inputPath
 }
 
-internal data class FromObjectFieldVariableProviderPlan(
+internal data class FromFieldVariableProviderPlan(
     override val owner: FieldCoordinate,
     override val variableName: String,
+    val providerFragment: ProviderFragment,
     val selection: FragmentSelectionPlan,
     override val nestedInput: Boolean,
     override val listValue: Boolean,
@@ -2851,7 +2591,13 @@ internal data class FromObjectFieldVariableProviderPlan(
     override val literalConvergence: Boolean,
 ) : VariableProviderPlan {
     fun source(): String =
-        FragmentPlan(owner.typeName, listOf(selection)).source()
+        FragmentPlan(providerOwnerName(), listOf(selection)).source()
+
+    fun providerOwnerName(): String =
+        when (providerFragment) {
+            ProviderFragment.OBJECT -> owner.typeName
+            ProviderFragment.QUERY -> "Query"
+        }
 
     fun responsePath(): List<String> =
         buildList {
@@ -2861,34 +2607,33 @@ internal data class FromObjectFieldVariableProviderPlan(
                 if (current.subselections.isEmpty()) break
                 current = current.subselections.single()
             }
-        }
+    }
 }
 
-internal data class FromQueryFieldVariableProviderPlan(
-    override val owner: FieldCoordinate,
-    override val variableName: String,
-    val selection: FragmentSelectionPlan,
-    override val nestedInput: Boolean,
-    override val listValue: Boolean,
-    override val nullable: Boolean,
-    val abstractPath: Boolean,
-    val useDepth: Int,
-    val topLevelUseField: FieldCoordinate,
-    override val literalConvergence: Boolean,
-) : VariableProviderPlan {
-    fun source(): String =
-        FragmentPlan("Query", listOf(selection)).source()
+private data class GeneratedFromFieldFeatures(
+    val variableCount: Int,
+    val literalVariableConvergenceCount: Int,
+    val passiveTopLevelVariableUseCount: Int,
+    val providerArgumentVariableCount: Int,
+    val maximumPathLength: Int,
+    val maximumVariableUseDepth: Int,
+    val hasAbstractProviderPath: Boolean,
+)
 
-    fun responsePath(): List<String> =
-        buildList {
-            var current = selection
-            while (true) {
-                add(current.alias ?: current.fieldName)
-                if (current.subselections.isEmpty()) break
-                current = current.subselections.single()
-            }
-        }
-}
+private fun List<FromFieldVariableProviderPlan>.features(
+    fieldSites: Set<FieldCoordinate>,
+): GeneratedFromFieldFeatures =
+    GeneratedFromFieldFeatures(
+        variableCount = size,
+        literalVariableConvergenceCount = count(VariableProviderPlan::literalConvergence),
+        passiveTopLevelVariableUseCount =
+            count { provider -> provider.topLevelUseField !in fieldSites },
+        providerArgumentVariableCount =
+            count { provider -> provider.providerArgumentVariableNames().isNotEmpty() },
+        maximumPathLength = maxOfOrNull { provider -> provider.responsePath().size } ?: 0,
+        maximumVariableUseDepth = maxOfOrNull(FromFieldVariableProviderPlan::useDepth) ?: 0,
+        hasAbstractProviderPath = any(FromFieldVariableProviderPlan::abstractPath),
+    )
 
 private enum class ProviderIntermediateOutcome {
     NONE,
@@ -2896,10 +2641,10 @@ private enum class ProviderIntermediateOutcome {
     ERROR,
 }
 
-private fun FromObjectFieldVariableProviderPlan.intermediateOutcome(
+private fun FromFieldVariableProviderPlan.intermediateOutcome(
     fieldValues: Map<FieldCoordinate, ValuePlan>,
 ): ProviderIntermediateOutcome {
-    var ownerName = owner.typeName
+    var ownerName = providerOwnerName()
     var containingObjectPlan: ObjectPlan? = null
     var current = selection
     while (current.subselections.isNotEmpty()) {
@@ -3169,10 +2914,7 @@ private fun InputValuePlan.variableTargets(variableName: String): List<VariableT
         -> emptyList()
     }
 
-private fun FromObjectFieldVariableProviderPlan.providerArgumentVariableNames(): Set<String> =
-    selection.pathArgumentVariableNames()
-
-private fun FromQueryFieldVariableProviderPlan.providerArgumentVariableNames(): Set<String> =
+private fun FromFieldVariableProviderPlan.providerArgumentVariableNames(): Set<String> =
     selection.pathArgumentVariableNames()
 
 private fun FragmentSelectionPlan.pathArgumentVariableNames(): Set<String> =

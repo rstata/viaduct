@@ -668,7 +668,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{ obj { x } }").assertJson("{data: {obj: {x: 30}}}")
         }
 
-    @Disabled("TODO: QueryRss Mutation")
+    @Disabled("TODO: Mutation")
     @Test
     fun `from query field -- simple mutation field`() =
         EngineTestModule(

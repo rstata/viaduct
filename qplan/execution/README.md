@@ -93,7 +93,7 @@ The adapter rejects or does not yet model:
 - Arbitrary callback variable providers and from-field providers whose erased production representation ambiguously matches both resolver fragments.
 - Batched or selective field and node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
-- Checker and type-checker executors.
+- Checker and type-checker executors, including their object- and Query-rooted required selections.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
 
 The test-only adapter uses `runBlocking` to cross the suspend executor SPI. That is acceptable for this synchronous feature-test surface and is not a proposed production scheduling design.

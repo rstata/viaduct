@@ -364,7 +364,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective QueryRss")
+    @Disabled("TODO: Selective")
     @Test
     fun `selective field executes separately for client and resolver rss shapes`() {
         val detailsCount = AtomicInteger()
@@ -1183,7 +1183,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: Abstract QueryRss VarCallbk Directive MechAdapt")
+    @Disabled("TODO: Abstract VarCallbk Directive MechAdapt")
     @Test
     fun `required selection with impossible sibling implementation dependency can be resolved`() {
         // Foo.x has an object RSS rooted at Foo. The outer `... on Node` branch can match Foo,
@@ -1332,7 +1332,7 @@ class RequiredSelectionsTest {
         assertEquals(1, bInAPlanChildPlanCount.get())
     }
 
-    @Disabled("TODO: Selective QueryRss AccessChk")
+    @Disabled("TODO: Selective AccessChk")
     @Test
     fun `selective query field resolves matching resolver and checker selections independently`() {
         val detailsCount = AtomicInteger()
@@ -2290,7 +2290,7 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"result": "No value provided"}}""")
         }
 
-    @Disabled("TODO: QueryRss Mutation")
+    @Disabled("TODO: Mutation")
     @Test
     fun `resolve mutation with queryValueFragment`() =
         EngineTestModule("extend type Query { string1: String } extend type Mutation { string1: String }") {
@@ -2461,7 +2461,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: QueryRss VarCallbk Directive")
+    @Disabled("TODO: VarCallbk Directive")
     @Test
     fun `query rss variable resolver is planned when repeated fragment spread has runtime directive`() {
         // Query.a has a query RSS that spreads the same fragment twice: once behind a runtime
@@ -2508,7 +2508,7 @@ class RequiredSelectionsTest {
      * must not fire when the runtime type is Foo, not Bar. Before the fix, Bar.value's checker
      * could leak into resolution of Foo.value because isRootType permitted any root-type parent.
      */
-    @Disabled("TODO: AccessChk QueryRss Abstract")
+    @Disabled("TODO: AccessChk Abstract")
     @Test
     fun `field-level checker RSS rooted on Query does not leak into sibling interface implementor`() {
         val sdl = """

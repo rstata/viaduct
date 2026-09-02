@@ -9,7 +9,7 @@ context(world: Assumptions)
 fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
-`correctResolution` judges a completed primary Query OER extensionally. When a field resolver declares a nonempty Query-rooted fragment, the judgment also requires the independently resolved Query OER stored for that exact resolver occurrence to be correct and uses its materialized value when re-evaluating the resolver relation. It does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests.
+`correctResolution` judges the value slots of a completed primary Query OER extensionally. When a field resolver declares a nonempty Query-rooted fragment, the judgment also requires the independently resolved Query OER stored for that exact resolver occurrence to be correct and uses its materialized value when re-evaluating the resolver relation. Access-result slots are deliberately outside this judgment: access checks are future qplan work, and maintained resolver versions are not currently required to publish or agree on those slots even though some versions populate them with `true`. It also does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests.
 
 ## Vocabulary
 

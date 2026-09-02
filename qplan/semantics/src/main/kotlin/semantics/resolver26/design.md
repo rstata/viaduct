@@ -80,7 +80,7 @@ Parent publication does not wait for descendant orchestration to finish. Readers
 
 Query fragments reuse the defining resolver occurrence's variable bindings, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. A Query-only `FromArgument` use binds directly from the owning resolver arguments, while a binding already established for an object-fragment use is reused without a second write. A Query-fragment `FromObjectField` use awaits the binding produced by its provider path in the object fragment. Resolver26 does not yet produce bindings from Query-fragment paths; that is the planned near-term `FromQueryField` feature described by the shared [variable production and consumption model](../../../../../README.md#variable-production-and-consumption). Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path.
 
-Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once.
+Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not publish access-result slots: access-check execution and its validation are future work, and the `true` access results written by some earlier resolver experiments are not part of the current resolver contract.
 
 ## Successor Demand
 

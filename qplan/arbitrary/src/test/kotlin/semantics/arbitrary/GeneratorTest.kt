@@ -5,6 +5,7 @@ import model.Assumptions
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
+import model.registry.ProviderFragment
 import model.engineObjectDataOf
 import model.objectOf
 import model.outputType
@@ -678,7 +679,10 @@ class GeneratorTest {
             val registry = schema.registry(config).next(random)
 
             registry.variableProviders
-                .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                .filterIsInstance<FromFieldVariableProviderPlan>()
+                .filter { provider ->
+                    provider.providerFragment == ProviderFragment.OBJECT
+                }
                 .forEach { provider ->
                     assertTrue(
                         provider.selection in
@@ -752,7 +756,10 @@ class GeneratorTest {
             val registry = schema.registry(config).next(random)
             val providers =
                 registry.variableProviders
-                    .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                    .filterIsInstance<FromFieldVariableProviderPlan>()
+                    .filter { provider ->
+                        provider.providerFragment == ProviderFragment.OBJECT
+                    }
 
             generatedVariables += providers.size
             assertTrue(providers.all { provider -> provider.responsePath().size in 1..3 })
@@ -788,7 +795,8 @@ class GeneratorTest {
             assertEquals(0, registry.features.fromQueryFieldVariableCount)
             assertTrue(
                 registry.variableProviders.none {
-                    it is FromQueryFieldVariableProviderPlan
+                    it is FromFieldVariableProviderPlan &&
+                        it.providerFragment == ProviderFragment.QUERY
                 },
             )
         }
@@ -824,7 +832,10 @@ class GeneratorTest {
             val registry = schema.registry(config).next(random)
             val providers =
                 registry.variableProviders
-                    .filterIsInstance<FromQueryFieldVariableProviderPlan>()
+                    .filterIsInstance<FromFieldVariableProviderPlan>()
+                    .filter { provider ->
+                        provider.providerFragment == ProviderFragment.QUERY
+                    }
 
             registry.world(schema)
             generatedVariables += providers.size
@@ -862,7 +873,10 @@ class GeneratorTest {
             val registry = schema.registry(config).next(random)
             val providers =
                 registry.variableProviders
-                    .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                    .filterIsInstance<FromFieldVariableProviderPlan>()
+                    .filter { provider ->
+                        provider.providerFragment == ProviderFragment.OBJECT
+                    }
 
             generatedVariables += providers.size
             assertTrue(providers.all { provider -> provider.owner.typeName != "Query" })

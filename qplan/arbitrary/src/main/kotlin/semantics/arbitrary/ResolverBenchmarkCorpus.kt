@@ -8,6 +8,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import graphql.language.StringValue
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
+import model.registry.ProviderFragment
 import model.testing.TestWorld
 import kotlin.random.Random
 
@@ -551,9 +552,7 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
             variableProviders
                 .mapNotNull { provider ->
                     when (provider) {
-                        is FromObjectFieldVariableProviderPlan ->
-                            provider.variableName to provider.source()
-                        is FromQueryFieldVariableProviderPlan ->
+                        is FromFieldVariableProviderPlan ->
                             provider.variableName to provider.source()
                         is FromArgumentVariableProviderPlan -> null
                     }
@@ -848,24 +847,13 @@ private fun VariableProviderPlan.toDocument(): VariableProviderDocument =
                 argumentPath = argumentPath,
                 nullableTraversal = nullableTraversal,
             )
-        is FromObjectFieldVariableProviderPlan ->
+        is FromFieldVariableProviderPlan ->
             VariableProviderDocument(
-                kind = "from-object-field",
-                owner = owner.toDocument(),
-                variableName = variableName,
-                argumentName = null,
-                selection = selection.toDocument(),
-                nestedInput = nestedInput,
-                listValue = listValue,
-                nullable = nullable,
-                abstractPath = abstractPath,
-                useDepth = useDepth,
-                topLevelUseField = topLevelUseField.toDocument(),
-                literalConvergence = literalConvergence,
-            )
-        is FromQueryFieldVariableProviderPlan ->
-            VariableProviderDocument(
-                kind = "from-query-field",
+                kind =
+                    when (providerFragment) {
+                        ProviderFragment.OBJECT -> "from-object-field"
+                        ProviderFragment.QUERY -> "from-query-field"
+                    },
                 owner = owner.toDocument(),
                 variableName = variableName,
                 argumentName = null,
@@ -895,9 +883,10 @@ private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderP
                 literalConvergence = literalConvergence,
             )
         "from-object-field" ->
-            FromObjectFieldVariableProviderPlan(
+            FromFieldVariableProviderPlan(
                 owner = owner.toCoordinate(),
                 variableName = variableName,
+                providerFragment = ProviderFragment.OBJECT,
                 selection = requireNotNull(selection).toFragmentSelectionPlan(),
                 nestedInput = nestedInput,
                 listValue = listValue,
@@ -908,9 +897,10 @@ private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderP
                 literalConvergence = literalConvergence,
             )
         "from-query-field" ->
-            FromQueryFieldVariableProviderPlan(
+            FromFieldVariableProviderPlan(
                 owner = owner.toCoordinate(),
                 variableName = variableName,
+                providerFragment = ProviderFragment.QUERY,
                 selection = requireNotNull(selection).toFragmentSelectionPlan(),
                 nestedInput = nestedInput,
                 listValue = listValue,

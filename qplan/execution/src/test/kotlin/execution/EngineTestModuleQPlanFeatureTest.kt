@@ -7,6 +7,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.MockFieldBatchResolverExecutor
+import viaduct.engine.api.mocks.MockFieldUnbatchedResolverExecutor
 import viaduct.engine.api.mocks.createEngineObjectData
 
 class EngineTestModuleQPlanFeatureTest {
@@ -56,6 +57,40 @@ class EngineTestModuleQPlanFeatureTest {
         }.runQPlanFeatureTest {
             runQuery("{ total }").assertJson("{data: {total: 9}}")
         }
+    }
+
+    @Test
+    fun `passes qplan output demand to selective field executors`() {
+        var requestedFields: Set<String>? = null
+        EngineTestModule(
+            """
+            extend type Query { viewer: User! }
+            type User { name: String!, age: Int! }
+            """.trimIndent(),
+        ) {
+            field("Query" to "viewer") {
+                resolverExecutor {
+                    MockFieldUnbatchedResolverExecutor(
+                        isSelective = true,
+                        resolverId = resolverId,
+                        unbatchedResolveFn = { _, _, _, selections, _ ->
+                            requestedFields =
+                                requireNotNull(selections)
+                                    .selections()
+                                    .mapTo(linkedSetOf()) { it.fieldName }
+                            createEngineObjectData(
+                                requireNotNull(schema.schema.getObjectType("User")),
+                                mapOf("name" to "Ada"),
+                            )
+                        },
+                    )
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ viewer { name } }").assertJson("{data: {viewer: {name: \"Ada\"}}}")
+        }
+
+        assertEquals(setOf("name"), requestedFields)
     }
 
     @Test

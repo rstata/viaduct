@@ -189,7 +189,7 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"foo": 6}}""")
         }
 
-    @Disabled("TODO: Selective Directive MechAdapt")
+    @Disabled("TODO: Directive MechAdapt")
     @Test
     fun `child RSS keeps pruned fragments separate from operation fragments`() {
         val module = EngineTestModule(
@@ -319,7 +319,6 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: Selective")
     @Test
     fun `selective field executes once for a single selection shape`() {
         val detailsCount = AtomicInteger()
@@ -364,7 +363,6 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective")
     @Test
     fun `selective field executes separately for client and resolver rss shapes`() {
         val detailsCount = AtomicInteger()
@@ -417,7 +415,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective")
+    @Disabled("TODO: SelSem")
     @Test
     fun `selective required selection is resolved independently from client query selection`() {
         val detailsCount = AtomicInteger()
@@ -905,7 +903,7 @@ class RequiredSelectionsTest {
         assertEquals(1, companyNameCount.get())
     }
 
-    @Disabled("TODO: Selective MechAdapt ErrorData")
+    @Disabled("TODO: MechAdapt ErrorData")
     @Test
     fun `plain OER keys cause required selections to reuse client selection shape`() {
         val detailsCount = AtomicInteger()
@@ -978,7 +976,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective")
+    @Disabled("TODO: SelSem")
     @Test
     fun `non-selective required selection is shared across client query and dependency selections`() {
         val detailsCount = AtomicInteger()
@@ -1035,7 +1033,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective")
+    @Disabled("TODO: SelSem")
     @Test
     fun `selective required selection is resolved independently across resolver rss variants`() {
         val detailsCount = AtomicInteger()
@@ -1332,7 +1330,7 @@ class RequiredSelectionsTest {
         assertEquals(1, bInAPlanChildPlanCount.get())
     }
 
-    @Disabled("TODO: Selective AccessChk")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `selective query field resolves matching resolver and checker selections independently`() {
         val detailsCount = AtomicInteger()
@@ -1407,7 +1405,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective AccessChk")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `selective required selection resolves resolver and type checker selections independently`() {
         val detailsCount = AtomicInteger()
@@ -1481,7 +1479,6 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("TODO: Selective Abstract")
     @Test
     fun `selective required selection through interface inline fragment uses concrete runtime type`() {
         val detailsCount = AtomicInteger()
@@ -1545,7 +1542,6 @@ class RequiredSelectionsTest {
         assertEquals(1, detailsCount.get())
     }
 
-    @Disabled("TODO: Selective")
     @Test
     fun `descendant fields of a selective resolver are not keyed selectively`() {
         EngineTestModule(
@@ -1717,7 +1713,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: Selective")
+    @Disabled("TODO: SelSem")
     @Test
     fun `proxy engine object data reads required selections through two nested client and rss merges`() {
         val outerCount = AtomicInteger()
@@ -1810,7 +1806,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), innerSelections)
     }
 
-    @Disabled("TODO: Selective Abstract VarCallbk")
+    @Disabled("TODO: Abstract VarCallbk")
     @Test
     fun `variable resolver rss reads through multiple selective fields including abstract hop`() {
         val middleCount = AtomicInteger()

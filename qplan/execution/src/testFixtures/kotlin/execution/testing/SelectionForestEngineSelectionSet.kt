@@ -83,17 +83,29 @@ private fun Selection.toField(
     concreteType: QPlanSchema.Object,
     schema: EngineSchema,
 ): Field {
-    val fieldName = key.field.name
-    val sourceField =
-        schema.schema.getFieldDefinition((concreteType.name to fieldName).gj)
-            ?: throw IllegalArgumentException(
-                "Qplan field ${concreteType.name}.$fieldName is absent from the Engine schema",
-            )
+    val loweredFieldName = key.field.name
+    val fieldName =
+        if (loweredFieldName == LOWERED_TYPENAME_FIELD) {
+            "__typename"
+        } else {
+            loweredFieldName
+        }
     val arguments =
         key.arguments as? Arguments.Resolved
             ?: throw IllegalArgumentException(
                 "EngineSelectionSet demand requires resolved arguments for " +
-                    "${key.field.containingDef.name}.$fieldName",
+                    "${key.field.containingDef.name}.$loweredFieldName",
+            )
+    if (fieldName == "__typename") {
+        require(arguments.fieldValues.isEmpty()) {
+            "Lowered __typename demand must be argumentless"
+        }
+        return Field.newField(fieldName).build()
+    }
+    val sourceField =
+        schema.schema.getFieldDefinition((concreteType.name to fieldName).gj)
+            ?: throw IllegalArgumentException(
+                "Qplan field ${concreteType.name}.$fieldName is absent from the Engine schema",
             )
     val field =
         Field.newField(fieldName)
@@ -125,3 +137,5 @@ private fun Selection.toField(
     }
     return field.build()
 }
+
+private const val LOWERED_TYPENAME_FIELD = "V_A_typename"

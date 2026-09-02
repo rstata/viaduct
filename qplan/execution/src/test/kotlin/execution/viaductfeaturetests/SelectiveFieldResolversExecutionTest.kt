@@ -6,7 +6,7 @@ package execution.viaductfeaturetests
 // Copied 63 out of 65 current tests as of 2026-09-01; one removed source test remains pending cleanup
 
 import execution.testing.QPlanFeatureTest
-import execution.testing.runQPlanFeatureTest
+import execution.testing.runQPlanFeatureTest as runWithQPlan
 
 import graphql.GraphQLError
 import graphql.execution.DataFetcherResult
@@ -79,7 +79,6 @@ import viaduct.service.api.spi.mocks.MockFlagManager
 class SelectiveFieldResolversExecutionTest {
     @Nested
     inner class BasicExecutionTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `selective resolver is run once for simple queries`() {
             val fooCalls = AtomicInteger()
@@ -110,7 +109,6 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `nested typename is available when selective resolver omits it`() {
             MockTenantModuleBootstrapper(
@@ -140,7 +138,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `multiple query selections on selective field`() {
             MockTenantModuleBootstrapper(
@@ -175,7 +172,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `field selectivity provider enables selective execution`() {
             MockTenantModuleBootstrapper(
@@ -240,7 +237,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -253,7 +250,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ParentFields {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: ParentFld")
         @Test
         fun `selective child object can read its non-selective parent`() {
             MockTenantModuleBootstrapper(
@@ -297,7 +294,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: ParentFld")
         @Test
         fun `parent traversal resolves a selective child field`() {
             MockTenantModuleBootstrapper(
@@ -359,7 +356,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: ParentFld")
         @Test
         fun `non-selective resolver restores parent traversal below selective ancestor`() {
             MockTenantModuleBootstrapper(
@@ -415,7 +412,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class RssTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `selective field skipped in query is selected in RSS`() {
             // This creates two planned executions of Foo.x:
@@ -484,7 +481,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `statically skipped fragment spread does not shadow spreads of the same fragment`() {
             // The first Frag spread is statically skipped and creates a stub fragment definition.
@@ -521,7 +518,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `selective field is skipped in RSS but selected in query`() {
             // This creates two planned executions of Query.a:
@@ -596,7 +593,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `selective field is selected in one RSS but in a skipped fragment in another RSS`() {
             // Query.b's object RSS fetches `foo.y` before `foo.x`. Resolving `foo.y` first exercises
@@ -708,7 +705,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class CoverageTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `covered nested rss reuses selective source`() {
             val fooCalls = AtomicInteger()
@@ -756,7 +752,6 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `returned nested rss coverage reuses selective source`() {
             val fooCalls = AtomicInteger()
@@ -800,7 +795,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `surplus coverage uses values from the first covering result`() {
             val resultNumber = AtomicInteger()
@@ -861,7 +856,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `missing nested rss coverage rematerializes selective source`() {
             val fooCalls = AtomicInteger()
@@ -911,7 +906,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(2, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `fully skipped selective field still resolves rss reads`() {
             // The client selects the selective field `foo` with a single aliased selection that a
@@ -997,7 +992,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `one-level nested rss rematerializes selective parent`() {
             MockTenantModuleBootstrapper(
@@ -1042,7 +1036,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class RecursiveTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `recursive rss is materialized`() {
             MockTenantModuleBootstrapper(
@@ -1097,7 +1090,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `recursive selective batching field supplies its own rss`() {
             MockTenantModuleBootstrapper(
@@ -1145,7 +1138,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -1158,7 +1151,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ListTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `selective resolver materializes list items`() {
             MockTenantModuleBootstrapper(
@@ -1203,7 +1195,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `selective resolver materializes nested list items`() {
             MockTenantModuleBootstrapper(
@@ -1255,7 +1246,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `partial rss coverage within a list item type rematerializes every item of that type`() {
             MockTenantModuleBootstrapper(
@@ -1306,7 +1296,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem Abstract")
         @Test
         fun `partial rss coverage across list item types rematerializes only uncovered types`() {
             MockTenantModuleBootstrapper(
@@ -1368,7 +1358,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `null list items remain null while siblings rematerialize`() {
             MockTenantModuleBootstrapper(
@@ -1420,7 +1409,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `list size changes across materializations leave unmatched items unresolved`() {
             MockTenantModuleBootstrapper(
@@ -1482,7 +1471,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `nested list item type changes across materializations report a field error`() {
             MockTenantModuleBootstrapper(
@@ -1548,7 +1537,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -1561,7 +1550,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class AbstractTypeTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `concrete field resolves after typename`() {
             MockTenantModuleBootstrapper(
@@ -1604,7 +1592,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -1619,7 +1607,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class VariablesTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `materialization preserves client directive variables`() {
             MockTenantModuleBootstrapper(
@@ -1678,7 +1666,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `selective field inputs survive rematerialization`() {
             var initialRequestContext: Any? = null
@@ -1738,7 +1725,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `rss aliases with different arguments remain isolated across materializations`() {
             MockTenantModuleBootstrapper(
@@ -1790,7 +1777,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: VarCallbk ErrorData")
         @Test
         fun `rss variables resolver failure during rematerialization reports a field error`() {
             MockTenantModuleBootstrapper(
@@ -1845,7 +1832,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `variable rss does not use skipped child object plan`() {
             // Query.b has a runtime-dependent object RSS field whose variable resolver needs
@@ -1939,7 +1926,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `embedded materialization preserves ancestor argument variables across child plans`() {
             MockTenantModuleBootstrapper(
@@ -1991,7 +1978,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: VarCallbk")
         @Test
         fun `selective-owned sibling supplies required rss variable`() {
             MockTenantModuleBootstrapper(
@@ -2045,7 +2032,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: VarCallbk")
         @Test
         fun `embedded materialization preserves fragment argument variables across child plans`() {
             MockTenantModuleBootstrapper(
@@ -2115,7 +2102,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -2130,7 +2117,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class BatchedTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `batched selective field resolver batches distinct rematerialization shapes`() {
             val batches = mutableListOf<List<Pair<Int, Set<String>>>>()
@@ -2221,7 +2208,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -2235,7 +2222,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ConsistencyTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `null rematerialization reports a field error at nullable consumer`() {
             MockTenantModuleBootstrapper(
@@ -2294,7 +2281,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `null rematerialization bubbles through non-null consumer`() {
             MockTenantModuleBootstrapper(
@@ -2351,7 +2338,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `initially null selective result is not rematerialized`() {
             val fooCalls = AtomicInteger()
@@ -2389,7 +2375,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `type changes across root materializations report a field error`() {
             MockTenantModuleBootstrapper(
@@ -2445,7 +2431,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `type changes across nested object materializations report a field error`() {
             MockTenantModuleBootstrapper(
@@ -2512,7 +2498,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `malformed nested object from rematerialization reports a field error`() {
             MockTenantModuleBootstrapper(
@@ -2570,7 +2556,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `resolver exceptions during rematerialization report a field error`() {
             MockTenantModuleBootstrapper(
@@ -2622,7 +2608,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ResultMetadataTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: ErrorData")
         @Test
         fun `errors returned during materialization are included in the response`() {
             val initialFooCall = AtomicBoolean(true)
@@ -2675,7 +2661,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: ErrorData")
         @Test
         fun `selective resolver rematerializes DataFetcherResult list items`() {
             MockTenantModuleBootstrapper(
@@ -2724,7 +2710,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class InstrumentationTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `mat backed traversal keeps the selective resolver result as its source`() {
             val instrumentation = RecordingInstrumentation()
@@ -2758,7 +2744,7 @@ class SelectiveFieldResolversExecutionTest {
             assertSame(selectiveSource, xEnvironment.getSource<EngineObjectData>())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `selective field resolver materialization invokes field fetching instrumentation`() {
             val instrumentation = RecordingInstrumentation()
@@ -2820,7 +2806,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class CheckerTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `selective field materialization reuses field checker`() {
             val fooCheckerCalls = AtomicInteger()
@@ -2872,7 +2858,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(2, fooResolverCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `field checker failure after selective materialization is reported`() {
             val fooCheckerCalls = AtomicInteger()
@@ -2931,7 +2917,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(2, fooResolverCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `selective field resolver materialization does not repeat type checker`() {
             val fooCheckerCalls = AtomicInteger()
@@ -2983,7 +2969,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCheckerCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker failure after selective materialization is reported`() {
             MockTenantModuleBootstrapper(
@@ -3031,7 +3017,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker reads multiple fields from selective source`() {
             val fooCalls = AtomicInteger()
@@ -3077,7 +3063,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCheckerCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker aliases field from selective list`() {
             val barCheckerCalls = AtomicInteger()
@@ -3129,7 +3115,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(2, barCheckerCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `field checker reads its selective field`() {
             val checkedY = AtomicInteger()
@@ -3182,7 +3168,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(2, fooResolverCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker reads conditional field from selective source`() {
             MockTenantModuleBootstrapper(
@@ -3244,7 +3230,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker query rss does not rematerialize selective field recursively`() {
             MockTenantModuleBootstrapper(
@@ -3290,7 +3276,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk MechAdapt")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -3304,7 +3290,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class SelectionSetTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `rss selects sibling fields on selective object`() {
             MockTenantModuleBootstrapper(
@@ -3344,7 +3329,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `aliased rss reads materialized value by schema field name`() {
             MockTenantModuleBootstrapper(
@@ -3384,7 +3368,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem Abstract")
         @Test
         fun `materialization output selections preserve path-specific concrete ownership`() {
             var materializationSelections: EngineSelectionSet? = null
@@ -3476,7 +3460,7 @@ class SelectiveFieldResolversExecutionTest {
             )
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Directive")
         @Test
         fun `materialization preserves resolver selection directives`() {
             MockTenantModuleBootstrapper(
@@ -3517,7 +3501,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `resolver does not hydrate a selected field in its output selection set`() {
             val initialFooCall = AtomicBoolean(true)
@@ -3557,7 +3541,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `resolver hydrates unselected fields in its output selection set`() {
             val initialFooCall = AtomicBoolean(true)
@@ -3595,7 +3578,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `client and rss arguments remain isolated in output selection set`() {
             MockTenantModuleBootstrapper(
@@ -3636,7 +3619,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: SelSem")
         @Test
         fun `resolver hydrates unselected fields outside its output selection set`() {
             MockTenantModuleBootstrapper(
@@ -3676,7 +3659,10 @@ class SelectiveFieldResolversExecutionTest {
         engineConfig: EngineConfiguration = EngineConfiguration.featureTestDefault,
         block: QPlanFeatureTest.() -> Unit,
     ) {
-        TODO("Qplan feature tests do not support custom engine configuration or MAT-only flags yet")
+        if (engineConfig != EngineConfiguration.featureTestDefault) {
+            TODO("Qplan feature tests do not support custom engine configuration yet")
+        }
+        runWithQPlan(block = block)
     }
 
     /** Helper class for managing deep Arb tests */

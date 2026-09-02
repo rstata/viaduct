@@ -99,6 +99,28 @@ class SelectionForestEngineSelectionSetTest {
         assertTrue(selections.requestsType("Beta"))
     }
 
+    @Test
+    fun `restores lowered typename demand to the source meta field`() {
+        val fixture = Fixture(ABSTRACT_SCHEMA)
+        val fragment =
+            fixture.world.schema.fragmentFrom(
+                """
+                fragment _ on Item {
+                  __typename
+                }
+                """.trimIndent(),
+            )
+
+        val selections =
+            fragment.subselections.toEngineSelectionSet(
+                type = fragment.nominalType,
+                schema = fixture.engineSchema,
+            )
+
+        assertTrue(selections.containsField("Alpha", "__typename"))
+        assertTrue(selections.containsField("Beta", "__typename"))
+    }
+
     private class Fixture(schemaSDL: String) {
         val world = TestWorld.fromSDL(schemaSDL)
         val engineSchema = createSchema(schemaSDL.replaceFirst("type Query", "extend type Query"))

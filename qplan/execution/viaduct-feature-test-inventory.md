@@ -46,22 +46,24 @@ The following source files are intentionally not copied because every test in ea
 - **Execution:** `TestWorld` fills missing nullable Query fields with null producers and missing non-null Query fields with error producers. Node lowering treats the fringe ID as authoritative when composing raw lookup data, matching production's `NodeEngineObjectDataImpl`; the lookup payload need not repeat it. Seven node tests currently pass through qplan; six remain disabled.
 - **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
 - **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.
+- **Selective fields:** The executor adapter now passes converted Resolver26 demand to selective field executors. Seventeen of the 71 formerly `Selective`-only cases in `SelectiveFieldResolversExecutionTest.kt` and three of the seven such cases in `RequiredSelectionsTest.kt` now pass unchanged. The remaining cases have been reclassified by their actual blocker. `SelSem` marks unresolved Resolver26/production differences in selective coverage, argument-shape isolation, concrete applicability, key coalescing, or handling of outputs outside qplan's resolver-perfect relation.
 - `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` tests memoization across the primary operation and an independently rooted resolver Query fragment. Qplan will not support memoizing query-fragment OERs across resolver roots, so the test is N/A rather than an intentional behavior alternative.
 - `FromFieldVariablesFeatureTest.kt`'s source-success case `from arg -- path traverses nested input` remains unchanged and disabled; adapter rejection coverage belongs in a separate qplan-specific test.
 - `OperationValidationTest.kt` is not a Resolver26 candidate. Its invalid operations are rejected before `QPlanExecutionStrategy`, while its valid case only executes two independent constant root fields.
 
 ## Grouped Blocker Counts
 
-Counts overlap because one test may be blocked by more than one requirement. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two intentional incompatibilities whose specific prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker.
+Counts overlap because one test may be blocked by more than one requirement. They cover the eleven synchronized ports and exclude the two incomplete ports listed above. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two intentional incompatibilities whose specific prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker.
 
 | Group | Count | Label |
 | --- | ---: | --- |
-| Selective executors / requested selections | 13 | `Selective` |
+| |
+| Selective resolution semantics | 4 | `SelSem` |
 | Parent-field semantics | 7 | `ParentFld` |
 | Checkers / access checks | 8 | `AccessChk` |
 | Arbitrary variable-provider callbacks | 10 | `VarCallbk` |
 | Likely mechanical adapter enablement | 5 | `MechAdapt` |
-| Abstract-type/runtime applicability | 6 | `Abstract` |
+| Abstract-type/runtime applicability | 5 | `Abstract` |
 | Directives | 6 | `Directive` |
 | Mutations | 3 | `Mutation` |
 | Rich executor error preservation | 1 | `ErrorData` |

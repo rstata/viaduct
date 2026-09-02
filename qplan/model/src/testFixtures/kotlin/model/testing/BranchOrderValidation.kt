@@ -6,6 +6,7 @@ import model.Arguments
 import model.Selection
 import model.SelectionForest
 import model.registry.FieldResolver
+import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import model.variables
 import model.requireField
@@ -78,7 +79,10 @@ internal class BranchOrderValidator(
             val additions = mutableListOf<Pair<Edge, EdgeReason.VariableProduction>>()
             fieldResolvers.values.forEach { resolver ->
                 resolver.variables.forEach variables@{ (variable, definition) ->
-                    if (definition !is VariableDefinition.FromObjectField) return@variables
+                    if (
+                        definition !is VariableDefinition.FromField ||
+                        definition.providerFragment != ProviderFragment.OBJECT
+                    ) return@variables
                     val providerPath = definition.path
                     val type = variable.field.containingDef
                     val graph = graphs.getValue(type)

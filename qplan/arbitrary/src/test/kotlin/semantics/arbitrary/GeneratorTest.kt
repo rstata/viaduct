@@ -735,75 +735,7 @@ class GeneratorTest {
     }
 
     @Test
-    fun `object path variable shape constraints remain generative`() {
-        val config =
-            Config.default +
-                (SchemaObjectCount to 5..7) +
-                (ObjectFieldCount to 4..6) +
-                (FieldArgumentWeight to 0.7) +
-                (ExplicitFieldResolverWeight to 0.9) +
-                (ResolverFragmentWeight to 1.0) +
-                (ResolverFragmentDepth to 3) +
-                (ResolverVariablesEnabled to true) +
-                (ResolverVariableWeight to 1.0) +
-                (ResolverFromFieldProviderPathLength to 1..3) +
-                (ResolverFromFieldVariableUseDepth to 1..3)
-        val random = RandomSource.seeded(86422L)
-        var generatedVariables = 0
-
-        repeat(100) {
-            val schema = Arb.schema(config).next(random)
-            val registry = schema.registry(config).next(random)
-            val providers =
-                registry.variableProviders
-                    .filterIsInstance<FromFieldVariableProviderPlan>()
-                    .filter { provider ->
-                        provider.providerFragment == ProviderFragment.OBJECT
-                    }
-
-            generatedVariables += providers.size
-            assertTrue(providers.all { provider -> provider.responsePath().size in 1..3 })
-            assertTrue(providers.all { provider -> provider.useDepth in 1..3 })
-        }
-
-        assertTrue(generatedVariables > 0)
-    }
-
-    @Test
-    fun `Query path variables require their explicit generator knob`() {
-        val config =
-            Config.default +
-                (SchemaObjectCount to 4..6) +
-                (ObjectFieldCount to 4..6) +
-                (QueryFieldCount to 6..8) +
-                (QueryScalarFieldWeight to 0.5) +
-                (FieldArgumentWeight to 0.8) +
-                (ExplicitFieldResolverWeight to 1.0) +
-                (ResolverFragmentsEnabled to true) +
-                (ResolverFragmentWeight to 1.0) +
-                (ResolverQueryFragmentsEnabled to true) +
-                (ResolverQueryFragmentWeight to 1.0) +
-                (ResolverVariablesEnabled to true) +
-                (ResolverFromObjectFieldVariablesEnabled to false) +
-                (ResolverVariableWeight to 1.0)
-        val random = RandomSource.seeded(86425L)
-
-        repeat(50) {
-            val schema = Arb.schema(config).next(random)
-            val registry = schema.registry(config).next(random)
-
-            assertEquals(0, registry.features.fromQueryFieldVariableCount)
-            assertTrue(
-                registry.variableProviders.none {
-                    it is FromFieldVariableProviderPlan &&
-                        it.providerFragment == ProviderFragment.QUERY
-                },
-            )
-        }
-    }
-
-    @Test
-    fun `Query path variable shape constraints remain generative`() {
+    fun `from-field variable shape constraints remain generative`() {
         val config =
             Config.default +
                 (SchemaObjectCount to 4..6) +
@@ -818,14 +750,13 @@ class GeneratorTest {
                 (ResolverQueryFragmentsEnabled to true) +
                 (ResolverQueryFragmentWeight to 1.0) +
                 (ResolverVariablesEnabled to true) +
-                (ResolverFromObjectFieldVariablesEnabled to false) +
                 (ResolverFromQueryFieldVariablesEnabled to true) +
                 (ResolverVariableWeight to 1.0) +
                 (ResolverVariableCount to 2..3) +
                 (ResolverFromFieldProviderPathLength to 1..3) +
                 (ResolverFromFieldVariableUseDepth to 1..3)
         val random = RandomSource.seeded(86426L)
-        var generatedVariables = 0
+        val generatedProviderFragments = mutableSetOf<ProviderFragment>()
 
         repeat(100) {
             val schema = Arb.schema(config).next(random)
@@ -833,23 +764,14 @@ class GeneratorTest {
             val providers =
                 registry.variableProviders
                     .filterIsInstance<FromFieldVariableProviderPlan>()
-                    .filter { provider ->
-                        provider.providerFragment == ProviderFragment.QUERY
-                    }
 
             registry.world(schema)
-            generatedVariables += providers.size
-            assertEquals(providers.size, registry.features.fromQueryFieldVariableCount)
+            generatedProviderFragments += providers.map(FromFieldVariableProviderPlan::providerFragment)
             assertTrue(providers.all { provider -> provider.responsePath().size in 1..3 })
             assertTrue(providers.all { provider -> provider.useDepth in 1..3 })
-            assertTrue(
-                providers.all { provider ->
-                    registry.queryFragmentSources.getValue(provider.owner).isNotEmpty()
-                },
-            )
         }
 
-        assertTrue(generatedVariables > 0)
+        assertEquals(ProviderFragment.entries.toSet(), generatedProviderFragments)
     }
 
     @Test

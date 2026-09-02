@@ -8,7 +8,6 @@ import model.PathComponent
 import model.fetchBindings
 import model.fetchGroundedArguments
 import model.requireQueryTypeDef
-import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import model.usedVariables
 import model.variableArgumentNames
@@ -35,7 +34,6 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
             launch {
                 target.completeProviderBindings(
                     reads = closed.objectProviderReads,
-                    providerFragment = ProviderFragment.OBJECT,
                     support = support,
                 )
             }

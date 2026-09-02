@@ -94,7 +94,7 @@ internal fun FieldResolver.fieldPathDefinitions(
     root: ObjectEngineResult,
     path: List<PathComponent>,
 ): List<InstantiatedFieldPathDefinition> =
-    instantiateFragments(ResolverOccurrenceId.at(root, path)).pathVariableDefinitions
+    instantiatedFieldPathVariableDefinitions(ResolverOccurrenceId.at(root, path))
 
 context(world: Assumptions)
 private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =

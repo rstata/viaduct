@@ -38,12 +38,7 @@ internal class Resolver26Support(
     }
 
     fun declareQueryValue(resolverOccurrenceId: ResolverOccurrenceId) {
-        check(
-            queryValues.putIfAbsent(
-                resolverOccurrenceId,
-                Promise.ofDeferred(),
-            ) == null,
-        ) {
+        check(queryValues.putIfAbsent(resolverOccurrenceId, Promise.ofDeferred()) == null) {
             "Resolver26 Query value was declared twice for $resolverOccurrenceId"
         }
     }
@@ -51,9 +46,7 @@ internal class Resolver26Support(
     fun completeQueryValue(
         resolverOccurrenceId: ResolverOccurrenceId,
         value: EngineObjectData.Sync,
-    ) {
-        queryValues.getValue(resolverOccurrenceId).complete(value)
-    }
+    ) = queryValues.getValue(resolverOccurrenceId).complete(value)
 
     suspend fun fetchQueryValue(
         resolverOccurrenceId: ResolverOccurrenceId,

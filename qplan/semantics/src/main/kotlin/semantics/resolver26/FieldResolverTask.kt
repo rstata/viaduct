@@ -18,8 +18,7 @@ import model.engineObjectDataOf
 import model.outputType
 import model.requireQueryTypeDef
 import model.registry.FieldResolver
-import model.registry.ProviderFragment
-import model.registry.ResolverQueryFragment
+import model.registry.ResolverFragment
 import model.schemaType
 import model.toMaterializeSelectionForest
 import semantics.correctresolution.argumentsContainErrorValue
@@ -101,7 +100,7 @@ internal class FieldResolverTask(
 }
 
 context(world: Assumptions, support: Resolver26Support)
-internal suspend fun ResolverQueryFragment.resolveQueryFragment(
+internal suspend fun ResolverFragment.resolveQueryFragment(
     coordinate: List<PathComponent>,
 ): EngineObjectData.Sync {
     if (constructionSelections.isEmpty()) {
@@ -133,7 +132,6 @@ internal suspend fun ResolverQueryFragment.resolveQueryFragment(
             pathVariableDefinitions.map { definition ->
                 ProviderDefinitionRead(definition, coordinate)
             },
-        providerFragment = ProviderFragment.QUERY,
         support = support,
     )
     return queryResult.materializeResolverInput(

@@ -550,13 +550,8 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
             queryFragments.mapValues { (_, fragment) -> fragment.source() },
         variableProviderSources =
             variableProviders
-                .mapNotNull { provider ->
-                    when (provider) {
-                        is FromFieldVariableProviderPlan ->
-                            provider.variableName to provider.source()
-                        is FromArgumentVariableProviderPlan -> null
-                    }
-                }.toMap(),
+                .filterIsInstance<FromFieldVariableProviderPlan>()
+                .associate { provider -> provider.variableName to provider.source() },
         fieldValues = fieldValues,
         nodeValues = nodeValues,
         objectFragments = objectFragments,
@@ -882,25 +877,18 @@ private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderP
                 nullable = nullable,
                 literalConvergence = literalConvergence,
             )
-        "from-object-field" ->
+        "from-object-field",
+        "from-query-field",
+        ->
             FromFieldVariableProviderPlan(
                 owner = owner.toCoordinate(),
                 variableName = variableName,
-                providerFragment = ProviderFragment.OBJECT,
-                selection = requireNotNull(selection).toFragmentSelectionPlan(),
-                nestedInput = nestedInput,
-                listValue = listValue,
-                nullable = nullable,
-                abstractPath = requireNotNull(abstractPath),
-                useDepth = requireNotNull(useDepth),
-                topLevelUseField = requireNotNull(topLevelUseField).toCoordinate(),
-                literalConvergence = literalConvergence,
-            )
-        "from-query-field" ->
-            FromFieldVariableProviderPlan(
-                owner = owner.toCoordinate(),
-                variableName = variableName,
-                providerFragment = ProviderFragment.QUERY,
+                providerFragment =
+                    if (kind == "from-object-field") {
+                        ProviderFragment.OBJECT
+                    } else {
+                        ProviderFragment.QUERY
+                    },
                 selection = requireNotNull(selection).toFragmentSelectionPlan(),
                 nestedInput = nestedInput,
                 listValue = listValue,

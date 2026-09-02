@@ -17,8 +17,8 @@ enum class ProviderFragment {
  * The source of one field-relative variable defined by a field resolver.
  *
  * Equality is structural: two definitions are equal exactly when they have the same variant and
- * equal [FromArgument.argument] and [FromArgument.inputPath], [FromObjectField.path], or
- * [FromQueryField.path], respectively.
+ * equal [FromArgument.argument] and [FromArgument.inputPath], or equal [FromField.providerFragment]
+ * and [FromField.path], respectively.
  */
 sealed interface VariableDefinition {
     /** A variable whose value is read from an input path rooted at one resolver argument. */
@@ -67,46 +67,22 @@ sealed interface VariableDefinition {
     sealed interface FromField : VariableDefinition {
         val providerFragment: ProviderFragment
         val path: List<ObjectEngineResult.Key>
-    }
-
-    /** A variable whose value is read from one path in its defining resolver's object fragment. */
-    sealed interface FromObjectField : FromField {
-        override val providerFragment: ProviderFragment
-            get() = ProviderFragment.OBJECT
 
         companion object {
             /**
-             * Returns the definition that reads [path].
+             * Returns the definition that reads [path] from [providerFragment].
              *
-             * ### Invariant: from-object-field-variable-definition-path-shape
+             * ### Invariant: from-field-variable-definition-path-shape
              *
              * [path] is nonempty, every nonterminal key selects a non-list composite value, and
              * the terminal key selects a simple value.
              */
-            fun of(path: List<ObjectEngineResult.Key>): FromObjectField {
-                validateFieldPath(path, ProviderFragment.OBJECT)
-                return FromObjectFieldImpl(path.toList())
-            }
-        }
-    }
-
-    /** A variable whose value is read from one path in its defining resolver's Query fragment. */
-    sealed interface FromQueryField : FromField {
-        override val providerFragment: ProviderFragment
-            get() = ProviderFragment.QUERY
-
-        companion object {
-            /**
-             * Returns the definition that reads [path].
-             *
-             * ### Invariant: from-query-field-variable-definition-path-shape
-             *
-             * [path] is nonempty, every nonterminal key selects a non-list composite value, and
-             * the terminal key selects a simple value.
-             */
-            fun of(path: List<ObjectEngineResult.Key>): FromQueryField {
-                validateFieldPath(path, ProviderFragment.QUERY)
-                return FromQueryFieldImpl(path.toList())
+            fun of(
+                providerFragment: ProviderFragment,
+                path: List<ObjectEngineResult.Key>,
+            ): FromField {
+                validateFieldPath(path, providerFragment)
+                return FromFieldImpl(providerFragment, path.toList())
             }
         }
     }
@@ -128,13 +104,10 @@ private data class FromArgumentImpl(
     }
 }
 
-private data class FromObjectFieldImpl(
+private data class FromFieldImpl(
+    override val providerFragment: ProviderFragment,
     override val path: List<ObjectEngineResult.Key>,
-) : VariableDefinition.FromObjectField
-
-private data class FromQueryFieldImpl(
-    override val path: List<ObjectEngineResult.Key>,
-) : VariableDefinition.FromQueryField
+) : VariableDefinition.FromField
 
 private fun validateFieldPath(
     path: List<ObjectEngineResult.Key>,

@@ -96,7 +96,8 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     resolver = resolver,
                     inputDemand = objectFragment.constructionSelections,
                     inputMaterializeSelections = objectFragment.materializeSelections,
-                    variableDefinitions = fragments.variableDefinitions,
+                    variableDefinitions =
+                        resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
                     fragments = fragments,
                 )
             check(expansions.put(objectKey, expansion) == null) {

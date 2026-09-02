@@ -180,6 +180,8 @@ This appendix records known weaknesses in Resolver26's test infrastructure. They
 
 ### Make Structural Coverage Interaction-Local
 
+This interaction-local accounting work is deliberately deferred to a follow-up PR. Until that lands, reviews should cite it as known accepted backlog rather than a newly discovered Resolver26 weakness.
+
 - [ ] Make each structural signature application-local where its name claims an interaction; for example, `MIXED_BINDING_SOURCES` in `Resolver26StructuralCoverage.kt` can currently combine `FromArgument` and `FromObjectField` evidence from unrelated applications in one case.
 - [ ] Replace the corpus-wide union in `ResolverBroadStressTest.kt` with per-case interaction records or explicit activation counts, so required signatures cannot be satisfied by unrelated cases distributed across the generated product.
 - [ ] Give each directed profile an activation predicate tied to the exact resolver application, occurrence path, binding source, and result structure that constitute the intended interaction; retain aggregate signature counts only as diagnostics.
@@ -189,11 +191,11 @@ This appendix records known weaknesses in Resolver26's test infrastructure. They
 - [ ] Reconstruct expected demanded occurrences independently of the completed Resolver26 result. `registeredResolverApplicationIdentityCounts` currently discovers expected applications from resolver-bearing cells already present in that result, so an extra valid cell accompanied by an extra matching invocation can increase both expected and actual counts together and pass.
 - [ ] Restore an independent supplied-demand oracle or replace the disabled `ResolverWitnessContract.generated supplied demand matches independently reconstructed successor demand` check with a narrower reconstruction that handles list-transparent continuation paths.
 
-### Fill Generator Reachability Holes
+### Recently Closed Generator Reachability Gaps
 
-- [ ] Generate singleton-coercion cases in the property corpus. Runtime coercion is covered by the static regression, but `ListVariableTarget` still requires a list-valued provider, so generated worlds do not reach scalar providers supplying one or more input-list layers.
-- [ ] Generate fields with multiple arguments so grounding, defaults, errors, and variable sources can interact within one resolver key; generated fields currently have at most one argument.
-- [ ] Deliberately reuse one variable across multiple selection occurrences and preserve `VariableInputPlan` as a replacement candidate, so generated worlds exercise coalescing of equal uses of one variable instance and separation of instances owned by different resolver occurrences instead of relying on accidental variable layouts.
-- [ ] Generate convergence between a `FromObjectField` variable value and a literal argument; the registry generator currently reports this convergence feature as always false.
-- [ ] Enable object-path variables in the default deep-stress configuration, or add a separate required deep profile that cannot silently run with them disabled.
-- [ ] Require activated abstract provider paths in Resolver26 structural coverage, not merely registry metadata that records their availability.
+- [x] Resolver26 profiles opt into list-target variables that admit scalar and shallower-list providers through singleton coercion across nested input-list layers, with directed generator and grounding evidence; earlier resolver profiles remain gated off.
+- [x] Generated fields admit multiple arguments through the configurable `FieldArgumentCount` range.
+- [x] Variable input plans retain their targets, and generation deliberately reuses one variable across multiple selections in the same fragment as well as across object and Query fragments.
+- [x] `FromObjectField` variables generate literal/symbolic convergence and report it independently from `FromArgument` convergence.
+- [x] Resolver26's default deep-stress configuration enables object-path variables and requires both generated and activated evidence.
+- [x] Broad structural coverage records `ABSTRACT_PROVIDER_PATH` only from an activated owner and requires it in the balanced Resolver26 profile.

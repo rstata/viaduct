@@ -21,6 +21,7 @@ internal enum class Resolver26StructuralSignature {
     PASSIVE_DESCENDANT_VARIABLE_USE,
     MIXED_BINDING_SOURCES,
     NESTED_PROVIDER_PATH,
+    ABSTRACT_PROVIDER_PATH,
     NULL_PROVIDER_INTERMEDIATE,
     ERROR_PROVIDER_INTERMEDIATE,
     MULTIPLE_OBJECT_PATH_OWNERS,
@@ -102,6 +103,13 @@ internal fun resolver26StructuralSignatures(
         }
     ) {
         signatures += Resolver26StructuralSignature.NESTED_PROVIDER_PATH
+    }
+    if (
+        activeSourceFields.any { sourceField ->
+            sourceField in registry.abstractFromObjectFieldVariableOwnerFields
+        }
+    ) {
+        signatures += Resolver26StructuralSignature.ABSTRACT_PROVIDER_PATH
     }
     if (
         activeSourceFields.any { sourceField ->

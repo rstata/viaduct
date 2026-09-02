@@ -59,6 +59,10 @@
       "resolverFromObjectFieldVariableOwnerLimit" : 4
     },
     "ranges" : {
+      "fieldArgumentCount" : {
+        "maximum" : 3,
+        "minimum" : 1
+      },
       "inputObjectCount" : {
         "maximum" : 2,
         "minimum" : 0
@@ -118,6 +122,9 @@
     }
   },
   "resolver26" : {
+    "booleans" : {
+      "resolverVariableSingletonCoercionEnabled" : true
+    },
     "id" : "resolver26-nullable-errors-large-deep-low-duplicates"
   }
 }

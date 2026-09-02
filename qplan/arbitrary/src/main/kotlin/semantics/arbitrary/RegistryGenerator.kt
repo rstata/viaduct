@@ -64,6 +64,9 @@ data class RegistryFeatures(
     val fromArgumentNullableTraversalVariableCount: Int,
     val fromObjectFieldVariableCount: Int,
     val literalVariableConvergenceCount: Int,
+    val fromObjectFieldLiteralVariableConvergenceCount: Int,
+    val sameFragmentVariableReuseCount: Int,
+    val singletonCoercionVariableCount: Int,
     val passiveTopLevelFromObjectFieldVariableUseCount: Int,
     val fromObjectFieldProviderArgumentVariableCount: Int,
     val maximumFromObjectFieldPathLength: Int,
@@ -124,6 +127,13 @@ class ArbitraryRegistry internal constructor(
     val fromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    /** Source resolver fields whose generated object-path provider crosses an abstract type. */
+    val abstractFromObjectFieldVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+            .filter(FromObjectFieldVariableProviderPlan::abstractPath)
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolvers whose provider key arguments depend on another object-path variable. */
@@ -730,6 +740,36 @@ private class RegistryGenerator(
                         },
                     literalVariableConvergenceCount =
                         variableProviders.count(VariableProviderPlan::literalConvergence),
+                    fromObjectFieldLiteralVariableConvergenceCount =
+                        variableProviders
+                            .filterIsInstance<FromObjectFieldVariableProviderPlan>()
+                            .count(VariableProviderPlan::literalConvergence),
+                    sameFragmentVariableReuseCount =
+                        variableProviders.count { provider ->
+                            val objectUses =
+                                objectFragments[provider.owner]
+                                    ?.variableUseCount(provider.variableName)
+                                    ?: 0
+                            val queryUses =
+                                queryFragments[provider.owner]
+                                    ?.variableUseCount(provider.variableName)
+                                    ?: 0
+                            objectUses > 1 || queryUses > 1
+                        },
+                    singletonCoercionVariableCount =
+                        variableProviders
+                            .filterIsInstance<FromArgumentVariableProviderPlan>()
+                            .count { provider ->
+                                !provider.listValue &&
+                                    (
+                                        objectFragments[provider.owner]
+                                            ?.variableTargets(provider.variableName)
+                                            .orEmpty() +
+                                            queryFragments[provider.owner]
+                                                ?.variableTargets(provider.variableName)
+                                                .orEmpty()
+                                    ).any { target -> target is ListVariableTarget }
+                            },
                     passiveTopLevelFromObjectFieldVariableUseCount =
                         variableProviders
                             .filterIsInstance<FromObjectFieldVariableProviderPlan>()
@@ -1147,13 +1187,21 @@ private class RegistryGenerator(
             val candidates =
                 fragments.argumentOccurrences()
                     .shuffled(random)
+                    .filter { locatedOccurrence ->
+                        locatedOccurrence.occurrence.existingVariableName == null
+                    }
                     .mapNotNull { locatedOccurrence ->
                         val occurrence = locatedOccurrence.occurrence
                         occurrence.target?.let { target ->
                             val sources =
                                 resolverArguments
                                     .flatMap(::fromArgumentSources)
-                                    .filter { source -> target.accepts(source.type) }
+                                    .filter { source ->
+                                        target.accepts(
+                                            source.type,
+                                            config[ResolverVariableSingletonCoercionEnabled],
+                                        )
+                                    }
                             val nestedSources =
                                 sources.filter { source -> source.inputPath.isNotEmpty() }
                             val preferredSources =
@@ -1198,11 +1246,22 @@ private class RegistryGenerator(
                 fragments
                     .argumentOccurrences()
                     .filter { locatedOccurrence ->
-                        locatedOccurrence.location != candidate.location
+                        locatedOccurrence.occurrence.existingVariableName == null
+                    }
+                    .filterNot { locatedOccurrence ->
+                        locatedOccurrence.location == candidate.location &&
+                            (
+                                literalConvergence ||
+                                    locatedOccurrence.occurrence.selectionPath ==
+                                    candidate.occurrence.selectionPath
+                            )
                     }
                     .shuffled(random)
                     .firstOrNull { locatedOccurrence ->
-                        locatedOccurrence.occurrence.target?.accepts(candidate.source.type) == true
+                        locatedOccurrence.occurrence.target?.accepts(
+                            candidate.source.type,
+                            config[ResolverVariableSingletonCoercionEnabled],
+                        ) == true
                     }
             val variableName = "resolverArgVar${ranks.getValue(consumer)}_$variableIndex"
             variableProviders +=
@@ -1264,13 +1323,14 @@ private class RegistryGenerator(
                     argumentName = occurrence.argument.name,
                     valuePath = occurrence.valuePath,
                     variableName = variableName,
+                    target = requireNotNull(occurrence.target),
                 )
             } else {
                 fragment.selections.replaceArgument(
                     selectionPath = occurrence.selectionPath,
                     argumentName = occurrence.argument.name,
                     valuePath = occurrence.valuePath,
-                    value = VariableInputPlan(variableName),
+                    value = VariableInputPlan(variableName, occurrence.target),
                 )
             }
         return when (location) {
@@ -1359,6 +1419,7 @@ private class RegistryGenerator(
                 fragments.argumentOccurrences()
                     .shuffled(random)
                     .filter { locatedOccurrence ->
+                        locatedOccurrence.occurrence.existingVariableName == null &&
                         locatedOccurrence.occurrence.selectionPath.size in
                             config[ResolverFromObjectFieldVariableUseDepth]
                     }
@@ -1468,6 +1529,13 @@ private class RegistryGenerator(
                             )
                         }
                 } ?: return@fold fragments
+            val literalConvergence =
+                fragments
+                    .fragment(candidate.location)
+                    .selectionAt(candidate.occurrence)
+                    .subselections
+                    .size >= 2 &&
+                    chance(config[ResolverLiteralVariableConvergenceWeight])
             val variableName = "resolverVar${ranks.getValue(consumer)}_$variableIndex"
             val providerSelection =
                 candidate.provider.withResponseAliases(variableName)
@@ -1475,7 +1543,15 @@ private class RegistryGenerator(
                 fragments
                     .argumentOccurrences()
                     .filter { locatedOccurrence ->
-                        locatedOccurrence.location != candidate.location
+                        locatedOccurrence.occurrence.existingVariableName == null
+                    }
+                    .filterNot { locatedOccurrence ->
+                        locatedOccurrence.location == candidate.location &&
+                            (
+                                literalConvergence ||
+                                    locatedOccurrence.occurrence.selectionPath ==
+                                    candidate.occurrence.selectionPath
+                            )
                     }
                     .shuffled(random)
                     .firstOrNull { locatedOccurrence ->
@@ -1544,7 +1620,7 @@ private class RegistryGenerator(
                         fragments
                             .fragment(candidate.location)
                             .topLevelField(candidate.occurrence),
-                    literalConvergence = false,
+                    literalConvergence = literalConvergence,
                 )
             var updated =
                 fragments.copy(
@@ -1556,7 +1632,7 @@ private class RegistryGenerator(
                     location = candidate.location,
                     occurrence = candidate.occurrence,
                     variableName = variableName,
-                    literalConvergence = false,
+                    literalConvergence = literalConvergence,
                 )
             if (sharedOccurrence != null) {
                 updated =
@@ -1589,7 +1665,10 @@ private class RegistryGenerator(
             candidate.name == fieldName
         }
         val child = subselections.singleOrNull()
-            ?: return target.matches(field.type) && (!field.type.nullable || target.nullable)
+            ?: return target.matches(
+                field.type,
+                config[ResolverVariableSingletonCoercionEnabled],
+            ) && (!field.type.nullable || target.nullable)
         return !field.type.list &&
             (!field.type.nullable || target.acceptsNullableTraversal) &&
             child.isCompatibleProviderFor(field.type.namedType, target)
@@ -1694,6 +1773,7 @@ private class RegistryGenerator(
                             argument = argument,
                             valuePath = valueOccurrence.path,
                             target = valueOccurrence.target,
+                            existingVariableName = valueOccurrence.existingVariableName,
                         )
                     }
             } +
@@ -1729,7 +1809,10 @@ private class RegistryGenerator(
                     field.hasOnlyLowerRankedResolverDependencies(consumerRank, ranks)
             }.flatMap { field ->
                 when {
-                    target.matches(field.type) &&
+                    target.matches(
+                        field.type,
+                        config[ResolverVariableSingletonCoercionEnabled],
+                    ) &&
                         (!field.type.nullable || target.nullable) ->
                         listOf(
                             FragmentSelectionPlan(
@@ -2229,11 +2312,11 @@ internal data class ListInputPlan(
 
     override fun variableTarget(): VariableTarget? {
         if (elements.any(InputValuePlan::containsVariable)) return null
-        val element = type.element as? ScalarInputTypeSpec ?: return null
+        val shape = type.scalarListShape() ?: return null
         return ListVariableTarget(
-            scalar = element.scalar,
+            scalar = shape.scalar,
             nullable = type.nullable,
-            elementNullable = element.nullable,
+            elementNullabilities = shape.elementNullabilities,
         )
     }
 }
@@ -2260,10 +2343,11 @@ internal data class NullInputPlan(
 
 internal data class VariableInputPlan(
     val variableName: String,
+    val target: VariableTarget? = null,
 ) : InputValuePlan {
     override fun source(): String = "\$$variableName"
 
-    override fun variableTarget(): VariableTarget? = null
+    override fun variableTarget(): VariableTarget? = target
 }
 
 internal data class ErrorInputPlan(
@@ -2279,9 +2363,15 @@ internal sealed interface VariableTarget {
 
     val acceptsNullableTraversal: Boolean
 
-    fun matches(type: OutputTypeSpec): Boolean
+    fun matches(
+        type: OutputTypeSpec,
+        allowSingletonCoercion: Boolean = false,
+    ): Boolean
 
-    fun accepts(type: InputTypeSpec): Boolean
+    fun accepts(
+        type: InputTypeSpec,
+        allowSingletonCoercion: Boolean = false,
+    ): Boolean
 }
 
 internal data class ScalarVariableTarget(
@@ -2291,10 +2381,16 @@ internal data class ScalarVariableTarget(
     override val acceptsNullableTraversal: Boolean
         get() = nullable
 
-    override fun matches(type: OutputTypeSpec): Boolean =
+    override fun matches(
+        type: OutputTypeSpec,
+        allowSingletonCoercion: Boolean,
+    ): Boolean =
         !type.list && type.namedType == scalar.graphQLName
 
-    override fun accepts(type: InputTypeSpec): Boolean =
+    override fun accepts(
+        type: InputTypeSpec,
+        allowSingletonCoercion: Boolean,
+    ): Boolean =
         type is ScalarInputTypeSpec &&
             type.scalar == scalar &&
             (!type.nullable || nullable)
@@ -2303,25 +2399,84 @@ internal data class ScalarVariableTarget(
 internal data class ListVariableTarget(
     val scalar: ScalarKind,
     override val nullable: Boolean,
-    val elementNullable: Boolean,
+    val elementNullabilities: List<Boolean>,
 ) : VariableTarget {
+    constructor(
+        scalar: ScalarKind,
+        nullable: Boolean,
+        elementNullable: Boolean,
+    ) : this(scalar, nullable, listOf(elementNullable))
+
+    init {
+        require(elementNullabilities.isNotEmpty())
+    }
+
     override val acceptsNullableTraversal: Boolean
         get() = nullable
 
-    override fun matches(type: OutputTypeSpec): Boolean =
-        type.list &&
-            type.nestedElementNullabilities.isEmpty() &&
-            type.namedType == scalar.graphQLName &&
-            (!type.elementNullable || elementNullable)
+    override fun matches(
+        type: OutputTypeSpec,
+        allowSingletonCoercion: Boolean,
+    ): Boolean =
+        type.namedType == scalar.graphQLName &&
+            type.listDepth.let { sourceDepth ->
+                sourceDepth == elementNullabilities.size ||
+                    (allowSingletonCoercion && sourceDepth < elementNullabilities.size)
+            } &&
+            type.nullabilities().zip(targetNullabilities()).all { (source, target) ->
+                !source || target
+            }
 
-    override fun accepts(type: InputTypeSpec): Boolean {
-        val list = type as? ListInputTypeSpec ?: return false
-        val element = list.element as? ScalarInputTypeSpec ?: return false
-        return element.scalar == scalar &&
-            (!list.nullable || nullable) &&
-            (!element.nullable || elementNullable)
+    override fun accepts(
+        type: InputTypeSpec,
+        allowSingletonCoercion: Boolean,
+    ): Boolean {
+        val shape = type.scalarShape() ?: return false
+        return shape.scalar == scalar &&
+            (
+                shape.listDepth == elementNullabilities.size ||
+                    (allowSingletonCoercion && shape.listDepth < elementNullabilities.size)
+            ) &&
+            shape.nullabilities.zip(targetNullabilities()).all { (source, target) ->
+                !source || target
+            }
     }
+
+    private fun targetNullabilities(): List<Boolean> = listOf(nullable) + elementNullabilities
 }
+
+private data class ScalarListShape(
+    val scalar: ScalarKind,
+    val nullabilities: List<Boolean>,
+) {
+    val listDepth: Int
+        get() = nullabilities.size - 1
+
+    val elementNullabilities: List<Boolean>
+        get() = nullabilities.drop(1)
+}
+
+private fun InputTypeSpec.scalarShape(): ScalarListShape? =
+    when (this) {
+        is ScalarInputTypeSpec -> ScalarListShape(scalar, listOf(nullable))
+        is ListInputTypeSpec ->
+            element.scalarShape()?.let { elementShape ->
+                ScalarListShape(
+                    scalar = elementShape.scalar,
+                    nullabilities = listOf(nullable) + elementShape.nullabilities,
+                )
+            }
+        is InputObjectInputTypeSpec -> null
+    }
+
+private fun ListInputTypeSpec.scalarListShape(): ScalarListShape? = scalarShape()
+
+private fun OutputTypeSpec.nullabilities(): List<Boolean> =
+    if (list) {
+        listOf(nullable, elementNullable) + nestedElementNullabilities
+    } else {
+        listOf(nullable)
+    }
 
 private data class FromArgumentSource(
     val argument: ArgumentDefinitionSpec,
@@ -2463,6 +2618,7 @@ private data class ArgumentOccurrence(
     val argument: ArgumentDefinitionSpec,
     val valuePath: List<InputValueStep>,
     val target: VariableTarget?,
+    val existingVariableName: String?,
 )
 
 private fun List<FragmentSelectionPlan>.replaceArgument(
@@ -2505,6 +2661,7 @@ private fun List<FragmentSelectionPlan>.replaceArgumentWithLiteralConvergence(
     argumentName: String,
     valuePath: List<InputValueStep>,
     variableName: String,
+    target: VariableTarget,
 ): List<FragmentSelectionPlan> {
     val selectedIndex = selectionPath.first()
     return flatMapIndexed { index, selection ->
@@ -2519,6 +2676,7 @@ private fun List<FragmentSelectionPlan>.replaceArgumentWithLiteralConvergence(
                                 argumentName = argumentName,
                                 valuePath = valuePath,
                                 variableName = variableName,
+                                target = target,
                             ),
                     ),
                 )
@@ -2530,7 +2688,7 @@ private fun List<FragmentSelectionPlan>.replaceArgumentWithLiteralConvergence(
                             argumentName to
                                 selection.arguments
                                     .getValue(argumentName)
-                                    .replace(valuePath, VariableInputPlan(variableName))
+                                    .replace(valuePath, VariableInputPlan(variableName, target))
                         )
                 listOf(
                     selection.copy(
@@ -2561,12 +2719,21 @@ private sealed interface InputValueStep {
 private data class InputValueOccurrence(
     val path: List<InputValueStep>,
     val target: VariableTarget,
+    val existingVariableName: String?,
 )
 
 private fun InputValuePlan.variableOccurrences(
     path: List<InputValueStep> = emptyList(),
 ): List<InputValueOccurrence> =
-    listOfNotNull(variableTarget()?.let { InputValueOccurrence(path, it) }) +
+    listOfNotNull(
+        variableTarget()?.let { target ->
+            InputValueOccurrence(
+                path = path,
+                target = target,
+                existingVariableName = (this as? VariableInputPlan)?.variableName,
+            )
+        },
+    ) +
         when (this) {
             is ListInputPlan ->
                 elements.flatMapIndexed { index, element ->
@@ -2606,6 +2773,45 @@ private fun InputValuePlan.variableNames(): Set<String> =
         is ErrorInputPlan,
         is NullInputPlan,
         -> emptySet()
+    }
+
+private fun FragmentPlan.variableUseCount(variableName: String): Int =
+    selections.sumOf { selection -> selection.variableUseCount(variableName) }
+
+private fun FragmentSelectionPlan.variableUseCount(variableName: String): Int =
+    arguments.values.sumOf { value -> value.variableUseCount(variableName) } +
+        subselections.sumOf { selection -> selection.variableUseCount(variableName) }
+
+private fun InputValuePlan.variableUseCount(variableName: String): Int =
+    when (this) {
+        is VariableInputPlan -> if (this.variableName == variableName) 1 else 0
+        is ListInputPlan -> elements.sumOf { element -> element.variableUseCount(variableName) }
+        is ObjectInputPlan ->
+            fields.values.sumOf { field -> field.variableUseCount(variableName) }
+        is ErrorInputPlan -> placeholder.variableUseCount(variableName)
+        is InputLiteralPlan,
+        is NullInputPlan,
+        -> 0
+    }
+
+private fun FragmentPlan.variableTargets(variableName: String): List<VariableTarget> =
+    selections.flatMap { selection -> selection.variableTargets(variableName) }
+
+private fun FragmentSelectionPlan.variableTargets(variableName: String): List<VariableTarget> =
+    arguments.values.flatMap { value -> value.variableTargets(variableName) } +
+        subselections.flatMap { selection -> selection.variableTargets(variableName) }
+
+private fun InputValuePlan.variableTargets(variableName: String): List<VariableTarget> =
+    when (this) {
+        is VariableInputPlan ->
+            if (this.variableName == variableName) listOfNotNull(target) else emptyList()
+        is ListInputPlan -> elements.flatMap { element -> element.variableTargets(variableName) }
+        is ObjectInputPlan ->
+            fields.values.flatMap { field -> field.variableTargets(variableName) }
+        is ErrorInputPlan -> placeholder.variableTargets(variableName)
+        is InputLiteralPlan,
+        is NullInputPlan,
+        -> emptyList()
     }
 
 private fun FromObjectFieldVariableProviderPlan.providerArgumentVariableNames(): Set<String> =

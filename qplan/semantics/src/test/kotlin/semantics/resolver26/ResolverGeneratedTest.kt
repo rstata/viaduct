@@ -9,6 +9,8 @@ import model.EngineResult
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.SelectionForest
+import semantics.arbitrary.Config
+import semantics.arbitrary.ResolverVariableSingletonCoercionEnabled
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
 import semantics.contract.GeneratedCaseAssertions
@@ -34,6 +36,13 @@ class ResolverGeneratedTest :
     QueryFragmentGeneratedResolverContract,
     SometimesPassiveGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
+    override val queryFragmentObjectPathVariablesEnabled: Boolean
+        get() = true
+
+    override val generatedResolverConfigOverrides: Config =
+        Config.default +
+            (ResolverVariableSingletonCoercionEnabled to true)
+
     override val selectiveResolvers: Boolean
         get() = true
 

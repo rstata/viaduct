@@ -33,6 +33,7 @@ import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverQueryFragmentWeight
 import semantics.arbitrary.ResolverVariableCount
+import semantics.arbitrary.ResolverVariableSingletonCoercionEnabled
 import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.ResolverVariablesOnNonQueryFieldsOnly
@@ -57,6 +58,7 @@ internal enum class Resolver26BroadStressProfile(
                 Resolver26StructuralSignature.SYMBOLIC_RESOLVER_INSTANCE,
                 Resolver26StructuralSignature.OBJECT_PATH_VARIABLE_OWNER,
                 Resolver26StructuralSignature.MIXED_BINDING_SOURCES,
+                Resolver26StructuralSignature.ABSTRACT_PROVIDER_PATH,
             ),
         config = balancedBroadConfig(),
     ),
@@ -191,6 +193,7 @@ private fun balancedBroadConfig(): Config =
         (ResolverVariablesEnabled to true) +
         (ResolverVariableWeight to 0.65) +
         (ResolverVariableCount to 1..3) +
+        (ResolverVariableSingletonCoercionEnabled to true) +
         (ResolverLiteralVariableConvergenceWeight to 0.2) +
         (ResolverNestedProviderPathWeight to 0.5) +
         (ResolverFromObjectFieldProviderPathLength to 1..3) +

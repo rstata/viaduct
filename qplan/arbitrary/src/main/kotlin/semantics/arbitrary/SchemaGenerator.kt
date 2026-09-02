@@ -85,6 +85,7 @@ class ArbitrarySchema internal constructor(
 
 data class SchemaFeatures(
     val hasArguments: Boolean,
+    val hasMultipleArgumentField: Boolean,
     val hasScalarArguments: Boolean,
     val hasListArguments: Boolean,
     val hasInputObjectArguments: Boolean,
@@ -540,12 +541,12 @@ private class SchemaGenerator(
                 (useObject && useRecursiveTarget && !isList)
         val arguments =
             if (config[ArgumentsEnabled] && chance(config[FieldArgumentWeight])) {
-                listOf(
+                List(Arb.int(config[FieldArgumentCount]).next(random)) { index ->
                     ArgumentDefinitionSpec(
-                        name = "arg",
+                        name = if (index == 0) "arg" else "arg$index",
                         type = inputType(inputObjectNames),
-                    ),
-                )
+                    )
+                }
             } else {
                 emptyList()
             }
@@ -802,11 +803,11 @@ private class SchemaGenerator(
                     targetIndex != null && targetIndex <= objectIndices.getValue(objectType.name)
                 }
             }
-        val arguments =
-            (objects.flatMap(ObjectDefinition::fields) + query.fields)
-                .flatMap(FieldDefinitionSpec::arguments)
+        val fields = objects.flatMap(ObjectDefinition::fields) + query.fields
+        val arguments = fields.flatMap(FieldDefinitionSpec::arguments)
         return SchemaFeatures(
             hasArguments = arguments.isNotEmpty(),
+            hasMultipleArgumentField = fields.any { field -> field.arguments.size > 1 },
             hasScalarArguments = arguments.any { it.type is ScalarInputTypeSpec },
             hasListArguments = arguments.any { it.type is ListInputTypeSpec },
             hasInputObjectArguments = arguments.any { it.type is InputObjectInputTypeSpec },

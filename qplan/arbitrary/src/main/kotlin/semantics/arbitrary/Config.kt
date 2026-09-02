@@ -68,6 +68,7 @@ object NestedQueryScalarFieldWeight : ConfigKey<Double>("nestedQueryScalarFieldW
 object QueryScalarFieldWeight : ConfigKey<Double>("queryScalarFieldWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ObjectOutputFieldWeight : ConfigKey<Double>("objectOutputFieldWeight", ConfigValueType.DOUBLE, 0.45, ::weight)
 object FieldArgumentWeight : ConfigKey<Double>("fieldArgumentWeight", ConfigValueType.DOUBLE, 0.3, ::weight)
+object FieldArgumentCount : ConfigKey<IntRange>("fieldArgumentCount", ConfigValueType.INTEGER_RANGE, 1..3, ::range)
 object InputScalarValueRange : ConfigKey<IntRange>("inputScalarValueRange", ConfigValueType.INTEGER_RANGE, 0..10_000, ::range)
 object ImplementationArgumentDefaultWeight : ConfigKey<Double>("implementationArgumentDefaultWeight", ConfigValueType.DOUBLE, 0.3, ::weight)
 object InputObjectCount : ConfigKey<IntRange>("inputObjectCount", ConfigValueType.INTEGER_RANGE, 0..2, ::range)
@@ -115,6 +116,7 @@ object ResolverFromArgumentNestedPathWeight :
     ConfigKey<Double>("resolverFromArgumentNestedPathWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverVariableWeight : ConfigKey<Double>("resolverVariableWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
 object ResolverVariableCount : ConfigKey<IntRange>("resolverVariableCount", ConfigValueType.INTEGER_RANGE, 1..3, ::range)
+object ResolverVariableSingletonCoercionEnabled : ConfigKey<Boolean>("resolverVariableSingletonCoercionEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverLiteralVariableConvergenceWeight : ConfigKey<Double>("resolverLiteralVariableConvergenceWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverNestedProviderPathWeight : ConfigKey<Double>("resolverNestedProviderPathWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
 object ResolverFromObjectFieldProviderPathLength :
@@ -141,6 +143,7 @@ internal object ConfigKeys {
             QueryScalarFieldWeight,
             ObjectOutputFieldWeight,
             FieldArgumentWeight,
+            FieldArgumentCount,
             InputScalarValueRange,
             ImplementationArgumentDefaultWeight,
             InputObjectCount,
@@ -187,6 +190,7 @@ internal object ConfigKeys {
             ResolverFromArgumentNestedPathWeight,
             ResolverVariableWeight,
             ResolverVariableCount,
+            ResolverVariableSingletonCoercionEnabled,
             ResolverLiteralVariableConvergenceWeight,
             ResolverNestedProviderPathWeight,
             ResolverFromObjectFieldProviderPathLength,

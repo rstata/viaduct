@@ -926,6 +926,67 @@ class GeneratorTest {
     }
 
     @Test
+    fun `object path variables generate literal and variable convergence`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 5..7) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (InputScalarValueRange to 0..2) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverFromArgumentVariablesEnabled to false) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 2..3) +
+                (ResolverLiteralVariableConvergenceWeight to 1.0)
+        val random = RandomSource.seeded(97533L)
+        var generatedConvergences = 0
+
+        repeat(300) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            generatedConvergences +=
+                registry.features.fromObjectFieldLiteralVariableConvergenceCount
+        }
+
+        assertTrue(generatedConvergences > 0)
+    }
+
+    @Test
+    fun `one variable is reused by multiple selections in one resolver fragment`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 5..7) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 2..3)
+        val random = RandomSource.seeded(97534L)
+        var reusedVariables = 0
+
+        repeat(300) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            reusedVariables += registry.features.sameFragmentVariableReuseCount
+        }
+
+        assertTrue(reusedVariables > 0)
+    }
+
+    @Test
     fun `object path variables can be used below passive top-level branches`() {
         val config =
             Config.default +
@@ -1047,6 +1108,79 @@ class GeneratorTest {
     }
 
     @Test
+    fun `list variable targets accept singleton coercion through every list layer`() {
+        val target =
+            ListVariableTarget(
+                scalar = ScalarKind.INT,
+                nullable = false,
+                elementNullabilities = listOf(false, false),
+            )
+
+        assertTrue(
+            target.accepts(
+                ScalarInputTypeSpec(ScalarKind.INT, nullable = false),
+                allowSingletonCoercion = true,
+            ),
+        )
+        assertTrue(
+            target.accepts(
+                ListInputTypeSpec(
+                    element = ScalarInputTypeSpec(ScalarKind.INT, nullable = false),
+                    nullable = false,
+                ),
+                allowSingletonCoercion = true,
+            ),
+        )
+        assertTrue(
+            target.matches(
+                OutputTypeSpec(
+                    namedType = "Int",
+                    nullable = false,
+                    list = false,
+                    elementNullable = false,
+                ),
+                allowSingletonCoercion = true,
+            ),
+        )
+        assertFalse(
+            target.accepts(
+                ScalarInputTypeSpec(ScalarKind.INT, nullable = true),
+                allowSingletonCoercion = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `resolver variables generate scalar to list singleton coercion`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 5..7) +
+                (FieldArgumentWeight to 1.0) +
+                (InputListTypeWeight to 0.5) +
+                (MaxInputTypeDepth to 3) +
+                (ExplicitFieldResolverWeight to 0.8) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 2..3) +
+                (ResolverVariableSingletonCoercionEnabled to true)
+        val random = RandomSource.seeded(97535L)
+        var singletonCoercions = 0
+
+        repeat(300) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            singletonCoercions += registry.features.singletonCoercionVariableCount
+        }
+
+        assertTrue(singletonCoercions > 0)
+    }
+
+    @Test
     fun `coverage profile reaches every current scope generator category`() {
         val config =
             Config.default +
@@ -1085,6 +1219,7 @@ class GeneratorTest {
 
             with(schema.features) {
                 if (hasListArguments) reached += "list arguments"
+                if (hasMultipleArgumentField) reached += "multiple field arguments"
                 if (hasInputObjectArguments) reached += "input-object arguments"
                 if (hasInputObjectListArguments) reached += "input-object list arguments"
                 if (hasRecursiveInputTypes) reached += "recursive input types"
@@ -1129,6 +1264,7 @@ class GeneratorTest {
         val expected =
             setOf(
                 "list arguments",
+                "multiple field arguments",
                 "input-object arguments",
                 "input-object list arguments",
                 "recursive input types",

@@ -370,7 +370,7 @@ class ArgumentsTest {
     }
 
     @Test
-    fun `grounding does not coerce a scalar variable binding through nested input lists`() {
+    fun `grounding coerces a scalar variable binding through nested input lists`() {
         val world =
             TestWorld.fromSDL(
                 """
@@ -394,11 +394,47 @@ class ArgumentsTest {
         world.declareBinding(requireNotNull(variable.instanceId))
         world.completeBinding(requireNotNull(variable.instanceId), 9)
 
-        assertFailsWith<ClassCastException> {
+        val grounded =
             context(world) {
                 arguments.instantiateBindings(consume)
             }
-        }
+
+        val values =
+            assertIs<EngineInputListData>(
+                assertIs<Arguments.Resolved>(grounded).fieldValues.getValue("values"),
+            )
+        assertEquals(listOf(listOf(9)), values)
+    }
+
+    @Test
+    fun `grounding coerces each element of a shallower list through a nested input list`() {
+        val world =
+            TestWorld.fromSDL(
+                """
+                type Query {
+                  source: [Int!]!
+                  consume(values: [[Int!]!]!): Int!
+                }
+                """.trimIndent(),
+            ).assumptions
+        val source = world.schema.requireObjectField("Query", "source")
+        val consume = world.schema.requireObjectField("Query", "consume")
+        val template = Arguments.Variable.of(source, "value")
+        val resolverOccurrenceId = ResolverOccurrenceId.at(world.schema.testRoot(), emptyList())
+        val variable = template.instantiate(resolverOccurrenceId)
+        val arguments =
+            Arguments.of(consume, mapOf("values" to template))
+                .instantiateVariables(consume, resolverOccurrenceId)
+        world.declareBinding(requireNotNull(variable.instanceId))
+        world.completeBinding(requireNotNull(variable.instanceId), listOf(4, 5))
+
+        val grounded = context(world) { arguments.instantiateBindings(consume) }
+
+        val values =
+            assertIs<EngineInputListData>(
+                assertIs<Arguments.Resolved>(grounded).fieldValues.getValue("values"),
+            )
+        assertEquals(listOf(listOf(4), listOf(5)), values)
     }
 
     @Test

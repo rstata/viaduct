@@ -329,27 +329,25 @@ class FromObjectFieldTest {
     }
 
     @Test
-    fun `rejects singleton coercion into nested input lists`() {
-        assertFailsWith<IllegalArgumentException> {
-            variableWorld(
-                schemaSDL =
-                    """
-                    type Query {
-                      result: Int!
-                      source: Int!
-                      consume(value: [[Int!]!]!): Int!
-                    }
-                    """.trimIndent(),
-                objectFragment =
-                    """
-                    fragment Provider on Query {
-                      source
-                      consume(value: ${'$'}value)
-                    }
-                    """.trimIndent(),
-                responsePath = listOf("source"),
-            )
-        }
+    fun `accepts singleton coercion into nested input lists`() {
+        variableWorld(
+            schemaSDL =
+                """
+                type Query {
+                  result: Int!
+                  source: Int!
+                  consume(value: [[Int!]!]!): Int!
+                }
+                """.trimIndent(),
+            objectFragment =
+                """
+                fragment Provider on Query {
+                  source
+                  consume(value: ${'$'}value)
+                }
+                """.trimIndent(),
+            responsePath = listOf("source"),
+        )
     }
 
     private fun variableWorld(

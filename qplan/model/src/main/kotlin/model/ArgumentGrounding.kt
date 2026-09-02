@@ -140,5 +140,20 @@ private fun VariableBinding.coerceTo(
     when (this) {
         VariableBinding.Error -> this
         is VariableBinding.Input ->
-            VariableBinding.of(toEngineInputData(expectedType, value))
+            VariableBinding.of(coerceVariableInput(expectedType, value))
     }
+
+private fun coerceVariableInput(
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+    value: EngineInputData?,
+): EngineInputData? {
+    if (value == null) return toEngineInputData(expectedType, null)
+
+    val elementType = expectedType.unwrapList()
+        ?: return toEngineInputData(expectedType, value)
+    return if (value is List<*>) {
+        value.map { element -> coerceVariableInput(elementType, element) }
+    } else {
+        listOf(coerceVariableInput(elementType, value))
+    }
+}

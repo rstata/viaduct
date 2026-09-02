@@ -31,6 +31,7 @@ import model.requireType
 import model.schemaType
 import model.registry.FieldResolver
 import model.registry.MissingResolverException
+import model.registry.ProviderFragment
 import model.registry.ResolverRegistry
 import model.registry.VariableDefinition
 import model.selectionForestOf
@@ -91,11 +92,7 @@ internal fun resolverRegistryOf(
         variableProviders.mapValues { (variable, declaration) ->
             val variablesByName = variablesByField.getValue(variable.field)
             when (declaration) {
-                is FromObjectField ->
-                    declaration.mapVariables { referenced ->
-                        variablesByName[referenced.variableName] ?: referenced
-                    }
-                is FromQueryField ->
+                is FromField ->
                     declaration.mapVariables { referenced ->
                         variablesByName[referenced.variableName] ?: referenced
                     }
@@ -426,10 +423,13 @@ private class TestResolverRegistry(
                         argument = declaration.argument,
                         inputPath = declaration.inputPath,
                     )
-                is FromObjectField ->
-                    VariableDefinition.FromObjectField.of(declaration.keyPath)
-                is FromQueryField ->
-                    VariableDefinition.FromQueryField.of(declaration.keyPath)
+                is FromField ->
+                    when (declaration.providerFragment) {
+                        ProviderFragment.OBJECT ->
+                            VariableDefinition.FromObjectField.of(declaration.keyPath)
+                        ProviderFragment.QUERY ->
+                            VariableDefinition.FromQueryField.of(declaration.keyPath)
+                    }
             }
         }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
@@ -487,41 +487,36 @@ private class TestResolverRegistry(
                         isCompatible = declaration::isCompatibleWith,
                     )
                 }
-                is FromObjectField -> {
+                is FromField -> {
                     val resolver = fieldResolverDefinitions.getValue(variable.field)
-                    require(declaration.objectFragment.nominalType == variable.field.containingDef) {
-                        "Variable ${variable.variableName} declaration is not relative to " +
-                            "${variable.field.containingDef.name}/${variable.field.name}"
-                    }
-                    validateProviderContainment(
-                        variable.field,
-                        resolver.objectFragment,
-                    )
-                    validateVariableUses(
-                        variable = variable,
-                        fragments = listOfNotNull(resolver.objectFragment, resolver.queryFragment),
-                        sourceDescription =
-                            "provider path " + declaration.responsePath.joinToString("."),
-                        isCompatible = declaration::isCompatibleWith,
-                    )
-                }
-                is FromQueryField -> {
-                    val resolver = fieldResolverDefinitions.getValue(variable.field)
-                    require(
-                        declaration.queryFragment.nominalType == schema.requireQueryTypeDef(),
-                    ) {
-                        "Variable ${variable.variableName} declaration is not relative to Query"
-                    }
-                    val queryFragment =
-                        requireNotNull(resolver.queryFragment) {
-                            "Variable ${variable.variableName} requires a Query fragment"
+                    val expectedType =
+                        when (declaration.providerFragment) {
+                            ProviderFragment.OBJECT -> variable.field.containingDef
+                            ProviderFragment.QUERY -> schema.requireQueryTypeDef()
                         }
-                    validateQueryProviderContainment(variable.field, queryFragment)
+                    require(declaration.fragment.nominalType == expectedType) {
+                        "Variable ${variable.variableName} declaration is not relative to " +
+                            expectedType.name
+                    }
+                    val providerFragment =
+                        when (declaration.providerFragment) {
+                            ProviderFragment.OBJECT -> resolver.objectFragment
+                            ProviderFragment.QUERY ->
+                                requireNotNull(resolver.queryFragment) {
+                                    "Variable ${variable.variableName} requires a Query fragment"
+                                }
+                        }
+                    validateProviderContainment(
+                        field = variable.field,
+                        fragment = providerFragment,
+                        providerFragment = declaration.providerFragment,
+                    )
                     validateVariableUses(
                         variable = variable,
                         fragments = listOfNotNull(resolver.objectFragment, resolver.queryFragment),
                         sourceDescription =
-                            "Query provider path " + declaration.responsePath.joinToString("."),
+                            "${declaration.providerFragment.name.lowercase()} provider path " +
+                                declaration.responsePath.joinToString("."),
                         isCompatible = declaration::isCompatibleWith,
                     )
                 }
@@ -544,30 +539,24 @@ private class TestResolverRegistry(
                         DependencyVertex.Variable(variable),
                         when (definition) {
                             is VariableDefinition.FromArgument -> emptySet<DependencyVertex>()
-                            is VariableDefinition.FromObjectField ->
+                            is VariableDefinition.FromField -> {
+                                val providerType =
+                                    when (definition.providerFragment) {
+                                        ProviderFragment.OBJECT -> variable.field.containingDef
+                                        ProviderFragment.QUERY -> schema.requireQueryTypeDef()
+                                    }
                                 implicatedVertices(
                                     Fragment.of(
-                                        variable.field.containingDef,
+                                        providerType,
                                         selectionForestOf(
                                             definition.path.toSelection(
-                                                setOf(variable.field.containingDef),
+                                                setOf(providerType),
                                             ),
                                         ),
                                     ),
                                     variable.field,
                                 )
-                            is VariableDefinition.FromQueryField ->
-                                implicatedVertices(
-                                    Fragment.of(
-                                        schema.requireQueryTypeDef(),
-                                        selectionForestOf(
-                                            definition.path.toSelection(
-                                                setOf(schema.requireQueryTypeDef()),
-                                            ),
-                                        ),
-                                    ),
-                                    variable.field,
-                                )
+                            }
                         },
                     )
                 }
@@ -585,7 +574,11 @@ private class TestResolverRegistry(
                                     variable.field == site.field
                                 },
                             validateObjectFragment = { fragment ->
-                                validateProviderContainment(site.field, fragment)
+                                validateProviderContainment(
+                                    field = site.field,
+                                    fragment = fragment,
+                                    providerFragment = ProviderFragment.OBJECT,
+                                )
                             },
                             field = site.field,
                         )
@@ -627,27 +620,20 @@ private class TestResolverRegistry(
     private fun validateProviderContainment(
         field: ViaductSchema.ObjectField,
         fragment: Fragment,
+        providerFragment: ProviderFragment,
     ) {
         variableDefinitions.forEach { (variable, definition) ->
             if (variable.field != field) return@forEach
-            if (definition !is VariableDefinition.FromObjectField) return@forEach
-            require(fragment.subselections.containsProviderPath(definition.path)) {
-                "Variable ${variable.variableName} provider path is not contained by " +
-                    "${field.containingDef.name}/${field.name} object fragment"
+            if (
+                definition !is VariableDefinition.FromField ||
+                definition.providerFragment != providerFragment
+            ) {
+                return@forEach
             }
-        }
-    }
-
-    private fun validateQueryProviderContainment(
-        field: ViaductSchema.ObjectField,
-        fragment: Fragment,
-    ) {
-        variableDefinitions.forEach { (variable, definition) ->
-            if (variable.field != field) return@forEach
-            if (definition !is VariableDefinition.FromQueryField) return@forEach
             require(fragment.subselections.containsProviderPath(definition.path)) {
                 "Variable ${variable.variableName} provider path is not contained by " +
-                    "${field.containingDef.name}/${field.name} Query fragment"
+                    "${field.containingDef.name}/${field.name} " +
+                    "${providerFragment.name.lowercase()} fragment"
             }
         }
     }

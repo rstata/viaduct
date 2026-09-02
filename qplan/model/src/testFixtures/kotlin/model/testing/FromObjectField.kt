@@ -10,34 +10,23 @@ import model.SourceSchemaAdapter
 import model.spec.SpecSelection
 import model.requireField
 import model.requireQueryTypeDef
+import model.registry.ProviderFragment
 import model.spec.flatten
 import model.spec.flattenForMaterialization
 import viaduct.graphql.utils.GraphQLTypeRelation
 
-/**
- * One external `fromObjectField` declaration compiled for canonical registry construction.
- *
- * [responsePath] contains GraphQL response keys, including aliases. Composition validates that
- * path against the alias-preserving object-fragment source, then retains only the canonical
- * alias-free key path for semantic reasoning.
- */
-class FromObjectField private constructor(
+/** One external from-field declaration compiled for canonical registry construction. */
+sealed class FromField protected constructor(
     val responsePath: List<String>,
-    internal val objectFragment: Fragment,
+    internal val providerFragment: ProviderFragment,
+    internal val fragment: Fragment,
     internal val keyPath: List<ObjectEngineResult.Key>,
     internal val terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     internal val nullableTraversal: Boolean,
 ) : VariableDeclaration {
     internal fun mapVariables(
         transform: (Arguments.Variable) -> Arguments.Variable,
-    ): FromObjectField =
-        FromObjectField(
-            responsePath = responsePath,
-            objectFragment = objectFragment.mapVariables(transform),
-            keyPath = keyPath.mapVariables(transform),
-            terminalType = terminalType,
-            nullableTraversal = nullableTraversal,
-        )
+    ): FromField = recreate(fragment.mapVariables(transform), keyPath.mapVariables(transform))
 
     internal fun isCompatibleWith(
         locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
@@ -50,6 +39,48 @@ class FromObjectField private constructor(
             locationHasDefault = locationHasDefault,
         )
 
+    protected abstract fun recreate(
+        fragment: Fragment,
+        keyPath: List<ObjectEngineResult.Key>,
+    ): FromField
+}
+
+/**
+ * One external `fromObjectField` declaration compiled for canonical registry construction.
+ *
+ * [responsePath] contains GraphQL response keys, including aliases. Composition validates that
+ * path against the alias-preserving object-fragment source, then retains only the canonical
+ * alias-free key path for semantic reasoning.
+ */
+class FromObjectField private constructor(
+    responsePath: List<String>,
+    fragment: Fragment,
+    keyPath: List<ObjectEngineResult.Key>,
+    terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+    nullableTraversal: Boolean,
+) : FromField(
+        responsePath = responsePath,
+        providerFragment = ProviderFragment.OBJECT,
+        fragment = fragment,
+        keyPath = keyPath,
+        terminalType = terminalType,
+        nullableTraversal = nullableTraversal,
+    ) {
+    internal val objectFragment: Fragment
+        get() = fragment
+
+    override fun recreate(
+        fragment: Fragment,
+        keyPath: List<ObjectEngineResult.Key>,
+    ): FromObjectField =
+        FromObjectField(
+            responsePath = responsePath,
+            fragment = fragment,
+            keyPath = keyPath,
+            terminalType = terminalType,
+            nullableTraversal = nullableTraversal,
+        )
+
     companion object {
         internal fun compile(
             schema: GJSchema,
@@ -58,40 +89,21 @@ class FromObjectField private constructor(
             variableField: ViaductSchema.ObjectField?,
             bindings: Map<String, EngineInputData?>,
         ): FromObjectField {
-            require(responsePath.isNotEmpty()) {
-                "fromObjectField path must contain at least one response key"
-            }
-            require(responsePath.none(String::isBlank)) {
-                "fromObjectField path cannot contain a blank response key"
-            }
-
-            val parsed =
-                GJSelectionParser(
-                    schema = schema,
-                    variableValues = bindings,
-                    variableField = variableField,
-                ).specSelectionsFrom(objectFragmentSource)
             val compiled =
-                schema.compilePath(
-                    typeInScope = parsed.nominalType,
-                    selections = parsed.selections,
+                compileFromField(
+                    schema = schema,
+                    fragmentSource = objectFragmentSource,
                     responsePath = responsePath,
+                    variableField = variableField,
+                    bindings = bindings,
+                    providerFragment = ProviderFragment.OBJECT,
                 )
             return FromObjectField(
                 responsePath = responsePath,
-                objectFragment =
-                    Fragment.of(
-                        nominalType = parsed.nominalType,
-                        materializeSelections =
-                            flattenForMaterialization(
-                                schema,
-                                parsed.nominalType,
-                                parsed.selections,
-                            ),
-                    ),
-                keyPath = compiled.keys,
-                terminalType = compiled.terminalType,
-                nullableTraversal = compiled.nullableTraversal,
+                fragment = compiled.fragment,
+                keyPath = compiled.path.keys,
+                terminalType = compiled.path.terminalType,
+                nullableTraversal = compiled.path.nullableTraversal,
             )
         }
     }
@@ -105,32 +117,32 @@ class FromObjectField private constructor(
  * alias-free key path for semantic reasoning.
  */
 class FromQueryField private constructor(
-    val responsePath: List<String>,
-    internal val queryFragment: Fragment,
-    internal val keyPath: List<ObjectEngineResult.Key>,
-    internal val terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-    private val nullableTraversal: Boolean,
-) : VariableDeclaration {
-    internal fun mapVariables(
-        transform: (Arguments.Variable) -> Arguments.Variable,
+    responsePath: List<String>,
+    fragment: Fragment,
+    keyPath: List<ObjectEngineResult.Key>,
+    terminalType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+    nullableTraversal: Boolean,
+) : FromField(
+        responsePath = responsePath,
+        providerFragment = ProviderFragment.QUERY,
+        fragment = fragment,
+        keyPath = keyPath,
+        terminalType = terminalType,
+        nullableTraversal = nullableTraversal,
+    ) {
+    internal val queryFragment: Fragment
+        get() = fragment
+
+    override fun recreate(
+        fragment: Fragment,
+        keyPath: List<ObjectEngineResult.Key>,
     ): FromQueryField =
         FromQueryField(
             responsePath = responsePath,
-            queryFragment = queryFragment.mapVariables(transform),
-            keyPath = keyPath.mapVariables(transform),
+            fragment = fragment,
+            keyPath = keyPath,
             terminalType = terminalType,
             nullableTraversal = nullableTraversal,
-        )
-
-    internal fun isCompatibleWith(
-        locationType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
-        locationHasDefault: Boolean,
-    ): Boolean =
-        compatibleTypes(
-            locationType = locationType,
-            sourceType = terminalType.asInputType(),
-            nullableTraversal = nullableTraversal,
-            locationHasDefault = locationHasDefault,
         )
 
     companion object {
@@ -142,22 +154,20 @@ class FromQueryField private constructor(
             bindings: Map<String, EngineInputData?>,
         ): FromQueryField {
             val compiled =
-                FromObjectField.compile(
+                compileFromField(
                     schema = schema,
-                    objectFragmentSource = queryFragmentSource,
+                    fragmentSource = queryFragmentSource,
                     responsePath = responsePath,
                     variableField = variableField,
                     bindings = bindings,
+                    providerFragment = ProviderFragment.QUERY,
                 )
-            require(compiled.objectFragment.nominalType == schema.requireQueryTypeDef()) {
-                "fromQueryField provider fragment must be rooted at Query"
-            }
             return FromQueryField(
-                responsePath = compiled.responsePath,
-                queryFragment = compiled.objectFragment,
-                keyPath = compiled.keyPath,
-                terminalType = compiled.terminalType,
-                nullableTraversal = compiled.nullableTraversal,
+                responsePath = responsePath,
+                fragment = compiled.fragment,
+                keyPath = compiled.path.keys,
+                terminalType = compiled.path.terminalType,
+                nullableTraversal = compiled.path.nullableTraversal,
             )
         }
     }
@@ -192,6 +202,61 @@ fun ViaductSchema.fromQueryField(
         variableField = variableField,
         bindings = bindings,
     )
+
+private data class CompiledFromField(
+    val fragment: Fragment,
+    val path: CompiledPath,
+)
+
+private fun compileFromField(
+    schema: GJSchema,
+    fragmentSource: String,
+    responsePath: List<String>,
+    variableField: ViaductSchema.ObjectField?,
+    bindings: Map<String, EngineInputData?>,
+    providerFragment: ProviderFragment,
+): CompiledFromField {
+    val sourceName =
+        when (providerFragment) {
+            ProviderFragment.OBJECT -> "fromObjectField"
+            ProviderFragment.QUERY -> "fromQueryField"
+        }
+    require(responsePath.isNotEmpty()) {
+        "$sourceName path must contain at least one response key"
+    }
+    require(responsePath.none(String::isBlank)) {
+        "$sourceName path cannot contain a blank response key"
+    }
+    val parsed =
+        GJSelectionParser(
+            schema = schema,
+            variableValues = bindings,
+            variableField = variableField,
+        ).specSelectionsFrom(fragmentSource)
+    if (providerFragment == ProviderFragment.QUERY) {
+        require(parsed.nominalType == schema.requireQueryTypeDef()) {
+            "fromQueryField provider fragment must be rooted at Query"
+        }
+    }
+    return CompiledFromField(
+        fragment =
+            Fragment.of(
+                nominalType = parsed.nominalType,
+                materializeSelections =
+                    flattenForMaterialization(
+                        schema,
+                        parsed.nominalType,
+                        parsed.selections,
+                    ),
+            ),
+        path =
+            schema.compilePath(
+                typeInScope = parsed.nominalType,
+                selections = parsed.selections,
+                responsePath = responsePath,
+            ),
+    )
+}
 
 private data class CompiledPath(
     val keys: List<ObjectEngineResult.Key>,

@@ -281,7 +281,11 @@ class ResolverVariableInstantiationTest {
         )
         assertEquals(
             objectFragment.pathVariableDefinitions,
-            resolver.instantiatedPathVariableDefinitions(resolverOccurrenceId),
+            resolver
+                .instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
+                .filter { definition ->
+                    definition.providerFragment == ProviderFragment.OBJECT
+                },
         )
     }
 

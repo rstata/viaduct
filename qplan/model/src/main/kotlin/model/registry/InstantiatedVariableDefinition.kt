@@ -5,49 +5,31 @@ import model.Arguments
 import model.ObjectEngineResult
 
 /**
- * One variable instance and its occurrence-specific object provider path.
+ * One variable instance and its occurrence-specific provider path.
  *
  * Equality is structural: two definitions are equal exactly when their [variable] and [path] are
  * equal.
  */
-sealed interface InstantiatedObjectPathDefinition {
+sealed interface InstantiatedFieldPathDefinition {
     val variable: Arguments.Variable
+    val providerFragment: ProviderFragment
     val path: List<ObjectEngineResult.Key>
 
     companion object {
-        /** Returns an object-path definition for the instantiated [variable]. */
+        /** Returns a from-field definition for the instantiated [variable]. */
         fun of(
             variable: Arguments.Variable,
+            providerFragment: ProviderFragment,
             path: List<ObjectEngineResult.Key>,
-        ): InstantiatedObjectPathDefinition {
+        ): InstantiatedFieldPathDefinition {
             require(variable.isInstantiated) {
-                "An object-path definition requires an instantiated variable"
+                "A from-field path definition requires an instantiated variable"
             }
-            return InstantiatedObjectPathDefinitionImpl(variable, path)
-        }
-    }
-}
-
-/**
- * One variable instance and its occurrence-specific Query provider path.
- *
- * Equality is structural: two definitions are equal exactly when their [variable] and [path] are
- * equal.
- */
-sealed interface InstantiatedQueryPathDefinition {
-    val variable: Arguments.Variable
-    val path: List<ObjectEngineResult.Key>
-
-    companion object {
-        /** Returns a Query-path definition for the instantiated [variable]. */
-        fun of(
-            variable: Arguments.Variable,
-            path: List<ObjectEngineResult.Key>,
-        ): InstantiatedQueryPathDefinition {
-            require(variable.isInstantiated) {
-                "A Query-path definition requires an instantiated variable"
-            }
-            return InstantiatedQueryPathDefinitionImpl(variable, path)
+            return InstantiatedFieldPathDefinitionImpl(
+                variable = variable,
+                providerFragment = providerFragment,
+                path = path.toList(),
+            )
         }
     }
 }
@@ -76,15 +58,11 @@ sealed interface VariableInstanceDefinition {
     }
 }
 
-private data class InstantiatedObjectPathDefinitionImpl(
+private data class InstantiatedFieldPathDefinitionImpl(
     override val variable: Arguments.Variable,
+    override val providerFragment: ProviderFragment,
     override val path: List<ObjectEngineResult.Key>,
-) : InstantiatedObjectPathDefinition
-
-private data class InstantiatedQueryPathDefinitionImpl(
-    override val variable: Arguments.Variable,
-    override val path: List<ObjectEngineResult.Key>,
-) : InstantiatedQueryPathDefinition
+) : InstantiatedFieldPathDefinition
 
 private data class VariableInstanceDefinitionImpl(
     override val variable: Arguments.Variable,

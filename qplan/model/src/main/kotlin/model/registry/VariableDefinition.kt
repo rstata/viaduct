@@ -7,6 +7,11 @@ import model.EngineInputData
 import model.ObjectEngineResult
 import model.inputType
 
+/** The resolver input fragment that supplies a from-field variable. */
+enum class ProviderFragment {
+    OBJECT,
+    QUERY,
+}
 
 /**
  * The source of one field-relative variable defined by a field resolver.
@@ -58,9 +63,16 @@ sealed interface VariableDefinition {
         fun read(arguments: Arguments.Resolved): EngineInputData?
     }
 
-    /** A variable whose value is read from one path in its defining resolver's object fragment. */
-    sealed interface FromObjectField : VariableDefinition {
+    /** A variable whose value is read from one path in one defining resolver fragment. */
+    sealed interface FromField : VariableDefinition {
+        val providerFragment: ProviderFragment
         val path: List<ObjectEngineResult.Key>
+    }
+
+    /** A variable whose value is read from one path in its defining resolver's object fragment. */
+    sealed interface FromObjectField : FromField {
+        override val providerFragment: ProviderFragment
+            get() = ProviderFragment.OBJECT
 
         companion object {
             /**
@@ -72,31 +84,16 @@ sealed interface VariableDefinition {
              * the terminal key selects a simple value.
              */
             fun of(path: List<ObjectEngineResult.Key>): FromObjectField {
-                require(path.isNotEmpty()) {
-                    "From-object-field variable path must not be empty"
-                }
-                path.dropLast(1).forEach { key ->
-                    require(
-                        !key.field.type.isList &&
-                            key.field.type.baseTypeDef is ViaductSchema.CompositeTypeDef,
-                    ) {
-                        "From-object-field variable path cannot cross list or simple field " +
-                            "${key.field.containingDef.name}/${key.field.name}"
-                    }
-                }
-                val terminal = path.last().field
-                require(terminal.type.baseTypeDef is ViaductSchema.SimpleTypeDef) {
-                    "From-object-field variable path must end at a simple field, not " +
-                        "${terminal.containingDef.name}/${terminal.name}"
-                }
-                return FromObjectFieldImpl(path)
+                validateFieldPath(path, ProviderFragment.OBJECT)
+                return FromObjectFieldImpl(path.toList())
             }
         }
     }
 
     /** A variable whose value is read from one path in its defining resolver's Query fragment. */
-    sealed interface FromQueryField : VariableDefinition {
-        val path: List<ObjectEngineResult.Key>
+    sealed interface FromQueryField : FromField {
+        override val providerFragment: ProviderFragment
+            get() = ProviderFragment.QUERY
 
         companion object {
             /**
@@ -108,7 +105,7 @@ sealed interface VariableDefinition {
              * the terminal key selects a simple value.
              */
             fun of(path: List<ObjectEngineResult.Key>): FromQueryField {
-                validateFieldPath(path, "query")
+                validateFieldPath(path, ProviderFragment.QUERY)
                 return FromQueryFieldImpl(path.toList())
             }
         }
@@ -141,8 +138,9 @@ private data class FromQueryFieldImpl(
 
 private fun validateFieldPath(
     path: List<ObjectEngineResult.Key>,
-    fragmentName: String,
+    providerFragment: ProviderFragment,
 ) {
+    val fragmentName = providerFragment.name.lowercase()
     require(path.isNotEmpty()) {
         "From-$fragmentName-field variable path must not be empty"
     }

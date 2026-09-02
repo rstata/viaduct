@@ -122,8 +122,16 @@ class VariableInstantiationTest {
             VariableDefinition.FromArgument.of(result.requireArg("seed"))
 
         assertEquals(
-            InstantiatedObjectPathDefinition.of(variable, providerPath),
-            InstantiatedObjectPathDefinition.of(variable, providerPath.toList()),
+            InstantiatedFieldPathDefinition.of(
+                variable,
+                ProviderFragment.OBJECT,
+                providerPath,
+            ),
+            InstantiatedFieldPathDefinition.of(
+                variable,
+                ProviderFragment.OBJECT,
+                providerPath.toList(),
+            ),
         )
         assertEquals(
             VariableInstanceDefinition.of(variable, argumentDefinition),
@@ -131,7 +139,11 @@ class VariableInstantiationTest {
         )
         assertNotNull(variable.instanceId)
         assertFailsWith<IllegalArgumentException> {
-            InstantiatedObjectPathDefinition.of(template, providerPath)
+            InstantiatedFieldPathDefinition.of(
+                template,
+                ProviderFragment.OBJECT,
+                providerPath,
+            )
         }
         assertFailsWith<IllegalArgumentException> {
             VariableInstanceDefinition.of(template, argumentDefinition)

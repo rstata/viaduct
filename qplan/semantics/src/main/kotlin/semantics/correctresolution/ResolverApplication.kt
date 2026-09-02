@@ -4,12 +4,18 @@ import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.Assumptions
 import model.EngineOutputData
+import model.EngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.Selection
+import model.SelectionForest
+import model.concatenateSelectionForests
 import model.engineObjectDataOf
 import model.merge
 import model.requireQueryTypeDef
 import model.groundedArguments
+import model.selectionForestOf
 import semantics.ResolverSupport
 import semantics.materialize
 import viaduct.engine.api.EngineObjectData
@@ -110,8 +116,41 @@ internal fun ObjectEngineResult.reapplyResolver(
                 input = input,
                 queryValue = queryValue,
                 arguments = resolverArguments,
+                selections = getCell(key).getValue().get().completedOutputDemand(),
             ),
         )
+    }
+
+/**
+ * Reconstructs one canonical demand from the completed output occurrence under judgment.
+ *
+ * This is an extensional reapplication input, not a claim about the exact demand supplied by a
+ * resolver algorithm. Selective resolver relations are required to agree on coordinates shared by
+ * different demands, so this demand is sufficient for completed-result correctness without adding
+ * scheduler witnesses to the judgment.
+ */
+private fun EngineResult?.completedOutputDemand(): SelectionForest =
+    when (this) {
+        is ObjectEngineResult ->
+            keys
+                .map { key ->
+                    selectionForestOf(
+                        Selection.of(
+                            key = key,
+                            possibleTypes = setOf(type),
+                            subselections =
+                                getCell(key)
+                                    .getValue()
+                                    .get()
+                                    .completedOutputDemand(),
+                        ),
+                    )
+                }.concatenateSelectionForests()
+        is ListEngineResult ->
+            indices
+                .map { index -> get(index).getValue().get().completedOutputDemand() }
+                .concatenateSelectionForests()
+        else -> selectionForestOf()
     }
 
 internal fun EngineObjectData.Sync?.requireArgumentlessField(

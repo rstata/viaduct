@@ -13,6 +13,7 @@ import semantics.arbitrary.RESOLVER_TEST_CASE_PROPERTY
 import semantics.arbitrary.RESOLVER_TEST_PROFILE_PROPERTY
 import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
+import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverQueryFragmentWeight
@@ -82,6 +83,11 @@ class ResolverBroadStressCampaignConfigurationTest {
         assertTrue(
             Resolver26BroadStressProfile.entries.all { profile ->
                 profile.config[ResolverQueryFragmentsEnabled]
+            },
+        )
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[ResolverFromQueryFieldVariablesEnabled]
             },
         )
         assertTrue(

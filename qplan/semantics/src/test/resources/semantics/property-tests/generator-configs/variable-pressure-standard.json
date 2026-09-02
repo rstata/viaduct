@@ -13,7 +13,6 @@
       "resolverFragmentsEnabled" : true,
       "resolverFromArgumentVariablesEnabled" : true,
       "resolverFromObjectFieldVariablesEnabled" : true,
-      "resolverFromQueryFieldVariablesEnabled" : false,
       "resolverVariablesEnabled" : true,
       "resolverVariablesOnNonQueryFieldsOnly" : false,
       "resolverVariablesOnQueryFieldsOnly" : false,
@@ -112,6 +111,7 @@
   },
   "resolver25" : {
     "booleans" : {
+      "resolverFromQueryFieldVariablesEnabled" : false,
       "resolverQueryFragmentsEnabled" : false,
       "resolverVariableSingletonCoercionEnabled" : false
     },
@@ -135,6 +135,7 @@
   },
   "resolver26" : {
     "booleans" : {
+      "resolverFromQueryFieldVariablesEnabled" : true,
       "resolverQueryFragmentsEnabled" : true,
       "resolverVariableSingletonCoercionEnabled" : true
     },

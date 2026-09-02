@@ -15,6 +15,7 @@ import model.objectKey
 import model.outputType
 import model.registry.FieldResolver
 import model.registry.InstantiatedObjectPathDefinition
+import model.registry.InstantiatedQueryPathDefinition
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
@@ -24,7 +25,7 @@ import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
 
 /**
- * Independently validates object-path bindings across every request-local Query root.
+ * Independently validates object- and Query-path bindings across every request-local Query root.
  *
  * An applied occurrence must have exactly all of its declared bindings and a passive occurrence
  * must have none.
@@ -36,20 +37,25 @@ fun ObjectEngineResult.validateObjectPathBindings(
     requestQueryRoots().forEach { root ->
         root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
             val resolver = world.resolverRegistry.resolver(cell.field)
-            val definitions =
+            val objectDefinitions =
                 resolver.objectPathDefinitions(
                     root = root,
                     path = cell.occurrencePath,
                 )
-            if (definitions.isEmpty()) {
+            val queryDefinitions =
+                resolver.queryPathDefinitions(
+                    root = root,
+                    path = cell.occurrencePath,
+                )
+            if (objectDefinitions.isEmpty() && queryDefinitions.isEmpty()) {
                 return@forEachRegisteredResolverOccurrence
             }
 
             val occurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
             val requiredBindingIds =
-                definitions.mapTo(linkedSetOf()) { definition ->
-                    requireNotNull(definition.variable.instanceId)
-                }
+                (objectDefinitions.map { definition -> definition.variable } +
+                    queryDefinitions.map { definition -> definition.variable })
+                    .mapTo(linkedSetOf()) { variable -> requireNotNull(variable.instanceId) }
             val actualBindingIds = requiredBindingIds.filterTo(linkedSetOf(), world::isBound)
             when (appliedResolverOccurrences.contains(occurrenceId)) {
                 true ->
@@ -57,22 +63,35 @@ fun ObjectEngineResult.validateObjectPathBindings(
                         requiredBindingIds,
                         actualBindingIds,
                         "Applied resolver occurrence $occurrenceId has incomplete " +
-                            "FromObjectField bindings",
+                            "from-field bindings",
                     )
                 false -> {
                     assertEquals(
                         emptySet(),
                         actualBindingIds,
                         "Passive resolver occurrence $occurrenceId unexpectedly has " +
-                            "FromObjectField bindings",
+                            "from-field bindings",
                     )
                     return@forEachRegisteredResolverOccurrence
                 }
             }
 
-            definitions.forEach { definition ->
+            objectDefinitions.forEach { definition ->
                 val expected =
                     cell.containingObject.readCompletedProvider(
+                        path = definition.path,
+                        reader = cell.occurrencePath,
+                    )
+                assertEquals(
+                    expected,
+                    world.getBinding(requireNotNull(definition.variable.instanceId)),
+                )
+            }
+            queryDefinitions.forEach { definition ->
+                val queryRoot =
+                    world.queryValues.getValue(occurrenceId)
+                val expected =
+                    queryRoot.readCompletedProvider(
                         path = definition.path,
                         reader = cell.occurrencePath,
                     )
@@ -90,6 +109,12 @@ internal fun FieldResolver.objectPathDefinitions(
     path: List<PathComponent>,
 ): List<InstantiatedObjectPathDefinition> =
     instantiateObjectFragmentAt(root, path).pathVariableDefinitions
+
+internal fun FieldResolver.queryPathDefinitions(
+    root: ObjectEngineResult,
+    path: List<PathComponent>,
+): List<InstantiatedQueryPathDefinition> =
+    instantiateQueryFragmentAt(root, path).pathVariableDefinitions
 
 context(world: Assumptions)
 private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =

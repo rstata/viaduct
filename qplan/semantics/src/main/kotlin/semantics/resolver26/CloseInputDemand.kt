@@ -12,6 +12,7 @@ import model.materializeSelectionForestOf
 import model.merge
 import model.registry.FieldResolver
 import model.registry.ResolverObjectFragment
+import model.registry.ResolverQueryFragment
 import model.registry.InstantiatedObjectPathDefinition
 import model.registry.VariableInstanceDefinition
 import model.schemaType
@@ -68,6 +69,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 objectKey is ObjectEngineResult.GroundKey &&
                 objectKey.arguments.argumentsContainErrorValue()
             ) {
+                val queryFragment = resolver.instantiateQueryFragment(resolverOccurrenceId)
                 check(
                     expansions.put(
                         objectKey,
@@ -78,6 +80,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                             inputDemand = selectionForestOf(),
                             inputMaterializeSelections = materializeSelectionForestOf(),
                             variableDefinitions = emptyList(),
+                            queryFragment = queryFragment,
                         ),
                     ) == null,
                 ) {
@@ -88,6 +91,8 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             val readerPath = path + objectKey
             val objectFragment: ResolverObjectFragment =
                 resolver.instantiateObjectFragment(resolverOccurrenceId)
+            val queryFragment: ResolverQueryFragment =
+                resolver.instantiateQueryFragment(resolverOccurrenceId)
             val expansion =
                 ResolverExpansion(
                     ownerKey = objectKey,
@@ -96,6 +101,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     inputDemand = objectFragment.constructionSelections,
                     inputMaterializeSelections = objectFragment.materializeSelections,
                     variableDefinitions = objectFragment.variableDefinitions,
+                    queryFragment = queryFragment,
                 )
             check(expansions.put(objectKey, expansion) == null) {
                 "Resolver26 expanded object key twice: $objectKey"
@@ -136,6 +142,7 @@ internal data class ResolverExpansion(
     val inputDemand: SelectionForest,
     val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<VariableInstanceDefinition>,
+    val queryFragment: ResolverQueryFragment,
 )
 
 internal class CloseInputDemandResult(

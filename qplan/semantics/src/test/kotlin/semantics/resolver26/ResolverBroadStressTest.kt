@@ -13,9 +13,10 @@ import semantics.arbitrary.FieldCoordinate
 import semantics.arbitrary.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionOccurrenceApplicationLog
 import semantics.arbitrary.ResolutionWitness
-import semantics.arbitrary.ResolverTestRun
-import semantics.arbitrary.ResolverTestExecution
+import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
+import semantics.arbitrary.ResolverTestExecution
+import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
@@ -125,8 +126,10 @@ internal suspend fun runResolver26BroadStress(
     var resolverApplications = 0
     var generatedArgumentVariables = 0
     var generatedObjectPathVariables = 0
+    var generatedQueryPathVariables = 0
     var activatedArgumentVariableApplications = 0
     var activatedObjectPathVariableApplications = 0
+    var activatedQueryPathVariableApplications = 0
     var maximumProviderPathLength = 0
     var maximumVariableUseDepth = 0
     var generatedSometimesPassiveFields = 0
@@ -148,6 +151,8 @@ internal suspend fun runResolver26BroadStress(
                     testCase.registry.features.fromArgumentVariableCount
                 generatedObjectPathVariables +=
                     testCase.registry.features.fromObjectFieldVariableCount
+                generatedQueryPathVariables +=
+                    testCase.registry.features.fromQueryFieldVariableCount
                 generatedSometimesPassiveFields +=
                     testCase.registry.features.sometimesPassiveFieldCount
                 generatedQueryFragments += testCase.registry.features.queryFragmentCount
@@ -155,11 +160,13 @@ internal suspend fun runResolver26BroadStress(
                     maxOf(
                         maximumProviderPathLength,
                         testCase.registry.features.maximumFromObjectFieldPathLength,
+                        testCase.registry.features.maximumFromQueryFieldPathLength,
                     )
                 maximumVariableUseDepth =
                     maxOf(
                         maximumVariableUseDepth,
                         testCase.registry.features.maximumFromObjectFieldVariableUseDepth,
+                        testCase.registry.features.maximumFromQueryFieldVariableUseDepth,
                     )
 
                 val world: Assumptions =
@@ -226,6 +233,13 @@ internal suspend fun runResolver26BroadStress(
                         )
                     ) {
                         activatedObjectPathVariableApplications += 1
+                    }
+                    if (
+                        testCase.registry.sourceResolverHasFromQueryFieldVariables(
+                            application.key.field,
+                        )
+                    ) {
+                        activatedQueryPathVariableApplications += 1
                     }
                 }
 
@@ -304,6 +318,13 @@ internal suspend fun runResolver26BroadStress(
                 "Resolver26 profile $propertyProfile did not activate query fragments",
             )
         }
+        if (config[ResolverFromQueryFieldVariablesEnabled]) {
+            run.assertAggregate(
+                generatedQueryPathVariables > 0 &&
+                    activatedQueryPathVariableApplications > 0,
+                "Resolver26 profile $propertyProfile did not activate FromQueryField variables",
+            )
+        }
         return completedCases
     } finally {
         println(
@@ -314,10 +335,13 @@ internal suspend fun runResolver26BroadStress(
                 "resolverApplications=$resolverApplications, " +
                 "generatedArgumentVariables=$generatedArgumentVariables, " +
                 "generatedObjectPathVariables=$generatedObjectPathVariables, " +
+                "generatedQueryPathVariables=$generatedQueryPathVariables, " +
                 "activatedArgumentVariableApplications=" +
                 "$activatedArgumentVariableApplications, " +
                 "activatedObjectPathVariableApplications=" +
                 "$activatedObjectPathVariableApplications, " +
+                "activatedQueryPathVariableApplications=" +
+                "$activatedQueryPathVariableApplications, " +
                 "maximumProviderPathLength=$maximumProviderPathLength, " +
                 "maximumVariableUseDepth=$maximumVariableUseDepth, " +
                 "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +

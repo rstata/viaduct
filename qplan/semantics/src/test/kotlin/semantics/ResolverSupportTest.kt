@@ -79,6 +79,25 @@ class ResolverSupportTest {
     }
 
     @Test
+    fun `read recorded before writer registration still detects a cycle`() {
+        val fixture = Fixture()
+        fixture.support.cycleCheck(
+            reader = fixture.path("first"),
+            cell = fixture.cell("first"),
+        )
+
+        val failure =
+            assertFailsWith<ResolverReadCycleException> {
+                fixture.register("first")
+            }
+
+        assertEquals(
+            listOf(fixture.path("first"), fixture.path("first")),
+            failure.cycle,
+        )
+    }
+
+    @Test
     fun `multi-hop cycle reports dependency order`() {
         val fixture = Fixture()
         fixture.register("first")

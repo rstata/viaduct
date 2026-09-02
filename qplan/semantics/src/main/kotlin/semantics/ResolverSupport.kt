@@ -70,6 +70,8 @@ internal class ResolverReadCycleException(
 private class CycleChecker {
     private val writersByCell =
         ConcurrentHashMap<EngineResultCell, List<PathComponent>>()
+    private val readersByCell =
+        ConcurrentHashMap<EngineResultCell, MutableSet<List<PathComponent>>>()
     private val readsByReader =
         ConcurrentHashMap<List<PathComponent>, MutableSet<List<PathComponent>>>()
 
@@ -77,9 +79,13 @@ private class CycleChecker {
         cell: EngineResultCell,
         writer: List<PathComponent>,
     ) {
-        val previous = writersByCell.putIfAbsent(cell, writer.toList())
+        val stableWriter = writer.toList()
+        val previous = writersByCell.putIfAbsent(cell, stableWriter)
         check(previous == null) {
             "Writer already registered for cell: $previous"
+        }
+        readersByCell[cell].orEmpty().forEach { reader ->
+            addRead(reader, stableWriter)
         }
     }
 
@@ -87,8 +93,21 @@ private class CycleChecker {
         reader: List<PathComponent>,
         cell: EngineResultCell,
     ) {
-        val writer = writersByCell[cell] ?: return
         val stableReader = reader.toList()
+        readersByCell
+            .computeIfAbsent(cell) {
+                ConcurrentHashMap.newKeySet()
+            }.add(stableReader)
+        writersByCell[cell]?.let { writer ->
+            addRead(stableReader, writer)
+        }
+    }
+
+    @Synchronized
+    private fun addRead(
+        stableReader: List<PathComponent>,
+        writer: List<PathComponent>,
+    ) {
         readsByReader
             .computeIfAbsent(stableReader) {
                 // One coroutine normally owns a reader's set; keep it concurrent defensively.

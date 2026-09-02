@@ -37,7 +37,7 @@ Semantics accepts resolver selection documents that retain named fragment defini
 
 `DepthFirstReactor` expresses the Resolver06-08 progression as explicit orchestrator and slot-resolver work. `CoroutineResolve.kt` expresses Resolver21-23 through structured suspension and exact promises. [`resolver-versions.md`](../resolver-versions.md) explains the capability grid and how to use it.
 
-Resolver25 and Resolver26 are self-contained advanced experiments with runtime `FromObjectField` bindings and distinct resolver-instance policies. Their current protocols are documented in [`resolver25/design.md`](./src/main/kotlin/semantics/resolver25/design.md) and [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
+Resolver25 and Resolver26 are self-contained advanced experiments with runtime from-field bindings and distinct resolver-instance policies. Resolver25 supports `FromObjectField`; Resolver26 supports both `FromObjectField` and `FromQueryField`. Their current protocols are documented in [`resolver25/design.md`](./src/main/kotlin/semantics/resolver25/design.md) and [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 
 ## Variable Production And Consumption
 
@@ -49,7 +49,7 @@ A variable recipe determines where one resolver-occurrence binding is produced. 
 | `FromObjectField` | A provider path in the defining resolver's object fragment | Object fragment, Query fragment, or both |
 | `FromQueryField` | A provider path in the defining resolver's Query fragment | Object fragment, Query fragment, or both |
 
-Producer/consumer legality is distinct from current implementation support. `FromArgument` is implemented, Resolver25 and Resolver26 implement `FromObjectField`, and Resolver26 supports consuming an object-fragment-produced binding from its Query fragment. `FromQueryField` is not implemented yet, but it is planned near-term work and will complete the symmetric from-field model described above.
+Producer/consumer legality is distinct from current implementation support. `FromArgument` is implemented by every maintained resolver, Resolver25 and Resolver26 implement `FromObjectField`, and Resolver26 implements `FromQueryField`. Resolver26 permits either from-field binding to be consumed by its object fragment, Query fragment, or both.
 
 ## Publication
 

@@ -103,28 +103,35 @@ private fun declareBindings(closed: CloseInputDemandResult) {
     }
     closed.bindingDeclarationStarted = true
     closed.expansions.values.forEach { expansion ->
-        expansion.variableDefinitions.forEach { variableDefinition ->
-            val variableId = requireNotNull(variableDefinition.variable.instanceId)
-            when (val definition = variableDefinition.definition) {
-                is VariableDefinition.FromArgument ->
-                    if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
-                        world.bindVariable(
-                            variableId,
-                            bindingFor(expansion.ownerKey.arguments, definition),
-                        )
-                    } else {
-                        world.declareBinding(variableId)
-                    }
+        (expansion.variableDefinitions + expansion.queryFragment.variableDefinitions)
+            .distinctBy { variableDefinition -> variableDefinition.variable }
+            .forEach { variableDefinition ->
+                val variableId = requireNotNull(variableDefinition.variable.instanceId)
+                when (val definition = variableDefinition.definition) {
+                    is VariableDefinition.FromArgument ->
+                        if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
+                            world.bindVariable(
+                                variableId,
+                                bindingFor(expansion.ownerKey.arguments, definition),
+                            )
+                        } else {
+                            world.declareBinding(variableId)
+                        }
 
-                is VariableDefinition.FromObjectField,
-                is VariableDefinition.FromQueryField,
-                -> Unit
+                    is VariableDefinition.FromObjectField,
+                    is VariableDefinition.FromQueryField,
+                    -> Unit
+                }
             }
-        }
     }
     closed.pathVariableDefinitions.forEach { read ->
         world.declareBinding(requireNotNull(read.definition.variable.instanceId))
     }
+    closed.expansions.values
+        .flatMap { expansion -> expansion.queryFragment.pathVariableDefinitions }
+        .forEach { definition ->
+            world.declareBinding(requireNotNull(definition.variable.instanceId))
+        }
 }
 
 // Reads one FromArgument definition from grounded arguments while preserving argument errors.

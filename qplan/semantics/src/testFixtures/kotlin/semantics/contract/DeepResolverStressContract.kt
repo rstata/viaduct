@@ -4,6 +4,7 @@ import model.requireField
 import io.kotest.property.PropertyTesting
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.SourceSchemaAdapter
 import viaduct.graphql.schema.ViaductSchema
 import model.fragmentFrom
 import model.objectOf
@@ -25,11 +26,11 @@ import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
-import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,6 +40,8 @@ import kotlin.test.assertTrue
 interface DeepResolverStressContract : ResolverContract {
     val resolverName: String
     val objectPathVariablesEnabled: Boolean
+        get() = false
+    val queryPathVariablesEnabled: Boolean
         get() = false
     val nodeResolversEnabled: Boolean
         get() = true
@@ -95,7 +98,9 @@ interface DeepResolverStressContract : ResolverContract {
                     // Static tests exhaustively cover dispatch; stress samples interactions cheaply.
                     (NodeObjectWeight to 0.05) +
                     (ResolverFromArgumentVariablesEnabled to true) +
-                    (ResolverVariablesEnabled to objectPathVariablesEnabled) +
+                    (ResolverVariablesEnabled to
+                        (objectPathVariablesEnabled || queryPathVariablesEnabled)) +
+                    (ResolverFromQueryFieldVariablesEnabled to queryPathVariablesEnabled) +
                     stressConfigOverrides
             var attemptedCases = 0
             var verifiedCases = 0
@@ -106,9 +111,11 @@ interface DeepResolverStressContract : ResolverContract {
             var polymorphicNodeLoaderApplications = 0
             var generatedFromArgumentVariables = 0
             var generatedObjectPathVariables = 0
+            var generatedQueryPathVariables = 0
             var generatedSometimesPassiveFields = 0
             var activatedFromArgumentApplications = 0
             var activatedObjectPathApplications = 0
+            var activatedQueryPathApplications = 0
             var activatedNestedObjectPathApplications = 0
             var activatedSometimesPassiveOccurrences = 0
             var maximumActivatedObjectPathResolverChainLength = 0
@@ -128,6 +135,8 @@ interface DeepResolverStressContract : ResolverContract {
                         testCase.registry.features.fromArgumentVariableCount
                     generatedObjectPathVariables +=
                         testCase.registry.features.fromObjectFieldVariableCount
+                    generatedQueryPathVariables +=
+                        testCase.registry.features.fromQueryFieldVariableCount
                     generatedSometimesPassiveFields +=
                         testCase.registry.features.sometimesPassiveFieldCount
                     assertTrue(testCase.query.selectionDepth >= 4)
@@ -149,9 +158,11 @@ interface DeepResolverStressContract : ResolverContract {
                         // Source-owned registry fields have result occurrences but no application.
                         val resultOccurrenceCounts =
                             context(world) {
-                                result.registeredResolverOccurrenceCounts(
-                                    world.resolverRegistry,
-                                )
+                                result
+                                    .registeredResolverOccurrenceApplicationKeyCounts()
+                                    .entries
+                                    .groupingBy { entry -> entry.key.applicationKey }
+                                    .fold(0) { count, entry -> count + entry.value }
                             }
                         witness.applicationCounts().forEach { (key, count) ->
                             assertTrue(
@@ -194,6 +205,13 @@ interface DeepResolverStressContract : ResolverContract {
                         ) {
                             activatedObjectPathApplications += 1
                             activatedObjectPath = true
+                        }
+                        if (
+                            testCase.registry.sourceResolverHasFromQueryFieldVariables(
+                                application.key.field,
+                            )
+                        ) {
+                            activatedQueryPathApplications += 1
                         }
                         if (
                             testCase.registry.sourceResolverHasNestedFromObjectFieldVariable(
@@ -256,9 +274,11 @@ interface DeepResolverStressContract : ResolverContract {
                         "$polymorphicNodeLoaderApplications, " +
                         "generatedFromArgumentVariables=$generatedFromArgumentVariables, " +
                         "generatedObjectPathVariables=$generatedObjectPathVariables, " +
+                        "generatedQueryPathVariables=$generatedQueryPathVariables, " +
                         "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
                         "activatedFromArgumentApplications=$activatedFromArgumentApplications, " +
                         "activatedObjectPathApplications=$activatedObjectPathApplications, " +
+                        "activatedQueryPathApplications=$activatedQueryPathApplications, " +
                         "activatedNestedObjectPathApplications=" +
                         "$activatedNestedObjectPathApplications, " +
                         "activatedSometimesPassiveOccurrences=" +
@@ -287,6 +307,10 @@ interface DeepResolverStressContract : ResolverContract {
             if (objectPathVariablesEnabled) {
                 assertTrue(generatedObjectPathVariables > 0)
                 assertTrue(activatedObjectPathApplications > 0)
+            }
+            if (queryPathVariablesEnabled) {
+                assertTrue(generatedQueryPathVariables > 0)
+                assertTrue(activatedQueryPathApplications > 0)
             }
             if (nestedObjectPathCoverageRequired) {
                 assertTrue(activatedNestedObjectPathApplications > 0)
@@ -320,8 +344,9 @@ interface DeepResolverStressContract : ResolverContract {
         activatedSourceResolvers: Set<FieldCoordinate>,
         roots: Set<FieldCoordinate>,
     ): Int {
+        val sourceSchema = SourceSchemaAdapter(world.schema)
         fun canonicalField(coordinate: FieldCoordinate): ViaductSchema.ObjectField? =
-            world.schema.requireField(coordinate.typeName, coordinate.fieldName) as? ViaductSchema.ObjectField
+            sourceSchema.field(coordinate.typeName, coordinate.fieldName) as? ViaductSchema.ObjectField
 
         fun depth(
             field: ViaductSchema.ObjectField,

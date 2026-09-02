@@ -8,9 +8,11 @@ import model.PathComponent
 import model.VariableBinding
 import model.fetchBindings
 import model.fetchGroundedArguments
+import model.requireQueryTypeDef
 import model.registry.VariableDefinition
 import model.usedVariables
 import model.variableArgumentNames
+import semantics.correctresolution.argumentsContainErrorValue
 
 /**
  * Reads object-path providers and installs every local field resolver.
@@ -26,6 +28,9 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
     closed: CloseInputDemandResult,
 ) {
     context(world, support) {
+        closed.expansions.values.forEach { expansion ->
+            support.declareQueryValue(expansion.resolverOccurrenceId)
+        }
         coroutineScope {
             closed.pathVariableDefinitions.forEach { read ->
                 launch {
@@ -43,6 +48,23 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
             }
             val demandByKey = closed.demand.byKey()
             closed.expansions.forEach { (objectKey, expansion) ->
+                launch {
+                    val queryValue =
+                        if (
+                            objectKey is ObjectEngineResult.GroundKey &&
+                            objectKey.arguments.argumentsContainErrorValue()
+                        ) {
+                            model.engineObjectDataOf(world.schema.requireQueryTypeDef())
+                        } else {
+                            expansion.queryFragment.resolveQueryFragment(
+                                coordinate = path + objectKey,
+                            )
+                        }
+                    support.completeQueryValue(
+                        expansion.resolverOccurrenceId,
+                        queryValue,
+                    )
+                }
                 launch {
                     installAndLaunchFieldResolver(
                         selection = demandByKey.getValue(objectKey),
@@ -112,15 +134,17 @@ private fun ObjectOrchestrationTask.completeFromArgumentBindings(
     groundedArguments: model.Arguments.Ground,
 ) {
     if (expansion.ownerKey is ObjectEngineResult.GroundKey) return
-    expansion.variableDefinitions.forEach { variableDefinition ->
-        if (variableDefinition.definition !is VariableDefinition.FromArgument) {
-            return@forEach
+    (expansion.variableDefinitions + expansion.queryFragment.variableDefinitions)
+        .distinctBy { variableDefinition -> variableDefinition.variable }
+        .forEach { variableDefinition ->
+            if (variableDefinition.definition !is VariableDefinition.FromArgument) {
+                return@forEach
+            }
+            val definition =
+                variableDefinition.definition as VariableDefinition.FromArgument
+            world.completeBinding(
+                requireNotNull(variableDefinition.variable.instanceId),
+                bindingFor(groundedArguments, definition),
+            )
         }
-        val definition =
-            variableDefinition.definition as VariableDefinition.FromArgument
-        world.completeBinding(
-            requireNotNull(variableDefinition.variable.instanceId),
-            bindingFor(groundedArguments, definition),
-        )
-    }
 }

@@ -39,6 +39,9 @@ class ResolverGeneratedTest :
     override val queryFragmentObjectPathVariablesEnabled: Boolean
         get() = true
 
+    override val queryFragmentQueryPathVariablesEnabled: Boolean
+        get() = true
+
     override val generatedResolverConfigOverrides: Config =
         Config.default +
             (ResolverVariableSingletonCoercionEnabled to true)

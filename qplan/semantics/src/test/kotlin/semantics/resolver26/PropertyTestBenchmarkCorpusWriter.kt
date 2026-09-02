@@ -11,7 +11,7 @@ import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.encodeResolverBenchmarkCorpus
 import semantics.contract.registeredResolverApplicationIdentityCounts
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
@@ -72,7 +72,7 @@ object PropertyTestBenchmarkCorpusWriter {
                         },
                     )
                     context(world) {
-                        result.validateObjectPathBindings(appliedResolverOccurrences)
+                        result.validateFromFieldBindings(appliedResolverOccurrences)
                     }
 
                     Files.createDirectories(outputDirectory)

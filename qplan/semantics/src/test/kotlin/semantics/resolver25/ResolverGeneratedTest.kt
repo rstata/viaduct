@@ -72,7 +72,7 @@ class ResolverGeneratedTest :
     override val generatedCaseAssertions =
         GeneratedCaseAssertions.defaultGeneratedContract +
             GeneratedCaseAssertions.exactOrdinaryApplicationCounts +
-            GeneratedCaseAssertions.objectPathBindings
+            GeneratedCaseAssertions.fromFieldBindings
 
     @Test
     fun `generated literal and variable selections converge at runtime`(): Unit =
@@ -192,7 +192,7 @@ class ResolverGeneratedTest :
                         .assertAll(
                             generatedCaseAssertions +
                                 GeneratedCaseAssertions.exactOrdinaryApplicationCounts +
-                                GeneratedCaseAssertions.objectPathBindings,
+                                GeneratedCaseAssertions.fromFieldBindings,
                         )
                 val events = observation.ordinary.lifecycleEvents
                 val activatedOwner =

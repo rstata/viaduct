@@ -92,7 +92,7 @@ Resolver25 remains a useful alternate experiment because it merges late-equal gr
 
 `correctResolution` judges the completed primary Query OER and every required occurrence-specific query-fragment OER extensionally. It does not establish resolver application count, supplied demand, binding correctness, execution order, lifecycle ownership, or concurrency.
 
-Keep separate evidence for completed-result correctness, exact and occurrence-aware application identities, object-path bindings, lifecycle invariants, mutation tests, structural activation, and scheduling behavior. An expected-application oracle derived from the completed result under test is not fully independent and must be described accordingly.
+Keep separate evidence for completed-result correctness, exact and occurrence-aware application identities, from-field bindings, lifecycle invariants, mutation tests, structural activation, and scheduling behavior. An expected-application oracle derived from the completed result under test is not fully independent and must be described accordingly.
 
 Generated presence is weaker than runtime activation. Directed profiles should require the target interaction to execute, and broad campaigns should record enough information to replay one exact `S:R:Q` coordinate. Large green campaigns remain finite evidence and do not override a focused counterexample.
 

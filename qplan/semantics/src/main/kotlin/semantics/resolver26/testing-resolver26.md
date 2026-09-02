@@ -16,7 +16,7 @@ Resolver26 caches one process-scoped daemon pool per configured count. Workers a
 
 Everything invoked while a resolution is running must tolerate concurrent resolver applications. The application witness recorder uses a short synchronized append after constructing each immutable record, application counts and mutation-fixture caches use concurrent maps, and application ordinals use atomics.
 
-Post-resolution validation is intentionally single-threaded. After `resolve` returns, the calling test coroutine snapshots instrumentation and serially evaluates application identities, structural coverage, `correctResolution`, object-path bindings, and any metamorphic comparison. Do not add synchronization to these pure snapshot consumers merely because resolution itself is concurrent.
+Post-resolution validation is intentionally single-threaded. After `resolve` returns, the calling test coroutine snapshots instrumentation and serially evaluates application identities, structural coverage, `correctResolution`, from-field bindings, and any metamorphic comparison. Do not add synchronization to these pure snapshot consumers merely because resolution itself is concurrent.
 
 Keep this division strict when adding instrumentation: capture concurrent events safely and cheaply during resolution, freeze or snapshot them after request quiescence, and perform expensive oracle work serially from the immutable snapshot. Never let a test-only recorder impose a scheduling dependency on Resolver26.
 
@@ -118,7 +118,7 @@ RESOLVER26_THREAD_COUNT=1 ./run-property-test-campaign.sh \
 
 The versioned campaign fixes all corpus inputs: rounds 1 through 100, five directed profiles per round, 2,000 cases per profile, each run's `S:R:Q` dimensions, and every seed. The result is exactly 10,000 cases per round and 1,000,000 cases total. The driver performs one incremental Gradle launcher install, lets Gradle exit, and then starts one fresh launcher JVM for each round. Do not add `clean`, regenerate resources, choose rounds, change the thread count, or otherwise alter this recipe unless the request explicitly asks for a different experiment.
 
-Success means that the command exits zero after printing `Completed 100 round(s)`, every round reports `runs=5, completedCases=10000`, and `build/reports/resolver26-broad-campaign-v1` contains logs for all 100 rounds. Each run checks attempted, resolved, and completed accounting, resolution correctness, exact resolver-application identities, object-path bindings, and its required structural coverage. The driver stops at the first failed run or round and prints its replay command.
+Success means that the command exits zero after printing `Completed 100 round(s)`, every round reports `runs=5, completedCases=10000`, and `build/reports/resolver26-broad-campaign-v1` contains logs for all 100 rounds. Each run checks attempted, resolved, and completed accounting, resolution correctness, exact resolver-application identities, from-field bindings, and its required structural coverage. The driver stops at the first failed run or round and prints its replay command.
 
 The driver's final wall-clock total covers the 100 launcher JVMs but excludes the initial Gradle install. To measure the complete command, including that one incremental install, use:
 
@@ -144,7 +144,7 @@ These ten persisted rounds contain exactly 100,000 cases and sample schema bread
 
 A 100,000- to 1,000,000-case run should explore a broad state space rather than repeat one distribution. Split the budget across fresh JVM rounds, independent seeds, directed profiles, and different `S:R:Q` shapes; persist each round's command, seed, profile, dimensions, thread count, and log.
 
-The checked-in million-case campaign varies schema breadth, registry diversity, query interaction count, and large/deep worlds. Its directed profiles emphasize balanced worlds, descendant variable uses, nullable and error providers, symbolic-key identity, and multiple object-path-variable owners. Keep all of those axes represented in future campaigns.
+The checked-in million-case campaign varies schema breadth, registry diversity, query interaction count, and large/deep worlds. Its directed profiles emphasize balanced worlds, descendant variable uses, nullable and error providers, symbolic-key identity, and multiple from-field-variable owners. Keep all of those axes represented in future campaigns.
 
 Favor cases that activate combinations of features, not registries that merely contain them. Important combinations include `FromObjectField` and `FromQueryField` with `FromArgument`, mixed object/Query provider chains, nested provider paths, passive and resolver-bearing descendants, lists containing symbolic resolver keys, node lowering and node arrays, many field resolvers with complex object and Query fragments, nullable or error intermediates, distinct symbolic expressions whose bindings resolve to equal values, multiple variable owners and owner dependencies, aliases, duplicate selections, deep selection sets, and high resolver density.
 
@@ -174,7 +174,7 @@ This appendix records known weaknesses in Resolver26's test infrastructure. They
 
 ### Restore Witness Coverage In Multithreaded Stress
 
-- [ ] Run multithreaded stress with resolution-witness capture, plus a separate pass with count-only capture because those modes are intentionally mutually exclusive. Both recorders are already thread-safe, but `runResolver26MultithreadedStress` currently disables both, so the instrumented campaign checks only extensional correctness and object-path bindings.
+- [ ] Run multithreaded stress with resolution-witness capture, plus a separate pass with count-only capture because those modes are intentionally mutually exclusive. Both recorders are already thread-safe, but `runResolver26MultithreadedStress` currently disables both, so the instrumented campaign checks only extensional correctness and from-field bindings.
 - [ ] Audit and replace unsynchronized mutable application counters and lists throughout deterministic resolver contracts, including `EmptyObjectFragmentResolverContract.kt`, `ObjectFragmentResolverContract.kt`, `VariableSelectionIdentityResolverContract.kt`, `ObjectFragmentFromArgumentResolverContract.kt`, and `NodeResolverContract.kt`; multiple Resolver26 workers may invoke fixture resolvers concurrently, and assertions that depend on append order or ordinary integer increments are harness races rather than valid resolver checks.
 - [ ] Add a focused concurrency regression for the fixture instrumentation itself, then rerun representative deterministic contracts at several thread counts to prove that recorded counts and observations are stable without imposing execution order.
 
@@ -197,5 +197,5 @@ This interaction-local accounting work is deliberately deferred to a follow-up P
 - [x] Generated fields admit multiple arguments through the configurable `FieldArgumentCount` range.
 - [x] Variable input plans retain their targets, and generation deliberately reuses one variable across multiple selections in the same fragment as well as across object and Query fragments.
 - [x] `FromObjectField` variables generate literal/symbolic convergence and report it independently from `FromArgument` convergence.
-- [x] Resolver26's default deep-stress configuration enables object-path variables and requires both generated and activated evidence.
+- [x] Resolver26's default deep-stress configuration enables from-field variables and requires both generated and activated evidence.
 - [x] Broad structural coverage records `ABSTRACT_PROVIDER_PATH` only from an activated owner and requires it in the balanced Resolver26 profile.

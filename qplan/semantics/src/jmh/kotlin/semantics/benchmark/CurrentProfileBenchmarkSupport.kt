@@ -24,7 +24,7 @@ import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.resolverBenchmarkFullConfig
 import semantics.contract.registeredResolverApplicationIdentityCounts
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
@@ -271,7 +271,7 @@ internal class CurrentProfileBenchmarkSupport(
                         },
                     )
                     context(world) {
-                        result.validateObjectPathBindings(appliedResolverOccurrences)
+                        result.validateFromFieldBindings(appliedResolverOccurrences)
                     }
                     verifiedCases += 1
                 }

@@ -25,7 +25,7 @@ import semantics.arbitrary.registeredResolverOccurrences
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCountsFor
 import semantics.contract.registeredResolverOccurrenceApplicationKeyCounts
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -286,7 +286,7 @@ internal suspend fun runResolver26BroadStress(
                     },
                 )
                 context(world) {
-                    result.validateObjectPathBindings(
+                    result.validateFromFieldBindings(
                         occurrenceWitness.applications
                             .map { application -> application.resolverOccurrenceId }
                             .toSet(),

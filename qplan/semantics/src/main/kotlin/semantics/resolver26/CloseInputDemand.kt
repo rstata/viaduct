@@ -11,9 +11,8 @@ import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.merge
 import model.registry.FieldResolver
-import model.registry.ResolverObjectFragment
-import model.registry.ResolverQueryFragment
-import model.registry.InstantiatedObjectPathDefinition
+import model.registry.InstantiatedFieldPathDefinition
+import model.registry.ResolverFragments
 import model.registry.VariableInstanceDefinition
 import model.schemaType
 import model.selectionForestOf
@@ -31,7 +30,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
     var accumulatedDemand: SelectionForest = initialDemand
     val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
         linkedMapOf()
-    val pathVariableDefinitions: MutableList<PathVariableDefinitionRead> =
+    val objectProviderReads: MutableList<ProviderDefinitionRead> =
         mutableListOf()
 
     while (true) {
@@ -57,7 +56,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             return CloseInputDemandResult(
                 demand = mergedDemand,
                 expansions = expansions,
-                pathVariableDefinitions = pathVariableDefinitions,
+                objectProviderReads = objectProviderReads,
             )
         }
 
@@ -65,11 +64,11 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             val resolver: FieldResolver =
                 world.resolverRegistry.resolver(objectKey.field)
             val resolverOccurrenceId = ResolverOccurrenceId.at(root, path + objectKey)
+            val fragments = resolver.instantiateFragments(resolverOccurrenceId)
             if (
                 objectKey is ObjectEngineResult.GroundKey &&
                 objectKey.arguments.argumentsContainErrorValue()
             ) {
-                val queryFragment = resolver.instantiateQueryFragment(resolverOccurrenceId)
                 check(
                     expansions.put(
                         objectKey,
@@ -79,8 +78,8 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                             resolver = resolver,
                             inputDemand = selectionForestOf(),
                             inputMaterializeSelections = materializeSelectionForestOf(),
-                            variableDefinitions = emptyList(),
-                            queryFragment = queryFragment,
+                            variableDefinitions = fragments.queryFragment.variableDefinitions,
+                            fragments = fragments,
                         ),
                     ) == null,
                 ) {
@@ -89,10 +88,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 return@forEach
             }
             val readerPath = path + objectKey
-            val objectFragment: ResolverObjectFragment =
-                resolver.instantiateObjectFragment(resolverOccurrenceId)
-            val queryFragment: ResolverQueryFragment =
-                resolver.instantiateQueryFragment(resolverOccurrenceId)
+            val objectFragment = fragments.objectFragment
             val expansion =
                 ResolverExpansion(
                     ownerKey = objectKey,
@@ -100,16 +96,16 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     resolver = resolver,
                     inputDemand = objectFragment.constructionSelections,
                     inputMaterializeSelections = objectFragment.materializeSelections,
-                    variableDefinitions = objectFragment.variableDefinitions,
-                    queryFragment = queryFragment,
+                    variableDefinitions = fragments.variableDefinitions,
+                    fragments = fragments,
                 )
             check(expansions.put(objectKey, expansion) == null) {
                 "Resolver26 expanded object key twice: $objectKey"
             }
 
-            pathVariableDefinitions +=
+            objectProviderReads +=
                 objectFragment.pathVariableDefinitions.map { definition ->
-                    PathVariableDefinitionRead(
+                    ProviderDefinitionRead(
                         definition = definition,
                         readerPath = readerPath,
                     )
@@ -142,18 +138,18 @@ internal data class ResolverExpansion(
     val inputDemand: SelectionForest,
     val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<VariableInstanceDefinition>,
-    val queryFragment: ResolverQueryFragment,
+    val fragments: ResolverFragments,
 )
 
 internal class CloseInputDemandResult(
     val demand: ObjectSelectionForest,
     val expansions: Map<ObjectEngineResult.ObjectKey, ResolverExpansion>,
-    val pathVariableDefinitions: List<PathVariableDefinitionRead>,
+    val objectProviderReads: List<ProviderDefinitionRead>,
 ) {
     var bindingDeclarationStarted: Boolean = false
 }
 
-internal data class PathVariableDefinitionRead(
-    val definition: InstantiatedObjectPathDefinition,
+internal data class ProviderDefinitionRead(
+    val definition: InstantiatedFieldPathDefinition,
     val readerPath: List<PathComponent>,
 )

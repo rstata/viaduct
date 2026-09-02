@@ -1,7 +1,5 @@
 package semantics.resolver26
 
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
@@ -20,6 +18,7 @@ import model.engineObjectDataOf
 import model.outputType
 import model.requireQueryTypeDef
 import model.registry.FieldResolver
+import model.registry.ProviderFragment
 import model.registry.ResolverQueryFragment
 import model.schemaType
 import model.toMaterializeSelectionForest
@@ -125,26 +124,18 @@ internal suspend fun ResolverQueryFragment.resolveQueryFragment(
             source = source,
             target = queryResult,
             initialDemand = symbolicSelections.constructionSelections(),
-        )
+    )
     orchestration.prepare()
     world.queryValues[resolverOccurrenceId] = queryResult
-    coroutineScope {
-        orchestration.launch()
-        pathVariableDefinitions.forEach { definition ->
-            launch {
-                val binding =
-                    queryResult.readProvider(
-                        definition = definition,
-                        reader = coordinate,
-                        support = support,
-                    )
-                world.completeBinding(
-                    requireNotNull(definition.variable.instanceId),
-                    binding,
-                )
-            }
-        }
-    }
+    orchestration.launch()
+    queryResult.completeProviderBindings(
+        reads =
+            pathVariableDefinitions.map { definition ->
+                ProviderDefinitionRead(definition, coordinate)
+            },
+        providerFragment = ProviderFragment.QUERY,
+        support = support,
+    )
     return queryResult.materializeResolverInput(
         selections = symbolicSelections,
         reader = coordinate,

@@ -52,7 +52,7 @@ class ResolverGeneratedTest :
     override val generatedCaseAssertions =
         GeneratedCaseAssertions.defaultGeneratedContract +
             GeneratedCaseAssertions.exactOrdinaryApplicationCounts +
-            GeneratedCaseAssertions.objectPathBindings
+            GeneratedCaseAssertions.fromFieldBindings
 
     override fun resolve(
         world: Assumptions,

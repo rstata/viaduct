@@ -132,7 +132,7 @@ For cross-profile debugging, run the concrete class with only the seed:
 
 Equivalent seed inputs are `RESOLVER_PROPERTY_SEED` and `-Dresolver.property.seed`. Resolver03, Resolver08, Resolver23, Resolver25, and Resolver26 stress use resolver-specific `<resolver>StressSeed` Gradle properties and `<RESOLVER>_STRESS_SEED` environment variables.
 
-Resolver25 also has independent unfiltered broad profiles. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and object-path bindings against the exact `ResolverStarted` occurrence set:
+Resolver25 also has independent unfiltered broad profiles. Every generated `S x R x Q` case calls Resolver25 and validates lifecycle events, exact application identities, `correctResolution`, and from-field bindings against the exact `ResolverStarted` occurrence set:
 
 ```shell
 ./gradlew :semantics:resolver25BroadStress \
@@ -165,9 +165,9 @@ Replay one failed campaign coordinate through its recorded round and profile:
 
 ## Resolver26 Broad Campaign
 
-Resolver26's broad tests use five directed distributions: balanced worlds, symbolic list descendants, nullable and error providers, equal grounded arguments from distinct symbolic keys, and multiple object-path owners. Every distribution admits query fragments at bounded density and requires both generated and activated query-fragment evidence. Their structural coverage is classified only from completed OER paths and symbolic keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation compares the exact required and completed object-path binding sets for every observed application across the primary and Query-fragment roots. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
+Resolver26's broad tests use five directed distributions: balanced worlds, symbolic list descendants, nullable and error providers, equal grounded arguments from distinct symbolic keys, and multiple from-field owners. Every distribution admits query fragments at bounded density and requires both generated and activated query-fragment evidence. Their structural coverage is classified only from completed OER paths and symbolic keys, resolver-application witnesses, and generated registry metadata. Separate request-local binding validation compares the exact required and completed from-field binding sets for every observed application across the primary and Query-fragment roots. No test observes scheduler events, coroutine ordering, demand phases, or Resolver25 lifecycle concepts.
 
-Every generated case checks exact attempted/resolved/completed accounting, root-and-path-qualified application identities, `correctResolution`, and independently reconstructed object-path bindings. Sometimes-passive occurrences form the independently counted difference between registered result occurrences and standard resolver applications. A profile's aggregate run must also observe its required Resolver26 structural signatures.
+Every generated case checks exact attempted/resolved/completed accounting, root-and-path-qualified application identities, `correctResolution`, and independently reconstructed from-field bindings. Sometimes-passive occurrences form the independently counted difference between registered result occurrences and standard resolver applications. A profile's aggregate run must also observe its required Resolver26 structural signatures.
 
 The checked-in campaign uses fresh JVM rounds and persisted seeds distributed across schema breadth, registry diversity, query interactions, and large/deep worlds. Large/deep worlds bound generated list fanout so the budget explores depth instead of combinatorial list multiplication. Run persisted rounds with:
 

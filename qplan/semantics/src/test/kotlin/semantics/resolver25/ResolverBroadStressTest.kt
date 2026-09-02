@@ -12,7 +12,7 @@ import semantics.arbitrary.configuredResolverTestExecution
 import semantics.arbitrary.executeResolverTestCases
 import semantics.arbitrary.registeredResolverOccurrenceCounts
 import semantics.contract.registeredResolverApplicationIdentityCounts
-import semantics.contract.validateObjectPathBindings
+import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -197,7 +197,7 @@ internal suspend fun runResolver25BroadStress(
                 }
                 assertTrue(context(world) { result.correctResolution(fragment) })
                 context(world) {
-                    result.validateObjectPathBindings(observation.appliedResolverOccurrences)
+                    result.validateFromFieldBindings(observation.appliedResolverOccurrences)
                 }
                 completedCases += 1
             }

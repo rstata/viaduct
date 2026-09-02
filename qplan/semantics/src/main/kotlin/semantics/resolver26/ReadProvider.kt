@@ -1,43 +1,58 @@
 package semantics.resolver26
 
-import viaduct.graphql.schema.ViaductSchema
-
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import model.Assumptions
-import model.EngineResult
 import model.EngineInputData
 import model.EngineInputListData
+import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.outputType
 import model.PathComponent
 import model.Selection
 import model.VariableBinding
 import model.fetchGroundedArguments
 import model.objectKey
+import model.outputType
+import model.registry.InstantiatedFieldPathDefinition
+import model.registry.ProviderFragment
 import model.selectionForestOf
 import model.toEngineSimpleData
-import model.registry.InstantiatedObjectPathDefinition
-import model.registry.InstantiatedQueryPathDefinition
+import viaduct.graphql.schema.ViaductSchema
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
 context(world: Assumptions)
 internal suspend fun ObjectEngineResult.readProvider(
-    definition: InstantiatedObjectPathDefinition,
+    definition: InstantiatedFieldPathDefinition,
     reader: List<PathComponent>,
     support: Resolver26Support,
-): VariableBinding {
-    return readProvider(definition.path, reader, support)
-}
+): VariableBinding = readProvider(definition.path, reader, support)
 
-// Traverses a Query-fragment provider path through OER promises.
+// Reads and completes all provider bindings rooted in this result.
 context(world: Assumptions)
-internal suspend fun ObjectEngineResult.readProvider(
-    definition: InstantiatedQueryPathDefinition,
-    reader: List<PathComponent>,
+internal suspend fun ObjectEngineResult.completeProviderBindings(
+    reads: List<ProviderDefinitionRead>,
+    providerFragment: ProviderFragment,
     support: Resolver26Support,
-): VariableBinding {
-    return readProvider(definition.path, reader, support)
+) {
+    require(reads.all { read -> read.definition.providerFragment == providerFragment })
+    coroutineScope {
+        reads.forEach { read ->
+            launch {
+                val binding =
+                    readProvider(
+                        definition = read.definition,
+                        reader = read.readerPath,
+                        support = support,
+                    )
+                world.completeBinding(
+                    requireNotNull(read.definition.variable.instanceId),
+                    binding,
+                )
+            }
+        }
+    }
 }
 
 context(world: Assumptions)
@@ -55,7 +70,6 @@ private suspend fun ObjectEngineResult.readProvider(
                 possibleTypes = setOf(current.type),
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
-        specializedKey.fetchGroundedArguments()
         val objectKey = specializedKey
         objectKey.fetchGroundedArguments()
         val cell = current.reserveCell(objectKey)

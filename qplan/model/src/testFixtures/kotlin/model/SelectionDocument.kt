@@ -1,6 +1,4 @@
-package semantics
-
-import viaduct.graphql.schema.ViaductSchema
+package model
 
 import graphql.language.AstPrinter
 import graphql.language.Document
@@ -9,18 +7,16 @@ import graphql.language.FragmentDefinition
 import graphql.language.FragmentSpread
 import graphql.language.InlineFragment
 import graphql.language.SelectionSet
-import model.EngineInputData
-import model.Fragment
-import model.fragmentFrom
+import viaduct.graphql.schema.ViaductSchema
 import viaduct.graphql.utils.SelectionsParserUtils
 
 /**
- * Converts one post-validation fragment document into the normalized fragment used by semantics.
+ * Converts one post-validation fragment document into the normalized model fragment.
  *
- * Named fragment definitions remain visible at this boundary. The current semantic selection
- * carrier has no named-spread representation, so this conversion lowers each spread to an inline
- * fragment. Keeping that policy here allows a future carrier to preserve and share named fragments
- * without changing execution adapters.
+ * Named fragment definitions remain visible at this boundary. The current selection carrier has no
+ * named-spread representation, so this conversion lowers each spread to an inline fragment. Keeping
+ * that policy in model fixture preparation allows a future carrier to preserve and share named
+ * fragments without changing execution adapters.
  */
 fun ViaductSchema.fragmentFromDocument(
     document: Document,

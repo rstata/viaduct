@@ -10,7 +10,6 @@ dependencies {
 
     testFixturesImplementation(project(":arbitrary"))
     testFixturesImplementation(testFixtures(project(":model")))
-    testFixturesImplementation("com.graphql-java:graphql-java:26.0")
     testFixturesImplementation("io.kotest:kotest-assertions-core-jvm:5.9.1")
     testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     testFixturesImplementation(kotlin("test-junit5"))
